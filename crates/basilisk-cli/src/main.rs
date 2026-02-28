@@ -3,13 +3,14 @@
 //! Usage:
 //! ```
 //! basilisk check [paths...]
+//! basilisk check [paths...] --output json
 //! ```
 
 use std::process;
 
 use clap::{Parser, Subcommand};
 
-use crate::output::{render_diagnostics, FileSource};
+use crate::output::{render_diagnostics, render_diagnostics_json, FileSource, OutputFormat};
 
 mod output;
 
@@ -30,6 +31,9 @@ enum Command {
         /// Paths to check. Directories are traversed recursively for `.py` files.
         #[arg(default_value = ".")]
         paths: Vec<String>,
+        /// Output format: text (default, human-readable) or json (machine-readable).
+        #[arg(long, default_value = "text")]
+        output: OutputFormat,
     },
 }
 
@@ -37,7 +41,7 @@ fn main() {
     let cli = Cli::parse();
 
     let exit_code = match cli.command {
-        Command::Check { paths } => run_check(&paths),
+        Command::Check { paths, output } => run_check(&paths, output),
     };
 
     process::exit(exit_code);
@@ -49,25 +53,35 @@ fn main() {
 /// - `0` — clean, no errors
 /// - `1` — type errors found
 /// - `3` — internal error
-fn run_check(paths: &[String]) -> i32 {
+fn run_check(paths: &[String], format: OutputFormat) -> i32 {
     match collect_and_check(paths) {
-        Ok((diagnostics, sources)) => {
-            let error_count = render_diagnostics(&diagnostics, &sources);
-            let total = diagnostics.len();
-            if total == 0 {
-                println!("All checked. No issues found.");
-                0
-            } else {
-                println!(
-                    "Found {} diagnostic{} ({} error{}).",
-                    total,
-                    if total == 1 { "" } else { "s" },
-                    error_count,
-                    if error_count == 1 { "" } else { "s" },
-                );
+        Ok((diagnostics, sources)) => match format {
+            OutputFormat::Json => {
+                render_diagnostics_json(&diagnostics, &sources);
+                let error_count = diagnostics
+                    .iter()
+                    .filter(|d| d.severity == basilisk_checker::Severity::Error)
+                    .count();
                 i32::from(error_count > 0)
             }
-        }
+            OutputFormat::Text => {
+                let error_count = render_diagnostics(&diagnostics, &sources);
+                let total = diagnostics.len();
+                if total == 0 {
+                    println!("All checked. No issues found.");
+                    0
+                } else {
+                    println!(
+                        "Found {} diagnostic{} ({} error{}).",
+                        total,
+                        if total == 1 { "" } else { "s" },
+                        error_count,
+                        if error_count == 1 { "" } else { "s" },
+                    );
+                    i32::from(error_count > 0)
+                }
+            }
+        },
         Err(err) => {
             eprintln!("basilisk: internal error: {err}");
             3
@@ -116,10 +130,6 @@ fn collect_python_files(paths: &[String]) -> Result<Vec<String>, String> {
                 return Err(format!("cannot access {root}: {e}"));
             }
             Err(e) => {
-                // Permission-denied or other I/O error: skip with a warning so
-                // the rest of the check run continues.  process_file will also
-                // print a warning if a file that _was_ discovered later becomes
-                // unreadable.
                 eprintln!("basilisk: cannot access {root}: {e}");
                 continue;
             }
@@ -189,9 +199,7 @@ mod tests {
         std::fs::set_permissions(&py, std::fs::Permissions::from_mode(0o000))?;
 
         let path = py.to_string_lossy().into_owned();
-        // collect_and_check prints a warning to stderr and returns Ok with no diags.
         let result = collect_and_check(&[path]);
-        // Restore permissions before asserting so cleanup can run even on failure.
         std::fs::set_permissions(&py, std::fs::Permissions::from_mode(0o644))?;
         let _ = std::fs::remove_file(&py);
 
