@@ -48,7 +48,6 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
 
     let module_bare_assignments = collect_module_bare_assignments(&module.ast.body);
     let module_attr_assignments = collect_module_attr_assignments(&module.ast.body);
-
     ResolvedModule {
         functions,
         classes,
@@ -1112,82 +1111,6 @@ fn collect_reveal_type_calls_from_stmt(stmt: &Stmt, out: &mut Vec<RevealTypeCall
     }
 }
 
-/// Collect all calls to a specific function name found anywhere in the module body.
-///
-/// Reuses `RevealTypeCallInfo` to record the argument count and span.
-fn collect_special_calls(stmts: &[Stmt], func_name: &str) -> Vec<RevealTypeCallInfo> {
-    let mut out = Vec::new();
-    collect_special_calls_from_stmts(stmts, func_name, &mut out);
-    out
-}
-
-fn collect_special_calls_from_stmts(
-    stmts: &[Stmt],
-    func_name: &str,
-    out: &mut Vec<RevealTypeCallInfo>,
-) {
-    for stmt in stmts {
-        collect_special_calls_from_stmt(stmt, func_name, out);
-    }
-}
-
-fn collect_special_calls_from_stmt(
-    stmt: &Stmt,
-    func_name: &str,
-    out: &mut Vec<RevealTypeCallInfo>,
-) {
-    match stmt {
-        Stmt::Expr(node) => {
-            if let Expr::Call(call) = node.value.as_ref() {
-                let is_target = expr_simple_name(&call.func).is_some_and(|n| n == func_name);
-                if is_target {
-                    out.push(RevealTypeCallInfo {
-                        arg_count: call.arguments.args.len(),
-                        span: text_range_to_span(call.range()),
-                    });
-                }
-            }
-        }
-        Stmt::FunctionDef(func) => {
-            collect_special_calls_from_stmts(&func.body, func_name, out);
-        }
-        Stmt::ClassDef(cls) => {
-            collect_special_calls_from_stmts(&cls.body, func_name, out);
-        }
-        Stmt::If(node) => {
-            collect_special_calls_from_stmts(&node.body, func_name, out);
-            for elif_else in &node.elif_else_clauses {
-                collect_special_calls_from_stmts(&elif_else.body, func_name, out);
-            }
-        }
-        Stmt::For(node) => {
-            collect_special_calls_from_stmts(&node.body, func_name, out);
-            collect_special_calls_from_stmts(&node.orelse, func_name, out);
-        }
-        Stmt::While(node) => {
-            collect_special_calls_from_stmts(&node.body, func_name, out);
-            collect_special_calls_from_stmts(&node.orelse, func_name, out);
-        }
-        Stmt::With(node) => {
-            collect_special_calls_from_stmts(&node.body, func_name, out);
-        }
-        Stmt::Try(node) => {
-            collect_special_calls_from_stmts(&node.body, func_name, out);
-            for handler in &node.handlers {
-                let ExceptHandler::ExceptHandler(h) = handler;
-                collect_special_calls_from_stmts(&h.body, func_name, out);
-            }
-            collect_special_calls_from_stmts(&node.orelse, func_name, out);
-            collect_special_calls_from_stmts(&node.finalbody, func_name, out);
-        }
-        Stmt::Match(node) => {
-            for case in &node.cases {
-                collect_special_calls_from_stmts(&case.body, func_name, out);
-            }
-        }
-        _ => {}
-    }
-}
 
 /// Extract `Generic[T, ...]` or `Protocol[T, ...]` type parameter names and
 /// any non-TypeVar (non-simple-name) argument spans from a class definition.
@@ -2143,4 +2066,21 @@ fn collect_module_attr_assignments(stmts: &[Stmt]) -> Vec<crate::scope::ModuleAt
         }
     }
     out
+}
+
+// ---------------------------------------------------------------------------
+// Final violation collection stub
+// ---------------------------------------------------------------------------
+
+/// Collect `Final` annotation violations from the module.
+///
+/// This is a stub implementation — full `Final` violation detection is handled
+/// by the E0034 checker rule which already has access to all the necessary info.
+/// This function returns an empty list for now; the collector may be enhanced later.
+fn collect_final_violations(
+    _stmts: &[Stmt],
+    _classes: &[ClassInfo],
+    _source: &str,
+) -> Vec<crate::scope::FinalViolationInfo> {
+    Vec::new()
 }

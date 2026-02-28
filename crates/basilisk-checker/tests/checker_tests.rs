@@ -2071,7 +2071,10 @@ Bad13: Annotated[int]
 fn debug_e0047_qualifiers_annotated_fp() -> Result<(), Box<dyn std::error::Error>> {
     use basilisk_parser::parse_file;
     use basilisk_resolver::resolve;
-    let path = "crates/basilisk-cli/tests/conformance/qualifiers_annotated.py";
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../basilisk-cli/tests/conformance/qualifiers_annotated.py"
+    );
     let parsed = parse_file(path).map_err(|e| format!("{e:?}"))?;
     let resolved = resolve(&parsed)?;
     let diags = basilisk_checker::check(&resolved);
@@ -2087,7 +2090,10 @@ fn debug_e0047_qualifiers_annotated_fp() -> Result<(), Box<dyn std::error::Error
 fn debug_all_diags_qualifiers_annotated() -> Result<(), Box<dyn std::error::Error>> {
     use basilisk_parser::parse_file;
     use basilisk_resolver::resolve;
-    let path = "/Users/christianfindlay/Documents/Code/Basilisk/crates/basilisk-cli/tests/conformance/qualifiers_annotated.py";
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../basilisk-cli/tests/conformance/qualifiers_annotated.py"
+    );
     let parsed = parse_file(path).map_err(|e| format!("{e:?}"))?;
     let resolved = resolve(&parsed)?;
     let diags = basilisk_checker::check(&resolved);

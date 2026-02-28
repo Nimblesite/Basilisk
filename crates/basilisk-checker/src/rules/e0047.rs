@@ -31,8 +31,9 @@
 //! y: {} = {}                            # E — dict literal not a type
 //! ```
 
+use std::collections::HashSet;
 
-use basilisk_resolver::{ResolvedModule, Span};
+use basilisk_resolver::{ImportKind, RhsKind, ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
@@ -166,6 +167,59 @@ fn paren_contains_top_level_comma(s: &str) -> bool {
     false
 }
 
+/// Build a set of names that are definitely not valid type expressions:
+/// - Names bound to modules via plain `import X` statements (the module object is not a type).
+/// - Names bound to unannotated simple literal values (`var1 = 3` → `var1` is `int`, not a type).
+fn collect_non_type_names(module: &ResolvedModule) -> HashSet<String> {
+    let mut names = HashSet::new();
+
+    // Plain `import X` binds `X` to a module object in scope.
+    for import in &module.imports {
+        if import.kind == ImportKind::Plain {
+            // `import os.path` binds `os` (first component). For `import types`, binding is `types`.
+            let local_name = import
+                .module
+                .split('.')
+                .next_back()
+                .unwrap_or(import.module.as_str());
+            names.insert(local_name.to_owned());
+        }
+    }
+
+    // Unannotated module-level variables with simple literal RHS are not types.
+    for var in &module.module_vars {
+        if var.has_annotation {
+            continue;
+        }
+        let is_simple_literal = matches!(
+            var.rhs_kind,
+            RhsKind::IntLiteral
+                | RhsKind::FloatLiteral
+                | RhsKind::StrLiteral
+                | RhsKind::BoolLiteral
+                | RhsKind::BytesLiteral
+                | RhsKind::EmptyList
+                | RhsKind::EmptyDict
+                | RhsKind::NoneValue
+        );
+        if is_simple_literal {
+            names.insert(var.name.clone());
+        }
+    }
+
+    names
+}
+
+/// Returns `true` when the annotation text is exactly a name bound to a non-type in module scope.
+fn is_non_type_name(ann: &str, non_type_names: &HashSet<String>) -> bool {
+    let ann = ann.trim();
+    // Only match bare identifiers — no subscripts, dot access, or call expressions.
+    if ann.contains('[') || ann.contains('.') || ann.contains('(') || ann.contains(' ') {
+        return false;
+    }
+    non_type_names.contains(ann)
+}
+
 /// Emits BSK-E0047 when an annotation contains an invalid type expression.
 pub(crate) struct InvalidTypeAnnotation;
 
@@ -173,6 +227,7 @@ impl Rule for InvalidTypeAnnotation {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         let source = &module.source;
         let path = &module.path;
+        let non_type_names = collect_non_type_names(module);
 
         // Function parameters
         for func in &module.functions {
@@ -189,7 +244,10 @@ impl Rule for InvalidTypeAnnotation {
                 let Some(ann) = span_text(source, param.annotation_span) else {
                     continue;
                 };
-                if is_invalid_type_annotation(ann.trim()) {
+                let ann_trimmed = ann.trim();
+                if is_invalid_type_annotation(ann_trimmed)
+                    || is_non_type_name(ann_trimmed, &non_type_names)
+                {
                     diagnostics.push(make_diagnostic(
                         format!(
                             "Invalid type expression in annotation for parameter `{}`",
@@ -207,7 +265,10 @@ impl Rule for InvalidTypeAnnotation {
             let Some(ann) = span_text(source, var.annotation_span) else {
                 continue;
             };
-            if is_invalid_type_annotation(ann.trim()) {
+            let ann_trimmed = ann.trim();
+            if is_invalid_type_annotation(ann_trimmed)
+                || is_non_type_name(ann_trimmed, &non_type_names)
+            {
                 diagnostics.push(make_diagnostic(
                     format!("Invalid type expression in annotation for `{}`", var.name),
                     var.name_span,
@@ -222,7 +283,10 @@ impl Rule for InvalidTypeAnnotation {
                 let Some(ann) = span_text(source, attr.annotation_span) else {
                     continue;
                 };
-                if is_invalid_type_annotation(ann.trim()) {
+                let ann_trimmed = ann.trim();
+                if is_invalid_type_annotation(ann_trimmed)
+                    || is_non_type_name(ann_trimmed, &non_type_names)
+                {
                     diagnostics.push(make_diagnostic(
                         format!(
                             "Invalid type expression in annotation for attribute `{}`",

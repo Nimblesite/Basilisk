@@ -92,13 +92,13 @@ fn collect_type_alias_names(module: &ResolvedModule) -> Vec<String> {
     names
 }
 
-/// Returns `true` when the annotation text matches one of the known TypeAlias names.
+/// Returns `true` when the annotation text matches one of the known `TypeAlias` names.
 fn is_type_alias_annotation(ann: &str, type_alias_names: &[String]) -> bool {
     let ann = ann.trim();
     type_alias_names.iter().any(|n| ann == n) || ann.ends_with(".TypeAlias")
 }
 
-/// Returns `true` when the RHS text is an invalid type expression for a TypeAlias.
+/// Returns `true` when the RHS text is an invalid type expression for a `TypeAlias`.
 fn is_invalid_rhs(rhs: &str) -> bool {
     let rhs = rhs.trim();
 
