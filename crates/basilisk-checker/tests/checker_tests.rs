@@ -961,7 +961,7 @@ fn type_ignore_suppresses_diagnostic() -> Result<(), Box<dyn std::error::Error>>
     Ok(())
 }
 
-/// `line_has_type_ignore` — BinaryOperator `-`/`*` mutants at lib.rs:23.
+/// `line_has_type_ignore` — `BinaryOperator` `-`/`*` mutants at lib.rs:23.
 /// Diagnostics on lines WITHOUT `# type: ignore` must NOT be suppressed.
 #[test]
 fn type_ignore_does_not_suppress_other_lines() -> Result<(), Box<dyn std::error::Error>> {
@@ -1200,7 +1200,7 @@ fn e0013_none_annotated_with_call_return_does_not_fire() -> Result<(), Box<dyn s
 // ---------------------------------------------------------------------------
 
 /// `is_typed_dict_hierarchy` — `FnValue → false` at e0017.rs:29.
-/// TypedDict subclasses must NOT fire E0017.
+/// `TypedDict` subclasses must NOT fire E0017.
 #[test]
 fn e0017_typed_dict_hierarchy_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
@@ -1317,7 +1317,7 @@ fn e0017_required_qualifier_exempt() -> Result<(), Box<dyn std::error::Error>> {
 // e0020.rs: BinaryOperator && and != mutants (lines 37, 40)
 // ---------------------------------------------------------------------------
 
-/// E0020 `check` — `&&` → `||` mutant at line 37 (exempt_classes filter).
+/// E0020 `check` — `&&` → `||` mutant at line 37 (`exempt_classes` filter).
 /// ABC class methods with @overload + no impl must NOT fire E0020.
 #[test]
 fn e0020_abc_class_overload_exempt() -> Result<(), Box<dyn std::error::Error>> {
@@ -1344,7 +1344,7 @@ fn e0020_abc_class_overload_exempt() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// E0020 — `&&` → `||` and `!=` mutants at line 40 (overloaded.len() < 2).
+/// E0020 — `&&` → `||` and `!=` mutants at line 40 (`overloaded.len()` < 2).
 /// A lone `@overload` with an implementation present fires E0020 (single overload).
 #[test]
 fn e0020_single_overload_with_impl_fires() -> Result<(), Box<dyn std::error::Error>> {
@@ -1569,7 +1569,7 @@ fn e0025_override_on_different_method_does_not_suppress_other(
     assert!(!e25.is_empty(), "method without @override must fire E0025");
     let messages: Vec<&str> = e25.iter().map(|d| d.message.as_str()).collect();
     assert!(
-        messages.iter().any(|m| m.contains("b")),
+        messages.iter().any(|m| m.contains('b')),
         "E0025 must point to method b, not a"
     );
     Ok(())
@@ -1599,7 +1599,7 @@ fn e0025_qualified_override_suppresses() -> Result<(), Box<dyn std::error::Error
     Ok(())
 }
 
-/// `method_has_decorator` — `!=` mutant at e0025.rs:174 (ends_with check).
+/// `method_has_decorator` — `!=` mutant at e0025.rs:174 (`ends_with` check).
 /// A decorator with a different name must NOT suppress E0025.
 #[test]
 fn e0025_unrelated_decorator_does_not_suppress() -> Result<(), Box<dyn std::error::Error>> {
@@ -1625,7 +1625,7 @@ fn e0025_unrelated_decorator_does_not_suppress() -> Result<(), Box<dyn std::erro
 // e0026.rs: FnValue→() and != mutants (lines 23/24)
 // ---------------------------------------------------------------------------
 
-/// E0026 — `FnValue → ()` at line 23: rule must emit for constraint_count == 1.
+/// E0026 — `FnValue → ()` at line 23: rule must emit for `constraint_count` == 1.
 #[test]
 fn e0026_single_constraint_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = "T = TypeVar('T', int)\n";
@@ -1638,7 +1638,7 @@ fn e0026_single_constraint_fires() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// E0026 — `!=` mutant at line 24: constraint_count == 1 must fire, count == 2 must not.
+/// E0026 — `!=` mutant at line 24: `constraint_count` == 1 must fire, count == 2 must not.
 #[test]
 fn e0026_two_constraints_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let src = "T = TypeVar('T', int, str)\n";
@@ -1658,7 +1658,7 @@ fn e0026_two_constraints_no_diagnostic() -> Result<(), Box<dyn std::error::Error
 // e0027.rs: FnValue→() (line 22)
 // ---------------------------------------------------------------------------
 
-/// E0027 — `FnValue → ()` at line 22: rule must detect duplicate TypeVar in Generic.
+/// E0027 — `FnValue → ()` at line 22: rule must detect duplicate `TypeVar` in Generic.
 #[test]
 fn e0027_duplicate_typevar_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
@@ -1683,7 +1683,7 @@ fn e0027_duplicate_typevar_fires() -> Result<(), Box<dyn std::error::Error>> {
 // e0029.rs: FnValue→(), ||→&&, !=  (lines 22, 35)
 // ---------------------------------------------------------------------------
 
-/// E0029 — `FnValue → ()` at line 22: rule must fire for method in TypedDict.
+/// E0029 — `FnValue → ()` at line 22: rule must fire for method in `TypedDict`.
 #[test]
 fn e0029_method_in_typed_dict_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
@@ -1701,7 +1701,7 @@ fn e0029_method_in_typed_dict_fires() -> Result<(), Box<dyn std::error::Error>> 
     Ok(())
 }
 
-/// E0029 — `||` → `&&` at line 35 (__init_subclass__ / __class_getitem__ filter).
+/// E0029 — `||` → `&&` at line 35 (__`init_subclass`__ / __`class_getitem`__ filter).
 /// These synthesised dunders must NOT fire E0029.
 #[test]
 fn e0029_init_subclass_exempt() -> Result<(), Box<dyn std::error::Error>> {
@@ -1722,7 +1722,7 @@ fn e0029_init_subclass_exempt() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// E0029 — `!=` mutant at line 35: method_name must equal the exempted string exactly.
+/// E0029 — `!=` mutant at line 35: `method_name` must equal the exempted string exactly.
 /// A method named `custom_method` must fire; `__init_subclass__` must not.
 #[test]
 fn e0029_only_exempt_dunders_are_skipped() -> Result<(), Box<dyn std::error::Error>> {
@@ -1748,7 +1748,7 @@ fn e0029_only_exempt_dunders_are_skipped() -> Result<(), Box<dyn std::error::Err
 // e0030.rs: FnValue→() (line 25)
 // ---------------------------------------------------------------------------
 
-/// E0030 — `FnValue → ()` at line 25: non-default after default TypeVar must fire.
+/// E0030 — `FnValue → ()` at line 25: non-default after default `TypeVar` must fire.
 #[test]
 fn e0030_non_default_after_default_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
@@ -1811,7 +1811,7 @@ fn e0031_valid_cast_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
 // e0032.rs: FnValue→(), UnaryOperator remove (lines 28, 30)
 // ---------------------------------------------------------------------------
 
-/// E0032 — `FnValue → ()` at line 28: unknown keyword in TypedDict must fire.
+/// E0032 — `FnValue → ()` at line 28: unknown keyword in `TypedDict` must fire.
 #[test]
 fn e0032_unknown_keyword_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
@@ -1858,7 +1858,7 @@ fn e0032_known_keyword_no_diagnostic() -> Result<(), Box<dyn std::error::Error>>
 // ---------------------------------------------------------------------------
 
 /// E0035 — `FnValue → ()` at line 93: rule must actually emit diagnostics.
-/// `Required` outside TypedDict must fire E0035.
+/// `Required` outside `TypedDict` must fire E0035.
 #[test]
 fn e0035_required_outside_typed_dict_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
@@ -1878,7 +1878,7 @@ fn e0035_required_outside_typed_dict_fires() -> Result<(), Box<dyn std::error::E
     Ok(())
 }
 
-/// E0035 — `NotRequired` outside TypedDict must also fire.
+/// E0035 — `NotRequired` outside `TypedDict` must also fire.
 #[test]
 fn e0035_not_required_outside_typed_dict_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
@@ -1899,7 +1899,7 @@ fn e0035_not_required_outside_typed_dict_fires() -> Result<(), Box<dyn std::erro
 }
 
 /// E0035 — `is_in_typed_dict_hierarchy` `FnValue → true` at line 78.
-/// If always true, the rule would only check for NESTED usage even outside TypedDict.
+/// If always true, the rule would only check for NESTED usage even outside `TypedDict`.
 /// A non-TypedDict class with Required must still fire E0035.
 #[test]
 fn e0035_non_typed_dict_class_not_exempt() -> Result<(), Box<dyn std::error::Error>> {
@@ -1921,8 +1921,8 @@ fn e0035_non_typed_dict_class_not_exempt() -> Result<(), Box<dyn std::error::Err
 }
 
 /// E0035 — `is_in_typed_dict_hierarchy` `FnValue → false` at line 78.
-/// If always false, TypedDict fields with Required would fire even though they're valid.
-/// Valid TypedDict usage with Required must NOT fire.
+/// If always false, `TypedDict` fields with Required would fire even though they're valid.
+/// Valid `TypedDict` usage with Required must NOT fire.
 #[test]
 fn e0035_required_inside_typed_dict_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
@@ -1943,7 +1943,7 @@ fn e0035_required_inside_typed_dict_no_diagnostic() -> Result<(), Box<dyn std::e
 }
 
 /// E0035 — `annotation_text` `FnValue → Some("xyzzy")` at line 51.
-/// If annotation_text always returned `Some("xyzzy")`, "xyzzy" doesn't contain
+/// If `annotation_text` always returned `Some("xyzzy")`, "xyzzy" doesn't contain
 /// "Required[" so no E0035 would fire on ANYTHING.
 /// This test verifies that an attribute with Required IS detected.
 #[test]
@@ -1966,8 +1966,8 @@ fn e0035_annotation_text_reads_actual_source() -> Result<(), Box<dyn std::error:
     Ok(())
 }
 
-/// E0035 — transitive TypedDict hierarchy: child of TypedDict must also be exempt.
-/// Tests is_in_typed_dict_hierarchy recursion.
+/// E0035 — transitive `TypedDict` hierarchy: child of `TypedDict` must also be exempt.
+/// Tests `is_in_typed_dict_hierarchy` recursion.
 #[test]
 fn e0035_transitive_typed_dict_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
@@ -1989,8 +1989,8 @@ fn e0035_transitive_typed_dict_exempt() -> Result<(), Box<dyn std::error::Error>
     Ok(())
 }
 
-/// E0035 — nested Required inside TypedDict MUST fire.
-/// Exercises the `in_typed_dict` branch: has_nested_required check.
+/// E0035 — nested Required inside `TypedDict` MUST fire.
+/// Exercises the `in_typed_dict` branch: `has_nested_required` check.
 #[test]
 fn e0035_nested_required_in_typed_dict_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(

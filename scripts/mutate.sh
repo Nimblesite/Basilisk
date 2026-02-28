@@ -22,6 +22,7 @@ header() { echo -e "\n${BOLD}${CYAN}▶ $*${RESET}"; }
 ok()     { echo -e "${GREEN}✓ $*${RESET}"; }
 warn()   { echo -e "${YELLOW}⚠ $*${RESET}"; }
 fail()   { echo -e "${RED}✗ $*${RESET}"; }
+diag()   { echo -e "${CYAN}  [diag] $*${RESET}" >&2; }
 
 # ── Parse args ───────────────────────────────────────────────────────────────
 DIFF_MODE=false
@@ -56,6 +57,13 @@ if ! cargo mutants --version &>/dev/null; then
 fi
 ok "cargo-mutants $(cargo mutants --version)"
 
+diag "rustc: $(rustc --version)"
+diag "cargo: $(cargo --version)"
+diag "toolchain: $(rustup show active-toolchain 2>/dev/null || echo 'unknown')"
+
+# ── Sanity-check: clean build MUST pass before handing off to cargo-mutants ──
+header "Pre-flight: clean build check"
+
 # Packages with complete, passing test suites — the only ones we mutate.
 MUTATE_PACKAGES=(
     basilisk-parser
@@ -70,21 +78,66 @@ for pkg in "${MUTATE_PACKAGES[@]}"; do
     PKG_ARGS+=(--package "$pkg")
 done
 
+diag "Wiping stale build artifacts to prevent cargo-mutants cache poisoning..."
+cargo clean "${PKG_ARGS[@]}" 2>&1 | sed 's/^/  [clean] /'
+
+diag "Verifying test build compiles cleanly..."
+if ! cargo test --no-run "${PKG_ARGS[@]}" 2>&1 | tee /tmp/basilisk-preflight.log | sed 's/^/  [build] /'; then
+    fail "PRE-FLIGHT BUILD FAILED — cargo-mutants would fail too. Fix compilation first."
+    echo ""
+    fail "Full build output:"
+    cat /tmp/basilisk-preflight.log
+    exit 1
+fi
+ok "Pre-flight build passed"
+
+diag "Verifying tests actually pass..."
+if ! cargo test "${PKG_ARGS[@]}" 2>&1 | tee /tmp/basilisk-tests.log | grep -E "^test result|FAILED|error\[" | sed 's/^/  [test] /'; then
+    fail "TESTS FAILED — fix tests before running mutation testing."
+    echo ""
+    fail "Full test output:"
+    cat /tmp/basilisk-tests.log
+    exit 1
+fi
+
+# Confirm no failures in the test output
+if grep -q "FAILED" /tmp/basilisk-tests.log; then
+    fail "PRE-FLIGHT TESTS FAILED:"
+    grep "FAILED" /tmp/basilisk-tests.log
+    exit 1
+fi
+ok "Pre-flight tests passed"
+
 # ── Run ───────────────────────────────────────────────────────────────────────
 if [[ "$DIFF_MODE" == true ]]; then
     header "Mutation test — changed lines vs origin/$BASE_BRANCH"
     echo -e "  Base: ${CYAN}origin/$BASE_BRANCH${RESET}"
     echo -e "  Only mutants generated from your diff will be tested.\n"
+    diag "Running: cargo mutants --jobs 4 ${PKG_ARGS[*]} --in-diff origin/$BASE_BRANCH..HEAD"
     cargo mutants --jobs 4 "${PKG_ARGS[@]}" --in-diff "origin/$BASE_BRANCH..HEAD" \
-        --output "$REPO_ROOT/mutation_testing/mutants.out"
+        --output "$REPO_ROOT/mutation_testing/mutants.out" 2>&1 \
+        | tee /tmp/basilisk-mutants-run.log
 else
     header "Mutation test — full suite"
     echo -e "  Packages: ${MUTATE_PACKAGES[*]}\n"
+    diag "Running: cargo mutants --jobs 4 ${PKG_ARGS[*]}"
     cargo mutants --jobs 4 "${PKG_ARGS[@]}" \
-        --output "$REPO_ROOT/mutation_testing/mutants.out"
+        --output "$REPO_ROOT/mutation_testing/mutants.out" 2>&1 \
+        | tee /tmp/basilisk-mutants-run.log
 fi
 
 EXIT=$?
+
+# ── Diagnose if cargo-mutants itself failed ───────────────────────────────────
+if [[ $EXIT -ne 0 ]]; then
+    fail "cargo-mutants exited with code $EXIT"
+    echo ""
+    warn "Scanning mutants run log for errors..."
+    grep -E "^error|error\[|FAILED|^ERROR|Failure\(|baseline" /tmp/basilisk-mutants-run.log \
+        | sed 's/^/  [mutants-err] /' || true
+    echo ""
+    warn "Full mutants run log: /tmp/basilisk-mutants-run.log"
+fi
 
 # ── Results ───────────────────────────────────────────────────────────────────
 RESULTS_DIR="$REPO_ROOT/mutation_testing/mutants.out"
@@ -111,6 +164,7 @@ fi
 
 echo ""
 echo -e "${BOLD}Full results:${RESET} $RESULTS_DIR/"
+echo -e "${BOLD}Mutants run log:${RESET} /tmp/basilisk-mutants-run.log"
 
 # ── HTML report ───────────────────────────────────────────────────────────────
 REPORT_SCRIPT="$REPO_ROOT/mutation_testing/mutants_report.py"

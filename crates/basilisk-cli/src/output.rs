@@ -332,7 +332,7 @@ mod tests {
     #[test]
     fn render_diagnostics_json_produces_correct_item_count(
     ) -> Result<(), Box<dyn std::error::Error>> {
-        use basilisk_checker::{check, ErrorCode, Severity};
+        use basilisk_checker::{ErrorCode, Severity};
         use basilisk_resolver::Span;
         let d1 = Diagnostic {
             code: ErrorCode {
@@ -358,7 +358,7 @@ mod tests {
             help: None,
             note: None,
         };
-        let sources = vec![FileSource {
+        let sources = [FileSource {
             path: "a.py".to_owned(),
             text: "def foo(x): pass".to_owned(),
         }];
@@ -417,16 +417,14 @@ mod tests {
             help: None,
             note: None,
         };
-        let sources = vec![
-            FileSource {
+        let sources = [FileSource {
                 path: "a.py".to_owned(),
                 text: "aaaa\nbbbb".to_owned(),
             },
             FileSource {
                 path: "b.py".to_owned(),
                 text: "x = 1\n".to_owned(),
-            },
-        ];
+            }];
         let source = sources
             .iter()
             .find(|s| s.path == diag.path)
@@ -440,9 +438,9 @@ mod tests {
 
     // ── render_diagnostics_json: - / * mutants at output.rs:97 ──────────────
 
-    /// BinaryOperator `-`/`*` mutants at line 97 in `render_diagnostics_json`.
+    /// `BinaryOperator` `-`/`*` mutants at line 97 in `render_diagnostics_json`.
     /// Line 97 computes end position: `byte_offset_to_line_col(src, d.span.end as usize)`.
-    /// We verify end_col > col for a span that crosses characters.
+    /// We verify `end_col` > col for a span that crosses characters.
     #[test]
     fn render_diagnostics_json_end_position_after_start() -> Result<(), Box<dyn std::error::Error>>
     {
@@ -513,11 +511,11 @@ mod tests {
 
     // ── render_snippet: - / * / + mutants (lines 165, 168, 169) ────────────
 
-    /// BinaryOperator `-`/`*` mutants at line 165: `line_start = rfind('\n').map_or(0, |p| p + 1)`.
-    /// The `+ 1` skips the newline byte. Without it, line_start points at '\n' itself.
-    /// That would make col_start negative (panic) or wrong.
-    /// This test indirectly validates by requiring render_snippet to not panic AND produce
-    /// meaningful output — if line_start is off by 1, col_start = start - (line_start-1) is wrong.
+    /// `BinaryOperator` `-`/`*` mutants at line 165: `line_start = rfind('\n').map_or(0, |p| p + 1)`.
+    /// The `+ 1` skips the newline byte. Without it, `line_start` points at '\n' itself.
+    /// That would make `col_start` negative (panic) or wrong.
+    /// This test indirectly validates by requiring `render_snippet` to not panic AND produce
+    /// meaningful output — if `line_start` is off by 1, `col_start` = start - (line_start-1) is wrong.
     #[test]
     fn render_snippet_line_start_skips_newline() {
         // "hello\nworld" — span at bytes 8..10 ("rl")
@@ -530,9 +528,9 @@ mod tests {
         render_snippet(source, 8, 10);
     }
 
-    /// BinaryOperator `+` → `-` / `+` mutants at line 168: `col_start = start - line_start`.
-    /// If this becomes `start + line_start`, col_start would be huge and `.repeat()` would OOM.
-    /// We verify render_snippet completes without panic for a span mid-line.
+    /// `BinaryOperator` `+` → `-` / `+` mutants at line 168: `col_start = start - line_start`.
+    /// If this becomes `start + line_start`, `col_start` would be huge and `.repeat()` would OOM.
+    /// We verify `render_snippet` completes without panic for a span mid-line.
     #[test]
     fn render_snippet_col_start_no_overflow() {
         // "abcdef\nghijkl" — span at bytes 9..12 ("ijk")
@@ -542,8 +540,8 @@ mod tests {
         render_snippet(source, 9, 12); // must not panic or OOM
     }
 
-    /// BinaryOperator `+` → `-` mutant at line 169: `col_end = (end - line_start).min(len)`.
-    /// If `end - line_start` becomes `end + line_start`, col_end > line len → clamped by .min().
+    /// `BinaryOperator` `+` → `-` mutant at line 169: `col_end = (end - line_start).min(len)`.
+    /// If `end - line_start` becomes `end + line_start`, `col_end` > line len → clamped by .`min()`.
     /// If it becomes `end - line_start` with wrong sign... verify no panic.
     #[test]
     fn render_snippet_col_end_no_overflow() {
@@ -552,10 +550,10 @@ mod tests {
         render_snippet(source, 12, 14); // must not panic
     }
 
-    /// Verify render_snippet produces correct underline length.
+    /// Verify `render_snippet` produces correct underline length.
     /// We can't easily capture stdout, but we verify the inputs produce valid math:
-    /// col_start = start - line_start, col_end = (end - line_start).min(len)
-    /// underline_len = col_end.saturating_sub(col_start).max(1)
+    /// `col_start` = start - `line_start`, `col_end` = (end - `line_start).min(len`)
+    /// `underline_len` = `col_end.saturating_sub(col_start).max(1)`
     #[test]
     fn render_snippet_arithmetic_properties() {
         let source = "hello world\n";

@@ -1,0 +1,185 @@
+//! BSK-E0067: Non-member referenced in `Literal[EnumClass.X]` annotation.
+//!
+//! The `Literal[EnumClass.X]` type is only valid when `X` is an actual enum
+//! member. Using it with a non-member (a method, property, lambda, nested
+//! class, private attribute, or `nonmember()`-wrapped attribute) is a type error.
+//!
+//! ```python
+//! from enum import Enum, nonmember
+//! from typing import Literal
+//!
+//! class Pet4(Enum):
+//!     CAT = 1
+//!     converter = lambda x: str(x)  # Non-member (lambda)
+//!
+//!     def speak(self) -> None: ...  # Non-member (method)
+//!
+//! converter: Literal[Pet4.converter]  # E — converter is not an enum member
+//! speak: Literal[Pet4.speak]          # E — speak is not an enum member
+//! ```
+
+use std::collections::HashMap;
+
+use basilisk_resolver::{ClassInfo, ResolvedModule, Span};
+
+use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+
+use super::{guards::is_enum_class, Rule};
+
+const CODE: ErrorCode = ErrorCode {
+    code: "BSK-E0067",
+    docs_url: "https://basilisk-lang.org/errors/BSK-E0067",
+};
+
+/// Emits BSK-E0067 when a non-member is referenced in `Literal[EnumClass.X]`.
+pub(crate) struct EnumNonMemberInLiteral;
+
+impl Rule for EnumNonMemberInLiteral {
+    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+        // Build a map of enum class names → ClassInfo for lookup.
+        let enum_classes: HashMap<&str, &ClassInfo> = module
+            .classes
+            .iter()
+            .filter(|c| is_enum_class(c))
+            .map(|c| (c.name.as_str(), c))
+            .collect();
+
+        if enum_classes.is_empty() {
+            return;
+        }
+
+        let source = &module.source;
+        let path = &module.path;
+
+        // Check module-level annotated variables for `Literal[ClassName.X]` annotations.
+        for var in &module.module_vars {
+            let Some(ann_span) = var.annotation_span else { continue };
+            let Some(ann_text) =
+                source.get(ann_span.start as usize..ann_span.end as usize)
+            else {
+                continue;
+            };
+            // Parse `Literal[ClassName.member]` from the annotation text.
+            if let Some((class_name, member_name)) = parse_literal_class_member(ann_text.trim()) {
+                let Some(cls) = enum_classes.get(class_name) else {
+                    continue;
+                };
+                if is_non_member(cls, member_name) {
+                    diagnostics.push(make_diagnostic(
+                        ann_span,
+                        class_name,
+                        member_name,
+                        path,
+                    ));
+                }
+            }
+        }
+
+        // Check assert_type second arguments for invalid Literal[EnumClass.X] types.
+        for call in &module.assert_type_calls {
+            if call.arg_count != 2 {
+                continue;
+            }
+            let Some(expected) = &call.expected_type else { continue };
+            if let Some((class_name, member_name)) = parse_literal_class_member(expected.trim()) {
+                let Some(cls) = enum_classes.get(class_name) else {
+                    continue;
+                };
+                if is_non_member(cls, member_name) {
+                    diagnostics.push(make_diagnostic(
+                        call.span,
+                        class_name,
+                        member_name,
+                        path,
+                    ));
+                }
+            }
+        }
+    }
+}
+
+/// Parse a `Literal[ClassName.member_name]` annotation.
+///
+/// Returns `Some((class_name, member_name))` when the annotation exactly
+/// matches the `Literal[X.Y]` form with a single class-member reference.
+///
+/// Returns `None` for multi-member Literals, non-Literal annotations, or
+/// annotations without a `.` in the Literal argument.
+fn parse_literal_class_member(ann: &str) -> Option<(&str, &str)> {
+    // Strip `Literal[` prefix and `]` suffix.
+    let inner = ann.strip_prefix("Literal[")?;
+    let inner = inner.strip_suffix(']')?;
+    // Only handle single-item Literals (no comma means no union).
+    if inner.contains(',') {
+        return None;
+    }
+    // Must have exactly one `.` separator.
+    let dot_pos = inner.find('.')?;
+    let class_name = &inner[..dot_pos];
+    let member_name = &inner[dot_pos + 1..];
+    // Both parts must be non-empty simple identifiers.
+    if class_name.is_empty() || member_name.is_empty() {
+        return None;
+    }
+    // Class name must not contain dots or brackets.
+    if class_name.contains('.') || class_name.contains('[') {
+        return None;
+    }
+    // Member name must not contain dots or brackets.
+    if member_name.contains('.') || member_name.contains('[') {
+        return None;
+    }
+    Some((class_name, member_name))
+}
+
+/// Returns `true` when `member_name` is NOT a real enum member of `cls`.
+///
+/// A name is considered a non-member when:
+/// - It is a method of the class (defined with `def`).
+/// - It starts with `__` but does not end with `__` (private name-mangled attribute).
+/// - It is declared with `nonmember(...)` as the RHS.
+fn is_non_member(cls: &ClassInfo, member_name: &str) -> bool {
+    // Private names (name-mangling): `__X` where X does not end with `__`.
+    if member_name.starts_with("__") && !member_name.ends_with("__") {
+        return true;
+    }
+
+    // Method names defined with `def` in the class body.
+    if cls.method_names.iter().any(|m| m.as_str() == member_name) {
+        return true;
+    }
+
+    // Class body attributes explicitly declared with `nonmember(...)`.
+    if cls
+        .attributes
+        .iter()
+        .any(|a| a.name == member_name && a.rhs_is_nonmember_call)
+    {
+        return true;
+    }
+
+    false
+}
+
+fn make_diagnostic(span: Span, class_name: &str, member_name: &str, path: &str) -> Diagnostic {
+    Diagnostic {
+        code: CODE.clone(),
+        severity: Severity::Error,
+        message: format!(
+            "`{class_name}.{member_name}` is not an enum member and cannot be used in \
+             `Literal[{class_name}.{member_name}]`"
+        ),
+        span,
+        path: path.to_owned(),
+        help: Some(format!(
+            "`{member_name}` is a non-member attribute of `{class_name}` — only actual enum \
+             members can appear inside `Literal[...]`"
+        )),
+        note: Some(
+            "PEP 435 / typing spec: Methods, properties, descriptors, nested classes, \
+             private attributes, and `nonmember()`-wrapped attributes are not enum members \
+             and cannot be used in `Literal[EnumClass.X]` type expressions"
+                .to_owned(),
+        ),
+    }
+}

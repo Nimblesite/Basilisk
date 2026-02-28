@@ -52,7 +52,7 @@ impl Rule for TooFewArguments {
 
             // Keyword arguments may satisfy positional requirements —
             // conservatively skip the check if any keywords are present.
-            if call.keyword_count > 0 {
+            if !call.keywords.is_empty() {
                 continue;
             }
 

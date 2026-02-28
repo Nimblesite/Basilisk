@@ -48,6 +48,22 @@ pub(crate) mod e0047;
 pub(crate) mod e0048;
 pub(crate) mod e0049;
 pub(crate) mod e0050;
+pub(crate) mod e0051;
+pub(crate) mod e0052;
+pub(crate) mod e0053;
+pub(crate) mod e0054;
+pub(crate) mod e0055;
+pub(crate) mod e0056;
+pub(crate) mod e0057;
+pub(crate) mod e0058;
+pub(crate) mod e0059;
+pub(crate) mod e0060;
+pub(crate) mod e0061;
+pub(crate) mod e0062;
+pub(crate) mod e0063;
+pub(crate) mod e0064;
+pub(crate) mod e0065;
+pub(crate) mod e0066;
 pub(crate) mod guards;
 
 use basilisk_resolver::ResolvedModule;
@@ -109,6 +125,22 @@ pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
         &e0048::TypeAliasInvalidRhs,
         &e0049::MultipleUnboundedTupleTypes,
         &e0050::InvalidNewType,
+        &e0051::InvalidLiteralParam,
+        &e0052::FrozenDataclassAssignment,
+        &e0053::AssertTypeMismatch,
+        &e0054::FinalAnnotationViolation,
+        &e0055::TypeVarInvalidKwargs,
+        &e0056::TypeAliasTypeInvalidRhs,
+        &e0057::TypeStatementInvalidRhs,
+        &e0058::AnnotatedTooFewArguments,
+        &e0059::MatchArgsFalseAccess,
+        &e0060::CrossTypeDataclassOrderComparison,
+        &e0061::AssertTypeEnumLiteralMismatch,
+        &e0062::NoReturnFallThrough,
+        &e0063::NonHashableDataclassAssignment,
+        &e0064::InvalidNamedTupleCall,
+        &e0065::FloatParamIntAttrAccess,
+        &e0066::EnumValueTypeMismatch,
     ];
 
     rules.iter().fold(Vec::new(), |mut acc, rule| {

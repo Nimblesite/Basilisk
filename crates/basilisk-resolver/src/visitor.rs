@@ -1165,11 +1165,18 @@ fn call_site_from_expr(expr: &Expr) -> Option<CallSite> {
         .iter()
         .map(|arg| (classify_rhs(arg), text_range_to_span(arg.range())))
         .collect();
-    let keyword_count = call.arguments.keywords.len();
+    let keywords: Vec<(String, RhsKind)> = call
+        .arguments
+        .keywords
+        .iter()
+        .filter_map(|kw| {
+            kw.arg.as_ref().map(|name| (name.to_string(), classify_rhs(&kw.value)))
+        })
+        .collect();
     Some(CallSite {
         callee,
         args,
-        keyword_count,
+        keywords,
         span: text_range_to_span(call.range()),
     })
 }

@@ -293,7 +293,7 @@ mod tests {
     //   line 65  > → ==/</>= : Json path, i32::from(error_count > 0)
     //   line 81  > → >=   : Text path, i32::from(error_count > 0)
 
-    /// run_check Json path: bad code must return 1.
+    /// `run_check` Json path: bad code must return 1.
     /// Kills `!=` at line 63 (which would invert the severity filter)
     /// and `== / < / >=` at line 65 (which would change the return value).
     #[test]
@@ -308,7 +308,7 @@ mod tests {
         Ok(())
     }
 
-    /// run_check Json path: clean code must return 0.
+    /// `run_check` Json path: clean code must return 0.
     /// Kills `==` mutant at line 65 (which would return 1 for clean code).
     #[test]
     fn run_check_json_clean_code_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
@@ -322,7 +322,7 @@ mod tests {
         Ok(())
     }
 
-    /// run_check Text path: bad code must return 1.
+    /// `run_check` Text path: bad code must return 1.
     /// Kills `>=` mutant at line 81 (which always returns 1 since usize >= 0).
     #[test]
     fn run_check_text_bad_code_returns_one() -> Result<(), Box<dyn std::error::Error>> {
@@ -336,7 +336,7 @@ mod tests {
         Ok(())
     }
 
-    /// run_check Text path: clean code must return 0.
+    /// `run_check` Text path: clean code must return 0.
     /// Kills `>=` mutant at line 81: if `> 0` became `>= 0`, clean code (count=0) would return 1.
     #[test]
     fn run_check_text_clean_code_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
@@ -350,7 +350,7 @@ mod tests {
         Ok(())
     }
 
-    /// run_check internal error path: nonexistent path must return 3.
+    /// `run_check` internal error path: nonexistent path must return 3.
     #[test]
     fn run_check_nonexistent_path_returns_three() {
         let code = run_check(&["/no/such/path.py".to_owned()], OutputFormat::Text);
@@ -362,7 +362,7 @@ mod tests {
     /// `collect_python_files` — `MatchArmGuard → true` at line 129.
     /// The guard `e.kind() == ErrorKind::NotFound` distinguishes "not found" from
     /// other I/O errors. If the guard is replaced with `true`, ALL I/O errors
-    /// would return Err instead of continuing. We test that the NotFound path
+    /// would return Err instead of continuing. We test that the `NotFound` path
     /// specifically returns Err (not Ok with empty list).
     #[test]
     fn collect_python_files_not_found_returns_err() {

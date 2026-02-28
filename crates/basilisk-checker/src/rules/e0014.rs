@@ -80,6 +80,17 @@ fn annotation_rhs_mismatch(annotation: &str, rhs: &RhsKind) -> Option<Mismatch> 
             rhs_description: "an `int` literal",
         }),
 
+        // `None` is not a valid value for container/iterable types.
+        // These annotations (without Optional/union wrappers) cannot hold None.
+        (
+            "iterable" | "iterator" | "sequence" | "list" | "set" | "frozenset"
+            | "dict" | "mapping" | "mutablemapping" | "mutablesequence"
+            | "collection" | "sized" | "container",
+            RhsKind::NoneValue,
+        ) => Some(Mismatch {
+            rhs_description: "`None` (not iterable/subscriptable)",
+        }),
+
         _ => None,
     }
 }

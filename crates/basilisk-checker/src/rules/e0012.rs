@@ -87,6 +87,11 @@ fn arg_rhs_mismatch(annotation: &str, rhs: &RhsKind) -> Option<&'static str> {
         ("int" | "str" | "float", RhsKind::BytesLiteral) => Some("a `bytes` literal"),
         ("int" | "str" | "bool", RhsKind::FloatLiteral) => Some("a `float` literal"),
         ("str" | "bytes", RhsKind::IntLiteral) => Some("an `int` literal"),
+        // `None` literal passed where a class/type object is expected.
+        // `type[X]` means a class object; passing `None` value is always wrong.
+        ("type", RhsKind::NoneValue) => {
+            Some("`None` (a value, not a class object — use `type(None)` or `NoneType`)")
+        }
         _ => None,
     }
 }

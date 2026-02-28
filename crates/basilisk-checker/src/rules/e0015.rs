@@ -8,12 +8,15 @@
 //! | `list[...]`      | exactly 1 | 0 or 2+ args |
 //! | `set[...]`       | exactly 1 | 0 or 2+ args |
 //! | `frozenset[...]` | exactly 1 | 0 or 2+ args |
+//! | `type[...]`      | exactly 1 | 0 or 2+ args |
+//! | `Type[...]`      | exactly 1 | 0 or 2+ args |
 //! | `dict[...]`      | exactly 2 | 0, 1, or 3+ args |
 //!
 //! The check is text-based: the annotation string is extracted from the source
-//! around each annotated parameter's name span.
+//! around each annotated parameter's name span.  Module-level variable
+//! annotations are also checked.
 
-use basilisk_resolver::{FunctionInfo, ParameterInfo, ResolvedModule, Span};
+use basilisk_resolver::{FunctionInfo, ParameterInfo, ResolvedModule, Span, VariableInfo};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
@@ -34,6 +37,11 @@ impl Rule for InvalidTypeArgCount {
             .functions
             .iter()
             .for_each(|func| check_function(func, &module.source, &module.path, diagnostics));
+
+        module
+            .module_vars
+            .iter()
+            .for_each(|var| check_module_var(var, &module.source, &module.path, diagnostics));
     }
 }
 
@@ -56,8 +64,21 @@ fn check_param(param: &ParameterInfo, source: &str, path: &str, out: &mut Vec<Di
     }
     if let Some(annotation) = extract_param_annotation(source, param.name_span) {
         if let Some(violation) = check_annotation(annotation) {
-            out.push(make_diagnostic(param, annotation, &violation, path));
+            out.push(make_param_diagnostic(param, annotation, &violation, path));
         }
+    }
+}
+
+/// Check a module-level variable annotation (e.g. `bad_type1: type[int, str]`).
+fn check_module_var(var: &VariableInfo, source: &str, path: &str, out: &mut Vec<Diagnostic>) {
+    let Some(ann_span) = var.annotation_span else {
+        return;
+    };
+    let Some(annotation) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+        return;
+    };
+    if let Some(violation) = check_annotation(annotation.trim()) {
+        out.push(make_var_diagnostic(var, annotation.trim(), &violation, path));
     }
 }
 
@@ -81,7 +102,7 @@ fn check_annotation(annotation: &str) -> Option<Violation> {
     let arg_count = count_type_args(inner);
 
     let expected: usize = match generic_name.as_str() {
-        "list" | "set" | "frozenset" => 1,
+        "list" | "set" | "frozenset" | "type" => 1,
         "dict" => 2,
         _ => return None,
     };
@@ -167,7 +188,7 @@ fn extract_param_annotation(source: &str, name_span: Span) -> Option<&str> {
     }
 }
 
-fn make_diagnostic(
+fn make_param_diagnostic(
     param: &ParameterInfo,
     annotation: &str,
     violation: &Violation,
@@ -188,6 +209,43 @@ fn make_diagnostic(
             if violation.found == 1 { "was" } else { "were" },
         ),
         span: param.name_span,
+        path: path.to_owned(),
+        help: Some(format!(
+            "`{}` requires exactly {} type argument{}; e.g. `{}[{}]`",
+            violation.generic_name,
+            violation.expected,
+            if violation.expected == 1 { "" } else { "s" },
+            violation.generic_name,
+            (0..violation.expected)
+                .map(|i| ["T", "K", "V"][i.min(2)])
+                .collect::<Vec<_>>()
+                .join(", "),
+        )),
+        note: Some("Provide the correct number of type arguments for this generic type".to_owned()),
+    }
+}
+
+fn make_var_diagnostic(
+    var: &VariableInfo,
+    annotation: &str,
+    violation: &Violation,
+    path: &str,
+) -> Diagnostic {
+    Diagnostic {
+        code: CODE.clone(),
+        severity: Severity::Error,
+        message: format!(
+            "Invalid type argument count in annotation `{}` on `{}`: \
+             `{}` takes {} type argument{} but {} {} provided",
+            annotation,
+            var.name,
+            violation.generic_name,
+            violation.expected,
+            if violation.expected == 1 { "" } else { "s" },
+            violation.found,
+            if violation.found == 1 { "was" } else { "were" },
+        ),
+        span: var.name_span,
         path: path.to_owned(),
         help: Some(format!(
             "`{}` requires exactly {} type argument{}; e.g. `{}[{}]`",

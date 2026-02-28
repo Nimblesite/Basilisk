@@ -131,10 +131,7 @@ fn has_top_level_union(s: &str) -> bool {
 }
 
 fn is_typevar_parameterized_subscript(s: &str) -> bool {
-    let bracket_pos = match s.find('[') {
-        Some(p) => p,
-        None => return false,
-    };
+    let Some(bracket_pos) = s.find('[') else { return false };
     let base_name = s[..bracket_pos].trim();
     if !base_name.chars().all(|c| c.is_alphanumeric() || c == '_') {
         return false;
@@ -171,7 +168,7 @@ fn inner_has_typevar(s: &str) -> bool {
 
 fn looks_like_typevar(s: &str) -> bool {
     let s = s.trim();
-    if s.len() == 1 && s.chars().next().is_some_and(|c| c.is_uppercase()) {
+    if s.len() == 1 && s.chars().next().is_some_and(char::is_uppercase) {
         return true;
     }
     if s.starts_with(|c: char| c.is_uppercase())
@@ -246,5 +243,185 @@ impl Rule for InvalidNewType {
         for info in &module.newtype_calls {
             check_newtype_call(info, source, path, &typeddict_names, diagnostics);
         }
+
+        // Collect all NewType names defined in this module.
+        let newtype_names: std::collections::HashSet<&str> = module
+            .newtype_calls
+            .iter()
+            .map(|nt| nt.lhs_name.as_str())
+            .collect();
+
+        if newtype_names.is_empty() {
+            return;
+        }
+
+        check_newtype_subclassing(module, &newtype_names, diagnostics);
+        check_newtype_subscript_uses(module, source, path, &newtype_names, diagnostics);
+        check_newtype_assigned_to_type(module, source, path, &newtype_names, diagnostics);
+        check_isinstance_with_newtype(module, source, path, &newtype_names, diagnostics);
     }
+}
+
+/// Subclassing a `NewType` is not allowed (PEP 484).
+fn check_newtype_subclassing(
+    module: &ResolvedModule,
+    newtype_names: &std::collections::HashSet<&str>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let path = &module.path;
+    for cls in &module.classes {
+        for base in &cls.bases {
+            if newtype_names.contains(base.as_str()) {
+                diagnostics.push(make_diagnostic(
+                    format!(
+                        "Class `{}` cannot subclass `{}` which is a `NewType`",
+                        cls.name, base
+                    ),
+                    cls.def_span,
+                    path,
+                ));
+            }
+        }
+    }
+}
+
+/// Using a `NewType` as a generic subscript (`MyNewType[int]`) is not allowed.
+fn check_newtype_subscript_uses(
+    module: &ResolvedModule,
+    source: &str,
+    path: &str,
+    newtype_names: &std::collections::HashSet<&str>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for func in &module.functions {
+        for param in func
+            .parameters
+            .iter()
+            .chain(func.vararg.iter())
+            .chain(func.kwarg.iter())
+        {
+            if let Some(ann) = span_text(source, param.annotation_span) {
+                if is_newtype_subscript(ann.trim(), newtype_names) {
+                    diagnostics.push(make_diagnostic(
+                        format!(
+                            "Parameter `{}`: `NewType` cannot be used as a generic type",
+                            param.name
+                        ),
+                        param.name_span,
+                        path,
+                    ));
+                }
+            }
+        }
+    }
+    for var in &module.module_vars {
+        if let Some(ann) = span_text(source, var.annotation_span) {
+            if is_newtype_subscript(ann.trim(), newtype_names) {
+                diagnostics.push(make_diagnostic(
+                    format!(
+                        "Variable `{}`: `NewType` cannot be used as a generic type",
+                        var.name
+                    ),
+                    var.name_span,
+                    path,
+                ));
+            }
+        }
+    }
+    for cls in &module.classes {
+        for attr in &cls.attributes {
+            if let Some(ann) = span_text(source, attr.annotation_span) {
+                if is_newtype_subscript(ann.trim(), newtype_names) {
+                    diagnostics.push(make_diagnostic(
+                        format!(
+                            "Attribute `{}`: `NewType` cannot be used as a generic type",
+                            attr.name
+                        ),
+                        attr.name_span,
+                        path,
+                    ));
+                }
+            }
+        }
+    }
+}
+
+/// `_: type = UserId` — assigning a `NewType` to a `type`-annotated variable is invalid.
+///
+/// PEP 484: `NewType(...)` does not return a class object; it returns a callable.
+fn check_newtype_assigned_to_type(
+    module: &ResolvedModule,
+    source: &str,
+    path: &str,
+    newtype_names: &std::collections::HashSet<&str>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for var in &module.module_vars {
+        let Some(ann_text) = span_text(source, var.annotation_span) else {
+            continue;
+        };
+        if ann_text.trim() != "type" {
+            continue;
+        }
+        let Some(rhs_span) = var.rhs_span else {
+            continue;
+        };
+        let Some(rhs_text) = source.get(rhs_span.start as usize..rhs_span.end as usize) else {
+            continue;
+        };
+        if newtype_names.contains(rhs_text.trim()) {
+            diagnostics.push(make_diagnostic(
+                format!(
+                    "`{}` is a `NewType`, not an instance of `type`; \
+                     `NewType()` does not return a class object",
+                    rhs_text.trim()
+                ),
+                var.name_span,
+                path,
+            ));
+        }
+    }
+}
+
+/// `isinstance(u2, UserId)` — using a `NewType` as the second argument to `isinstance` is invalid.
+///
+/// PEP 484: the object returned by `NewType(...)` is not a class and cannot be
+/// used as the second argument to `isinstance` or `issubclass`.
+fn check_isinstance_with_newtype(
+    module: &ResolvedModule,
+    source: &str,
+    path: &str,
+    newtype_names: &std::collections::HashSet<&str>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for call in &module.calls {
+        if call.callee != "isinstance" {
+            continue;
+        }
+        let Some((_, second_span)) = call.args.get(1) else {
+            continue;
+        };
+        let Some(arg_text) = source.get(second_span.start as usize..second_span.end as usize)
+        else {
+            continue;
+        };
+        if newtype_names.contains(arg_text.trim()) {
+            diagnostics.push(make_diagnostic(
+                format!(
+                    "`{}` is a `NewType` and cannot be used as the second argument \
+                     to `isinstance`; `NewType` types are not runtime classes",
+                    arg_text.trim()
+                ),
+                call.span,
+                path,
+            ));
+        }
+    }
+}
+
+/// Returns `true` if the annotation text looks like `NewTypeName[...]`.
+fn is_newtype_subscript(ann: &str, newtype_names: &std::collections::HashSet<&str>) -> bool {
+    let Some(bracket_pos) = ann.find('[') else { return false };
+    let name_part = ann[..bracket_pos].trim();
+    newtype_names.contains(name_part)
 }

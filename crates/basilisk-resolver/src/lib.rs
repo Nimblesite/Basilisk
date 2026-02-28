@@ -9,11 +9,16 @@ pub mod scope;
 mod visitor;
 
 pub use scope::{
-    AssertTypeCallInfo, AttributeInfo, CallSite, ClassInfo, FinalViolationInfo, FinalViolationKind,
-    FunctionInfo, GenericParamInfo, ImportInfo, ImportKind, MatchStmtInfo, ModuleAttrAssignment,
-    ModuleBareAssignment, NewTypeCallInfo, ParameterInfo, ResolvedModule, ReturnAnnotationKind,
-    ReturnStmtInfo, RevealTypeCallInfo, RhsKind, Span, TypeVarCallInfo, TypedDictCallInfo,
-    TypedDictSecondArgKind, UnhashableKeyRef, VariableInfo,
+    AnnotatedTooFewArgs, AssertTypeCallInfo, AttributeInfo, CallSite, ClassInfo, CompareOp,
+    EnumValueTypeViolationInfo, EnumValueTypeViolationKind, FinalViolationInfo, FinalViolationKind,
+    FloatParamIntAttrAccess, FunctionInfo, GenericParamInfo, HistoricalPositionalViolation,
+    HistoricalPositionalViolationKind, ImportInfo, ImportKind, InvalidStringAnnotation,
+    InvalidStringAnnotationKind, LiteralStringEnumMismatch, LocalClassVarViolation, MatchStmtInfo,
+    ModuleAttrAccessInfo, ModuleAttrAssignment, ModuleBareAssignment, ModuleOrderComparisonInfo,
+    NamedTupleDefInfo, NewTypeCallInfo, ParameterInfo, Pep695BoundViolation,
+    Pep695BoundViolationKind, ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo,
+    RevealTypeCallInfo, RhsKind, Span, TypeAliasTypeCallInfo, TypeStatementInfo, TypeVarCallInfo,
+    TypedDictCallInfo, TypedDictSecondArgKind, UnhashableKeyRef, VariableInfo,
 };
 
 use basilisk_parser::ParsedModule;

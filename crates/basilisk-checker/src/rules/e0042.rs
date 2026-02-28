@@ -86,16 +86,42 @@ impl Rule for Pep695TraditionalTypeVarMix {
             .map(|tv| tv.name.as_str())
             .collect();
 
-        if traditional_typevars.is_empty() {
-            return;
-        }
-
         // Check classes: if a class uses PEP 695 syntax and references a traditional
         // TypeVar in its base expressions that is NOT one of its own PEP 695 params.
+        // Also check for redundant `Generic[T]` or `Protocol[T]` with PEP 695 syntax.
         for cls in &module.classes {
             if !cls.has_pep695_type_params {
                 continue;
             }
+
+            // PEP 695: using Generic[T] or Protocol[T] with bracket syntax is invalid —
+            // the class already declares its type params with [T, ...] syntax.
+            // Detect this by checking if Generic/Protocol appears in base_expression_names
+            // but NOT in bases (meaning it's subscripted, not bare).
+            let bases_set: HashSet<&str> = cls.bases.iter().map(String::as_str).collect();
+            for generic_name in &["Generic", "Protocol"] {
+                let in_expressions = cls
+                    .base_expression_names
+                    .iter()
+                    .any(|n| n.as_str() == *generic_name);
+                let in_bases = bases_set.contains(*generic_name);
+                if in_expressions && !in_bases {
+                    diagnostics.push(make_diagnostic(
+                        format!(
+                            "Class `{}` uses PEP 695 type parameter syntax but also \
+                             inherits from parameterized `{}[...]`; use bare `{}` instead",
+                            cls.name, generic_name, generic_name
+                        ),
+                        cls.name_span,
+                        &module.path,
+                    ));
+                }
+            }
+
+            if traditional_typevars.is_empty() {
+                continue;
+            }
+
             let own_params: HashSet<&str> = cls
                 .pep695_type_param_names
                 .iter()

@@ -57,7 +57,10 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
 
 /// Collect all local names that refer to `typing.TypeAlias` in this module.
 ///
-/// Handles `from typing import TypeAlias` and `from typing import TypeAlias as TA`.
+/// Handles:
+/// - `from typing import TypeAlias`
+/// - `from typing import TypeAlias as TA`
+/// - `import typing` (used as `typing.TypeAlias`)
 fn collect_type_alias_names(module: &ResolvedModule) -> Vec<String> {
     let mut names = vec!["TypeAlias".to_owned()];
     for import in &module.imports {
@@ -67,26 +70,26 @@ fn collect_type_alias_names(module: &ResolvedModule) -> Vec<String> {
         if import.module != "typing" && import.module != "typing_extensions" {
             continue;
         }
-        // The source may have `from typing import TypeAlias as TA` — we need to
-        // look at the raw source to find aliases since ImportInfo only stores the
-        // names as imported (possibly aliased).
-        // Check if "TypeAlias" appears in the import names or as an alias target.
-        for name in &import.names {
-            if name == "TypeAlias" {
-                // Already covered by default
-            } else {
-                // This could be an alias like `TA` from `from typing import TypeAlias as TA`.
-                // We detect this by checking if the source text of the import contains
-                // `TypeAlias as <name>`.
-                let import_span = import.span;
-                if let Some(import_text) =
-                    module.source.get(import_span.start as usize..import_span.end as usize)
-                {
-                    if import_text.contains(&format!("TypeAlias as {name}")) {
-                        names.push(name.clone());
-                    }
-                }
+        // Scan the raw import source text for `TypeAlias as <alias>` patterns.
+        let import_span = import.span;
+        let Some(import_text) =
+            module.source.get(import_span.start as usize..import_span.end as usize)
+        else {
+            continue;
+        };
+        // Find all occurrences of `TypeAlias as <identifier>`
+        let mut search = import_text;
+        while let Some(pos) = search.find("TypeAlias as ") {
+            let after = &search[pos + "TypeAlias as ".len()..];
+            // Extract the identifier following `TypeAlias as `
+            let alias: String = after
+                .chars()
+                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .collect();
+            if !alias.is_empty() && alias != "TypeAlias" {
+                names.push(alias);
             }
+            search = &search[pos + 1..];
         }
     }
     names

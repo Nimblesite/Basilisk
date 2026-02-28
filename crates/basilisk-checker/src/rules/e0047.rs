@@ -74,6 +74,14 @@ fn is_invalid_type_annotation(ann: &str) -> bool {
         return false;
     }
 
+    // `Annotated[...]` annotations are validated by E0045, which checks the first argument
+    // and enforces the minimum-two-arguments rule.  The metadata arguments (2nd+) may be
+    // arbitrary runtime values including lambdas, calls, and literals, so checking the full
+    // `Annotated[...]` text here would produce false positives.
+    if ann.starts_with("Annotated[") {
+        return false;
+    }
+
     // List literal or list comprehension: starts with `[`
     if ann.starts_with('[') {
         return true;

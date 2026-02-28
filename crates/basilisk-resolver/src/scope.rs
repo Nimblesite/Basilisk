@@ -96,6 +96,12 @@ pub struct FunctionInfo {
     /// Stub bodies are exempt from E0001/E0002/E0004: they appear in overload
     /// signatures, Protocol bodies used as stubs, and `.pyi`-style inline stubs.
     pub is_stub_body: bool,
+    /// `true` when the last top-level statement in the function body unconditionally
+    /// terminates: either a `raise` statement or a standalone call expression (which
+    /// may be a call to a `NoReturn` function).
+    ///
+    /// Used to detect `-> NoReturn`/`-> Never` functions that can fall through.
+    pub body_last_stmt_terminates: bool,
     /// `true` when the function uses PEP 695 type parameter syntax (`def foo[T](): ...`).
     pub has_pep695_type_params: bool,
     /// Names of the PEP 695 type parameters declared in `[...]` for this function.
@@ -135,9 +141,34 @@ pub struct CallSite {
     pub callee: String,
     /// Kinds and spans of positional arguments at the call site.
     pub args: Vec<(RhsKind, Span)>,
-    /// Number of keyword arguments at the call site.
-    pub keyword_count: usize,
+    /// Keyword arguments at the call site: `(name, rhs_kind)` pairs.
+    ///
+    /// For `func(a=1, b="x")`, this is `[("a", IntLiteral), ("b", StrLiteral)]`.
+    /// Only populated for keyword arguments with an explicit name (`arg=val`).
+    /// Star-unpacked kwargs (`**kw`) are not included.
+    pub keywords: Vec<(String, RhsKind)>,
     /// The span of the entire call expression.
+    pub span: Span,
+}
+
+/// A `NamedTuple` definition collected from module-level code.
+///
+/// Covers calls of the form `N = NamedTuple("N", [(field1, type1), ...])`.
+/// Field names are resolved by substituting `Final` string-literal constants.
+#[derive(Debug, Clone)]
+pub struct NamedTupleDefInfo {
+    /// The name the result is bound to (LHS of the assignment).
+    pub lhs_name: String,
+    /// Field names in declaration order.
+    ///
+    /// Each name is either a literal string from the tuple list, or a `Final`
+    /// string constant resolved at resolver time.
+    pub field_names: Vec<String>,
+    /// Field type texts in declaration order (parallel to `field_names`).
+    ///
+    /// Contains the source text of each type expression (e.g. `"int"`, `"str"`).
+    pub field_types: Vec<String>,
+    /// Span of the entire `NamedTuple(...)` call expression.
     pub span: Span,
 }
 
@@ -196,6 +227,47 @@ pub struct AttributeInfo {
     pub annotation_span: Option<Span>,
     /// `true` when a right-hand-side value is present (`name: Type = value`).
     pub has_value: bool,
+    /// The kind of right-hand-side expression, if a value is present.
+    pub rhs_kind: RhsKind,
+    /// The source span of the right-hand-side expression, if present.
+    pub rhs_span: Option<Span>,
+    /// `true` when the right-hand-side is a call to `nonmember(...)`.
+    ///
+    /// In enum class bodies, `nonmember(value)` explicitly marks an attribute
+    /// as a non-member so it is not treated as an enum value.
+    pub rhs_is_nonmember_call: bool,
+}
+
+/// Information about an enum `_value_` type mismatch detected during resolution.
+///
+/// Populated by the resolver visitor; used by `BSK-E0063` to emit diagnostics
+/// without re-walking the AST.
+#[derive(Debug, Clone)]
+pub struct EnumValueTypeViolationInfo {
+    /// The kind of violation.
+    pub kind: EnumValueTypeViolationKind,
+    /// The source span to highlight.
+    pub span: Span,
+    /// The name of the enum class.
+    pub class_name: String,
+    /// The declared `_value_` annotation text.
+    pub declared_type: String,
+    /// The actual type that was assigned (as a descriptive string).
+    pub actual_type: String,
+}
+
+/// What kind of `_value_` type violation was detected.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EnumValueTypeViolationKind {
+    /// A member literal value in the class body conflicts with `_value_: T`.
+    ///
+    /// E.g. `_value_: int` but `GREEN = "green"`.
+    MemberValueTypeMismatch,
+    /// `self._value_ = param` in `__init__` where `param`'s annotation conflicts
+    /// with `_value_: T`.
+    ///
+    /// E.g. `_value_: str` but `def __init__(self, value: int, ...)`.
+    InitValueParamTypeMismatch,
 }
 
 /// A class definition with its attributes and method names.
@@ -226,6 +298,22 @@ pub struct ClassInfo {
     pub is_dataclass: bool,
     /// `true` when the dataclass is decorated with `frozen=True`.
     pub is_dataclass_frozen: bool,
+    /// `true` when the dataclass is decorated with `match_args=False`
+    /// (suppresses `__match_args__` generation).
+    pub is_dataclass_match_args_false: bool,
+    /// `true` when the dataclass is decorated with `order=True`
+    /// (synthesizes ordering comparison methods).
+    pub is_dataclass_order: bool,
+    /// `true` when the dataclass is decorated with `unsafe_hash=True`.
+    ///
+    /// `unsafe_hash=True` forces generation of `__hash__` even when `eq=True`
+    /// and the class is not frozen.
+    pub is_dataclass_unsafe_hash: bool,
+    /// `true` when the dataclass is decorated with `eq=False`.
+    ///
+    /// When `eq=False`, `__hash__` is not touched by the dataclass machinery,
+    /// so the class retains the inherited `__hash__` from `object`.
+    pub is_dataclass_eq_false: bool,
     /// `true` when the class is decorated with `@final` or `typing.final`.
     pub is_final: bool,
     /// `true` when the class directly or transitively inherits from an `Enum` family class.
@@ -276,6 +364,12 @@ pub struct TypeVarCallInfo {
     /// Whether the `bound=` expression is itself parameterized by a `TypeVar`
     /// (e.g. `TypeVar("T", bound=list[T])` — bound `list[T]` contains a `TypeVar`).
     pub has_parameterized_bound: bool,
+    /// Whether `covariant=True` keyword argument is present.
+    pub is_covariant: bool,
+    /// Whether `contravariant=True` keyword argument is present.
+    pub is_contravariant: bool,
+    /// Whether `infer_variance=True` keyword argument is present.
+    pub has_infer_variance: bool,
     /// The span of the entire `TypeVar` call expression.
     pub span: Span,
 }
@@ -455,6 +549,210 @@ pub struct ModuleAttrAssignment {
     pub target_span: Span,
 }
 
+/// A module-level attribute access expression (`Name.attr` as a standalone statement).
+///
+/// Used to detect reads of attributes that may not be generated (e.g. `DC.__match_args__`
+/// on a dataclass with `match_args=False`).
+#[derive(Debug, Clone)]
+pub struct ModuleAttrAccessInfo {
+    /// The object/class name on the left of the dot.
+    pub object_name: String,
+    /// The attribute name being accessed.
+    pub attr_name: String,
+    /// Span of the entire `Name.attr` expression.
+    pub span: Span,
+}
+
+/// Comparison operators used in ordering comparisons.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CompareOp {
+    /// `<`
+    Lt,
+    /// `<=`
+    LtE,
+    /// `>`
+    Gt,
+    /// `>=`
+    GtE,
+}
+
+/// A module-level comparison between two simple names using an ordering operator.
+///
+/// Used to detect cross-type ordering comparisons of `order=True` dataclass instances.
+#[derive(Debug, Clone)]
+pub struct ModuleOrderComparisonInfo {
+    /// Name of the left operand.
+    pub left_name: String,
+    /// Name of the right operand.
+    pub right_name: String,
+    /// The comparison operator used.
+    pub op: CompareOp,
+    /// Span of the entire comparison expression.
+    pub span: Span,
+}
+
+/// Information about a `TypeAliasType(name, rhs, ...)` call.
+#[derive(Debug, Clone)]
+pub struct TypeAliasTypeCallInfo {
+    /// The LHS variable name.
+    pub lhs_name: String,
+    /// Span of the second argument (the type expression / RHS).
+    pub rhs_span: Option<Span>,
+    /// Span of the entire call.
+    pub span: Span,
+}
+
+/// Information about a PEP 695 `type X = rhs` statement.
+#[derive(Debug, Clone)]
+pub struct TypeStatementInfo {
+    /// The alias name (`X` in `type X = rhs`).
+    pub name: String,
+    /// Span of the RHS value expression.
+    pub rhs_span: Span,
+    /// Span of the name token.
+    pub name_span: Span,
+}
+
+/// Information about an `Annotated[...]` subscription with too few arguments.
+#[derive(Debug, Clone)]
+pub struct AnnotatedTooFewArgs {
+    /// Span of the subscript expression.
+    pub span: Span,
+}
+
+/// An attribute access on a `float`-typed function parameter using an `int`-only attribute.
+///
+/// An annotated assignment in a function body where the declared `Literal` type uses a
+/// quoted string that looks like an enum member (e.g. `"Color.RED"`) but the RHS is
+/// a parameter typed as the actual enum member literal (e.g. `Literal[Color.RED]`).
+///
+/// ```python
+/// def func2(a: Literal[Color.RED]):
+///     x1: Literal["Color.RED"] = a  # E — string ≠ enum member
+/// ```
+///
+/// Used by `BSK-E0066`.
+#[derive(Debug, Clone)]
+pub struct LiteralStringEnumMismatch {
+    /// The variable name being assigned (e.g. `"x1"`).
+    pub var_name: String,
+    /// The annotation text as written (e.g. `Literal["Color.RED"]`).
+    pub annotation: String,
+    /// The enum-member form extracted from the annotation (e.g. `Color.RED`).
+    pub enum_form: String,
+    /// Span of the variable name on the LHS of the assignment.
+    pub span: Span,
+}
+
+/// A `ClassVar` annotation used inside a function body (local variable or
+/// self-attribute assignment) where it is not valid.
+///
+/// PEP 526 forbids `ClassVar` in function bodies, including:
+/// - `x: ClassVar[str] = ""` — local variable annotation
+/// - `self.xx: ClassVar[str] = ""` — attribute annotation on `self` in a method
+///
+/// Used by `BSK-E0036`.
+#[derive(Debug, Clone)]
+pub struct LocalClassVarViolation {
+    /// The variable or attribute name being annotated.
+    pub name: String,
+    /// The source span of the name token.
+    pub name_span: Span,
+    /// Whether this is a self-attribute annotation (e.g. `self.xx: ClassVar[str]`).
+    pub is_self_attr: bool,
+}
+
+/// For example, `f.numerator` where `f: float` is invalid because `float` does not have
+/// `.numerator` — that is an `int`-only attribute.  This is detected only at the
+/// top level of a function body (not inside `if`/`for`/`while`/`match` blocks), so
+/// that `isinstance`-guarded branches (where `f` has been narrowed to `int`) are
+/// excluded.
+///
+/// Used by `BSK-E0065`.
+#[derive(Debug, Clone)]
+pub struct FloatParamIntAttrAccess {
+    /// The name of the parameter (e.g. `"f"`).
+    pub param_name: String,
+    /// The int-only attribute being accessed (e.g. `"numerator"`).
+    pub attr_name: String,
+    /// Span of the entire attribute access expression (e.g. `f.numerator`).
+    pub span: Span,
+}
+
+/// What kind of PEP 695 type parameter bound violation was detected.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Pep695BoundViolationKind {
+    /// The bound is a list literal, e.g. `class Foo[T: [str, int]]`.
+    ListLiteralBound,
+    /// The constraint tuple is empty, e.g. `class Foo[T: ()]`.
+    EmptyTuple,
+    /// The constraint tuple has only one element, e.g. `class Foo[T: (str,)]`.
+    SingleElementTuple,
+    /// The constraint is a non-literal variable, e.g. `class Foo[T: t1]` where `t1 = (bytes, str)`.
+    NonLiteralConstraint,
+    /// A constraint tuple element is not a valid type (e.g. an integer literal `(3, bytes)`).
+    InvalidConstraintElement,
+    /// The bound/constraint references a type variable from outer scope.
+    OuterScopeTypeVarInBound,
+}
+
+/// A PEP 695 type parameter bound violation.
+#[derive(Debug, Clone)]
+pub struct Pep695BoundViolation {
+    /// The kind of violation.
+    pub kind: Pep695BoundViolationKind,
+    /// The name of the class containing the type parameter.
+    pub class_name: String,
+    /// The name of the type parameter with the invalid bound.
+    pub type_param_name: String,
+    /// The span to highlight.
+    pub span: Span,
+}
+
+/// What kind of historical positional-only parameter violation was detected.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HistoricalPositionalViolationKind {
+    /// A `__`-prefixed positional-only parameter was passed as a keyword argument.
+    ///
+    /// E.g. `f1(__x=3)` where `def f1(__x: int) -> None: ...`.
+    KeywordPassedToPositionalOnly,
+    /// A `__`-prefixed parameter appears after a non-`__` positional-or-keyword parameter.
+    ///
+    /// E.g. `def f2(x: int, __y: int) -> None: ...`.
+    PositionalOnlyAfterKeyword,
+}
+
+/// A historical positional-only parameter violation.
+#[derive(Debug, Clone)]
+pub struct HistoricalPositionalViolation {
+    /// The kind of violation.
+    pub kind: HistoricalPositionalViolationKind,
+    /// The span to highlight (either the call site or the function definition).
+    pub span: Span,
+    /// The name involved (parameter name or function name).
+    pub name: String,
+}
+
+/// What kind of invalid string annotation was detected.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InvalidStringAnnotationKind {
+    /// The annotation string contains a non-name, non-subscript expression.
+    NonTypeExpression,
+    /// The annotation string starts with `f"` (f-string, not a valid type annotation).
+    FStringAnnotation,
+    /// The annotation string is used in a union with `|` operator (e.g. `"ClassA" | int`).
+    StringInUnion,
+}
+
+/// An invalid string annotation detected during AST resolution.
+#[derive(Debug, Clone)]
+pub struct InvalidStringAnnotation {
+    /// The kind of invalidity.
+    pub kind: InvalidStringAnnotationKind,
+    /// The span of the annotation expression.
+    pub span: Span,
+}
+
 /// The complete resolved view of a parsed module.
 #[derive(Debug)]
 pub struct ResolvedModule {
@@ -495,8 +793,84 @@ pub struct ResolvedModule {
     pub module_bare_assignments: Vec<ModuleBareAssignment>,
     /// Module-level attribute assignments (`Class.attr = expr`).
     pub module_attr_assignments: Vec<ModuleAttrAssignment>,
+    /// Module-level attribute accesses (`Name.attr` as a standalone expression statement).
+    ///
+    /// Used by `BSK-E0057` to detect reads of `__match_args__` on dataclasses where
+    /// `match_args=False` was set.
+    pub module_attr_accesses: Vec<ModuleAttrAccessInfo>,
+    /// Module-level ordering comparisons (`a < b`, `a <= b`, etc.) between two simple names.
+    ///
+    /// Used by `BSK-E0058` to detect cross-type comparisons of `order=True` dataclass instances.
+    pub module_order_comparisons: Vec<ModuleOrderComparisonInfo>,
+    /// Spans of direct calls to `Annotated` (whether bare or parameterized).
+    ///
+    /// PEP 593 forbids calling `Annotated` as a callable:
+    /// - `Annotated()` — bare call with no type argument
+    /// - `Annotated[int, ""]()` — calling a parameterized `Annotated[...]` subscript
+    ///
+    /// Populated by the resolver; used by `BSK-E0045`.
+    pub annotated_direct_call_spans: Vec<Span>,
+    /// Names that were imported from other modules where they were declared `Final`.
+    ///
+    /// E.g. `from _qualifiers_final_annotation_1 import TEN` when `TEN: Final[int] = 10`
+    /// in that module — `TEN` would appear here.  Any bare re-assignment to such a name
+    /// in the current module is a violation.
+    ///
+    /// Populated lazily by the resolver when the imported module can be found.
+    pub imported_final_names: std::collections::HashSet<String>,
+    /// Module-level `TypeAliasType(...)` call sites.
+    pub type_alias_type_calls: Vec<TypeAliasTypeCallInfo>,
+    /// PEP 695 `type X = rhs` alias statements.
+    pub type_statements: Vec<TypeStatementInfo>,
+    /// `Annotated[...]` subscriptions with too few type arguments (< 2).
+    pub annotated_too_few_args: Vec<AnnotatedTooFewArgs>,
+    /// `NamedTuple(...)` definitions at module level.
+    ///
+    /// Each entry represents a `N = NamedTuple("N", [(field, type), ...])` call
+    /// with field names resolved from Final string constants.
+    /// Used by checker rules to validate `NamedTuple` call sites.
+    pub namedtuple_defs: Vec<NamedTupleDefInfo>,
+    /// Attribute accesses on `float`-typed parameters using `int`-only attributes.
+    ///
+    /// Only top-level accesses in function bodies are collected (not inside
+    /// `if`/`for`/`while`/`match` blocks) so that `isinstance`-guarded uses are excluded.
+    ///
+    /// Used by `BSK-E0065`.
+    pub float_param_int_attr_accesses: Vec<FloatParamIntAttrAccess>,
+    /// Annotated local assignments where the declared type is `Literal["X.Y"]` (a string
+    /// that resembles an enum member) but the RHS is a parameter typed as `Literal[X.Y]`
+    /// (the actual enum member).  `Literal["Color.RED"]` ≠ `Literal[Color.RED]`.
+    ///
+    /// Used by `BSK-E0066`.
+    pub literal_string_enum_mismatches: Vec<LiteralStringEnumMismatch>,
+    /// Enum `_value_` type violations detected during AST resolution.
+    ///
+    /// Populated by the resolver visitor so that `BSK-E0063` can emit them
+    /// without re-walking the AST.
+    pub enum_value_type_violations: Vec<EnumValueTypeViolationInfo>,
+    /// `ClassVar` annotations used in function-local variable or self-attribute
+    /// positions, where they are forbidden by PEP 526.
+    ///
+    /// Populated by the resolver visitor; used by `BSK-E0036`.
+    pub local_classvar_violations: Vec<LocalClassVarViolation>,
+    /// PEP 695 type parameter bound violations detected during AST resolution.
+    ///
+    /// Covers invalid bound/constraint expressions in `class Foo[T: ...]` syntax.
+    /// Used by `BSK-E0067`.
+    pub pep695_bound_violations: Vec<Pep695BoundViolation>,
+    /// Historical positional-only parameter violations.
+    ///
+    /// Covers the pre-PEP 570 `__`-prefix convention for positional-only parameters.
+    /// Used by `BSK-E0068`.
+    pub historical_positional_violations: Vec<HistoricalPositionalViolation>,
+    /// Invalid string annotations detected during AST resolution.
+    ///
+    /// String annotations that contain non-type expressions (e.g. list literals,
+    /// lambda calls, conditional expressions, etc.).
+    /// Used by `BSK-E0069`.
+    pub invalid_string_annotations: Vec<InvalidStringAnnotation>,
     /// The source file path.
     pub path: String,
-    /// The original source text (forwarded from parser for span resolution).
+    /// The original source text (forwarded from parser for span restoration).
     pub source: String,
 }

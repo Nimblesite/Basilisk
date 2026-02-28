@@ -1568,7 +1568,7 @@ fn collect_return_stmts_return_inside_for_loop() -> Result<(), Box<dyn std::erro
 // ---------------------------------------------------------------------------
 
 /// `collect_unconditional_assigns` — `Stmt::AnnAssign` arm (visitor.rs:652).
-/// Killing this arm means annotated assignments won't appear in unconditional_assigns.
+/// Killing this arm means annotated assignments won't appear in `unconditional_assigns`.
 #[test]
 fn collect_unconditional_assigns_ann_assign() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
@@ -1713,7 +1713,7 @@ fn unhashable_keys_in_expr_stmt() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 /// `collect_module_level_calls` — `Stmt::Assign` arm (line 839 area).
-/// Killing this arm means TypeVar calls in assignments aren't collected.
+/// Killing this arm means `TypeVar` calls in assignments aren't collected.
 #[test]
 fn collect_module_level_calls_from_assign() -> Result<(), Box<dyn std::error::Error>> {
     let src = "T = TypeVar('T', int, str)\n".to_owned();
@@ -1731,7 +1731,7 @@ fn collect_module_level_calls_from_assign() -> Result<(), Box<dyn std::error::Er
 // ---------------------------------------------------------------------------
 
 /// `collect_typevar_calls` — kills `FnValue → vec![]` at line 857.
-/// TypeVar must be extracted and returned, not an empty vec.
+/// `TypeVar` must be extracted and returned, not an empty vec.
 #[test]
 fn collect_typevar_calls_returns_entries() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
@@ -1751,7 +1751,7 @@ fn collect_typevar_calls_returns_entries() -> Result<(), Box<dyn std::error::Err
 }
 
 /// `collect_typevar_calls` — `Stmt::Assign` arm (line 860).
-/// Killing this arm means TypeVar assignments are skipped.
+/// Killing this arm means `TypeVar` assignments are skipped.
 #[test]
 fn collect_typevar_calls_plain_assign_arm() -> Result<(), Box<dyn std::error::Error>> {
     let src = "T = TypeVar('T', int, str)\n".to_owned();
@@ -1767,7 +1767,7 @@ fn collect_typevar_calls_plain_assign_arm() -> Result<(), Box<dyn std::error::Er
 }
 
 /// `collect_typevar_calls` — `Stmt::AnnAssign` arm (line 898).
-/// Killing this arm means annotated TypeVar assignments are skipped.
+/// Killing this arm means annotated `TypeVar` assignments are skipped.
 #[test]
 fn collect_typevar_calls_ann_assign_arm() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
@@ -1785,7 +1785,7 @@ fn collect_typevar_calls_ann_assign_arm() -> Result<(), Box<dyn std::error::Erro
 }
 
 /// `collect_typevar_calls` — `attr.attr == "TypeVar"` condition (line 865 area).
-/// `!=` mutant would accept all attribute calls as TypeVar. We test that
+/// `!=` mutant would accept all attribute calls as `TypeVar`. We test that
 /// `typing.TypeVar` IS collected (killing `!=` that would skip it).
 #[test]
 fn collect_typevar_calls_qualified_typing_typevar() -> Result<(), Box<dyn std::error::Error>> {
@@ -1802,7 +1802,7 @@ fn collect_typevar_calls_qualified_typing_typevar() -> Result<(), Box<dyn std::e
     Ok(())
 }
 
-/// Kills `!=` mutant at line 869 — callee must equal "TypeVar", not anything else.
+/// Kills `!=` mutant at line 869 — callee must equal "`TypeVar`", not anything else.
 /// A non-TypeVar call (e.g. `T = int('T')`) must NOT be collected.
 #[test]
 fn collect_typevar_calls_ignores_non_typevar_calls() -> Result<(), Box<dyn std::error::Error>> {
@@ -1816,7 +1816,7 @@ fn collect_typevar_calls_ignores_non_typevar_calls() -> Result<(), Box<dyn std::
     Ok(())
 }
 
-/// Kills `!=` mutant at line 890 — same check in AnnAssign branch.
+/// Kills `!=` mutant at line 890 — same check in `AnnAssign` branch.
 #[test]
 fn collect_typevar_calls_ann_assign_ignores_non_typevar() -> Result<(), Box<dyn std::error::Error>>
 {
@@ -1831,7 +1831,7 @@ fn collect_typevar_calls_ann_assign_ignores_non_typevar() -> Result<(), Box<dyn 
 }
 
 /// Kills `!=` mutant at line 904 — the `kw.arg == "default"` check.
-/// A TypeVar with `default=int` must have `has_default = true`.
+/// A `TypeVar` with `default=int` must have `has_default = true`.
 #[test]
 fn collect_typevar_calls_has_default_true() -> Result<(), Box<dyn std::error::Error>> {
     let src = "T = TypeVar('T', default=int)\n".to_owned();
@@ -1867,7 +1867,7 @@ fn collect_typevar_calls_has_default_false_when_absent() -> Result<(), Box<dyn s
     Ok(())
 }
 
-/// Kills `!=` mutant at line 925 — same `has_default` check in AnnAssign arm.
+/// Kills `!=` mutant at line 925 — same `has_default` check in `AnnAssign` arm.
 #[test]
 fn collect_typevar_calls_ann_assign_has_default() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
@@ -2065,7 +2065,7 @@ fn alias_name_single_name_is_correct() -> Result<(), Box<dyn std::error::Error>>
 
 /// `classify_rhs` — empty list guard `list.elts.is_empty()` at line 1115.
 /// An empty list must produce `RhsKind::EmptyList`, not `RhsKind::Other`.
-/// Replacing the guard with `true` would classify ALL lists as EmptyList.
+/// Replacing the guard with `true` would classify ALL lists as `EmptyList`.
 #[test]
 fn classify_rhs_empty_list_vs_nonempty() -> Result<(), Box<dyn std::error::Error>> {
     // Use two module vars: one with empty list, one with non-empty.
@@ -2097,7 +2097,7 @@ fn classify_rhs_empty_list_vs_nonempty() -> Result<(), Box<dyn std::error::Error
 
 /// `classify_rhs` — empty dict guard `dict.items.is_empty()` at line 1116.
 /// An empty dict must produce `RhsKind::EmptyDict`, not `RhsKind::Other`.
-/// Replacing the guard with `true` would classify ALL dicts as EmptyDict.
+/// Replacing the guard with `true` would classify ALL dicts as `EmptyDict`.
 #[test]
 fn classify_rhs_empty_dict_vs_nonempty() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!("empty: dict = {}\n", "nonempty: dict = {'a': 1}\n",).to_owned();
@@ -2145,7 +2145,7 @@ fn is_wildcard_pattern_named_match_as_is_not_wildcard() -> Result<(), Box<dyn st
     let resolved = resolve(&parsed)?;
     // A MatchAs with a name is a capture pattern, not a wildcard.
     // The match stmt must be resolved with has_wildcard = false.
-    let stmt = resolved.match_stmts.iter().next().ok_or("no match stmt")?;
+    let stmt = resolved.match_stmts.first().ok_or("no match stmt")?;
     assert!(
         !stmt.has_wildcard,
         "capture pattern `case y:` must not be wildcard"
@@ -2167,7 +2167,7 @@ fn is_wildcard_pattern_bare_wildcard() -> Result<(), Box<dyn std::error::Error>>
     .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    let stmt = resolved.match_stmts.iter().next().ok_or("no match stmt")?;
+    let stmt = resolved.match_stmts.first().ok_or("no match stmt")?;
     assert!(
         stmt.has_wildcard,
         "bare `case _:` must set has_wildcard=true"
@@ -2284,7 +2284,7 @@ fn reveal_type_calls_only_matches_reveal_type() -> Result<(), Box<dyn std::error
 // ---------------------------------------------------------------------------
 
 /// `collect_special_calls` — `FnValue → vec![]` at line 1044.
-/// assert_type calls must be returned, not an empty vec.
+/// `assert_type` calls must be returned, not an empty vec.
 #[test]
 fn collect_special_calls_assert_type_returns_entries() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!("assert_type(1, int)\n", "assert_type('hello', str)\n",).to_owned();
@@ -2461,7 +2461,7 @@ fn collect_special_calls_inside_match() -> Result<(), Box<dyn std::error::Error>
 /// `annotation_flags` — `==` → `!=` at line 1187.
 /// The `is_none` flag (`s == "None"`) must be true for the name "None" and
 /// false for any other name.  If mutated to `!=`, "None" would be false and
-/// every other name would be true, causing wrong NoneType classifications.
+/// every other name would be true, causing wrong `NoneType` classifications.
 #[test]
 fn annotation_flags_none_name_is_none_not_other() -> Result<(), Box<dyn std::error::Error>> {
     use basilisk_resolver::ReturnAnnotationKind;
@@ -2495,7 +2495,7 @@ fn annotation_flags_none_name_is_none_not_other() -> Result<(), Box<dyn std::err
 // ---------------------------------------------------------------------------
 
 /// `collect_typeddict_calls` — `FnValue → vec![]` at line 1351.
-/// TypedDict functional call must be returned, not an empty vec.
+/// `TypedDict` functional call must be returned, not an empty vec.
 #[test]
 fn collect_typeddict_calls_returns_entries() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
