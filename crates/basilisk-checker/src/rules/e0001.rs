@@ -11,7 +11,9 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://basilisk-lang.org/errors/BSK-E0001",
 };
 
-/// Emits BSK-E0001 for every unannotated parameter.
+/// Emits BSK-E0001 for every unannotated regular parameter (not `*args`/`**kwargs`).
+///
+/// `*args` and `**kwargs` are handled by [`super::e0004`].
 pub(crate) struct MissingParameterAnnotation;
 
 impl Rule for MissingParameterAnnotation {
@@ -25,16 +27,6 @@ impl Rule for MissingParameterAnnotation {
 
 fn check_function(func: &FunctionInfo, path: &str, out: &mut Vec<Diagnostic>) {
     func.parameters
-        .iter()
-        .filter(|p| !p.has_annotation)
-        .for_each(|p| out.push(make_diagnostic(p, path)));
-
-    func.vararg
-        .iter()
-        .filter(|p| !p.has_annotation)
-        .for_each(|p| out.push(make_diagnostic(p, path)));
-
-    func.kwarg
         .iter()
         .filter(|p| !p.has_annotation)
         .for_each(|p| out.push(make_diagnostic(p, path)));

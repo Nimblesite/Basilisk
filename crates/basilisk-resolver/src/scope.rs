@@ -24,6 +24,29 @@ pub struct ParameterInfo {
     pub name_span: Span,
 }
 
+/// How a return annotation is classified.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReturnAnnotationKind {
+    /// No return annotation present.
+    Missing,
+    /// Return annotation is explicitly `Any`.
+    Any,
+    /// Return annotation is `None` or `-> None`.
+    NoneType,
+    /// Return annotation is a numeric or boolean literal (invalid type form).
+    NumericLiteral,
+    /// Return annotation is some other valid type expression.
+    Other,
+}
+
+impl ReturnAnnotationKind {
+    /// Returns `true` when a return annotation is present (not `Missing`).
+    #[must_use]
+    pub fn is_present(&self) -> bool {
+        !matches!(self, Self::Missing)
+    }
+}
+
 /// Information about a single function definition.
 #[derive(Debug, Clone)]
 pub struct FunctionInfo {
@@ -35,14 +58,8 @@ pub struct FunctionInfo {
     pub vararg: Option<ParameterInfo>,
     /// The `**kwargs` parameter, if present.
     pub kwarg: Option<ParameterInfo>,
-    /// `true` when a `-> ReturnType` annotation is present.
-    pub has_return_annotation: bool,
-    /// `true` when the return annotation is explicitly `Any`.
-    pub return_annotation_is_any: bool,
-    /// `true` when the return annotation is `-> None`.
-    pub return_annotation_is_none: bool,
-    /// `true` when the return annotation is a numeric or boolean literal.
-    pub return_annotation_is_numeric_literal: bool,
+    /// How the return annotation is classified (or absent).
+    pub return_annotation: ReturnAnnotationKind,
     /// Decorator names applied to this function (e.g. `"overload"`, `"override"`).
     pub decorators: Vec<String>,
     /// Return statements found in this function body.

@@ -1,17 +1,17 @@
 //! AST visitor that collects function definitions and module-level information.
 
 use ruff_python_ast::{
-    Alias, Decorator, ElifElseClause, Expr, ExceptHandler, MatchCase, MatchPattern, Parameter,
-    ParameterWithDefault, Stmt, StmtAnnAssign, StmtAssign, StmtClassDef, StmtFunctionDef,
+    Alias, Decorator, ElifElseClause, Expr, ExceptHandler, MatchCase, Parameter,
+    ParameterWithDefault, Pattern, Stmt, StmtAnnAssign, StmtAssign, StmtClassDef, StmtFunctionDef,
     StmtImport, StmtImportFrom, StmtMatch, StmtReturn,
 };
-use ruff_text_size::TextRange;
+use ruff_text_size::{Ranged, TextRange};
 
 use basilisk_parser::ParsedModule;
 
 use crate::scope::{
     AttributeInfo, ClassInfo, FunctionInfo, ImportInfo, ImportKind, MatchStmtInfo, ParameterInfo,
-    ResolvedModule, ReturnStmtInfo, RhsKind, Span, VariableInfo,
+    ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo, RhsKind, Span, VariableInfo,
 };
 
 /// Collect all function definitions and module-level data from the parsed module.
@@ -53,7 +53,7 @@ fn collect_from_body(
     match_stmts: &mut Vec<MatchStmtInfo>,
     is_module_level: bool,
 ) {
-    stmts.iter().for_each(|stmt| {
+    for stmt in stmts {
         collect_from_stmt(
             stmt,
             functions,
@@ -63,10 +63,10 @@ fn collect_from_body(
             match_stmts,
             is_module_level,
         );
-    });
+    }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 fn collect_from_stmt(
     stmt: &Stmt,
     functions: &mut Vec<FunctionInfo>,
@@ -245,23 +245,23 @@ fn collect_from_stmt(
 fn collect_from_elif_else(
     clauses: &[ElifElseClause],
     functions: &mut Vec<FunctionInfo>,
-    classes: &mut Vec<ClassInfo>,
+    class_defs: &mut Vec<ClassInfo>,
     module_vars: &mut Vec<VariableInfo>,
     imports: &mut Vec<ImportInfo>,
     match_stmts: &mut Vec<MatchStmtInfo>,
     is_module_level: bool,
 ) {
-    clauses.iter().for_each(|clause| {
+    for clause in clauses {
         collect_from_body(
             &clause.body,
             functions,
-            classes,
+            class_defs,
             module_vars,
             imports,
             match_stmts,
             is_module_level,
         );
-    });
+    }
 }
 
 fn collect_from_handlers(
@@ -301,7 +301,7 @@ fn class_info_from(
         .map(|args| {
             args.args
                 .iter()
-                .filter_map(|e| expr_simple_name(e))
+                .filter_map(expr_simple_name)
                 .collect()
         })
         .unwrap_or_default();
@@ -388,11 +388,9 @@ fn function_info_from(func: &StmtFunctionDef) -> FunctionInfo {
     let vararg = params.vararg.as_deref().map(parameter_to_info);
     let kwarg = params.kwarg.as_deref().map(parameter_to_info);
 
-    let (return_annotation_is_any, return_annotation_is_none, return_annotation_is_numeric_literal) =
-        func.returns
-            .as_deref()
-            .map(annotation_flags)
-            .unwrap_or((false, false, false));
+    let return_annotation = func.returns
+        .as_deref()
+        .map_or(ReturnAnnotationKind::Missing, return_annotation_kind);
 
     let decorators = func
         .decorator_list
@@ -407,10 +405,7 @@ fn function_info_from(func: &StmtFunctionDef) -> FunctionInfo {
         parameters: all_params,
         vararg,
         kwarg,
-        has_return_annotation: func.returns.is_some(),
-        return_annotation_is_any,
-        return_annotation_is_none,
-        return_annotation_is_numeric_literal,
+        return_annotation,
         decorators,
         return_stmts,
         def_span: text_range_to_span(func.range),
@@ -426,11 +421,10 @@ fn parameter_to_info(p: &Parameter) -> ParameterInfo {
     let (annotation_is_any, annotation_is_numeric_literal) = p
         .annotation
         .as_deref()
-        .map(|e| {
+        .map_or((false, false), |e| {
             let (is_any, _, is_num) = annotation_flags(e);
             (is_any, is_num)
-        })
-        .unwrap_or((false, false));
+        });
 
     ParameterInfo {
         name: p.name.to_string(),
@@ -479,7 +473,7 @@ fn collect_return_stmts(stmts: &[Stmt]) -> Vec<ReturnStmtInfo> {
 }
 
 fn return_stmt_info_from(ret: &StmtReturn) -> ReturnStmtInfo {
-    let has_value = ret.value.as_deref().map_or(false, |e| {
+    let has_value = ret.value.as_deref().is_some_and(|e| {
         !matches!(e, Expr::NoneLiteral(_))
     });
     ReturnStmtInfo {
@@ -491,6 +485,20 @@ fn return_stmt_info_from(ret: &StmtReturn) -> ReturnStmtInfo {
 // ---------------------------------------------------------------------------
 // Annotation analysis helpers
 // ---------------------------------------------------------------------------
+
+/// Maps a return annotation expression to its [`ReturnAnnotationKind`].
+fn return_annotation_kind(expr: &Expr) -> ReturnAnnotationKind {
+    let (is_any, is_none, is_num) = annotation_flags(expr);
+    if is_any {
+        ReturnAnnotationKind::Any
+    } else if is_none {
+        ReturnAnnotationKind::NoneType
+    } else if is_num {
+        ReturnAnnotationKind::NumericLiteral
+    } else {
+        ReturnAnnotationKind::Other
+    }
+}
 
 /// Returns `(is_any, is_none, is_numeric_literal)` for an annotation expression.
 fn annotation_flags(expr: &Expr) -> (bool, bool, bool) {
@@ -529,7 +537,7 @@ fn import_from_infos_from(node: &StmtImportFrom) -> Vec<ImportInfo> {
     let module = node
         .module
         .as_ref()
-        .map(|m| m.to_string())
+        .map(ToString::to_string)
         .unwrap_or_default();
 
     let is_star = node.names.iter().any(|a| a.name.as_str() == "*");
@@ -625,10 +633,10 @@ fn is_wildcard_case(case: &MatchCase) -> bool {
     is_wildcard_pattern(&case.pattern)
 }
 
-fn is_wildcard_pattern(pattern: &MatchPattern) -> bool {
+fn is_wildcard_pattern(pattern: &Pattern) -> bool {
     match pattern {
-        MatchPattern::MatchAs(ma) => ma.name.is_none() && ma.pattern.is_none(),
-        MatchPattern::MatchOr(mo) => mo.patterns.iter().any(is_wildcard_pattern),
+        Pattern::MatchAs(ma) => ma.name.is_none() && ma.pattern.is_none(),
+        Pattern::MatchOr(mo) => mo.patterns.iter().any(is_wildcard_pattern),
         _ => false,
     }
 }

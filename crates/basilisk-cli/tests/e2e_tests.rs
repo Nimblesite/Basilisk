@@ -67,6 +67,7 @@ impl Expected {
         }
     }
 
+    #[allow(dead_code)]
     fn warning(
         code: &'static str,
         message_contains: &'static str,

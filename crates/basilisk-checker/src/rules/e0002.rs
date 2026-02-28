@@ -19,7 +19,7 @@ impl Rule for MissingReturnAnnotation {
         module
             .functions
             .iter()
-            .filter(|func| !func.has_return_annotation)
+            .filter(|func| !func.return_annotation.is_present())
             .for_each(|func| diagnostics.push(make_diagnostic(func, &module.path)));
     }
 }

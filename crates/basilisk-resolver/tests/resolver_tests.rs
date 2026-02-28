@@ -14,7 +14,7 @@ fn detects_unannotated_parameter() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(func.name, "process");
     assert_eq!(func.parameters.len(), 1);
     assert!(!func.parameters[0].has_annotation);
-    assert!(func.has_return_annotation);
+    assert!(func.return_annotation.is_present());
     Ok(())
 }
 
@@ -27,7 +27,7 @@ fn detects_fully_annotated_function() -> Result<(), Box<dyn std::error::Error>> 
     assert_eq!(resolved.functions.len(), 1);
     let func = &resolved.functions[0];
     assert!(func.parameters[0].has_annotation);
-    assert!(func.has_return_annotation);
+    assert!(func.return_annotation.is_present());
     Ok(())
 }
 
@@ -37,7 +37,7 @@ fn detects_missing_return_annotation() -> Result<(), Box<dyn std::error::Error>>
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
 
-    assert!(!resolved.functions[0].has_return_annotation);
+    assert!(!resolved.functions[0].return_annotation.is_present());
     Ok(())
 }
 

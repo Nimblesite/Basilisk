@@ -21,6 +21,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Do not use Git unless asked to
 
 ## Rust Quality Standards
+- Routinely runny clippy and fix violations immediately
 - All lints at highest strictness (see Cargo.toml `[lints]` section)
 - `unsafe` code is forbidden (`unsafe_code = "deny"`)
 - No `.unwrap()` or `.expect()` in production code - use `?` with proper error types
