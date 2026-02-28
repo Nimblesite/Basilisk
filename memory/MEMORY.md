@@ -1,7 +1,7 @@
 # Basilisk Project Memory
 
 ## Status
-Phase 1 (Foundation) is COMPLETE and all tests pass.
+Phase 1 COMPLETE. Phase 2 (VS Code Problems) COMPLETE.
 
 ## Ruff Dependency
 - NOT on crates.io — must use git dependency
@@ -18,20 +18,26 @@ Phase 1 (Foundation) is COMPLETE and all tests pass.
 ## Architecture
 - Workspace: `Cargo.toml` at root with 9 crates
 - Crate order: basilisk-db → basilisk-parser → basilisk-resolver → basilisk-checker → basilisk-cli
-- Stub crates (empty): basilisk-stubs, basilisk-plugin, basilisk-lsp, basilisk-mojo
+- Stub crates: basilisk-stubs, basilisk-plugin, basilisk-mojo
+- basilisk-lsp: implemented `check_source` wired to full pipeline
 - Tests: integration tests only in `crates/*/tests/`
 - Fixtures: `crates/basilisk-cli/tests/fixtures/*.py`
 
 ## Implemented Diagnostics
-- BSK-E0001: Missing parameter type annotation
-- BSK-E0002: Missing return type annotation
-- NOTE: `self` is flagged as unannotated — no exception in Phase 1
+- BSK-E0001 through BSK-E0025 all implemented
+- `self`/`cls` parameters exempt from BSK-E0001
+
+## Phase 2: VS Code Problems (COMPLETE)
+- `basilisk check --output json` emits JSON array: code/severity/message/path/line/col/end_line/end_col
+- `basilisk-lsp::check_source` wired to full pipeline (powers LSP tests)
+- VSIX extension: `vscode-extension/` — subprocess approach, no LSP needed
+  - Runs binary on save/open, parses JSON, pushes to `DiagnosticCollection`
+  - Config: `basilisk.executablePath` (default `"basilisk"`), `basilisk.enabled`
+  - Build: `cd vscode-extension && npm install && npm run compile`
+- LSP server deferred — see `docs/lsp-plan.md`
 
 ## Next Phase
-Phase 2: LSP server and VS Code extension
-- `basilisk-lsp` crate stub already exists
-- Add `tower-lsp` or `lsp-server` dependency
-- Implement textDocument/diagnostic, hover, completions
+Phase 3: strict-by-default rules (E0001–E0025), 80% PEP conformance
 
 ## Website
 - Located at `/website/` — eleventy 3.x + eleventy-plugin-techdoc

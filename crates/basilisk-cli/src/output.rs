@@ -1,7 +1,6 @@
-//! Rustc-style diagnostic output rendering.
+//! Diagnostic output rendering — rustc-style text and machine-readable JSON.
 //!
-//! Example output:
-//!
+//! Text example:
 //! ```text
 //! error[BSK-E0001]: Missing parameter type annotation for `data`
 //!   --> src/utils.py:14:5
@@ -13,8 +12,44 @@
 //!    = note: In Basilisk, all function parameters require explicit types
 //!    = see: https://basilisk-lang.org/errors/BSK-E0001
 //! ```
+//!
+//! JSON output is a flat array consumed by the VS Code extension:
+//! ```json
+//! [
+//!   {
+//!     "code": "BSK-E0001",
+//!     "severity": "error",
+//!     "message": "Missing parameter type annotation for `x`",
+//!     "path": "src/utils.py",
+//!     "line": 1,
+//!     "col": 9,
+//!     "end_line": 1,
+//!     "end_col": 10
+//!   }
+//! ]
+//! ```
+
+use clap::ValueEnum;
+use serde::Serialize;
 
 use basilisk_checker::Diagnostic;
+
+/// Output format for the `check` subcommand.
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum OutputFormat {
+    /// Human-readable rustc-style text (default).
+    Text,
+    /// Machine-readable JSON array consumed by the VS Code extension.
+    Json,
+}
+
+/// Associates a file path with its source text for span-to-line-col mapping.
+pub struct FileSource {
+    /// The file path.
+    pub path: String,
+    /// The full source text.
+    pub text: String,
+}
 
 /// Render all diagnostics to stdout in rustc style.
 ///
@@ -30,12 +65,58 @@ pub fn render_diagnostics(diagnostics: &[Diagnostic], sources: &[FileSource]) ->
         .count()
 }
 
-/// Associates a file path with its source text for span-to-line-col mapping.
-pub struct FileSource {
-    /// The file path.
-    pub path: String,
-    /// The full source text.
-    pub text: String,
+/// Serialisable form of a single diagnostic for JSON output.
+#[derive(Serialize)]
+struct JsonDiagnostic<'a> {
+    code: &'a str,
+    severity: &'a str,
+    message: &'a str,
+    path: &'a str,
+    /// 1-based line number of the start of the span.
+    line: usize,
+    /// 1-based column number of the start of the span.
+    col: usize,
+    /// 1-based line number of the end of the span.
+    end_line: usize,
+    /// 1-based column number of the end of the span (exclusive).
+    end_col: usize,
+}
+
+/// Render all diagnostics as a JSON array to stdout.
+pub fn render_diagnostics_json(diagnostics: &[Diagnostic], sources: &[FileSource]) {
+    let items: Vec<JsonDiagnostic<'_>> = diagnostics
+        .iter()
+        .map(|d| {
+            let source = sources
+                .iter()
+                .find(|s| s.path == d.path)
+                .map(|s| s.text.as_str());
+            let (line, col) = source.map_or((1, 1), |src| {
+                byte_offset_to_line_col(src, d.span.start as usize)
+            });
+            let (end_line, end_col) = source.map_or((line, col + 1), |src| {
+                byte_offset_to_line_col(src, d.span.end as usize)
+            });
+            JsonDiagnostic {
+                code: d.code.code,
+                severity: match d.severity {
+                    basilisk_checker::Severity::Error => "error",
+                    basilisk_checker::Severity::Warning => "warning",
+                },
+                message: &d.message,
+                path: &d.path,
+                line,
+                col,
+                end_line,
+                end_col,
+            }
+        })
+        .collect();
+
+    match serde_json::to_string_pretty(&items) {
+        Ok(json) => println!("{json}"),
+        Err(e) => eprintln!("basilisk: failed to serialize diagnostics: {e}"),
+    }
 }
 
 fn render_one(diag: &Diagnostic, source: Option<&str>) {
@@ -115,7 +196,7 @@ mod tests {
             },
             severity: Severity::Error,
             message: "missing annotation for `x`".to_owned(),
-            span: Span { start: 0, end: 1 },
+            span: Span { start: 8, end: 9 },
             path: "test.py".to_owned(),
             help: help.map(str::to_owned),
             note: note.map(str::to_owned),
@@ -127,7 +208,7 @@ mod tests {
         let diag = make_diag(Some("add a type"), Some("all params need types"));
         let sources = vec![FileSource {
             path: "test.py".to_owned(),
-            text: "x = 1".to_owned(),
+            text: "def foo(x): pass".to_owned(),
         }];
         let count = render_diagnostics(&[diag], &sources);
         assert_eq!(count, 1);
@@ -135,7 +216,6 @@ mod tests {
 
     #[test]
     fn render_one_without_source_falls_back_to_path() {
-        // Exercises the `|| diag.path.clone()` closure in map_or_else.
         let diag = make_diag(Some("help"), Some("note"));
         render_one(&diag, None);
     }
@@ -160,7 +240,6 @@ mod tests {
 
     #[test]
     fn byte_offset_to_line_col_second_line() {
-        // Exercises the rfind('\n') Some branch — offset past first newline.
         let source = "def foo(): pass\ndef bar(x): pass";
         // byte 16 is the 'd' starting "def bar"
         let (line, col) = byte_offset_to_line_col(source, 16);
@@ -170,9 +249,75 @@ mod tests {
 
     #[test]
     fn render_snippet_on_second_line() {
-        // Exercises rfind('\n') Some branch inside render_snippet.
         let source = "def foo(): pass\ndef bar(x): pass";
-        // span covers "bar" starting at byte 20
         render_snippet(source, 20, 23);
+    }
+
+    // ── JSON output ───────────────────────────────────────────────────────────
+
+    #[test]
+    fn json_produces_valid_array_with_correct_fields() {
+        let source = "def foo(x): pass";
+        // byte 8 = 'x', so line=1, col=9 (1-based)
+        let (line, col) = byte_offset_to_line_col(source, 8);
+        let (end_line, end_col) = byte_offset_to_line_col(source, 9);
+        let item = JsonDiagnostic {
+            code: "BSK-E0001",
+            severity: "error",
+            message: "missing annotation for `x`",
+            path: "test.py",
+            line,
+            col,
+            end_line,
+            end_col,
+        };
+        let json = serde_json::to_string(&item).expect("serialisation must succeed");
+        assert!(json.contains("BSK-E0001"));
+        assert!(json.contains("\"line\":1"));
+        assert!(json.contains("\"col\":9"));
+        assert!(json.contains("\"end_line\":1"));
+        assert!(json.contains("\"end_col\":10"));
+    }
+
+    #[test]
+    fn json_empty_diagnostics_produces_empty_array() {
+        let items: Vec<JsonDiagnostic<'_>> = vec![];
+        let json = serde_json::to_string(&items).expect("serialisation must succeed");
+        assert_eq!(json, "[]");
+    }
+
+    #[test]
+    fn render_diagnostics_json_smoke_test() {
+        let diag = make_diag(None, None);
+        let sources = vec![FileSource {
+            path: "test.py".to_owned(),
+            text: "def foo(x): pass".to_owned(),
+        }];
+        // Just verify it doesn't panic.
+        render_diagnostics_json(&[diag], &sources);
+    }
+
+    #[test]
+    fn render_diagnostics_json_empty_is_safe() {
+        render_diagnostics_json(&[], &[]);
+    }
+
+    #[test]
+    fn json_severity_warning() {
+        let source = "def foo(x): pass";
+        let (line, col) = byte_offset_to_line_col(source, 8);
+        let (end_line, end_col) = byte_offset_to_line_col(source, 9);
+        let item = JsonDiagnostic {
+            code: "BSK-W0001",
+            severity: "warning",
+            message: "test warning",
+            path: "test.py",
+            line,
+            col,
+            end_line,
+            end_col,
+        };
+        let json = serde_json::to_string(&item).expect("serialisation must succeed");
+        assert!(json.contains("\"warning\""));
     }
 }

@@ -119,6 +119,11 @@ version = "0.1.0"
 [[package]]
 name = "basilisk-lsp"
 version = "0.1.0"
+dependencies = [
+ "basilisk-checker",
+ "basilisk-parser",
+ "basilisk-resolver",
+]
 
 [[package]]
 name = "basilisk-mojo"

@@ -10,18 +10,18 @@ timeout_multiplier = 2.0
 minimum_test_count = 50
 
 # Only test the packages being mutated, not the entire workspace.
-# Prevents Phase 2–5 placeholder test failures in basilisk-lsp,
-# basilisk-mojo, basilisk-plugin, and basilisk-stubs from blocking
-# per-mutant test runs.
 test_workspace = false
 
-# Also restrict test runs to only these packages (same list as `packages`),
-# so the baseline and per-mutant tests don't pick up placeholder crates.
-test_package = [
-    "basilisk-parser",
-    "basilisk-resolver",
-    "basilisk-checker",
-    "basilisk-cli",
+# Skip Phase 2–5 placeholder tests that are intentionally failing.
+# These tests assert unimplemented features and must not block the mutation run.
+additional_cargo_test_args = [
+    "--",
+    "--skip", "lsp_returns_diagnostics_for_unannotated_function",
+    "--skip", "ownership_checker_detects_mutation_of_borrowed",
+    "--skip", "plugin_host_loads_wasm_plugin",
+    "--skip", "lookup_builtin_int_type",
+    "--skip", "lookup_builtin_str_type",
+    "--skip", "lookup_builtin_list_type",
 ]
 
 # Only mutate crates that have complete, passing test suites.
