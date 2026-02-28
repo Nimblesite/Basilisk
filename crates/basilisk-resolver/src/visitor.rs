@@ -12,10 +12,10 @@ use ruff_text_size::{Ranged, TextRange};
 use basilisk_parser::ParsedModule;
 
 use crate::scope::{
-    AttributeInfo, CallSite, ClassInfo, FunctionInfo, GenericParamInfo, ImportInfo, ImportKind,
-    MatchStmtInfo, ParameterInfo, ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo,
-    RevealTypeCallInfo, RhsKind, Span, TypeVarCallInfo, TypedDictCallInfo, TypedDictSecondArgKind,
-    UnhashableKeyRef, VariableInfo,
+    AssertTypeCallInfo, AttributeInfo, CallSite, ClassInfo,
+    FunctionInfo, GenericParamInfo, ImportInfo, ImportKind, MatchStmtInfo, NewTypeCallInfo, ParameterInfo, ResolvedModule, ReturnAnnotationKind,
+    ReturnStmtInfo, RevealTypeCallInfo, RhsKind, Span, TypeVarCallInfo, TypedDictCallInfo,
+    TypedDictSecondArgKind, UnhashableKeyRef, VariableInfo,
 };
 
 /// Collect all function definitions and module-level data from the parsed module.
@@ -39,8 +39,15 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
     let calls = collect_module_level_calls(&module.ast.body);
     let typevar_calls = collect_typevar_calls(&module.ast.body);
     let reveal_type_calls = collect_reveal_type_calls(&module.ast.body);
-    let assert_type_calls = collect_special_calls(&module.ast.body, "assert_type");
+    let assert_type_calls =
+        collect_assert_type_calls_from_stmts(&module.ast.body, &[], &module.source);
     let typeddict_calls = collect_typeddict_calls(&module.ast.body);
+    let newtype_calls = collect_newtype_calls(&module.ast.body);
+    let multiple_unbounded_tuple_spans =
+        collect_multiple_unbounded_tuple_spans(&module.ast.body);
+
+    let module_bare_assignments = collect_module_bare_assignments(&module.ast.body);
+    let module_attr_assignments = collect_module_attr_assignments(&module.ast.body);
 
     ResolvedModule {
         functions,
@@ -53,6 +60,11 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         reveal_type_calls,
         assert_type_calls,
         typeddict_calls,
+        newtype_calls,
+        multiple_unbounded_tuple_spans,
+        final_violations: Vec::new(),
+        module_bare_assignments,
+        module_attr_assignments,
         path: module.path.clone(),
         source: module.source.clone(),
     }
@@ -410,6 +422,8 @@ fn class_info_from(
         .iter()
         .any(|d| d == "dataclass" || d.ends_with(".dataclass"));
 
+    let is_dataclass_frozen = is_dataclass && dataclass_frozen_flag(class);
+
     let is_final = class_decorators
         .iter()
         .any(|d| d == "final" || d.rsplit('.').next() == Some("final"));
@@ -446,6 +460,7 @@ fn class_info_from(
         is_typed_dict,
         class_keywords,
         is_dataclass,
+        is_dataclass_frozen,
         is_final,
         is_enum,
         has_pep695_type_params,
@@ -1403,6 +1418,30 @@ fn is_wildcard_pattern(pattern: &Pattern) -> bool {
 // Decorator helpers
 // ---------------------------------------------------------------------------
 
+/// Extract the `frozen=True/False` flag from `@dataclass(frozen=...)`.
+/// Returns `false` if no explicit `frozen=` is present (default is `False`).
+fn dataclass_frozen_flag(class: &StmtClassDef) -> bool {
+    for dec in &class.decorator_list {
+        let Expr::Call(call) = &dec.expression else {
+            continue;
+        };
+        let is_dc = match call.func.as_ref() {
+            Expr::Name(n) => n.id.as_str() == "dataclass",
+            Expr::Attribute(a) => a.attr.as_str() == "dataclass",
+            _ => false,
+        };
+        if !is_dc {
+            continue;
+        }
+        for kw in &call.arguments.keywords {
+            if kw.arg.as_ref().map(ruff_python_ast::Identifier::as_str) == Some("frozen") {
+                return matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
+            }
+        }
+    }
+    false
+}
+
 fn decorator_name(dec: &Decorator) -> Option<String> {
     match &dec.expression {
         Expr::Name(name) => Some(name.id.to_string()),
@@ -1489,6 +1528,47 @@ fn collect_typeddict_calls(stmts: &[Stmt]) -> Vec<TypedDictCallInfo> {
             has_positional_dict,
             keyword_names,
             span: text_range_to_span(call.range()),
+        });
+    }
+    out
+}
+
+/// Collect module-level `NewType(...)` call sites.
+///
+/// Matches assignments of the form `Name = NewType("Name", BaseType)`.
+fn collect_newtype_calls(stmts: &[Stmt]) -> Vec<NewTypeCallInfo> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        let Stmt::Assign(node) = stmt else { continue };
+        let Expr::Call(call) = node.value.as_ref() else {
+            continue;
+        };
+        let is_newtype = expr_simple_name(&call.func).as_deref() == Some("NewType")
+            || matches!(call.func.as_ref(), Expr::Attribute(a) if a.attr.as_str() == "NewType");
+        if !is_newtype {
+            continue;
+        }
+        let Some(lhs_name) = node.targets.first().and_then(expr_simple_name) else {
+            continue;
+        };
+        let declared_name = call.arguments.args.first().and_then(|arg| {
+            if let Expr::StringLiteral(s) = arg {
+                Some(s.value.to_str().to_owned())
+            } else {
+                None
+            }
+        });
+        let base_type_span = call
+            .arguments
+            .args
+            .get(1)
+            .map(|a| text_range_to_span(ruff_text_size::Ranged::range(a)));
+        out.push(NewTypeCallInfo {
+            lhs_name,
+            declared_name,
+            positional_arg_count: call.arguments.args.len(),
+            base_type_span,
+            span: text_range_to_span(ruff_text_size::Ranged::range(call)),
         });
     }
     out
@@ -1590,4 +1670,477 @@ fn text_range_to_span(range: TextRange) -> Span {
         start: range.start().to_u32(),
         end: range.end().to_u32(),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Multiple unbounded tuple detection (for BSK-E0047)
+// ---------------------------------------------------------------------------
+
+/// Counts the number of "unbounded" components in a `tuple[...]` slice expression.
+///
+/// An unbounded component is one of:
+/// - `*tuple[T, ...]` — a starred subscript where the inner tuple ends with `...`
+/// - `*Ts` / `*<Name>` — a starred name (`TypeVarTuple` unpack)
+/// - `Unpack[tuple[T, ...]]` — legacy Unpack form
+///
+/// Returns the count of unbounded components found.
+fn count_unbounded_in_tuple_slice(slice: &Expr) -> usize {
+    let elements: &[Expr] = match slice {
+        Expr::Tuple(t) => &t.elts,
+        // Single-element tuple slice — check just this element
+        other => return usize::from(is_unbounded_component(other)),
+    };
+    elements.iter().filter(|e| is_unbounded_component(e)).count()
+}
+
+/// Returns `true` if this expression is an unbounded tuple component:
+/// - `*tuple[T, ...]` — starred subscript with an ellipsis last element
+/// - `*Name` — starred name (`TypeVarTuple` unpack)
+/// - `Unpack[tuple[T, ...]]` — legacy form
+fn is_unbounded_component(expr: &Expr) -> bool {
+    match expr {
+        Expr::Starred(starred) => match starred.value.as_ref() {
+            // `*tuple[T, ...]` or `*tuple[str, *tuple[str, ...]]`
+            Expr::Subscript(sub) => {
+                if expr_simple_name(&sub.value).as_deref() != Some("tuple") {
+                    return false;
+                }
+                inner_tuple_is_unbounded(&sub.slice)
+            }
+            // `*Ts` — TypeVarTuple unpack
+            Expr::Name(_) => true,
+            _ => false,
+        },
+        // `Unpack[tuple[T, ...]]` — legacy unpack form
+        Expr::Subscript(sub)
+            if expr_simple_name(&sub.value).as_deref() == Some("Unpack") =>
+        {
+            match sub.slice.as_ref() {
+                Expr::Subscript(inner_sub)
+                    if expr_simple_name(&inner_sub.value).as_deref() == Some("tuple") =>
+                {
+                    inner_tuple_is_unbounded(&inner_sub.slice)
+                }
+                _ => false,
+            }
+        }
+        _ => false,
+    }
+}
+
+/// Returns `true` when the slice of a `tuple[...]` represents an unbounded tuple
+/// (i.e. the tuple contains an ellipsis: `tuple[T, ...]`).
+fn inner_tuple_is_unbounded(slice: &Expr) -> bool {
+    match slice {
+        Expr::Tuple(t) => t.elts.last().is_some_and(|e| {
+            matches!(e, Expr::EllipsisLiteral(_))
+                || is_unbounded_component(e)  // nested unbounded: `*tuple[str, ...]`
+        }),
+        Expr::EllipsisLiteral(_) => true,
+        // Single element that is itself an unbounded starred expr
+        other => is_unbounded_component(other),
+    }
+}
+
+/// Returns `true` if the annotation expression is a `tuple[...]` with multiple
+/// unbounded components (more than one `*tuple[T, ...]` or `*Ts`).
+fn annotation_has_multiple_unbounded(expr: &Expr) -> bool {
+    match expr {
+        Expr::Subscript(sub) if expr_simple_name(&sub.value).as_deref() == Some("tuple") => {
+            count_unbounded_in_tuple_slice(&sub.slice) >= 2
+        }
+        _ => false,
+    }
+}
+
+/// Collect all annotation spans that contain invalid multiple-unbounded-tuple patterns.
+fn collect_multiple_unbounded_tuple_spans(stmts: &[Stmt]) -> Vec<Span> {
+    let mut out = Vec::new();
+    collect_multi_unbounded_from_stmts(stmts, &mut out);
+    out
+}
+
+fn collect_multi_unbounded_from_stmts(stmts: &[Stmt], out: &mut Vec<Span>) {
+    for stmt in stmts {
+        collect_multi_unbounded_from_stmt(stmt, out);
+    }
+}
+
+fn collect_multi_unbounded_from_stmt(stmt: &Stmt, out: &mut Vec<Span>) {
+    match stmt {
+        Stmt::AnnAssign(ann) => {
+            if annotation_has_multiple_unbounded(&ann.annotation) {
+                out.push(text_range_to_span(ann.annotation.range()));
+            }
+        }
+        Stmt::FunctionDef(func) => {
+            // Check parameter annotations
+            let all_params = func
+                .parameters
+                .posonlyargs
+                .iter()
+                .chain(func.parameters.args.iter())
+                .chain(func.parameters.kwonlyargs.iter());
+            for param in all_params {
+                if let Some(ann) = param.parameter.annotation.as_ref() {
+                    if annotation_has_multiple_unbounded(ann) {
+                        out.push(text_range_to_span(ann.range()));
+                    }
+                }
+            }
+            if let Some(vararg) = &func.parameters.vararg {
+                if let Some(ann) = vararg.annotation.as_ref() {
+                    if annotation_has_multiple_unbounded(ann) {
+                        out.push(text_range_to_span(ann.range()));
+                    }
+                }
+            }
+            if let Some(kwarg) = &func.parameters.kwarg {
+                if let Some(ann) = kwarg.annotation.as_ref() {
+                    if annotation_has_multiple_unbounded(ann) {
+                        out.push(text_range_to_span(ann.range()));
+                    }
+                }
+            }
+            // Check return annotation
+            if let Some(ret) = func.returns.as_ref() {
+                if annotation_has_multiple_unbounded(ret) {
+                    out.push(text_range_to_span(ret.range()));
+                }
+            }
+            // Recurse into function body
+            collect_multi_unbounded_from_stmts(&func.body, out);
+        }
+        Stmt::ClassDef(cls) => {
+            collect_multi_unbounded_from_stmts(&cls.body, out);
+        }
+        Stmt::If(if_stmt) => {
+            collect_multi_unbounded_from_stmts(&if_stmt.body, out);
+            collect_multi_unbounded_from_stmts(&if_stmt.elif_else_clauses.iter()
+                .flat_map(|c| c.body.iter()).cloned().collect::<Vec<_>>(), out);
+        }
+        _ => {}
+    }
+}
+
+// ---------------------------------------------------------------------------
+// assert_type type-aware collection
+// ---------------------------------------------------------------------------
+
+/// Collect all `assert_type(value, ExpectedType)` calls from the given statements,
+#[allow(dead_code)]
+/// using `params` as the in-scope parameter map (`name → annotation text`).
+///
+/// Recursively descends into function bodies (updating the param scope) and all
+/// other control-flow constructs (preserving the current scope).
+pub(crate) fn collect_assert_type_calls_from_stmts(
+    stmts: &[Stmt],
+    params: &[(&str, &str)],
+    source: &str,
+) -> Vec<AssertTypeCallInfo> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        collect_assert_type_calls_from_stmt(stmt, params, source, &mut out);
+    }
+    out
+}
+
+fn collect_assert_type_calls_from_stmt(
+    stmt: &Stmt,
+    params: &[(&str, &str)],
+    source: &str,
+    out: &mut Vec<AssertTypeCallInfo>,
+) {
+    match stmt {
+        Stmt::Expr(node) => {
+            if let Expr::Call(call) = node.value.as_ref() {
+                let is_assert_type =
+                    expr_simple_name(&call.func).is_some_and(|n| n == "assert_type");
+                if is_assert_type {
+                    out.push(build_assert_type_call_info(call, params, source));
+                }
+            }
+        }
+        Stmt::FunctionDef(func) => {
+            // Build new param scope for the function body.
+            let new_params: Vec<(String, String)> =
+                build_param_scope_owned(&func.parameters, source);
+            let borrowed: Vec<(&str, &str)> = new_params
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.as_str()))
+                .collect();
+            out.extend(collect_assert_type_calls_from_stmts(
+                &func.body, &borrowed, source,
+            ));
+        }
+        Stmt::ClassDef(cls) => {
+            // Class bodies may contain methods; pass empty params at class level.
+            out.extend(collect_assert_type_calls_from_stmts(&cls.body, &[], source));
+        }
+        Stmt::If(node) => {
+            out.extend(collect_assert_type_calls_from_stmts(
+                &node.body, params, source,
+            ));
+            for elif_else in &node.elif_else_clauses {
+                out.extend(collect_assert_type_calls_from_stmts(
+                    &elif_else.body,
+                    params,
+                    source,
+                ));
+            }
+        }
+        Stmt::For(node) => {
+            out.extend(collect_assert_type_calls_from_stmts(
+                &node.body, params, source,
+            ));
+            out.extend(collect_assert_type_calls_from_stmts(
+                &node.orelse, params, source,
+            ));
+        }
+        Stmt::While(node) => {
+            out.extend(collect_assert_type_calls_from_stmts(
+                &node.body, params, source,
+            ));
+            out.extend(collect_assert_type_calls_from_stmts(
+                &node.orelse, params, source,
+            ));
+        }
+        Stmt::With(node) => {
+            out.extend(collect_assert_type_calls_from_stmts(
+                &node.body, params, source,
+            ));
+        }
+        Stmt::Try(node) => {
+            out.extend(collect_assert_type_calls_from_stmts(
+                &node.body, params, source,
+            ));
+            for handler in &node.handlers {
+                let ExceptHandler::ExceptHandler(h) = handler;
+                out.extend(collect_assert_type_calls_from_stmts(&h.body, params, source));
+            }
+            out.extend(collect_assert_type_calls_from_stmts(
+                &node.orelse, params, source,
+            ));
+            out.extend(collect_assert_type_calls_from_stmts(
+                &node.finalbody, params, source,
+            ));
+        }
+        Stmt::Match(node) => {
+            for case in &node.cases {
+                out.extend(collect_assert_type_calls_from_stmts(
+                    &case.body, params, source,
+                ));
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Build the parameter scope for a function: a list of `(param_name, annotation_text)` pairs.
+///
+/// Parameters without annotations are excluded (no annotation text to compare against).
+fn build_param_scope_owned(
+    parameters: &ruff_python_ast::Parameters,
+    source: &str,
+) -> Vec<(String, String)> {
+    parameters
+        .posonlyargs
+        .iter()
+        .chain(parameters.args.iter())
+        .chain(parameters.kwonlyargs.iter())
+        .filter_map(|p| {
+            let name = p.parameter.name.to_string();
+            let ann = p.parameter.annotation.as_deref()?;
+            let range = ann.range();
+            let ann_text = source
+                .get(range.start().to_u32() as usize..range.end().to_u32() as usize)?;
+            Some((name, ann_text.to_owned()))
+        })
+        .collect()
+}
+
+/// Build an `AssertTypeCallInfo` for a single `assert_type(...)` call expression.
+fn build_assert_type_call_info(
+    call: &ruff_python_ast::ExprCall,
+    params: &[(&str, &str)],
+    source: &str,
+) -> AssertTypeCallInfo {
+    let arg_count = call.arguments.args.len();
+    let span = text_range_to_span(call.range());
+
+    if arg_count != 2 {
+        // Arity error — type mismatch checking is not applicable.
+        return AssertTypeCallInfo {
+            arg_count,
+            span,
+            actual_type: None,
+            expected_type: None,
+            type_mismatch: false,
+        };
+    }
+
+    let first_arg = &call.arguments.args[0];
+    let second_arg = &call.arguments.args[1];
+
+    // Determine the actual type of the first argument.
+    let actual_type = resolve_actual_type(first_arg, params, source);
+
+    // Extract the expected type text from the second argument.
+    let expected_type = extract_type_text(second_arg, source);
+
+    // Compare normalized forms.
+    let type_mismatch = match (&actual_type, &expected_type) {
+        (Some(actual), Some(expected)) => !types_match(actual, expected),
+        _ => false,
+    };
+
+    AssertTypeCallInfo {
+        arg_count,
+        span,
+        actual_type,
+        expected_type,
+        type_mismatch,
+    }
+}
+
+/// Resolve the static type of `assert_type`'s first argument.
+///
+/// - If it is a name reference to a known parameter, returns its annotation text (normalized).
+/// - If it is a literal, returns the corresponding primitive type name.
+/// - Otherwise returns `None`.
+fn resolve_actual_type(
+    expr: &Expr,
+    params: &[(&str, &str)],
+    source: &str,
+) -> Option<String> {
+    match expr {
+        Expr::Name(name) => {
+            let param_name = name.id.as_str();
+            params
+                .iter()
+                .find(|(n, _)| *n == param_name)
+                .map(|(_, ann)| normalize_type_str(ann))
+        }
+        Expr::StringLiteral(_) => Some("str".to_owned()),
+        Expr::NumberLiteral(n) => {
+            if matches!(n.value, ruff_python_ast::Number::Float(_)) {
+                Some("float".to_owned())
+            } else {
+                Some("int".to_owned())
+            }
+        }
+        Expr::BooleanLiteral(_) => Some("bool".to_owned()),
+        Expr::BytesLiteral(_) => Some("bytes".to_owned()),
+        Expr::NoneLiteral(_) => Some("None".to_owned()),
+        _ => {
+            // For other expressions, try to get the source text.
+            let range = expr.range();
+            source
+                .get(range.start().to_u32() as usize..range.end().to_u32() as usize)
+                .map(normalize_type_str)
+        }
+    }
+}
+
+/// Extract the text of a type expression (the second argument to `assert_type`).
+fn extract_type_text(expr: &Expr, source: &str) -> Option<String> {
+    let range = expr.range();
+    source
+        .get(range.start().to_u32() as usize..range.end().to_u32() as usize)
+        .map(normalize_type_str)
+}
+
+/// Normalize a type annotation string for comparison.
+///
+/// Strips outer `Annotated[T, ...]` wrappers, trims whitespace, and collapses
+/// internal spacing around `|` union operators.
+fn normalize_type_str(ann: &str) -> String {
+    let trimmed = ann.trim();
+    // Strip Annotated[T, ...] → take first argument only.
+    if let Some(inner) = strip_annotated_wrapper(trimmed) {
+        return normalize_type_str(inner);
+    }
+    trimmed.to_owned()
+}
+
+/// If `ann` starts with `Annotated[`, return the first type argument (the actual type).
+fn strip_annotated_wrapper(ann: &str) -> Option<&str> {
+    let ann = ann.trim();
+    if !ann.starts_with("Annotated[") {
+        return None;
+    }
+    let inner_start = "Annotated[".len();
+    let inner = &ann[inner_start..];
+    // Find the end of the first argument (handle nested brackets).
+    let mut depth = 0i32;
+    let mut end = inner.len();
+    for (i, ch) in inner.char_indices() {
+        match ch {
+            '[' | '(' | '{' => depth += 1,
+            ']' | ')' | '}' => {
+                if depth == 0 {
+                    // Hit closing ] of Annotated without a comma — whole inner is one arg.
+                    end = i;
+                    break;
+                }
+                depth -= 1;
+            }
+            ',' if depth == 0 => {
+                end = i;
+                break;
+            }
+            _ => {}
+        }
+    }
+    Some(inner[..end].trim())
+}
+
+/// Returns `true` when `actual` and `expected` are equivalent types (textual comparison).
+fn types_match(actual: &str, expected: &str) -> bool {
+    actual == expected
+}
+
+// ---------------------------------------------------------------------------
+// Module-level bare and attribute assignment collection
+// ---------------------------------------------------------------------------
+
+/// Collect module-level bare assignments (`name = expr`).
+///
+/// Used by the checker to detect re-assignments to `Final`-annotated variables.
+fn collect_module_bare_assignments(stmts: &[Stmt]) -> Vec<crate::scope::ModuleBareAssignment> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        let Stmt::Assign(node) = stmt else { continue };
+        for target in &node.targets {
+            if let Some(name) = expr_simple_name(target) {
+                out.push(crate::scope::ModuleBareAssignment {
+                    name,
+                    name_span: text_range_to_span(target.range()),
+                });
+            }
+        }
+    }
+    out
+}
+
+/// Collect module-level attribute assignments (`Class.attr = expr`).
+///
+/// Used by the checker to detect re-assignments to `Final` class attributes.
+fn collect_module_attr_assignments(stmts: &[Stmt]) -> Vec<crate::scope::ModuleAttrAssignment> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        let Stmt::Assign(node) = stmt else { continue };
+        for target in &node.targets {
+            if let Expr::Attribute(attr) = target {
+                if let Some(object_name) = expr_simple_name(&attr.value) {
+                    out.push(crate::scope::ModuleAttrAssignment {
+                        object_name,
+                        attr_name: attr.attr.to_string(),
+                        target_span: text_range_to_span(target.range()),
+                    });
+                }
+            }
+        }
+    }
+    out
 }

@@ -224,6 +224,8 @@ pub struct ClassInfo {
     pub class_keywords: Vec<String>,
     /// `true` when the class is decorated with `@dataclass` or `@dataclass(...)`.
     pub is_dataclass: bool,
+    /// `true` when the dataclass is decorated with `frozen=True`.
+    pub is_dataclass_frozen: bool,
     /// `true` when the class is decorated with `@final` or `typing.final`.
     pub is_final: bool,
     /// `true` when the class directly or transitively inherits from an `Enum` family class.
@@ -372,6 +374,87 @@ pub struct TypedDictCallInfo {
     pub span: Span,
 }
 
+/// Information about a module-level `NewType(...)` call.
+///
+/// Covers assignments of the form `Name = NewType("Name", BaseType)`.
+#[derive(Debug, Clone)]
+pub struct NewTypeCallInfo {
+    /// The name the result is bound to (LHS of the assignment).
+    pub lhs_name: String,
+    /// The name string passed as the first argument, if it is a string literal.
+    pub declared_name: Option<String>,
+    /// Number of positional arguments to `NewType(...)`.
+    pub positional_arg_count: usize,
+    /// The span of the second positional argument (the base type expression), if present.
+    pub base_type_span: Option<Span>,
+    /// The span of the entire `NewType(...)` call expression.
+    pub span: Span,
+}
+
+/// A violation of `Final` typing rules, collected during resolution.
+///
+/// These are gathered in the resolver so that the checker rule (`E0047`) can
+/// emit them without duplicating AST-walking logic.
+#[derive(Debug, Clone)]
+pub struct FinalViolationInfo {
+    /// The kind of violation.
+    pub kind: FinalViolationKind,
+    /// The source span to highlight for this violation.
+    pub span: Span,
+    /// Human-readable name of the variable or attribute involved.
+    pub name: String,
+}
+
+/// What kind of `Final` violation was detected.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FinalViolationKind {
+    /// `ID2: Final` — class attribute with bare `Final` and no initializer,
+    /// not set unconditionally in `__init__`.
+    ClassFinalWithoutInit,
+    /// `self.id3: Final = 1` — `Final` annotation on a self-attribute in a
+    /// method other than `__init__`.
+    InstanceFinalOutsideInit,
+    /// `self.ID5 = 0` — assignment to a self-attribute that was already given
+    /// a value in the class body as `ID5: Final[int] = 0`.
+    InstanceReassignAlreadyInitialized,
+    /// `self.ID7 = 0` — assignment to a self-attribute declared `Final` in the
+    /// class body (regardless of whether it had an initializer there).
+    InstanceModifyFinal,
+    /// `RATE = 300` — bare re-assignment to a module-level `Final` variable.
+    ModuleLevelReassignment,
+    /// `ClassB.DEFAULT_ID = 0` — attribute assignment via a class reference
+    /// where the attribute is declared `Final`.
+    ClassAttributeReassignment,
+    /// `BORDER_WIDTH = 2.5` in a subclass — overriding a `Final` attribute
+    /// inherited from a parent class.
+    SubclassOverrideFinal,
+    /// `x += 1` / `a = (x := 4)` etc. — modifying a function-local `Final`.
+    FunctionLocalFinalModification,
+    /// `ID1 = 2` after `global ID1` — modifying a global `Final` from inside
+    /// a function.
+    GlobalFinalModification,
+}
+
+/// A module-level bare assignment (`name = expr`) that may re-assign a `Final`.
+#[derive(Debug, Clone)]
+pub struct ModuleBareAssignment {
+    /// The simple name being assigned.
+    pub name: String,
+    /// Span of the target name token.
+    pub name_span: Span,
+}
+
+/// A module-level attribute assignment (`Class.attr = expr`).
+#[derive(Debug, Clone)]
+pub struct ModuleAttrAssignment {
+    /// The class/object name on the left of the dot.
+    pub object_name: String,
+    /// The attribute name on the right of the dot.
+    pub attr_name: String,
+    /// Span of the entire `Class.attr` target expression.
+    pub target_span: Span,
+}
+
 /// The complete resolved view of a parsed module.
 #[derive(Debug)]
 pub struct ResolvedModule {
@@ -392,9 +475,26 @@ pub struct ResolvedModule {
     /// All `reveal_type(...)` call sites found anywhere in the module.
     pub reveal_type_calls: Vec<RevealTypeCallInfo>,
     /// All `assert_type(...)` call sites found anywhere in the module.
-    pub assert_type_calls: Vec<RevealTypeCallInfo>,
+    pub assert_type_calls: Vec<AssertTypeCallInfo>,
     /// Module-level `TypedDict(...)` functional-syntax call sites.
     pub typeddict_calls: Vec<TypedDictCallInfo>,
+    /// Module-level `NewType(...)` call sites.
+    pub newtype_calls: Vec<NewTypeCallInfo>,
+    /// Spans of type annotations that contain multiple unbounded tuple unpacks.
+    ///
+    /// A tuple type is invalid if it contains more than one unbounded component,
+    /// e.g. `tuple[*tuple[str, ...], *tuple[int, ...]]` — two `*tuple[T, ...]` unpacks.
+    pub multiple_unbounded_tuple_spans: Vec<Span>,
+    /// `Final` violations detected during AST resolution.
+    ///
+    /// Populated by the resolver visitor so that `BSK-E0047` can emit them
+    /// without re-walking the AST.
+    pub final_violations: Vec<FinalViolationInfo>,
+    /// Module-level bare assignments (`name = expr`) — used to detect re-assignments
+    /// to `Final`-annotated module variables.
+    pub module_bare_assignments: Vec<ModuleBareAssignment>,
+    /// Module-level attribute assignments (`Class.attr = expr`).
+    pub module_attr_assignments: Vec<ModuleAttrAssignment>,
     /// The source file path.
     pub path: String,
     /// The original source text (forwarded from parser for span resolution).

@@ -76,13 +76,13 @@ fn has_nested_final(ann: &str) -> bool {
     ann.contains("[Final[") || ann.contains("[Final ")
 }
 
-/// Returns `true` when the annotation is `ClassVar[Final...]` — Final inside ClassVar.
+/// Returns `true` when the annotation is `ClassVar[Final...]` — Final inside `ClassVar`.
 fn has_classvar_wrapping_final(ann: &str) -> bool {
     ann.starts_with("ClassVar[")
         && (ann.contains("Final[") || ann.contains("Final]") || ann.contains("Final,"))
 }
 
-/// Returns `true` when the annotation is `Final[ClassVar...]` — ClassVar inside Final.
+/// Returns `true` when the annotation is `Final[ClassVar...]` — `ClassVar` inside Final.
 fn has_final_wrapping_classvar(ann: &str) -> bool {
     ann.starts_with("Final[") && ann.contains("ClassVar")
 }

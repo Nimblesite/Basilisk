@@ -2028,3 +2028,73 @@ fn e0035_required_on_param_fires() -> Result<(), Box<dyn std::error::Error>> {
     );
     Ok(())
 }
+
+#[test]
+fn debug_e0045_qualifiers_annotated() -> Result<(), Box<dyn std::error::Error>> {
+    let src = r#"from typing import Annotated, Any, TypeVar
+
+T = TypeVar("T")
+var1 = 1
+
+Bad1: Annotated[[int, str], ""]
+Bad2: Annotated[((int, str),), ""]
+Bad3: Annotated[[int for i in range(1)], ""]
+Bad4: Annotated[{"a": "b"}, ""]
+Bad5: Annotated[(lambda: int)(), ""]
+Bad6: Annotated[[int][0], ""]
+Bad7: Annotated[int if 1 < 3 else str, ""]
+Bad8: Annotated[var1, ""]
+Bad9: Annotated[True, ""]
+Bad10: Annotated[1, ""]
+Bad11: Annotated[list or set, ""]
+Bad12: Annotated[f"{'int'}", ""]
+Bad13: Annotated[int]
+"#;
+    let diags = run(src)?;
+    let e45: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0045")
+        .collect();
+    eprintln!("E0045 diagnostics: {}", e45.len());
+    for d in &e45 {
+        let line = src[..d.span.start as usize]
+            .chars()
+            .filter(|&c| c == '\n')
+            .count()
+            + 1;
+        eprintln!("  Line {}: {}", line, d.message);
+    }
+    Ok(())
+}
+
+#[test]
+fn debug_e0047_qualifiers_annotated_fp() -> Result<(), Box<dyn std::error::Error>> {
+    use basilisk_parser::parse_file;
+    use basilisk_resolver::resolve;
+    let path = "crates/basilisk-cli/tests/conformance/qualifiers_annotated.py";
+    let parsed = parse_file(path).map_err(|e| format!("{e:?}"))?;
+    let resolved = resolve(&parsed)?;
+    let diags = basilisk_checker::check(&resolved);
+    let src = &resolved.source;
+    for d in &diags {
+        let line = src[..d.span.start as usize].chars().filter(|&c| c == '\n').count() + 1;
+        eprintln!("Line {}: {} - {}", line, d.code.code, d.message);
+    }
+    Ok(())
+}
+
+#[test]
+fn debug_all_diags_qualifiers_annotated() -> Result<(), Box<dyn std::error::Error>> {
+    use basilisk_parser::parse_file;
+    use basilisk_resolver::resolve;
+    let path = "/Users/christianfindlay/Documents/Code/Basilisk/crates/basilisk-cli/tests/conformance/qualifiers_annotated.py";
+    let parsed = parse_file(path).map_err(|e| format!("{e:?}"))?;
+    let resolved = resolve(&parsed)?;
+    let diags = basilisk_checker::check(&resolved);
+    let src = &resolved.source;
+    for d in &diags {
+        let line = src[..d.span.start as usize].chars().filter(|&c| c == '\n').count() + 1;
+        eprintln!("Line {}: {} - {}", line, d.code.code, d.message);
+    }
+    Ok(())
+}

@@ -234,10 +234,10 @@ fn has_top_level_if(s: &str) -> bool {
     let chars: Vec<char> = s.chars().collect();
     let mut j = 0;
     while j < chars.len() {
-        match chars[j] {
-            '[' | '(' | '{' => depth2 += 1,
-            ']' | ')' | '}' => depth2 -= 1,
-            _ if depth2 == 0 => {
+        match chars.get(j).copied() {
+            Some('[' | '(' | '{') => depth2 += 1,
+            Some(']' | ')' | '}') => depth2 -= 1,
+            Some(_) if depth2 == 0 => {
                 // Look for " if " starting at j
                 let rest: String = chars[j..].iter().collect();
                 if rest.starts_with(" if ") {
@@ -257,10 +257,10 @@ fn has_top_level_bool_op(s: &str) -> bool {
     let chars: Vec<char> = s.chars().collect();
     let mut i = 0;
     while i < chars.len() {
-        match chars[i] {
-            '[' | '(' | '{' => depth += 1,
-            ']' | ')' | '}' => depth -= 1,
-            _ if depth == 0 => {
+        match chars.get(i).copied() {
+            Some('[' | '(' | '{') => depth += 1,
+            Some(']' | ')' | '}') => depth -= 1,
+            Some(_) if depth == 0 => {
                 let rest: String = chars[i..].iter().collect();
                 if rest.starts_with(" or ") || rest.starts_with(" and ") {
                     return true;
