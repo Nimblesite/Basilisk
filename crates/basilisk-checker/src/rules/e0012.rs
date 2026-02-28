@@ -82,6 +82,11 @@ fn arg_rhs_mismatch(annotation: &str, rhs: &RhsKind) -> Option<&'static str> {
         .trim()
         .to_ascii_lowercase();
 
+    // Check for TypeVarTuple unpack patterns in parameter annotations
+    if annotation.contains("*tuple[Any, ...]") && matches!(rhs, RhsKind::CallExpr | RhsKind::Other) {
+        return Some("a generic type that may be incompatible with TypeVarTuple unpacking");
+    }
+
     match (base.as_str(), rhs) {
         ("int" | "bool" | "float" | "bytes", RhsKind::StrLiteral) => Some("a `str` literal"),
         ("int" | "str" | "float", RhsKind::BytesLiteral) => Some("a `bytes` literal"),
@@ -91,6 +96,11 @@ fn arg_rhs_mismatch(annotation: &str, rhs: &RhsKind) -> Option<&'static str> {
         // `type[X]` means a class object; passing `None` value is always wrong.
         ("type", RhsKind::NoneValue) => {
             Some("`None` (a value, not a class object — use `type(None)` or `NoneType`)")
+        }
+        // `type(None)` returns a class object (`NoneType`), not the value `None`.
+        // A parameter annotated `None` expects the value `None`, not its type.
+        ("none", RhsKind::TypeCall) => {
+            Some("`type(None)` (a class object, not the value `None`)")
         }
         _ => None,
     }

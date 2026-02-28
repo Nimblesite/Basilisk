@@ -74,14 +74,14 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         module_order_comparisons: collect_module_order_comparisons(&module.ast.body),
         readonly_violations,
         annotated_direct_call_spans: collect_annotated_direct_calls(&module.ast.body),
-        imported_final_names: std::collections::HashSet::new(),
+        imported_final_names: collect_imported_final_names(&module.ast.body, &module.path),
         type_alias_type_calls: Vec::new(),
         type_statements: Vec::new(),
         annotated_too_few_args: Vec::new(),
         namedtuple_defs: Vec::new(),
         float_param_int_attr_accesses,
         literal_string_enum_mismatches,
-        enum_value_type_violations: Vec::new(),
+        enum_value_type_violations: collect_enum_value_type_violations(&module.ast.body, &module.source),
         local_classvar_violations: Vec::new(),
         pep695_bound_violations: Vec::new(),
         historical_positional_violations: Vec::new(),
@@ -2481,17 +2481,757 @@ fn collect_module_attr_assignments(stmts: &[Stmt]) -> Vec<crate::scope::ModuleAt
 // Final violation collection stub
 // ---------------------------------------------------------------------------
 
-/// Collect `Final` annotation violations from the module.
+/// Returns `true` when the annotation text refers to `Final`.
+fn ann_text_is_final(text: &str) -> bool {
+    let t = text.trim();
+    t == "Final"
+        || t.starts_with("Final[")
+        || t == "typing.Final"
+        || t.starts_with("typing.Final[")
+}
+
+/// Collect the names of module-level `Final`-annotated variables from a statement list.
+fn collect_file_final_names(
+    stmts: &[Stmt],
+    source: &str,
+) -> std::collections::HashSet<String> {
+    let mut names = std::collections::HashSet::new();
+    for stmt in stmts {
+        let Stmt::AnnAssign(ann) = stmt else { continue };
+        let Expr::Name(n) = ann.target.as_ref() else { continue };
+        let range = ann.annotation.range();
+        let Some(ann_text) = source.get(range.start().to_u32() as usize..range.end().to_u32() as usize) else {
+            continue;
+        };
+        if ann_text_is_final(ann_text) {
+            names.insert(n.id.to_string());
+        }
+    }
+    names
+}
+
+/// Collect the set of imported names that are declared `Final` in a sibling module.
 ///
-/// This is a stub implementation — full `Final` violation detection is handled
-/// by the E0034 checker rule which already has access to all the necessary info.
-/// This function returns an empty list for now; the collector may be enhanced later.
+/// For `from X import Y`, checks if `Y` is `Final` in `X.py`.
+/// For `from X import *`, adds all `Final` names from `X.py`.
+/// Only resolves simple (non-dotted) module names that map to local `.py` files.
+fn collect_imported_final_names(
+    stmts: &[Stmt],
+    module_path: &str,
+) -> std::collections::HashSet<String> {
+    let mut out = std::collections::HashSet::new();
+    let Some(module_dir) = std::path::Path::new(module_path).parent() else { return out };
+    for stmt in stmts {
+        let Stmt::ImportFrom(import_from) = stmt else { continue };
+        let Some(module_name) = import_from.module.as_ref() else { continue };
+        let module_str = module_name.to_string();
+        // Only handle simple (undotted) local module names.
+        if module_str.contains('.') {
+            continue;
+        }
+        let sibling_path = module_dir.join(format!("{module_str}.py"));
+        let Some(sibling_path_str) = sibling_path.to_str() else { continue };
+        let Ok(sibling) = basilisk_parser::parse_file(sibling_path_str) else { continue };
+        let sibling_finals = collect_file_final_names(&sibling.ast.body, &sibling.source);
+        let is_star = import_from.names.iter().any(|a| a.name.as_str() == "*");
+        if is_star {
+            out.extend(sibling_finals);
+        } else {
+            for alias in &import_from.names {
+                let name = alias.name.as_str();
+                if sibling_finals.contains(name) {
+                    out.insert(name.to_owned());
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Collect `Final` annotation violations from class and function bodies.
+///
+/// Detects:
+/// - `ClassFinalWithoutInit`: class attr annotated `Final` with no value and no __init__ assignment
+/// - `InstanceFinalOutsideInit`: `self.x: Final` in a non-`__init__` method
+/// - `InstanceReassignAlreadyInitialized`: assigning to `self.X` in __init__ when `X: Final = value`
+/// - `InstanceModifyFinal`: assigning/augmenting `self.X` in any method when `X: Final`
+/// - `SubclassOverrideFinal`: child class defines attr that parent declares `Final`
+/// - `FunctionLocalFinalModification`: modifying a function-local `Final` variable
+/// - `GlobalFinalModification`: assigning to a global that is module-level `Final`
 fn collect_final_violations(
-    _stmts: &[Stmt],
-    _classes: &[ClassInfo],
-    _source: &str,
+    stmts: &[Stmt],
+    classes: &[ClassInfo],
+    source: &str,
 ) -> Vec<crate::scope::FinalViolationInfo> {
-    Vec::new()
+    use crate::scope::{FinalViolationInfo, FinalViolationKind};
+    let mut out = Vec::new();
+
+    // Collect module-level Final names for GlobalFinalModification.
+    let module_final_names: std::collections::HashSet<&str> = stmts
+        .iter()
+        .filter_map(|s| {
+            let Stmt::AnnAssign(ann) = s else { return None };
+            let Expr::Name(n) = ann.target.as_ref() else { return None };
+            let range = ann.annotation.range();
+            let ann_text = source.get(range.start().to_u32() as usize..range.end().to_u32() as usize)?;
+            ann_text_is_final(ann_text).then(|| n.id.as_str())
+        })
+        .collect();
+
+    // Build a class-name -> Final-attr-names map for SubclassOverrideFinal.
+    let class_finals: std::collections::HashMap<&str, std::collections::HashSet<&str>> = classes
+        .iter()
+        .map(|cls| {
+            let finals: std::collections::HashSet<&str> = cls
+                .attributes
+                .iter()
+                .filter(|a| {
+                    a.has_annotation
+                        && a.annotation_span
+                            .and_then(|sp| {
+                                source.get(sp.start as usize..sp.end as usize)
+                            })
+                            .is_some_and(ann_text_is_final)
+                })
+                .map(|a| a.name.as_str())
+                .collect();
+            (cls.name.as_str(), finals)
+        })
+        .collect();
+
+    // Walk class definitions for per-class violations.
+    for stmt in stmts {
+        let Stmt::ClassDef(cls_def) = stmt else {
+            // Walk function bodies for Global/Local Final violations.
+            if let Stmt::FunctionDef(func) = stmt {
+                collect_func_final_violations(func, &module_final_names, source, &mut out);
+            }
+            continue;
+        };
+        collect_class_final_violations(cls_def, classes, &class_finals, source, &mut out);
+    }
+    out
+}
+
+/// Collect Final violations inside a class definition.
+fn collect_class_final_violations(
+    cls_def: &StmtClassDef,
+    all_classes: &[ClassInfo],
+    class_finals: &std::collections::HashMap<&str, std::collections::HashSet<&str>>,
+    source: &str,
+    out: &mut Vec<crate::scope::FinalViolationInfo>,
+) {
+    use crate::scope::{FinalViolationInfo, FinalViolationKind};
+
+    let class_name = cls_def.name.as_str();
+
+    // Find parent class Final attrs for SubclassOverrideFinal.
+    let base_names: Vec<&str> = cls_def
+        .arguments
+        .as_deref()
+        .map(|args| {
+            args.args
+                .iter()
+                .filter_map(|base| {
+                    if let Expr::Name(n) = base {
+                        Some(n.id.as_str())
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // Collect Final attrs from all parent classes.
+    let parent_finals: std::collections::HashSet<&str> = base_names
+        .iter()
+        .filter_map(|name| class_finals.get(name))
+        .flat_map(|set| set.iter().copied())
+        .collect();
+
+    // Collect Final attrs in THIS class (annotation-only or with value).
+    let mut this_final_attrs: std::collections::HashMap<&str, bool> = std::collections::HashMap::new();
+    // key = attr name, value = has_initializer
+    for body_stmt in &cls_def.body {
+        let Stmt::AnnAssign(ann) = body_stmt else { continue };
+        let Expr::Name(n) = ann.target.as_ref() else { continue };
+        let attr_name = n.id.as_str();
+        let range = ann.annotation.range();
+        let Some(ann_text) = source.get(range.start().to_u32() as usize..range.end().to_u32() as usize) else { continue };
+        if ann_text_is_final(ann_text) {
+            let has_value = ann.value.is_some();
+            this_final_attrs.insert(attr_name, has_value);
+        }
+    }
+
+    // Find attrs unconditionally assigned in __init__.
+    let init_assigns: std::collections::HashSet<String> = cls_def
+        .body
+        .iter()
+        .find_map(|s| {
+            if let Stmt::FunctionDef(f) = s {
+                if f.name.as_str() == "__init__" {
+                    return Some(collect_unconditional_self_assigns(&f.body));
+                }
+            }
+            None
+        })
+        .unwrap_or_default();
+
+    // ClassFinalWithoutInit: attr has no initializer AND not in __init__ assignments.
+    for (attr_name, has_value) in &this_final_attrs {
+        if !has_value && !init_assigns.contains(*attr_name) {
+            // Find the span of this annotation.
+            for body_stmt in &cls_def.body {
+                let Stmt::AnnAssign(ann) = body_stmt else { continue };
+                let Expr::Name(n) = ann.target.as_ref() else { continue };
+                if n.id.as_str() != *attr_name { continue; }
+                out.push(FinalViolationInfo {
+                    kind: FinalViolationKind::ClassFinalWithoutInit,
+                    span: text_range_to_span(ann.range()),
+                    name: attr_name.to_string(),
+                });
+                break;
+            }
+        }
+    }
+
+    // Walk all method bodies for instance Final violations.
+    for body_stmt in &cls_def.body {
+        let Stmt::FunctionDef(method) = body_stmt else { continue };
+        let is_init = method.name.as_str() == "__init__";
+        for method_stmt in &method.body {
+            collect_instance_final_violations(
+                method_stmt,
+                is_init,
+                &this_final_attrs,
+                source,
+                out,
+            );
+        }
+    }
+
+    // SubclassOverrideFinal: child class declares an attr that is Final in a parent.
+    for body_stmt in &cls_def.body {
+        let attr_name = match body_stmt {
+            Stmt::Assign(assign) if assign.targets.len() == 1 => {
+                if let Expr::Name(n) = &assign.targets[0] {
+                    n.id.as_str()
+                } else {
+                    continue;
+                }
+            }
+            Stmt::AnnAssign(ann) => {
+                if let Expr::Name(n) = ann.target.as_ref() {
+                    n.id.as_str()
+                } else {
+                    continue;
+                }
+            }
+            _ => continue,
+        };
+
+        // Skip private name-mangled attributes.
+        if attr_name.starts_with("__") && !attr_name.ends_with("__") {
+            continue;
+        }
+
+        if parent_finals.contains(attr_name) {
+            let span = match body_stmt {
+                Stmt::Assign(assign) => text_range_to_span(assign.range()),
+                Stmt::AnnAssign(ann) => text_range_to_span(ann.range()),
+                _ => continue,
+            };
+            out.push(crate::scope::FinalViolationInfo {
+                kind: FinalViolationKind::SubclassOverrideFinal,
+                span,
+                name: attr_name.to_string(),
+            });
+        }
+    }
+
+    // Recurse into nested class definitions.
+    for body_stmt in &cls_def.body {
+        if let Stmt::ClassDef(nested) = body_stmt {
+            collect_class_final_violations(nested, all_classes, class_finals, source, out);
+        }
+    }
+}
+
+/// Check a single statement inside a method body for instance Final violations.
+fn collect_instance_final_violations(
+    stmt: &Stmt,
+    is_init: bool,
+    class_final_attrs: &std::collections::HashMap<&str, bool>,
+    source: &str,
+    out: &mut Vec<crate::scope::FinalViolationInfo>,
+) {
+    use crate::scope::{FinalViolationInfo, FinalViolationKind};
+    match stmt {
+        Stmt::AnnAssign(ann) => {
+            // self.x: Final = ... outside __init__
+            if !is_init {
+                if let Expr::Attribute(attr) = ann.target.as_ref() {
+                    let Some(ann_span) = Some(ann.annotation.range()) else { return };
+                    let Some(ann_text) = source.get(
+                        ann_span.start().to_u32() as usize..ann_span.end().to_u32() as usize
+                    ) else { return };
+                    if ann_text_is_final(ann_text) {
+                        if let Expr::Name(self_name) = attr.value.as_ref() {
+                            if self_name.id == "self" {
+                                out.push(FinalViolationInfo {
+                                    kind: FinalViolationKind::InstanceFinalOutsideInit,
+                                    span: text_range_to_span(ann.range()),
+                                    name: attr.attr.to_string(),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Stmt::Assign(assign) | Stmt::AugAssign(assign @ _) => {
+            let targets: &[Expr] = match stmt {
+                Stmt::Assign(a) => &a.targets,
+                _ => return,
+            };
+            for target in targets {
+                let Expr::Attribute(attr) = target else { continue };
+                let Expr::Name(self_name) = attr.value.as_ref() else { continue };
+                if self_name.id != "self" { continue; }
+                let field_name = attr.attr.as_str();
+                if let Some(&has_value) = class_final_attrs.get(field_name) {
+                    let kind = if is_init && has_value {
+                        FinalViolationKind::InstanceReassignAlreadyInitialized
+                    } else if !is_init {
+                        FinalViolationKind::InstanceModifyFinal
+                    } else {
+                        continue;
+                    };
+                    out.push(FinalViolationInfo {
+                        kind,
+                        span: text_range_to_span(assign.range()),
+                        name: field_name.to_string(),
+                    });
+                }
+            }
+        }
+        Stmt::AugAssign(aug) => {
+            // self.X += 1 — augmented assignment to Final class attr
+            let Expr::Attribute(attr) = aug.target.as_ref() else { return };
+            let Expr::Name(self_name) = attr.value.as_ref() else { return };
+            if self_name.id != "self" { return; }
+            let field_name = attr.attr.as_str();
+            if class_final_attrs.contains_key(field_name) {
+                out.push(FinalViolationInfo {
+                    kind: FinalViolationKind::InstanceModifyFinal,
+                    span: text_range_to_span(aug.range()),
+                    name: field_name.to_string(),
+                });
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Collect the names of attributes unconditionally assigned via `self.X = ...` in
+/// the top-level statements of a function body (i.e., not inside if/for/while/try).
+fn collect_unconditional_self_assigns(stmts: &[Stmt]) -> std::collections::HashSet<String> {
+    let mut names = std::collections::HashSet::new();
+    for stmt in stmts {
+        let Stmt::Assign(assign) = stmt else { continue };
+        for target in &assign.targets {
+            let Expr::Attribute(attr) = target else { continue };
+            let Expr::Name(n) = attr.value.as_ref() else { continue };
+            if n.id == "self" {
+                names.insert(attr.attr.to_string());
+            }
+        }
+    }
+    names
+}
+
+/// Collect Final violations inside a function body (GlobalFinalModification and
+/// FunctionLocalFinalModification).
+fn collect_func_final_violations(
+    func: &StmtFunctionDef,
+    module_final_names: &std::collections::HashSet<&str>,
+    source: &str,
+    out: &mut Vec<crate::scope::FinalViolationInfo>,
+) {
+    use crate::scope::{FinalViolationInfo, FinalViolationKind};
+    // Find `global X` declarations to know which names are global Final.
+    let global_final_names: std::collections::HashSet<&str> = func
+        .body
+        .iter()
+        .filter_map(|s| {
+            if let Stmt::Global(g) = s {
+                Some(g.names.iter().filter_map(|name| {
+                    if module_final_names.contains(name.as_str()) {
+                        Some(name.as_str())
+                    } else {
+                        None
+                    }
+                }))
+            } else {
+                None
+            }
+        })
+        .flatten()
+        .collect();
+
+    // Collect function-local Final variables (x: Final = ...) as we scan.
+    let mut local_finals: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    for stmt in &func.body {
+        collect_func_stmt_final_violations(
+            stmt,
+            &global_final_names,
+            &mut local_finals,
+            source,
+            out,
+        );
+    }
+}
+
+/// Process a single statement inside a function for Final violations.
+#[allow(clippy::too_many_arguments)]
+fn collect_func_stmt_final_violations(
+    stmt: &Stmt,
+    global_finals: &std::collections::HashSet<&str>,
+    local_finals: &mut std::collections::HashSet<String>,
+    source: &str,
+    out: &mut Vec<crate::scope::FinalViolationInfo>,
+) {
+    use crate::scope::{FinalViolationInfo, FinalViolationKind};
+    match stmt {
+        Stmt::AnnAssign(ann) => {
+            // Register x: Final = ... as a local Final.
+            if let Expr::Name(n) = ann.target.as_ref() {
+                let range = ann.annotation.range();
+                if let Some(ann_text) = source.get(range.start().to_u32() as usize..range.end().to_u32() as usize) {
+                    if ann_text_is_final(ann_text) {
+                        local_finals.insert(n.id.to_string());
+                    }
+                }
+            }
+        }
+        Stmt::Assign(assign) => {
+            for target in &assign.targets {
+                check_final_assign_target(target, global_finals, local_finals, out);
+            }
+        }
+        Stmt::AugAssign(aug) => {
+            check_final_assign_target(aug.target.as_ref(), global_finals, local_finals, out);
+        }
+        Stmt::For(for_stmt) => {
+            check_final_assign_target(for_stmt.target.as_ref(), global_finals, local_finals, out);
+        }
+        Stmt::With(with_stmt) => {
+            for item in &with_stmt.items {
+                if let Some(opt_var) = &item.optional_vars {
+                    check_final_assign_target(opt_var.as_ref(), global_finals, local_finals, out);
+                }
+            }
+        }
+        Stmt::Expr(expr_stmt) => {
+            check_walrus_final(expr_stmt.value.as_ref(), global_finals, local_finals, out);
+        }
+        _ => {}
+    }
+}
+
+/// Check if an assign target is a Final name and emit violations if so.
+fn check_final_assign_target(
+    target: &Expr,
+    global_finals: &std::collections::HashSet<&str>,
+    local_finals: &std::collections::HashSet<String>,
+    out: &mut Vec<crate::scope::FinalViolationInfo>,
+) {
+    use crate::scope::{FinalViolationInfo, FinalViolationKind};
+    match target {
+        Expr::Name(n) => {
+            let name = n.id.as_str();
+            if global_finals.contains(name) {
+                out.push(FinalViolationInfo {
+                    kind: FinalViolationKind::GlobalFinalModification,
+                    span: text_range_to_span(n.range()),
+                    name: name.to_string(),
+                });
+            } else if local_finals.contains(name) {
+                out.push(FinalViolationInfo {
+                    kind: FinalViolationKind::FunctionLocalFinalModification,
+                    span: text_range_to_span(n.range()),
+                    name: name.to_string(),
+                });
+            }
+        }
+        Expr::Tuple(tup) => {
+            // Handle tuple unpacking: (a, x) = ...
+            for elt in &tup.elts {
+                check_final_assign_target(elt, global_finals, local_finals, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Check an expression for walrus operator assignments to Final variables.
+fn check_walrus_final(
+    expr: &Expr,
+    global_finals: &std::collections::HashSet<&str>,
+    local_finals: &std::collections::HashSet<String>,
+    out: &mut Vec<crate::scope::FinalViolationInfo>,
+) {
+    use crate::scope::{FinalViolationInfo, FinalViolationKind};
+    if let Expr::Named(named) = expr {
+        let Expr::Name(n) = named.target.as_ref() else { return };
+        let name = n.id.as_str();
+        if global_finals.contains(name) {
+            out.push(FinalViolationInfo {
+                kind: FinalViolationKind::GlobalFinalModification,
+                span: text_range_to_span(n.range()),
+                name: name.to_string(),
+            });
+        } else if local_finals.contains(name) {
+            out.push(FinalViolationInfo {
+                kind: FinalViolationKind::FunctionLocalFinalModification,
+                span: text_range_to_span(n.range()),
+                name: name.to_string(),
+            });
+        }
+    }
+}
+
+
+/// Collect enum `_value_` type annotation violations.
+///
+/// When `_value_: T` is declared in an enum class body (annotation-only, no value),
+/// every member literal that is type-incompatible with `T` is flagged, and any
+/// `self._value_ = param` assignment in `__init__` where `param` has a type
+/// annotation incompatible with `T` is also flagged.
+fn collect_enum_value_type_violations(
+    stmts: &[Stmt],
+    source: &str,
+) -> Vec<crate::scope::EnumValueTypeViolationInfo> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        let Stmt::ClassDef(cls) = stmt else { continue };
+        if !stmt_class_is_direct_enum(cls) {
+            continue;
+        }
+        let Some(declared_type) = find_enum_value_annotation(cls, source) else {
+            continue;
+        };
+        let class_name = cls.name.to_string();
+        check_enum_member_values(cls, source, &declared_type, &class_name, &mut out);
+        check_enum_init_value_param(cls, source, &declared_type, &class_name, &mut out);
+    }
+    out
+}
+
+/// Checks member value assignments in an enum class body against `_value_: T`.
+fn check_enum_member_values(
+    cls: &StmtClassDef,
+    _source: &str,
+    declared_type: &str,
+    class_name: &str,
+    out: &mut Vec<crate::scope::EnumValueTypeViolationInfo>,
+) {
+    use crate::scope::{EnumValueTypeViolationInfo, EnumValueTypeViolationKind};
+    for body_stmt in &cls.body {
+        let Stmt::Assign(assign) = body_stmt else {
+            continue;
+        };
+        if assign.targets.len() != 1 {
+            continue;
+        }
+        let Expr::Name(name_expr) = &assign.targets[0] else {
+            continue;
+        };
+        let member_name = name_expr.id.as_str();
+        // Skip dunder and special names.
+        if member_name.starts_with("__") || member_name == "_value_" {
+            continue;
+        }
+        let Some(actual_type) = infer_member_literal_type(assign.value.as_ref()) else {
+            continue;
+        };
+        if !enum_types_compatible(declared_type, &actual_type) {
+            out.push(EnumValueTypeViolationInfo {
+                kind: EnumValueTypeViolationKind::MemberValueTypeMismatch,
+                span: text_range_to_span(assign.value.range()),
+                class_name: class_name.to_owned(),
+                declared_type: declared_type.to_owned(),
+                actual_type,
+            });
+        }
+    }
+}
+
+/// Checks `self._value_ = param` assignments in `__init__` against `_value_: T`.
+fn check_enum_init_value_param(
+    cls: &StmtClassDef,
+    source: &str,
+    declared_type: &str,
+    class_name: &str,
+    out: &mut Vec<crate::scope::EnumValueTypeViolationInfo>,
+) {
+    for body_stmt in &cls.body {
+        let Stmt::FunctionDef(func) = body_stmt else {
+            continue;
+        };
+        if func.name.as_str() != "__init__" {
+            continue;
+        }
+        // Build parameter name -> annotation text map.
+        let params: Vec<(&str, &str)> = func
+            .parameters
+            .posonlyargs
+            .iter()
+            .chain(func.parameters.args.iter())
+            .filter_map(|p| {
+                if p.parameter.name.as_str() == "self" {
+                    return None;
+                }
+                let ann_expr = p.parameter.annotation.as_deref()?;
+                let range = ann_expr.range();
+                let ann_text = source
+                    .get(range.start().to_u32() as usize..range.end().to_u32() as usize)?
+                    .trim();
+                Some((p.parameter.name.as_str(), ann_text))
+            })
+            .collect();
+
+        for init_stmt in &func.body {
+            check_init_self_value_assign(init_stmt, &params, source, declared_type, class_name, out);
+        }
+    }
+}
+
+/// Checks a single `__init__` statement for `self._value_ = param` pattern.
+fn check_init_self_value_assign<'a>(
+    stmt: &Stmt,
+    params: &[(&'a str, &'a str)],
+    _source: &str,
+    declared_type: &str,
+    class_name: &str,
+    out: &mut Vec<crate::scope::EnumValueTypeViolationInfo>,
+) {
+    use crate::scope::{EnumValueTypeViolationInfo, EnumValueTypeViolationKind};
+    let Stmt::Assign(assign) = stmt else { return };
+    if assign.targets.len() != 1 {
+        return;
+    }
+    let Expr::Attribute(attr) = &assign.targets[0] else { return };
+    if attr.attr.as_str() != "_value_" {
+        return;
+    }
+    let Expr::Name(self_name) = attr.value.as_ref() else { return };
+    if self_name.id.as_str() != "self" {
+        return;
+    }
+    // Found self._value_ = <expr>; check if RHS is a parameter name.
+    let Expr::Name(rhs_name) = assign.value.as_ref() else { return };
+    let param_name = rhs_name.id.as_str();
+    let Some((_, ann_text)) = params.iter().find(|(n, _)| *n == param_name) else {
+        return;
+    };
+    let actual_type = ann_text.trim().to_owned();
+    if !enum_types_compatible(declared_type, &actual_type) {
+        out.push(EnumValueTypeViolationInfo {
+            kind: EnumValueTypeViolationKind::InitValueParamTypeMismatch,
+            span: text_range_to_span(assign.range()),
+            class_name: class_name.to_owned(),
+            declared_type: declared_type.to_owned(),
+            actual_type,
+        });
+    }
+}
+
+/// Returns `true` when the class directly inherits from one of the standard enum bases.
+fn stmt_class_is_direct_enum(cls: &StmtClassDef) -> bool {
+    let Some(args) = cls.arguments.as_deref() else {
+        return false;
+    };
+    args.args.iter().any(|base| {
+        if let Expr::Name(n) = base {
+            ENUM_BASES.contains(&n.id.as_str())
+        } else {
+            false
+        }
+    })
+}
+
+/// Finds an `_value_: T` annotation-only declaration in the enum class body.
+///
+/// Returns the annotation text (e.g. `"int"`) if found, `None` otherwise.
+fn find_enum_value_annotation(cls: &StmtClassDef, source: &str) -> Option<String> {
+    for stmt in &cls.body {
+        let Stmt::AnnAssign(ann) = stmt else {
+            continue;
+        };
+        if ann.value.is_some() {
+            continue; // Must be annotation-only (no initializer).
+        }
+        let Expr::Name(n) = ann.target.as_ref() else {
+            continue;
+        };
+        if n.id != "_value_" {
+            continue;
+        }
+        let range = ann.annotation.range();
+        let ann_text = source
+            .get(range.start().to_u32() as usize..range.end().to_u32() as usize)?
+            .trim()
+            .to_owned();
+        return Some(ann_text);
+    }
+    None
+}
+
+/// Infers the primitive type name of a literal expression.
+///
+/// Returns `None` for non-literal expressions (tuples, calls, names, etc.) so
+/// that only clearly-typed literals are checked against `_value_: T`.
+fn infer_member_literal_type(expr: &Expr) -> Option<String> {
+    match expr {
+        Expr::StringLiteral(_) => Some("str".to_owned()),
+        Expr::NumberLiteral(n) => {
+            if matches!(n.value, ruff_python_ast::Number::Float(_)) {
+                Some("float".to_owned())
+            } else if matches!(n.value, ruff_python_ast::Number::Complex { .. }) {
+                Some("complex".to_owned())
+            } else {
+                Some("int".to_owned())
+            }
+        }
+        Expr::BooleanLiteral(_) => Some("bool".to_owned()),
+        Expr::NoneLiteral(_) => Some("None".to_owned()),
+        Expr::BytesLiteral(_) => Some("bytes".to_owned()),
+        _ => None,
+    }
+}
+
+/// Returns `true` when `actual` is compatible with `declared` as an enum `_value_` type.
+///
+/// - Identical types are always compatible.
+/// - `bool` is compatible with `int` (bool is a subclass of int).
+/// - `bool` and `int` are compatible with `float` (numeric tower).
+fn enum_types_compatible(declared: &str, actual: &str) -> bool {
+    if declared == actual {
+        return true;
+    }
+    // bool is a subtype of int.
+    if declared == "int" && actual == "bool" {
+        return true;
+    }
+    // int and bool are compatible with float (PEP 3141 numeric tower).
+    if declared == "float" && (actual == "int" || actual == "bool") {
+        return true;
+    }
+    false
 }
 
 // ---------------------------------------------------------------------------

@@ -141,7 +141,7 @@ fn parse_literal_class_member(ann: &str) -> Option<(&str, &str)> {
 /// - It is assigned a lambda expression.
 /// - It is assigned via `staticmethod(...)` or `classmethod(...)`.
 /// - It is `_value_` or `value` — these are special attributes that
-/// cannot be accessed directly on enum members.
+///   cannot be accessed directly on enum members.
 fn is_non_member(cls: &ClassInfo, member_name: &str) -> bool {
     // Private names (name-mangling): `__X` where X does not end with `__`.
     if member_name.starts_with("__") && !member_name.ends_with("__") {

@@ -193,6 +193,8 @@ pub enum RhsKind {
     NoneValue,
     /// A function or constructor call — return type may be unknown.
     CallExpr,
+    /// A `type(X)` call — returns a class object (e.g. `type(None)` → `NoneType`).
+    TypeCall,
     /// Any other expression.
     Other,
 }
