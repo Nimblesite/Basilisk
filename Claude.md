@@ -2,8 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-We are shooting for 100% PEP conformance. The conformance test suite requires **Python 3.12** — this is the canonical target version for the entire project. Read the conformance README carefully:
-https://github.com/python/typing/blob/main/conformance/README.md
+We are shooting for 100% PEP conformance. The conformance test suite requires **Python 3.12** — this is the canonical target version for the entire project. Read the PEP conformance readme carefully.
+
 
 To run the conformance suite locally:
 ```
@@ -11,6 +11,11 @@ python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r conformance/requirements.txt
 ```
+
+# Critical Docs
+
+[Specification for the Python type system](https://typing.python.org/en/latest/spec/index.html)
+[PEP Conformance](https://github.com/python/typing/blob/main/conformance/README.md)
 
 # Rules
 
@@ -32,7 +37,7 @@ pip install -r conformance/requirements.txt
 - Do not use Git unless asked to
 
 ## Rust Quality Standards
-- Routinely runny clippy and fix violations immediately
+- Routinely run clippy, check and fix violations immediately
 - All lints at highest strictness (see Cargo.toml `[lints]` section)
 - `unsafe` code is forbidden (`unsafe_code = "deny"`)
 - No `.unwrap()` or `.expect()` in production code - use `?` with proper error types
@@ -42,7 +47,7 @@ pip install -r conformance/requirements.txt
 - Follow FP style code with `Result<T,E>` and `Option<T>`
 - Expressions over statements - prefer `match`, `if let`, iterator chains
 - Pure functions where possible - minimize side effects
-- Prefer `map`, `and_then`, `unwrap_or_else` over imperative control flow
+- Prefer pattern matching over casting or unwrapping
 - Use early returns with `?` operator for clean error propagation
 
 ## Code Structure
@@ -58,31 +63,11 @@ pip install -r conformance/requirements.txt
 - **Name classes after what the element is** - Don't name the class after the section it belongs to
 - **There are too many CSS classes** - Consolidate NOW!!!
 
-## Project Status
-
-Basilisk is currently in the **specification stage**. [SPEC.md](SPEC.md) is the primary artifact — a 1200+ line technical specification. No source code exists yet. The first implementation task is building a Rust toolchain.
-
 ## What Basilisk Is
 
 A strict-by-default static type analyzer for Python — "TypeScript for Python". It enforces complete type safety with no permissive modes: every parameter must be typed, every return type declared, `Any` is always explicit. Implemented in **Rust**, not Python.
 
 Basilisk also adds Mojo-inspired ownership semantics (`Borrowed`, `Owned`, `InOut`) as static analysis annotations over standard Python syntax, making code compatible with Mojo's type expectations without requiring a Mojo compiler.
-
-## Implementation Language and Build
-
-- **Language**: Rust
-- **Build system**: Cargo
-- **No Node.js, no Python runtime** — output is a standalone binary
-
-Once `Cargo.toml` exists, standard commands will be:
-```
-cargo build
-cargo test
-cargo test <test_name>   # run a single test
-cargo clippy             # lint
-cargo fmt                # format
-cargo fuzz               # fuzz testing (cargo-fuzz)
-```
 
 ## Key Architecture Decisions (from SPEC.md)
 
@@ -93,36 +78,6 @@ cargo fuzz               # fuzz testing (cargo-fuzz)
 - **Plugin system**: WASM-based for security and portability
 - **Parallelism**: Rayon (work-stealing) for file-level parallel analysis
 - **No Pyright/mypy/Node.js dependency** — zero TypeScript or Python runtime
-
-## Planned CLI
-
-```
-basilisk check [path]
-basilisk migrate --from pyright   # reads pyrightconfig.json
-basilisk migrate --from mypy      # reads mypy.ini / setup.cfg
-basilisk fmt                      # delegates to ruff format
-basilisk lint                     # delegates to ruff check
-basilisk stats
-```
-
-## Configuration (pyproject.toml)
-
-```toml
-[tool.basilisk]
-python-version = "3.12"
-stub-paths = ["stubs/"]
-include = ["src/", "tests/"]
-exclude = ["**/migrations/**"]
-
-[tool.basilisk.mojo-safety]
-ownership = true
-immutability = true
-no-implicit-coercion = true
-
-[tool.basilisk.per-path-overrides."legacy/**"]
-strict = false
-deadline = "2026-12-31"
-```
 
 ## Diagnostic Code Convention
 
@@ -144,10 +99,6 @@ Key diagnostic ranges defined in SPEC.md:
 ## Alternative Ecosystems
 
 Pyright is the gold standard that Basilisk must compare itself to. You can [view the code here](https://github.com/microsoft/pyright) as a reference, but NEVER copy any of the code from the Pyright codebase.
-
-## Stub Quality Tiers
-
-Tier 1 (typeshed, hand-written) → Tier 2 (community-reviewed auto-generated) → Tier 3 (best-effort inference). Tier 1 bundled with the binary; user stub paths override in order.
 
 ## Testing Strategy (per SPEC.md)
 
@@ -176,15 +127,10 @@ Tier 1 (typeshed, hand-written) → Tier 2 (community-reviewed auto-generated) �
 
 Run locally:
 ```bash
-cargo mutants
+sh scripts/mutate.sh
 ```
 
-In CI (GitHub Actions), mutation testing runs on every PR against the changed crates only:
-```yaml
-- uses: actions/checkout@v4
-- run: cargo install cargo-mutants
-- run: cargo mutants --in-diff HEAD~1..HEAD
-```
+
 
 Performance targets: PyTorch (600K LOC), Django (250K LOC), FastAPI (30K LOC), stdlib (500K LOC).
 
