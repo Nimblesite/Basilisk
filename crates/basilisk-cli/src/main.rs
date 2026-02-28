@@ -65,7 +65,11 @@ fn run_check(paths: &[String]) -> i32 {
                     error_count,
                     if error_count == 1 { "" } else { "s" },
                 );
-                if error_count > 0 { 1 } else { 0 }
+                if error_count > 0 {
+                    1
+                } else {
+                    0
+                }
             }
         }
         Err(err) => {

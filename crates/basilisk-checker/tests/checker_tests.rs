@@ -49,7 +49,10 @@ fn emits_both_for_unannotated_function() {
 fn emits_one_e0001_per_unannotated_parameter() {
     let diags = run("def multi(a, b, c) -> None:\n    pass\n");
     let count = diags.iter().filter(|d| d.code.code == "BSK-E0001").count();
-    assert_eq!(count, 3, "three unannotated params should produce three E0001s");
+    assert_eq!(
+        count, 3,
+        "three unannotated params should produce three E0001s"
+    );
 }
 
 #[test]

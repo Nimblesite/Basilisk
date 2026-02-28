@@ -28,7 +28,10 @@ fn make_diagnostic(func: &FunctionInfo, path: &str) -> Diagnostic {
     Diagnostic {
         code: CODE.clone(),
         severity: Severity::Error,
-        message: format!("Missing return type annotation for function `{}`", func.name),
+        message: format!(
+            "Missing return type annotation for function `{}`",
+            func.name
+        ),
         span: func.name_span,
         path: path.to_owned(),
         help: Some(format!(

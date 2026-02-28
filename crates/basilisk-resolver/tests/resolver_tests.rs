@@ -44,7 +44,11 @@ fn finds_nested_functions() {
     let parsed = parse_source(src, "test.py".to_owned()).unwrap();
     let resolved = resolve(&parsed).unwrap();
 
-    assert_eq!(resolved.functions.len(), 2, "should find both outer and inner");
+    assert_eq!(
+        resolved.functions.len(),
+        2,
+        "should find both outer and inner"
+    );
     let names: Vec<&str> = resolved.functions.iter().map(|f| f.name.as_str()).collect();
     assert!(names.contains(&"outer"));
     assert!(names.contains(&"inner"));
@@ -76,8 +80,16 @@ fn detects_vararg_and_kwarg() {
     let resolved = resolve(&parsed).unwrap();
 
     let func = &resolved.functions[0];
-    assert!(func.vararg.as_ref().map(|p| p.has_annotation).unwrap_or(false));
-    assert!(func.kwarg.as_ref().map(|p| p.has_annotation).unwrap_or(false));
+    assert!(func
+        .vararg
+        .as_ref()
+        .map(|p| p.has_annotation)
+        .unwrap_or(false));
+    assert!(func
+        .kwarg
+        .as_ref()
+        .map(|p| p.has_annotation)
+        .unwrap_or(false));
 }
 
 #[test]

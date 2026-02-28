@@ -81,10 +81,7 @@ fn byte_offset_to_line_col(source: &str, offset: usize) -> (usize, usize) {
 fn render_snippet(source: &str, start: usize, end: usize) {
     let (line_num, _) = byte_offset_to_line_col(source, start);
     let line_start = source[..start].rfind('\n').map_or(0, |p| p + 1);
-    let line_text = source[line_start..]
-        .lines()
-        .next()
-        .unwrap_or("");
+    let line_text = source[line_start..].lines().next().unwrap_or("");
 
     let col_start = start - line_start;
     let col_end = (end - line_start).min(line_text.len());

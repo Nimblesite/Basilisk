@@ -44,7 +44,12 @@ fn missing_param_annotation_produces_only_e0001() {
         "all diagnostics should be E0001, got: {diags:#?}"
     );
     // `process` has 1 unannotated param, `transform` has 1 unannotated param
-    assert_eq!(diags.len(), 2, "expected 2 E0001 diagnostics, got {}", diags.len());
+    assert_eq!(
+        diags.len(),
+        2,
+        "expected 2 E0001 diagnostics, got {}",
+        diags.len()
+    );
 }
 
 #[test]
@@ -89,10 +94,7 @@ fn all_diagnostics_reference_correct_file_path() {
     let path = fixture("missing_both.py");
     let diags = check_fixture("missing_both.py");
     for diag in &diags {
-        assert_eq!(
-            diag.path, path,
-            "diagnostic path should match fixture path"
-        );
+        assert_eq!(diag.path, path, "diagnostic path should match fixture path");
     }
 }
 

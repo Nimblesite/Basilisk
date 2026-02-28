@@ -82,7 +82,10 @@ fn assert_diagnostics(source: &str, diags: &[Diagnostic], expected: &[Expected])
             .iter()
             .map(|d| {
                 let (l, c) = line_col(source, d.span.start);
-                format!("    {}[{}] at {l}:{c} — {}", d.severity, d.code.code, d.message)
+                format!(
+                    "    {}[{}] at {l}:{c} — {}",
+                    d.severity, d.code.code, d.message
+                )
             })
             .collect::<Vec<_>>()
             .join("\n"),
@@ -230,11 +233,7 @@ fn e0001_unannotated_kwarg() {
 fn e0001_unannotated_param_in_nested_function() {
     let diags = run("errors/e0001_nested.py");
     let src = std::fs::read_to_string(fixture("errors/e0001_nested.py")).unwrap();
-    assert_diagnostics(
-        &src,
-        &diags,
-        &[Expected::error("BSK-E0001", "`y`", 2, 15)],
-    );
+    assert_diagnostics(&src, &diags, &[Expected::error("BSK-E0001", "`y`", 2, 15)]);
 }
 
 // ---------------------------------------------------------------------------
@@ -308,8 +307,7 @@ fn e0002_three_functions_all_missing_return() {
 #[test]
 fn e0001_and_e0002_class_methods() {
     let diags = run("errors/e0001_and_e0002_class_methods.py");
-    let src =
-        std::fs::read_to_string(fixture("errors/e0001_and_e0002_class_methods.py")).unwrap();
+    let src = std::fs::read_to_string(fixture("errors/e0001_and_e0002_class_methods.py")).unwrap();
     assert_diagnostics(
         &src,
         &diags,
@@ -330,31 +328,46 @@ fn e0001_and_e0002_class_methods() {
 #[test]
 fn clean_typed_generics_is_silent() {
     let diags = run("clean/typed_generics.py");
-    assert!(diags.is_empty(), "typed_generics.py must produce no diagnostics, got:\n{diags:#?}");
+    assert!(
+        diags.is_empty(),
+        "typed_generics.py must produce no diagnostics, got:\n{diags:#?}"
+    );
 }
 
 #[test]
 fn clean_typed_optional_is_silent() {
     let diags = run("clean/typed_optional.py");
-    assert!(diags.is_empty(), "typed_optional.py must produce no diagnostics, got:\n{diags:#?}");
+    assert!(
+        diags.is_empty(),
+        "typed_optional.py must produce no diagnostics, got:\n{diags:#?}"
+    );
 }
 
 #[test]
 fn clean_typed_inheritance_is_silent() {
     let diags = run("clean/typed_inheritance.py");
-    assert!(diags.is_empty(), "typed_inheritance.py must produce no diagnostics, got:\n{diags:#?}");
+    assert!(
+        diags.is_empty(),
+        "typed_inheritance.py must produce no diagnostics, got:\n{diags:#?}"
+    );
 }
 
 #[test]
 fn clean_typed_dataclass_style_is_silent() {
     let diags = run("clean/typed_dataclass_style.py");
-    assert!(diags.is_empty(), "typed_dataclass_style.py must produce no diagnostics, got:\n{diags:#?}");
+    assert!(
+        diags.is_empty(),
+        "typed_dataclass_style.py must produce no diagnostics, got:\n{diags:#?}"
+    );
 }
 
 #[test]
 fn clean_typed_control_flow_is_silent() {
     let diags = run("clean/typed_control_flow.py");
-    assert!(diags.is_empty(), "typed_control_flow.py must produce no diagnostics, got:\n{diags:#?}");
+    assert!(
+        diags.is_empty(),
+        "typed_control_flow.py must produce no diagnostics, got:\n{diags:#?}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -377,8 +390,8 @@ fn e0002_dunder_methods_all_missing_return() {
         &[
             Expected::error("BSK-E0002", "`__init__`", 2, 9),
             Expected::error("BSK-E0002", "`__repr__`", 6, 9),
-            Expected::error("BSK-E0002", "`__add__`",  9, 9),
-            Expected::error("BSK-E0002", "`__len__`",  12, 9),
+            Expected::error("BSK-E0002", "`__add__`", 9, 9),
+            Expected::error("BSK-E0002", "`__len__`", 12, 9),
         ],
     );
 }
@@ -400,7 +413,7 @@ fn e0001_only_unannotated_params_flagged_in_mixed_signature() {
         &diags,
         &[
             Expected::error("BSK-E0001", "`destination`", 1, 27),
-            Expected::error("BSK-E0001", "`currency`",    1, 55),
+            Expected::error("BSK-E0001", "`currency`", 1, 55),
         ],
     );
 }
@@ -421,7 +434,7 @@ fn e0001_positional_only_params_flagged() {
         &src,
         &diags,
         &[
-            Expected::error("BSK-E0001", "`numerator`",   1, 12),
+            Expected::error("BSK-E0001", "`numerator`", 1, 12),
             Expected::error("BSK-E0001", "`denominator`", 1, 23),
         ],
     );
@@ -463,7 +476,7 @@ fn e0001_unannotated_keyword_only_params_flagged() {
         &src,
         &diags,
         &[
-            Expected::error("BSK-E0001", "`height`",     1, 27),
+            Expected::error("BSK-E0001", "`height`", 1, 27),
             Expected::error("BSK-E0001", "`background`", 1, 35),
         ],
     );
@@ -487,14 +500,14 @@ fn e0001_and_e0002_four_completely_untyped_functions() {
         &diags,
         &[
             // E0001s come from params; E0002s from func names — sorted by span start
-            Expected::error("BSK-E0002", "`parse`",     1,  5),
-            Expected::error("BSK-E0001", "`raw`",       1, 11),
-            Expected::error("BSK-E0002", "`validate`",  5,  5),
-            Expected::error("BSK-E0001", "`value`",     5, 14),
-            Expected::error("BSK-E0002", "`transform`", 9,  5),
-            Expected::error("BSK-E0001", "`data`",      9, 15),
+            Expected::error("BSK-E0002", "`parse`", 1, 5),
+            Expected::error("BSK-E0001", "`raw`", 1, 11),
+            Expected::error("BSK-E0002", "`validate`", 5, 5),
+            Expected::error("BSK-E0001", "`value`", 5, 14),
+            Expected::error("BSK-E0002", "`transform`", 9, 5),
+            Expected::error("BSK-E0001", "`data`", 9, 15),
             Expected::error("BSK-E0002", "`serialize`", 13, 5),
-            Expected::error("BSK-E0001", "`obj`",       13, 15),
+            Expected::error("BSK-E0001", "`obj`", 13, 15),
         ],
     );
 }
@@ -535,12 +548,12 @@ fn e0001_and_e0002_subclass_override_missing_annotations() {
         &src,
         &diags,
         &[
-            Expected::error("BSK-E0002", "`process`", 7,  9),
-            Expected::error("BSK-E0001", "`self`",    7, 17),
-            Expected::error("BSK-E0001", "`data`",    7, 23),
-            Expected::error("BSK-E0002", "`extra`",   10, 9),
-            Expected::error("BSK-E0001", "`self`",    10, 15),
-            Expected::error("BSK-E0001", "`value`",   10, 21),
+            Expected::error("BSK-E0002", "`process`", 7, 9),
+            Expected::error("BSK-E0001", "`self`", 7, 17),
+            Expected::error("BSK-E0001", "`data`", 7, 23),
+            Expected::error("BSK-E0002", "`extra`", 10, 9),
+            Expected::error("BSK-E0001", "`self`", 10, 15),
+            Expected::error("BSK-E0001", "`value`", 10, 21),
         ],
     );
 }
