@@ -54,8 +54,18 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
 /// type constructor — e.g. `list[Final[int]]`, `Optional[Final[int]]`.
 ///
 /// `Final[...]` at the top-level (starts with `Final`) is NOT nested.
-/// `ClassVar[Final[...]]` and `Final[ClassVar[...]]` are handled separately.
+/// `ClassVar[Final[...]]` is handled separately (and exempt in dataclasses).
+/// `Annotated[Final[...], ...]` is explicitly valid per PEP 591.
 fn has_nested_final(ann: &str) -> bool {
+    // Annotated[Final[...], ...] is explicitly valid — skip it.
+    if ann.starts_with("Annotated[") {
+        return false;
+    }
+    // ClassVar[Final[...]] is handled by has_classvar_wrapping_final — skip here
+    // to avoid double-reporting (and to respect the dataclass exemption).
+    if ann.starts_with("ClassVar[") {
+        return false;
+    }
     // Has `[Final[` somewhere — meaning Final is not the outermost wrapper.
     ann.contains("[Final[") || ann.contains("[Final ")
 }
@@ -178,14 +188,18 @@ impl Rule for FinalInvalidPosition {
 
         // --- Class attributes ---
         for cls in &module.classes {
+            // PEP 681 / dataclasses spec: `ClassVar[Final[int]]` is explicitly valid
+            // in dataclasses as a way to declare a final class variable.
+            let is_dataclass = cls.is_dataclass;
+
             for attr in &cls.attributes {
                 let Some(ann) = span_text(source, attr.annotation_span) else {
                     continue;
                 };
                 let ann = ann.trim();
 
-                // `ClassVar[Final[...]]`
-                if has_classvar_wrapping_final(ann) {
+                // `ClassVar[Final[...]]` — invalid except in dataclasses
+                if !is_dataclass && has_classvar_wrapping_final(ann) {
                     diagnostics.push(make_diagnostic(
                         format!(
                             "`Final` cannot be used inside `ClassVar` for attribute `{}`",

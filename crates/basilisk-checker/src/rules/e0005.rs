@@ -27,19 +27,32 @@ pub(crate) struct MissingAttributeAnnotation;
 
 impl Rule for MissingAttributeAnnotation {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+        // Collect all TypeVar names (module-level and class-body) so we can
+        // exempt unannotated TypeVar assignments like `T = TypeVar("T")` from E0005.
+        let typevar_names: std::collections::HashSet<&str> = module
+            .typevar_calls
+            .iter()
+            .map(|tv| tv.name.as_str())
+            .collect();
+
         module
             .classes
             .iter()
             .filter(|class| !is_enum_class(class) && !is_protocol_class(class))
-            .for_each(|class| check_class(class, &module.path, diagnostics));
+            .for_each(|class| check_class(class, &module.path, &typevar_names, diagnostics));
     }
 }
 
-fn check_class(class: &ClassInfo, path: &str, out: &mut Vec<Diagnostic>) {
+fn check_class(
+    class: &ClassInfo,
+    path: &str,
+    typevar_names: &std::collections::HashSet<&str>,
+    out: &mut Vec<Diagnostic>,
+) {
     class
         .attributes
         .iter()
-        .filter(|attr| !attr.has_annotation)
+        .filter(|attr| !attr.has_annotation && !typevar_names.contains(attr.name.as_str()))
         .for_each(|attr| out.push(make_diagnostic(attr, &class.name, path)));
 }
 

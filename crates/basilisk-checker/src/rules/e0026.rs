@@ -59,6 +59,46 @@ impl Rule for TypeVarSingleConstraint {
                     ),
                 });
             }
+            // Constraint must not itself be parameterized by a TypeVar (e.g. `list[T]`).
+            if tv.has_parameterized_constraint && tv.constraint_count >= 2 {
+                diagnostics.push(Diagnostic {
+                    code: CODE.clone(),
+                    severity: Severity::Error,
+                    message: format!(
+                        "`{}` has a constraint that is parameterized by a type variable",
+                        tv.name
+                    ),
+                    span: tv.span,
+                    path: module.path.clone(),
+                    help: Some(
+                        "TypeVar constraints must be plain types, not generic types".to_owned(),
+                    ),
+                    note: Some(
+                        "PEP 484: TypeVar constraints cannot themselves be parameterized by type variables"
+                            .to_owned(),
+                    ),
+                });
+            }
+            // Bound must not be parameterized by a TypeVar (e.g. `bound=list[T]`).
+            if tv.has_parameterized_bound {
+                diagnostics.push(Diagnostic {
+                    code: CODE.clone(),
+                    severity: Severity::Error,
+                    message: format!(
+                        "`{}` has a `bound=` that is parameterized by a type variable",
+                        tv.name
+                    ),
+                    span: tv.span,
+                    path: module.path.clone(),
+                    help: Some(
+                        "The `bound=` argument must be a plain type, not a generic type".to_owned(),
+                    ),
+                    note: Some(
+                        "PEP 484: TypeVar bound cannot itself be parameterized by a type variable"
+                            .to_owned(),
+                    ),
+                });
+            }
         }
     }
 }

@@ -44,6 +44,7 @@ pub(crate) mod e0042;
 pub(crate) mod e0043;
 pub(crate) mod e0044;
 pub(crate) mod e0045;
+pub(crate) mod e0046;
 
 use basilisk_resolver::ResolvedModule;
 
@@ -99,6 +100,7 @@ pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
         &e0043::NonTypeVarInGeneric,
         &e0044::FinalInvalidPosition,
         &e0045::AnnotatedInvalidFirstArg,
+        &e0046::EnumMemberAnnotated,
     ];
 
     rules.iter().fold(Vec::new(), |mut acc, rule| {
