@@ -1131,3 +1131,183 @@ fn module_level_ann_assign_with_attribute_target_not_collected(
     );
     Ok(())
 }
+
+/// Class body with Attribute targets in both AnnAssign and Assign →
+/// exercises the None branch of `expr_simple_name` in class_info_from
+/// (visitor.rs lines 322 and 333).
+#[test]
+fn class_body_attribute_targets_skipped() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "class Foo:\n",
+        "    x.y: int = 0\n", // AnnAssign with Attribute target → line 322 None branch
+        "    a.b = 0\n",      // Assign with Attribute target → line 333 None branch
+        "    name: str = 'ok'\n", // regular AnnAssign — should be collected
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert_eq!(resolved.classes.len(), 1);
+    let cls = &resolved.classes[0];
+    // Only `name` is collected; x.y and a.b are skipped
+    assert_eq!(
+        cls.attributes.len(),
+        1,
+        "attribute-target assigns must not be collected"
+    );
+    assert_eq!(cls.attributes[0].name, "name");
+    Ok(())
+}
+
+/// Function body with an `AnnAssign` whose target is an Attribute (not a Name) →
+/// exercises the None branch in `collect_all_assigns` (visitor.rs line 539).
+/// Also exercises `collect_unhashable_keys` None branches for AnnAssign-without-value
+/// (line 676) and bare `return` (line 681).
+#[test]
+fn function_body_attribute_ann_assign_and_bare_return() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "def foo() -> None:\n",
+        "    x.y: int = 0\n", // AnnAssign with Attribute target (collect_all_assigns None, line 539)
+        "    z: int\n",        // AnnAssign without value (collect_unhashable_keys None, line 676)
+        "    return\n",        // bare return (collect_unhashable_keys None, line 681)
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert_eq!(resolved.functions.len(), 1);
+    // x.y is not a simple name → must not appear in local assigns
+    let func = &resolved.functions[0];
+    assert!(
+        !func.all_local_assigns.contains(&"y".to_owned()),
+        "attribute target must not be collected as a local assign"
+    );
+    Ok(())
+}
+
+/// Function body with a `with` statement that has no `as` clause →
+/// exercises the None branch of `item.optional_vars` in `collect_all_assigns`
+/// (visitor.rs line 565).
+#[test]
+fn function_body_with_clause_without_as() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "def foo() -> None:\n",
+        "    with open('f'):\n", // `with` without `as` → optional_vars is None
+        "        pass\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert_eq!(resolved.functions.len(), 1);
+    Ok(())
+}
+
+/// Module-level bare expression statement (not a Call) →
+/// exercises the None branch of `call_site_from_expr` for `Stmt::Expr`
+/// in `collect_module_level_calls` (visitor.rs line 797).
+#[test]
+fn module_level_bare_expression_not_collected_as_call() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "42\n".to_owned(); // Stmt::Expr with NumberLiteral value — not a Call
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(
+        resolved.calls.is_empty(),
+        "bare integer expression must not produce a call site"
+    );
+    Ok(())
+}
+
+/// Function decorated with an `Attribute` expression (`@abc.abstractmethod`) →
+/// exercises `Expr::Attribute` arm of `decorator_name` (visitor.rs line 984).
+#[test]
+fn attribute_decorator_name_extracted() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "import abc\n",
+        "class Base:\n",
+        "    @abc.abstractmethod\n", // Attribute decorator → line 984
+        "    def foo(self) -> None: pass\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let method = resolved
+        .functions
+        .iter()
+        .find(|f| f.name == "foo")
+        .expect("foo must be resolved");
+    // decorator_name returns "abstractmethod" for the Attribute expression
+    assert!(
+        method.decorators.contains(&"abstractmethod".to_owned()),
+        "attribute decorator name must be extracted"
+    );
+    Ok(())
+}
+
+/// Function decorated with a `Call(Name)` expression (`@dataclass(frozen=True)`) →
+/// exercises `Expr::Name` arm inside the `Expr::Call` branch of `decorator_name`
+/// (visitor.rs line 986).
+#[test]
+fn call_name_decorator_name_extracted() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "from dataclasses import dataclass\n",
+        "@dataclass(frozen=True)\n", // Call(func=Name("dataclass")) → line 986
+        "class Config:\n",
+        "    x: int = 0\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    // dataclass is a class decorator, not a function decorator — but we still
+    // parse the class. The important thing is there's no panic.
+    let resolved = resolve(&parsed)?;
+    assert_eq!(resolved.classes.len(), 1);
+    Ok(())
+}
+
+/// Function decorated with a `Call(Call(...))` expression (`@factory()()`) →
+/// exercises the `_ => None` arm inside the `Expr::Call` branch of `decorator_name`
+/// (visitor.rs line 988).
+#[test]
+fn call_exotic_func_decorator_returns_none() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "def factory(): pass\n",
+        "@factory()()\n", // Call(func=Call(func=Name("factory"))) → line 988
+        "def foo() -> None: pass\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let func = resolved
+        .functions
+        .iter()
+        .find(|f| f.name == "foo")
+        .expect("foo must be resolved");
+    // decorator_name returns None → decorator not collected in the list
+    assert!(
+        func.decorators.is_empty(),
+        "exotic call decorator must yield no decorator name"
+    );
+    Ok(())
+}
+
+/// Function decorated with a `Subscript` expression (`@buttons[0]`) →
+/// exercises the `_ => None` arm of the outer match in `decorator_name`
+/// (visitor.rs line 990).  Uses PEP 614 arbitrary decorator expressions.
+#[test]
+fn subscript_decorator_returns_none() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "buttons = [lambda f: f]\n",
+        "@buttons[0]\n", // Subscript expression → outer `_ => None` (line 990)
+        "def foo() -> None: pass\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let func = resolved
+        .functions
+        .iter()
+        .find(|f| f.name == "foo")
+        .expect("foo must be resolved");
+    assert!(
+        func.decorators.is_empty(),
+        "subscript decorator must yield no decorator name"
+    );
+    Ok(())
+}

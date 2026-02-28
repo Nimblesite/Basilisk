@@ -110,7 +110,20 @@ fn collect_python_files(paths: &[String]) -> Result<Vec<String>, String> {
     let mut files = Vec::new();
 
     for root in paths {
-        let meta = std::fs::metadata(root).map_err(|e| format!("cannot access {root}: {e}"))?;
+        let meta = match std::fs::metadata(root) {
+            Ok(m) => m,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return Err(format!("cannot access {root}: {e}"));
+            }
+            Err(e) => {
+                // Permission-denied or other I/O error: skip with a warning so
+                // the rest of the check run continues.  process_file will also
+                // print a warning if a file that _was_ discovered later becomes
+                // unreadable.
+                eprintln!("basilisk: cannot access {root}: {e}");
+                continue;
+            }
+        };
 
         if meta.is_file() {
             if std::path::Path::new(root)
@@ -125,7 +138,11 @@ fn collect_python_files(paths: &[String]) -> Result<Vec<String>, String> {
                 .into_iter()
                 .filter_map(Result::ok)
                 .filter(|e| e.file_type().is_file())
-                .filter(|e| e.path().extension().is_some_and(|ext| ext == "py"))
+                .filter(|e| {
+                    e.path()
+                        .extension()
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("py"))
+                })
             {
                 files.push(entry.path().to_string_lossy().into_owned());
             }
