@@ -1,7 +1,7 @@
 class Outer:
     class Inner:
-        def method(self: object, value) -> None:
+        def method(self, value) -> None:
             pass
 
-    def outer_method(self: object, x, y) -> None:
+    def outer_method(self, x, y) -> None:
         pass

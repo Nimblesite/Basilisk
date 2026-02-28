@@ -321,7 +321,6 @@ fn e0001_and_e0002_class_methods() -> Result<(), Box<dyn std::error::Error>> {
         &diags,
         &[
             Expected::error("BSK-E0002", "`connect`", 2, 9),
-            Expected::error("BSK-E0001", "`self`", 2, 17),
             Expected::error("BSK-E0001", "`host`", 2, 23),
             Expected::error("BSK-E0001", "`port`", 2, 29),
             Expected::error("BSK-E0002", "`send`", 8, 9),
@@ -535,10 +534,8 @@ fn e0001_and_e0002_subclass_override_missing_annotations() -> Result<(), Box<dyn
         &[
             Expected::error("BSK-E0025", "`process`", 6, 7),
             Expected::error("BSK-E0002", "`process`", 7, 9),
-            Expected::error("BSK-E0001", "`self`", 7, 17),
             Expected::error("BSK-E0001", "`data`", 7, 23),
             Expected::error("BSK-E0002", "`extra`", 10, 9),
-            Expected::error("BSK-E0001", "`self`", 10, 15),
             Expected::error("BSK-E0001", "`value`", 10, 21),
         ],
     );

@@ -2,8 +2,8 @@ class Service:
     def connect(self, host, port):
         pass
 
-    def disconnect(self: Service) -> None:
+    def disconnect(self) -> None:
         pass
 
-    def send(self: Service, payload: str):
+    def send(self, payload: str):
         pass

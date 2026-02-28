@@ -1,5 +1,5 @@
 class Base:
-    def process(self: Base, data: str) -> str:
+    def process(self, data: str) -> str:
         return data
 
 

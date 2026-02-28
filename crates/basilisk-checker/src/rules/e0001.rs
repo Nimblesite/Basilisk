@@ -28,7 +28,7 @@ impl Rule for MissingParameterAnnotation {
 fn check_function(func: &FunctionInfo, path: &str, out: &mut Vec<Diagnostic>) {
     func.parameters
         .iter()
-        .filter(|p| !p.has_annotation)
+        .filter(|p| !p.has_annotation && p.name != "self" && p.name != "cls")
         .for_each(|p| out.push(make_diagnostic(p, path)));
 }
 

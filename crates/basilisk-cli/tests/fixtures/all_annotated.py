@@ -10,5 +10,5 @@ def add(a: float, b: float) -> float:
 
 
 class Calculator:
-    def multiply(self: Calculator, x: int, y: int) -> int:
+    def multiply(self, x: int, y: int) -> int:
         return x * y

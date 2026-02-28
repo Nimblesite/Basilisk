@@ -185,4 +185,64 @@ mod tests {
         );
         Ok(())
     }
+
+    // ── collect_python_files: .py file is included ────────────────────────────
+
+    #[test]
+    fn collect_python_files_includes_py_file() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = std::env::temp_dir();
+        let py = dir.join("basilisk_test_include.py");
+        std::fs::write(&py, b"x = 1")?;
+        let path = py.to_string_lossy().into_owned();
+        let files = collect_python_files(&[path])?;
+        let _ = std::fs::remove_file(&py);
+        assert_eq!(files.len(), 1, ".py file must be included");
+        Ok(())
+    }
+
+    // ── collect_python_files: directory traversal ─────────────────────────────
+
+    #[test]
+    fn collect_python_files_walks_directory() -> Result<(), Box<dyn std::error::Error>> {
+        let base = std::env::temp_dir().join("basilisk_test_walk_dir");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base)?;
+        std::fs::write(base.join("a.py"), b"x = 1")?;
+        std::fs::write(base.join("b.txt"), b"ignored")?;
+        let path = base.to_string_lossy().into_owned();
+        let files = collect_python_files(&[path])?;
+        let _ = std::fs::remove_dir_all(&base);
+        assert_eq!(files.len(), 1, "directory walk must find exactly one .py file");
+        Ok(())
+    }
+
+    // ── collect_and_check: produces diagnostics for bad code ──────────────────
+
+    #[test]
+    fn collect_and_check_returns_diagnostics_for_bad_code(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let dir = std::env::temp_dir();
+        let py = dir.join("basilisk_test_bad_code.py");
+        std::fs::write(&py, b"def foo(x):\n    pass\n")?;
+        let path = py.to_string_lossy().into_owned();
+        let (diags, _) = collect_and_check(&[path])?;
+        let _ = std::fs::remove_file(&py);
+        assert!(!diags.is_empty(), "unannotated function must produce diagnostics");
+        Ok(())
+    }
+
+    // ── collect_and_check: clean code produces no diagnostics ─────────────────
+
+    #[test]
+    fn collect_and_check_returns_no_diagnostics_for_clean_code(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let dir = std::env::temp_dir();
+        let py = dir.join("basilisk_test_clean_code.py");
+        std::fs::write(&py, b"def greet(name: str) -> str:\n    return name\n")?;
+        let path = py.to_string_lossy().into_owned();
+        let (diags, _) = collect_and_check(&[path])?;
+        let _ = std::fs::remove_file(&py);
+        assert!(diags.is_empty(), "fully annotated code must produce no diagnostics");
+        Ok(())
+    }
 }

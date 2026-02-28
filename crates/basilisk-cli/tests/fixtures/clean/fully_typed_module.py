@@ -14,12 +14,12 @@ def identity(value: float) -> float:
 
 
 class Point:
-    def __init__(self: Point, x: float, y: float) -> None:
+    def __init__(self, x: float, y: float) -> None:
         self.x = x
         self.y = y
 
-    def distance(self: Point) -> float:
+    def distance(self) -> float:
         return (self.x ** 2 + self.y ** 2) ** 0.5
 
-    def scale(self: Point, factor: float) -> Point:
+    def scale(self, factor: float) -> Point:
         return Point(self.x * factor, self.y * factor)

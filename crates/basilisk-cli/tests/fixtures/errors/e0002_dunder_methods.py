@@ -1,13 +1,13 @@
 class Vector:
-    def __init__(self: Vector, x: float, y: float):
+    def __init__(self, x: float, y: float):
         self.x = x
         self.y = y
 
-    def __repr__(self: Vector):
+    def __repr__(self):
         return f"Vector({self.x}, {self.y})"
 
-    def __add__(self: Vector, other: Vector):
+    def __add__(self, other: Vector):
         return Vector(self.x + other.x, self.y + other.y)
 
-    def __len__(self: Vector):
+    def __len__(self):
         return 2

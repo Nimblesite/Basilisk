@@ -4,26 +4,26 @@ from typing import override
 
 
 class Animal:
-    def speak(self: Animal) -> str:
+    def speak(self) -> str:
         return ""
 
-    def name(self: Animal) -> str:
+    def name(self) -> str:
         return "animal"
 
 
 class Dog(Animal):
     @override
-    def speak(self: Dog) -> str:
+    def speak(self) -> str:
         return "woof"
 
-    def fetch(self: Dog, item: str) -> str:
+    def fetch(self, item: str) -> str:
         return f"fetched {item}"
 
 
 class Cat(Animal):
     @override
-    def speak(self: Cat) -> str:
+    def speak(self) -> str:
         return "meow"
 
-    def purr(self: Cat, duration: float) -> None:
+    def purr(self, duration: float) -> None:
         pass
