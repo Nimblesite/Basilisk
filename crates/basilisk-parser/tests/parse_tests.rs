@@ -16,11 +16,12 @@ fn parses_simple_annotated_function() {
 }
 
 #[test]
-fn preserves_source_and_path() {
+fn preserves_source_and_path() -> Result<(), Box<dyn std::error::Error>> {
     let source = "x: int = 1\n".to_owned();
-    let parsed = parse_source(source.clone(), "myfile.py".to_owned()).unwrap();
+    let parsed = parse_source(source.clone(), "myfile.py".to_owned())?;
     assert_eq!(parsed.source, source);
     assert_eq!(parsed.path, "myfile.py");
+    Ok(())
 }
 
 #[test]

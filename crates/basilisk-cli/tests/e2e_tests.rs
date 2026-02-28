@@ -557,3 +557,154 @@ fn e0001_and_e0002_subclass_override_missing_annotations() {
         ],
     );
 }
+
+// ---------------------------------------------------------------------------
+// Clean fixtures — control flow and exception handling
+// ---------------------------------------------------------------------------
+
+#[test]
+fn clean_typed_try_except_is_silent() {
+    let diags = run("clean/typed_try_except.py");
+    assert!(
+        diags.is_empty(),
+        "typed_try_except.py must produce no diagnostics, got:\n{diags:#?}"
+    );
+}
+
+#[test]
+fn clean_typed_while_for_is_silent() {
+    let diags = run("clean/typed_while_for.py");
+    assert!(
+        diags.is_empty(),
+        "typed_while_for.py must produce no diagnostics, got:\n{diags:#?}"
+    );
+}
+
+#[test]
+fn clean_typed_with_statement_is_silent() {
+    let diags = run("clean/typed_with_statement.py");
+    assert!(
+        diags.is_empty(),
+        "typed_with_statement.py must produce no diagnostics, got:\n{diags:#?}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// E0001 + E0002 — untyped functions inside try/except blocks
+//
+// def risky(value):      line 1  param col 11  func col 5
+// def also_risky(a, b):  line 8  params col 16, 19  func col 5
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0001_and_e0002_functions_inside_try_except() {
+    let diags = run("errors/e0001_and_e0002_try_except.py");
+    let src = std::fs::read_to_string(fixture("errors/e0001_and_e0002_try_except.py")).unwrap();
+    assert_diagnostics(
+        &src,
+        &diags,
+        &[
+            Expected::error("BSK-E0002", "`risky`", 1, 5),
+            Expected::error("BSK-E0001", "`value`", 1, 11),
+            Expected::error("BSK-E0002", "`also_risky`", 8, 5),
+            Expected::error("BSK-E0001", "`a`", 8, 16),
+            Expected::error("BSK-E0001", "`b`", 8, 19),
+        ],
+    );
+}
+
+// ---------------------------------------------------------------------------
+// E0001 + E0002 — untyped functions inside while/for blocks
+//
+// def count(limit):         line 1  param col 11  func col 5
+// def search(items, target): line 8  params col 12, 19  func col 5
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0001_and_e0002_functions_inside_while_for() {
+    let diags = run("errors/e0001_and_e0002_while_for.py");
+    let src = std::fs::read_to_string(fixture("errors/e0001_and_e0002_while_for.py")).unwrap();
+    assert_diagnostics(
+        &src,
+        &diags,
+        &[
+            Expected::error("BSK-E0002", "`count`", 1, 5),
+            Expected::error("BSK-E0001", "`limit`", 1, 11),
+            Expected::error("BSK-E0002", "`search`", 8, 5),
+            Expected::error("BSK-E0001", "`items`", 8, 12),
+            Expected::error("BSK-E0001", "`target`", 8, 19),
+        ],
+    );
+}
+
+// ---------------------------------------------------------------------------
+// E0002 — zero-param functions without return annotation
+//
+// def get_version():    line 1, col 5
+// def get_timestamp():  line 5, col 5
+// def noop():           line 9, col 5
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0002_zero_param_functions_all_missing_return() {
+    let diags = run("errors/e0002_no_params.py");
+    let src = std::fs::read_to_string(fixture("errors/e0002_no_params.py")).unwrap();
+    assert_diagnostics(
+        &src,
+        &diags,
+        &[
+            Expected::error("BSK-E0002", "`get_version`", 1, 5),
+            Expected::error("BSK-E0002", "`get_timestamp`", 5, 5),
+            Expected::error("BSK-E0002", "`noop`", 9, 5),
+        ],
+    );
+}
+
+// ---------------------------------------------------------------------------
+// E0001 — unannotated params in methods on a doubly-nested class
+//
+// class Outer:
+//     class Inner:
+//         def method(self: object, value) -> None:   # value col 34, line 3
+//     def outer_method(self: object, x, y) -> None:  # x col 36, y col 39, line 6
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0001_params_in_doubly_nested_class_methods() {
+    let diags = run("errors/e0001_deeply_nested_class.py");
+    let src = std::fs::read_to_string(fixture("errors/e0001_deeply_nested_class.py")).unwrap();
+    assert_diagnostics(
+        &src,
+        &diags,
+        &[
+            Expected::error("BSK-E0001", "`value`", 3, 34),
+            Expected::error("BSK-E0001", "`x`", 6, 36),
+            Expected::error("BSK-E0001", "`y`", 6, 39),
+        ],
+    );
+}
+
+// ---------------------------------------------------------------------------
+// E0001 — every parameter kind in one signature
+//
+// def everything(pos_only, /, normal, *args, kw_only, **kwargs) -> None:
+//                ^^^^^^^^^      ^^^^^^  ^^^^  ^^^^^^^   ^^^^^^
+//                col 16         col 29  col 38 col 44   col 55
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0001_all_parameter_kinds_flagged() {
+    let diags = run("errors/e0001_all_param_kinds.py");
+    let src = std::fs::read_to_string(fixture("errors/e0001_all_param_kinds.py")).unwrap();
+    assert_diagnostics(
+        &src,
+        &diags,
+        &[
+            Expected::error("BSK-E0001", "`pos_only`", 1, 16),
+            Expected::error("BSK-E0001", "`normal`", 1, 29),
+            Expected::error("BSK-E0001", "`args`", 1, 38),
+            Expected::error("BSK-E0001", "`kw_only`", 1, 44),
+            Expected::error("BSK-E0001", "`kwargs`", 1, 55),
+        ],
+    );
+}

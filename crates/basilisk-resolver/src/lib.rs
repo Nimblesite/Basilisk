@@ -29,5 +29,5 @@ pub enum ResolveError {
 /// Currently infallible in Phase 1; future phases may add import resolution
 /// errors.
 pub fn resolve(module: &ParsedModule) -> Result<ResolvedModule, ResolveError> {
-    visitor::collect_functions(module)
+    Ok(visitor::collect_functions(module))
 }

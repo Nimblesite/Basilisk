@@ -7,21 +7,18 @@ use ruff_text_size::TextRange;
 
 use basilisk_parser::ParsedModule;
 
-use crate::{
-    scope::{FunctionInfo, ParameterInfo, ResolvedModule, Span},
-    ResolveError,
-};
+use crate::scope::{FunctionInfo, ParameterInfo, ResolvedModule, Span};
 
 /// Collect all function definitions from the parsed module.
-pub(crate) fn collect_functions(module: &ParsedModule) -> Result<ResolvedModule, ResolveError> {
+pub(crate) fn collect_functions(module: &ParsedModule) -> ResolvedModule {
     let mut functions = Vec::new();
     collect_from_body(&module.ast.body, &mut functions);
 
-    Ok(ResolvedModule {
+    ResolvedModule {
         functions,
         path: module.path.clone(),
         source: module.source.clone(),
-    })
+    }
 }
 
 fn collect_from_body(stmts: &[Stmt], out: &mut Vec<FunctionInfo>) {

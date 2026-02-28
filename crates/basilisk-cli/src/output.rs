@@ -43,12 +43,13 @@ fn render_one(diag: &Diagnostic, source: Option<&str>) {
     println!("{}[{}]: {}", diag.severity, diag.code.code, diag.message);
 
     // Location: --> path:line:col
-    let location = source
-        .map(|src| {
+    let location = source.map_or_else(
+        || diag.path.clone(),
+        |src| {
             let (line, col) = byte_offset_to_line_col(src, diag.span.start as usize);
             format!("{}:{}:{}", diag.path, line, col)
-        })
-        .unwrap_or_else(|| diag.path.clone());
+        },
+    );
 
     println!("  --> {location}");
 

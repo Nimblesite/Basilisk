@@ -17,6 +17,7 @@ pub(crate) trait Rule {
 }
 
 /// Run all registered Phase 1 rules against a resolved module.
+#[must_use]
 pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
     let rules: &[&dyn Rule] = &[
         &e0001::MissingParameterAnnotation,

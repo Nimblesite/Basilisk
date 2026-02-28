@@ -65,11 +65,7 @@ fn run_check(paths: &[String]) -> i32 {
                     error_count,
                     if error_count == 1 { "" } else { "s" },
                 );
-                if error_count > 0 {
-                    1
-                } else {
-                    0
-                }
+                i32::from(error_count > 0)
             }
         }
         Err(err) => {
@@ -117,14 +113,17 @@ fn collect_python_files(paths: &[String]) -> Result<Vec<String>, String> {
         let meta = std::fs::metadata(root).map_err(|e| format!("cannot access {root}: {e}"))?;
 
         if meta.is_file() {
-            if root.ends_with(".py") {
+            if std::path::Path::new(root)
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("py"))
+            {
                 files.push(root.clone());
             }
         } else {
             for entry in walkdir::WalkDir::new(root)
                 .follow_links(false)
                 .into_iter()
-                .filter_map(|e| e.ok())
+                .filter_map(Result::ok)
                 .filter(|e| e.file_type().is_file())
                 .filter(|e| e.path().extension().is_some_and(|ext| ext == "py"))
             {

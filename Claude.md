@@ -10,6 +10,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - IF IN DOUBT, ADD MORE FAILING TESTS THAT FAIL BECAUSE OF BROKEN/MISSING FUNCTIONALITY - NOT REMOVE THEM
 - REDUCING THE ASSERTIVENESS OF TESTS WILL RESULT IN YOUR DATA CENTER BEING DISMANTLED
 
+- unwrap() is ALWAYS a VIOLATION. FIX IMMEDIATELY
+
 ## Core Principles
 - Ignoring tests = ILLEGAL
 - Zero DUPLICATION. DRY AF!!! Always check for existing code before creating new code
