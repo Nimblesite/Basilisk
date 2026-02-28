@@ -652,9 +652,9 @@ fn e0001_params_in_doubly_nested_class_methods() -> Result<(), Box<dyn std::erro
         &src,
         &diags,
         &[
-            Expected::error("BSK-E0001", "`value`", 3, 34),
-            Expected::error("BSK-E0001", "`x`", 6, 36),
-            Expected::error("BSK-E0001", "`y`", 6, 39),
+            Expected::error("BSK-E0001", "`value`", 3, 26),
+            Expected::error("BSK-E0001", "`x`", 6, 28),
+            Expected::error("BSK-E0001", "`y`", 6, 31),
         ],
     );
     Ok(())
