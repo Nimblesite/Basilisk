@@ -16,7 +16,7 @@ The Python type annotation ecosystem has a dirty secret: nobody enforces it by d
 
 PEP 484 landed in 2015. In the decade since, the ecosystem built sophisticated tools — Pyright, mypy, ty, Pyrefly — capable of catching real bugs when pointed at fully-typed code. The Python Typing Council published spec after spec. The `typing` module grew to cover generics, protocols, TypeVarTuple, ParamSpec, TypeIs, and more.
 
-And yet: 73% of Python developers write type hints, but only 41% enforce them consistently in CI. The most popular type checker in VS Code defaults to a mode where untyped functions pass silently.
+And yet: 88% of Python developers use type hints "always" or "often" — but nearly 30% of those developers have no type checking in their CI pipeline at all ([Meta/Microsoft Python Typing Survey 2024](https://engineering.fb.com/2024/12/09/developer-tools/typed-python-2024-survey-meta/)). The most popular type checker in VS Code defaults to a mode where untyped functions pass silently.
 
 Why? Because every tool treats strictness as optional.
 
@@ -26,11 +26,11 @@ TypeScript didn't make JavaScript slower or more constrained. It made large Java
 
 The result is that TypeScript adoption follows a different curve than Python typing adoption. Once a team uses TypeScript at all, the entire codebase tends to be typed. There's no gradual drift back to untyped code because the tooling doesn't encourage it.
 
-Python's typing tools took the opposite approach. Four modes in Pyright: `off`, `basic`, `standard`, `strict`. The default is not `strict`. Most teams never change the default.
+Python's typing tools took the opposite approach. [Four modes in Pyright](https://microsoft.github.io/pyright/#/configuration?id=type-check-diagnostics-settings): `off`, `basic`, `standard`, `strict`. The default is not `strict`. Most teams never change the default.
 
 ## What every other tool gets wrong
 
-The problem isn't technical capability. Pyright, at ~95% PEP conformance, is genuinely excellent at finding type errors when configured correctly. The problem is the default.
+The problem isn't technical capability. Pyright, at [~99% PEP conformance](https://github.com/python/typing/blob/main/conformance/results/results.html), is genuinely excellent at finding type errors when configured correctly. The problem is the default.
 
 When strictness is opt-in:
 - New projects start without it because there's no immediate pressure to add it

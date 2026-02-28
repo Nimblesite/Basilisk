@@ -1077,7 +1077,7 @@ fn module_level_ann_assign_without_value() -> Result<(), Box<dyn std::error::Err
     Ok(())
 }
 
-/// Class with a docstring (Stmt::Expr) → exercises `_ => {}` in class_info_from
+/// Class with a docstring (`Stmt::Expr`) → exercises `_ => {}` in `class_info_from`
 /// (line 361 in visitor.rs).
 #[test]
 fn class_with_docstring_not_collected_as_attribute() -> Result<(), Box<dyn std::error::Error>> {
@@ -1132,8 +1132,8 @@ fn module_level_ann_assign_with_attribute_target_not_collected(
     Ok(())
 }
 
-/// Class body with Attribute targets in both AnnAssign and Assign →
-/// exercises the None branch of `expr_simple_name` in class_info_from
+/// Class body with Attribute targets in both `AnnAssign` and Assign →
+/// exercises the None branch of `expr_simple_name` in `class_info_from`
 /// (visitor.rs lines 322 and 333).
 #[test]
 fn class_body_attribute_targets_skipped() -> Result<(), Box<dyn std::error::Error>> {
@@ -1232,7 +1232,7 @@ fn attribute_decorator_name_extracted() -> Result<(), Box<dyn std::error::Error>
         .functions
         .iter()
         .find(|f| f.name == "foo")
-        .expect("foo must be resolved");
+        .ok_or("foo must be resolved")?;
     // decorator_name returns "abstractmethod" for the Attribute expression
     assert!(
         method.decorators.contains(&"abstractmethod".to_owned()),
@@ -1258,7 +1258,7 @@ fn call_name_decorator_name_extracted() -> Result<(), Box<dyn std::error::Error>
         .functions
         .iter()
         .find(|f| f.name == "foo")
-        .expect("foo must be resolved");
+        .ok_or("foo must be resolved")?;
     // decorator_name returns "deprecated" for Call(func=Name("deprecated"))
     assert!(
         func.decorators.contains(&"deprecated".to_owned()),
@@ -1284,7 +1284,7 @@ fn call_exotic_func_decorator_returns_none() -> Result<(), Box<dyn std::error::E
         .functions
         .iter()
         .find(|f| f.name == "foo")
-        .expect("foo must be resolved");
+        .ok_or("foo must be resolved")?;
     // decorator_name returns None → decorator not collected in the list
     assert!(
         func.decorators.is_empty(),
@@ -1310,7 +1310,7 @@ fn subscript_decorator_returns_none() -> Result<(), Box<dyn std::error::Error>> 
         .functions
         .iter()
         .find(|f| f.name == "foo")
-        .expect("foo must be resolved");
+        .ok_or("foo must be resolved")?;
     assert!(
         func.decorators.is_empty(),
         "subscript decorator must yield no decorator name"

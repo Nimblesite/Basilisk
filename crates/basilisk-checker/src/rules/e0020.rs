@@ -13,6 +13,8 @@ use basilisk_resolver::{FunctionInfo, ResolvedModule};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
+use super::guards::is_protocol_class;
+
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
@@ -26,15 +28,49 @@ pub(crate) struct MissingOverloadImpl;
 
 impl Rule for MissingOverloadImpl {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        // Group functions by name, preserving the first occurrence for span reporting.
-        let mut groups: HashMap<&str, Vec<&FunctionInfo>> = HashMap::new();
+        // Build a set of Protocol/ABC class names so we can exempt their methods.
+        let exempt_classes: std::collections::HashSet<&str> = module
+            .classes
+            .iter()
+            .filter(|cls| {
+                is_protocol_class(cls)
+                    || cls
+                        .bases
+                        .iter()
+                        .any(|b| b == "ABC" || b == "abc.ABC" || b == "ABCMeta")
+            })
+            .map(|cls| cls.name.as_str())
+            .collect();
+
+        // Group functions by (class_name, function_name) to handle overloads correctly
+        // across different classes that may have the same method name.
+        let mut groups: HashMap<(Option<&str>, &str), Vec<&FunctionInfo>> = HashMap::new();
         for func in &module.functions {
-            groups.entry(&func.name).or_default().push(func);
+            groups
+                .entry((func.class_name.as_deref(), &func.name))
+                .or_default()
+                .push(func);
         }
 
-        for (name, funcs) in &groups {
+        for ((class_name, name), funcs) in &groups {
             // A group is interesting only if it has 2+ overloads.
             if funcs.len() < 2 {
+                continue;
+            }
+
+            // Exempt overload groups inside Protocol or ABC classes — stubs
+            // in Protocol bodies and abstract base classes never need a concrete impl.
+            if let Some(cls) = class_name {
+                if exempt_classes.contains(*cls) {
+                    continue;
+                }
+            }
+
+            // Exempt if any overload in the group has @abstractmethod.
+            let has_abstract = funcs
+                .iter()
+                .any(|f| has_decorator(&f.decorators, "abstractmethod"));
+            if has_abstract {
                 continue;
             }
 

@@ -4,7 +4,7 @@ use basilisk_resolver::{FunctionInfo, ParameterInfo, ResolvedModule};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
-use super::Rule;
+use super::{guards::is_stub_context, Rule};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0001",
@@ -14,6 +14,7 @@ const CODE: ErrorCode = ErrorCode {
 /// Emits BSK-E0001 for every unannotated regular parameter (not `*args`/`**kwargs`).
 ///
 /// `*args` and `**kwargs` are handled by [`super::e0004`].
+/// Skipped for `@overload`, `@abstractmethod`, and `Protocol` methods.
 pub(crate) struct MissingParameterAnnotation;
 
 impl Rule for MissingParameterAnnotation {
@@ -21,6 +22,7 @@ impl Rule for MissingParameterAnnotation {
         module
             .functions
             .iter()
+            .filter(|func| !is_stub_context(func, &module.classes))
             .for_each(|func| check_function(func, &module.path, diagnostics));
     }
 }

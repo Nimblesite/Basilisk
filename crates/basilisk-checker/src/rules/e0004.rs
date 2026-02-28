@@ -7,7 +7,7 @@ use basilisk_resolver::{FunctionInfo, ParameterInfo, ResolvedModule};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
-use super::Rule;
+use super::{guards::is_stub_context, Rule};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0004",
@@ -15,6 +15,8 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 /// Emits BSK-E0004 for unannotated `*args` and `**kwargs` parameters.
+///
+/// Skipped for `@overload`, `@abstractmethod`, and `Protocol` methods.
 pub(crate) struct MissingVarArgAnnotation;
 
 impl Rule for MissingVarArgAnnotation {
@@ -22,6 +24,7 @@ impl Rule for MissingVarArgAnnotation {
         module
             .functions
             .iter()
+            .filter(|func| !is_stub_context(func, &module.classes))
             .for_each(|func| check_function(func, &module.path, diagnostics));
     }
 }

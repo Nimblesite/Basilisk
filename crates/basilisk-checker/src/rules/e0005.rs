@@ -3,12 +3,19 @@
 //! Every class attribute declared in the class body must have an explicit type
 //! annotation.  Without one, Basilisk cannot verify assignments to the
 //! attribute and cannot produce accurate stub types.
+//!
+//! Enum subclasses and Protocol subclasses are exempt: Enum members have
+//! metaclass-synthesised `Literal[...]` types, and Protocol attributes are
+//! interface specifications rather than concrete class variables.
 
 use basilisk_resolver::{AttributeInfo, ClassInfo, ResolvedModule};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
-use super::Rule;
+use super::{
+    guards::{is_enum_class, is_protocol_class},
+    Rule,
+};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0005",
@@ -23,6 +30,7 @@ impl Rule for MissingAttributeAnnotation {
         module
             .classes
             .iter()
+            .filter(|class| !is_enum_class(class) && !is_protocol_class(class))
             .for_each(|class| check_class(class, &module.path, diagnostics));
     }
 }

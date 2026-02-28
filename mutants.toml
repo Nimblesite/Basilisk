@@ -1,33 +1,4 @@
 # cargo-mutants configuration
 # https://mutants.rs/configuration.html
-
-# Multiply the baseline test duration by this factor for each mutant's timeout.
-# 2x gives ample headroom without letting slow mutants stall the run.
-timeout_multiplier = 2.0
-
-# Only test the packages being mutated, not the entire workspace.
-test_workspace = false
-
-# Skip Phase 2–5 placeholder tests that are intentionally failing.
-# These tests assert unimplemented features and must not block the mutation run.
-additional_cargo_test_args = [
-    "--",
-    "--skip", "lsp_returns_diagnostics_for_unannotated_function",
-    "--skip", "ownership_checker_detects_mutation_of_borrowed",
-    "--skip", "plugin_host_loads_wasm_plugin",
-    "--skip", "lookup_builtin_int_type",
-    "--skip", "lookup_builtin_str_type",
-    "--skip", "lookup_builtin_list_type",
-]
-
-# Only mutate crates that have complete, passing test suites.
-# Remove entries from this list (or add new ones) as coverage evolves.
-# basilisk-db, basilisk-stubs, basilisk-plugin, basilisk-lsp, basilisk-mojo
-# are excluded because they have no tests or have intentionally-failing tests
-# (Phase 2 placeholders).
-packages = [
-    "basilisk-parser",
-    "basilisk-resolver",
-    "basilisk-checker",
-    "basilisk-cli",
-]
+# NOTE: cargo-mutants reads .cargo/mutants.toml by default.
+# This root file is kept for documentation only — the active config is .cargo/mutants.toml.

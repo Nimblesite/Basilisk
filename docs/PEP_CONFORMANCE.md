@@ -27,16 +27,19 @@ means unless it is measured against the same test suite.  Without this suite,
 "95% conformance" is marketing copy.  With it, it is a fact you can verify on
 your own machine in under a minute.
 
-| Tool     | Conformance (approx)        | Measured how?           |
-|----------|-----------------------------|-------------------------|
-| Pyright  | ~95%                        | python/typing suite     |
-| mypy     | ~85%                        | python/typing suite     |
-| Zuban    | ~69%                        | python/typing suite     |
-| Pyrefly  | ~58%                        | python/typing suite     |
-| ty       | ~15%                        | python/typing suite     |
-| Basilisk | **run the harness**         | python/typing suite     |
+Official scores from the [python/typing conformance suite results](https://github.com/python/typing/blob/main/conformance/results/results.html)
+(versions tested: pyright 1.1.408, mypy 1.19.1, zuban 0.6.1, pyrefly 0.54.0):
 
-The target for Basilisk is **95%+** — matching Pyright, the current best-in-
+| Tool     | Full-pass | Partial+pass | Measured by             |
+|----------|-----------|--------------|-------------------------|
+| Pyright  | ~99%      | 100%         | python/typing suite     |
+| Zuban    | ~98%      | 100%         | python/typing suite     |
+| Pyrefly  | ~86%      | 100%         | python/typing suite     |
+| mypy     | ~58%      | ~96%         | python/typing suite     |
+| ty       | alpha — not yet in suite | — | [independent blog, Aug 2025](https://sinon.github.io/future-python-type-checkers/) |
+| Basilisk | **run the harness**      | — | python/typing suite     |
+
+The target for Basilisk is **95%+ full-pass** — matching Pyright, the current best-in-
 class, while being strict-by-default and not requiring a Node.js runtime.
 
 ---

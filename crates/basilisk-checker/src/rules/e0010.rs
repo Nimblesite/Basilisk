@@ -109,6 +109,8 @@ const STDLIB_ROOTS: &[&str] = &[
 
 /// Emits BSK-E0010 for imports from modules outside the known stdlib/typing
 /// ecosystem.
+///
+/// Suppressed when the import line carries a `# type: ignore` comment.
 pub(crate) struct ImportFromUntypedModule;
 
 impl Rule for ImportFromUntypedModule {
@@ -117,6 +119,7 @@ impl Rule for ImportFromUntypedModule {
             .imports
             .iter()
             .filter(|import| !is_stdlib(&import.module))
+            .filter(|import| !line_has_type_ignore(&module.source, import.span.start))
             .for_each(|import| diagnostics.push(make_diagnostic(import, &module.path)));
     }
 }
@@ -125,6 +128,16 @@ impl Rule for ImportFromUntypedModule {
 fn is_stdlib(module_name: &str) -> bool {
     let root = module_name.split('.').next().unwrap_or(module_name);
     STDLIB_ROOTS.contains(&root)
+}
+
+/// Returns `true` when the source line containing `byte_offset` has `# type: ignore`.
+fn line_has_type_ignore(source: &str, byte_offset: u32) -> bool {
+    let offset = (byte_offset as usize).min(source.len());
+    let line_start = source[..offset].rfind('\n').map_or(0, |p| p + 1);
+    let line_end = source[offset..]
+        .find('\n')
+        .map_or(source.len(), |p| offset + p);
+    source[line_start..line_end].contains("# type: ignore")
 }
 
 fn make_diagnostic(import: &ImportInfo, path: &str) -> Diagnostic {

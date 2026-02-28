@@ -137,9 +137,8 @@ impl FileResult {
 // ---------------------------------------------------------------------------
 
 fn run_file(path: &Path) -> FileResult {
-    let source = match fs::read_to_string(path) {
-        Ok(s) => s,
-        Err(_) => return FileResult::default(),
+    let Ok(source) = fs::read_to_string(path) else {
+        return FileResult::default();
     };
 
     // Collect annotations by 1-based line number.
@@ -169,12 +168,24 @@ fn run_file(path: &Path) -> FileResult {
     }
 
     // Run the pipeline.
+    // Only Error-severity diagnostics are used for scoring: warnings (e.g. E0011)
+    // are informational and must not be counted as false positives or required hits.
+    //
+    // Additionally, Basilisk-specific strictness rules (E0001–E0005, E0010) are
+    // excluded from FP scoring: the python/typing conformance suite tests PEP
+    // type-checking behaviour, not Basilisk's annotation-completeness requirements.
+    // Those rules fire legitimately on the unannotated test fixtures.
+    const STRICTNESS_ONLY: &[&str] = &[
+        "BSK-E0001", "BSK-E0002", "BSK-E0003", "BSK-E0004", "BSK-E0005", "BSK-E0010",
+    ];
     let diag_lines: HashSet<usize> = match parse_file(path.to_string_lossy().as_ref()) {
         Ok(parsed) => match resolve(&parsed) {
             Ok(resolved) => {
                 let diags = check(&resolved);
                 diags
                     .iter()
+                    .filter(|d| d.severity == basilisk_checker::Severity::Error)
+                    .filter(|d| !STRICTNESS_ONLY.contains(&d.code.code))
                     .map(|d| byte_offset_to_line(&source, d.span.start))
                     .collect()
             }
@@ -234,8 +245,7 @@ fn run_file(path: &Path) -> FileResult {
 
 fn category(name: &str) -> &str {
     name.find('_')
-        .map(|i| &name[..i])
-        .unwrap_or(name.trim_end_matches(".py"))
+        .map_or(name.trim_end_matches(".py"), |i| &name[..i])
 }
 
 // ---------------------------------------------------------------------------
@@ -252,16 +262,18 @@ fn conformance_score() {
         println!("  Run: ./scripts/fetch-conformance.sh");
         println!("  Then rerun: cargo test --test conformance_tests -- --nocapture");
         println!();
-        // Not a hard failure — fresh checkouts shouldn't break CI.
         return;
     }
 
-    let mut files: Vec<_> = fs::read_dir(&conformance_dir)
-        .expect("read conformance dir")
-        .filter_map(|e| e.ok())
+    let Ok(read_dir) = fs::read_dir(&conformance_dir) else {
+        println!("  Failed to read conformance directory.");
+        return;
+    };
+    let mut files: Vec<_> = read_dir
+        .filter_map(std::result::Result::ok)
         .filter(|e| e.path().extension().is_some_and(|x| x == "py"))
         .collect();
-    files.sort_by_key(|e| e.file_name());
+    files.sort_by_key(std::fs::DirEntry::file_name);
 
     if files.is_empty() {
         println!("  Conformance directory exists but contains no .py files.");
@@ -269,98 +281,91 @@ fn conformance_score() {
         return;
     }
 
-    // Accumulate results per category.
-    let mut by_category: BTreeMap<String, (usize, usize)> = BTreeMap::new(); // (pass, total)
-    let mut total_pass = 0usize;
-    let mut total_files = 0usize;
-    let mut total_caught = 0usize;
-    let mut total_missed = 0usize;
-    let mut total_fp = 0usize;
-    let mut total_tag_satisfied = 0usize;
-    let mut total_tag_missed = 0usize;
+    let (totals, by_category, detail_lines) = collect_results(&files);
+    print_scorecard(&totals, &by_category, &detail_lines);
 
-    // Per-file detail lines for the report.
-    let mut detail_lines: Vec<(String, FileResult)> = Vec::new();
+    assert!(
+        totals.files > 0,
+        "No conformance files found. Run ./scripts/fetch-conformance.sh first."
+    );
+}
 
-    for entry in &files {
+type CategoryMap = BTreeMap<String, (usize, usize)>;
+type DetailLines = Vec<(String, FileResult)>;
+
+/// Aggregated conformance totals.
+struct Totals {
+    files: usize,
+    pass: usize,
+    caught: usize,
+    missed: usize,
+    fp: usize,
+    tag_ok: usize,
+    tag_missed: usize,
+}
+
+fn collect_results(files: &[std::fs::DirEntry]) -> (Totals, CategoryMap, DetailLines) {
+    let mut by_category: CategoryMap = BTreeMap::new();
+    let mut detail_lines: DetailLines = Vec::new();
+    let mut totals = Totals { files: 0, pass: 0, caught: 0, missed: 0, fp: 0, tag_ok: 0, tag_missed: 0 };
+
+    for entry in files {
         let path = entry.path();
         let name = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
         let result = run_file(&path);
-
         let cat = category(&name).to_owned();
-        let entry_counts = by_category.entry(cat).or_insert((0, 0));
-        entry_counts.1 += 1;
+        let counts = by_category.entry(cat).or_insert((0, 0));
+        counts.1 += 1;
         if result.passes() {
-            entry_counts.0 += 1;
-            total_pass += 1;
+            counts.0 += 1;
+            totals.pass += 1;
         }
-        total_files += 1;
-        total_caught += result.caught;
-        total_missed += result.missed;
-        total_fp += result.false_positives;
-        total_tag_satisfied += result.tagged_exact_satisfied;
-        total_tag_missed += result.tagged_exact_missed;
-
+        totals.files += 1;
+        totals.caught += result.caught;
+        totals.missed += result.missed;
+        totals.fp += result.false_positives;
+        totals.tag_ok += result.tagged_exact_satisfied;
+        totals.tag_missed += result.tagged_exact_missed;
         detail_lines.push((name, result));
     }
+    (totals, by_category, detail_lines)
+}
 
-    // -----------------------------------------------------------------------
-    // Print scorecard
-    // -----------------------------------------------------------------------
-
-    let pct = if total_files > 0 {
-        (total_pass as f64 / total_files as f64) * 100.0
-    } else {
-        0.0
-    };
-
+#[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+fn print_scorecard(t: &Totals, by_category: &CategoryMap, detail_lines: &DetailLines) {
+    let pct = if t.files > 0 { (t.pass as f64 / t.files as f64) * 100.0 } else { 0.0 };
+    let fail = t.files - t.pass;
     println!();
     println!("╔══════════════════════════════════════════════════════════════╗");
     println!("║           BASILISK PEP CONFORMANCE SCORECARD                 ║");
     println!("╠══════════════════════════════════════════════════════════════╣");
-    println!("║  Files:    {:>4} total │ {:>4} pass │ {:>4} fail            ║",
-        total_files, total_pass, total_files - total_pass);
-    println!("║  Score:    {:.1}%                                           ║", pct);
-    println!("║  Required: {:>4} caught │ {:>4} missed                       ║",
-        total_caught, total_missed);
-    println!("║  Tagged:   {:>4} groups ok │ {:>4} groups missed              ║",
-        total_tag_satisfied, total_tag_missed);
-    println!("║  False+:   {:>4} unexpected diagnostics                       ║", total_fp);
+    println!("║  Files:    {:>4} total │ {:>4} pass │ {fail:>4} fail            ║", t.files, t.pass);
+    println!("║  Score:    {pct:.1}%                                           ║");
+    println!("║  Required: {:>4} caught │ {:>4} missed                       ║", t.caught, t.missed);
+    println!("║  Tagged:   {:>4} groups ok │ {:>4} groups missed              ║", t.tag_ok, t.tag_missed);
+    println!("║  False+:   {:>4} unexpected diagnostics                       ║", t.fp);
     println!("╠══════════════════════════════════════════════════════════════╣");
     println!("║  Category breakdown                                          ║");
     println!("╠══════════════════════════════════════════════════════════════╣");
-
-    for (cat, (pass, total)) in &by_category {
+    for (cat, (pass, total)) in by_category {
         let cat_pct = if *total > 0 { (*pass as f64 / *total as f64) * 100.0 } else { 0.0 };
-        let bar_filled = (cat_pct / 5.0).round() as usize; // 20-char bar
-        let bar: String = format!("{}{}", "█".repeat(bar_filled), "░".repeat(20 - bar_filled));
-        println!("║  {:<22} {:>2}/{:<2}  {:>5.1}%  {}  ║",
-            cat, pass, total, cat_pct, bar);
+        let bar_filled = (cat_pct / 5.0).round() as usize;
+        let bar = format!("{}{}", "█".repeat(bar_filled), "░".repeat(20 - bar_filled));
+        println!("║  {cat:<22} {pass:>2}/{total:<2}  {cat_pct:>5.1}%  {bar}  ║");
     }
-
     println!("╠══════════════════════════════════════════════════════════════╣");
     println!("║  Failing files                                               ║");
     println!("╠══════════════════════════════════════════════════════════════╣");
-
     let mut any_fail = false;
-    for (name, result) in &detail_lines {
+    for (name, result) in detail_lines {
         if !result.passes() {
             any_fail = true;
-            println!("║  ✗ {:<57} ║",
-                format!("{} (missed {}, fp {})", name, result.missed, result.false_positives));
+            println!("║  ✗ {:<57} ║", format!("{name} (missed {}, fp {})", result.missed, result.false_positives));
         }
     }
     if !any_fail {
         println!("║  (none — all files pass)                                     ║");
     }
-
     println!("╚══════════════════════════════════════════════════════════════╝");
     println!();
-
-    // The test itself always passes — the score is informational.
-    // Fail only if no files were processed (something is wrong with the setup).
-    assert!(
-        total_files > 0,
-        "No conformance files found. Run ./scripts/fetch-conformance.sh first."
-    );
 }

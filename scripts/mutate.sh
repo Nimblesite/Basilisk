@@ -56,16 +56,30 @@ if ! cargo mutants --version &>/dev/null; then
 fi
 ok "cargo-mutants $(cargo mutants --version)"
 
+# Packages with complete, passing test suites — the only ones we mutate.
+MUTATE_PACKAGES=(
+    basilisk-parser
+    basilisk-resolver
+    basilisk-checker
+    basilisk-cli
+)
+
+# Build --package flags
+PKG_ARGS=()
+for pkg in "${MUTATE_PACKAGES[@]}"; do
+    PKG_ARGS+=(--package "$pkg")
+done
+
 # ── Run ───────────────────────────────────────────────────────────────────────
 if [[ "$DIFF_MODE" == true ]]; then
     header "Mutation test — changed lines vs origin/$BASE_BRANCH"
     echo -e "  Base: ${CYAN}origin/$BASE_BRANCH${RESET}"
     echo -e "  Only mutants generated from your diff will be tested.\n"
-    cargo mutants --jobs 4 --in-diff "origin/$BASE_BRANCH..HEAD"
+    cargo mutants --jobs 4 "${PKG_ARGS[@]}" --in-diff "origin/$BASE_BRANCH..HEAD"
 else
     header "Mutation test — full suite"
-    echo -e "  All included crates will be mutated.\n"
-    cargo mutants --jobs 4
+    echo -e "  Packages: ${MUTATE_PACKAGES[*]}\n"
+    cargo mutants --jobs 4 "${PKG_ARGS[@]}"
 fi
 
 EXIT=$?

@@ -37,10 +37,10 @@ Basilisk removes the choice. There is no permissive mode to fall back to.
 | Feature | Basilisk | Pyright | mypy | ty | Pyrefly |
 |---|---|---|---|---|---|
 | Strict by default | ✅ | ❌ opt-in | ❌ opt-in | ❌ opt-in | ❌ opt-in |
-| PEP conformance | 100% target | ~95% | ~85% | ~15% | ~58% |
+| PEP conformance | 100% target | ~99%¹ | ~58%¹ | early alpha² | ~86%¹ |
 | Implementation | Rust | TypeScript | Python/C | Rust | Rust |
 | Runtime required | None | Node.js | Python | None | None |
-| Incremental speed | <10ms | ~50ms | ~100ms | <10ms | <10ms |
+| Incremental speed | <10ms | ~386ms² | slower | 4.7ms² | <10ms |
 | Ownership analysis | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Immutability enforcement | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Coercion detection | ✅ | ❌ | ❌ | ❌ | ❌ |
@@ -50,16 +50,23 @@ Basilisk removes the choice. There is no permissive mode to fall back to.
 | SARIF output | ✅ (Phase 3) | ✅ | ❌ | ❌ | ✅ |
 | License | MIT / Apache-2.0 | MIT | MIT | MIT | MIT |
 
+<a name="footnotes"></a>
+
+**Sources:**
+
+¹ Full-pass score from the [official python/typing conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html) (pyright 1.1.408, mypy 1.19.1, pyrefly 0.54.0). mypy's partial+pass score is 96.4%. ty is not yet included in the official suite — alpha-stage figure from [sinon.github.io/future-python-type-checkers](https://sinon.github.io/future-python-type-checkers/) (August 2025, alpha build).
+² Incremental re-check time after editing a load-bearing file in PyTorch, per the [Astral ty launch post](https://astral.sh/blog/ty) (December 2025): ty 4.7ms, Pyright 386ms.
+
 ---
 
 ## Pyright
 
-**By Microsoft. TypeScript-based. ~95% PEP conformance.**
+**By Microsoft. TypeScript-based. ~99% PEP conformance ([source](https://github.com/python/typing/blob/main/conformance/results/results.html)).**
 
 Pyright is the most conformant Python type checker available today. It correctly handles the vast majority of PEP typing features and has excellent performance for a TypeScript-based tool.
 
 **What Pyright does well:**
-- Highest PEP coverage of any shipping tool (~95%)
+- Highest PEP coverage of any shipping tool (~99% on the official conformance suite)
 - Excellent documentation and error messages
 - Deep VS Code integration via Pylance
 - Fast enough for interactive use in most codebases
@@ -79,7 +86,7 @@ Pyright is the most conformant Python type checker available today. It correctly
 
 ## mypy
 
-**The original. Python/C-based. ~85% PEP conformance.**
+**The original. Python/C-based. ~58% full-pass, 96% partial+pass ([source](https://github.com/python/typing/blob/main/conformance/results/results.html)).**
 
 mypy defined what Python type checking looks like. Its `--strict` flag was the reference implementation for what "strict" means in Python typing for years.
 
@@ -90,7 +97,7 @@ mypy defined what Python type checking looks like. Its `--strict` flag was the r
 - Long history means most edge cases are handled
 
 **What mypy doesn't do:**
-- 10–100x slower than Rust-based tools on large codebases
+- Significantly slower than Rust-based tools on large codebases
 - Daemon mode (`dmypy`) is fragile under certain conditions
 - Not strict by default
 - Requires a Python runtime
@@ -103,7 +110,7 @@ mypy defined what Python type checking looks like. Its `--strict` flag was the r
 
 ## ty (Astral)
 
-**Built by the Ruff team. Rust + Salsa. ~15% PEP conformance.**
+**Built by the Ruff team. Rust + Salsa. Early alpha — not yet in the official conformance suite.**
 
 ty is the most interesting new entrant. It's built by the same team that created Ruff (now the de facto Python linter), uses the same Salsa-based incremental architecture as Basilisk, and has Astral's engineering velocity behind it.
 
@@ -111,13 +118,12 @@ ty is the most interesting new entrant. It's built by the same team that created
 - Same architectural foundation as Basilisk (Salsa + Rust)
 - Built by a team with a track record of shipping
 - MIT licensed, fully open source
-- Sub-10ms incremental speed when it reaches feature parity
+- Sub-10ms incremental speed ([4.7ms on PyTorch](https://astral.sh/blog/ty), December 2025)
 
 **What ty doesn't do (yet):**
-- Only ~15% PEP conformance as of late 2025 — early beta
+- Not yet included in the [official python/typing conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html) — still in early alpha
 - Gradual typing by default
 - No ownership analysis
-- Years away from Pyright's coverage level
 
 **When ty makes sense:** If you want to bet on Astral's velocity and can tolerate lower type coverage during the adoption period. ty may eventually become a major player; it's too early to depend on it for strict enforcement.
 
@@ -125,9 +131,9 @@ ty is the most interesting new entrant. It's built by the same team that created
 
 ## Pyrefly (Meta)
 
-**Production-tested at Instagram scale. Rust-based. ~58% PEP conformance.**
+**Production-tested at Instagram scale. Rust-based. ~86% PEP conformance ([source](https://github.com/python/typing/blob/main/conformance/results/results.html)).**
 
-Pyrefly was built by Meta to handle their Python codebase — one of the largest in the world. It emphasizes throughput (1.8M LOC/sec) over coverage.
+Pyrefly was built by Meta to handle their Python codebase — one of the largest in the world. It emphasizes throughput ([1.85M LOC/sec on 166-core Meta infrastructure](https://pyrefly.org/)) over strict enforcement.
 
 **What Pyrefly does well:**
 - Battle-tested on millions of lines of production Python
@@ -136,13 +142,12 @@ Pyrefly was built by Meta to handle their Python codebase — one of the largest
 - Good documentation
 
 **What Pyrefly doesn't do:**
-- ~58% PEP conformance — below Pyright and below Basilisk's target
 - Strict by default — not available
 - No ownership or immutability analysis
 - No plugin system
 - Meta-driven roadmap — external contributions have less influence
 
-**When Pyrefly makes sense:** Extremely large codebases (500K+ LOC) where throughput matters more than coverage completeness, particularly if the team has Meta-adjacent tooling.
+**When Pyrefly makes sense:** Extremely large codebases (500K+ LOC) where throughput matters more than strict enforcement, particularly if the team has Meta-adjacent tooling.
 
 ---
 

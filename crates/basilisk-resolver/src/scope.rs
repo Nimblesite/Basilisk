@@ -82,6 +82,11 @@ pub struct FunctionInfo {
     pub return_name_refs: Vec<(String, Span)>,
     /// Unhashable expressions used as dict keys in the function body.
     pub unhashable_keys: Vec<UnhashableKeyRef>,
+    /// `true` when the entire function body is a stub (only `...` or `pass`).
+    ///
+    /// Stub bodies are exempt from E0001/E0002/E0004: they appear in overload
+    /// signatures, Protocol bodies used as stubs, and `.pyi`-style inline stubs.
+    pub is_stub_body: bool,
 }
 
 /// A `return` statement found inside a function body.
@@ -181,6 +186,34 @@ pub struct ClassInfo {
     pub method_names: Vec<String>,
     /// Decorators for each method: `(method_name, [decorator_names])`.
     pub method_decorators: Vec<(String, Vec<String>)>,
+    /// Type parameter names extracted from a `Generic[...]` base, if present.
+    pub generic_params: Vec<GenericParamInfo>,
+    /// `true` when the class inherits from `TypedDict`.
+    pub is_typed_dict: bool,
+    /// Keyword argument names in the class definition (e.g. `metaclass`, `total`, `other`).
+    pub class_keywords: Vec<String>,
+}
+
+/// Type parameters declared in a `Generic[T1, T2, ...]` base expression.
+#[derive(Debug, Clone)]
+pub struct GenericParamInfo {
+    /// The name of the type parameter (e.g. `"T"`, `"T_co"`).
+    pub name: String,
+    /// The source span of this parameter name inside `Generic[...]`.
+    pub span: Span,
+}
+
+/// Information about a module-level `TypeVar(...)` call.
+#[derive(Debug, Clone)]
+pub struct TypeVarCallInfo {
+    /// The name the `TypeVar` is bound to (LHS of assignment).
+    pub name: String,
+    /// Number of positional constraint arguments (excludes the name string).
+    pub constraint_count: usize,
+    /// Whether a `default=` keyword argument is present (PEP 696).
+    pub has_default: bool,
+    /// The span of the entire `TypeVar` call expression.
+    pub span: Span,
 }
 
 /// How an import statement is structured.
@@ -232,6 +265,8 @@ pub struct ResolvedModule {
     pub match_stmts: Vec<MatchStmtInfo>,
     /// Module-level call sites (calls appearing in module-level expressions or assignments).
     pub calls: Vec<CallSite>,
+    /// Module-level `TypeVar(...)` call sites.
+    pub typevar_calls: Vec<TypeVarCallInfo>,
     /// The source file path.
     pub path: String,
     /// The original source text (forwarded from parser for span resolution).

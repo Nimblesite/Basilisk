@@ -10,9 +10,9 @@ use ruff_text_size::{Ranged, TextRange};
 use basilisk_parser::ParsedModule;
 
 use crate::scope::{
-    AttributeInfo, CallSite, ClassInfo, FunctionInfo, ImportInfo, ImportKind, MatchStmtInfo,
-    ParameterInfo, ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo, RhsKind, Span,
-    UnhashableKeyRef, VariableInfo,
+    AttributeInfo, CallSite, ClassInfo, FunctionInfo, GenericParamInfo, ImportInfo, ImportKind,
+    MatchStmtInfo, ParameterInfo, ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo, RhsKind,
+    Span, TypeVarCallInfo, UnhashableKeyRef, VariableInfo,
 };
 
 /// Collect all function definitions and module-level data from the parsed module.
@@ -34,6 +34,7 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
     );
 
     let calls = collect_module_level_calls(&module.ast.body);
+    let typevar_calls = collect_typevar_calls(&module.ast.body);
 
     ResolvedModule {
         functions,
@@ -42,6 +43,7 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         imports,
         match_stmts,
         calls,
+        typevar_calls,
         path: module.path.clone(),
         source: module.source.clone(),
     }
@@ -299,7 +301,7 @@ fn class_info_from(
     functions: &mut Vec<FunctionInfo>,
     match_stmts: &mut Vec<MatchStmtInfo>,
 ) -> ClassInfo {
-    let bases = class
+    let bases: Vec<String> = class
         .arguments
         .as_ref()
         .map(|args| args.args.iter().filter_map(expr_simple_name).collect())
@@ -362,6 +364,20 @@ fn class_info_from(
         }
     }
 
+    let generic_params = extract_generic_params(class);
+    let is_typed_dict = bases.iter().any(|b| b == "TypedDict");
+
+    let class_keywords: Vec<String> = class
+        .arguments
+        .as_ref()
+        .map(|args| {
+            args.keywords
+                .iter()
+                .filter_map(|kw| kw.arg.as_ref().map(ToString::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+
     ClassInfo {
         name: class.name.to_string(),
         name_span: text_range_to_span(class.name.range),
@@ -370,6 +386,9 @@ fn class_info_from(
         attributes,
         method_names,
         method_decorators,
+        generic_params,
+        is_typed_dict,
+        class_keywords,
     }
 }
 
@@ -418,6 +437,7 @@ fn function_info_from(func: &StmtFunctionDef, class_name: Option<String>) -> Fun
     let unconditional_assigns = collect_unconditional_assigns(&func.body);
     let return_name_refs = collect_return_name_refs(&func.body);
     let unhashable_keys = collect_unhashable_keys_from_stmts(&func.body);
+    let is_stub_body = body_is_stub(&func.body);
 
     FunctionInfo {
         name: func.name.to_string(),
@@ -435,7 +455,26 @@ fn function_info_from(func: &StmtFunctionDef, class_name: Option<String>) -> Fun
         unconditional_assigns,
         return_name_refs,
         unhashable_keys,
+        is_stub_body,
     }
+}
+
+/// Returns `true` when a function body is a pure ellipsis stub (`...`).
+///
+/// Only `...` — optionally preceded by a docstring — is treated as a stub.
+/// `pass` is valid in real function bodies and must not suppress diagnostics.
+///
+/// These stubs appear in `@overload` signatures, Protocol method declarations,
+/// and abstract method placeholders where annotation enforcement should not apply.
+fn body_is_stub(stmts: &[Stmt]) -> bool {
+    let non_docstring: Vec<&Stmt> = stmts
+        .iter()
+        .skip_while(|s| matches!(s, Stmt::Expr(e) if matches!(e.value.as_ref(), Expr::StringLiteral(_))))
+        .collect();
+
+    non_docstring.iter().all(|s| {
+        matches!(s, Stmt::Expr(e) if matches!(e.value.as_ref(), Expr::EllipsisLiteral(_)))
+    })
 }
 
 fn param_with_default_to_info(p: &ParameterWithDefault) -> ParameterInfo {
@@ -800,6 +839,125 @@ fn collect_module_level_calls(stmts: &[Stmt]) -> Vec<CallSite> {
         }
     }
     out
+}
+
+/// Collect module-level `TypeVar(...)` assignments.
+fn collect_typevar_calls(stmts: &[Stmt]) -> Vec<TypeVarCallInfo> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        match stmt {
+            Stmt::Assign(node) => {
+                let Expr::Call(call) = node.value.as_ref() else {
+                    continue;
+                };
+                let callee = expr_simple_name(&call.func)
+                    .filter(|n| n == "TypeVar")
+                    .or_else(|| {
+                        // typing.TypeVar(...)
+                        if let Expr::Attribute(attr) = call.func.as_ref() {
+                            if attr.attr.as_str() == "TypeVar" {
+                                return Some("TypeVar".to_owned());
+                            }
+                        }
+                        None
+                    });
+                if callee.is_none() {
+                    continue;
+                }
+                let bound_name = node
+                    .targets
+                    .first()
+                    .and_then(expr_simple_name);
+                let Some(name) = bound_name else { continue };
+                // First positional arg is the name string; remaining are constraints.
+                let positional_args = call.arguments.args.len();
+                let constraint_count = positional_args.saturating_sub(1);
+                let has_default = call
+                    .arguments
+                    .keywords
+                    .iter()
+                    .any(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "default"));
+                out.push(TypeVarCallInfo {
+                    name,
+                    constraint_count,
+                    has_default,
+                    span: text_range_to_span(call.range()),
+                });
+            }
+            Stmt::AnnAssign(node) => {
+                let Some(val) = node.value.as_deref() else {
+                    continue;
+                };
+                let Expr::Call(call) = val else { continue };
+                let callee = expr_simple_name(&call.func)
+                    .filter(|n| n == "TypeVar")
+                    .or_else(|| {
+                        if let Expr::Attribute(attr) = call.func.as_ref() {
+                            if attr.attr.as_str() == "TypeVar" {
+                                return Some("TypeVar".to_owned());
+                            }
+                        }
+                        None
+                    });
+                if callee.is_none() {
+                    continue;
+                }
+                let Some(name) = expr_simple_name(&node.target) else {
+                    continue;
+                };
+                let positional_args = call.arguments.args.len();
+                let constraint_count = positional_args.saturating_sub(1);
+                let has_default = call
+                    .arguments
+                    .keywords
+                    .iter()
+                    .any(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "default"));
+                out.push(TypeVarCallInfo {
+                    name,
+                    constraint_count,
+                    has_default,
+                    span: text_range_to_span(call.range()),
+                });
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Extract `Generic[T, ...]` type parameter names from a class definition.
+fn extract_generic_params(class: &StmtClassDef) -> Vec<GenericParamInfo> {
+    let args = match class.arguments.as_ref() {
+        Some(a) => &a.args,
+        None => return Vec::new(),
+    };
+    for base in args {
+        let Expr::Subscript(sub) = base else { continue };
+        let is_generic = matches!(sub.value.as_ref(), Expr::Name(n) if n.id.as_str() == "Generic")
+            || matches!(sub.value.as_ref(), Expr::Attribute(a) if a.attr.as_str() == "Generic");
+        if !is_generic {
+            continue;
+        }
+        return match sub.slice.as_ref() {
+            Expr::Tuple(tuple) => tuple
+                .elts
+                .iter()
+                .filter_map(|e| {
+                    expr_simple_name(e).map(|name| GenericParamInfo {
+                        span: text_range_to_span(e.range()),
+                        name,
+                    })
+                })
+                .collect(),
+            other => expr_simple_name(other)
+                .map(|name| vec![GenericParamInfo {
+                    span: text_range_to_span(other.range()),
+                    name,
+                }])
+                .unwrap_or_default(),
+        };
+    }
+    Vec::new()
 }
 
 fn call_site_from_expr(expr: &Expr) -> Option<CallSite> {

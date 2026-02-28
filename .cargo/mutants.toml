@@ -1,0 +1,19 @@
+# cargo-mutants configuration
+# https://mutants.rs/configuration.html
+# This file must live at .cargo/mutants.toml to be auto-detected.
+
+# Multiply the baseline test duration by this factor for each mutant's timeout.
+timeout_multiplier = 2.0
+
+# Do not rebuild/test packages outside the ones being mutated.
+test_workspace = false
+
+# Only mutate these crates — they have complete, passing test suites.
+# basilisk-db, basilisk-stubs, basilisk-plugin, basilisk-lsp, basilisk-mojo
+# are excluded because they have no tests or have intentionally-failing tests.
+test_package = [
+    "basilisk-parser",
+    "basilisk-resolver",
+    "basilisk-checker",
+    "basilisk-cli",
+]

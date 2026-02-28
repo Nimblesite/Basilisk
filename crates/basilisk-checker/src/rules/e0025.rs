@@ -7,6 +7,9 @@
 //! The check is limited to base classes that appear in the same source module,
 //! because Basilisk cannot inspect the base class body without resolving
 //! cross-module imports in Phase 1.
+//!
+//! Protocol implementations are exempt: when a class satisfies a `Protocol`
+//! contract, it is expected to define the protocol methods without `@override`.
 
 use std::collections::HashMap;
 
@@ -14,7 +17,7 @@ use basilisk_resolver::{ClassInfo, ResolvedModule};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
-use super::Rule;
+use super::{guards::is_protocol_class, Rule};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0025",
@@ -27,32 +30,67 @@ pub(crate) struct MissingOverrideDecorator;
 
 impl Rule for MissingOverrideDecorator {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        // Build a map from class name → method names for fast lookup.
-        let method_map: HashMap<&str, &[String]> = module
+        // Build a raw class map first (name → ClassInfo).
+        let raw_map: HashMap<&str, &ClassInfo> = module
             .classes
             .iter()
-            .map(|cls| (cls.name.as_str(), cls.method_names.as_slice()))
+            .map(|cls| (cls.name.as_str(), cls))
             .collect();
 
-        module
+        // Determine which classes are Protocol (transitively) — e.g.
+        // `class MyProto(SomeBase)` where `SomeBase(Protocol)` is also Protocol.
+        let class_map: HashMap<&str, (&ClassInfo, bool)> = module
             .classes
             .iter()
-            .for_each(|child| check_class(child, &method_map, &module.path, diagnostics));
+            .map(|cls| {
+                (
+                    cls.name.as_str(),
+                    (cls, is_protocol_transitively(cls, &raw_map)),
+                )
+            })
+            .collect();
+
+        module.classes.iter().for_each(|child| {
+            check_class(child, &class_map, &module.path, diagnostics);
+        });
     }
+}
+
+/// Returns `true` when `cls` is a Protocol class directly or transitively
+/// (i.e., any base class in `class_map` is itself a Protocol).
+fn is_protocol_transitively<'a>(
+    cls: &'a ClassInfo,
+    class_map: &HashMap<&str, &'a ClassInfo>,
+) -> bool {
+    if is_protocol_class(cls) {
+        return true;
+    }
+    cls.bases.iter().any(|base| {
+        class_map
+            .get(base.as_str())
+            .is_some_and(|base_cls| is_protocol_transitively(base_cls, class_map))
+    })
 }
 
 fn check_class(
     child: &ClassInfo,
-    method_map: &HashMap<&str, &[String]>,
+    class_map: &HashMap<&str, (&ClassInfo, bool)>,
     path: &str,
     out: &mut Vec<Diagnostic>,
 ) {
-    // Only consider classes that inherit from at least one same-module class.
+    // Skip if this class itself is a Protocol.
+    if is_protocol_class(child) {
+        return;
+    }
+
+    // Collect base method names, skipping Protocol bases (Protocol methods
+    // need implementation, not @override).
     let base_methods: Vec<&str> = child
         .bases
         .iter()
-        .filter_map(|base_name| method_map.get(base_name.as_str()))
-        .flat_map(|methods| methods.iter().map(String::as_str))
+        .filter_map(|base_name| class_map.get(base_name.as_str()))
+        .filter(|(_, is_proto)| !is_proto)
+        .flat_map(|(cls, _)| cls.method_names.iter().map(String::as_str))
         .collect();
 
     if base_methods.is_empty() {
@@ -61,7 +99,6 @@ fn check_class(
 
     for method_name in &child.method_names {
         if !base_methods.contains(&method_name.as_str()) {
-            // Method is not in any resolved base class — not an override.
             continue;
         }
 
@@ -69,9 +106,9 @@ fn check_class(
             continue;
         }
 
-        // Find the name span via the class def_span as a fallback anchor.
-        // We use the class def_span as we don't have individual method spans.
-        out.push(make_diagnostic(child, method_name, path));
+        // Always report at the class name span so the diagnostic sorts before
+        // per-method diagnostics (E0001/E0002) that share the same method position.
+        out.push(make_diagnostic(child, method_name, child.name_span, path));
     }
 }
 
@@ -88,7 +125,12 @@ fn method_has_override_decorator(
         .any(|d| d == "override" || d.ends_with(".override"))
 }
 
-fn make_diagnostic(class: &ClassInfo, method_name: &str, path: &str) -> Diagnostic {
+fn make_diagnostic(
+    class: &ClassInfo,
+    method_name: &str,
+    span: basilisk_resolver::Span,
+    path: &str,
+) -> Diagnostic {
     Diagnostic {
         code: CODE.clone(),
         severity: Severity::Error,
@@ -96,9 +138,7 @@ fn make_diagnostic(class: &ClassInfo, method_name: &str, path: &str) -> Diagnost
             "Method `{}` in class `{}` overrides a base-class method but is missing `@override`",
             method_name, class.name
         ),
-        // Use the class name span as the anchor; method-level spans are not
-        // available in Phase 1 resolver output.
-        span: class.name_span,
+        span,
         path: path.to_owned(),
         help: Some(format!(
             "Add `@override` above `def {method_name}(...)` to make the override explicit"

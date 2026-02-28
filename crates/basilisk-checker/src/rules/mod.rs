@@ -3,6 +3,7 @@
 //! Each rule is a zero-size struct implementing [`Rule`]. Rules are
 //! registered in [`run_all`] and executed in order against a resolved module.
 
+pub(crate) mod guards;
 pub(crate) mod e0001;
 pub(crate) mod e0002;
 pub(crate) mod e0003;
@@ -24,6 +25,12 @@ pub(crate) mod e0022;
 pub(crate) mod e0023;
 pub(crate) mod e0024;
 pub(crate) mod e0025;
+pub(crate) mod e0026;
+pub(crate) mod e0027;
+pub(crate) mod e0029;
+pub(crate) mod e0030;
+pub(crate) mod e0031;
+pub(crate) mod e0032;
 
 use basilisk_resolver::ResolvedModule;
 
@@ -60,6 +67,12 @@ pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
         &e0023::NonExhaustiveMatch,
         &e0024::InvalidTypeForm,
         &e0025::MissingOverrideDecorator,
+        &e0026::TypeVarSingleConstraint,
+        &e0027::DuplicateTypeVarInGeneric,
+        &e0029::TypedDictMethodNotAllowed,
+        &e0030::NonDefaultAfterDefault,
+        &e0031::InvalidCastCall,
+        &e0032::InvalidTypedDictBase,
     ];
 
     rules.iter().fold(Vec::new(), |mut acc, rule| {

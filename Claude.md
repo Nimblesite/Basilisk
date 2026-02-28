@@ -2,6 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+We are shooting for 100% PEP comformance. Read this document carefully:
+https://github.com/python/typing/blob/main/conformance/README.md
+
 # Rules
 
 - NEVER DELETE FAILING TESTS

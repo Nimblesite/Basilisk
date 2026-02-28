@@ -256,7 +256,7 @@ mod tests {
     // ── JSON output ───────────────────────────────────────────────────────────
 
     #[test]
-    fn json_produces_valid_array_with_correct_fields() {
+    fn json_produces_valid_array_with_correct_fields() -> Result<(), Box<dyn std::error::Error>> {
         let source = "def foo(x): pass";
         // byte 8 = 'x', so line=1, col=9 (1-based)
         let (line, col) = byte_offset_to_line_col(source, 8);
@@ -271,19 +271,21 @@ mod tests {
             end_line,
             end_col,
         };
-        let json = serde_json::to_string(&item).expect("serialisation must succeed");
+        let json = serde_json::to_string(&item)?;
         assert!(json.contains("BSK-E0001"));
         assert!(json.contains("\"line\":1"));
         assert!(json.contains("\"col\":9"));
         assert!(json.contains("\"end_line\":1"));
         assert!(json.contains("\"end_col\":10"));
+        Ok(())
     }
 
     #[test]
-    fn json_empty_diagnostics_produces_empty_array() {
+    fn json_empty_diagnostics_produces_empty_array() -> Result<(), Box<dyn std::error::Error>> {
         let items: Vec<JsonDiagnostic<'_>> = vec![];
-        let json = serde_json::to_string(&items).expect("serialisation must succeed");
+        let json = serde_json::to_string(&items)?;
         assert_eq!(json, "[]");
+        Ok(())
     }
 
     #[test]
@@ -303,7 +305,7 @@ mod tests {
     }
 
     #[test]
-    fn json_severity_warning() {
+    fn json_severity_warning() -> Result<(), Box<dyn std::error::Error>> {
         let source = "def foo(x): pass";
         let (line, col) = byte_offset_to_line_col(source, 8);
         let (end_line, end_col) = byte_offset_to_line_col(source, 9);
@@ -317,7 +319,8 @@ mod tests {
             end_line,
             end_col,
         };
-        let json = serde_json::to_string(&item).expect("serialisation must succeed");
+        let json = serde_json::to_string(&item)?;
         assert!(json.contains("\"warning\""));
+        Ok(())
     }
 }

@@ -20,7 +20,7 @@ Python's type annotation syntax has existed since PEP 484 in 2015. Over the foll
 
 The catch: every one of them defaults to *gradual typing*. Untyped code passes silently. `Any` spreads through type inference without warning. Strictness is something you must deliberately opt into, configure, remember to enforce in CI, and re-explain to every new team member.
 
-The result: 73% of Python developers write type hints, but only 41% enforce them consistently in CI.
+The result: 88% of Python developers use type hints "always" or "often" — yet nearly 30% of those developers have no type checking in their CI pipeline ([Meta/Microsoft Python Typing Survey 2024](https://engineering.fb.com/2024/12/09/developer-tools/typed-python-2024-survey-meta/)).
 
 Basilisk takes a different position. **Type annotations are contracts, not documentation.** A function without a return type annotation is not "partially typed" — it is untyped, and that is an error.
 
