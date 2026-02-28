@@ -20,11 +20,11 @@ use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
 use super::Rule;
 
-/// Returns `true` when the child class is a TypedDict or inherits from one.
+/// Returns `true` when the child class is a `TypedDict` or inherits from one.
 ///
-/// TypedDict subclassing has entirely different rules from normal OOP attribute
-/// inheritance — subclasses can narrow ReadOnly items, change Required/NotRequired,
-/// etc.  Applying E0017 to TypedDict classes produces only false positives.
+/// `TypedDict` subclassing has entirely different rules from normal OOP attribute
+/// inheritance — subclasses can narrow `ReadOnly` items, change `Required`/`NotRequired`,
+/// etc.  Applying E0017 to `TypedDict` classes produces only false positives.
 fn is_typed_dict_hierarchy(child: &ClassInfo, class_map: &HashMap<&str, &ClassInfo>) -> bool {
     if child.is_typed_dict {
         return true;
@@ -65,15 +65,6 @@ impl Rule for IncompatibleVariableOverride {
         module.classes.iter().for_each(|child| {
             // TypedDict hierarchies have their own subtyping rules — skip.
             if is_typed_dict_hierarchy(child, &class_map) {
-                return;
-            }
-            // Dataclasses use covariant semantics in frozen hierarchies; skip.
-            let in_dataclass_hierarchy = child.is_dataclass
-                || child
-                    .bases
-                    .iter()
-                    .any(|b| class_map.get(b.as_str()).is_some_and(|c| c.is_dataclass));
-            if in_dataclass_hierarchy {
                 return;
             }
             check_class(
@@ -142,7 +133,7 @@ fn check_class(
     }
 }
 
-/// Returns `true` when an annotation string contains TypedDict qualifier wrappers.
+/// Returns `true` when an annotation string contains `TypedDict` qualifier wrappers.
 ///
 /// `ReadOnly`, `Required`, and `NotRequired` change subtyping rules in ways
 /// that a raw string comparison cannot capture — a subclass can legally strip

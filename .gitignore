@@ -17,3 +17,4 @@ node_modules/
 
 # Downloaded conformance test suite (python/typing) — fetch with scripts/fetch-conformance.sh
 crates/basilisk-cli/tests/conformance/
+.venv/
