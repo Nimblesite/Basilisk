@@ -35,7 +35,11 @@ pub(crate) struct EnumMemberAnnotated;
 impl Rule for EnumMemberAnnotated {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         for cls in module.classes.iter().filter(|c| is_enum_class(c)) {
-            for attr in cls.attributes.iter().filter(|a| a.has_annotation && a.has_value) {
+            for attr in cls
+                .attributes
+                .iter()
+                .filter(|a| a.has_annotation && a.has_value)
+            {
                 // Skip dunder names — _value_, _name_, _ignore_ etc. are special enum
                 // class attributes, not members.
                 if attr.name.starts_with('_') && attr.name.ends_with('_') {

@@ -45,7 +45,11 @@ impl Rule for FinalViolation {
         let method_map: HashMap<(&str, &str), &FunctionInfo> = module
             .functions
             .iter()
-            .filter_map(|f| f.class_name.as_deref().map(|cls| ((cls, f.name.as_str()), f)))
+            .filter_map(|f| {
+                f.class_name
+                    .as_deref()
+                    .map(|cls| ((cls, f.name.as_str()), f))
+            })
             .collect();
 
         // Check 1: Inheriting from a @final class.
@@ -56,19 +60,14 @@ impl Rule for FinalViolation {
                         diagnostics.push(Diagnostic {
                             code: CODE.clone(),
                             severity: Severity::Error,
-                            message: format!(
-                                "Cannot inherit from final class `{}`",
-                                base_cls.name
-                            ),
+                            message: format!("Cannot inherit from final class `{}`", base_cls.name),
                             span: child.name_span,
                             path: module.path.clone(),
                             help: Some(format!(
                                 "Remove `{}` from the base classes of `{}`",
                                 base_cls.name, child.name
                             )),
-                            note: Some(
-                                "`@final` (PEP 591) prohibits subclassing".to_owned(),
-                            ),
+                            note: Some("`@final` (PEP 591) prohibits subclassing".to_owned()),
                         });
                     }
                 }
@@ -77,9 +76,7 @@ impl Rule for FinalViolation {
 
         // Check 2: @final on a module-level (non-method) function.
         for func in &module.functions {
-            if func.class_name.is_none()
-                && func.decorators.iter().any(|d| is_final_decorator(d))
-            {
+            if func.class_name.is_none() && func.decorators.iter().any(|d| is_final_decorator(d)) {
                 diagnostics.push(Diagnostic {
                     code: CODE.clone(),
                     severity: Severity::Error,
@@ -92,9 +89,7 @@ impl Rule for FinalViolation {
                     help: Some(
                         "`@final` may only be applied to methods inside a class body".to_owned(),
                     ),
-                    note: Some(
-                        "PEP 591: `@final` on a non-method function is an error".to_owned(),
-                    ),
+                    note: Some("PEP 591: `@final` on a non-method function is an error".to_owned()),
                 });
             }
         }

@@ -33,8 +33,7 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
         path: path.to_owned(),
         help: None,
         note: Some(
-            "PEP 589: TypedDict subclassing has strict field-compatibility requirements"
-                .to_owned(),
+            "PEP 589: TypedDict subclassing has strict field-compatibility requirements".to_owned(),
         ),
     }
 }
@@ -61,9 +60,7 @@ fn annotation_text(source: &str, span: Option<Span>) -> Option<&str> {
 /// (`ReadOnly`, `Required`, `NotRequired`) that change field subtyping semantics.
 fn uses_qualifier_wrapper(ann: Option<&str>) -> bool {
     ann.is_some_and(|s| {
-        s.contains("ReadOnly")
-            || s.contains("Required")
-            || s.contains("NotRequired")
+        s.contains("ReadOnly") || s.contains("Required") || s.contains("NotRequired")
     })
 }
 
@@ -167,8 +164,7 @@ fn check_conflicting_bases(
                 continue;
             }
             let ann = annotation_text(source, attr.annotation_span);
-            if let Some((prev_base, prev_ann)) = seen.insert(attr.name.as_str(), (base_name, ann))
-            {
+            if let Some((prev_base, prev_ann)) = seen.insert(attr.name.as_str(), (base_name, ann)) {
                 if prev_ann != ann
                     && !uses_qualifier_wrapper(ann)
                     && !uses_qualifier_wrapper(prev_ann)

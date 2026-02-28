@@ -35,9 +35,7 @@ impl Rule for TypeVarSingleConstraint {
                     help: Some(
                         "Add a second constraint or remove the single constraint".to_owned(),
                     ),
-                    note: Some(
-                        "PEP 484: a TypeVar with one constraint is invalid".to_owned(),
-                    ),
+                    note: Some("PEP 484: a TypeVar with one constraint is invalid".to_owned()),
                 });
             }
             // Cannot specify both constraints and a bound.

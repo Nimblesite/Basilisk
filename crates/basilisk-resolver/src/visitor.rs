@@ -3,9 +3,9 @@
 const ENUM_BASES: &[&str] = &["Enum", "IntEnum", "StrEnum", "Flag", "IntFlag", "ReprEnum"];
 
 use ruff_python_ast::{
-    Alias, Decorator, ElifElseClause, ExceptHandler, Expr, MatchCase, Parameter, ParameterWithDefault,
-    Pattern, Stmt, StmtAnnAssign, StmtAssign, StmtClassDef, StmtFunctionDef, StmtImport,
-    StmtImportFrom, StmtMatch, StmtReturn, TypeParam,
+    Alias, Decorator, ElifElseClause, ExceptHandler, Expr, MatchCase, Parameter,
+    ParameterWithDefault, Pattern, Stmt, StmtAnnAssign, StmtAssign, StmtClassDef, StmtFunctionDef,
+    StmtImport, StmtImportFrom, StmtMatch, StmtReturn, TypeParam,
 };
 use ruff_text_size::{Ranged, TextRange};
 
@@ -14,7 +14,7 @@ use basilisk_parser::ParsedModule;
 use crate::scope::{
     AttributeInfo, CallSite, ClassInfo, FunctionInfo, GenericParamInfo, ImportInfo, ImportKind,
     MatchStmtInfo, ParameterInfo, ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo,
-    RevealTypeCallInfo, RhsKind, Span, TypedDictCallInfo, TypedDictSecondArgKind, TypeVarCallInfo,
+    RevealTypeCallInfo, RhsKind, Span, TypeVarCallInfo, TypedDictCallInfo, TypedDictSecondArgKind,
     UnhashableKeyRef, VariableInfo,
 };
 
@@ -542,12 +542,14 @@ fn function_info_from(func: &StmtFunctionDef, class_name: Option<String>) -> Fun
 fn body_is_stub(stmts: &[Stmt]) -> bool {
     let non_docstring: Vec<&Stmt> = stmts
         .iter()
-        .skip_while(|s| matches!(s, Stmt::Expr(e) if matches!(e.value.as_ref(), Expr::StringLiteral(_))))
+        .skip_while(
+            |s| matches!(s, Stmt::Expr(e) if matches!(e.value.as_ref(), Expr::StringLiteral(_))),
+        )
         .collect();
 
-    non_docstring.iter().all(|s| {
-        matches!(s, Stmt::Expr(e) if matches!(e.value.as_ref(), Expr::EllipsisLiteral(_)))
-    })
+    non_docstring
+        .iter()
+        .all(|s| matches!(s, Stmt::Expr(e) if matches!(e.value.as_ref(), Expr::EllipsisLiteral(_))))
 }
 
 fn param_with_default_to_info(p: &ParameterWithDefault) -> ParameterInfo {
@@ -942,8 +944,7 @@ fn collect_module_level_calls(stmts: &[Stmt]) -> Vec<CallSite> {
 /// Returns `true` if an expression is a `TypeVar(...)` or `typing.TypeVar(...)` call.
 fn is_typevar_call(expr: &Expr) -> bool {
     let Expr::Call(call) = expr else { return false };
-    (expr_simple_name(&call.func)
-        .as_deref() == Some("TypeVar"))
+    (expr_simple_name(&call.func).as_deref() == Some("TypeVar"))
         || matches!(call.func.as_ref(), Expr::Attribute(a) if a.attr.as_str() == "TypeVar")
 }
 
@@ -1045,8 +1046,8 @@ fn collect_reveal_type_calls_from_stmt(stmt: &Stmt, out: &mut Vec<RevealTypeCall
     match stmt {
         Stmt::Expr(node) => {
             if let Expr::Call(call) = node.value.as_ref() {
-                let is_reveal_type = expr_simple_name(&call.func)
-                    .is_some_and(|n| n == "reveal_type");
+                let is_reveal_type =
+                    expr_simple_name(&call.func).is_some_and(|n| n == "reveal_type");
                 if is_reveal_type {
                     out.push(RevealTypeCallInfo {
                         arg_count: call.arguments.args.len(),
@@ -1105,18 +1106,25 @@ fn collect_special_calls(stmts: &[Stmt], func_name: &str) -> Vec<RevealTypeCallI
     out
 }
 
-fn collect_special_calls_from_stmts(stmts: &[Stmt], func_name: &str, out: &mut Vec<RevealTypeCallInfo>) {
+fn collect_special_calls_from_stmts(
+    stmts: &[Stmt],
+    func_name: &str,
+    out: &mut Vec<RevealTypeCallInfo>,
+) {
     for stmt in stmts {
         collect_special_calls_from_stmt(stmt, func_name, out);
     }
 }
 
-fn collect_special_calls_from_stmt(stmt: &Stmt, func_name: &str, out: &mut Vec<RevealTypeCallInfo>) {
+fn collect_special_calls_from_stmt(
+    stmt: &Stmt,
+    func_name: &str,
+    out: &mut Vec<RevealTypeCallInfo>,
+) {
     match stmt {
         Stmt::Expr(node) => {
             if let Expr::Call(call) = node.value.as_ref() {
-                let is_target = expr_simple_name(&call.func)
-                    .is_some_and(|n| n == func_name);
+                let is_target = expr_simple_name(&call.func).is_some_and(|n| n == func_name);
                 if is_target {
                     out.push(RevealTypeCallInfo {
                         arg_count: call.arguments.args.len(),
@@ -1177,8 +1185,7 @@ fn extract_generic_params(class: &StmtClassDef) -> (Vec<GenericParamInfo>, Vec<S
     };
     for base in args {
         let Expr::Subscript(sub) = base else { continue };
-        let is_generic_or_protocol =
-            matches!(sub.value.as_ref(), Expr::Name(n) if n.id.as_str() == "Generic" || n.id.as_str() == "Protocol")
+        let is_generic_or_protocol = matches!(sub.value.as_ref(), Expr::Name(n) if n.id.as_str() == "Generic" || n.id.as_str() == "Protocol")
             || matches!(sub.value.as_ref(), Expr::Attribute(a) if a.attr.as_str() == "Generic" || a.attr.as_str() == "Protocol");
         if !is_generic_or_protocol {
             continue;
@@ -1420,7 +1427,9 @@ fn collect_typeddict_calls(stmts: &[Stmt]) -> Vec<TypedDictCallInfo> {
     let mut out = Vec::new();
     for stmt in stmts {
         let Stmt::Assign(node) = stmt else { continue };
-        let Expr::Call(call) = node.value.as_ref() else { continue };
+        let Expr::Call(call) = node.value.as_ref() else {
+            continue;
+        };
         // Callee must be `TypedDict` or `typing.TypedDict`.
         let is_typeddict = if let Some(name) = expr_simple_name(&call.func) {
             name == "TypedDict"
@@ -1452,9 +1461,9 @@ fn collect_typeddict_calls(stmts: &[Stmt]) -> Vec<TypedDictCallInfo> {
                 if let Expr::Dict(dict) = second_arg {
                     // Check if every key is a string literal.
                     let non_string = dict.items.iter().any(|item| {
-                        item.key.as_ref().is_some_and(|k| {
-                            !matches!(k, Expr::StringLiteral(_))
-                        })
+                        item.key
+                            .as_ref()
+                            .is_some_and(|k| !matches!(k, Expr::StringLiteral(_)))
                     });
                     (TypedDictSecondArgKind::DictLiteral, non_string)
                 } else {
@@ -1489,32 +1498,41 @@ fn collect_typeddict_calls(stmts: &[Stmt]) -> Vec<TypedDictCallInfo> {
 // Shared utilities
 // ---------------------------------------------------------------------------
 
-/// Names of well-known typing forms that are NOT parameterized by TypeVars even
-/// when subscripted.  `Literal["x"]`, `Optional[int]`, etc. are valid TypeVar
-/// bounds and constraints, so we must not flag them as "parameterized by TypeVar".
+/// Names of well-known typing forms that are NOT parameterized by `TypeVar`s even
+/// when subscripted.  `Literal["x"]`, `Optional[int]`, etc. are valid `TypeVar`
+/// bounds and constraints, so we must not flag them as "parameterized by `TypeVar`".
 const TYPING_FORMS: &[&str] = &[
-    "Literal", "Optional", "Union", "Final", "ClassVar", "Annotated",
-    "Required", "NotRequired", "ReadOnly", "TypeAlias",
+    "Literal",
+    "Optional",
+    "Union",
+    "Final",
+    "ClassVar",
+    "Annotated",
+    "Required",
+    "NotRequired",
+    "ReadOnly",
+    "TypeAlias",
 ];
 
 /// Returns `true` when an expression is a subscript parameterized by a potential
-/// TypeVar — i.e. it is `list[T]` or similar, NOT a typing form like `Literal[...]`.
+/// `TypeVar` — i.e. it is `list[T]` or similar, NOT a typing form like `Literal[...]`.
 ///
 /// Used to detect cases like `TypeVar("T", bound=list[T])` where the bound is
-/// parameterized by a free TypeVar rather than being a valid concrete generic.
+/// parameterized by a free `TypeVar` rather than being a valid concrete generic.
 fn expr_is_parameterized(expr: &Expr) -> bool {
     match expr {
         Expr::Subscript(sub) => {
             // Skip well-known typing forms: Literal["x"], Optional[T], etc.
             let base_name = expr_simple_name(&sub.value);
-            if base_name.as_deref().is_some_and(|n| TYPING_FORMS.contains(&n)) {
+            if base_name
+                .as_deref()
+                .is_some_and(|n| TYPING_FORMS.contains(&n))
+            {
                 return false;
             }
             true
         }
-        Expr::BinOp(bin) => {
-            expr_is_parameterized(&bin.left) || expr_is_parameterized(&bin.right)
-        }
+        Expr::BinOp(bin) => expr_is_parameterized(&bin.left) || expr_is_parameterized(&bin.right),
         Expr::Tuple(tup) => tup.elts.iter().any(expr_is_parameterized),
         _ => false,
     }
@@ -1573,4 +1591,3 @@ fn text_range_to_span(range: TextRange) -> Span {
         end: range.end().to_u32(),
     }
 }
-

@@ -34,9 +34,7 @@ fn make_diagnostic(message: String, span: basilisk_resolver::Span, path: &str) -
              or ParamSpec instances"
                 .to_owned(),
         ),
-        note: Some(
-            "PEP 484: `Generic[int]` is invalid; use a TypeVar instead".to_owned(),
-        ),
+        note: Some("PEP 484: `Generic[int]` is invalid; use a TypeVar instead".to_owned()),
     }
 }
 
@@ -67,8 +65,11 @@ impl Rule for NonTypeVarInGeneric {
 
             // Flag simple-name args that are NOT known TypeVars and NOT PEP 695 type params.
             // This catches `Generic[int]` where `int` is a builtin type, not a TypeVar.
-            let pep695_params: HashSet<&str> =
-                class.pep695_type_param_names.iter().map(String::as_str).collect();
+            let pep695_params: HashSet<&str> = class
+                .pep695_type_param_names
+                .iter()
+                .map(String::as_str)
+                .collect();
 
             for param in &class.generic_params {
                 let name = param.name.as_str();
@@ -83,8 +84,8 @@ impl Rule for NonTypeVarInGeneric {
                 // Skip well-known TypeVar-like names that might be imported.
                 // These are common names that type checkers conventionally accept.
                 // We only flag names that look like concrete types (lowercase or builtins).
-                let is_likely_typevar = name.chars().next().is_some_and(|c| c.is_uppercase())
-                    || name.starts_with('_');
+                let is_likely_typevar =
+                    name.chars().next().is_some_and(char::is_uppercase) || name.starts_with('_');
                 if is_likely_typevar {
                     continue;
                 }

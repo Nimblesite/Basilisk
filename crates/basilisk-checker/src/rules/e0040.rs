@@ -34,7 +34,9 @@ fn is_enum_class(name: &str, class_map: &HashMap<&str, &ClassInfo>) -> bool {
     if cls.is_enum {
         return true;
     }
-    cls.bases.iter().any(|b| is_enum_class(b.as_str(), class_map))
+    cls.bases
+        .iter()
+        .any(|b| is_enum_class(b.as_str(), class_map))
 }
 
 /// Returns `true` when an enum class has any declared members (non-method attributes).

@@ -122,7 +122,13 @@ fn is_invalid_type_expr(first: &str) -> bool {
     }
 
     // Negative numeric literals: -1, -3.14
-    if first.starts_with('-') && first[1..].trim().chars().next().is_some_and(|c| c.is_ascii_digit()) {
+    if first.starts_with('-')
+        && first[1..]
+            .trim()
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_digit())
+    {
         return true;
     }
 
@@ -176,7 +182,9 @@ fn is_invalid_type_expr(first: &str) -> bool {
 /// Returns `true` when the expression is a subscript like `list[int]` (NOT `[int][0]`).
 fn is_subscript_expression(s: &str) -> bool {
     // A subscript expression starts with a name, not `[`
-    s.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_')
+    s.chars()
+        .next()
+        .is_some_and(|c| c.is_alphabetic() || c == '_')
 }
 
 /// Returns `true` when the expression looks like a tuple literal.
@@ -210,7 +218,9 @@ fn has_top_level_if(s: &str) -> bool {
             b']' | b')' | b'}' => depth -= 1,
             b'i' if depth == 0 => {
                 // Check for ` if ` at this position
-                if bytes.get(i..i + 4) == Some(b" if ") || (i > 0 && bytes.get(i - 1..i + 3) == Some(b" if")) {
+                if bytes.get(i..i + 4) == Some(b" if ")
+                    || (i > 0 && bytes.get(i - 1..i + 3) == Some(b" if"))
+                {
                     return true;
                 }
             }

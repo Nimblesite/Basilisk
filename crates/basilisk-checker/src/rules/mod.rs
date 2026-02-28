@@ -3,7 +3,6 @@
 //! Each rule is a zero-size struct implementing [`Rule`]. Rules are
 //! registered in [`run_all`] and executed in order against a resolved module.
 
-pub(crate) mod guards;
 pub(crate) mod e0001;
 pub(crate) mod e0002;
 pub(crate) mod e0003;
@@ -45,6 +44,7 @@ pub(crate) mod e0043;
 pub(crate) mod e0044;
 pub(crate) mod e0045;
 pub(crate) mod e0046;
+pub(crate) mod guards;
 
 use basilisk_resolver::ResolvedModule;
 

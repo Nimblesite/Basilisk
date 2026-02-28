@@ -358,16 +358,35 @@ mod tests {
             help: None,
             note: None,
         };
-        let sources = vec![FileSource { path: "a.py".to_owned(), text: "def foo(x): pass".to_owned() }];
+        let sources = vec![FileSource {
+            path: "a.py".to_owned(),
+            text: "def foo(x): pass".to_owned(),
+        }];
         // Can't easily capture stdout, but verify items array construction is correct
         // by constructing directly.
         let items: Vec<JsonDiagnostic<'_>> = [&d1, &d2]
             .iter()
             .map(|d| {
-                let source = sources.iter().find(|s| s.path == d.path).map(|s| s.text.as_str());
-                let (line, col) = source.map_or((1, 1), |src| byte_offset_to_line_col(src, d.span.start as usize));
-                let (end_line, end_col) = source.map_or((line, col + 1), |src| byte_offset_to_line_col(src, d.span.end as usize));
-                JsonDiagnostic { code: d.code.code, severity: "error", message: &d.message, path: &d.path, line, col, end_line, end_col }
+                let source = sources
+                    .iter()
+                    .find(|s| s.path == d.path)
+                    .map(|s| s.text.as_str());
+                let (line, col) = source.map_or((1, 1), |src| {
+                    byte_offset_to_line_col(src, d.span.start as usize)
+                });
+                let (end_line, end_col) = source.map_or((line, col + 1), |src| {
+                    byte_offset_to_line_col(src, d.span.end as usize)
+                });
+                JsonDiagnostic {
+                    code: d.code.code,
+                    severity: "error",
+                    message: &d.message,
+                    path: &d.path,
+                    line,
+                    col,
+                    end_line,
+                    end_col,
+                }
             })
             .collect();
         assert_eq!(items.len(), 2, "must produce one item per diagnostic");
@@ -399,10 +418,19 @@ mod tests {
             note: None,
         };
         let sources = vec![
-            FileSource { path: "a.py".to_owned(), text: "aaaa\nbbbb".to_owned() },
-            FileSource { path: "b.py".to_owned(), text: "x = 1\n".to_owned() },
+            FileSource {
+                path: "a.py".to_owned(),
+                text: "aaaa\nbbbb".to_owned(),
+            },
+            FileSource {
+                path: "b.py".to_owned(),
+                text: "x = 1\n".to_owned(),
+            },
         ];
-        let source = sources.iter().find(|s| s.path == diag.path).map(|s| s.text.as_str());
+        let source = sources
+            .iter()
+            .find(|s| s.path == diag.path)
+            .map(|s| s.text.as_str());
         let (line, col) = source.map_or((1, 1), |src| byte_offset_to_line_col(src, 0));
         // b.py offset 0 → line 1, col 1
         assert_eq!(line, 1);
@@ -416,8 +444,8 @@ mod tests {
     /// Line 97 computes end position: `byte_offset_to_line_col(src, d.span.end as usize)`.
     /// We verify end_col > col for a span that crosses characters.
     #[test]
-    fn render_diagnostics_json_end_position_after_start(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn render_diagnostics_json_end_position_after_start() -> Result<(), Box<dyn std::error::Error>>
+    {
         let source = "def foo(x): pass";
         // span covers "foo" at bytes 4..7
         let (start_line, start_col) = byte_offset_to_line_col(source, 4);

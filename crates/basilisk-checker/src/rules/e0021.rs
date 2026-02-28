@@ -86,12 +86,18 @@ fn signatures_overlap(a: &FunctionInfo, b: &FunctionInfo) -> bool {
 
     // Exclude `self` and `cls` — these are unannotated by convention and
     // carry no type information that could distinguish overloads.
-    let is_implicit = |p: &&basilisk_resolver::ParameterInfo| {
-        p.name == "self" || p.name == "cls"
-    };
+    let is_implicit = |p: &&basilisk_resolver::ParameterInfo| p.name == "self" || p.name == "cls";
 
-    let a_typed = a.parameters.iter().filter(|p| !is_implicit(p)).all(|p| p.has_annotation);
-    let b_typed = b.parameters.iter().filter(|p| !is_implicit(p)).all(|p| p.has_annotation);
+    let a_typed = a
+        .parameters
+        .iter()
+        .filter(|p| !is_implicit(p))
+        .all(|p| p.has_annotation);
+    let b_typed = b
+        .parameters
+        .iter()
+        .filter(|p| !is_implicit(p))
+        .all(|p| p.has_annotation);
 
     // If every meaningful parameter on both sides is annotated the overloads
     // might differ by type alone — defer to a future phase.

@@ -44,10 +44,12 @@ pub(crate) fn is_stub_context(func: &FunctionInfo, classes: &[ClassInfo]) -> boo
 /// Enum members are unannotated by design — their type is `Literal[EnumClass.member]`,
 /// synthesised by the Enum metaclass.  Firing E0005 on them is a false positive.
 pub(crate) fn is_enum_class(class: &ClassInfo) -> bool {
-    class
-        .bases
-        .iter()
-        .any(|b| matches!(b.as_str(), "Enum" | "IntEnum" | "StrEnum" | "Flag" | "IntFlag"))
+    class.bases.iter().any(|b| {
+        matches!(
+            b.as_str(),
+            "Enum" | "IntEnum" | "StrEnum" | "Flag" | "IntFlag"
+        )
+    })
 }
 
 /// Returns `true` when a class is a `Protocol` subclass.

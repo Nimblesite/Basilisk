@@ -28,12 +28,9 @@ impl Rule for TypedDictMethodNotAllowed {
                 ) {
                     continue;
                 }
-                let func = module
-                    .functions
-                    .iter()
-                    .find(|f| {
-                        f.class_name.as_deref() == Some(&class.name) && &f.name == method_name
-                    });
+                let func = module.functions.iter().find(|f| {
+                    f.class_name.as_deref() == Some(&class.name) && &f.name == method_name
+                });
                 if let Some(f) = func {
                     diagnostics.push(Diagnostic {
                         code: CODE.clone(),
@@ -45,7 +42,8 @@ impl Rule for TypedDictMethodNotAllowed {
                         span: f.name_span,
                         path: module.path.clone(),
                         help: Some(
-                            "TypedDict classes may only declare typed fields, not methods".to_owned(),
+                            "TypedDict classes may only declare typed fields, not methods"
+                                .to_owned(),
                         ),
                         note: Some(
                             "PEP 589: TypedDict does not support method definitions".to_owned(),

@@ -45,8 +45,14 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
         message,
         span,
         path: path.to_owned(),
-        help: Some("`Final` is only valid as the outermost qualifier in variable or attribute annotations".to_owned()),
-        note: Some("PEP 591: `Final` cannot be nested, used in parameters, or combined with `ClassVar`".to_owned()),
+        help: Some(
+            "`Final` is only valid as the outermost qualifier in variable or attribute annotations"
+                .to_owned(),
+        ),
+        note: Some(
+            "PEP 591: `Final` cannot be nested, used in parameters, or combined with `ClassVar`"
+                .to_owned(),
+        ),
     }
 }
 
@@ -72,7 +78,8 @@ fn has_nested_final(ann: &str) -> bool {
 
 /// Returns `true` when the annotation is `ClassVar[Final...]` — Final inside ClassVar.
 fn has_classvar_wrapping_final(ann: &str) -> bool {
-    ann.starts_with("ClassVar[") && (ann.contains("Final[") || ann.contains("Final]") || ann.contains("Final,"))
+    ann.starts_with("ClassVar[")
+        && (ann.contains("Final[") || ann.contains("Final]") || ann.contains("Final,"))
 }
 
 /// Returns `true` when the annotation is `Final[ClassVar...]` — ClassVar inside Final.

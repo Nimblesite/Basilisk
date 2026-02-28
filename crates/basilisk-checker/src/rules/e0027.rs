@@ -37,7 +37,8 @@ impl Rule for DuplicateTypeVarInGeneric {
                             "Each TypeVar must appear exactly once in the Generic base".to_owned(),
                         ),
                         note: Some(
-                            "PEP 484: duplicate TypeVar parameters in Generic are invalid".to_owned(),
+                            "PEP 484: duplicate TypeVar parameters in Generic are invalid"
+                                .to_owned(),
                         ),
                     });
                 } else {

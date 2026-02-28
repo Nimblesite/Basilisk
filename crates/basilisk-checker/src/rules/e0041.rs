@@ -48,11 +48,7 @@ impl Rule for TooFewArguments {
             }
 
             // Count required parameters (those without defaults, excluding *args/**kwargs).
-            let required_count = func
-                .parameters
-                .iter()
-                .filter(|p| !p.has_default)
-                .count();
+            let required_count = func.parameters.iter().filter(|p| !p.has_default).count();
 
             // Keyword arguments may satisfy positional requirements —
             // conservatively skip the check if any keywords are present.

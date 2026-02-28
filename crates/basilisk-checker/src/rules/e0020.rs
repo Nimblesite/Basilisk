@@ -101,11 +101,7 @@ impl Rule for MissingOverloadImpl {
             // least two @overload signatures are required.
             if overloaded.len() == 1 {
                 if let Some(first) = overloaded.first() {
-                    diagnostics.push(make_single_overload_diagnostic(
-                        first,
-                        name,
-                        &module.path,
-                    ));
+                    diagnostics.push(make_single_overload_diagnostic(first, name, &module.path));
                 }
             }
 

@@ -321,6 +321,27 @@ pub struct RevealTypeCallInfo {
     pub span: Span,
 }
 
+/// An `assert_type(value, ExpectedType)` call found anywhere in the module.
+#[derive(Debug, Clone)]
+pub struct AssertTypeCallInfo {
+    /// Number of positional arguments passed to `assert_type`.
+    pub arg_count: usize,
+    /// The span of the entire `assert_type(...)` call expression.
+    pub span: Span,
+    /// The normalized type text of the actual first argument.
+    ///
+    /// - For a parameter reference, this is the parameter annotation text (normalized).
+    /// - For a literal, this is the inferred literal type (e.g. `"str"` for `""`).
+    /// - `None` when the type cannot be determined statically.
+    pub actual_type: Option<String>,
+    /// The normalized type text of the second argument (the expected/declared type).
+    ///
+    /// `None` when there is no second argument (arity error) or the text cannot be extracted.
+    pub expected_type: Option<String>,
+    /// `true` when `actual_type` and `expected_type` are both known and do not match.
+    pub type_mismatch: bool,
+}
+
 /// What kind of second argument was passed to a `TypedDict(...)` functional call.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypedDictSecondArgKind {

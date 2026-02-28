@@ -96,8 +96,11 @@ impl Rule for Pep695TraditionalTypeVarMix {
             if !cls.has_pep695_type_params {
                 continue;
             }
-            let own_params: HashSet<&str> =
-                cls.pep695_type_param_names.iter().map(String::as_str).collect();
+            let own_params: HashSet<&str> = cls
+                .pep695_type_param_names
+                .iter()
+                .map(String::as_str)
+                .collect();
 
             let offending: Vec<&str> = cls
                 .base_expression_names
@@ -128,8 +131,11 @@ impl Rule for Pep695TraditionalTypeVarMix {
             if !func.has_pep695_type_params {
                 continue;
             }
-            let own_params: HashSet<&str> =
-                func.pep695_type_param_names.iter().map(String::as_str).collect();
+            let own_params: HashSet<&str> = func
+                .pep695_type_param_names
+                .iter()
+                .map(String::as_str)
+                .collect();
 
             // Collect annotation texts to scan.
             let annotation_texts: Vec<&str> = func

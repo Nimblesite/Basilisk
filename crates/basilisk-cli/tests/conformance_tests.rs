@@ -79,7 +79,9 @@ fn parse_annotation(line: &str) -> Option<Annotation> {
         if let Some(close) = inner.find(']') {
             let tag = &inner[..close];
             if tag.ends_with('+') {
-                return Some(Annotation::TaggedMulti(tag.trim_end_matches('+').to_owned()));
+                return Some(Annotation::TaggedMulti(
+                    tag.trim_end_matches('+').to_owned(),
+                ));
             }
             return Some(Annotation::TaggedExact(tag.to_owned()));
         }
@@ -150,8 +152,15 @@ fn run_file(path: &Path) -> FileResult {
     //          inside match arms but does not require a wildcard `case _:` branch
     // - E0025: missing @override (PEP 698 makes @override optional documentation)
     const STRICTNESS_ONLY: &[&str] = &[
-        "BSK-E0001", "BSK-E0002", "BSK-E0003", "BSK-E0004", "BSK-E0005", "BSK-E0010",
-        "BSK-E0011", "BSK-E0023", "BSK-E0025",
+        "BSK-E0001",
+        "BSK-E0002",
+        "BSK-E0003",
+        "BSK-E0004",
+        "BSK-E0005",
+        "BSK-E0010",
+        "BSK-E0011",
+        "BSK-E0023",
+        "BSK-E0025",
     ];
 
     let Ok(source) = fs::read_to_string(path) else {
@@ -314,11 +323,23 @@ struct Totals {
 fn collect_results(files: &[std::fs::DirEntry]) -> (Totals, CategoryMap, DetailLines) {
     let mut by_category: CategoryMap = BTreeMap::new();
     let mut detail_lines: DetailLines = Vec::new();
-    let mut totals = Totals { files: 0, pass: 0, caught: 0, missed: 0, fp: 0, tag_ok: 0, tag_missed: 0 };
+    let mut totals = Totals {
+        files: 0,
+        pass: 0,
+        caught: 0,
+        missed: 0,
+        fp: 0,
+        tag_ok: 0,
+        tag_missed: 0,
+    };
 
     for entry in files {
         let path = entry.path();
-        let name = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
+        let name = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
         let result = run_file(&path);
         let cat = category(&name).to_owned();
         let counts = by_category.entry(cat).or_insert((0, 0));
@@ -338,24 +359,48 @@ fn collect_results(files: &[std::fs::DirEntry]) -> (Totals, CategoryMap, DetailL
     (totals, by_category, detail_lines)
 }
 
-#[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
 fn print_scorecard(t: &Totals, by_category: &CategoryMap, detail_lines: &DetailLines) {
-    let pct = if t.files > 0 { (t.pass as f64 / t.files as f64) * 100.0 } else { 0.0 };
+    let pct = if t.files > 0 {
+        (t.pass as f64 / t.files as f64) * 100.0
+    } else {
+        0.0
+    };
     let fail = t.files - t.pass;
     println!();
     println!("╔══════════════════════════════════════════════════════════════╗");
     println!("║           BASILISK PEP CONFORMANCE SCORECARD                 ║");
     println!("╠══════════════════════════════════════════════════════════════╣");
-    println!("║  Files:    {:>4} total │ {:>4} pass │ {fail:>4} fail            ║", t.files, t.pass);
+    println!(
+        "║  Files:    {:>4} total │ {:>4} pass │ {fail:>4} fail            ║",
+        t.files, t.pass
+    );
     println!("║  Score:    {pct:.1}%                                           ║");
-    println!("║  Required: {:>4} caught │ {:>4} missed                       ║", t.caught, t.missed);
-    println!("║  Tagged:   {:>4} groups ok │ {:>4} groups missed              ║", t.tag_ok, t.tag_missed);
-    println!("║  False+:   {:>4} unexpected diagnostics                       ║", t.fp);
+    println!(
+        "║  Required: {:>4} caught │ {:>4} missed                       ║",
+        t.caught, t.missed
+    );
+    println!(
+        "║  Tagged:   {:>4} groups ok │ {:>4} groups missed              ║",
+        t.tag_ok, t.tag_missed
+    );
+    println!(
+        "║  False+:   {:>4} unexpected diagnostics                       ║",
+        t.fp
+    );
     println!("╠══════════════════════════════════════════════════════════════╣");
     println!("║  Category breakdown                                          ║");
     println!("╠══════════════════════════════════════════════════════════════╣");
     for (cat, (pass, total)) in by_category {
-        let cat_pct = if *total > 0 { (*pass as f64 / *total as f64) * 100.0 } else { 0.0 };
+        let cat_pct = if *total > 0 {
+            (*pass as f64 / *total as f64) * 100.0
+        } else {
+            0.0
+        };
         let bar_filled = (cat_pct / 5.0).round() as usize;
         let bar = format!("{}{}", "█".repeat(bar_filled), "░".repeat(20 - bar_filled));
         println!("║  {cat:<22} {pass:>2}/{total:<2}  {cat_pct:>5.1}%  {bar}  ║");
@@ -367,7 +412,13 @@ fn print_scorecard(t: &Totals, by_category: &CategoryMap, detail_lines: &DetailL
     for (name, result) in detail_lines {
         if !result.passes() {
             any_fail = true;
-            println!("║  ✗ {:<57} ║", format!("{name} (missed {}, fp {})", result.missed, result.false_positives));
+            println!(
+                "║  ✗ {:<57} ║",
+                format!(
+                    "{name} (missed {}, fp {})",
+                    result.missed, result.false_positives
+                )
+            );
         }
     }
     if !any_fail {

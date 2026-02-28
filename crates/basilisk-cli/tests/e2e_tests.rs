@@ -91,7 +91,10 @@ fn assert_diagnostics(source: &str, diags: &[Diagnostic], expected: &[Expected])
     // Sort by span start, then by code for a stable order when two diagnostics
     // share the same position (e.g. E0025 and E0002 on the same method line).
     sorted.sort_by(|a, b| {
-        a.span.start.cmp(&b.span.start).then(a.code.code.cmp(b.code.code))
+        a.span
+            .start
+            .cmp(&b.span.start)
+            .then(a.code.code.cmp(b.code.code))
     });
 
     assert_eq!(

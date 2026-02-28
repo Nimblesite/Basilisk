@@ -11,7 +11,7 @@ mod visitor;
 pub use scope::{
     AttributeInfo, CallSite, ClassInfo, FunctionInfo, GenericParamInfo, ImportInfo, ImportKind,
     MatchStmtInfo, ParameterInfo, ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo,
-    RevealTypeCallInfo, RhsKind, Span, TypedDictCallInfo, TypedDictSecondArgKind, TypeVarCallInfo,
+    RevealTypeCallInfo, RhsKind, Span, TypeVarCallInfo, TypedDictCallInfo, TypedDictSecondArgKind,
     UnhashableKeyRef, VariableInfo,
 };
 

@@ -30,10 +30,11 @@ fn is_typed_dict_hierarchy(child: &ClassInfo, class_map: &HashMap<&str, &ClassIn
         return true;
     }
     child.bases.iter().any(|base| {
-        class_map.get(base.as_str()).is_some_and(|b| b.is_typed_dict)
+        class_map
+            .get(base.as_str())
+            .is_some_and(|b| b.is_typed_dict)
     })
 }
-
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0017",
@@ -47,8 +48,11 @@ pub(crate) struct IncompatibleVariableOverride;
 impl Rule for IncompatibleVariableOverride {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         // Build map: class_name → &ClassInfo
-        let class_map: HashMap<&str, &ClassInfo> =
-            module.classes.iter().map(|cls| (cls.name.as_str(), cls)).collect();
+        let class_map: HashMap<&str, &ClassInfo> = module
+            .classes
+            .iter()
+            .map(|cls| (cls.name.as_str(), cls))
+            .collect();
 
         // Build map: (class_name, attr_name) → &AttributeInfo
         let attr_map: HashMap<(&str, &str), &AttributeInfo> = module
@@ -160,9 +164,7 @@ fn check_class(
 /// `ReadOnly` or change `Required` to `NotRequired`.  Skip E0017 for these.
 fn uses_typed_dict_qualifier(ann: Option<&str>) -> bool {
     ann.is_some_and(|s| {
-        s.contains("ReadOnly")
-            || s.contains("Required")
-            || s.contains("NotRequired")
+        s.contains("ReadOnly") || s.contains("Required") || s.contains("NotRequired")
     })
 }
 

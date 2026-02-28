@@ -1167,8 +1167,8 @@ fn function_body_attribute_ann_assign_and_bare_return() -> Result<(), Box<dyn st
     let src = concat!(
         "def foo() -> None:\n",
         "    x.y: int = 0\n", // AnnAssign with Attribute target (collect_all_assigns None, line 539)
-        "    z: int\n",        // AnnAssign without value (collect_unhashable_keys None, line 676)
-        "    return\n",        // bare return (collect_unhashable_keys None, line 681)
+        "    z: int\n",       // AnnAssign without value (collect_unhashable_keys None, line 676)
+        "    return\n",       // bare return (collect_unhashable_keys None, line 681)
     )
     .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
@@ -1326,8 +1326,7 @@ fn subscript_decorator_returns_none() -> Result<(), Box<dyn std::error::Error>> 
 /// defined inside a for-loop body must be collected.
 /// Kills the `MatchArm` → empty mutant at visitor.rs:142 / :122.
 #[test]
-fn collect_from_stmt_for_loop_body_has_nested_function() -> Result<(), Box<dyn std::error::Error>>
-{
+fn collect_from_stmt_for_loop_body_has_nested_function() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "def outer() -> None:\n",
         "    for i in range(3):\n",
@@ -1338,7 +1337,10 @@ fn collect_from_stmt_for_loop_body_has_nested_function() -> Result<(), Box<dyn s
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let names: Vec<&str> = resolved.functions.iter().map(|f| f.name.as_str()).collect();
-    assert!(names.contains(&"inner"), "inner must be collected from for-body");
+    assert!(
+        names.contains(&"inner"),
+        "inner must be collected from for-body"
+    );
     Ok(())
 }
 
@@ -1356,7 +1358,10 @@ fn collect_from_stmt_while_body_has_nested_function() -> Result<(), Box<dyn std:
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let names: Vec<&str> = resolved.functions.iter().map(|f| f.name.as_str()).collect();
-    assert!(names.contains(&"inner"), "inner must be collected from while-body");
+    assert!(
+        names.contains(&"inner"),
+        "inner must be collected from while-body"
+    );
     Ok(())
 }
 
@@ -1374,7 +1379,10 @@ fn collect_from_stmt_with_body_has_nested_function() -> Result<(), Box<dyn std::
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let names: Vec<&str> = resolved.functions.iter().map(|f| f.name.as_str()).collect();
-    assert!(names.contains(&"inner"), "inner must be collected from with-body");
+    assert!(
+        names.contains(&"inner"),
+        "inner must be collected from with-body"
+    );
     Ok(())
 }
 
@@ -1398,7 +1406,10 @@ fn collect_from_handlers_collects_function_in_except() -> Result<(), Box<dyn std
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let names: Vec<&str> = resolved.functions.iter().map(|f| f.name.as_str()).collect();
-    assert!(names.contains(&"inner"), "inner must be collected from except handler");
+    assert!(
+        names.contains(&"inner"),
+        "inner must be collected from except handler"
+    );
     Ok(())
 }
 
@@ -1420,8 +1431,15 @@ fn class_info_from_qualified_dataclass_decorator() -> Result<(), Box<dyn std::er
     .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    let cls = resolved.classes.iter().find(|c| c.name == "Point").ok_or("Point not found")?;
-    assert!(cls.is_dataclass, "qualified @dataclasses.dataclass must set is_dataclass");
+    let cls = resolved
+        .classes
+        .iter()
+        .find(|c| c.name == "Point")
+        .ok_or("Point not found")?;
+    assert!(
+        cls.is_dataclass,
+        "qualified @dataclasses.dataclass must set is_dataclass"
+    );
     Ok(())
 }
 
@@ -1438,7 +1456,11 @@ fn class_info_from_bare_dataclass_decorator() -> Result<(), Box<dyn std::error::
     .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    let cls = resolved.classes.iter().find(|c| c.name == "Rect").ok_or("Rect not found")?;
+    let cls = resolved
+        .classes
+        .iter()
+        .find(|c| c.name == "Rect")
+        .ok_or("Rect not found")?;
     assert!(cls.is_dataclass, "bare @dataclass must set is_dataclass");
     Ok(())
 }
@@ -1456,7 +1478,11 @@ fn class_info_from_qualified_final_decorator() -> Result<(), Box<dyn std::error:
     .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    let cls = resolved.classes.iter().find(|c| c.name == "Sealed").ok_or("Sealed not found")?;
+    let cls = resolved
+        .classes
+        .iter()
+        .find(|c| c.name == "Sealed")
+        .ok_or("Sealed not found")?;
     assert!(cls.is_final, "qualified @typing.final must set is_final");
     Ok(())
 }
@@ -1524,7 +1550,11 @@ fn collect_return_stmts_return_inside_for_loop() -> Result<(), Box<dyn std::erro
     .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    let func = resolved.functions.iter().find(|f| f.name == "find").ok_or("find not found")?;
+    let func = resolved
+        .functions
+        .iter()
+        .find(|f| f.name == "find")
+        .ok_or("find not found")?;
     assert!(
         func.return_stmts.len() >= 2,
         "both return stmts must be collected, got {}",
@@ -1549,7 +1579,11 @@ fn collect_unconditional_assigns_ann_assign() -> Result<(), Box<dyn std::error::
     .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    let func = resolved.functions.iter().find(|f| f.name == "foo").ok_or("foo not found")?;
+    let func = resolved
+        .functions
+        .iter()
+        .find(|f| f.name == "foo")
+        .ok_or("foo not found")?;
     assert!(
         func.unconditional_assigns.contains(&"result".to_owned()),
         "annotated assign must appear in unconditional_assigns"
@@ -1568,7 +1602,11 @@ fn collect_unconditional_assigns_for_target() -> Result<(), Box<dyn std::error::
     .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    let func = resolved.functions.iter().find(|f| f.name == "foo").ok_or("foo not found")?;
+    let func = resolved
+        .functions
+        .iter()
+        .find(|f| f.name == "foo")
+        .ok_or("foo not found")?;
     assert!(
         func.unconditional_assigns.contains(&"item".to_owned()),
         "for loop variable must appear in unconditional_assigns"
@@ -1593,10 +1631,16 @@ fn collect_return_name_refs_inside_for_loop() -> Result<(), Box<dyn std::error::
     .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    let func =
-        resolved.functions.iter().find(|f| f.name == "first").ok_or("first not found")?;
-    let names: Vec<&str> =
-        func.return_name_refs.iter().map(|(n, _)| n.as_str()).collect();
+    let func = resolved
+        .functions
+        .iter()
+        .find(|f| f.name == "first")
+        .ok_or("first not found")?;
+    let names: Vec<&str> = func
+        .return_name_refs
+        .iter()
+        .map(|(n, _)| n.as_str())
+        .collect();
     assert!(
         names.contains(&"item"),
         "return inside for loop must be captured in return_name_refs"
@@ -1630,14 +1674,14 @@ fn unhashable_keys_in_assign_stmt() -> Result<(), Box<dyn std::error::Error>> {
 /// Killing this arm would miss unhashable keys in return statements.
 #[test]
 fn unhashable_keys_in_return_stmt() -> Result<(), Box<dyn std::error::Error>> {
-    let src = concat!(
-        "def bad() -> dict:\n",
-        "    return {[1, 2]: 'bad'}\n",
-    )
-    .to_owned();
+    let src = concat!("def bad() -> dict:\n", "    return {[1, 2]: 'bad'}\n",).to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    let func = resolved.functions.iter().find(|f| f.name == "bad").ok_or("bad not found")?;
+    let func = resolved
+        .functions
+        .iter()
+        .find(|f| f.name == "bad")
+        .ok_or("bad not found")?;
     assert!(
         !func.unhashable_keys.is_empty(),
         "unhashable key in return must be collected"
@@ -1649,14 +1693,14 @@ fn unhashable_keys_in_return_stmt() -> Result<(), Box<dyn std::error::Error>> {
 /// Killing the arm misses unhashable keys in standalone expression statements.
 #[test]
 fn unhashable_keys_in_expr_stmt() -> Result<(), Box<dyn std::error::Error>> {
-    let src = concat!(
-        "def f() -> None:\n",
-        "    {[1, 2]: 'key'}\n",
-    )
-    .to_owned();
+    let src = concat!("def f() -> None:\n", "    {[1, 2]: 'key'}\n",).to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    let func = resolved.functions.iter().find(|f| f.name == "f").ok_or("f not found")?;
+    let func = resolved
+        .functions
+        .iter()
+        .find(|f| f.name == "f")
+        .ok_or("f not found")?;
     assert!(
         !func.unhashable_keys.is_empty(),
         "unhashable key in expr stmt must be collected"
@@ -1698,7 +1742,11 @@ fn collect_typevar_calls_returns_entries() -> Result<(), Box<dyn std::error::Err
     .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    assert_eq!(resolved.typevar_calls.len(), 2, "both TypeVars must be collected");
+    assert_eq!(
+        resolved.typevar_calls.len(),
+        2,
+        "both TypeVars must be collected"
+    );
     Ok(())
 }
 
@@ -1709,7 +1757,11 @@ fn collect_typevar_calls_plain_assign_arm() -> Result<(), Box<dyn std::error::Er
     let src = "T = TypeVar('T', int, str)\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    let tv = resolved.typevar_calls.iter().find(|t| t.name == "T").ok_or("T not found")?;
+    let tv = resolved
+        .typevar_calls
+        .iter()
+        .find(|t| t.name == "T")
+        .ok_or("T not found")?;
     assert_eq!(tv.constraint_count, 2);
     Ok(())
 }
@@ -1740,7 +1792,10 @@ fn collect_typevar_calls_qualified_typing_typevar() -> Result<(), Box<dyn std::e
     let src = "T = typing.TypeVar('T', int, str)\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    assert!(!resolved.typevar_calls.is_empty(), "typing.TypeVar must be collected");
+    assert!(
+        !resolved.typevar_calls.is_empty(),
+        "typing.TypeVar must be collected"
+    );
     let tv = &resolved.typevar_calls[0];
     assert_eq!(tv.name, "T");
     assert_eq!(tv.constraint_count, 2);
@@ -1754,7 +1809,10 @@ fn collect_typevar_calls_ignores_non_typevar_calls() -> Result<(), Box<dyn std::
     let src = "T = int('T')\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    assert!(resolved.typevar_calls.is_empty(), "non-TypeVar call must not be collected");
+    assert!(
+        resolved.typevar_calls.is_empty(),
+        "non-TypeVar call must not be collected"
+    );
     Ok(())
 }
 
@@ -1779,20 +1837,33 @@ fn collect_typevar_calls_has_default_true() -> Result<(), Box<dyn std::error::Er
     let src = "T = TypeVar('T', default=int)\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    let tv = resolved.typevar_calls.iter().find(|t| t.name == "T").ok_or("T not found")?;
-    assert!(tv.has_default, "TypeVar with default= must have has_default=true");
+    let tv = resolved
+        .typevar_calls
+        .iter()
+        .find(|t| t.name == "T")
+        .ok_or("T not found")?;
+    assert!(
+        tv.has_default,
+        "TypeVar with default= must have has_default=true"
+    );
     Ok(())
 }
 
 /// Kills `!=` mutant at line 907 — `has_default = false` when no `default=` kwarg.
 #[test]
-fn collect_typevar_calls_has_default_false_when_absent() -> Result<(), Box<dyn std::error::Error>>
-{
+fn collect_typevar_calls_has_default_false_when_absent() -> Result<(), Box<dyn std::error::Error>> {
     let src = "T = TypeVar('T', int, str)\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    let tv = resolved.typevar_calls.iter().find(|t| t.name == "T").ok_or("T not found")?;
-    assert!(!tv.has_default, "TypeVar without default= must have has_default=false");
+    let tv = resolved
+        .typevar_calls
+        .iter()
+        .find(|t| t.name == "T")
+        .ok_or("T not found")?;
+    assert!(
+        !tv.has_default,
+        "TypeVar without default= must have has_default=false"
+    );
     Ok(())
 }
 
@@ -1806,8 +1877,15 @@ fn collect_typevar_calls_ann_assign_has_default() -> Result<(), Box<dyn std::err
     .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    let tv = resolved.typevar_calls.iter().find(|t| t.name == "T").ok_or("T not found")?;
-    assert!(tv.has_default, "annotated TypeVar with default= must have has_default=true");
+    let tv = resolved
+        .typevar_calls
+        .iter()
+        .find(|t| t.name == "T")
+        .ok_or("T not found")?;
+    assert!(
+        tv.has_default,
+        "annotated TypeVar with default= must have has_default=true"
+    );
     Ok(())
 }
 
@@ -1829,8 +1907,16 @@ fn extract_generic_params_collects_multiple_params() -> Result<(), Box<dyn std::
     .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    let cls = resolved.classes.iter().find(|c| c.name == "Pair").ok_or("Pair not found")?;
-    assert_eq!(cls.generic_params.len(), 2, "Generic[T, S] must produce 2 params");
+    let cls = resolved
+        .classes
+        .iter()
+        .find(|c| c.name == "Pair")
+        .ok_or("Pair not found")?;
+    assert_eq!(
+        cls.generic_params.len(),
+        2,
+        "Generic[T, S] must produce 2 params"
+    );
     Ok(())
 }
 
@@ -1849,8 +1935,11 @@ fn extract_generic_params_non_generic_subscript_ignored() -> Result<(), Box<dyn 
     .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    let cls =
-        resolved.classes.iter().find(|c| c.name == "Wrapper").ok_or("Wrapper not found")?;
+    let cls = resolved
+        .classes
+        .iter()
+        .find(|c| c.name == "Wrapper")
+        .ok_or("Wrapper not found")?;
     // list[T] is a subscript but NOT Generic[...] — no params should be extracted
     assert_eq!(
         cls.generic_params.len(),
@@ -1873,8 +1962,16 @@ fn extract_generic_params_single_param() -> Result<(), Box<dyn std::error::Error
     .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    let cls = resolved.classes.iter().find(|c| c.name == "Box").ok_or("Box not found")?;
-    assert_eq!(cls.generic_params.len(), 1, "Generic[T] must produce 1 param");
+    let cls = resolved
+        .classes
+        .iter()
+        .find(|c| c.name == "Box")
+        .ok_or("Box not found")?;
+    assert_eq!(
+        cls.generic_params.len(),
+        1,
+        "Generic[T] must produce 1 param"
+    );
     assert_eq!(cls.generic_params[0].name, "T");
     Ok(())
 }
@@ -1927,9 +2024,19 @@ fn alias_name_preserves_import_name() -> Result<(), Box<dyn std::error::Error>> 
     let src = "from typing import Optional, Union\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    let import = resolved.imports.iter().find(|i| i.module == "typing").ok_or("no typing import")?;
-    assert!(import.names.contains(&"Optional".to_owned()), "Optional must be in import names");
-    assert!(import.names.contains(&"Union".to_owned()), "Union must be in import names");
+    let import = resolved
+        .imports
+        .iter()
+        .find(|i| i.module == "typing")
+        .ok_or("no typing import")?;
+    assert!(
+        import.names.contains(&"Optional".to_owned()),
+        "Optional must be in import names"
+    );
+    assert!(
+        import.names.contains(&"Union".to_owned()),
+        "Union must be in import names"
+    );
     Ok(())
 }
 
@@ -1939,8 +2046,16 @@ fn alias_name_single_name_is_correct() -> Result<(), Box<dyn std::error::Error>>
     let src = "from os.path import join\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    let import = resolved.imports.iter().find(|i| i.module == "os.path").ok_or("no import")?;
-    assert_eq!(import.names, vec!["join".to_owned()], "join must be preserved");
+    let import = resolved
+        .imports
+        .iter()
+        .find(|i| i.module == "os.path")
+        .ok_or("no import")?;
+    assert_eq!(
+        import.names,
+        vec!["join".to_owned()],
+        "join must be preserved"
+    );
     Ok(())
 }
 
@@ -1954,17 +2069,19 @@ fn alias_name_single_name_is_correct() -> Result<(), Box<dyn std::error::Error>>
 #[test]
 fn classify_rhs_empty_list_vs_nonempty() -> Result<(), Box<dyn std::error::Error>> {
     // Use two module vars: one with empty list, one with non-empty.
-    let src = concat!(
-        "empty: list = []\n",
-        "nonempty: list = [1, 2, 3]\n",
-    )
-    .to_owned();
+    let src = concat!("empty: list = []\n", "nonempty: list = [1, 2, 3]\n",).to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    let empty_var =
-        resolved.module_vars.iter().find(|v| v.name == "empty").ok_or("empty not found")?;
-    let nonempty_var =
-        resolved.module_vars.iter().find(|v| v.name == "nonempty").ok_or("nonempty not found")?;
+    let empty_var = resolved
+        .module_vars
+        .iter()
+        .find(|v| v.name == "empty")
+        .ok_or("empty not found")?;
+    let nonempty_var = resolved
+        .module_vars
+        .iter()
+        .find(|v| v.name == "nonempty")
+        .ok_or("nonempty not found")?;
     assert_eq!(
         format!("{:?}", empty_var.rhs_kind),
         "EmptyList",
@@ -1983,21 +2100,19 @@ fn classify_rhs_empty_list_vs_nonempty() -> Result<(), Box<dyn std::error::Error
 /// Replacing the guard with `true` would classify ALL dicts as EmptyDict.
 #[test]
 fn classify_rhs_empty_dict_vs_nonempty() -> Result<(), Box<dyn std::error::Error>> {
-    let src = concat!(
-        "empty: dict = {}\n",
-        "nonempty: dict = {'a': 1}\n",
-    )
-    .to_owned();
+    let src = concat!("empty: dict = {}\n", "nonempty: dict = {'a': 1}\n",).to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    let empty_var =
-        resolved.module_vars.iter().find(|v| v.name == "empty").ok_or("empty not found")?;
-    let nonempty_var =
-        resolved
-            .module_vars
-            .iter()
-            .find(|v| v.name == "nonempty")
-            .ok_or("nonempty not found")?;
+    let empty_var = resolved
+        .module_vars
+        .iter()
+        .find(|v| v.name == "empty")
+        .ok_or("empty not found")?;
+    let nonempty_var = resolved
+        .module_vars
+        .iter()
+        .find(|v| v.name == "nonempty")
+        .ok_or("nonempty not found")?;
     assert_eq!(
         format!("{:?}", empty_var.rhs_kind),
         "EmptyDict",
@@ -2018,8 +2133,7 @@ fn classify_rhs_empty_dict_vs_nonempty() -> Result<(), Box<dyn std::error::Error
 /// `is_wildcard_pattern` — `&&` → `||` mutant at line 1140.
 /// A `MatchAs` with a name is NOT a wildcard; one with neither name nor pattern IS.
 #[test]
-fn is_wildcard_pattern_named_match_as_is_not_wildcard() -> Result<(), Box<dyn std::error::Error>>
-{
+fn is_wildcard_pattern_named_match_as_is_not_wildcard() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "x = 1\n",
         "match x:\n",
@@ -2054,7 +2168,10 @@ fn is_wildcard_pattern_bare_wildcard() -> Result<(), Box<dyn std::error::Error>>
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let stmt = resolved.match_stmts.iter().next().ok_or("no match stmt")?;
-    assert!(stmt.has_wildcard, "bare `case _:` must set has_wildcard=true");
+    assert!(
+        stmt.has_wildcard,
+        "bare `case _:` must set has_wildcard=true"
+    );
     Ok(())
 }
 
@@ -2147,9 +2264,9 @@ fn reveal_type_inside_match_collected() -> Result<(), Box<dyn std::error::Error>
 #[test]
 fn reveal_type_calls_only_matches_reveal_type() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
-        "print(42)\n",          // NOT reveal_type — must not be collected
-        "reveal_type(42)\n",    // IS reveal_type — must be collected
-        "assert_type(42)\n",    // NOT reveal_type — must not be collected
+        "print(42)\n",       // NOT reveal_type — must not be collected
+        "reveal_type(42)\n", // IS reveal_type — must be collected
+        "assert_type(42)\n", // NOT reveal_type — must not be collected
     )
     .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
@@ -2170,11 +2287,7 @@ fn reveal_type_calls_only_matches_reveal_type() -> Result<(), Box<dyn std::error
 /// assert_type calls must be returned, not an empty vec.
 #[test]
 fn collect_special_calls_assert_type_returns_entries() -> Result<(), Box<dyn std::error::Error>> {
-    let src = concat!(
-        "assert_type(1, int)\n",
-        "assert_type('hello', str)\n",
-    )
-    .to_owned();
+    let src = concat!("assert_type(1, int)\n", "assert_type('hello', str)\n",).to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert_eq!(
@@ -2190,9 +2303,9 @@ fn collect_special_calls_assert_type_returns_entries() -> Result<(), Box<dyn std
 #[test]
 fn collect_special_calls_only_matches_exact_name() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
-        "print(1)\n",           // NOT assert_type
-        "assert_type(1)\n",     // IS assert_type
-        "reveal_type(1)\n",     // NOT assert_type
+        "print(1)\n",       // NOT assert_type
+        "assert_type(1)\n", // IS assert_type
+        "reveal_type(1)\n", // NOT assert_type
     )
     .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
@@ -2209,11 +2322,7 @@ fn collect_special_calls_only_matches_exact_name() -> Result<(), Box<dyn std::er
 /// `assert_type` inside a function body must be collected.
 #[test]
 fn collect_special_calls_inside_function_def() -> Result<(), Box<dyn std::error::Error>> {
-    let src = concat!(
-        "def foo() -> None:\n",
-        "    assert_type(1, int)\n",
-    )
-    .to_owned();
+    let src = concat!("def foo() -> None:\n", "    assert_type(1, int)\n",).to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(
@@ -2227,11 +2336,7 @@ fn collect_special_calls_inside_function_def() -> Result<(), Box<dyn std::error:
 /// `assert_type` inside a class body must be collected.
 #[test]
 fn collect_special_calls_inside_class_def() -> Result<(), Box<dyn std::error::Error>> {
-    let src = concat!(
-        "class Foo:\n",
-        "    assert_type(1, int)\n",
-    )
-    .to_owned();
+    let src = concat!("class Foo:\n", "    assert_type(1, int)\n",).to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(
@@ -2245,12 +2350,7 @@ fn collect_special_calls_inside_class_def() -> Result<(), Box<dyn std::error::Er
 /// `assert_type` inside an if body must be collected.
 #[test]
 fn collect_special_calls_inside_if() -> Result<(), Box<dyn std::error::Error>> {
-    let src = concat!(
-        "x: int = 1\n",
-        "if x > 0:\n",
-        "    assert_type(x, int)\n",
-    )
-    .to_owned();
+    let src = concat!("x: int = 1\n", "if x > 0:\n", "    assert_type(x, int)\n",).to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(
@@ -2264,11 +2364,7 @@ fn collect_special_calls_inside_if() -> Result<(), Box<dyn std::error::Error>> {
 /// `assert_type` inside a for body must be collected.
 #[test]
 fn collect_special_calls_inside_for() -> Result<(), Box<dyn std::error::Error>> {
-    let src = concat!(
-        "for i in range(3):\n",
-        "    assert_type(i, int)\n",
-    )
-    .to_owned();
+    let src = concat!("for i in range(3):\n", "    assert_type(i, int)\n",).to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(
@@ -2374,7 +2470,10 @@ fn annotation_flags_none_name_is_none_not_other() -> Result<(), Box<dyn std::err
     let parsed_none = parse_source(src_none, "test.py".to_owned())?;
     let resolved_none = resolve(&parsed_none)?;
     assert!(
-        matches!(resolved_none.functions[0].return_annotation, ReturnAnnotationKind::NoneType),
+        matches!(
+            resolved_none.functions[0].return_annotation,
+            ReturnAnnotationKind::NoneType
+        ),
         "-> None must be NoneType"
     );
     // "int" → Other (not NoneType, not Any)
@@ -2382,7 +2481,10 @@ fn annotation_flags_none_name_is_none_not_other() -> Result<(), Box<dyn std::err
     let parsed_int = parse_source(src_int, "test.py".to_owned())?;
     let resolved_int = resolve(&parsed_int)?;
     assert!(
-        matches!(resolved_int.functions[0].return_annotation, ReturnAnnotationKind::Other),
+        matches!(
+            resolved_int.functions[0].return_annotation,
+            ReturnAnnotationKind::Other
+        ),
         "-> int must be Other, not NoneType"
     );
     Ok(())
@@ -2417,8 +2519,7 @@ fn collect_typeddict_calls_returns_entries() -> Result<(), Box<dyn std::error::E
 /// `collect_typeddict_calls` — `==` → `!=` at line 1358 for simple callee name.
 /// Only `TypedDict` by name must match; other names must be skipped.
 #[test]
-fn collect_typeddict_calls_only_matches_typeddict_name() -> Result<(), Box<dyn std::error::Error>>
-{
+fn collect_typeddict_calls_only_matches_typeddict_name() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         r#"NotTypedDict = dict("Name", {"x": int})"#,
         "\n",
@@ -2462,11 +2563,7 @@ fn collect_typeddict_calls_qualified_typing_typeddict() -> Result<(), Box<dyn st
 /// A dict with a non-string key must set `has_non_string_key = true`.
 #[test]
 fn collect_typeddict_calls_non_string_key_detected() -> Result<(), Box<dyn std::error::Error>> {
-    let src = concat!(
-        r#"Movie = TypedDict("Movie", {1: str})"#,
-        "\n",
-    )
-    .to_owned();
+    let src = concat!(r#"Movie = TypedDict("Movie", {1: str})"#, "\n",).to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert_eq!(resolved.typeddict_calls.len(), 1);
@@ -2522,11 +2619,7 @@ fn collect_typeddict_calls_non_dict_second_arg() -> Result<(), Box<dyn std::erro
 /// Exercises the else branch at line 1395.
 #[test]
 fn collect_typeddict_calls_keyword_only_form() -> Result<(), Box<dyn std::error::Error>> {
-    let src = concat!(
-        r#"Movie = TypedDict("Movie", name=str, year=int)"#,
-        "\n",
-    )
-    .to_owned();
+    let src = concat!(r#"Movie = TypedDict("Movie", name=str, year=int)"#, "\n",).to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert_eq!(resolved.typeddict_calls.len(), 1);
