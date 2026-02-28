@@ -53,37 +53,63 @@ impl Rule for MissingOverloadImpl {
         }
 
         for ((class_name, name), funcs) in &groups {
-            // A group is interesting only if it has 2+ overloads.
-            if funcs.len() < 2 {
+            let overloaded: Vec<&&FunctionInfo> = funcs
+                .iter()
+                .filter(|f| has_decorator(&f.decorators, "overload"))
+                .collect();
+
+            // No @overload decorators in this group — nothing to check.
+            if overloaded.is_empty() {
                 continue;
             }
 
-            // Exempt overload groups inside Protocol or ABC classes — stubs
-            // in Protocol bodies and abstract base classes never need a concrete impl.
-            if let Some(cls) = class_name {
-                if exempt_classes.contains(*cls) {
+            let non_overloaded: Vec<&&FunctionInfo> = funcs
+                .iter()
+                .filter(|f| !has_decorator(&f.decorators, "overload"))
+                .collect();
+
+            // Case 1: ALL definitions carry @overload (no implementation).
+            // Exempt Protocol/ABC classes — they never need a concrete impl.
+            // Also require at least 2 @overload signatures — a lone @overload in
+            // a stub or protocol declaration is common and must not be flagged.
+            if non_overloaded.is_empty() {
+                if overloaded.len() < 2 {
                     continue;
                 }
-            }
+                let is_exempt_class = class_name
+                    .map(|cls| exempt_classes.contains(cls))
+                    .unwrap_or(false);
+                let has_abstract = overloaded
+                    .iter()
+                    .any(|f| has_decorator(&f.decorators, "abstractmethod"));
 
-            // Exempt if any overload in the group has @abstractmethod.
-            let has_abstract = funcs
-                .iter()
-                .any(|f| has_decorator(&f.decorators, "abstractmethod"));
-            if has_abstract {
+                if !is_exempt_class && !has_abstract {
+                    if let Some(first) = overloaded.first() {
+                        diagnostics.push(make_diagnostic(
+                            first,
+                            name,
+                            overloaded.len(),
+                            &module.path,
+                        ));
+                    }
+                }
                 continue;
             }
 
-            let all_overloaded = funcs
-                .iter()
-                .all(|func| has_decorator(&func.decorators, "overload"));
-
-            if all_overloaded {
-                // Use the span of the first definition as the diagnostic anchor.
-                if let Some(first) = funcs.first() {
-                    diagnostics.push(make_diagnostic(first, name, funcs.len(), &module.path));
+            // Case 2: Has at least one @overload AND at least one non-overload
+            // implementation, but only exactly 1 @overload — invalid because at
+            // least two @overload signatures are required.
+            if overloaded.len() == 1 {
+                if let Some(first) = overloaded.first() {
+                    diagnostics.push(make_single_overload_diagnostic(
+                        first,
+                        name,
+                        &module.path,
+                    ));
                 }
             }
+
+            // Case 3: 2+ @overload + at least 1 non-overload implementation — valid.
         }
     }
 }
@@ -118,6 +144,29 @@ fn make_diagnostic(
         )),
         note: Some(
             "`@overload` signatures are type-only; a concrete implementation is required at runtime"
+                .to_owned(),
+        ),
+    }
+}
+
+fn make_single_overload_diagnostic(
+    first_func: &FunctionInfo,
+    name: &str,
+    path: &str,
+) -> Diagnostic {
+    Diagnostic {
+        code: CODE.clone(),
+        severity: Severity::Error,
+        message: format!(
+            "Function `{name}` has only 1 `@overload` signature — at least two are required",
+        ),
+        span: first_func.name_span,
+        path: path.to_owned(),
+        help: Some(format!(
+            "Add at least one more `@overload`-decorated signature for `{name}`"
+        )),
+        note: Some(
+            "Python's `@overload` protocol requires at least two type signatures before the implementation"
                 .to_owned(),
         ),
     }

@@ -1,5 +1,7 @@
 //! AST visitor that collects function definitions and module-level information.
 
+const ENUM_BASES: &[&str] = &["Enum", "IntEnum", "StrEnum", "Flag", "IntFlag", "ReprEnum"];
+
 use ruff_python_ast::{
     Alias, Decorator, ElifElseClause, ExceptHandler, Expr, MatchCase, Parameter,
     ParameterWithDefault, Pattern, Stmt, StmtAnnAssign, StmtAssign, StmtClassDef, StmtFunctionDef,
@@ -11,8 +13,9 @@ use basilisk_parser::ParsedModule;
 
 use crate::scope::{
     AttributeInfo, CallSite, ClassInfo, FunctionInfo, GenericParamInfo, ImportInfo, ImportKind,
-    MatchStmtInfo, ParameterInfo, ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo, RhsKind,
-    Span, TypeVarCallInfo, UnhashableKeyRef, VariableInfo,
+    MatchStmtInfo, ParameterInfo, ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo,
+    RevealTypeCallInfo, RhsKind, Span, TypedDictCallInfo, TypedDictSecondArgKind, TypeVarCallInfo,
+    UnhashableKeyRef, VariableInfo,
 };
 
 /// Collect all function definitions and module-level data from the parsed module.
@@ -35,6 +38,9 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
 
     let calls = collect_module_level_calls(&module.ast.body);
     let typevar_calls = collect_typevar_calls(&module.ast.body);
+    let reveal_type_calls = collect_reveal_type_calls(&module.ast.body);
+    let assert_type_calls = collect_special_calls(&module.ast.body, "assert_type");
+    let typeddict_calls = collect_typeddict_calls(&module.ast.body);
 
     ResolvedModule {
         functions,
@@ -44,6 +50,9 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         match_stmts,
         calls,
         typevar_calls,
+        reveal_type_calls,
+        assert_type_calls,
+        typeddict_calls,
         path: module.path.clone(),
         source: module.source.clone(),
     }
@@ -388,6 +397,12 @@ fn class_info_from(
         .iter()
         .any(|d| d == "dataclass" || d.ends_with(".dataclass"));
 
+    let is_final = class_decorators
+        .iter()
+        .any(|d| d == "final" || d.rsplit('.').next() == Some("final"));
+
+    let is_enum = bases.iter().any(|b| ENUM_BASES.contains(&b.as_str()));
+
     ClassInfo {
         name: class.name.to_string(),
         name_span: text_range_to_span(class.name.range),
@@ -400,6 +415,8 @@ fn class_info_from(
         is_typed_dict,
         class_keywords,
         is_dataclass,
+        is_final,
+        is_enum,
     }
 }
 
@@ -447,6 +464,7 @@ fn function_info_from(func: &StmtFunctionDef, class_name: Option<String>) -> Fun
     let all_local_assigns = collect_all_assigns(&func.body);
     let unconditional_assigns = collect_unconditional_assigns(&func.body);
     let return_name_refs = collect_return_name_refs(&func.body);
+    let top_level_return_name_refs = collect_top_level_return_name_refs(&func.body);
     let unhashable_keys = collect_unhashable_keys_from_stmts(&func.body);
     let is_stub_body = body_is_stub(&func.body);
 
@@ -465,6 +483,7 @@ fn function_info_from(func: &StmtFunctionDef, class_name: Option<String>) -> Fun
         all_local_assigns,
         unconditional_assigns,
         return_name_refs,
+        top_level_return_name_refs,
         unhashable_keys,
         is_stub_body,
     }
@@ -489,7 +508,9 @@ fn body_is_stub(stmts: &[Stmt]) -> bool {
 }
 
 fn param_with_default_to_info(p: &ParameterWithDefault) -> ParameterInfo {
-    parameter_to_info(&p.parameter)
+    let mut info = parameter_to_info(&p.parameter);
+    info.has_default = p.default.is_some();
+    info
 }
 
 fn parameter_to_info(p: &Parameter) -> ParameterInfo {
@@ -504,6 +525,7 @@ fn parameter_to_info(p: &Parameter) -> ParameterInfo {
         has_annotation: p.annotation.is_some(),
         annotation_is_any,
         annotation_is_numeric_literal,
+        has_default: false,
         name_span: text_range_to_span(p.name.range),
         annotation_span: p
             .annotation
@@ -703,6 +725,27 @@ fn collect_return_name_refs(stmts: &[Stmt]) -> Vec<(String, Span)> {
     out
 }
 
+/// Collects `return <name>` references from the TOP LEVEL of a function body only.
+///
+/// Unlike [`collect_return_name_refs`], this does NOT recurse into `if`/`for`/
+/// `while`/`try`/`with` blocks.  A `return name` inside a conditional branch will
+/// only execute when that branch is taken, so `name` is always bound at that point
+/// if it was assigned earlier in the same branch.  Recursing would produce false
+/// positives; this conservative variant is used by E0019.
+fn collect_top_level_return_name_refs(stmts: &[Stmt]) -> Vec<(String, Span)> {
+    stmts
+        .iter()
+        .filter_map(|stmt| {
+            if let Stmt::Return(ret) = stmt {
+                if let Some(Expr::Name(name)) = ret.value.as_deref() {
+                    return Some((name.id.to_string(), text_range_to_span(name.range)));
+                }
+            }
+            None
+        })
+        .collect()
+}
+
 // ---------------------------------------------------------------------------
 // Unhashable key collection
 // ---------------------------------------------------------------------------
@@ -888,10 +931,16 @@ fn collect_typevar_calls(stmts: &[Stmt]) -> Vec<TypeVarCallInfo> {
                     .keywords
                     .iter()
                     .any(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "default"));
+                let has_bound = call
+                    .arguments
+                    .keywords
+                    .iter()
+                    .any(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "bound"));
                 out.push(TypeVarCallInfo {
                     name,
                     constraint_count,
                     has_default,
+                    has_bound,
                     span: text_range_to_span(call.range()),
                 });
             }
@@ -923,10 +972,16 @@ fn collect_typevar_calls(stmts: &[Stmt]) -> Vec<TypeVarCallInfo> {
                     .keywords
                     .iter()
                     .any(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "default"));
+                let has_bound = call
+                    .arguments
+                    .keywords
+                    .iter()
+                    .any(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "bound"));
                 out.push(TypeVarCallInfo {
                     name,
                     constraint_count,
                     has_default,
+                    has_bound,
                     span: text_range_to_span(call.range()),
                 });
             }
@@ -934,6 +989,144 @@ fn collect_typevar_calls(stmts: &[Stmt]) -> Vec<TypeVarCallInfo> {
         }
     }
     out
+}
+
+/// Collect all `reveal_type(...)` calls found anywhere in the module body.
+fn collect_reveal_type_calls(stmts: &[Stmt]) -> Vec<RevealTypeCallInfo> {
+    let mut out = Vec::new();
+    collect_reveal_type_calls_from_stmts(stmts, &mut out);
+    out
+}
+
+fn collect_reveal_type_calls_from_stmts(stmts: &[Stmt], out: &mut Vec<RevealTypeCallInfo>) {
+    for stmt in stmts {
+        collect_reveal_type_calls_from_stmt(stmt, out);
+    }
+}
+
+fn collect_reveal_type_calls_from_stmt(stmt: &Stmt, out: &mut Vec<RevealTypeCallInfo>) {
+    match stmt {
+        Stmt::Expr(node) => {
+            if let Expr::Call(call) = node.value.as_ref() {
+                let is_reveal_type = expr_simple_name(&call.func)
+                    .is_some_and(|n| n == "reveal_type");
+                if is_reveal_type {
+                    out.push(RevealTypeCallInfo {
+                        arg_count: call.arguments.args.len(),
+                        span: text_range_to_span(call.range()),
+                    });
+                }
+            }
+        }
+        Stmt::FunctionDef(func) => {
+            collect_reveal_type_calls_from_stmts(&func.body, out);
+        }
+        Stmt::ClassDef(cls) => {
+            collect_reveal_type_calls_from_stmts(&cls.body, out);
+        }
+        Stmt::If(node) => {
+            collect_reveal_type_calls_from_stmts(&node.body, out);
+            for elif_else in &node.elif_else_clauses {
+                collect_reveal_type_calls_from_stmts(&elif_else.body, out);
+            }
+        }
+        Stmt::For(node) => {
+            collect_reveal_type_calls_from_stmts(&node.body, out);
+            collect_reveal_type_calls_from_stmts(&node.orelse, out);
+        }
+        Stmt::While(node) => {
+            collect_reveal_type_calls_from_stmts(&node.body, out);
+            collect_reveal_type_calls_from_stmts(&node.orelse, out);
+        }
+        Stmt::With(node) => {
+            collect_reveal_type_calls_from_stmts(&node.body, out);
+        }
+        Stmt::Try(node) => {
+            collect_reveal_type_calls_from_stmts(&node.body, out);
+            for handler in &node.handlers {
+                let ExceptHandler::ExceptHandler(h) = handler;
+                collect_reveal_type_calls_from_stmts(&h.body, out);
+            }
+            collect_reveal_type_calls_from_stmts(&node.orelse, out);
+            collect_reveal_type_calls_from_stmts(&node.finalbody, out);
+        }
+        Stmt::Match(node) => {
+            for case in &node.cases {
+                collect_reveal_type_calls_from_stmts(&case.body, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Collect all calls to a specific function name found anywhere in the module body.
+///
+/// Reuses `RevealTypeCallInfo` to record the argument count and span.
+fn collect_special_calls(stmts: &[Stmt], func_name: &str) -> Vec<RevealTypeCallInfo> {
+    let mut out = Vec::new();
+    collect_special_calls_from_stmts(stmts, func_name, &mut out);
+    out
+}
+
+fn collect_special_calls_from_stmts(stmts: &[Stmt], func_name: &str, out: &mut Vec<RevealTypeCallInfo>) {
+    for stmt in stmts {
+        collect_special_calls_from_stmt(stmt, func_name, out);
+    }
+}
+
+fn collect_special_calls_from_stmt(stmt: &Stmt, func_name: &str, out: &mut Vec<RevealTypeCallInfo>) {
+    match stmt {
+        Stmt::Expr(node) => {
+            if let Expr::Call(call) = node.value.as_ref() {
+                let is_target = expr_simple_name(&call.func)
+                    .is_some_and(|n| n == func_name);
+                if is_target {
+                    out.push(RevealTypeCallInfo {
+                        arg_count: call.arguments.args.len(),
+                        span: text_range_to_span(call.range()),
+                    });
+                }
+            }
+        }
+        Stmt::FunctionDef(func) => {
+            collect_special_calls_from_stmts(&func.body, func_name, out);
+        }
+        Stmt::ClassDef(cls) => {
+            collect_special_calls_from_stmts(&cls.body, func_name, out);
+        }
+        Stmt::If(node) => {
+            collect_special_calls_from_stmts(&node.body, func_name, out);
+            for elif_else in &node.elif_else_clauses {
+                collect_special_calls_from_stmts(&elif_else.body, func_name, out);
+            }
+        }
+        Stmt::For(node) => {
+            collect_special_calls_from_stmts(&node.body, func_name, out);
+            collect_special_calls_from_stmts(&node.orelse, func_name, out);
+        }
+        Stmt::While(node) => {
+            collect_special_calls_from_stmts(&node.body, func_name, out);
+            collect_special_calls_from_stmts(&node.orelse, func_name, out);
+        }
+        Stmt::With(node) => {
+            collect_special_calls_from_stmts(&node.body, func_name, out);
+        }
+        Stmt::Try(node) => {
+            collect_special_calls_from_stmts(&node.body, func_name, out);
+            for handler in &node.handlers {
+                let ExceptHandler::ExceptHandler(h) = handler;
+                collect_special_calls_from_stmts(&h.body, func_name, out);
+            }
+            collect_special_calls_from_stmts(&node.orelse, func_name, out);
+            collect_special_calls_from_stmts(&node.finalbody, func_name, out);
+        }
+        Stmt::Match(node) => {
+            for case in &node.cases {
+                collect_special_calls_from_stmts(&case.body, func_name, out);
+            }
+        }
+        _ => {}
+    }
 }
 
 /// Extract `Generic[T, ...]` type parameter names from a class definition.
@@ -980,9 +1173,11 @@ fn call_site_from_expr(expr: &Expr) -> Option<CallSite> {
         .iter()
         .map(|arg| (classify_rhs(arg), text_range_to_span(arg.range())))
         .collect();
+    let keyword_count = call.arguments.keywords.len();
     Some(CallSite {
         callee,
         args,
+        keyword_count,
         span: text_range_to_span(call.range()),
     })
 }
@@ -1075,6 +1270,7 @@ fn alias_name(alias: &Alias) -> String {
 
 fn assign_infos_from(node: &StmtAssign) -> Vec<VariableInfo> {
     let rhs_kind = classify_rhs(&node.value);
+    let rhs_span = Some(text_range_to_span(node.value.range()));
     node.targets
         .iter()
         .filter_map(|target| {
@@ -1083,6 +1279,8 @@ fn assign_infos_from(node: &StmtAssign) -> Vec<VariableInfo> {
                 name_span: text_range_to_span(target.range()),
                 has_annotation: false,
                 rhs_kind: rhs_kind.clone(),
+                annotation_span: None,
+                rhs_span,
             })
         })
         .collect()
@@ -1091,11 +1289,15 @@ fn assign_infos_from(node: &StmtAssign) -> Vec<VariableInfo> {
 fn ann_assign_info_from(node: &StmtAnnAssign) -> Option<VariableInfo> {
     let name = expr_simple_name(&node.target)?;
     let rhs_kind = node.value.as_deref().map_or(RhsKind::Other, classify_rhs);
+    let annotation_span = Some(text_range_to_span(node.annotation.range()));
+    let rhs_span = node.value.as_deref().map(|v| text_range_to_span(v.range()));
     Some(VariableInfo {
         name,
         name_span: text_range_to_span(node.target.range()),
         has_annotation: true,
         rhs_kind,
+        annotation_span,
+        rhs_span,
     })
 }
 
@@ -1161,6 +1363,82 @@ fn decorator_name(dec: &Decorator) -> Option<String> {
 }
 
 // ---------------------------------------------------------------------------
+// TypedDict functional-syntax call collection
+// ---------------------------------------------------------------------------
+
+/// Collect module-level `TypedDict(...)` functional-syntax call sites.
+///
+/// Matches assignments of the form `Name = TypedDict("Name", {...}, ...)`.
+fn collect_typeddict_calls(stmts: &[Stmt]) -> Vec<TypedDictCallInfo> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        let Stmt::Assign(node) = stmt else { continue };
+        let Expr::Call(call) = node.value.as_ref() else { continue };
+        // Callee must be `TypedDict` or `typing.TypedDict`.
+        let is_typeddict = if let Some(name) = expr_simple_name(&call.func) {
+            name == "TypedDict"
+        } else if let Expr::Attribute(attr) = call.func.as_ref() {
+            attr.attr.as_str() == "TypedDict"
+        } else {
+            false
+        };
+        if !is_typeddict {
+            continue;
+        }
+        // Determine the LHS name.
+        let Some(lhs_name) = node.targets.first().and_then(expr_simple_name) else {
+            continue;
+        };
+        // First positional arg: the declared name (must be a string literal).
+        let declared_name = call.arguments.args.first().and_then(|arg| {
+            if let Expr::StringLiteral(s) = arg {
+                Some(s.value.to_string())
+            } else {
+                None
+            }
+        });
+        // Second positional arg: expected to be a dict literal.
+        let has_positional_dict;
+        let (second_arg_kind, has_non_string_key) =
+            if let Some(second_arg) = call.arguments.args.get(1) {
+                has_positional_dict = true;
+                if let Expr::Dict(dict) = second_arg {
+                    // Check if every key is a string literal.
+                    let non_string = dict.items.iter().any(|item| {
+                        item.key.as_ref().is_some_and(|k| {
+                            !matches!(k, Expr::StringLiteral(_))
+                        })
+                    });
+                    (TypedDictSecondArgKind::DictLiteral, non_string)
+                } else {
+                    (TypedDictSecondArgKind::NotDictLiteral, false)
+                }
+            } else {
+                // No second arg — keyword syntax or zero args; treat as dict literal
+                // variant since we don't flag keyword-only syntax here.
+                has_positional_dict = false;
+                (TypedDictSecondArgKind::DictLiteral, false)
+            };
+        let keyword_names: Vec<String> = call
+            .arguments
+            .keywords
+            .iter()
+            .filter_map(|kw| kw.arg.as_ref().map(std::string::ToString::to_string))
+            .collect();
+        out.push(TypedDictCallInfo {
+            lhs_name,
+            declared_name,
+            second_arg_kind,
+            has_non_string_key,
+            has_positional_dict,
+            keyword_names,
+            span: text_range_to_span(call.range()),
+        });
+    }
+    out
+}
+
+// ---------------------------------------------------------------------------
 // Shared utilities
 // ---------------------------------------------------------------------------
 
@@ -1177,3 +1455,4 @@ fn text_range_to_span(range: TextRange) -> Span {
         end: range.end().to_u32(),
     }
 }
+

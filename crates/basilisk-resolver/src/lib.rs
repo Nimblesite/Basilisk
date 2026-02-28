@@ -10,8 +10,9 @@ mod visitor;
 
 pub use scope::{
     AttributeInfo, CallSite, ClassInfo, FunctionInfo, GenericParamInfo, ImportInfo, ImportKind,
-    MatchStmtInfo, ParameterInfo, ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo, RhsKind,
-    Span, TypeVarCallInfo, UnhashableKeyRef, VariableInfo,
+    MatchStmtInfo, ParameterInfo, ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo,
+    RevealTypeCallInfo, RhsKind, Span, TypedDictCallInfo, TypedDictSecondArgKind, TypeVarCallInfo,
+    UnhashableKeyRef, VariableInfo,
 };
 
 use basilisk_parser::ParsedModule;

@@ -37,7 +37,9 @@ impl Rule for UnboundVariable {
 fn check_function(func: &FunctionInfo, path: &str, out: &mut Vec<Diagnostic>) {
     let param_names: Vec<&str> = func.parameters.iter().map(|p| p.name.as_str()).collect();
 
-    for (name, span) in &func.return_name_refs {
+    // Use top_level_return_name_refs to avoid false positives where a `return name`
+    // is inside the same conditional branch that assigned `name`.
+    for (name, span) in &func.top_level_return_name_refs {
         // Skip parameter names — always bound.
         if param_names.contains(&name.as_str()) {
             continue;

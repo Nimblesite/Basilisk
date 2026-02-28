@@ -140,6 +140,10 @@ Key diagnostic ranges defined in SPEC.md:
 - `E004x`: Immutability violations (mutation of immutable param, reassignment of parameter)
 - `E005x / E006x`: Structural discipline and implicit coercion
 
+## Alternative Ecosystems
+
+Pyright is the gold standard that Basilisk must compare itself to. You can [view the code here](https://github.com/microsoft/pyright) as a reference, but NEVER copy any of the code from the Pyright codebase.
+
 ## Stub Quality Tiers
 
 Tier 1 (typeshed, hand-written) → Tier 2 (community-reviewed auto-generated) → Tier 3 (best-effort inference). Tier 1 bundled with the binary; user stub paths override in order.

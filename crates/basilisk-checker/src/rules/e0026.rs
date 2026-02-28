@@ -15,7 +15,8 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://basilisk-lang.org/errors/BSK-E0026",
 };
 
-/// Emits BSK-E0026 when a `TypeVar` is declared with exactly one constraint.
+/// Emits BSK-E0026 when a `TypeVar` is declared with exactly one constraint,
+/// or when it has both constraints and a `bound=` keyword argument.
 pub(crate) struct TypeVarSingleConstraint;
 
 impl Rule for TypeVarSingleConstraint {
@@ -36,6 +37,25 @@ impl Rule for TypeVarSingleConstraint {
                     ),
                     note: Some(
                         "PEP 484: a TypeVar with one constraint is invalid".to_owned(),
+                    ),
+                });
+            }
+            // Cannot specify both constraints and a bound.
+            if tv.constraint_count >= 2 && tv.has_bound {
+                diagnostics.push(Diagnostic {
+                    code: CODE.clone(),
+                    severity: Severity::Error,
+                    message: format!(
+                        "`{}` specifies both constraints and `bound=`; these are mutually exclusive",
+                        tv.name
+                    ),
+                    span: tv.span,
+                    path: module.path.clone(),
+                    help: Some(
+                        "Use either constraints (positional type args) or `bound=`, not both".to_owned(),
+                    ),
+                    note: Some(
+                        "PEP 484: `TypeVar` cannot have both constraints and a `bound`".to_owned(),
                     ),
                 });
             }

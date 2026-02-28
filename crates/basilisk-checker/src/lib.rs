@@ -9,6 +9,7 @@ pub mod rules;
 pub use diagnostic::{Diagnostic, ErrorCode, Severity};
 
 /// Run all rules and filter out diagnostics on lines suppressed by `# type: ignore`.
+#[must_use]
 pub fn check(module: &basilisk_resolver::ResolvedModule) -> Vec<Diagnostic> {
     let raw = rules::run_all(module);
     raw.into_iter()

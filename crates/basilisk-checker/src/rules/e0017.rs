@@ -34,6 +34,7 @@ fn is_typed_dict_hierarchy(child: &ClassInfo, class_map: &HashMap<&str, &ClassIn
     })
 }
 
+
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0017",
     docs_url: "https://basilisk-lang.org/errors/BSK-E0017",
@@ -71,6 +72,7 @@ impl Rule for IncompatibleVariableOverride {
                 child,
                 &attr_map,
                 &class_names,
+                &class_map,
                 &module.source,
                 &module.path,
                 diagnostics,
@@ -83,6 +85,7 @@ fn check_class(
     child: &ClassInfo,
     attr_map: &HashMap<(&str, &str), &AttributeInfo>,
     class_names: &[&str],
+    class_map: &HashMap<&str, &ClassInfo>,
     source: &str,
     path: &str,
     out: &mut Vec<Diagnostic>,
@@ -91,6 +94,10 @@ fn check_class(
         if !class_names.contains(&base_name.as_str()) {
             continue;
         }
+
+        let base_is_dataclass = class_map
+            .get(base_name.as_str())
+            .is_some_and(|b| b.is_dataclass);
 
         for child_attr in &child.attributes {
             // Only check annotated attributes in child.
@@ -116,6 +123,19 @@ fn check_class(
             // NotRequired, etc. — string comparison cannot verify compatibility here.
             if uses_typed_dict_qualifier(child_ann) || uses_typed_dict_qualifier(base_ann) {
                 continue;
+            }
+
+            // When both the child and the base are dataclasses, a non-`ClassVar`
+            // annotation change is allowed (frozen dataclasses support covariant
+            // attribute overrides).  We still flag `ClassVar` vs instance-variable
+            // mismatches because those are always errors in dataclasses.
+            if child.is_dataclass && base_is_dataclass {
+                let child_is_classvar = child_ann.is_some_and(|s| s.contains("ClassVar"));
+                let base_is_classvar = base_ann.is_some_and(|s| s.contains("ClassVar"));
+                if child_is_classvar == base_is_classvar {
+                    // Same ClassVar-ness: allow the override (frozen covariance).
+                    continue;
+                }
             }
 
             if child_ann != base_ann {

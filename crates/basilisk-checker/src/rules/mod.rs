@@ -31,6 +31,15 @@ pub(crate) mod e0029;
 pub(crate) mod e0030;
 pub(crate) mod e0031;
 pub(crate) mod e0032;
+pub(crate) mod e0033;
+pub(crate) mod e0034;
+pub(crate) mod e0035;
+pub(crate) mod e0036;
+pub(crate) mod e0037;
+pub(crate) mod e0038;
+pub(crate) mod e0039;
+pub(crate) mod e0040;
+pub(crate) mod e0041;
 
 use basilisk_resolver::ResolvedModule;
 
@@ -73,6 +82,15 @@ pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
         &e0030::NonDefaultAfterDefault,
         &e0031::InvalidCastCall,
         &e0032::InvalidTypedDictBase,
+        &e0033::InvalidRevealTypeCall,
+        &e0034::FinalViolation,
+        &e0035::RequiredNotRequiredContext,
+        &e0036::ClassVarInvalidContext,
+        &e0037::InvalidTypedDictCall,
+        &e0038::InvalidTypedDictInheritance,
+        &e0039::InvalidAssertTypeCall,
+        &e0040::EnumWithMembersFinal,
+        &e0041::TooFewArguments,
     ];
 
     rules.iter().fold(Vec::new(), |mut acc, rule| {

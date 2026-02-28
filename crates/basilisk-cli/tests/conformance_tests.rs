@@ -74,14 +74,16 @@ fn parse_annotation(line: &str) -> Option<Annotation> {
     }
 
     if rest.starts_with("E[") {
-        let inner = rest.strip_prefix("E[")?.trim_end();
-        if let Some(tag) = inner.strip_suffix("+]") {
-            return Some(Annotation::TaggedMulti(tag.to_owned()));
-        }
-        if let Some(tag) = inner.strip_suffix(']') {
+        let inner = rest.strip_prefix("E[")?;
+        // Find closing ] — ignore anything after it (description text)
+        if let Some(close) = inner.find(']') {
+            let tag = &inner[..close];
+            if tag.ends_with('+') {
+                return Some(Annotation::TaggedMulti(tag.trim_end_matches('+').to_owned()));
+            }
             return Some(Annotation::TaggedExact(tag.to_owned()));
         }
-        // malformed tag — treat as required
+        // No closing ] at all — malformed, treat as required
         return Some(Annotation::Required);
     }
 

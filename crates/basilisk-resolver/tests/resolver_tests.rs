@@ -1317,3 +1317,1222 @@ fn subscript_decorator_returns_none() -> Result<(), Box<dyn std::error::Error>> 
     );
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Missed mutant coverage: collect_from_stmt match arms
+// ---------------------------------------------------------------------------
+
+/// Exercises the `Stmt::For` match arm in `collect_from_stmt` — a function
+/// defined inside a for-loop body must be collected.
+/// Kills the `MatchArm` → empty mutant at visitor.rs:142 / :122.
+#[test]
+fn collect_from_stmt_for_loop_body_has_nested_function() -> Result<(), Box<dyn std::error::Error>>
+{
+    let src = concat!(
+        "def outer() -> None:\n",
+        "    for i in range(3):\n",
+        "        def inner(x: int) -> None:\n",
+        "            pass\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let names: Vec<&str> = resolved.functions.iter().map(|f| f.name.as_str()).collect();
+    assert!(names.contains(&"inner"), "inner must be collected from for-body");
+    Ok(())
+}
+
+/// Exercises the `Stmt::While` match arm in `collect_from_stmt`.
+/// Kills the `MatchArm` → empty mutant at visitor.rs:162.
+#[test]
+fn collect_from_stmt_while_body_has_nested_function() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "def outer() -> None:\n",
+        "    while False:\n",
+        "        def inner(x: int) -> None:\n",
+        "            pass\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let names: Vec<&str> = resolved.functions.iter().map(|f| f.name.as_str()).collect();
+    assert!(names.contains(&"inner"), "inner must be collected from while-body");
+    Ok(())
+}
+
+/// Exercises the `Stmt::With` match arm in `collect_from_stmt`.
+/// Kills the `MatchArm` → empty mutant at visitor.rs:173.
+#[test]
+fn collect_from_stmt_with_body_has_nested_function() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "def outer() -> None:\n",
+        "    with open('f') as g:\n",
+        "        def inner(x: int) -> None:\n",
+        "            pass\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let names: Vec<&str> = resolved.functions.iter().map(|f| f.name.as_str()).collect();
+    assert!(names.contains(&"inner"), "inner must be collected from with-body");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Missed mutant coverage: collect_from_handlers
+// ---------------------------------------------------------------------------
+
+/// Exercises `collect_from_handlers` — functions inside except handlers must
+/// be collected.  Kills the `FnValue` → `()` mutant at visitor.rs:281.
+#[test]
+fn collect_from_handlers_collects_function_in_except() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "def outer() -> None:\n",
+        "    try:\n",
+        "        pass\n",
+        "    except Exception:\n",
+        "        def inner(x: int) -> None:\n",
+        "            pass\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let names: Vec<&str> = resolved.functions.iter().map(|f| f.name.as_str()).collect();
+    assert!(names.contains(&"inner"), "inner must be collected from except handler");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Missed mutant coverage: class_info_from — is_dataclass / is_final
+// ---------------------------------------------------------------------------
+
+/// `class_info_from` at line 389: `d == "dataclass" || d.ends_with(".dataclass")`.
+/// Replacing `||` with `&&` would miss the qualified `dataclasses.dataclass`.
+/// This test uses the qualified form to kill that mutant.
+#[test]
+fn class_info_from_qualified_dataclass_decorator() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "import dataclasses\n",
+        "@dataclasses.dataclass\n",
+        "class Point:\n",
+        "    x: int = 0\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let cls = resolved.classes.iter().find(|c| c.name == "Point").ok_or("Point not found")?;
+    assert!(cls.is_dataclass, "qualified @dataclasses.dataclass must set is_dataclass");
+    Ok(())
+}
+
+/// `class_info_from` at line 389: the simple `"dataclass"` branch.
+/// Replacing `||` with `&&` would miss the bare `@dataclass`.
+#[test]
+fn class_info_from_bare_dataclass_decorator() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "from dataclasses import dataclass\n",
+        "@dataclass\n",
+        "class Rect:\n",
+        "    w: int = 0\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let cls = resolved.classes.iter().find(|c| c.name == "Rect").ok_or("Rect not found")?;
+    assert!(cls.is_dataclass, "bare @dataclass must set is_dataclass");
+    Ok(())
+}
+
+/// `class_info_from` at line 395: `d == "final" || d.rsplit('.').next() == Some("final")`.
+/// Replacing `||` with `&&` would miss the qualified `typing.final`.
+#[test]
+fn class_info_from_qualified_final_decorator() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "import typing\n",
+        "@typing.final\n",
+        "class Sealed:\n",
+        "    pass\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let cls = resolved.classes.iter().find(|c| c.name == "Sealed").ok_or("Sealed not found")?;
+    assert!(cls.is_final, "qualified @typing.final must set is_final");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Missed mutant coverage: body_is_stub
+// ---------------------------------------------------------------------------
+
+/// `body_is_stub` must return `true` for a pure `...` body.
+/// Kills `FnValue → false` at visitor.rs:481.
+#[test]
+fn body_is_stub_ellipsis_only_is_stub() -> Result<(), Box<dyn std::error::Error>> {
+    // @overload functions with `...` bodies are stubs — E0001/E0002 must not fire.
+    let src = concat!(
+        "from typing import overload\n",
+        "@overload\n",
+        "def process(x: int) -> int: ...\n",
+        "@overload\n",
+        "def process(x: str) -> str: ...\n",
+        "def process(x):\n",
+        "    return x\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    // The overload stubs must have is_stub_body = true
+    let overloads: Vec<_> = resolved
+        .functions
+        .iter()
+        .filter(|f| f.decorators.iter().any(|d| d == "overload"))
+        .collect();
+    assert!(!overloads.is_empty(), "overloads must be resolved");
+    for f in &overloads {
+        assert!(f.is_stub_body, "overload with `...` body must be stub");
+    }
+    Ok(())
+}
+
+/// `body_is_stub` must return `false` for a real body.
+/// The mutation `false` would make real functions look like stubs.
+#[test]
+fn body_is_stub_real_body_is_not_stub() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "def process(x: int) -> int:\n    return x + 1\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let func = &resolved.functions[0];
+    assert!(!func.is_stub_body, "real body must not be stub");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Missed mutant coverage: collect_return_stmts match arm (visitor.rs:521)
+// ---------------------------------------------------------------------------
+
+/// `collect_return_stmts` — the `Stmt::For` arm (line 521 area).
+/// Replacing this arm with empty would miss returns inside for-loops.
+#[test]
+fn collect_return_stmts_return_inside_for_loop() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "def find(items: list) -> int:\n",
+        "    for item in items:\n",
+        "        return item\n",
+        "    return 0\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let func = resolved.functions.iter().find(|f| f.name == "find").ok_or("find not found")?;
+    assert!(
+        func.return_stmts.len() >= 2,
+        "both return stmts must be collected, got {}",
+        func.return_stmts.len()
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Missed mutant coverage: collect_unconditional_assigns match arms
+// ---------------------------------------------------------------------------
+
+/// `collect_unconditional_assigns` — `Stmt::AnnAssign` arm (visitor.rs:652).
+/// Killing this arm means annotated assignments won't appear in unconditional_assigns.
+#[test]
+fn collect_unconditional_assigns_ann_assign() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "def foo() -> str:\n",
+        "    result: str = 'hello'\n",
+        "    return result\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let func = resolved.functions.iter().find(|f| f.name == "foo").ok_or("foo not found")?;
+    assert!(
+        func.unconditional_assigns.contains(&"result".to_owned()),
+        "annotated assign must appear in unconditional_assigns"
+    );
+    Ok(())
+}
+
+/// `collect_unconditional_assigns` — `Stmt::For` arm collects loop variable (visitor.rs:647).
+#[test]
+fn collect_unconditional_assigns_for_target() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "def foo() -> None:\n",
+        "    for item in range(3):\n",
+        "        pass\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let func = resolved.functions.iter().find(|f| f.name == "foo").ok_or("foo not found")?;
+    assert!(
+        func.unconditional_assigns.contains(&"item".to_owned()),
+        "for loop variable must appear in unconditional_assigns"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Missed mutant coverage: collect_return_name_refs match arm (visitor.rs:673)
+// ---------------------------------------------------------------------------
+
+/// `collect_return_name_refs` — exercising the For arm so that returns inside
+/// loops are captured.  Kills `MatchArm` → empty at visitor.rs:673.
+#[test]
+fn collect_return_name_refs_inside_for_loop() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "def first(items: list) -> object:\n",
+        "    for item in items:\n",
+        "        return item\n",
+        "    return items\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let func =
+        resolved.functions.iter().find(|f| f.name == "first").ok_or("first not found")?;
+    let names: Vec<&str> =
+        func.return_name_refs.iter().map(|(n, _)| n.as_str()).collect();
+    assert!(
+        names.contains(&"item"),
+        "return inside for loop must be captured in return_name_refs"
+    );
+    assert!(
+        names.contains(&"items"),
+        "return after for loop must also be captured"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Missed mutant coverage: collect_unhashable_keys_from_stmt match arms
+// ---------------------------------------------------------------------------
+
+/// Exercises `Stmt::Assign` arm in `collect_unhashable_keys_from_stmt` (line 723).
+/// Killing this arm would miss unhashable keys in assignments.
+#[test]
+fn unhashable_keys_in_assign_stmt() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "d = {[1, 2]: 'bad'}\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(
+        !resolved.module_vars.is_empty(),
+        "variable d must be resolved"
+    );
+    Ok(())
+}
+
+/// Exercises `Stmt::Return` arm in `collect_unhashable_keys_from_stmt` (line 733).
+/// Killing this arm would miss unhashable keys in return statements.
+#[test]
+fn unhashable_keys_in_return_stmt() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "def bad() -> dict:\n",
+        "    return {[1, 2]: 'bad'}\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let func = resolved.functions.iter().find(|f| f.name == "bad").ok_or("bad not found")?;
+    assert!(
+        !func.unhashable_keys.is_empty(),
+        "unhashable key in return must be collected"
+    );
+    Ok(())
+}
+
+/// Exercises `Stmt::Expr` arm in `collect_unhashable_keys_from_stmt` (line 803).
+/// Killing the arm misses unhashable keys in standalone expression statements.
+#[test]
+fn unhashable_keys_in_expr_stmt() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "def f() -> None:\n",
+        "    {[1, 2]: 'key'}\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let func = resolved.functions.iter().find(|f| f.name == "f").ok_or("f not found")?;
+    assert!(
+        !func.unhashable_keys.is_empty(),
+        "unhashable key in expr stmt must be collected"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Missed mutant coverage: collect_module_level_calls match arm (line 839)
+// ---------------------------------------------------------------------------
+
+/// `collect_module_level_calls` — `Stmt::Assign` arm (line 839 area).
+/// Killing this arm means TypeVar calls in assignments aren't collected.
+#[test]
+fn collect_module_level_calls_from_assign() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "T = TypeVar('T', int, str)\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(
+        !resolved.typevar_calls.is_empty(),
+        "TypeVar in plain assignment must be collected"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Missed mutant coverage: collect_typevar_calls match arm + operators
+// ---------------------------------------------------------------------------
+
+/// `collect_typevar_calls` — kills `FnValue → vec![]` at line 857.
+/// TypeVar must be extracted and returned, not an empty vec.
+#[test]
+fn collect_typevar_calls_returns_entries() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "from typing import TypeVar\n",
+        "T = TypeVar('T', int, str)\n",
+        "S = TypeVar('S')\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert_eq!(resolved.typevar_calls.len(), 2, "both TypeVars must be collected");
+    Ok(())
+}
+
+/// `collect_typevar_calls` — `Stmt::Assign` arm (line 860).
+/// Killing this arm means TypeVar assignments are skipped.
+#[test]
+fn collect_typevar_calls_plain_assign_arm() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "T = TypeVar('T', int, str)\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let tv = resolved.typevar_calls.iter().find(|t| t.name == "T").ok_or("T not found")?;
+    assert_eq!(tv.constraint_count, 2);
+    Ok(())
+}
+
+/// `collect_typevar_calls` — `Stmt::AnnAssign` arm (line 898).
+/// Killing this arm means annotated TypeVar assignments are skipped.
+#[test]
+fn collect_typevar_calls_ann_assign_arm() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "from typing import TypeVar\n",
+        "T: TypeVar = TypeVar('T', int, str)\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(
+        !resolved.typevar_calls.is_empty(),
+        "annotated TypeVar assignment must be collected"
+    );
+    Ok(())
+}
+
+/// `collect_typevar_calls` — `attr.attr == "TypeVar"` condition (line 865 area).
+/// `!=` mutant would accept all attribute calls as TypeVar. We test that
+/// `typing.TypeVar` IS collected (killing `!=` that would skip it).
+#[test]
+fn collect_typevar_calls_qualified_typing_typevar() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "T = typing.TypeVar('T', int, str)\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(!resolved.typevar_calls.is_empty(), "typing.TypeVar must be collected");
+    let tv = &resolved.typevar_calls[0];
+    assert_eq!(tv.name, "T");
+    assert_eq!(tv.constraint_count, 2);
+    Ok(())
+}
+
+/// Kills `!=` mutant at line 869 — callee must equal "TypeVar", not anything else.
+/// A non-TypeVar call (e.g. `T = int('T')`) must NOT be collected.
+#[test]
+fn collect_typevar_calls_ignores_non_typevar_calls() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "T = int('T')\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(resolved.typevar_calls.is_empty(), "non-TypeVar call must not be collected");
+    Ok(())
+}
+
+/// Kills `!=` mutant at line 890 — same check in AnnAssign branch.
+#[test]
+fn collect_typevar_calls_ann_assign_ignores_non_typevar() -> Result<(), Box<dyn std::error::Error>>
+{
+    let src = "T: int = int('T')\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(
+        resolved.typevar_calls.is_empty(),
+        "non-TypeVar ann-assign must not be collected"
+    );
+    Ok(())
+}
+
+/// Kills `!=` mutant at line 904 — the `kw.arg == "default"` check.
+/// A TypeVar with `default=int` must have `has_default = true`.
+#[test]
+fn collect_typevar_calls_has_default_true() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "T = TypeVar('T', default=int)\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let tv = resolved.typevar_calls.iter().find(|t| t.name == "T").ok_or("T not found")?;
+    assert!(tv.has_default, "TypeVar with default= must have has_default=true");
+    Ok(())
+}
+
+/// Kills `!=` mutant at line 907 — `has_default = false` when no `default=` kwarg.
+#[test]
+fn collect_typevar_calls_has_default_false_when_absent() -> Result<(), Box<dyn std::error::Error>>
+{
+    let src = "T = TypeVar('T', int, str)\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let tv = resolved.typevar_calls.iter().find(|t| t.name == "T").ok_or("T not found")?;
+    assert!(!tv.has_default, "TypeVar without default= must have has_default=false");
+    Ok(())
+}
+
+/// Kills `!=` mutant at line 925 — same `has_default` check in AnnAssign arm.
+#[test]
+fn collect_typevar_calls_ann_assign_has_default() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "from typing import TypeVar\n",
+        "T: TypeVar = TypeVar('T', default=int)\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let tv = resolved.typevar_calls.iter().find(|t| t.name == "T").ok_or("T not found")?;
+    assert!(tv.has_default, "annotated TypeVar with default= must have has_default=true");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Missed mutant coverage: extract_generic_params (line 941, 948, 949)
+// ---------------------------------------------------------------------------
+
+/// `extract_generic_params` — `FnValue → vec![]` at line 941.
+/// A class with `Generic[T, S]` must have 2 params; empty vec means none collected.
+#[test]
+fn extract_generic_params_collects_multiple_params() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "from typing import TypeVar, Generic\n",
+        "T = TypeVar('T')\n",
+        "S = TypeVar('S')\n",
+        "class Pair(Generic[T, S]):\n",
+        "    pass\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let cls = resolved.classes.iter().find(|c| c.name == "Pair").ok_or("Pair not found")?;
+    assert_eq!(cls.generic_params.len(), 2, "Generic[T, S] must produce 2 params");
+    Ok(())
+}
+
+/// `extract_generic_params` — `&&` → `||` and `!` → `` mutants at lines 948/949.
+/// Both conditions must hold: a `Subscript` whose value is `Generic`.
+/// Non-Generic subscripts must not produce params.
+#[test]
+fn extract_generic_params_non_generic_subscript_ignored() -> Result<(), Box<dyn std::error::Error>>
+{
+    let src = concat!(
+        "from typing import TypeVar\n",
+        "T = TypeVar('T')\n",
+        "class Wrapper(list[T]):\n", // list[T] is not Generic[T]
+        "    pass\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let cls =
+        resolved.classes.iter().find(|c| c.name == "Wrapper").ok_or("Wrapper not found")?;
+    // list[T] is a subscript but NOT Generic[...] — no params should be extracted
+    assert_eq!(
+        cls.generic_params.len(),
+        0,
+        "non-Generic subscript must not produce generic_params"
+    );
+    Ok(())
+}
+
+/// Single-param `Generic[T]` — exercises the `other` arm (not a Tuple slice).
+/// Kills `&&` → `||` at line 948 combined with the single-element path.
+#[test]
+fn extract_generic_params_single_param() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "from typing import TypeVar, Generic\n",
+        "T = TypeVar('T')\n",
+        "class Box(Generic[T]):\n",
+        "    pass\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let cls = resolved.classes.iter().find(|c| c.name == "Box").ok_or("Box not found")?;
+    assert_eq!(cls.generic_params.len(), 1, "Generic[T] must produce 1 param");
+    assert_eq!(cls.generic_params[0].name, "T");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Missed mutant coverage: annotation_flags (line 1017)
+// ---------------------------------------------------------------------------
+
+/// `annotation_flags` — `!=` mutant at line 1017.
+/// A `-> None` annotation must be classified as `NoneType`, not `Any`.
+#[test]
+fn annotation_flags_none_is_not_any() -> Result<(), Box<dyn std::error::Error>> {
+    use basilisk_resolver::ReturnAnnotationKind;
+    let src = "def f() -> None: pass\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let func = &resolved.functions[0];
+    assert!(
+        matches!(func.return_annotation, ReturnAnnotationKind::NoneType),
+        "None annotation must be NoneType, not Any — got {:?}",
+        func.return_annotation
+    );
+    Ok(())
+}
+
+/// `annotation_flags` — an `Any` return annotation must be classified as `Any`.
+#[test]
+fn annotation_flags_any_is_any() -> Result<(), Box<dyn std::error::Error>> {
+    use basilisk_resolver::ReturnAnnotationKind;
+    let src = "from typing import Any\ndef f() -> Any: pass\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let func = &resolved.functions[0];
+    assert!(
+        matches!(func.return_annotation, ReturnAnnotationKind::Any),
+        "Any annotation must be ReturnAnnotationKind::Any — got {:?}",
+        func.return_annotation
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Missed mutant coverage: alias_name (line 1069)
+// ---------------------------------------------------------------------------
+
+/// `alias_name` — `FnValue → String::new()` / `"xyzzy".into()` mutants.
+/// Import alias names must be preserved correctly.
+#[test]
+fn alias_name_preserves_import_name() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "from typing import Optional, Union\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let import = resolved.imports.iter().find(|i| i.module == "typing").ok_or("no typing import")?;
+    assert!(import.names.contains(&"Optional".to_owned()), "Optional must be in import names");
+    assert!(import.names.contains(&"Union".to_owned()), "Union must be in import names");
+    Ok(())
+}
+
+/// `alias_name` — single import preserves the name (kills `String::new()` mutant).
+#[test]
+fn alias_name_single_name_is_correct() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "from os.path import join\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let import = resolved.imports.iter().find(|i| i.module == "os.path").ok_or("no import")?;
+    assert_eq!(import.names, vec!["join".to_owned()], "join must be preserved");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Missed mutant coverage: classify_rhs / MatchArmGuard (line 1115/1116)
+// ---------------------------------------------------------------------------
+
+/// `classify_rhs` — empty list guard `list.elts.is_empty()` at line 1115.
+/// An empty list must produce `RhsKind::EmptyList`, not `RhsKind::Other`.
+/// Replacing the guard with `true` would classify ALL lists as EmptyList.
+#[test]
+fn classify_rhs_empty_list_vs_nonempty() -> Result<(), Box<dyn std::error::Error>> {
+    // Use two module vars: one with empty list, one with non-empty.
+    let src = concat!(
+        "empty: list = []\n",
+        "nonempty: list = [1, 2, 3]\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let empty_var =
+        resolved.module_vars.iter().find(|v| v.name == "empty").ok_or("empty not found")?;
+    let nonempty_var =
+        resolved.module_vars.iter().find(|v| v.name == "nonempty").ok_or("nonempty not found")?;
+    assert_eq!(
+        format!("{:?}", empty_var.rhs_kind),
+        "EmptyList",
+        "empty list must produce EmptyList"
+    );
+    assert_ne!(
+        format!("{:?}", nonempty_var.rhs_kind),
+        "EmptyList",
+        "non-empty list must NOT produce EmptyList"
+    );
+    Ok(())
+}
+
+/// `classify_rhs` — empty dict guard `dict.items.is_empty()` at line 1116.
+/// An empty dict must produce `RhsKind::EmptyDict`, not `RhsKind::Other`.
+/// Replacing the guard with `true` would classify ALL dicts as EmptyDict.
+#[test]
+fn classify_rhs_empty_dict_vs_nonempty() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "empty: dict = {}\n",
+        "nonempty: dict = {'a': 1}\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let empty_var =
+        resolved.module_vars.iter().find(|v| v.name == "empty").ok_or("empty not found")?;
+    let nonempty_var =
+        resolved
+            .module_vars
+            .iter()
+            .find(|v| v.name == "nonempty")
+            .ok_or("nonempty not found")?;
+    assert_eq!(
+        format!("{:?}", empty_var.rhs_kind),
+        "EmptyDict",
+        "empty dict must produce EmptyDict"
+    );
+    assert_ne!(
+        format!("{:?}", nonempty_var.rhs_kind),
+        "EmptyDict",
+        "non-empty dict must NOT produce EmptyDict"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Missed mutant coverage: is_wildcard_pattern (line 1140)
+// ---------------------------------------------------------------------------
+
+/// `is_wildcard_pattern` — `&&` → `||` mutant at line 1140.
+/// A `MatchAs` with a name is NOT a wildcard; one with neither name nor pattern IS.
+#[test]
+fn is_wildcard_pattern_named_match_as_is_not_wildcard() -> Result<(), Box<dyn std::error::Error>>
+{
+    let src = concat!(
+        "x = 1\n",
+        "match x:\n",
+        "    case y:\n", // MatchAs with name — NOT wildcard
+        "        pass\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    // A MatchAs with a name is a capture pattern, not a wildcard.
+    // The match stmt must be resolved with has_wildcard = false.
+    let stmt = resolved.match_stmts.iter().next().ok_or("no match stmt")?;
+    assert!(
+        !stmt.has_wildcard,
+        "capture pattern `case y:` must not be wildcard"
+    );
+    Ok(())
+}
+
+/// `is_wildcard_pattern` — true wildcard (`case _:`) must have `has_wildcard = true`.
+#[test]
+fn is_wildcard_pattern_bare_wildcard() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "x = 1\n",
+        "match x:\n",
+        "    case 1:\n",
+        "        pass\n",
+        "    case _:\n", // bare wildcard
+        "        pass\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let stmt = resolved.match_stmts.iter().next().ok_or("no match stmt")?;
+    assert!(stmt.has_wildcard, "bare `case _:` must set has_wildcard=true");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Missed mutant coverage: collect_reveal_type_calls_from_stmt match arms
+// ---------------------------------------------------------------------------
+
+/// `collect_reveal_type_calls_from_stmt` — `Stmt::While` arm (line 1016).
+/// `reveal_type` inside a while body must be collected.
+#[test]
+fn reveal_type_inside_while_collected() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "x: int = 1\n",
+        "while x > 0:\n",
+        "    reveal_type(x)\n",
+        "    x = x - 1\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(
+        !resolved.reveal_type_calls.is_empty(),
+        "reveal_type inside while body must be collected"
+    );
+    Ok(())
+}
+
+/// `collect_reveal_type_calls_from_stmt` — `Stmt::With` arm (line 1020).
+/// `reveal_type` inside a with body must be collected.
+#[test]
+fn reveal_type_inside_with_collected() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "x: int = 1\n",
+        "with open('f') as g:\n",
+        "    reveal_type(x)\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(
+        !resolved.reveal_type_calls.is_empty(),
+        "reveal_type inside with body must be collected"
+    );
+    Ok(())
+}
+
+/// `collect_reveal_type_calls_from_stmt` — `Stmt::Try` arm (line 1023).
+/// `reveal_type` inside a try body must be collected.
+#[test]
+fn reveal_type_inside_try_collected() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "x: int = 1\n",
+        "try:\n",
+        "    reveal_type(x)\n",
+        "except Exception:\n",
+        "    pass\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(
+        !resolved.reveal_type_calls.is_empty(),
+        "reveal_type inside try body must be collected"
+    );
+    Ok(())
+}
+
+/// `collect_reveal_type_calls_from_stmt` — `Stmt::Match` arm (line 1032).
+/// `reveal_type` inside a match case body must be collected.
+#[test]
+fn reveal_type_inside_match_collected() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "x: int = 1\n",
+        "match x:\n",
+        "    case _:\n",
+        "        reveal_type(x)\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(
+        !resolved.reveal_type_calls.is_empty(),
+        "reveal_type inside match arm must be collected"
+    );
+    Ok(())
+}
+
+/// `collect_reveal_type_calls_from_stmt` — `==` → `!=` mutant at line 991.
+/// Only `reveal_type` (not other calls) must be collected.
+#[test]
+fn reveal_type_calls_only_matches_reveal_type() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "print(42)\n",          // NOT reveal_type — must not be collected
+        "reveal_type(42)\n",    // IS reveal_type — must be collected
+        "assert_type(42)\n",    // NOT reveal_type — must not be collected
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert_eq!(
+        resolved.reveal_type_calls.len(),
+        1,
+        "exactly one reveal_type call must be collected, not print or assert_type"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Missed mutant coverage: collect_special_calls / collect_special_calls_from_stmt
+// ---------------------------------------------------------------------------
+
+/// `collect_special_calls` — `FnValue → vec![]` at line 1044.
+/// assert_type calls must be returned, not an empty vec.
+#[test]
+fn collect_special_calls_assert_type_returns_entries() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "assert_type(1, int)\n",
+        "assert_type('hello', str)\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert_eq!(
+        resolved.assert_type_calls.len(),
+        2,
+        "both assert_type calls must be collected"
+    );
+    Ok(())
+}
+
+/// `collect_special_calls_from_stmt` — `==` → `!=` mutant at line 1061.
+/// Only the exact function name must match — other calls must be ignored.
+#[test]
+fn collect_special_calls_only_matches_exact_name() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "print(1)\n",           // NOT assert_type
+        "assert_type(1)\n",     // IS assert_type
+        "reveal_type(1)\n",     // NOT assert_type
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert_eq!(
+        resolved.assert_type_calls.len(),
+        1,
+        "only assert_type must be collected, not print or reveal_type"
+    );
+    Ok(())
+}
+
+/// `collect_special_calls_from_stmt` — `Stmt::FunctionDef` arm (line 1070).
+/// `assert_type` inside a function body must be collected.
+#[test]
+fn collect_special_calls_inside_function_def() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "def foo() -> None:\n",
+        "    assert_type(1, int)\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(
+        !resolved.assert_type_calls.is_empty(),
+        "assert_type inside function must be collected"
+    );
+    Ok(())
+}
+
+/// `collect_special_calls_from_stmt` — `Stmt::ClassDef` arm (line 1073).
+/// `assert_type` inside a class body must be collected.
+#[test]
+fn collect_special_calls_inside_class_def() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "class Foo:\n",
+        "    assert_type(1, int)\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(
+        !resolved.assert_type_calls.is_empty(),
+        "assert_type inside class body must be collected"
+    );
+    Ok(())
+}
+
+/// `collect_special_calls_from_stmt` — `Stmt::If` arm (line 1076).
+/// `assert_type` inside an if body must be collected.
+#[test]
+fn collect_special_calls_inside_if() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "x: int = 1\n",
+        "if x > 0:\n",
+        "    assert_type(x, int)\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(
+        !resolved.assert_type_calls.is_empty(),
+        "assert_type inside if body must be collected"
+    );
+    Ok(())
+}
+
+/// `collect_special_calls_from_stmt` — `Stmt::For` arm (line 1082).
+/// `assert_type` inside a for body must be collected.
+#[test]
+fn collect_special_calls_inside_for() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "for i in range(3):\n",
+        "    assert_type(i, int)\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(
+        !resolved.assert_type_calls.is_empty(),
+        "assert_type inside for body must be collected"
+    );
+    Ok(())
+}
+
+/// `collect_special_calls_from_stmt` — `Stmt::While` arm (line 1086).
+/// `assert_type` inside a while body must be collected.
+#[test]
+fn collect_special_calls_inside_while() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "x: int = 1\n",
+        "while x > 0:\n",
+        "    assert_type(x, int)\n",
+        "    x = x - 1\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(
+        !resolved.assert_type_calls.is_empty(),
+        "assert_type inside while body must be collected"
+    );
+    Ok(())
+}
+
+/// `collect_special_calls_from_stmt` — `Stmt::With` arm (line 1090).
+/// `assert_type` inside a with body must be collected.
+#[test]
+fn collect_special_calls_inside_with() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "x: int = 1\n",
+        "with open('f') as g:\n",
+        "    assert_type(x, int)\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(
+        !resolved.assert_type_calls.is_empty(),
+        "assert_type inside with body must be collected"
+    );
+    Ok(())
+}
+
+/// `collect_special_calls_from_stmt` — `Stmt::Try` arm (line 1093).
+/// `assert_type` inside a try body must be collected.
+#[test]
+fn collect_special_calls_inside_try() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "x: int = 1\n",
+        "try:\n",
+        "    assert_type(x, int)\n",
+        "except Exception:\n",
+        "    pass\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(
+        !resolved.assert_type_calls.is_empty(),
+        "assert_type inside try body must be collected"
+    );
+    Ok(())
+}
+
+/// `collect_special_calls_from_stmt` — `Stmt::Match` arm (line 1102).
+/// `assert_type` inside a match case body must be collected.
+#[test]
+fn collect_special_calls_inside_match() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "x: int = 1\n",
+        "match x:\n",
+        "    case _:\n",
+        "        assert_type(x, int)\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(
+        !resolved.assert_type_calls.is_empty(),
+        "assert_type inside match arm must be collected"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Missed mutant coverage: annotation_flags line 1187 — `==` → `!=` for None
+// ---------------------------------------------------------------------------
+
+/// `annotation_flags` — `==` → `!=` at line 1187.
+/// The `is_none` flag (`s == "None"`) must be true for the name "None" and
+/// false for any other name.  If mutated to `!=`, "None" would be false and
+/// every other name would be true, causing wrong NoneType classifications.
+#[test]
+fn annotation_flags_none_name_is_none_not_other() -> Result<(), Box<dyn std::error::Error>> {
+    use basilisk_resolver::ReturnAnnotationKind;
+    // "None" → NoneType
+    let src_none = "def f() -> None: pass\n".to_owned();
+    let parsed_none = parse_source(src_none, "test.py".to_owned())?;
+    let resolved_none = resolve(&parsed_none)?;
+    assert!(
+        matches!(resolved_none.functions[0].return_annotation, ReturnAnnotationKind::NoneType),
+        "-> None must be NoneType"
+    );
+    // "int" → Other (not NoneType, not Any)
+    let src_int = "def g() -> int: pass\n".to_owned();
+    let parsed_int = parse_source(src_int, "test.py".to_owned())?;
+    let resolved_int = resolve(&parsed_int)?;
+    assert!(
+        matches!(resolved_int.functions[0].return_annotation, ReturnAnnotationKind::Other),
+        "-> int must be Other, not NoneType"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Missed mutant coverage: collect_typeddict_calls
+// ---------------------------------------------------------------------------
+
+/// `collect_typeddict_calls` — `FnValue → vec![]` at line 1351.
+/// TypedDict functional call must be returned, not an empty vec.
+#[test]
+fn collect_typeddict_calls_returns_entries() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "from typing import TypedDict\n",
+        r#"Movie = TypedDict("Movie", {"name": str, "year": int})"#,
+        "\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert_eq!(
+        resolved.typeddict_calls.len(),
+        1,
+        "TypedDict functional call must be collected"
+    );
+    let td = &resolved.typeddict_calls[0];
+    assert_eq!(td.lhs_name, "Movie");
+    Ok(())
+}
+
+/// `collect_typeddict_calls` — `==` → `!=` at line 1358 for simple callee name.
+/// Only `TypedDict` by name must match; other names must be skipped.
+#[test]
+fn collect_typeddict_calls_only_matches_typeddict_name() -> Result<(), Box<dyn std::error::Error>>
+{
+    let src = concat!(
+        r#"NotTypedDict = dict("Name", {"x": int})"#,
+        "\n",
+        r#"Movie = TypedDict("Movie", {"name": str})"#,
+        "\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert_eq!(
+        resolved.typeddict_calls.len(),
+        1,
+        "only TypedDict call must be collected, not dict"
+    );
+    assert_eq!(resolved.typeddict_calls[0].lhs_name, "Movie");
+    Ok(())
+}
+
+/// `collect_typeddict_calls` — `==` → `!=` at line 1360 for attribute callee.
+/// `typing.TypedDict` must be collected; other attribute calls must not.
+#[test]
+fn collect_typeddict_calls_qualified_typing_typeddict() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "import typing\n",
+        r#"Movie = typing.TypedDict("Movie", {"name": str})"#,
+        "\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert_eq!(
+        resolved.typeddict_calls.len(),
+        1,
+        "typing.TypedDict must be collected"
+    );
+    assert_eq!(resolved.typeddict_calls[0].lhs_name, "Movie");
+    Ok(())
+}
+
+/// `collect_typeddict_calls` — `!` deletion at line 1386 (`!matches!(k, Expr::StringLiteral(_))`).
+/// A dict with a non-string key must set `has_non_string_key = true`.
+#[test]
+fn collect_typeddict_calls_non_string_key_detected() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        r#"Movie = TypedDict("Movie", {1: str})"#,
+        "\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert_eq!(resolved.typeddict_calls.len(), 1);
+    assert!(
+        resolved.typeddict_calls[0].has_non_string_key,
+        "non-string dict key must set has_non_string_key=true"
+    );
+    Ok(())
+}
+
+/// Complement test: all string keys must set `has_non_string_key = false`.
+/// Kills `!` deletion at line 1386 by providing the false side.
+#[test]
+fn collect_typeddict_calls_string_keys_only() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        r#"Movie = TypedDict("Movie", {"name": str, "year": int})"#,
+        "\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert_eq!(resolved.typeddict_calls.len(), 1);
+    assert!(
+        !resolved.typeddict_calls[0].has_non_string_key,
+        "all-string keys must set has_non_string_key=false"
+    );
+    Ok(())
+}
+
+/// `collect_typeddict_calls` — second arg is not a dict literal → `NotDictLiteral`.
+/// Kills the `!` deletion / `==`→`!=` variants around the dict literal check.
+#[test]
+fn collect_typeddict_calls_non_dict_second_arg() -> Result<(), Box<dyn std::error::Error>> {
+    use basilisk_resolver::TypedDictSecondArgKind;
+    let src = concat!(
+        "fields = {'name': str}\n",
+        r#"Movie = TypedDict("Movie", fields)"#,
+        "\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert_eq!(resolved.typeddict_calls.len(), 1);
+    assert_eq!(
+        resolved.typeddict_calls[0].second_arg_kind,
+        TypedDictSecondArgKind::NotDictLiteral,
+        "variable second arg must produce NotDictLiteral"
+    );
+    Ok(())
+}
+
+/// `collect_typeddict_calls` — no second positional arg → `has_positional_dict = false`.
+/// Exercises the else branch at line 1395.
+#[test]
+fn collect_typeddict_calls_keyword_only_form() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        r#"Movie = TypedDict("Movie", name=str, year=int)"#,
+        "\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert_eq!(resolved.typeddict_calls.len(), 1);
+    assert!(
+        !resolved.typeddict_calls[0].has_positional_dict,
+        "keyword-only form must set has_positional_dict=false"
+    );
+    Ok(())
+}

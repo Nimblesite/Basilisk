@@ -23,7 +23,7 @@ mkdir -p "$DEST"
 echo "Fetching file list from ${REPO} conformance/tests (ref: ${COMMIT})..."
 FILE_LIST=$(curl -fsSL "$API_URL")
 
-COUNT=$(echo "$FILE_LIST" | python3 -c "
+COUNT=$(echo "$FILE_LIST" | python3.12 -c "
 import json, sys
 files = [f for f in json.load(sys.stdin) if f['type'] == 'file' and f['name'].endswith('.py')]
 print(len(files))
@@ -31,7 +31,7 @@ print(len(files))
 
 echo "Downloading ${COUNT} test files to ${DEST}..."
 
-echo "$FILE_LIST" | python3 -c "
+echo "$FILE_LIST" | python3.12 -c "
 import json, sys, urllib.request, os
 
 dest = sys.argv[1]

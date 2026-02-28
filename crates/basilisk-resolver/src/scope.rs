@@ -11,6 +11,7 @@ pub struct Span {
 
 /// Information about a single function parameter.
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct ParameterInfo {
     /// The parameter name as it appears in source.
     pub name: String,
@@ -20,6 +21,8 @@ pub struct ParameterInfo {
     pub annotation_is_any: bool,
     /// `true` when the annotation is a numeric or boolean literal (invalid type form).
     pub annotation_is_numeric_literal: bool,
+    /// `true` when the parameter has a default value (`param = default`).
+    pub has_default: bool,
     /// The source span of the parameter name token.
     pub name_span: Span,
     /// The source span of the annotation expression, if present.
@@ -80,6 +83,12 @@ pub struct FunctionInfo {
     pub unconditional_assigns: Vec<String>,
     /// Names referenced directly in `return` expressions (simple `return name`).
     pub return_name_refs: Vec<(String, Span)>,
+    /// Names referenced in top-level (unconditional) `return` expressions only.
+    ///
+    /// Unlike `return_name_refs`, this excludes returns nested inside `if`/`for`/
+    /// `while`/`try`/`with` blocks.  Used by E0019 to avoid false positives where
+    /// a `return name` is inside the same branch that assigned `name`.
+    pub top_level_return_name_refs: Vec<(String, Span)>,
     /// Unhashable expressions used as dict keys in the function body.
     pub unhashable_keys: Vec<UnhashableKeyRef>,
     /// `true` when the entire function body is a stub (only `...` or `pass`).
@@ -120,6 +129,8 @@ pub struct CallSite {
     pub callee: String,
     /// Kinds and spans of positional arguments at the call site.
     pub args: Vec<(RhsKind, Span)>,
+    /// Number of keyword arguments at the call site.
+    pub keyword_count: usize,
     /// The span of the entire call expression.
     pub span: Span,
 }
@@ -160,6 +171,10 @@ pub struct VariableInfo {
     pub has_annotation: bool,
     /// What kind of value is on the right-hand side.
     pub rhs_kind: RhsKind,
+    /// The source span of the annotation expression, if present (`x: T = ...` → span of `T`).
+    pub annotation_span: Option<Span>,
+    /// The source span of the right-hand side expression, if present (`x = expr` → span of `expr`).
+    pub rhs_span: Option<Span>,
 }
 
 /// A class attribute (declared in the class body).
@@ -177,6 +192,7 @@ pub struct AttributeInfo {
 
 /// A class definition with its attributes and method names.
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct ClassInfo {
     /// The class name.
     pub name: String,
@@ -200,6 +216,10 @@ pub struct ClassInfo {
     pub class_keywords: Vec<String>,
     /// `true` when the class is decorated with `@dataclass` or `@dataclass(...)`.
     pub is_dataclass: bool,
+    /// `true` when the class is decorated with `@final` or `typing.final`.
+    pub is_final: bool,
+    /// `true` when the class directly or transitively inherits from an `Enum` family class.
+    pub is_enum: bool,
 }
 
 /// Type parameters declared in a `Generic[T1, T2, ...]` base expression.
@@ -220,6 +240,8 @@ pub struct TypeVarCallInfo {
     pub constraint_count: usize,
     /// Whether a `default=` keyword argument is present (PEP 696).
     pub has_default: bool,
+    /// Whether a `bound=` keyword argument is present.
+    pub has_bound: bool,
     /// The span of the entire `TypeVar` call expression.
     pub span: Span,
 }
@@ -258,6 +280,45 @@ pub struct MatchStmtInfo {
     pub has_wildcard: bool,
 }
 
+/// A `reveal_type(...)` call found anywhere in the module.
+#[derive(Debug, Clone)]
+pub struct RevealTypeCallInfo {
+    /// Number of positional arguments passed to `reveal_type`.
+    pub arg_count: usize,
+    /// The span of the entire `reveal_type(...)` call expression.
+    pub span: Span,
+}
+
+/// What kind of second argument was passed to a `TypedDict(...)` functional call.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TypedDictSecondArgKind {
+    /// A dict literal `{...}` was passed.
+    DictLiteral,
+    /// Something other than a dict literal was passed (e.g. a variable reference).
+    NotDictLiteral,
+}
+
+/// Information about a module-level `TypedDict(...)` functional-syntax call.
+///
+/// Covers calls of the form `Name = TypedDict("Name", {...})`.
+#[derive(Debug, Clone)]
+pub struct TypedDictCallInfo {
+    /// The name the result is bound to (LHS of the assignment).
+    pub lhs_name: String,
+    /// The first positional argument — the declared name string, if it is a string literal.
+    pub declared_name: Option<String>,
+    /// Whether the second positional argument is a dict literal or something else.
+    pub second_arg_kind: TypedDictSecondArgKind,
+    /// Whether any key in the second-arg dict literal is a non-string literal.
+    pub has_non_string_key: bool,
+    /// Whether there is actually a second positional argument (as opposed to keyword-only form).
+    pub has_positional_dict: bool,
+    /// Keyword argument names in the call (after the positional args).
+    pub keyword_names: Vec<String>,
+    /// The span of the entire `TypedDict(...)` call expression.
+    pub span: Span,
+}
+
 /// The complete resolved view of a parsed module.
 #[derive(Debug)]
 pub struct ResolvedModule {
@@ -275,6 +336,12 @@ pub struct ResolvedModule {
     pub calls: Vec<CallSite>,
     /// Module-level `TypeVar(...)` call sites.
     pub typevar_calls: Vec<TypeVarCallInfo>,
+    /// All `reveal_type(...)` call sites found anywhere in the module.
+    pub reveal_type_calls: Vec<RevealTypeCallInfo>,
+    /// All `assert_type(...)` call sites found anywhere in the module.
+    pub assert_type_calls: Vec<RevealTypeCallInfo>,
+    /// Module-level `TypedDict(...)` functional-syntax call sites.
+    pub typeddict_calls: Vec<TypedDictCallInfo>,
     /// The source file path.
     pub path: String,
     /// The original source text (forwarded from parser for span resolution).

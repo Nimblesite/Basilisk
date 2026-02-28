@@ -125,7 +125,7 @@ from which every subsequent phase of implementation is measured.
 
 ---
 
-## Road to 95%
+## Road to 100%
 
 The conformance suite files group naturally into implementation phases.  The
 table below maps each category to the PEP that governs it and the estimated

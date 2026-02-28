@@ -247,12 +247,11 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   border-radius: var(--radius-sm);
   font-size: 0.875rem;
   color: var(--color-text-secondary);
-  border-left: 2px solid transparent;
   transition: all var(--ease-fast);
   text-decoration: none;
 }
 .docs-nav a:hover, .sidebar nav a:hover { color: var(--color-text-primary); background: var(--color-bg-elevated); }
-.docs-nav a.active, .sidebar nav a.active { color: var(--color-primary); border-left-color: var(--color-primary); font-weight: 500; }
+.docs-nav a.active, .sidebar nav a.active { color: var(--color-text-primary); background: var(--color-bg-tertiary); font-weight: 600; border-left: none; }
 
 .docs-nav ul ul, .sidebar nav ul ul { list-style: none; padding-left: var(--space-3); margin-top: var(--space-1); margin-bottom: var(--space-1); }
 

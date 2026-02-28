@@ -280,4 +280,109 @@ mod tests {
         );
         Ok(())
     }
+
+    // ── run_check: return value tests (lines 63, 65, 81) ────────────────────
+    //
+    // run_check returns:
+    //   0  — no errors (Json: error_count == 0; Text: total == 0 OR error_count == 0)
+    //   1  — errors found
+    //   3  — internal error
+    //
+    // Mutants:
+    //   line 63  == → !=  : Json path, error filter
+    //   line 65  > → ==/</>= : Json path, i32::from(error_count > 0)
+    //   line 81  > → >=   : Text path, i32::from(error_count > 0)
+
+    /// run_check Json path: bad code must return 1.
+    /// Kills `!=` at line 63 (which would invert the severity filter)
+    /// and `== / < / >=` at line 65 (which would change the return value).
+    #[test]
+    fn run_check_json_bad_code_returns_one() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = std::env::temp_dir();
+        let py = dir.join("basilisk_test_rc_json_bad.py");
+        std::fs::write(&py, b"def foo(x) -> None:\n    pass\n")?;
+        let path = py.to_string_lossy().into_owned();
+        let code = run_check(&[path], OutputFormat::Json);
+        let _ = std::fs::remove_file(&py);
+        assert_eq!(code, 1, "bad code must make run_check return 1 (Json)");
+        Ok(())
+    }
+
+    /// run_check Json path: clean code must return 0.
+    /// Kills `==` mutant at line 65 (which would return 1 for clean code).
+    #[test]
+    fn run_check_json_clean_code_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = std::env::temp_dir();
+        let py = dir.join("basilisk_test_rc_json_clean.py");
+        std::fs::write(&py, b"def greet(name: str) -> str:\n    return name\n")?;
+        let path = py.to_string_lossy().into_owned();
+        let code = run_check(&[path], OutputFormat::Json);
+        let _ = std::fs::remove_file(&py);
+        assert_eq!(code, 0, "clean code must make run_check return 0 (Json)");
+        Ok(())
+    }
+
+    /// run_check Text path: bad code must return 1.
+    /// Kills `>=` mutant at line 81 (which always returns 1 since usize >= 0).
+    #[test]
+    fn run_check_text_bad_code_returns_one() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = std::env::temp_dir();
+        let py = dir.join("basilisk_test_rc_text_bad.py");
+        std::fs::write(&py, b"def foo(x) -> None:\n    pass\n")?;
+        let path = py.to_string_lossy().into_owned();
+        let code = run_check(&[path], OutputFormat::Text);
+        let _ = std::fs::remove_file(&py);
+        assert_eq!(code, 1, "bad code must make run_check return 1 (Text)");
+        Ok(())
+    }
+
+    /// run_check Text path: clean code must return 0.
+    /// Kills `>=` mutant at line 81: if `> 0` became `>= 0`, clean code (count=0) would return 1.
+    #[test]
+    fn run_check_text_clean_code_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = std::env::temp_dir();
+        let py = dir.join("basilisk_test_rc_text_clean.py");
+        std::fs::write(&py, b"def greet(name: str) -> str:\n    return name\n")?;
+        let path = py.to_string_lossy().into_owned();
+        let code = run_check(&[path], OutputFormat::Text);
+        let _ = std::fs::remove_file(&py);
+        assert_eq!(code, 0, "clean code must make run_check return 0 (Text)");
+        Ok(())
+    }
+
+    /// run_check internal error path: nonexistent path must return 3.
+    #[test]
+    fn run_check_nonexistent_path_returns_three() {
+        let code = run_check(&["/no/such/path.py".to_owned()], OutputFormat::Text);
+        assert_eq!(code, 3, "nonexistent path must make run_check return 3");
+    }
+
+    // ── collect_python_files: MatchArmGuard mutant at main.rs:129 ────────────
+
+    /// `collect_python_files` — `MatchArmGuard → true` at line 129.
+    /// The guard `e.kind() == ErrorKind::NotFound` distinguishes "not found" from
+    /// other I/O errors. If the guard is replaced with `true`, ALL I/O errors
+    /// would return Err instead of continuing. We test that the NotFound path
+    /// specifically returns Err (not Ok with empty list).
+    #[test]
+    fn collect_python_files_not_found_returns_err() {
+        let result = collect_python_files(&["/absolutely/does/not/exist/file.py".to_owned()]);
+        assert!(result.is_err(), "NotFound path must return Err, not Ok");
+    }
+
+    /// Complement: a path that exists but is not .py returns Ok with empty list.
+    /// This kills the `true` guard mutant: if all errors → Err, this would fail.
+    #[test]
+    fn collect_python_files_non_py_existing_file_returns_ok_empty(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let dir = std::env::temp_dir();
+        let txt = dir.join("basilisk_test_guard_complement.txt");
+        std::fs::write(&txt, b"hello")?;
+        let path = txt.to_string_lossy().into_owned();
+        let result = collect_python_files(&[path]);
+        let _ = std::fs::remove_file(&txt);
+        assert!(result.is_ok(), "existing non-py file must return Ok");
+        assert!(result?.is_empty(), "non-py file must produce empty list");
+        Ok(())
+    }
 }
