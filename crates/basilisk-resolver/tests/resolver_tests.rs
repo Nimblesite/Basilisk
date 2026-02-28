@@ -1241,23 +1241,29 @@ fn attribute_decorator_name_extracted() -> Result<(), Box<dyn std::error::Error>
     Ok(())
 }
 
-/// Function decorated with a `Call(Name)` expression (`@dataclass(frozen=True)`) →
+/// Function decorated with a `Call(Name)` expression (`@deprecated("msg")`) →
 /// exercises `Expr::Name` arm inside the `Expr::Call` branch of `decorator_name`
 /// (visitor.rs line 986).
 #[test]
 fn call_name_decorator_name_extracted() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
-        "from dataclasses import dataclass\n",
-        "@dataclass(frozen=True)\n", // Call(func=Name("dataclass")) → line 986
-        "class Config:\n",
-        "    x: int = 0\n",
+        "def deprecated(msg): pass\n",
+        "@deprecated('use new_foo instead')\n", // Call(func=Name("deprecated")) → line 986
+        "def foo() -> None: pass\n",
     )
     .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
-    // dataclass is a class decorator, not a function decorator — but we still
-    // parse the class. The important thing is there's no panic.
     let resolved = resolve(&parsed)?;
-    assert_eq!(resolved.classes.len(), 1);
+    let func = resolved
+        .functions
+        .iter()
+        .find(|f| f.name == "foo")
+        .expect("foo must be resolved");
+    // decorator_name returns "deprecated" for Call(func=Name("deprecated"))
+    assert!(
+        func.decorators.contains(&"deprecated".to_owned()),
+        "call-with-name decorator name must be extracted"
+    );
     Ok(())
 }
 

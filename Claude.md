@@ -41,6 +41,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Group related functionality into modules
 - Public APIs must have documentation (`missing_docs = "warn"`)
 
+# Website and CSS
+
+- **MINIMIZE CSS CLASSES** - Always consolidate classes where possible
+- **Name classes after what the element is** - Don't name the class after the section it belongs to
+- **There are too many CSS classes** - Consolidate NOW!!!
+
 ## Project Status
 
 Basilisk is currently in the **specification stage**. [SPEC.md](SPEC.md) is the primary artifact — a 1200+ line technical specification. No source code exists yet. The first implementation task is building a Rust toolchain.

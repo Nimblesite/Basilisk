@@ -7,3 +7,7 @@ lcov.info
 mutants.out/
 
 mutants.out.old/
+
+.playwright-mcp/
+
+*.png

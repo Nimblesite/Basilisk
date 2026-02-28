@@ -5,8 +5,9 @@
   "type": "module",
   "description": "Documentation website for Basilisk — strict-by-default Python type checker",
   "scripts": {
+    "prebuild": "node scripts/copy-readme.js",
     "build": "eleventy",
-    "start": "eleventy --serve --watch",
+    "start": "node scripts/copy-readme.js && eleventy --serve --watch",
     "clean": "rm -rf _site"
   },
   "devDependencies": {

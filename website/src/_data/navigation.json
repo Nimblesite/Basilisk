@@ -1,9 +1,9 @@
 {
   "main": [
-    { "title": "Docs", "url": "/docs/" },
-    { "title": "Rules", "url": "/docs/rules/" },
-    { "title": "Blog", "url": "/blog/" },
-    { "title": "GitHub", "url": "https://github.com/basilisk-lang/basilisk", "external": true }
+    { "text": "Docs", "url": "/docs/" },
+    { "text": "Rules", "url": "/docs/rules/" },
+    { "text": "Blog", "url": "/blog/" },
+    { "text": "GitHub", "url": "https://github.com/basilisk-lang/basilisk", "external": true }
   ],
   "docs": [
     {
@@ -46,23 +46,23 @@
     {
       "title": "Product",
       "items": [
-        { "title": "Documentation", "url": "/docs/" },
-        { "title": "Rules Reference", "url": "/docs/rules/" },
-        { "title": "Blog", "url": "/blog/" }
+        { "text": "Documentation", "url": "/docs/" },
+        { "text": "Rules Reference", "url": "/docs/rules/" },
+        { "text": "Blog", "url": "/blog/" }
       ]
     },
     {
       "title": "Community",
       "items": [
-        { "title": "GitHub", "url": "https://github.com/basilisk-lang/basilisk" },
-        { "title": "Issues", "url": "https://github.com/basilisk-lang/basilisk/issues" },
-        { "title": "Discussions", "url": "https://github.com/basilisk-lang/basilisk/discussions" }
+        { "text": "GitHub", "url": "https://github.com/basilisk-lang/basilisk" },
+        { "text": "Issues", "url": "https://github.com/basilisk-lang/basilisk/issues" },
+        { "text": "Discussions", "url": "https://github.com/basilisk-lang/basilisk/discussions" }
       ]
     },
     {
       "title": "Legal",
       "items": [
-        { "title": "MIT / Apache-2.0", "url": "https://github.com/basilisk-lang/basilisk/blob/main/LICENSE" }
+        { "text": "MIT / Apache-2.0", "url": "https://github.com/basilisk-lang/basilisk/blob/main/LICENSE" }
       ]
     }
   ]

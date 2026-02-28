@@ -14,7 +14,7 @@ Basilisk includes tooling to help existing codebases adopt it gradually. A full 
 
 ---
 
-## From Pyright {#from-pyright}
+<h2 id="from-pyright">From Pyright</h2>
 
 ### Step 1 — Import your configuration
 
@@ -105,7 +105,7 @@ If you used Pyright with `typeCheckingMode = "basic"` or `"standard"`, you will 
 
 ---
 
-## From mypy {#from-mypy}
+<h2 id="from-mypy">From mypy</h2>
 
 ### Step 1 — Import your configuration
 

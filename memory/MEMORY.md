@@ -32,3 +32,13 @@ Phase 2: LSP server and VS Code extension
 - `basilisk-lsp` crate stub already exists
 - Add `tower-lsp` or `lsp-server` dependency
 - Implement textDocument/diagnostic, hover, completions
+
+## Website
+- Located at `/website/` — eleventy 3.x + eleventy-plugin-techdoc
+- Build: `cd website && npm run build` (generates `_site/`)
+- Dev: `npm start` (localhost:8080)
+- Design: dark-only, orange (#e8500a) primary, purple (#7c3aed) accent
+- Layout names from techdoc: `layouts/base.njk`, `layouts/docs.njk`, `layouts/blog.njk`
+- Landing page uses `layouts/base.njk` (NOT home.njk — does not exist)
+- Nunjucks processes markdown: avoid `{# ... #}` syntax in .md files (use HTML anchors instead)
+- CSS: `src/assets/css/styles.css` — all custom properties, full component set
