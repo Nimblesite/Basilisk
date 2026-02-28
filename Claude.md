@@ -129,15 +129,32 @@ Tier 1 (typeshed, hand-written) → Tier 2 (community-reviewed auto-generated) �
 
 3. Unit testing: minimal. We avoid these except for isolating logic and enforcing fine grained behavior - particularly for regressions.
 
-| Layer | Tool | Purpose |
+| Layer | Rust mechanism | What it checks |
 |---|---|---|
-| Integration tests | Multi-file scenarios | Cross-module type checking |
-| Unit tests | `cargo test` | Per-crate correctness |
-| Conformance tests | Python typing test suite | PEP compliance (target: 100%) |
-| Golden file tests | Expected diagnostic output | Regression |
-| Fuzzing | `cargo-fuzz` | Crash resistance |
-| Property tests | `proptest` crate | Type system invariants |
-| Benchmarks | Criterion | Performance regression gates |
+| **E2E** | `tests/` in `basilisk-cli` crate; real `.py` fixtures piped through the full stack | The whole analyzer pipeline produces correct diagnostics — the thing that actually matters |
+| **Integration** | `tests/` in each crate (`basilisk-checker`, `basilisk-resolver`, etc.) | Individual crates behave correctly when wired together, isolated from CLI |
+| **Unit** | `#[cfg(test)]` modules inside `src/` files | Narrow logic only — edge cases and regression pins, kept to a minimum |
+| **Conformance** | Python typing test suite run via `cargo test` | PEP compliance (target: 100%) |
+| **Golden file** | Expected diagnostic snapshots committed to repo | Catches silent regressions in diagnostic output format |
+| **Mutation** | `cargo-mutants` | Proves tests actually catch bugs — kills mutants or the tests are worthless |
+| **Fuzzing** | `cargo-fuzz` (nightly) | Parser and checker don't crash on garbage input |
+| **Benchmarks** | `criterion` | Performance doesn't regress; targets: <10ms incremental, <5s cold on 100K LOC |
+
+### Mutation Testing (`cargo-mutants`)
+
+`cargo-mutants` is the standard Rust mutation testing tool. It mutates your code (flips operators, removes return values, etc.) and verifies that at least one test fails for each mutation. If no test fails, the tests are not testing what they claim to test.
+
+Run locally:
+```bash
+cargo mutants
+```
+
+In CI (GitHub Actions), mutation testing runs on every PR against the changed crates only:
+```yaml
+- uses: actions/checkout@v4
+- run: cargo install cargo-mutants
+- run: cargo mutants --in-diff HEAD~1..HEAD
+```
 
 Performance targets: PyTorch (600K LOC), Django (250K LOC), FastAPI (30K LOC), stdlib (500K LOC).
 
