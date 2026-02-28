@@ -519,11 +519,9 @@ fn collects_nested_function_name_as_local_assign() -> Result<(), Box<dyn std::er
     let src = "def outer() -> None:\n    def inner() -> None:\n        pass\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    let outer = resolved
-        .functions
-        .iter()
-        .find(|f| f.name == "outer")
-        .expect("outer must be present");
+    let outer = resolved.functions.iter().find(|f| f.name == "outer");
+    assert!(outer.is_some(), "outer must be present");
+    let outer = outer.ok_or("outer not found")?;
     assert!(
         outer.all_local_assigns.contains(&"inner".to_string()),
         "nested function name must appear in enclosing scope's assigns"
@@ -668,7 +666,8 @@ fn collects_decorator_with_call_on_attribute() -> Result<(), Box<dyn std::error:
     let resolved = resolve(&parsed)?;
     let bar = resolved.functions.iter().find(|f| f.name == "bar");
     assert!(bar.is_some(), "bar method must be resolved");
-    assert!(!bar.unwrap().decorators.is_empty());
+    let bar = bar.ok_or("bar not found")?;
+    assert!(!bar.decorators.is_empty());
     Ok(())
 }
 
@@ -751,5 +750,316 @@ fn resolves_from_import_without_module_name() -> Result<(), Box<dyn std::error::
     assert_eq!(resolved.imports.len(), 1);
     assert_eq!(resolved.imports[0].kind, ImportKind::From);
     assert_eq!(resolved.imports[0].module, "");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// For/while else body: collect_all_assigns orelse branch
+// ---------------------------------------------------------------------------
+
+#[test]
+fn collects_assigns_from_for_else_body() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "def foo() -> None:\n",
+        "    for i in range(10):\n",
+        "        x = 1\n",
+        "    else:\n",
+        "        y = 2\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let func = &resolved.functions[0];
+    assert!(
+        func.all_local_assigns.contains(&"x".to_string()),
+        "assign in for body must be collected"
+    );
+    assert!(
+        func.all_local_assigns.contains(&"y".to_string()),
+        "assign in for else body must be collected"
+    );
+    Ok(())
+}
+
+#[test]
+fn collects_assigns_from_while_else_body() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "def foo() -> None:\n",
+        "    while True:\n",
+        "        a = 1\n",
+        "        break\n",
+        "    else:\n",
+        "        b = 2\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let func = &resolved.functions[0];
+    assert!(
+        func.all_local_assigns.contains(&"a".to_string()),
+        "assign in while body must be collected"
+    );
+    assert!(
+        func.all_local_assigns.contains(&"b".to_string()),
+        "assign in while else body must be collected"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// List target unpacking: extract_target_names Expr::List branch
+// ---------------------------------------------------------------------------
+
+#[test]
+fn collects_list_target_unpacking() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!("def foo() -> None:\n", "    [a, b] = [1, 2]\n",).to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let func = &resolved.functions[0];
+    assert!(
+        func.all_local_assigns.contains(&"a".to_string()),
+        "first name in list-target must be collected"
+    );
+    assert!(
+        func.all_local_assigns.contains(&"b".to_string()),
+        "second name in list-target must be collected"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Return name refs: for/while else orelse branch
+// ---------------------------------------------------------------------------
+
+#[test]
+fn collects_return_name_from_for_else() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "def foo() -> int:\n",
+        "    for i in range(10):\n",
+        "        pass\n",
+        "    else:\n",
+        "        return result\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let func = &resolved.functions[0];
+    assert!(
+        func.return_name_refs.iter().any(|(name, _)| name == "result"),
+        "return name in for-else clause must be collected"
+    );
+    Ok(())
+}
+
+#[test]
+fn collects_return_name_from_while_else() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "def foo() -> int:\n",
+        "    while True:\n",
+        "        break\n",
+        "    else:\n",
+        "        return outcome\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let func = &resolved.functions[0];
+    assert!(
+        func.return_name_refs.iter().any(|(name, _)| name == "outcome"),
+        "return name in while-else clause must be collected"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Unhashable key: set and nested-dict keys, tuple/call traversal
+// ---------------------------------------------------------------------------
+
+#[test]
+fn detects_set_key_in_dict() -> Result<(), Box<dyn std::error::Error>> {
+    // {1, 2} as a dict key — set is unhashable at runtime
+    let src = "def foo() -> None:\n    d = {{1, 2}: 'val'}\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let func = &resolved.functions[0];
+    assert!(!func.unhashable_keys.is_empty(), "set dict key must be detected");
+    assert_eq!(func.unhashable_keys[0].key_type, "set");
+    Ok(())
+}
+
+#[test]
+fn detects_dict_key_in_dict() -> Result<(), Box<dyn std::error::Error>> {
+    // {'a': 1} as a dict key — dicts are unhashable
+    let src = "def foo() -> None:\n    d = {{'a': 1}: 'val'}\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let func = &resolved.functions[0];
+    assert!(!func.unhashable_keys.is_empty(), "dict dict key must be detected");
+    assert_eq!(func.unhashable_keys[0].key_type, "dict");
+    Ok(())
+}
+
+#[test]
+fn detects_unhashable_key_inside_tuple_expr() -> Result<(), Box<dyn std::error::Error>> {
+    // A tuple assigned as RHS — exercises the Expr::Tuple traversal path
+    let src = "def foo() -> None:\n    _ = ({[1]: 2},)\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let func = &resolved.functions[0];
+    assert!(
+        !func.unhashable_keys.is_empty(),
+        "unhashable key inside tuple element must be detected"
+    );
+    Ok(())
+}
+
+#[test]
+fn detects_unhashable_key_inside_call_arg() -> Result<(), Box<dyn std::error::Error>> {
+    // A dict with list key passed as a function argument — exercises Expr::Call traversal
+    let src = "def foo() -> None:\n    _ = some_func({[1]: 2})\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let func = &resolved.functions[0];
+    assert!(
+        !func.unhashable_keys.is_empty(),
+        "unhashable key inside call argument must be detected"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// RhsKind: IntLiteral, EmptyList, EmptyDict
+// ---------------------------------------------------------------------------
+
+#[test]
+fn classifies_int_literal_rhs() -> Result<(), Box<dyn std::error::Error>> {
+    use basilisk_resolver::RhsKind;
+    let src = "count = 42\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert_eq!(resolved.module_vars[0].rhs_kind, RhsKind::IntLiteral);
+    Ok(())
+}
+
+#[test]
+fn classifies_empty_list_rhs() -> Result<(), Box<dyn std::error::Error>> {
+    use basilisk_resolver::RhsKind;
+    let src = "items = []\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert_eq!(resolved.module_vars[0].rhs_kind, RhsKind::EmptyList);
+    Ok(())
+}
+
+#[test]
+fn classifies_empty_dict_rhs() -> Result<(), Box<dyn std::error::Error>> {
+    use basilisk_resolver::RhsKind;
+    let src = "mapping = {}\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert_eq!(resolved.module_vars[0].rhs_kind, RhsKind::EmptyDict);
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// collect_return_stmts: for/while orelse branches
+// ---------------------------------------------------------------------------
+
+#[test]
+fn collects_return_from_for_else_clause() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "def foo() -> int:\n",
+        "    for i in range(10):\n",
+        "        pass\n",
+        "    else:\n",
+        "        return 99\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let func = &resolved.functions[0];
+    assert_eq!(
+        func.return_stmts.len(),
+        1,
+        "return in for-else clause must be collected"
+    );
+    assert!(func.return_stmts[0].has_value);
+    Ok(())
+}
+
+#[test]
+fn collects_return_from_while_else_clause() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "def foo() -> int:\n",
+        "    while True:\n",
+        "        break\n",
+        "    else:\n",
+        "        return 0\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let func = &resolved.functions[0];
+    assert_eq!(
+        func.return_stmts.len(),
+        1,
+        "return in while-else clause must be collected"
+    );
+    assert!(func.return_stmts[0].has_value);
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// visitor.rs: three remaining uncovered paths
+// ---------------------------------------------------------------------------
+
+/// Dict spread (`{**other}`) → item.key is None → exercises the "false" branch
+/// of `if let Some(key) = item.key.as_ref()` (line 758 in visitor.rs).
+#[test]
+fn dict_spread_item_does_not_crash() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "def foo() -> None:\n",
+        "    other = {'b': 2}\n",
+        "    d = {**other, [1]: 'val'}\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let func = &resolved.functions[0];
+    // The [1] key is unhashable; the spread item (**other) has no key.
+    assert!(!func.unhashable_keys.is_empty(), "list key in dict must be detected");
+    Ok(())
+}
+
+/// Module-level `AnnAssign` without value (`x: int`) → `node.value` is None
+/// → exercises the "false" branch of `if let Some(val) = node.value.as_deref()`
+/// (line 796 in visitor.rs).
+#[test]
+fn module_level_ann_assign_without_value() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "x: int\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    // AnnAssign with no value: the important thing is this parses and resolves without crashing.
+    let _ = &resolved.module_vars;
+    Ok(())
+}
+
+/// Class with a docstring (Stmt::Expr) → exercises `_ => {}` in class_info_from
+/// (line 361 in visitor.rs).
+#[test]
+fn class_with_docstring_not_collected_as_attribute() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "class Foo:\n",
+        "    \"\"\"A docstring.\"\"\"\n",
+        "    x: int = 0\n",
+    )
+    .to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert_eq!(resolved.classes.len(), 1);
+    let cls = &resolved.classes[0];
+    // Only `x` is an attribute; the docstring is not.
+    assert_eq!(cls.attributes.len(), 1, "docstring must not be collected as attribute");
+    assert_eq!(cls.attributes[0].name, "x");
     Ok(())
 }

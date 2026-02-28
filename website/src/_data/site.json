@@ -1,0 +1,11 @@
+{
+  "name": "Basilisk",
+  "title": "Basilisk — Complete Type Safety for Python",
+  "description": "Strict-by-default static type analyzer for Python. Every parameter typed. Every return declared. Any always explicit. Built in Rust. Ships as a single binary.",
+  "url": "https://basilisk-lang.org",
+  "themeColor": "#e8500a",
+  "stylesheet": "/assets/css/styles.css",
+  "github": "https://github.com/basilisk-lang/basilisk",
+  "ogImage": "/assets/images/og-image.png",
+  "version": "0.1.0"
+}

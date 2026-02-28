@@ -1,0 +1,69 @@
+{
+  "main": [
+    { "title": "Docs", "url": "/docs/" },
+    { "title": "Rules", "url": "/docs/rules/" },
+    { "title": "Blog", "url": "/blog/" },
+    { "title": "GitHub", "url": "https://github.com/basilisk-lang/basilisk", "external": true }
+  ],
+  "docs": [
+    {
+      "title": "Getting Started",
+      "items": [
+        { "title": "Introduction", "url": "/docs/" },
+        { "title": "Installation", "url": "/docs/installation/" },
+        { "title": "Quick Start", "url": "/docs/quick-start/" }
+      ]
+    },
+    {
+      "title": "Configuration",
+      "items": [
+        { "title": "pyproject.toml Reference", "url": "/docs/configuration/" },
+        { "title": "Migration from Pyright", "url": "/docs/migration/#from-pyright" },
+        { "title": "Migration from mypy", "url": "/docs/migration/#from-mypy" }
+      ]
+    },
+    {
+      "title": "Diagnostics",
+      "items": [
+        { "title": "All Rules (BSK-E/W)", "url": "/docs/rules/" }
+      ]
+    },
+    {
+      "title": "Safety Analysis",
+      "items": [
+        { "title": "Mojo-Style Ownership", "url": "/docs/mojo-safety/" }
+      ]
+    },
+    {
+      "title": "Reference",
+      "items": [
+        { "title": "Comparison: Basilisk vs Others", "url": "/docs/comparison/" },
+        { "title": "Migration Guide", "url": "/docs/migration/" }
+      ]
+    }
+  ],
+  "footer": [
+    {
+      "title": "Product",
+      "items": [
+        { "title": "Documentation", "url": "/docs/" },
+        { "title": "Rules Reference", "url": "/docs/rules/" },
+        { "title": "Blog", "url": "/blog/" }
+      ]
+    },
+    {
+      "title": "Community",
+      "items": [
+        { "title": "GitHub", "url": "https://github.com/basilisk-lang/basilisk" },
+        { "title": "Issues", "url": "https://github.com/basilisk-lang/basilisk/issues" },
+        { "title": "Discussions", "url": "https://github.com/basilisk-lang/basilisk/discussions" }
+      ]
+    },
+    {
+      "title": "Legal",
+      "items": [
+        { "title": "MIT / Apache-2.0", "url": "https://github.com/basilisk-lang/basilisk/blob/main/LICENSE" }
+      ]
+    }
+  ]
+}

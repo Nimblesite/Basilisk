@@ -652,3 +652,51 @@ fn e0025_new_method_not_in_base_does_not_fire() -> Result<(), Box<dyn std::error
     assert!(e25.is_empty(), "new method not in base must not fire E0025");
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// E0016: additional branches
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0016_override_when_base_has_no_methods_does_not_fire() -> Result<(), Box<dyn std::error::Error>>
+{
+    // Base class has no methods — base_func lookup returns None → the override
+    // is not checked and no E0016 is emitted.  This exercises the
+    // `else { continue }` branch when `base_func` is missing.
+    let src = concat!(
+        "class Base:\n",
+        "    x: int = 0\n",
+        "class Child(Base):\n",
+        "    @override\n",
+        "    def process(self: 'Child', data: str) -> str: return data\n",
+    );
+    let diags = run(src)?;
+    let e16: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-E0016").collect();
+    assert!(
+        e16.is_empty(),
+        "base with no methods must not fire E0016, got: {e16:#?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0016_override_without_self_param_compatible_does_not_fire() -> Result<(), Box<dyn std::error::Error>>
+{
+    // Both base and child method have no `self` parameter — exercises the
+    // `_ => params` arm of `skip_self_param` (first param name is neither
+    // "self" nor "cls").
+    let src = concat!(
+        "class Base:\n",
+        "    def process(data: str) -> str: return data\n",
+        "class Child(Base):\n",
+        "    @override\n",
+        "    def process(data: str) -> str: return data\n",
+    );
+    let diags = run(src)?;
+    let e16: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-E0016").collect();
+    assert!(
+        e16.is_empty(),
+        "compatible override without self must not fire E0016, got: {e16:#?}"
+    );
+    Ok(())
+}
