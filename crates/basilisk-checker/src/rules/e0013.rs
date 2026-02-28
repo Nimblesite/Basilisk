@@ -31,7 +31,10 @@ impl Rule for ReturnTypeMismatch {
 fn check_function(func: &FunctionInfo, path: &str, out: &mut Vec<Diagnostic>) {
     func.return_stmts
         .iter()
-        .filter(|stmt| stmt.has_value)
+        // Skip call expressions: without full type inference we cannot prove the
+        // callee returns non-None (e.g. `return f(self)` where f: Callable[..., None]
+        // is valid in a -> None function).
+        .filter(|stmt| stmt.has_value && !stmt.value_is_call)
         .for_each(|stmt| out.push(make_diagnostic(stmt, &func.name, path)));
 }
 

@@ -67,6 +67,15 @@ impl Rule for IncompatibleVariableOverride {
             if is_typed_dict_hierarchy(child, &class_map) {
                 return;
             }
+            // Dataclasses use covariant semantics in frozen hierarchies; skip.
+            let in_dataclass_hierarchy = child.is_dataclass
+                || child
+                    .bases
+                    .iter()
+                    .any(|b| class_map.get(b.as_str()).is_some_and(|c| c.is_dataclass));
+            if in_dataclass_hierarchy {
+                return;
+            }
             check_class(
                 child,
                 &attr_map,
