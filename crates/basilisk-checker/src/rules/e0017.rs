@@ -76,8 +76,7 @@ fn check_class(
                 continue;
             }
 
-            let Some(base_attr) =
-                attr_map.get(&(base_name.as_str(), child_attr.name.as_str()))
+            let Some(base_attr) = attr_map.get(&(base_name.as_str(), child_attr.name.as_str()))
             else {
                 continue;
             };

@@ -38,9 +38,7 @@ fn make_diagnostic(span: Span, key_type: &str, path: &str) -> Diagnostic {
     Diagnostic {
         code: CODE.clone(),
         severity: Severity::Error,
-        message: format!(
-            "Unhashable type `{key_type}` used as a dictionary key"
-        ),
+        message: format!("Unhashable type `{key_type}` used as a dictionary key"),
         span,
         path: path.to_owned(),
         help: Some(format!(

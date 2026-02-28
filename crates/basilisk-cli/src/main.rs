@@ -212,22 +212,29 @@ mod tests {
         let path = base.to_string_lossy().into_owned();
         let files = collect_python_files(&[path])?;
         let _ = std::fs::remove_dir_all(&base);
-        assert_eq!(files.len(), 1, "directory walk must find exactly one .py file");
+        assert_eq!(
+            files.len(),
+            1,
+            "directory walk must find exactly one .py file"
+        );
         Ok(())
     }
 
     // ── collect_and_check: produces diagnostics for bad code ──────────────────
 
     #[test]
-    fn collect_and_check_returns_diagnostics_for_bad_code(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn collect_and_check_returns_diagnostics_for_bad_code() -> Result<(), Box<dyn std::error::Error>>
+    {
         let dir = std::env::temp_dir();
         let py = dir.join("basilisk_test_bad_code.py");
         std::fs::write(&py, b"def foo(x):\n    pass\n")?;
         let path = py.to_string_lossy().into_owned();
         let (diags, _) = collect_and_check(&[path])?;
         let _ = std::fs::remove_file(&py);
-        assert!(!diags.is_empty(), "unannotated function must produce diagnostics");
+        assert!(
+            !diags.is_empty(),
+            "unannotated function must produce diagnostics"
+        );
         Ok(())
     }
 
@@ -242,7 +249,10 @@ mod tests {
         let path = py.to_string_lossy().into_owned();
         let (diags, _) = collect_and_check(&[path])?;
         let _ = std::fs::remove_file(&py);
-        assert!(diags.is_empty(), "fully annotated code must produce no diagnostics");
+        assert!(
+            diags.is_empty(),
+            "fully annotated code must produce no diagnostics"
+        );
         Ok(())
     }
 }

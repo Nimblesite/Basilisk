@@ -49,10 +49,16 @@ impl Rule for IncompatibleOverride {
         // Build set of class names for same-module lookup.
         let class_names: Vec<&str> = module.classes.iter().map(|c| c.name.as_str()).collect();
 
-        module
-            .classes
-            .iter()
-            .for_each(|child| check_class(child, &method_map, &class_names, &module.source, &module.path, diagnostics));
+        module.classes.iter().for_each(|child| {
+            check_class(
+                child,
+                &method_map,
+                &class_names,
+                &module.source,
+                &module.path,
+                diagnostics,
+            )
+        });
     }
 }
 
@@ -105,10 +111,9 @@ fn signatures_incompatible(child: &FunctionInfo, base: &FunctionInfo, source: &s
     }
 
     // Compare non-self parameter annotation texts.
-    let params_differ = child_params
-        .iter()
-        .zip(base_params.iter())
-        .any(|(cp, bp)| annotation_text(source, cp.annotation_span) != annotation_text(source, bp.annotation_span));
+    let params_differ = child_params.iter().zip(base_params.iter()).any(|(cp, bp)| {
+        annotation_text(source, cp.annotation_span) != annotation_text(source, bp.annotation_span)
+    });
 
     if params_differ {
         return true;
@@ -136,7 +141,12 @@ fn annotation_text(source: &str, span: Option<basilisk_resolver::Span>) -> Optio
     source.get(span.start as usize..span.end as usize)
 }
 
-fn make_diagnostic(func: &FunctionInfo, method_name: &str, class_name: &str, path: &str) -> Diagnostic {
+fn make_diagnostic(
+    func: &FunctionInfo,
+    method_name: &str,
+    class_name: &str,
+    path: &str,
+) -> Diagnostic {
     Diagnostic {
         code: CODE.clone(),
         severity: Severity::Error,

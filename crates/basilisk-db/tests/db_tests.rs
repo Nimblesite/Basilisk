@@ -16,5 +16,8 @@ fn different_sources_produce_different_hashes() {
     // Hash function must distinguish different source strings.
     let hash_a = basilisk_db::hash_source("x = 1\n");
     let hash_b = basilisk_db::hash_source("x = 2\n");
-    assert_ne!(hash_a, hash_b, "different sources must produce different hashes");
+    assert_ne!(
+        hash_a, hash_b,
+        "different sources must produce different hashes"
+    );
 }

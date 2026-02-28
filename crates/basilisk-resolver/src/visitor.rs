@@ -402,7 +402,10 @@ fn function_info_from(func: &StmtFunctionDef, class_name: Option<String>) -> Fun
         .as_deref()
         .map_or(ReturnAnnotationKind::Missing, return_annotation_kind);
 
-    let return_annotation_span = func.returns.as_deref().map(|e| text_range_to_span(e.range()));
+    let return_annotation_span = func
+        .returns
+        .as_deref()
+        .map(|e| text_range_to_span(e.range()));
 
     let decorators = func
         .decorator_list
@@ -516,16 +519,8 @@ fn return_stmt_info_from(ret: &StmtReturn) -> ReturnStmtInfo {
 fn extract_target_names(expr: &Expr) -> Vec<String> {
     match expr {
         Expr::Name(name) => vec![name.id.to_string()],
-        Expr::Tuple(tuple) => tuple
-            .elts
-            .iter()
-            .flat_map(extract_target_names)
-            .collect(),
-        Expr::List(list) => list
-            .elts
-            .iter()
-            .flat_map(extract_target_names)
-            .collect(),
+        Expr::Tuple(tuple) => tuple.elts.iter().flat_map(extract_target_names).collect(),
+        Expr::List(list) => list.elts.iter().flat_map(extract_target_names).collect(),
         _ => Vec::new(),
     }
 }
@@ -536,11 +531,7 @@ fn collect_all_assigns(stmts: &[Stmt]) -> Vec<String> {
     for stmt in stmts {
         match stmt {
             Stmt::Assign(node) => {
-                out.extend(
-                    node.targets
-                        .iter()
-                        .flat_map(extract_target_names),
-                );
+                out.extend(node.targets.iter().flat_map(extract_target_names));
             }
             Stmt::AnnAssign(node) => {
                 if let Some(name) = expr_simple_name(&node.target) {
