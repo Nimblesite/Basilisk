@@ -9,6 +9,8 @@ pub enum Severity {
     Warning,
     /// A type error that must be resolved.
     Error,
+    /// Critical Mojo safety violation (ownership/move semantics). 
+    SafetyViolation,
 }
 
 impl std::fmt::Display for Severity {
@@ -16,6 +18,7 @@ impl std::fmt::Display for Severity {
         match self {
             Severity::Warning => write!(f, "warning"),
             Severity::Error => write!(f, "error"),
+            Severity::SafetyViolation => write!(f, "safety violation"),
         }
     }
 }
