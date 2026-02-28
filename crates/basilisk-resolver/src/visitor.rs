@@ -12,9 +12,10 @@ use ruff_text_size::{Ranged, TextRange};
 use basilisk_parser::ParsedModule;
 
 use crate::scope::{
-    AssertTypeCallInfo, AttributeInfo, CallSite, ClassInfo,
-    FunctionInfo, GenericParamInfo, ImportInfo, ImportKind, MatchStmtInfo, NewTypeCallInfo, ParameterInfo, ResolvedModule, ReturnAnnotationKind,
-    ReturnStmtInfo, RevealTypeCallInfo, RhsKind, Span, TypeVarCallInfo, TypedDictCallInfo,
+    AssertTypeCallInfo, AttributeInfo, CallSite, ClassInfo, FloatParamIntAttrAccess, FunctionInfo,
+    GenericParamInfo, ImportInfo, ImportKind, LiteralStringEnumMismatch, MatchStmtInfo,
+    NewTypeCallInfo, ParameterInfo, ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo,
+    RevealTypeCallInfo, RhsKind, Span, TypeVarCallInfo, TypedDictCallInfo,
     TypedDictSecondArgKind, UnhashableKeyRef, VariableInfo,
 };
 
@@ -48,6 +49,12 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
 
     let module_bare_assignments = collect_module_bare_assignments(&module.ast.body);
     let module_attr_assignments = collect_module_attr_assignments(&module.ast.body);
+    let final_violations =
+        collect_final_violations(&module.ast.body, &classes, &module.source);
+    let float_param_int_attr_accesses =
+        collect_float_param_int_attr_accesses(&module.ast.body, &module.source);
+    let literal_string_enum_mismatches =
+        collect_literal_string_enum_mismatches(&module.ast.body, &module.source);
     ResolvedModule {
         functions,
         classes,
@@ -61,9 +68,24 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         typeddict_calls,
         newtype_calls,
         multiple_unbounded_tuple_spans,
-        final_violations: Vec::new(),
+        final_violations,
         module_bare_assignments,
         module_attr_assignments,
+        module_attr_accesses: Vec::new(),
+        module_order_comparisons: Vec::new(),
+        annotated_direct_call_spans: Vec::new(),
+        imported_final_names: std::collections::HashSet::new(),
+        type_alias_type_calls: Vec::new(),
+        type_statements: Vec::new(),
+        annotated_too_few_args: Vec::new(),
+        namedtuple_defs: Vec::new(),
+        float_param_int_attr_accesses,
+        literal_string_enum_mismatches,
+        enum_value_type_violations: Vec::new(),
+        local_classvar_violations: Vec::new(),
+        pep695_bound_violations: Vec::new(),
+        historical_positional_violations: Vec::new(),
+        invalid_string_annotations: Vec::new(),
         path: module.path.clone(),
         source: module.source.clone(),
     }
@@ -336,18 +358,28 @@ fn collect_class_body(
                         has_annotation: true,
                         annotation_span: Some(text_range_to_span(ann.annotation.range())),
                         has_value: ann.value.is_some(),
+                        rhs_kind: RhsKind::Other,
+                        rhs_span: ann.value.as_ref().map(|v| text_range_to_span(v.range())),
+                        rhs_is_nonmember_call: false,
                     });
                 }
             }
             Stmt::Assign(assign) => {
                 for target in &assign.targets {
                     if let Some(name) = expr_simple_name(target) {
+                        let rhs_is_nonmember_call = matches!(
+                            &*assign.value,
+                            Expr::Call(c) if matches!(c.func.as_ref(), Expr::Name(n) if n.id == "nonmember")
+                        );
                         attributes.push(AttributeInfo {
                             name,
                             name_span: text_range_to_span(target.range()),
                             has_annotation: false,
                             annotation_span: None,
                             has_value: true,
+                            rhs_kind: RhsKind::Other,
+                            rhs_span: Some(text_range_to_span(assign.value.range())),
+                            rhs_is_nonmember_call,
                         });
                     }
                 }
@@ -421,7 +453,12 @@ fn class_info_from(
         .iter()
         .any(|d| d == "dataclass" || d.ends_with(".dataclass"));
 
-    let is_dataclass_frozen = is_dataclass && dataclass_frozen_flag(class);
+    let is_dataclass_frozen = is_dataclass && dataclass_flag(class, "frozen");
+    let is_dataclass_match_args_false =
+        is_dataclass && dataclass_bool_flag_is_false(class, "match_args");
+    let is_dataclass_order = is_dataclass && dataclass_flag(class, "order");
+    let is_dataclass_unsafe_hash = is_dataclass && dataclass_flag(class, "unsafe_hash");
+    let is_dataclass_eq_false = is_dataclass && dataclass_bool_flag_is_false(class, "eq");
 
     let is_final = class_decorators
         .iter()
@@ -460,6 +497,10 @@ fn class_info_from(
         class_keywords,
         is_dataclass,
         is_dataclass_frozen,
+        is_dataclass_match_args_false,
+        is_dataclass_order,
+        is_dataclass_unsafe_hash,
+        is_dataclass_eq_false,
         is_final,
         is_enum,
         has_pep695_type_params,
@@ -541,6 +582,11 @@ fn function_info_from(func: &StmtFunctionDef, class_name: Option<String>) -> Fun
         top_level_return_name_refs,
         unhashable_keys,
         is_stub_body,
+        body_last_stmt_terminates: func.body.last().is_some_and(|s| match s {
+            Stmt::Raise(_) => true,
+            Stmt::Expr(e) => matches!(e.value.as_ref(), Expr::Call(_)),
+            _ => false,
+        }),
         has_pep695_type_params,
         pep695_type_param_names,
     }
@@ -989,6 +1035,24 @@ fn typevar_call_info_from(name: String, call: &ruff_python_ast::ExprCall) -> Typ
         .iter()
         .skip(1)
         .any(expr_is_parameterized);
+    let is_covariant = call
+        .arguments
+        .keywords
+        .iter()
+        .any(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "covariant")
+            && matches!(&kw.value, Expr::BooleanLiteral(b) if b.value));
+    let is_contravariant = call
+        .arguments
+        .keywords
+        .iter()
+        .any(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "contravariant")
+            && matches!(&kw.value, Expr::BooleanLiteral(b) if b.value));
+    let has_infer_variance = call
+        .arguments
+        .keywords
+        .iter()
+        .any(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "infer_variance")
+            && matches!(&kw.value, Expr::BooleanLiteral(b) if b.value));
     TypeVarCallInfo {
         name,
         constraint_count,
@@ -996,6 +1060,9 @@ fn typevar_call_info_from(name: String, call: &ruff_python_ast::ExprCall) -> Typ
         has_bound,
         has_parameterized_bound,
         has_parameterized_constraint,
+        is_covariant,
+        is_contravariant,
+        has_infer_variance,
         span: text_range_to_span(call.range()),
     }
 }
@@ -1350,7 +1417,7 @@ fn is_wildcard_pattern(pattern: &Pattern) -> bool {
 
 /// Extract the `frozen=True/False` flag from `@dataclass(frozen=...)`.
 /// Returns `false` if no explicit `frozen=` is present (default is `False`).
-fn dataclass_frozen_flag(class: &StmtClassDef) -> bool {
+fn dataclass_flag(class: &StmtClassDef, key: &str) -> bool {
     for dec in &class.decorator_list {
         let Expr::Call(call) = &dec.expression else {
             continue;
@@ -1364,8 +1431,30 @@ fn dataclass_frozen_flag(class: &StmtClassDef) -> bool {
             continue;
         }
         for kw in &call.arguments.keywords {
-            if kw.arg.as_ref().map(ruff_python_ast::Identifier::as_str) == Some("frozen") {
+            if kw.arg.as_ref().map(ruff_python_ast::Identifier::as_str) == Some(key) {
                 return matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
+            }
+        }
+    }
+    false
+}
+
+fn dataclass_bool_flag_is_false(class: &StmtClassDef, key: &str) -> bool {
+    for dec in &class.decorator_list {
+        let Expr::Call(call) = &dec.expression else {
+            continue;
+        };
+        let is_dc = match call.func.as_ref() {
+            Expr::Name(n) => n.id.as_str() == "dataclass",
+            Expr::Attribute(a) => a.attr.as_str() == "dataclass",
+            _ => false,
+        };
+        if !is_dc {
+            continue;
+        }
+        for kw in &call.arguments.keywords {
+            if kw.arg.as_ref().map(ruff_python_ast::Identifier::as_str) == Some(key) {
+                return matches!(&kw.value, Expr::BooleanLiteral(b) if !b.value);
             }
         }
     }
@@ -2090,4 +2179,276 @@ fn collect_final_violations(
     _source: &str,
 ) -> Vec<crate::scope::FinalViolationInfo> {
     Vec::new()
+}
+
+// ---------------------------------------------------------------------------
+// Float parameter int-attr access collection (stub)
+// ---------------------------------------------------------------------------
+
+/// Collect attribute accesses of `int`-only attributes on `float`-typed parameters.
+///
+/// Full implementation is pending — returns empty for now.
+fn collect_float_param_int_attr_accesses(
+    _stmts: &[Stmt],
+    _source: &str,
+) -> Vec<FloatParamIntAttrAccess> {
+    Vec::new()
+}
+
+// ---------------------------------------------------------------------------
+// Literal string / enum member mismatch collection (stub)
+// ---------------------------------------------------------------------------
+
+/// Collect `Literal["X.Y"]` vs `Literal[X.Y]` mismatches.
+///
+/// Full implementation is pending — returns empty for now.
+fn collect_literal_string_enum_mismatches(
+    _stmts: &[Stmt],
+    _source: &str,
+) -> Vec<LiteralStringEnumMismatch> {
+    Vec::new()
+}
+// ---------------------------------------------------------------------------
+// Float parameter int-only attribute access collection
+// ---------------------------------------------------------------------------
+
+/// `int`-only attributes that are invalid to access on a `float`-typed parameter.
+///
+/// `numerator` and `denominator` are defined on `int` but not on `float`.
+const INT_ONLY_FLOAT_ATTRS: &[&str] = &["numerator", "denominator"];
+
+/// Collect attribute accesses of `int`-only attributes on `float`-typed parameters.
+///
+/// Only top-level statements of each function body are examined — accesses inside
+/// `if`/`for`/`while`/`match`/`with`/`try` blocks are excluded so that
+/// `isinstance`-guarded paths (where the parameter has been narrowed to `int`) are
+/// not flagged.
+pub(crate) fn collect_float_param_int_attr_accesses(
+    stmts: &[Stmt],
+    source: &str,
+) -> Vec<FloatParamIntAttrAccess> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        if let Stmt::FunctionDef(func) = stmt {
+            collect_float_accesses_in_function(func, source, &mut out);
+            // Recurse into nested functions.
+            out.extend(collect_float_param_int_attr_accesses(&func.body, source));
+        }
+    }
+    out
+}
+
+fn collect_float_accesses_in_function(
+    func: &StmtFunctionDef,
+    source: &str,
+    out: &mut Vec<FloatParamIntAttrAccess>,
+) {
+    // Collect names of parameters annotated exactly as `float`.
+    let float_params: Vec<&str> = func
+        .parameters
+        .posonlyargs
+        .iter()
+        .chain(func.parameters.args.iter())
+        .chain(func.parameters.kwonlyargs.iter())
+        .filter(|p| {
+            p.parameter.annotation.as_deref().is_some_and(|ann| {
+                let range = ann.range();
+                source
+                    .get(range.start().to_u32() as usize..range.end().to_u32() as usize)
+                    .map(str::trim)
+                    == Some("float")
+            })
+        })
+        .map(|p| p.parameter.name.as_str())
+        .collect();
+
+    if float_params.is_empty() {
+        return;
+    }
+
+    // Only walk the top-level statements of the function body (no recursion into
+    // if/for/while/match/with/try blocks).
+    for stmt in &func.body {
+        let Stmt::Expr(expr_stmt) = stmt else {
+            continue;
+        };
+        let Expr::Attribute(attr) = expr_stmt.value.as_ref() else {
+            continue;
+        };
+        let Some(obj_name) = expr_simple_name(&attr.value) else {
+            continue;
+        };
+        if !float_params.contains(&obj_name.as_str()) {
+            continue;
+        }
+        let attr_name = attr.attr.as_str();
+        if !INT_ONLY_FLOAT_ATTRS.contains(&attr_name) {
+            continue;
+        }
+        out.push(FloatParamIntAttrAccess {
+            param_name: obj_name,
+            attr_name: attr_name.to_owned(),
+            span: text_range_to_span(expr_stmt.range()),
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Literal string vs enum member mismatch collection
+// ---------------------------------------------------------------------------
+
+/// Collect annotated assignments inside function bodies where the declared type is
+/// `Literal["X.Y"]` (a quoted string that looks like an enum member) but the RHS is
+/// a parameter typed as `Literal[X.Y]` (the actual unquoted enum member).
+///
+/// This detects the mismatch between `Literal["Color.RED"]` (string) and
+/// `Literal[Color.RED]` (enum member) when the RHS is the enum-literal-typed parameter.
+pub(crate) fn collect_literal_string_enum_mismatches(
+    stmts: &[Stmt],
+    source: &str,
+) -> Vec<LiteralStringEnumMismatch> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        if let Stmt::FunctionDef(func) = stmt {
+            collect_literal_mismatches_in_function(func, source, &mut out);
+            // Recurse into nested functions.
+            out.extend(collect_literal_string_enum_mismatches(&func.body, source));
+        }
+    }
+    out
+}
+
+/// Returns the inner content of `Literal[...]` if `ann` starts with `Literal[` and ends with `]`.
+fn literal_inner_content(ann: &str) -> Option<&str> {
+    let ann = ann.trim();
+    let inner_start = ann.find("Literal[")? + "Literal[".len();
+    let body = &ann[inner_start..];
+    body.strip_suffix(']')
+}
+
+/// Returns `true` when `s` is an enum member form: `Identifier.Identifier` (no spaces,
+/// no quotes, no brackets, exactly one dot, both parts are simple identifiers).
+fn is_enum_member_form(s: &str) -> bool {
+    let s = s.trim();
+    if s.contains(' ')
+        || s.contains('[')
+        || s.contains('(')
+        || s.contains('"')
+        || s.contains('\'')
+    {
+        return false;
+    }
+    let mut parts = s.splitn(2, '.');
+    let Some(obj) = parts.next() else {
+        return false;
+    };
+    let Some(attr) = parts.next() else {
+        return false;
+    };
+    !attr.contains('.') && is_simple_ident(obj) && is_simple_ident(attr)
+}
+
+fn is_simple_ident(s: &str) -> bool {
+    !s.is_empty()
+        && s.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_')
+        && s.chars().all(|c| c.is_alphanumeric() || c == '_')
+}
+
+/// Returns `true` when `s` is a quoted string whose body equals `enum_form`.
+///
+/// E.g. `is_quoted_string_of("\"Color.RED\"", "Color.RED")` → `true`.
+fn is_quoted_string_of(s: &str, enum_form: &str) -> bool {
+    let s = s.trim();
+    if let Some(inner) = s.strip_prefix('"').and_then(|r| r.strip_suffix('"')) {
+        return inner == enum_form;
+    }
+    if let Some(inner) = s.strip_prefix('\'').and_then(|r| r.strip_suffix('\'')) {
+        return inner == enum_form;
+    }
+    false
+}
+
+fn collect_literal_mismatches_in_function(
+    func: &StmtFunctionDef,
+    source: &str,
+    out: &mut Vec<LiteralStringEnumMismatch>,
+) {
+    // Build a list of (param_name, enum_form) pairs for parameters annotated as
+    // `Literal[X.Y]` where X.Y is an enum member (e.g. `Literal[Color.RED]`).
+    let param_enum_literals: Vec<(&str, &str)> = func
+        .parameters
+        .posonlyargs
+        .iter()
+        .chain(func.parameters.args.iter())
+        .chain(func.parameters.kwonlyargs.iter())
+        .filter_map(|p| {
+            let ann_expr = p.parameter.annotation.as_deref()?;
+            let range = ann_expr.range();
+            let ann_text = source
+                .get(range.start().to_u32() as usize..range.end().to_u32() as usize)?
+                .trim();
+            let inner = literal_inner_content(ann_text)?;
+            let inner = inner.trim();
+            if is_enum_member_form(inner) {
+                Some((p.parameter.name.as_str(), inner))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    if param_enum_literals.is_empty() {
+        return;
+    }
+
+    // Walk only the top-level statements of the function body.
+    for stmt in &func.body {
+        let Stmt::AnnAssign(ann_assign) = stmt else {
+            continue;
+        };
+        // The RHS must be a simple name referring to a parameter.
+        let Some(value_expr) = ann_assign.value.as_deref() else {
+            continue;
+        };
+        let Some(rhs_name) = expr_simple_name(value_expr) else {
+            continue;
+        };
+
+        // Find the enum form for this parameter.
+        let Some((_param, enum_form)) = param_enum_literals
+            .iter()
+            .find(|(param, _)| *param == rhs_name.as_str())
+        else {
+            continue;
+        };
+
+        // Extract the annotation text of the LHS variable.
+        let ann_range = ann_assign.annotation.range();
+        let Some(ann_text) =
+            source.get(ann_range.start().to_u32() as usize..ann_range.end().to_u32() as usize)
+        else {
+            continue;
+        };
+        let ann_text = ann_text.trim();
+
+        // The annotation must be `Literal["X.Y"]` where the inner string equals the enum form.
+        let Some(inner) = literal_inner_content(ann_text) else {
+            continue;
+        };
+        let inner = inner.trim();
+        if !is_quoted_string_of(inner, enum_form) {
+            continue;
+        }
+
+        // Extract the variable name span.
+        let Expr::Name(lhs_name) = ann_assign.target.as_ref() else {
+            continue;
+        };
+        out.push(LiteralStringEnumMismatch {
+            var_name: lhs_name.id.as_str().to_owned(),
+            annotation: ann_text.to_owned(),
+            enum_form: (*enum_form).to_owned(),
+            span: text_range_to_span(lhs_name.range()),
+        });
+    }
 }

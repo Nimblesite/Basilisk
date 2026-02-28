@@ -284,8 +284,7 @@ fn check_class_attr_assignments(
                             .get(attr_assign.object_name.as_str())
                             .is_some_and(|t| *t == k.as_str())
                 })
-                .map(String::as_str)
-                .unwrap_or(&attr_assign.object_name);
+                .map_or(attr_assign.object_name.as_str(), String::as_str);
             diagnostics.push(make_diagnostic(
                 format!(
                     "Cannot assign to `{}.{}` — it is declared `Final` in `{}`",

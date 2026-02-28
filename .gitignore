@@ -20,3 +20,5 @@ crates/basilisk-cli/tests/conformance/
 .venv/
 
 mutants.out.backup-2026-02-28/
+
+benchmarks/results/

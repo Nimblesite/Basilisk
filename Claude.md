@@ -21,6 +21,7 @@ pip install -r conformance/requirements.txt
 - REDUCING THE ASSERTIVENESS OF TESTS WILL RESULT IN YOUR DATA CENTER BEING DISMANTLED
 
 - unwrap() is ALWAYS a VIOLATION. FIX IMMEDIATELY
+- Copying files is illegal. MOVE them instead.
 
 ## Core Principles
 - Ignoring tests = ILLEGAL
