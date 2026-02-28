@@ -3,9 +3,9 @@
 const ENUM_BASES: &[&str] = &["Enum", "IntEnum", "StrEnum", "Flag", "IntFlag", "ReprEnum"];
 
 use ruff_python_ast::{
-    Alias, Decorator, ElifElseClause, ExceptHandler, Expr, MatchCase, Parameter,
-    ParameterWithDefault, Pattern, Stmt, StmtAnnAssign, StmtAssign, StmtClassDef, StmtFunctionDef,
-    StmtImport, StmtImportFrom, StmtMatch, StmtReturn,
+    Alias, Decorator, ElifElseClause, ExceptHandler, Expr, MatchCase, Parameter, ParameterWithDefault,
+    Pattern, Stmt, StmtAnnAssign, StmtAssign, StmtClassDef, StmtFunctionDef, StmtImport,
+    StmtImportFrom, StmtMatch, StmtReturn, TypeParam,
 };
 use ruff_text_size::{Ranged, TextRange};
 
@@ -305,17 +305,11 @@ fn collect_from_handlers(
 // Class info
 // ---------------------------------------------------------------------------
 
-fn class_info_from(
+fn collect_class_body(
     class: &StmtClassDef,
     functions: &mut Vec<FunctionInfo>,
     match_stmts: &mut Vec<MatchStmtInfo>,
-) -> ClassInfo {
-    let bases: Vec<String> = class
-        .arguments
-        .as_ref()
-        .map(|args| args.args.iter().filter_map(expr_simple_name).collect())
-        .unwrap_or_default();
-
+) -> (Vec<AttributeInfo>, Vec<String>, Vec<(String, Vec<String>)>) {
     let mut attributes = Vec::new();
     let mut method_names = Vec::new();
     let mut method_decorators: Vec<(String, Vec<String>)> = Vec::new();
@@ -345,8 +339,7 @@ fn class_info_from(
                 }
             }
             Stmt::FunctionDef(func) => {
-                let class_name = class.name.to_string();
-                let func_info = function_info_from(func, Some(class_name));
+                let func_info = function_info_from(func, Some(class.name.to_string()));
                 let method_name = func_info.name.clone();
                 let decs = func_info.decorators.clone();
                 functions.push(func_info);
@@ -373,7 +366,24 @@ fn class_info_from(
         }
     }
 
-    let generic_params = extract_generic_params(class);
+    (attributes, method_names, method_decorators)
+}
+
+fn class_info_from(
+    class: &StmtClassDef,
+    functions: &mut Vec<FunctionInfo>,
+    match_stmts: &mut Vec<MatchStmtInfo>,
+) -> ClassInfo {
+    let bases: Vec<String> = class
+        .arguments
+        .as_ref()
+        .map(|args| args.args.iter().filter_map(expr_simple_name).collect())
+        .unwrap_or_default();
+
+    let (attributes, method_names, method_decorators) =
+        collect_class_body(class, functions, match_stmts);
+
+    let (generic_params, generic_non_typevar_args) = extract_generic_params(class);
     let is_typed_dict = bases.iter().any(|b| b == "TypedDict");
 
     let class_keywords: Vec<String> = class
@@ -403,6 +413,24 @@ fn class_info_from(
 
     let is_enum = bases.iter().any(|b| ENUM_BASES.contains(&b.as_str()));
 
+    let has_pep695_type_params = class.type_params.is_some();
+    let pep695_type_param_names: Vec<String> = class
+        .type_params
+        .as_deref()
+        .map(|tp| tp.type_params.iter().map(type_param_name).collect())
+        .unwrap_or_default();
+    let base_expression_names: Vec<String> = class
+        .arguments
+        .as_ref()
+        .map(|args| {
+            let mut names = Vec::new();
+            for expr in &args.args {
+                collect_name_refs_from_expr(expr, &mut names);
+            }
+            names
+        })
+        .unwrap_or_default();
+
     ClassInfo {
         name: class.name.to_string(),
         name_span: text_range_to_span(class.name.range),
@@ -417,6 +445,10 @@ fn class_info_from(
         is_dataclass,
         is_final,
         is_enum,
+        has_pep695_type_params,
+        pep695_type_param_names,
+        base_expression_names,
+        generic_non_typevar_args,
     }
 }
 
@@ -467,6 +499,12 @@ fn function_info_from(func: &StmtFunctionDef, class_name: Option<String>) -> Fun
     let top_level_return_name_refs = collect_top_level_return_name_refs(&func.body);
     let unhashable_keys = collect_unhashable_keys_from_stmts(&func.body);
     let is_stub_body = body_is_stub(&func.body);
+    let has_pep695_type_params = func.type_params.is_some();
+    let pep695_type_param_names: Vec<String> = func
+        .type_params
+        .as_deref()
+        .map(|tp| tp.type_params.iter().map(type_param_name).collect())
+        .unwrap_or_default();
 
     FunctionInfo {
         name: func.name.to_string(),
@@ -486,6 +524,8 @@ fn function_info_from(func: &StmtFunctionDef, class_name: Option<String>) -> Fun
         top_level_return_name_refs,
         unhashable_keys,
         is_stub_body,
+        has_pep695_type_params,
+        pep695_type_param_names,
     }
 }
 
@@ -896,6 +936,53 @@ fn collect_module_level_calls(stmts: &[Stmt]) -> Vec<CallSite> {
 }
 
 /// Collect module-level `TypeVar(...)` assignments.
+/// Returns `true` if an expression is a `TypeVar(...)` or `typing.TypeVar(...)` call.
+fn is_typevar_call(expr: &Expr) -> bool {
+    let Expr::Call(call) = expr else { return false };
+    expr_simple_name(&call.func)
+        .as_deref()
+        .map_or(false, |n| n == "TypeVar")
+        || matches!(call.func.as_ref(), Expr::Attribute(a) if a.attr.as_str() == "TypeVar")
+}
+
+/// Builds a `TypeVarCallInfo` from a `TypeVar(...)` call expression and a bound name.
+fn typevar_call_info_from(name: String, call: &ruff_python_ast::ExprCall) -> TypeVarCallInfo {
+    use ruff_text_size::Ranged as _;
+    let positional_args = call.arguments.args.len();
+    let constraint_count = positional_args.saturating_sub(1);
+    let has_default = call
+        .arguments
+        .keywords
+        .iter()
+        .any(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "default"));
+    let has_bound = call
+        .arguments
+        .keywords
+        .iter()
+        .any(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "bound"));
+    let has_parameterized_bound = call
+        .arguments
+        .keywords
+        .iter()
+        .find(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "bound"))
+        .is_some_and(|kw| expr_is_parameterized(&kw.value));
+    let has_parameterized_constraint = call
+        .arguments
+        .args
+        .iter()
+        .skip(1)
+        .any(expr_is_parameterized);
+    TypeVarCallInfo {
+        name,
+        constraint_count,
+        has_default,
+        has_bound,
+        has_parameterized_bound,
+        has_parameterized_constraint,
+        span: text_range_to_span(call.range()),
+    }
+}
+
 fn collect_typevar_calls(stmts: &[Stmt]) -> Vec<TypeVarCallInfo> {
     let mut out = Vec::new();
     for stmt in stmts {
@@ -904,86 +991,26 @@ fn collect_typevar_calls(stmts: &[Stmt]) -> Vec<TypeVarCallInfo> {
                 let Expr::Call(call) = node.value.as_ref() else {
                     continue;
                 };
-                let callee = expr_simple_name(&call.func)
-                    .filter(|n| n == "TypeVar")
-                    .or_else(|| {
-                        // typing.TypeVar(...)
-                        if let Expr::Attribute(attr) = call.func.as_ref() {
-                            if attr.attr.as_str() == "TypeVar" {
-                                return Some("TypeVar".to_owned());
-                            }
-                        }
-                        None
-                    });
-                if callee.is_none() {
+                if !is_typevar_call(node.value.as_ref()) {
                     continue;
                 }
-                let bound_name = node
-                    .targets
-                    .first()
-                    .and_then(expr_simple_name);
-                let Some(name) = bound_name else { continue };
-                // First positional arg is the name string; remaining are constraints.
-                let positional_args = call.arguments.args.len();
-                let constraint_count = positional_args.saturating_sub(1);
-                let has_default = call
-                    .arguments
-                    .keywords
-                    .iter()
-                    .any(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "default"));
-                let has_bound = call
-                    .arguments
-                    .keywords
-                    .iter()
-                    .any(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "bound"));
-                out.push(TypeVarCallInfo {
-                    name,
-                    constraint_count,
-                    has_default,
-                    has_bound,
-                    span: text_range_to_span(call.range()),
-                });
+                let Some(name) = node.targets.first().and_then(expr_simple_name) else {
+                    continue;
+                };
+                out.push(typevar_call_info_from(name, call));
             }
             Stmt::AnnAssign(node) => {
                 let Some(val) = node.value.as_deref() else {
                     continue;
                 };
                 let Expr::Call(call) = val else { continue };
-                let callee = expr_simple_name(&call.func)
-                    .filter(|n| n == "TypeVar")
-                    .or_else(|| {
-                        if let Expr::Attribute(attr) = call.func.as_ref() {
-                            if attr.attr.as_str() == "TypeVar" {
-                                return Some("TypeVar".to_owned());
-                            }
-                        }
-                        None
-                    });
-                if callee.is_none() {
+                if !is_typevar_call(val) {
                     continue;
                 }
                 let Some(name) = expr_simple_name(&node.target) else {
                     continue;
                 };
-                let positional_args = call.arguments.args.len();
-                let constraint_count = positional_args.saturating_sub(1);
-                let has_default = call
-                    .arguments
-                    .keywords
-                    .iter()
-                    .any(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "default"));
-                let has_bound = call
-                    .arguments
-                    .keywords
-                    .iter()
-                    .any(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "bound"));
-                out.push(TypeVarCallInfo {
-                    name,
-                    constraint_count,
-                    has_default,
-                    has_bound,
-                    span: text_range_to_span(call.range()),
-                });
+                out.push(typevar_call_info_from(name, call));
             }
             _ => {}
         }
@@ -1129,39 +1156,41 @@ fn collect_special_calls_from_stmt(stmt: &Stmt, func_name: &str, out: &mut Vec<R
     }
 }
 
-/// Extract `Generic[T, ...]` type parameter names from a class definition.
-fn extract_generic_params(class: &StmtClassDef) -> Vec<GenericParamInfo> {
+/// Extract `Generic[T, ...]` or `Protocol[T, ...]` type parameter names and
+/// any non-TypeVar (non-simple-name) argument spans from a class definition.
+///
+/// Returns `(type_params, non_typevar_arg_spans)`.
+fn extract_generic_params(class: &StmtClassDef) -> (Vec<GenericParamInfo>, Vec<Span>) {
     let args = match class.arguments.as_ref() {
         Some(a) => &a.args,
-        None => return Vec::new(),
+        None => return (Vec::new(), Vec::new()),
     };
     for base in args {
         let Expr::Subscript(sub) = base else { continue };
-        let is_generic = matches!(sub.value.as_ref(), Expr::Name(n) if n.id.as_str() == "Generic")
-            || matches!(sub.value.as_ref(), Expr::Attribute(a) if a.attr.as_str() == "Generic");
-        if !is_generic {
+        let is_generic_or_protocol =
+            matches!(sub.value.as_ref(), Expr::Name(n) if n.id.as_str() == "Generic" || n.id.as_str() == "Protocol")
+            || matches!(sub.value.as_ref(), Expr::Attribute(a) if a.attr.as_str() == "Generic" || a.attr.as_str() == "Protocol");
+        if !is_generic_or_protocol {
             continue;
         }
-        return match sub.slice.as_ref() {
-            Expr::Tuple(tuple) => tuple
-                .elts
-                .iter()
-                .filter_map(|e| {
-                    expr_simple_name(e).map(|name| GenericParamInfo {
-                        span: text_range_to_span(e.range()),
-                        name,
-                    })
-                })
-                .collect(),
-            other => expr_simple_name(other)
-                .map(|name| vec![GenericParamInfo {
-                    span: text_range_to_span(other.range()),
-                    name,
-                }])
-                .unwrap_or_default(),
+        let elts: &[Expr] = match sub.slice.as_ref() {
+            Expr::Tuple(tuple) => &tuple.elts,
+            other => std::slice::from_ref(other),
         };
+        let mut params = Vec::new();
+        let mut non_typevar = Vec::new();
+        for e in elts {
+            match expr_simple_name(e) {
+                Some(name) => params.push(GenericParamInfo {
+                    span: text_range_to_span(e.range()),
+                    name,
+                }),
+                None => non_typevar.push(text_range_to_span(e.range())),
+            }
+        }
+        return (params, non_typevar);
     }
-    Vec::new()
+    (Vec::new(), Vec::new())
 }
 
 fn call_site_from_expr(expr: &Expr) -> Option<CallSite> {
@@ -1442,10 +1471,64 @@ fn collect_typeddict_calls(stmts: &[Stmt]) -> Vec<TypedDictCallInfo> {
 // Shared utilities
 // ---------------------------------------------------------------------------
 
+/// Returns `true` when an expression contains a subscript (parameterized type like `list[T]`).
+///
+/// Used to detect cases like `TypeVar("T", bound=list[T])` where the bound is parameterized.
+fn expr_is_parameterized(expr: &Expr) -> bool {
+    match expr {
+        Expr::Subscript(_) => true,
+        Expr::BinOp(bin) => {
+            expr_is_parameterized(&bin.left) || expr_is_parameterized(&bin.right)
+        }
+        Expr::Tuple(tup) => tup.elts.iter().any(expr_is_parameterized),
+        _ => false,
+    }
+}
+
+/// Extracts the name from a PEP 695 `TypeParam` (`TypeVar`, `TypeVarTuple`, or `ParamSpec`).
+fn type_param_name(tp: &TypeParam) -> String {
+    match tp {
+        TypeParam::TypeVar(tv) => tv.name.to_string(),
+        TypeParam::TypeVarTuple(tvt) => tvt.name.to_string(),
+        TypeParam::ParamSpec(ps) => ps.name.to_string(),
+    }
+}
+
 fn expr_simple_name(expr: &Expr) -> Option<String> {
     match expr {
         Expr::Name(name) => Some(name.id.to_string()),
         _ => None,
+    }
+}
+
+/// Recursively collect all `Name` references from an expression tree.
+///
+/// Used to find all identifier names referenced within base class expressions,
+/// including those nested inside subscripts, tuples, and other compound forms.
+fn collect_name_refs_from_expr(expr: &Expr, out: &mut Vec<String>) {
+    match expr {
+        Expr::Name(name) => out.push(name.id.to_string()),
+        Expr::Subscript(sub) => {
+            collect_name_refs_from_expr(&sub.value, out);
+            collect_name_refs_from_expr(&sub.slice, out);
+        }
+        Expr::Attribute(attr) => collect_name_refs_from_expr(&attr.value, out),
+        Expr::Tuple(tup) => {
+            for elt in &tup.elts {
+                collect_name_refs_from_expr(elt, out);
+            }
+        }
+        Expr::BinOp(bin) => {
+            collect_name_refs_from_expr(&bin.left, out);
+            collect_name_refs_from_expr(&bin.right, out);
+        }
+        Expr::Call(call) => {
+            collect_name_refs_from_expr(&call.func, out);
+            for arg in &call.arguments.args {
+                collect_name_refs_from_expr(arg, out);
+            }
+        }
+        _ => {}
     }
 }
 

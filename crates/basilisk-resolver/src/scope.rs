@@ -96,6 +96,12 @@ pub struct FunctionInfo {
     /// Stub bodies are exempt from E0001/E0002/E0004: they appear in overload
     /// signatures, Protocol bodies used as stubs, and `.pyi`-style inline stubs.
     pub is_stub_body: bool,
+    /// `true` when the function uses PEP 695 type parameter syntax (`def foo[T](): ...`).
+    pub has_pep695_type_params: bool,
+    /// Names of the PEP 695 type parameters declared in `[...]` for this function.
+    ///
+    /// For `def foo[T, *Ts, **P](): ...`, this is `["T", "Ts", "P"]`.
+    pub pep695_type_param_names: Vec<String>,
 }
 
 /// A `return` statement found inside a function body.
@@ -220,6 +226,23 @@ pub struct ClassInfo {
     pub is_final: bool,
     /// `true` when the class directly or transitively inherits from an `Enum` family class.
     pub is_enum: bool,
+    /// `true` when the class uses PEP 695 type parameter syntax (`class Foo[T]: ...`).
+    pub has_pep695_type_params: bool,
+    /// Names of the PEP 695 type parameters declared in `[...]` for this class.
+    ///
+    /// For `class Foo[T, *Ts, **P]: ...`, this is `["T", "Ts", "P"]`.
+    pub pep695_type_param_names: Vec<String>,
+    /// All simple names referenced inside base class expressions (including subscript arguments).
+    ///
+    /// For `class Foo[V](dict[K, V])`, this would include `"dict"`, `"K"`, and `"V"`.
+    /// Used by E0042 to detect traditional `TypeVars` mixed into PEP 695 classes.
+    pub base_expression_names: Vec<String>,
+    /// Spans of arguments in `Generic[...]` or `Protocol[...]` that are NOT simple names
+    /// (i.e. not plain TypeVar references, but literals, subscripts, etc.).
+    ///
+    /// For `class Foo(Generic[int])`, this would contain the span of `int`.
+    /// Used by E0043 to detect non-TypeVar arguments to Generic/Protocol.
+    pub generic_non_typevar_args: Vec<Span>,
 }
 
 /// Type parameters declared in a `Generic[T1, T2, ...]` base expression.
@@ -242,6 +265,12 @@ pub struct TypeVarCallInfo {
     pub has_default: bool,
     /// Whether a `bound=` keyword argument is present.
     pub has_bound: bool,
+    /// Whether any constraint argument is parameterized by a TypeVar
+    /// (e.g. `TypeVar("T", str, list[T])` — constraint `list[T]` contains a TypeVar).
+    pub has_parameterized_constraint: bool,
+    /// Whether the `bound=` expression is itself parameterized by a TypeVar
+    /// (e.g. `TypeVar("T", bound=list[T])` — bound `list[T]` contains a TypeVar).
+    pub has_parameterized_bound: bool,
     /// The span of the entire `TypeVar` call expression.
     pub span: Span,
 }

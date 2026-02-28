@@ -40,6 +40,8 @@ pub(crate) mod e0038;
 pub(crate) mod e0039;
 pub(crate) mod e0040;
 pub(crate) mod e0041;
+pub(crate) mod e0042;
+pub(crate) mod e0043;
 
 use basilisk_resolver::ResolvedModule;
 
@@ -91,6 +93,8 @@ pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
         &e0039::InvalidAssertTypeCall,
         &e0040::EnumWithMembersFinal,
         &e0041::TooFewArguments,
+        &e0042::Pep695TraditionalTypeVarMix,
+        &e0043::NonTypeVarInGeneric,
     ];
 
     rules.iter().fold(Vec::new(), |mut acc, rule| {

@@ -75,17 +75,19 @@ if [[ "$DIFF_MODE" == true ]]; then
     header "Mutation test — changed lines vs origin/$BASE_BRANCH"
     echo -e "  Base: ${CYAN}origin/$BASE_BRANCH${RESET}"
     echo -e "  Only mutants generated from your diff will be tested.\n"
-    cargo mutants --jobs 4 "${PKG_ARGS[@]}" --in-diff "origin/$BASE_BRANCH..HEAD"
+    cargo mutants --jobs 4 "${PKG_ARGS[@]}" --in-diff "origin/$BASE_BRANCH..HEAD" \
+        --output "$REPO_ROOT/mutation_testing/mutants.out"
 else
     header "Mutation test — full suite"
     echo -e "  Packages: ${MUTATE_PACKAGES[*]}\n"
-    cargo mutants --jobs 4 "${PKG_ARGS[@]}"
+    cargo mutants --jobs 4 "${PKG_ARGS[@]}" \
+        --output "$REPO_ROOT/mutation_testing/mutants.out"
 fi
 
 EXIT=$?
 
 # ── Results ───────────────────────────────────────────────────────────────────
-RESULTS_DIR="$REPO_ROOT/mutants.out"
+RESULTS_DIR="$REPO_ROOT/mutation_testing/mutants.out"
 
 echo ""
 header "Results"
@@ -109,5 +111,18 @@ fi
 
 echo ""
 echo -e "${BOLD}Full results:${RESET} $RESULTS_DIR/"
+
+# ── HTML report ───────────────────────────────────────────────────────────────
+REPORT_SCRIPT="$REPO_ROOT/mutation_testing/mutants_report.py"
+OUTCOMES_JSON="$RESULTS_DIR/outcomes.json"
+HTML_REPORT="$REPO_ROOT/mutation_testing/mutants_report.html"
+
+if [[ -f "$REPORT_SCRIPT" && -f "$OUTCOMES_JSON" ]]; then
+    header "Generating HTML report"
+    python3 "$REPORT_SCRIPT" "$OUTCOMES_JSON" "$HTML_REPORT"
+    ok "HTML report: $HTML_REPORT"
+else
+    warn "HTML report skipped (outcomes.json not found)"
+fi
 
 exit "$EXIT"
