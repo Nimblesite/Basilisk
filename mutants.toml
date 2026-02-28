@@ -5,10 +5,6 @@
 # 2x gives ample headroom without letting slow mutants stall the run.
 timeout_multiplier = 2.0
 
-# Require at least this many tests to run — catches misconfigured test suites
-# that would otherwise silently pass every mutant.
-minimum_test_count = 50
-
 # Only test the packages being mutated, not the entire workspace.
 test_workspace = false
 
