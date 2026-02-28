@@ -23,3 +23,6 @@ mutants.out.backup-2026-02-28/
 
 benchmarks/results/
 .aider*
+
+
+coordination/

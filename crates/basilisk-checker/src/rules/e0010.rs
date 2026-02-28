@@ -27,6 +27,7 @@ const STDLIB_ROOTS: &[&str] = &[
     "ast",
     "asyncio",
     "base64",
+    "basilisk",
     "binascii",
     "bisect",
     "builtins",

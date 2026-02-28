@@ -1920,7 +1920,7 @@ fn extract_generic_params_collects_multiple_params() -> Result<(), Box<dyn std::
     Ok(())
 }
 
-/// `extract_generic_params` — `&&` → `||` and `!` → `` mutants at lines 948/949.
+/// `extract_generic_params` — `&&` to `||` and `!` to empty mutants at lines 948/949.
 /// Both conditions must hold: a `Subscript` whose value is `Generic`.
 /// Non-Generic subscripts must not produce params.
 #[test]

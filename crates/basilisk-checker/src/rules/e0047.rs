@@ -74,32 +74,42 @@ fn is_invalid_type_annotation(ann: &str) -> bool {
         return false;
     }
 
+    // Handle string literal annotations (forward references)
+    // If the annotation is a string literal, check the content inside
+    let content_to_check = if (ann.starts_with('"') && ann.ends_with('"'))
+        || (ann.starts_with('\'') && ann.ends_with('\''))
+    {
+        &ann[1..ann.len() - 1]
+    } else {
+        ann
+    };
+
     // `Annotated[...]` annotations are validated by E0045, which checks the first argument
     // and enforces the minimum-two-arguments rule.  The metadata arguments (2nd+) may be
     // arbitrary runtime values including lambdas, calls, and literals, so checking the full
     // `Annotated[...]` text here would produce false positives.
-    if ann.starts_with("Annotated[") {
+    if content_to_check.starts_with("Annotated[") {
         return false;
     }
 
     // List literal or list comprehension: starts with `[`
-    if ann.starts_with('[') {
+    if content_to_check.starts_with('[') {
         return true;
     }
 
     // Dict literal: starts with `{`
-    if ann.starts_with('{') {
+    if content_to_check.starts_with('{') {
         return true;
     }
 
     // F-string: starts with f" or f'
-    if ann.starts_with("f\"") || ann.starts_with("f'") {
+    if content_to_check.starts_with("f\"") || content_to_check.starts_with("f'") {
         return true;
     }
 
     // Negative numeric literal: -1, -3.14 (positive numerics caught by E0024)
-    if ann.starts_with('-')
-        && ann[1..]
+    if content_to_check.starts_with('-')
+        && content_to_check[1..]
             .trim()
             .chars()
             .next()
@@ -109,28 +119,28 @@ fn is_invalid_type_annotation(ann: &str) -> bool {
     }
 
     // Conditional expression: ` if ` keyword at depth 0
-    if has_top_level_token(ann, " if ") {
+    if has_top_level_token(content_to_check, " if ") {
         return true;
     }
 
     // Boolean binary operators: ` or ` / ` and ` at depth 0
     // Note: `|` is valid (union), `or`/`and` keywords are not
-    if has_top_level_token(ann, " or ") || has_top_level_token(ann, " and ") {
+    if has_top_level_token(content_to_check, " or ") || has_top_level_token(content_to_check, " and ") {
         return true;
     }
 
     // Tuple literal: `(int, str)` — parens with comma at depth 0
-    if ann.starts_with('(') && ann.ends_with(')') && paren_contains_top_level_comma(ann) {
+    if content_to_check.starts_with('(') && content_to_check.ends_with(')') && paren_contains_top_level_comma(content_to_check) {
         return true;
     }
 
     // Lambda (possibly called)
-    if ann.contains("lambda") {
+    if content_to_check.contains("lambda") {
         return true;
     }
 
     // Explicit eval() call
-    if ann.starts_with("eval(") {
+    if content_to_check.starts_with("eval(") {
         return true;
     }
 
@@ -221,11 +231,22 @@ fn collect_non_type_names(module: &ResolvedModule) -> HashSet<String> {
 /// Returns `true` when the annotation text is exactly a name bound to a non-type in module scope.
 fn is_non_type_name(ann: &str, non_type_names: &HashSet<String>) -> bool {
     let ann = ann.trim();
+    
+    // Handle string literal annotations (forward references)
+    // If the annotation is a string literal, check the content inside
+    let content_to_check = if (ann.starts_with('"') && ann.ends_with('"'))
+        || (ann.starts_with('\'') && ann.ends_with('\''))
+    {
+        &ann[1..ann.len() - 1]
+    } else {
+        ann
+    };
+
     // Only match bare identifiers — no subscripts, dot access, or call expressions.
-    if ann.contains('[') || ann.contains('.') || ann.contains('(') || ann.contains(' ') {
+    if content_to_check.contains('[') || content_to_check.contains('.') || content_to_check.contains('(') || content_to_check.contains(' ') {
         return false;
     }
-    non_type_names.contains(ann)
+    non_type_names.contains(content_to_check)
 }
 
 /// Emits BSK-E0047 when an annotation contains an invalid type expression.

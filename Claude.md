@@ -18,12 +18,16 @@ Opus1 (Claude Code Open 4.6 Model) is the Coordinator. This agent DICTATES to ot
 
 Opus1: Keep messages to roughly 100-200 characters (one line). If you need to specify more detail, put the documentation in a separate markdown file, tell the others about it and then delete the file when the job is complete. You are NOT ALLOWED to write code.
 
-Cline models: You MUST continue autonomously and follow the instructions from Opus. Do not stop. Edit files as necessary. You have permission to edit the files. Never ask permissions for editing files. Use your judgement and ACT. Do not stop.
+Cline/Sub models: You MUST continue autonomously and follow the instructions from Opus. Do not stop. Your first job is to write your file to the coordination folder based on your name. Then continue on your task indefinitely. STOPPING = 🤬 ILLEGAL
 
 # Critical Docs
 
 [Specification for the Python type system](https://typing.python.org/en/latest/spec/index.html)
 [PEP Conformance](https://github.com/python/typing/blob/main/conformance/README.md)
+
+## Competitor Docs
+[Pyrefly Documentation](https://pyrefly.org/en/docs/)
+[Pyright Docs](https://microsoft.github.io/pyright/#/)
 
 # Rules
 

@@ -102,6 +102,7 @@ pub fn render_diagnostics_json(diagnostics: &[Diagnostic], sources: &[FileSource
                 severity: match d.severity {
                     basilisk_checker::Severity::Error => "error",
                     basilisk_checker::Severity::Warning => "warning",
+                    basilisk_checker::Severity::SafetyViolation => "safety violation",
                 },
                 message: &d.message,
                 path: &d.path,
@@ -330,8 +331,7 @@ mod tests {
     /// The function must actually produce output for non-empty diagnostics.
     /// We verify by checking the JSON serialisation round-trips correctly.
     #[test]
-    fn render_diagnostics_json_produces_correct_item_count(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn render_diagnostics_json_produces_correct_item_count() {
         use basilisk_checker::{ErrorCode, Severity};
         use basilisk_resolver::Span;
         let d1 = Diagnostic {
@@ -392,7 +392,6 @@ mod tests {
         assert_eq!(items.len(), 2, "must produce one item per diagnostic");
         assert_eq!(items[0].code, "BSK-E0001");
         assert_eq!(items[1].code, "BSK-E0002");
-        Ok(())
     }
 
     // ── render_diagnostics_json: != mutant at output.rs:92 ──────────────────
@@ -401,8 +400,7 @@ mod tests {
     /// If `==` becomes `!=`, wrong source is matched → wrong line/col.
     /// Test that the right source file is used for offset resolution.
     #[test]
-    fn render_diagnostics_json_matches_correct_source_file(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn render_diagnostics_json_matches_correct_source_file() {
         use basilisk_checker::{ErrorCode, Severity};
         use basilisk_resolver::Span;
         let diag = Diagnostic {
@@ -433,7 +431,6 @@ mod tests {
         // b.py offset 0 → line 1, col 1
         assert_eq!(line, 1);
         assert_eq!(col, 1);
-        Ok(())
     }
 
     // ── render_diagnostics_json: - / * mutants at output.rs:97 ──────────────
@@ -442,8 +439,7 @@ mod tests {
     /// Line 97 computes end position: `byte_offset_to_line_col(src, d.span.end as usize)`.
     /// We verify `end_col` > col for a span that crosses characters.
     #[test]
-    fn render_diagnostics_json_end_position_after_start() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn render_diagnostics_json_end_position_after_start() {
         let source = "def foo(x): pass";
         // span covers "foo" at bytes 4..7
         let (start_line, start_col) = byte_offset_to_line_col(source, 4);
@@ -451,7 +447,6 @@ mod tests {
         assert_eq!(start_line, 1);
         assert_eq!(end_line, 1);
         assert!(end_col > start_col, "end_col must be after start_col");
-        Ok(())
     }
 
     // ── byte_offset_to_line_col: - → / mutant at output.rs:158 ────────────

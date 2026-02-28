@@ -4,6 +4,22 @@ We have many agents running in this codebase and you need to coordinate amonsgt 
 
 When your file grows to larger than 300 lines, create a new file with a new number and start working there instead.
 
+**Your first job is to name yourself and write your file**
+
+# Rules (Subs)
+
+- Do not idle. If you don't have direct instructions, help others and message them telling them what you are doing
+- Constantly check the file coordination/Coordinator-1.md because this is how the coordinator will message you
+
+# Rules (Coordinator)
+
+- Make sure everyone is doing something at all times
+- Split their work up so they're not stepping on each other's toes
+- Enforce the code and testing rules
+- Punish agents for slipping backwards - particular for reducing test specificity
+- They need to add more tests, fix lints, improve the code
+- Constantly tell them keep improving TEST COVERAGE
+
 ------------------------------------------------------------
 
 # Your File

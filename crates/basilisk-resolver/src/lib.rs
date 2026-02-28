@@ -16,9 +16,10 @@ pub use scope::{
     InvalidStringAnnotationKind, LiteralStringEnumMismatch, LocalClassVarViolation, MatchStmtInfo,
     ModuleAttrAccessInfo, ModuleAttrAssignment, ModuleBareAssignment, ModuleOrderComparisonInfo,
     NamedTupleDefInfo, NewTypeCallInfo, ParameterInfo, Pep695BoundViolation,
-    Pep695BoundViolationKind, ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo,
-    RevealTypeCallInfo, RhsKind, Span, TypeAliasTypeCallInfo, TypeStatementInfo, TypeVarCallInfo,
-    TypedDictCallInfo, TypedDictSecondArgKind, UnhashableKeyRef, VariableInfo,
+    Pep695BoundViolationKind, ReadOnlyViolationInfo, ReadOnlyViolationKind, ResolvedModule,
+    ReturnAnnotationKind, ReturnStmtInfo, RevealTypeCallInfo, RhsKind, Span, TypeAliasTypeCallInfo,
+    TypeStatementInfo, TypeVarCallInfo, TypedDictCallInfo, TypedDictSecondArgKind,
+    UnhashableKeyRef, VariableInfo,
 };
 
 use basilisk_parser::ParsedModule;

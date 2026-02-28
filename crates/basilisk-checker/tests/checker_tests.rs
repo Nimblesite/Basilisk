@@ -1422,7 +1422,7 @@ fn e0021_different_param_count_no_overlap() -> Result<(), Box<dyn std::error::Er
     Ok(())
 }
 
-/// `signatures_overlap` — `!` → `` (UnaryOperator remove) mutants at lines 93/94.
+/// `signatures_overlap` — `!` to empty (`UnaryOperator` remove) mutants at lines 93/94.
 /// When all non-self/cls params ARE annotated on both sides, they DON'T overlap.
 #[test]
 fn e0021_both_fully_annotated_no_overlap() -> Result<(), Box<dyn std::error::Error>> {
@@ -1831,7 +1831,7 @@ fn e0032_unknown_keyword_fires() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// E0032 — `!` → `` (UnaryOperator remove) at line 30.
+/// E0032 — `!` to empty (`UnaryOperator` remove) at line 30.
 /// A known keyword (`total`) must NOT fire.
 #[test]
 fn e0032_known_keyword_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {

@@ -216,6 +216,7 @@ pub struct VariableInfo {
 
 /// A class attribute (declared in the class body).
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct AttributeInfo {
     /// The attribute name.
     pub name: String,
@@ -236,6 +237,25 @@ pub struct AttributeInfo {
     /// In enum class bodies, `nonmember(value)` explicitly marks an attribute
     /// as a non-member so it is not treated as an enum value.
     pub rhs_is_nonmember_call: bool,
+    /// `true` when the right-hand-side is a lambda expression (`attr = lambda ...`).
+    ///
+    /// In enum class bodies, lambda attributes are non-members.
+    pub rhs_is_lambda: bool,
+    /// `true` when the right-hand-side is a call to `staticmethod(...)` or `classmethod(...)`.
+    ///
+    /// In enum class bodies, static/class method descriptors are non-members.
+    pub rhs_is_descriptor_call: bool,
+    /// `true` when the annotation contains `ReadOnly[...]` (directly or nested).
+    ///
+    /// Used by `BSK-E0056` to detect mutation of read-only `TypedDict` fields.
+    pub is_readonly: bool,
+    /// `true` when the field is keyword-only in a dataclass `__init__`.
+    ///
+    /// A field is `kw_only` when:
+    /// - It appears after the `_: KW_ONLY` sentinel in the class body.
+    /// - It uses `field(kw_only=True, ...)` as its value.
+    /// - The class is `@dataclass(kw_only=True)` and the field does not use `field(kw_only=False)`.
+    pub is_kw_only: bool,
 }
 
 /// Information about an enum `_value_` type mismatch detected during resolution.
@@ -298,6 +318,11 @@ pub struct ClassInfo {
     pub is_dataclass: bool,
     /// `true` when the dataclass is decorated with `frozen=True`.
     pub is_dataclass_frozen: bool,
+    /// `true` when the dataclass is decorated with `kw_only=True`.
+    ///
+    /// When `kw_only=True`, all fields are keyword-only in `__init__`
+    /// unless individually overridden with `field(kw_only=False)`.
+    pub is_dataclass_kw_only: bool,
     /// `true` when the dataclass is decorated with `match_args=False`
     /// (suppresses `__match_args__` generation).
     pub is_dataclass_match_args_false: bool,
@@ -576,6 +601,31 @@ pub enum CompareOp {
     GtE,
 }
 
+/// A violation of `ReadOnly` `TypedDict` field mutation rules.
+///
+/// Covers module-level subscript assignment (`td["key"] = val`) and `.update()` calls
+/// on `TypedDict` variables that have `ReadOnly` fields.
+#[derive(Debug, Clone)]
+pub struct ReadOnlyViolationInfo {
+    /// The name of the variable being mutated.
+    pub var_name: String,
+    /// The `ReadOnly` field key being mutated, if applicable (subscript assignment).
+    pub field_name: Option<String>,
+    /// The kind of violation.
+    pub kind: ReadOnlyViolationKind,
+    /// Span of the offending expression.
+    pub span: Span,
+}
+
+/// Kind of `ReadOnly` `TypedDict` mutation violation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReadOnlyViolationKind {
+    /// Direct subscript assignment: `td["key"] = val`.
+    SubscriptAssign,
+    /// `.update(...)` call on a `TypedDict` with `ReadOnly` fields.
+    UpdateCall,
+}
+
 /// A module-level comparison between two simple names using an ordering operator.
 ///
 /// Used to detect cross-type ordering comparisons of `order=True` dataclass instances.
@@ -802,6 +852,10 @@ pub struct ResolvedModule {
     ///
     /// Used by `BSK-E0058` to detect cross-type comparisons of `order=True` dataclass instances.
     pub module_order_comparisons: Vec<ModuleOrderComparisonInfo>,
+    /// `ReadOnly` `TypedDict` field mutation violations detected at module level.
+    ///
+    /// Used by `BSK-E0056`.
+    pub readonly_violations: Vec<ReadOnlyViolationInfo>,
     /// Spans of direct calls to `Annotated` (whether bare or parameterized).
     ///
     /// PEP 593 forbids calling `Annotated` as a callable:

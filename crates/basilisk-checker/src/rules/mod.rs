@@ -66,6 +66,7 @@ pub(crate) mod e0065;
 pub(crate) mod e0066;
 pub(crate) mod e0067;
 pub(crate) mod e0068;
+pub(crate) mod e0069;
 pub(crate) mod guards;
 
 use basilisk_resolver::ResolvedModule;
@@ -145,6 +146,7 @@ pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
         &e0066::EnumValueTypeMismatch,
         &e0067::EnumNonMemberInLiteral,
         &e0068::LiteralStringEnumMismatch,
+        &e0069::DataclassKwOnlyViolation,
     ];
 
     rules.iter().fold(Vec::new(), |mut acc, rule| {

@@ -1,23 +1,24 @@
-//! BSK-E0056: Mutation of ReadOnly TypedDict fields
+//! BSK-E0056: Mutation of `ReadOnly` `TypedDict` fields
 //!
-//! Fields marked as `ReadOnly` in TypedDicts cannot be mutated through:
+//! Fields marked as `ReadOnly` in `TypedDict`s cannot be mutated through:
 //! - Direct assignment: `td["key"] = value`
 //! - `.update()` calls
-//! - `**kwargs` mutation
 //!
 //! ```python
-//! from typing import TypedDict, ReadOnly
+//! from typing import TypedDict
+//! from typing_extensions import ReadOnly
 //!
 //! class Config(TypedDict):
 //!     name: str
 //!     version: ReadOnly[str]
 //!
 //! cfg: Config = {"name": "test", "version": "1.0"}
-//! cfg["version"] = "2.0"  # E0056 - Cannot mutate ReadOnly field
-//! cfg.update(version="2.0")  # E0056 - Cannot mutate ReadOnly field
+//! cfg["version"] = "2.0"  # E0056
+//! cfg.update(version="2.0")  # E0056
 //! ```
 
-use basilisk_resolver::{ResolvedModule, Span};
+use basilisk_resolver::{ReadOnlyViolationKind, ResolvedModule};
+
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
 use super::Rule;
@@ -27,28 +28,38 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://basilisk-lang.org/errors/BSK-E0056",
 };
 
-fn make_diag(field_name: &str, span: Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE,
-        severity: Severity::Error,
-        message: format!("Cannot mutate ReadOnly TypedDict field '{}'", field_name),
-        span,
-        path: path.to_owned(),
-        help: Some("ReadOnly fields can only be read, not written".to_owned()),
-        note: None,
-    }
-}
-
-/// Rule E0056: Detect mutation of ReadOnly TypedDict fields
+/// Rule E0056: Detect mutation of `ReadOnly` `TypedDict` fields
 pub(crate) struct ReadOnlyTypedDictMutation;
 
 impl Rule for ReadOnlyTypedDictMutation {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        // TODO: Implement actual ReadOnly TypedDict mutation detection
-        // Placeholder implementation that doesn't break compilation
-        // TODO: Implement actual ReadOnly TypedDict mutation detection
-        // For now this is a placeholder — no false positives
-        let _ = (module, diagnostics);
+        for v in &module.readonly_violations {
+            let message = match v.kind {
+                ReadOnlyViolationKind::SubscriptAssign => {
+                    let field = v.field_name.as_deref().unwrap_or("?");
+                    format!(
+                        "Cannot assign to read-only field `{field}` of `TypedDict` `{}`",
+                        v.var_name
+                    )
+                }
+                ReadOnlyViolationKind::UpdateCall => {
+                    format!(
+                        "Cannot call `.update()` on `TypedDict` `{}`: it has `ReadOnly` fields",
+                        v.var_name
+                    )
+                }
+            };
+            diagnostics.push(Diagnostic {
+                code: CODE.clone(),
+                severity: Severity::Error,
+                message,
+                span: v.span,
+                path: module.path.clone(),
+                help: Some("Remove the mutation or make the field writable".to_owned()),
+                note: Some(
+                    "PEP 705: `ReadOnly` fields in a `TypedDict` may not be assigned after construction".to_owned(),
+                ),
+            });
+        }
     }
 }
-

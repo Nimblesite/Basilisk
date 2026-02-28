@@ -135,26 +135,39 @@ fn parse_literal_class_member(ann: &str) -> Option<(&str, &str)> {
 /// Returns `true` when `member_name` is NOT a real enum member of `cls`.
 ///
 /// A name is considered a non-member when:
-/// - It is a method of the class (defined with `def`).
+/// - It is a method defined with `def` (unless decorated with `@member`).
 /// - It starts with `__` but does not end with `__` (private name-mangled attribute).
 /// - It is declared with `nonmember(...)` as the RHS.
+/// - It is assigned a lambda expression.
+/// - It is assigned via `staticmethod(...)` or `classmethod(...)`.
+/// - It is `_value_` or `value` — these are special attributes that
+/// cannot be accessed directly on enum members.
 fn is_non_member(cls: &ClassInfo, member_name: &str) -> bool {
     // Private names (name-mangling): `__X` where X does not end with `__`.
     if member_name.starts_with("__") && !member_name.ends_with("__") {
         return true;
     }
 
-    // Method names defined with `def` in the class body.
-    if cls.method_names.iter().any(|m| m.as_str() == member_name) {
+    // Special enum member attributes that cannot be accessed directly.
+    if member_name == "_value_" || member_name == "value" {
         return true;
     }
 
-    // Class body attributes explicitly declared with `nonmember(...)`.
-    if cls
-        .attributes
-        .iter()
-        .any(|a| a.name == member_name && a.rhs_is_nonmember_call)
-    {
+    // Method names defined with `def` in the class body — unless decorated with `@member`.
+    if cls.method_names.iter().any(|m| m.as_str() == member_name) {
+        let has_member_decorator = cls.method_decorators.iter().any(|(name, decorators)| {
+            name.as_str() == member_name && decorators.iter().any(|d| d == "member")
+        });
+        if !has_member_decorator {
+            return true;
+        }
+    }
+
+    // Class body attributes explicitly declared with `nonmember(...)`, lambda, or descriptor.
+    if cls.attributes.iter().any(|a| {
+            a.name == member_name
+                && (a.rhs_is_nonmember_call || a.rhs_is_lambda || a.rhs_is_descriptor_call)
+    }) {
         return true;
     }
 

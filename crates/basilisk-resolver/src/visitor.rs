@@ -14,9 +14,9 @@ use basilisk_parser::ParsedModule;
 use crate::scope::{
     AssertTypeCallInfo, AttributeInfo, CallSite, ClassInfo, FloatParamIntAttrAccess, FunctionInfo,
     GenericParamInfo, ImportInfo, ImportKind, LiteralStringEnumMismatch, MatchStmtInfo,
-    NewTypeCallInfo, ParameterInfo, ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo,
-    RevealTypeCallInfo, RhsKind, Span, TypeVarCallInfo, TypedDictCallInfo,
-    TypedDictSecondArgKind, UnhashableKeyRef, VariableInfo,
+    NewTypeCallInfo, ParameterInfo, ReadOnlyViolationInfo, ReadOnlyViolationKind, ResolvedModule,
+    ReturnAnnotationKind, ReturnStmtInfo, RevealTypeCallInfo, RhsKind, Span, TypeVarCallInfo,
+    TypedDictCallInfo, TypedDictSecondArgKind, UnhashableKeyRef, VariableInfo,
 };
 
 /// Collect all function definitions and module-level data from the parsed module.
@@ -44,17 +44,16 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         collect_assert_type_calls_from_stmts(&module.ast.body, &[], &module.source);
     let typeddict_calls = collect_typeddict_calls(&module.ast.body);
     let newtype_calls = collect_newtype_calls(&module.ast.body);
-    let multiple_unbounded_tuple_spans =
-        collect_multiple_unbounded_tuple_spans(&module.ast.body);
+    let multiple_unbounded_tuple_spans = collect_multiple_unbounded_tuple_spans(&module.ast.body);
 
     let module_bare_assignments = collect_module_bare_assignments(&module.ast.body);
     let module_attr_assignments = collect_module_attr_assignments(&module.ast.body);
-    let final_violations =
-        collect_final_violations(&module.ast.body, &classes, &module.source);
+    let final_violations = collect_final_violations(&module.ast.body, &classes, &module.source);
     let float_param_int_attr_accesses =
         collect_float_param_int_attr_accesses(&module.ast.body, &module.source);
     let literal_string_enum_mismatches =
         collect_literal_string_enum_mismatches(&module.ast.body, &module.source);
+    let readonly_violations = collect_readonly_violations(&module.ast.body, &classes);
     ResolvedModule {
         functions,
         classes,
@@ -71,9 +70,10 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         final_violations,
         module_bare_assignments,
         module_attr_assignments,
-        module_attr_accesses: Vec::new(),
-        module_order_comparisons: Vec::new(),
-        annotated_direct_call_spans: Vec::new(),
+        module_attr_accesses: collect_module_attr_accesses(&module.ast.body),
+        module_order_comparisons: collect_module_order_comparisons(&module.ast.body),
+        readonly_violations,
+        annotated_direct_call_spans: collect_annotated_direct_calls(&module.ast.body),
         imported_final_names: std::collections::HashSet::new(),
         type_alias_type_calls: Vec::new(),
         type_statements: Vec::new(),
@@ -343,15 +343,28 @@ fn collect_class_body(
     class: &StmtClassDef,
     functions: &mut Vec<FunctionInfo>,
     match_stmts: &mut Vec<MatchStmtInfo>,
+    class_kw_only: bool,
 ) -> (Vec<AttributeInfo>, Vec<String>, Vec<(String, Vec<String>)>) {
     let mut attributes = Vec::new();
     let mut method_names = Vec::new();
     let mut method_decorators: Vec<(String, Vec<String>)> = Vec::new();
+    // Track whether we have passed the `_: KW_ONLY` sentinel.
+    let mut after_kw_only_sentinel = false;
 
     for stmt in &class.body {
         match stmt {
             Stmt::AnnAssign(ann) => {
                 if let Some(name) = expr_simple_name(&ann.target) {
+                    // Detect `_: KW_ONLY` sentinel — skip it as a real attribute.
+                    if name == "_" && annotation_is_kw_only(&ann.annotation) {
+                        after_kw_only_sentinel = true;
+                        continue;
+                    }
+                    let is_readonly = annotation_contains_readonly_expr(&ann.annotation);
+                    let field_kw_only = ann.value.as_deref().and_then(field_kw_only_override);
+                    // Determine kw_only: explicit field() override wins; then sentinel; then class default.
+                    let is_kw_only =
+                        field_kw_only.unwrap_or(after_kw_only_sentinel || class_kw_only);
                     attributes.push(AttributeInfo {
                         name,
                         name_span: text_range_to_span(ann.target.range()),
@@ -361,6 +374,10 @@ fn collect_class_body(
                         rhs_kind: RhsKind::Other,
                         rhs_span: ann.value.as_ref().map(|v| text_range_to_span(v.range())),
                         rhs_is_nonmember_call: false,
+                        rhs_is_lambda: false,
+                        rhs_is_descriptor_call: false,
+                        is_readonly,
+                        is_kw_only,
                     });
                 }
             }
@@ -371,6 +388,14 @@ fn collect_class_body(
                             &*assign.value,
                             Expr::Call(c) if matches!(c.func.as_ref(), Expr::Name(n) if n.id == "nonmember")
                         );
+                        let rhs_is_lambda = matches!(&*assign.value, Expr::Lambda(_));
+                        let rhs_is_descriptor_call = matches!(
+                            &*assign.value,
+                            Expr::Call(c) if matches!(
+                                c.func.as_ref(),
+                                Expr::Name(n) if n.id == "staticmethod" || n.id == "classmethod"
+                            )
+                        );
                         attributes.push(AttributeInfo {
                             name,
                             name_span: text_range_to_span(target.range()),
@@ -380,6 +405,10 @@ fn collect_class_body(
                             rhs_kind: RhsKind::Other,
                             rhs_span: Some(text_range_to_span(assign.value.range())),
                             rhs_is_nonmember_call,
+                            rhs_is_lambda,
+                            rhs_is_descriptor_call,
+                            is_readonly: false,
+                            is_kw_only: false,
                         });
                     }
                 }
@@ -426,8 +455,15 @@ fn class_info_from(
         .map(|args| args.args.iter().filter_map(expr_simple_name).collect())
         .unwrap_or_default();
 
+    // Pre-compute is_dataclass and is_dataclass_kw_only so we can pass kw_only
+    // into collect_class_body for per-attribute kw_only resolution.
+    let pre_is_dataclass = class.decorator_list.iter().any(
+        |d| matches!(decorator_name(d), Some(n) if n == "dataclass" || n.ends_with(".dataclass")),
+    );
+    let pre_is_dataclass_kw_only = pre_is_dataclass && dataclass_flag(class, "kw_only");
+
     let (attributes, method_names, method_decorators) =
-        collect_class_body(class, functions, match_stmts);
+        collect_class_body(class, functions, match_stmts, pre_is_dataclass_kw_only);
 
     let (generic_params, generic_non_typevar_args) = extract_generic_params(class);
     let is_typed_dict = bases.iter().any(|b| b == "TypedDict");
@@ -454,6 +490,7 @@ fn class_info_from(
         .any(|d| d == "dataclass" || d.ends_with(".dataclass"));
 
     let is_dataclass_frozen = is_dataclass && dataclass_flag(class, "frozen");
+    let is_dataclass_kw_only = pre_is_dataclass_kw_only;
     let is_dataclass_match_args_false =
         is_dataclass && dataclass_bool_flag_is_false(class, "match_args");
     let is_dataclass_order = is_dataclass && dataclass_flag(class, "order");
@@ -497,6 +534,7 @@ fn class_info_from(
         class_keywords,
         is_dataclass,
         is_dataclass_frozen,
+        is_dataclass_kw_only,
         is_dataclass_match_args_false,
         is_dataclass_order,
         is_dataclass_unsafe_hash,
@@ -1035,24 +1073,22 @@ fn typevar_call_info_from(name: String, call: &ruff_python_ast::ExprCall) -> Typ
         .iter()
         .skip(1)
         .any(expr_is_parameterized);
-    let is_covariant = call
-        .arguments
-        .keywords
-        .iter()
-        .any(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "covariant")
-            && matches!(&kw.value, Expr::BooleanLiteral(b) if b.value));
-    let is_contravariant = call
-        .arguments
-        .keywords
-        .iter()
-        .any(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "contravariant")
-            && matches!(&kw.value, Expr::BooleanLiteral(b) if b.value));
-    let has_infer_variance = call
-        .arguments
-        .keywords
-        .iter()
-        .any(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "infer_variance")
-            && matches!(&kw.value, Expr::BooleanLiteral(b) if b.value));
+    let is_covariant = call.arguments.keywords.iter().any(|kw| {
+        kw.arg.as_ref().is_some_and(|a| a.as_str() == "covariant")
+            && matches!(&kw.value, Expr::BooleanLiteral(b) if b.value)
+    });
+    let is_contravariant = call.arguments.keywords.iter().any(|kw| {
+        kw.arg
+            .as_ref()
+            .is_some_and(|a| a.as_str() == "contravariant")
+            && matches!(&kw.value, Expr::BooleanLiteral(b) if b.value)
+    });
+    let has_infer_variance = call.arguments.keywords.iter().any(|kw| {
+        kw.arg
+            .as_ref()
+            .is_some_and(|a| a.as_str() == "infer_variance")
+            && matches!(&kw.value, Expr::BooleanLiteral(b) if b.value)
+    });
     TypeVarCallInfo {
         name,
         constraint_count,
@@ -1178,7 +1214,6 @@ fn collect_reveal_type_calls_from_stmt(stmt: &Stmt, out: &mut Vec<RevealTypeCall
     }
 }
 
-
 /// Extract `Generic[T, ...]` or `Protocol[T, ...]` type parameter names and
 /// any non-TypeVar (non-simple-name) argument spans from a class definition.
 ///
@@ -1237,7 +1272,9 @@ fn call_site_from_expr(expr: &Expr) -> Option<CallSite> {
         .keywords
         .iter()
         .filter_map(|kw| {
-            kw.arg.as_ref().map(|name| (name.to_string(), classify_rhs(&kw.value)))
+            kw.arg
+                .as_ref()
+                .map(|name| (name.to_string(), classify_rhs(&kw.value)))
         })
         .collect();
     Some(CallSite {
@@ -1437,6 +1474,32 @@ fn dataclass_flag(class: &StmtClassDef, key: &str) -> bool {
         }
     }
     false
+}
+
+/// Returns `true` when the annotation expression is `KW_ONLY`
+/// (the sentinel that makes all following fields keyword-only).
+fn annotation_is_kw_only(ann: &Expr) -> bool {
+    matches!(ann, Expr::Name(n) if n.id.as_str() == "KW_ONLY")
+}
+
+/// For a field value expression, returns `Some(true)` when it is `field(kw_only=True, ...)`,
+/// `Some(false)` when it is `field(kw_only=False, ...)`, and `None` otherwise.
+fn field_kw_only_override(value: &Expr) -> Option<bool> {
+    let Expr::Call(call) = value else { return None };
+    let is_field_call = match call.func.as_ref() {
+        Expr::Name(n) => n.id.as_str() == "field",
+        Expr::Attribute(a) => a.attr.as_str() == "field",
+        _ => false,
+    };
+    if !is_field_call {
+        return None;
+    }
+    for kw in &call.arguments.keywords {
+        if kw.arg.as_ref().map(ruff_python_ast::Identifier::as_str) == Some("kw_only") {
+            return Some(matches!(&kw.value, Expr::BooleanLiteral(b) if b.value));
+        }
+    }
+    None
 }
 
 fn dataclass_bool_flag_is_false(class: &StmtClassDef, key: &str) -> bool {
@@ -1709,7 +1772,10 @@ fn count_unbounded_in_tuple_slice(slice: &Expr) -> usize {
         // Single-element tuple slice — check just this element
         other => return usize::from(is_unbounded_component(other)),
     };
-    elements.iter().filter(|e| is_unbounded_component(e)).count()
+    elements
+        .iter()
+        .filter(|e| is_unbounded_component(e))
+        .count()
 }
 
 /// Returns `true` if this expression is an unbounded tuple component:
@@ -1731,9 +1797,7 @@ fn is_unbounded_component(expr: &Expr) -> bool {
             _ => false,
         },
         // `Unpack[tuple[T, ...]]` — legacy unpack form
-        Expr::Subscript(sub)
-            if expr_simple_name(&sub.value).as_deref() == Some("Unpack") =>
-        {
+        Expr::Subscript(sub) if expr_simple_name(&sub.value).as_deref() == Some("Unpack") => {
             match sub.slice.as_ref() {
                 Expr::Subscript(inner_sub)
                     if expr_simple_name(&inner_sub.value).as_deref() == Some("tuple") =>
@@ -1752,8 +1816,7 @@ fn is_unbounded_component(expr: &Expr) -> bool {
 fn inner_tuple_is_unbounded(slice: &Expr) -> bool {
     match slice {
         Expr::Tuple(t) => t.elts.last().is_some_and(|e| {
-            matches!(e, Expr::EllipsisLiteral(_))
-                || is_unbounded_component(e)  // nested unbounded: `*tuple[str, ...]`
+            matches!(e, Expr::EllipsisLiteral(_)) || is_unbounded_component(e) // nested unbounded: `*tuple[str, ...]`
         }),
         Expr::EllipsisLiteral(_) => true,
         // Single element that is itself an unbounded starred expr
@@ -1835,8 +1898,15 @@ fn collect_multi_unbounded_from_stmt(stmt: &Stmt, out: &mut Vec<Span>) {
         }
         Stmt::If(if_stmt) => {
             collect_multi_unbounded_from_stmts(&if_stmt.body, out);
-            collect_multi_unbounded_from_stmts(&if_stmt.elif_else_clauses.iter()
-                .flat_map(|c| c.body.iter()).cloned().collect::<Vec<_>>(), out);
+            collect_multi_unbounded_from_stmts(
+                &if_stmt
+                    .elif_else_clauses
+                    .iter()
+                    .flat_map(|c| c.body.iter())
+                    .cloned()
+                    .collect::<Vec<_>>(),
+                out,
+            );
         }
         _ => {}
     }
@@ -1913,7 +1983,9 @@ fn collect_assert_type_calls_from_stmt(
                 &node.body, params, source,
             ));
             out.extend(collect_assert_type_calls_from_stmts(
-                &node.orelse, params, source,
+                &node.orelse,
+                params,
+                source,
             ));
         }
         Stmt::While(node) => {
@@ -1921,7 +1993,9 @@ fn collect_assert_type_calls_from_stmt(
                 &node.body, params, source,
             ));
             out.extend(collect_assert_type_calls_from_stmts(
-                &node.orelse, params, source,
+                &node.orelse,
+                params,
+                source,
             ));
         }
         Stmt::With(node) => {
@@ -1935,13 +2009,19 @@ fn collect_assert_type_calls_from_stmt(
             ));
             for handler in &node.handlers {
                 let ExceptHandler::ExceptHandler(h) = handler;
-                out.extend(collect_assert_type_calls_from_stmts(&h.body, params, source));
+                out.extend(collect_assert_type_calls_from_stmts(
+                    &h.body, params, source,
+                ));
             }
             out.extend(collect_assert_type_calls_from_stmts(
-                &node.orelse, params, source,
+                &node.orelse,
+                params,
+                source,
             ));
             out.extend(collect_assert_type_calls_from_stmts(
-                &node.finalbody, params, source,
+                &node.finalbody,
+                params,
+                source,
             ));
         }
         Stmt::Match(node) => {
@@ -1971,8 +2051,8 @@ fn build_param_scope_owned(
             let name = p.parameter.name.to_string();
             let ann = p.parameter.annotation.as_deref()?;
             let range = ann.range();
-            let ann_text = source
-                .get(range.start().to_u32() as usize..range.end().to_u32() as usize)?;
+            let ann_text =
+                source.get(range.start().to_u32() as usize..range.end().to_u32() as usize)?;
             Some((name, ann_text.to_owned()))
         })
         .collect()
@@ -2027,11 +2107,7 @@ fn build_assert_type_call_info(
 /// - If it is a name reference to a known parameter, returns its annotation text (normalized).
 /// - If it is a literal, returns the corresponding primitive type name.
 /// - Otherwise returns `None`.
-fn resolve_actual_type(
-    expr: &Expr,
-    params: &[(&str, &str)],
-    source: &str,
-) -> Option<String> {
+fn resolve_actual_type(expr: &Expr, params: &[(&str, &str)], source: &str) -> Option<String> {
     match expr {
         Expr::Name(name) => {
             let param_name = name.id.as_str();
@@ -2051,6 +2127,8 @@ fn resolve_actual_type(
         Expr::BooleanLiteral(_) => Some("bool".to_owned()),
         Expr::BytesLiteral(_) => Some("bytes".to_owned()),
         Expr::NoneLiteral(_) => Some("None".to_owned()),
+        // Attribute accesses (`X.y`, `obj.attr`) cannot be typed without inference.
+        Expr::Attribute(_) | Expr::Subscript(_) | Expr::Call(_) => None,
         _ => {
             // For other expressions, try to get the source text.
             let range = expr.range();
@@ -2119,6 +2197,241 @@ fn types_match(actual: &str, expected: &str) -> bool {
     actual == expected
 }
 
+/// Recursively check if an expression contains `ReadOnly`.
+fn annotation_contains_readonly_expr(expr: &Expr) -> bool {
+    match expr {
+        Expr::Name(name) => name.id.as_str() == "ReadOnly",
+        Expr::Attribute(attr) => attr.attr.as_str() == "ReadOnly",
+        Expr::Subscript(sub) => {
+            annotation_contains_readonly_expr(&sub.value)
+                || annotation_contains_readonly_expr(&sub.slice)
+        }
+        Expr::BinOp(bin) => {
+            annotation_contains_readonly_expr(&bin.left)
+                || annotation_contains_readonly_expr(&bin.right)
+        }
+        Expr::Tuple(tuple) => tuple.elts.iter().any(annotation_contains_readonly_expr),
+        _ => false,
+    }
+}
+
+/// Extract `ReadOnly` field names from a functional `TypedDict(...)` call's dict literal.
+///
+/// Returns a set of field names that have `ReadOnly[...]` annotations.
+fn functional_typeddict_readonly_fields(dict_expr: &Expr) -> std::collections::HashSet<String> {
+    let Expr::Dict(dict) = dict_expr else {
+        return std::collections::HashSet::new();
+    };
+    dict.items
+        .iter()
+        .filter_map(|item| {
+            let key_expr = item.key.as_ref()?;
+            let Expr::StringLiteral(key) = key_expr else {
+                return None;
+            };
+            if annotation_contains_readonly_expr(&item.value) {
+                Some(key.value.to_string())
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// Scan function body for `kwargs["key"] = val` where key is a `ReadOnly` field.
+fn check_kwargs_readonly_violations(
+    func: &StmtFunctionDef,
+    td_readonly_fields: &std::collections::HashMap<String, std::collections::HashSet<String>>,
+    out: &mut Vec<ReadOnlyViolationInfo>,
+) {
+    let Some(kwarg) = &func.parameters.kwarg else {
+        return;
+    };
+    let Some(ann_expr) = kwarg.annotation.as_deref() else {
+        return;
+    };
+    // Match Unpack[TypedDictName]
+    let Expr::Subscript(sub) = ann_expr else {
+        return;
+    };
+    if !matches!(sub.value.as_ref(), Expr::Name(n) if n.id == "Unpack") {
+        return;
+    }
+    let Some(td_name) = expr_simple_name(&sub.slice) else {
+        return;
+    };
+    let Some(readonly_fields) = td_readonly_fields.get(&td_name) else {
+        return;
+    };
+    let kwarg_name = kwarg.name.to_string();
+    for stmt in &func.body {
+        let Stmt::Assign(assign) = stmt else {
+            continue;
+        };
+        for target in &assign.targets {
+            let Expr::Subscript(tsub) = target else {
+                continue;
+            };
+            let Some(var_name) = expr_simple_name(&tsub.value) else {
+                continue;
+            };
+            if var_name != kwarg_name {
+                continue;
+            }
+            let Expr::StringLiteral(key_str) = tsub.slice.as_ref() else {
+                continue;
+            };
+            let key = key_str.value.to_string();
+            if readonly_fields.contains(&key) {
+                out.push(ReadOnlyViolationInfo {
+                    var_name,
+                    field_name: Some(key),
+                    kind: ReadOnlyViolationKind::SubscriptAssign,
+                    span: text_range_to_span(assign.range()),
+                });
+            }
+        }
+    }
+}
+
+/// Build a map from `TypedDict` class name to its `ReadOnly` field names.
+fn build_typeddict_readonly_map(
+    stmts: &[Stmt],
+    classes: &[ClassInfo],
+) -> std::collections::HashMap<String, std::collections::HashSet<String>> {
+    use std::collections::{HashMap, HashSet};
+    let mut map: HashMap<String, HashSet<String>> = classes
+        .iter()
+        .filter(|cls| cls.is_typed_dict)
+        .filter_map(|cls| {
+            let fields: HashSet<String> = cls
+                .attributes
+                .iter()
+                .filter(|a| a.is_readonly)
+                .map(|a| a.name.clone())
+                .collect();
+            if fields.is_empty() {
+                None
+            } else {
+                Some((cls.name.clone(), fields))
+            }
+        })
+        .collect();
+    // Functional form: `Name = TypedDict("Name", {"field": ReadOnly[...]})`
+    for stmt in stmts {
+        let Stmt::Assign(assign) = stmt else { continue };
+        let Some(lhs_name) = assign.targets.first().and_then(expr_simple_name) else {
+            continue;
+        };
+        let Expr::Call(call) = assign.value.as_ref() else {
+            continue;
+        };
+        if !matches!(call.func.as_ref(), Expr::Name(n) if n.id == "TypedDict") {
+            continue;
+        }
+        if let Some(second_arg) = call.arguments.args.get(1) {
+            let fields = functional_typeddict_readonly_fields(second_arg);
+            if !fields.is_empty() {
+                map.insert(lhs_name, fields);
+            }
+        }
+    }
+    map
+}
+
+/// Build a map from variable name to its declared `TypedDict` type name.
+fn build_var_type_map<'a>(
+    stmts: &[Stmt],
+    td_readonly_fields: &'a std::collections::HashMap<String, std::collections::HashSet<String>>,
+) -> std::collections::HashMap<String, &'a str> {
+    let mut map = std::collections::HashMap::new();
+    for stmt in stmts {
+        let Stmt::AnnAssign(ann) = stmt else { continue };
+        let Some(var_name) = expr_simple_name(&ann.target) else {
+            continue;
+        };
+        let Expr::Name(type_name) = ann.annotation.as_ref() else {
+            continue;
+        };
+        if let Some((key, _)) = td_readonly_fields.get_key_value(type_name.id.as_str()) {
+            map.insert(var_name, key.as_str());
+        }
+    }
+    map
+}
+
+/// Collect `ReadOnly` violations from module-level statements and function bodies.
+fn collect_readonly_violations(
+    stmts: &[Stmt],
+    classes: &[ClassInfo],
+) -> Vec<ReadOnlyViolationInfo> {
+    let td_readonly_fields = build_typeddict_readonly_map(stmts, classes);
+    if td_readonly_fields.is_empty() {
+        return Vec::new();
+    }
+    let var_type = build_var_type_map(stmts, &td_readonly_fields);
+    let mut out = Vec::new();
+    for stmt in stmts {
+        match stmt {
+            Stmt::Assign(assign) => {
+                for target in &assign.targets {
+                    let Expr::Subscript(sub) = target else {
+                        continue;
+                    };
+                    let Some(var_name) = expr_simple_name(&sub.value) else {
+                        continue;
+                    };
+                    let Some(&class_name) = var_type.get(&var_name) else {
+                        continue;
+                    };
+                    let Some(fields) = td_readonly_fields.get(class_name) else {
+                        continue;
+                    };
+                    let Expr::StringLiteral(key_str) = sub.slice.as_ref() else {
+                        continue;
+                    };
+                    let key = key_str.value.to_string();
+                    if fields.contains(&key) {
+                        out.push(ReadOnlyViolationInfo {
+                            var_name,
+                            field_name: Some(key),
+                            kind: ReadOnlyViolationKind::SubscriptAssign,
+                            span: text_range_to_span(assign.range()),
+                        });
+                    }
+                }
+            }
+            Stmt::Expr(expr_stmt) => {
+                let Expr::Call(call) = expr_stmt.value.as_ref() else {
+                    continue;
+                };
+                let Expr::Attribute(attr) = call.func.as_ref() else {
+                    continue;
+                };
+                if attr.attr.as_str() != "update" {
+                    continue;
+                }
+                let Some(var_name) = expr_simple_name(&attr.value) else {
+                    continue;
+                };
+                if var_type.contains_key(&var_name) {
+                    out.push(ReadOnlyViolationInfo {
+                        var_name,
+                        field_name: None,
+                        kind: ReadOnlyViolationKind::UpdateCall,
+                        span: text_range_to_span(expr_stmt.value.range()),
+                    });
+                }
+            }
+            Stmt::FunctionDef(func) => {
+                check_kwargs_readonly_violations(func, &td_readonly_fields, &mut out);
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
 // ---------------------------------------------------------------------------
 // Module-level bare and attribute assignment collection
 // ---------------------------------------------------------------------------
@@ -2185,17 +2498,16 @@ fn collect_final_violations(
 // Float parameter int-attr access collection (stub)
 // ---------------------------------------------------------------------------
 
-/// Collect attribute accesses of `int`-only attributes on `float`-typed parameters.
-///
-/// Full implementation is pending — returns empty for now.
+// Collect attribute accesses of `int`-only attributes on `float`-typed parameters.
+// Full implementation is pending — returns empty for now.
 
 // ---------------------------------------------------------------------------
 // Literal string / enum member mismatch collection (stub)
 // ---------------------------------------------------------------------------
 
-/// Collect `Literal["X.Y"]` vs `Literal[X.Y]` mismatches.
-///
-/// Full implementation is pending — returns empty for now.
+// Collect `Literal["X.Y"]` vs `Literal[X.Y]` mismatches.
+// Full implementation is pending — returns empty for now.
+
 // ---------------------------------------------------------------------------
 // Float parameter int-only attribute access collection
 // ---------------------------------------------------------------------------
@@ -2318,11 +2630,7 @@ fn literal_inner_content(ann: &str) -> Option<&str> {
 /// no quotes, no brackets, exactly one dot, both parts are simple identifiers).
 fn is_enum_member_form(s: &str) -> bool {
     let s = s.trim();
-    if s.contains(' ')
-        || s.contains('[')
-        || s.contains('(')
-        || s.contains('"')
-        || s.contains('\'')
+    if s.contains(' ') || s.contains('[') || s.contains('(') || s.contains('"') || s.contains('\'')
     {
         return false;
     }
@@ -2338,7 +2646,9 @@ fn is_enum_member_form(s: &str) -> bool {
 
 fn is_simple_ident(s: &str) -> bool {
     !s.is_empty()
-        && s.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_')
+        && s.chars()
+            .next()
+            .is_some_and(|c| c.is_alphabetic() || c == '_')
         && s.chars().all(|c| c.is_alphanumeric() || c == '_')
 }
 
@@ -2437,6 +2747,160 @@ fn collect_literal_mismatches_in_function(
             annotation: ann_text.to_owned(),
             enum_form: (*enum_form).to_owned(),
             span: text_range_to_span(lhs_name.range()),
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Module-level attribute access collection
+// ---------------------------------------------------------------------------
+
+/// Collect module-level `Name.attr` attribute accesses.
+///
+/// Used by E0059 to detect access to `__match_args__` on a dataclass with
+/// `match_args=False`.
+fn collect_module_attr_accesses(stmts: &[Stmt]) -> Vec<crate::scope::ModuleAttrAccessInfo> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        collect_attr_accesses_from_stmt(stmt, &mut out);
+    }
+    out
+}
+
+fn collect_attr_accesses_from_stmt(stmt: &Stmt, out: &mut Vec<crate::scope::ModuleAttrAccessInfo>) {
+    match stmt {
+        Stmt::Expr(node) => collect_attr_accesses_from_expr(&node.value, out),
+        Stmt::If(node) => {
+            collect_attr_accesses_from_expr(&node.test, out);
+            for s in &node.body {
+                collect_attr_accesses_from_stmt(s, out);
+            }
+            for clause in &node.elif_else_clauses {
+                if let Some(test) = &clause.test {
+                    collect_attr_accesses_from_expr(test, out);
+                }
+                for s in &clause.body {
+                    collect_attr_accesses_from_stmt(s, out);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_attr_accesses_from_expr(expr: &Expr, out: &mut Vec<crate::scope::ModuleAttrAccessInfo>) {
+    if let Expr::Attribute(attr) = expr {
+        if let Some(object_name) = expr_simple_name(&attr.value) {
+            out.push(crate::scope::ModuleAttrAccessInfo {
+                object_name,
+                attr_name: attr.attr.to_string(),
+                span: text_range_to_span(expr.range()),
+            });
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Annotated() direct-call detection
+// ---------------------------------------------------------------------------
+
+/// Collect spans of module-level calls where `Annotated` itself is called as a
+/// function — either bare `Annotated(...)` or parameterized `Annotated[T, ...]()`.
+///
+/// Used by `BSK-E0045` to detect invalid direct invocation of `Annotated`.
+fn collect_annotated_direct_calls(stmts: &[Stmt]) -> Vec<Span> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        if let Stmt::Expr(node) = stmt {
+            collect_annotated_calls_from_expr(&node.value, &mut out);
+        }
+    }
+    out
+}
+
+fn collect_annotated_calls_from_expr(expr: &Expr, out: &mut Vec<Span>) {
+    let Expr::Call(call) = expr else { return };
+    let is_annotated_callee = match call.func.as_ref() {
+        // `Annotated(...)` — bare name call
+        Expr::Name(n) => n.id.as_str() == "Annotated",
+        // `Annotated[T, ...]()` — subscript then call
+        Expr::Subscript(s) => {
+            matches!(s.value.as_ref(), Expr::Name(n) if n.id.as_str() == "Annotated")
+        }
+        _ => false,
+    };
+    if is_annotated_callee {
+        out.push(text_range_to_span(expr.range()));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Module-level ordering comparison collection
+// ---------------------------------------------------------------------------
+
+/// Collect module-level `a < b` / `a <= b` / `a > b` / `a >= b` comparisons
+/// where both operands are simple names.
+///
+/// Used by E0060 to detect cross-type ordering comparisons of `order=True`
+/// dataclass instances.
+fn collect_module_order_comparisons(
+    stmts: &[Stmt],
+) -> Vec<crate::scope::ModuleOrderComparisonInfo> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        collect_order_comparisons_from_stmt(stmt, &mut out);
+    }
+    out
+}
+
+fn collect_order_comparisons_from_stmt(
+    stmt: &Stmt,
+    out: &mut Vec<crate::scope::ModuleOrderComparisonInfo>,
+) {
+    match stmt {
+        Stmt::Expr(node) => collect_order_comparisons_from_expr(&node.value, out),
+        Stmt::If(node) => {
+            collect_order_comparisons_from_expr(&node.test, out);
+            for s in &node.body {
+                collect_order_comparisons_from_stmt(s, out);
+            }
+            for clause in &node.elif_else_clauses {
+                if let Some(test) = &clause.test {
+                    collect_order_comparisons_from_expr(test, out);
+                }
+                for s in &clause.body {
+                    collect_order_comparisons_from_stmt(s, out);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_order_comparisons_from_expr(
+    expr: &Expr,
+    out: &mut Vec<crate::scope::ModuleOrderComparisonInfo>,
+) {
+    let Expr::Compare(cmp) = expr else { return };
+    let Some(left_name) = expr_simple_name(&cmp.left) else {
+        return;
+    };
+    for (op, comparator) in cmp.ops.iter().zip(cmp.comparators.iter()) {
+        let scope_op = match op {
+            ruff_python_ast::CmpOp::Lt => crate::scope::CompareOp::Lt,
+            ruff_python_ast::CmpOp::LtE => crate::scope::CompareOp::LtE,
+            ruff_python_ast::CmpOp::Gt => crate::scope::CompareOp::Gt,
+            ruff_python_ast::CmpOp::GtE => crate::scope::CompareOp::GtE,
+            _ => continue,
+        };
+        let Some(right_name) = expr_simple_name(comparator) else {
+            continue;
+        };
+        out.push(crate::scope::ModuleOrderComparisonInfo {
+            left_name: left_name.clone(),
+            right_name,
+            op: scope_op,
+            span: text_range_to_span(expr.range()),
         });
     }
 }
