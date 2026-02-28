@@ -5,7 +5,7 @@
 //! comment in the source.  This rule fires as a **Warning** so that it does
 //! not block compilation but remains visible in reports.
 
-use basilisk_resolver::{FunctionInfo, ParameterInfo, ResolvedModule};
+use basilisk_resolver::{FunctionInfo, ParameterInfo, ResolvedModule, ReturnAnnotationKind};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
@@ -53,7 +53,7 @@ fn check_function(func: &FunctionInfo, path: &str, out: &mut Vec<Diagnostic>) {
         }
     }
 
-    if func.return_annotation_is_any {
+    if func.return_annotation == ReturnAnnotationKind::Any {
         out.push(make_return_diagnostic(func, path));
     }
 }

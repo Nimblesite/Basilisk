@@ -1,7 +1,7 @@
 //! AST visitor that collects function definitions and module-level information.
 
 use ruff_python_ast::{
-    Alias, Decorator, ElifElseClause, Expr, ExceptHandler, MatchCase, Parameter,
+    Alias, Decorator, ElifElseClause, ExceptHandler, Expr, MatchCase, Parameter,
     ParameterWithDefault, Pattern, Stmt, StmtAnnAssign, StmtAssign, StmtClassDef, StmtFunctionDef,
     StmtImport, StmtImportFrom, StmtMatch, StmtReturn,
 };
@@ -298,12 +298,7 @@ fn class_info_from(
     let bases = class
         .arguments
         .as_ref()
-        .map(|args| {
-            args.args
-                .iter()
-                .filter_map(expr_simple_name)
-                .collect()
-        })
+        .map(|args| args.args.iter().filter_map(expr_simple_name).collect())
         .unwrap_or_default();
 
     let mut attributes = Vec::new();
@@ -349,6 +344,13 @@ fn class_info_from(
                 method_names.push(method_name.clone());
                 method_decorators.push((method_name, decs));
             }
+            Stmt::ClassDef(inner_class) => {
+                // Recurse into nested classes so their methods are checked
+                // by E0001/E0002.  The inner ClassInfo is not added to the
+                // module's class list (Phase 1 limitation), but all its
+                // method FunctionInfos land in `functions`.
+                let _inner_info = class_info_from(inner_class, functions, match_stmts);
+            }
             _ => {}
         }
     }
@@ -388,7 +390,8 @@ fn function_info_from(func: &StmtFunctionDef) -> FunctionInfo {
     let vararg = params.vararg.as_deref().map(parameter_to_info);
     let kwarg = params.kwarg.as_deref().map(parameter_to_info);
 
-    let return_annotation = func.returns
+    let return_annotation = func
+        .returns
         .as_deref()
         .map_or(ReturnAnnotationKind::Missing, return_annotation_kind);
 
@@ -418,10 +421,8 @@ fn param_with_default_to_info(p: &ParameterWithDefault) -> ParameterInfo {
 }
 
 fn parameter_to_info(p: &Parameter) -> ParameterInfo {
-    let (annotation_is_any, annotation_is_numeric_literal) = p
-        .annotation
-        .as_deref()
-        .map_or((false, false), |e| {
+    let (annotation_is_any, annotation_is_numeric_literal) =
+        p.annotation.as_deref().map_or((false, false), |e| {
             let (is_any, _, is_num) = annotation_flags(e);
             (is_any, is_num)
         });
@@ -473,9 +474,10 @@ fn collect_return_stmts(stmts: &[Stmt]) -> Vec<ReturnStmtInfo> {
 }
 
 fn return_stmt_info_from(ret: &StmtReturn) -> ReturnStmtInfo {
-    let has_value = ret.value.as_deref().is_some_and(|e| {
-        !matches!(e, Expr::NoneLiteral(_))
-    });
+    let has_value = ret
+        .value
+        .as_deref()
+        .is_some_and(|e| !matches!(e, Expr::NoneLiteral(_)));
     ReturnStmtInfo {
         span: text_range_to_span(ret.range),
         has_value,
@@ -585,10 +587,7 @@ fn assign_infos_from(node: &StmtAssign) -> Vec<VariableInfo> {
 
 fn ann_assign_info_from(node: &StmtAnnAssign) -> Option<VariableInfo> {
     let name = expr_simple_name(&node.target)?;
-    let rhs_kind = node
-        .value
-        .as_deref()
-        .map_or(RhsKind::Other, classify_rhs);
+    let rhs_kind = node.value.as_deref().map_or(RhsKind::Other, classify_rhs);
     Some(VariableInfo {
         name,
         name_span: text_range_to_span(node.target.range()),

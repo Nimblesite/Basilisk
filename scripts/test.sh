@@ -46,11 +46,15 @@ ok "cargo-llvm-cov present"
 # ── Tests + coverage ─────────────────────────────────────────────────────────
 header "Running tests with coverage instrumentation"
 
+# Capture test exit code — intentional Phase-1-limitation failures (E0012,
+# E0016-E0019, E0022) panic with "not yet implemented" messages and are
+# expected to fail.  We still want coverage data even when they do.
+TESTS_EXIT=0
 cargo llvm-cov \
     --workspace \
     --all-targets \
     --lcov \
-    --output-path "$LCOV_FILE"
+    --output-path "$LCOV_FILE" || TESTS_EXIT=$?
 
 ok "lcov.info → $LCOV_FILE"
 
@@ -58,7 +62,7 @@ cargo llvm-cov \
     --workspace \
     --all-targets \
     --html \
-    --output-dir "$HTML_DIR"
+    --output-dir "$HTML_DIR" 2>/dev/null || true
 
 ok "HTML report → $HTML_DIR/index.html"
 
@@ -73,4 +77,13 @@ echo -e "then ${CYAN}Coverage Gutters: Watch${RESET} via Ctrl+Shift+P to see gut
 
 if [[ "${1:-}" == "--open" ]]; then
     open "$HTML_DIR/index.html" 2>/dev/null || xdg-open "$HTML_DIR/index.html" 2>/dev/null || true
+fi
+
+# ── Final status ─────────────────────────────────────────────────────────────
+if [[ "$TESTS_EXIT" -ne 0 ]]; then
+    echo ""
+    warn "Some tests failed (exit $TESTS_EXIT)."
+    warn "Expected Phase-1 limitation failures: E0012, E0016, E0017, E0018, E0019, E0022"
+    warn "These are intentional — they document unimplemented functionality."
+    exit "$TESTS_EXIT"
 fi

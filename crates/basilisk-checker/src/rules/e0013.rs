@@ -4,7 +4,7 @@
 //! statement that carries a value.  A bare `return` (or no `return` at all) is
 //! fine; `return <expr>` is not.
 
-use basilisk_resolver::{FunctionInfo, ResolvedModule, ReturnStmtInfo};
+use basilisk_resolver::{FunctionInfo, ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
@@ -23,7 +23,7 @@ impl Rule for ReturnTypeMismatch {
         module
             .functions
             .iter()
-            .filter(|func| func.return_annotation_is_none)
+            .filter(|func| func.return_annotation == ReturnAnnotationKind::NoneType)
             .for_each(|func| check_function(func, &module.path, diagnostics));
     }
 }
@@ -40,8 +40,7 @@ fn make_diagnostic(stmt: &ReturnStmtInfo, func_name: &str, path: &str) -> Diagno
         code: CODE.clone(),
         severity: Severity::Error,
         message: format!(
-            "Function `{}` is annotated `-> None` but has a `return` statement with a value",
-            func_name
+            "Function `{func_name}` is annotated `-> None` but has a `return` statement with a value"
         ),
         span: stmt.span,
         path: path.to_owned(),

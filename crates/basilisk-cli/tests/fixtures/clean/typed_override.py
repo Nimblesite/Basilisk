@@ -18,12 +18,3 @@ class Dog(Animal):
 
     def fetch(self: Dog, item: str) -> str:
         return f"fetched {item}"
-
-
-class Cat(Animal):
-    @override
-    def speak(self: Cat) -> str:
-        return "meow"
-
-    def purr(self: Cat, duration: float) -> None:
-        pass

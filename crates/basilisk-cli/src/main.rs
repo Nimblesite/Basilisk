@@ -148,41 +148,41 @@ mod tests {
     }
 
     #[test]
-    fn collect_python_files_skips_non_py_file() {
+    fn collect_python_files_skips_non_py_file() -> Result<(), Box<dyn std::error::Error>> {
         let dir = std::env::temp_dir();
         let txt = dir.join("basilisk_test_skip.txt");
-        std::fs::write(&txt, b"hello").expect("write temp file");
+        std::fs::write(&txt, b"hello")?;
         let path = txt.to_string_lossy().into_owned();
-        let files = collect_python_files(&[path]).expect("should succeed");
+        let files = collect_python_files(&[path])?;
         assert!(files.is_empty(), "non-.py file must be skipped");
         let _ = std::fs::remove_file(&txt);
+        Ok(())
     }
 
     // ── collect_and_check: process_file error branch ─────────────────────────
 
     #[test]
     #[cfg(unix)]
-    fn collect_and_check_handles_unreadable_py_file() {
+    fn collect_and_check_handles_unreadable_py_file() -> Result<(), Box<dyn std::error::Error>> {
         use std::os::unix::fs::PermissionsExt;
 
         let dir = std::env::temp_dir();
         let py = dir.join("basilisk_test_locked.py");
-        std::fs::write(&py, b"def foo(): pass").expect("write temp file");
-        std::fs::set_permissions(&py, std::fs::Permissions::from_mode(0o000))
-            .expect("chmod 000");
+        std::fs::write(&py, b"def foo(): pass")?;
+        std::fs::set_permissions(&py, std::fs::Permissions::from_mode(0o000))?;
 
         let path = py.to_string_lossy().into_owned();
         // collect_and_check prints a warning to stderr and returns Ok with no diags.
         let result = collect_and_check(&[path]);
         // Restore permissions before asserting so cleanup can run even on failure.
-        std::fs::set_permissions(&py, std::fs::Permissions::from_mode(0o644))
-            .expect("chmod 644");
+        std::fs::set_permissions(&py, std::fs::Permissions::from_mode(0o644))?;
         let _ = std::fs::remove_file(&py);
 
-        let (diags, _) = result.expect("collect_and_check must return Ok");
+        let (diags, _) = result?;
         assert!(
             diags.is_empty(),
             "unreadable file produces no diagnostics, got: {diags:#?}"
         );
+        Ok(())
     }
 }

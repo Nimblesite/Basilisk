@@ -5,7 +5,7 @@
 //! and message. No hand-wavy count assertions — if a diagnostic appears at
 //! the wrong location or with the wrong message, the test fails.
 //!
-//! Pipeline under test: parse_file → resolve → check
+//! Pipeline under test: `parse_file` → resolve → check
 //!
 //! Fixture layout:
 //!   tests/fixtures/clean/   — fully typed Python; must produce zero diagnostics
@@ -410,8 +410,8 @@ fn e0002_dunder_methods_all_missing_return() -> Result<(), Box<dyn std::error::E
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0001_only_unannotated_params_flagged_in_mixed_signature() -> Result<(), Box<dyn std::error::Error>>
-{
+fn e0001_only_unannotated_params_flagged_in_mixed_signature(
+) -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0001_mixed_annotated.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0001_mixed_annotated.py"))?;
     assert_diagnostics(
@@ -533,6 +533,7 @@ fn e0001_and_e0002_subclass_override_missing_annotations() -> Result<(), Box<dyn
         &src,
         &diags,
         &[
+            Expected::error("BSK-E0025", "`process`", 6, 7),
             Expected::error("BSK-E0002", "`process`", 7, 9),
             Expected::error("BSK-E0001", "`self`", 7, 17),
             Expected::error("BSK-E0001", "`data`", 7, 23),
@@ -906,8 +907,8 @@ fn e0016_incompatible_method_override_not_yet_implemented() -> Result<(), Box<dy
 /// E0017: Incompatible variable override.
 /// Requires type inference for variable types — not implemented in Phase 1.
 #[test]
-fn e0017_incompatible_variable_override_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>>
-{
+fn e0017_incompatible_variable_override_not_yet_implemented(
+) -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0017_variable_override.py")?;
     assert!(
         diags.iter().any(|d| d.code.code == "BSK-E0017"),
@@ -1013,7 +1014,10 @@ fn clean_typed_match_is_silent() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn clean_stdlib_imports_are_silent() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("clean/typed_stdlib_imports.py")?;
-    let e0010: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-E0010").collect();
+    let e0010: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0010")
+        .collect();
     assert!(
         e0010.is_empty(),
         "stdlib imports must not produce E0010, got:\n{e0010:#?}"
@@ -1028,7 +1032,10 @@ fn clean_stdlib_imports_are_silent() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn clean_any_with_comment_is_silent() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("clean/typed_any_justified.py")?;
-    let e0011: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-E0011").collect();
+    let e0011: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0011")
+        .collect();
     assert!(
         e0011.is_empty(),
         "justified Any must not produce E0011, got:\n{e0011:#?}"
@@ -1043,7 +1050,10 @@ fn clean_any_with_comment_is_silent() -> Result<(), Box<dyn std::error::Error>> 
 #[test]
 fn clean_match_with_wildcard_is_silent() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("clean/typed_match.py")?;
-    let e0023: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-E0023").collect();
+    let e0023: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0023")
+        .collect();
     assert!(
         e0023.is_empty(),
         "match with wildcard must not produce E0023, got:\n{e0023:#?}"
@@ -1058,7 +1068,10 @@ fn clean_match_with_wildcard_is_silent() -> Result<(), Box<dyn std::error::Error
 #[test]
 fn clean_override_with_decorator_is_silent() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("clean/typed_override.py")?;
-    let e0025: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-E0025").collect();
+    let e0025: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0025")
+        .collect();
     assert!(
         e0025.is_empty(),
         "override with @override must not produce E0025, got:\n{e0025:#?}"
@@ -1073,7 +1086,10 @@ fn clean_override_with_decorator_is_silent() -> Result<(), Box<dyn std::error::E
 #[test]
 fn clean_overloads_with_implementation_is_silent() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("clean/typed_overloads.py")?;
-    let e0020: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-E0020").collect();
+    let e0020: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0020")
+        .collect();
     assert!(
         e0020.is_empty(),
         "properly implemented overloads must not produce E0020, got:\n{e0020:#?}"

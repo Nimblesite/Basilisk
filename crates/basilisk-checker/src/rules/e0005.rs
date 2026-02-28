@@ -45,10 +45,7 @@ fn make_diagnostic(attr: &AttributeInfo, class_name: &str, path: &str) -> Diagno
         ),
         span: attr.name_span,
         path: path.to_owned(),
-        help: Some(format!(
-            "Add a type annotation: `{}: <type>`",
-            attr.name
-        )),
+        help: Some(format!("Add a type annotation: `{}: <type>`", attr.name)),
         note: Some(
             "In Basilisk, all class attributes require explicit type annotations".to_owned(),
         ),

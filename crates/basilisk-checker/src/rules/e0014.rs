@@ -40,19 +40,20 @@ impl Rule for AssignmentTypeMismatch {
                 Some((var, annotation.to_owned(), mismatch))
             })
             .for_each(|(var, annotation, mismatch)| {
-                diagnostics.push(make_diagnostic(var, &annotation, mismatch, &module.path));
+                diagnostics.push(make_diagnostic(var, &annotation, &mismatch, &module.path));
             });
     }
 }
 
 /// Describes why an annotation/RHS pair is incompatible.
+#[derive(Copy, Clone)]
 struct Mismatch {
     rhs_description: &'static str,
 }
 
 /// Returns `Some(Mismatch)` when the annotation text and RHS kind are
 /// clearly incompatible; `None` when the pairing is acceptable or unknown.
-fn annotation_rhs_mismatch<'a>(annotation: &str, rhs: &RhsKind) -> Option<Mismatch> {
+fn annotation_rhs_mismatch(annotation: &str, rhs: &RhsKind) -> Option<Mismatch> {
     // Normalise: strip generic parameters and whitespace, lower-case.
     let base = annotation
         .split('[')
@@ -62,38 +63,22 @@ fn annotation_rhs_mismatch<'a>(annotation: &str, rhs: &RhsKind) -> Option<Mismat
         .to_ascii_lowercase();
 
     match (base.as_str(), rhs) {
-        // int annotation with a string, bytes, or bool-string value
-        ("int", RhsKind::StrLiteral) => Some(Mismatch { rhs_description: "a `str` literal" }),
-        ("int", RhsKind::BytesLiteral) => Some(Mismatch { rhs_description: "a `bytes` literal" }),
-        ("int", RhsKind::FloatLiteral) => {
-            Some(Mismatch { rhs_description: "a `float` literal" })
-        }
+        // String annotation incompatible with non-str numeric literals
+        ("int" | "bool" | "float" | "bytes", RhsKind::StrLiteral) => Some(Mismatch {
+            rhs_description: "a `str` literal",
+        }),
 
-        // str annotation with a numeric value
-        ("str", RhsKind::IntLiteral) => Some(Mismatch { rhs_description: "an `int` literal" }),
-        ("str", RhsKind::FloatLiteral) => {
-            Some(Mismatch { rhs_description: "a `float` literal" }
-            )
-        }
-        ("str", RhsKind::BytesLiteral) => {
-            Some(Mismatch { rhs_description: "a `bytes` literal" })
-        }
+        ("int" | "str" | "float", RhsKind::BytesLiteral) => Some(Mismatch {
+            rhs_description: "a `bytes` literal",
+        }),
 
-        // bool annotation with a string value
-        ("bool", RhsKind::StrLiteral) => Some(Mismatch { rhs_description: "a `str` literal" }),
-        ("bool", RhsKind::FloatLiteral) => {
-            Some(Mismatch { rhs_description: "a `float` literal" })
-        }
+        ("int" | "str" | "bool", RhsKind::FloatLiteral) => Some(Mismatch {
+            rhs_description: "a `float` literal",
+        }),
 
-        // float annotation with a string value
-        ("float", RhsKind::StrLiteral) => Some(Mismatch { rhs_description: "a `str` literal" }),
-        ("float", RhsKind::BytesLiteral) => {
-            Some(Mismatch { rhs_description: "a `bytes` literal" })
-        }
-
-        // bytes annotation with a string value
-        ("bytes", RhsKind::StrLiteral) => Some(Mismatch { rhs_description: "a `str` literal" }),
-        ("bytes", RhsKind::IntLiteral) => Some(Mismatch { rhs_description: "an `int` literal" }),
+        ("str" | "bytes", RhsKind::IntLiteral) => Some(Mismatch {
+            rhs_description: "an `int` literal",
+        }),
 
         _ => None,
     }
@@ -104,7 +89,7 @@ fn annotation_rhs_mismatch<'a>(annotation: &str, rhs: &RhsKind) -> Option<Mismat
 /// Looks for `: <annotation>` on the same source line as the variable name,
 /// stopping at the `=` sign that introduces the RHS.  Returns `None` if no
 /// such pattern is found.
-fn extract_annotation<'src>(source: &'src str, name_span: Span) -> Option<&'src str> {
+fn extract_annotation(source: &str, name_span: Span) -> Option<&str> {
     // Find the byte offset of the start of the line containing the name.
     let start = name_span.start as usize;
     let line_start = source[..start].rfind('\n').map_or(0, |pos| pos + 1);
@@ -122,9 +107,10 @@ fn extract_annotation<'src>(source: &'src str, name_span: Span) -> Option<&'src 
     let after_colon = colon_pos + 2; // skip ': '
 
     // Find `=` that ends the annotation (must be after the colon).
-    let eq_pos = line[after_colon..].find('=').map(|p| after_colon + p);
+    let annotation_end = line[after_colon..]
+        .find('=')
+        .map_or(line.len(), |p| after_colon + p);
 
-    let annotation_end = eq_pos.unwrap_or(line.len());
     let annotation = line.get(after_colon..annotation_end)?.trim();
 
     if annotation.is_empty() {
@@ -137,25 +123,23 @@ fn extract_annotation<'src>(source: &'src str, name_span: Span) -> Option<&'src 
 fn make_diagnostic(
     var: &VariableInfo,
     annotation: &str,
-    mismatch: Mismatch,
+    mismatch: &Mismatch,
     path: &str,
 ) -> Diagnostic {
     Diagnostic {
         code: CODE.clone(),
         severity: Severity::Error,
         message: format!(
-            "Type mismatch: `{}` is annotated `{}` but assigned {}",
-            var.name, annotation, mismatch.rhs_description
+            "Type mismatch: `{}` is annotated `{annotation}` but assigned {}",
+            var.name, mismatch.rhs_description
         ),
         span: var.name_span,
         path: path.to_owned(),
         help: Some(format!(
-            "Either change the annotation to match the value, or change the value to `{}`",
-            annotation
+            "Either change the annotation to match the value, or change the value to `{annotation}`"
         )),
         note: Some(
-            "Basilisk requires the literal kind to be compatible with the declared type"
-                .to_owned(),
+            "Basilisk requires the literal kind to be compatible with the declared type".to_owned(),
         ),
     }
 }

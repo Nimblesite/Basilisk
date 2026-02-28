@@ -32,12 +32,18 @@ impl Rule for MissingVariableType {
 /// Returns `true` for RHS kinds whose element/value type cannot be inferred
 /// from the literal alone.
 fn is_unresolvable(rhs: &RhsKind) -> bool {
-    matches!(rhs, RhsKind::EmptyList | RhsKind::EmptyDict | RhsKind::NoneValue)
+    matches!(
+        rhs,
+        RhsKind::EmptyList | RhsKind::EmptyDict | RhsKind::NoneValue
+    )
 }
 
 fn make_diagnostic(var: &VariableInfo, path: &str) -> Diagnostic {
     let (rhs_desc, example) = match &var.rhs_kind {
-        RhsKind::EmptyList => ("empty list `[]`", format!("{}: list[<type>] = []", var.name)),
+        RhsKind::EmptyList => (
+            "empty list `[]`",
+            format!("{}: list[<type>] = []", var.name),
+        ),
         RhsKind::EmptyDict => (
             "empty dict `{}`",
             format!("{}: dict[<key>, <value>] = {{}}", var.name),
