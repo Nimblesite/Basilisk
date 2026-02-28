@@ -1,6 +1,6 @@
 # Basilisk Type Inference Specification
 
-> **Status**: Draft — Basilisk is in the specification stage. This document defines the target behavior for the type inference engine.
+> **Status**: Draft — Basilisk is in the specification stage. This document defines the target behavior for the type inference engine. Don't get stuck going down the rabbit hole of expecting type inference infrastructure at this point. Focus on other parts of the system until we have some infastructure built
 >
 > **Canonical Python version**: 3.12
 >

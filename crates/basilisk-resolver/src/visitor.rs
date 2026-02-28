@@ -1489,12 +1489,29 @@ fn collect_typeddict_calls(stmts: &[Stmt]) -> Vec<TypedDictCallInfo> {
 // Shared utilities
 // ---------------------------------------------------------------------------
 
-/// Returns `true` when an expression contains a subscript (parameterized type like `list[T]`).
+/// Names of well-known typing forms that are NOT parameterized by TypeVars even
+/// when subscripted.  `Literal["x"]`, `Optional[int]`, etc. are valid TypeVar
+/// bounds and constraints, so we must not flag them as "parameterized by TypeVar".
+const TYPING_FORMS: &[&str] = &[
+    "Literal", "Optional", "Union", "Final", "ClassVar", "Annotated",
+    "Required", "NotRequired", "ReadOnly", "TypeAlias",
+];
+
+/// Returns `true` when an expression is a subscript parameterized by a potential
+/// TypeVar — i.e. it is `list[T]` or similar, NOT a typing form like `Literal[...]`.
 ///
-/// Used to detect cases like `TypeVar("T", bound=list[T])` where the bound is parameterized.
+/// Used to detect cases like `TypeVar("T", bound=list[T])` where the bound is
+/// parameterized by a free TypeVar rather than being a valid concrete generic.
 fn expr_is_parameterized(expr: &Expr) -> bool {
     match expr {
-        Expr::Subscript(_) => true,
+        Expr::Subscript(sub) => {
+            // Skip well-known typing forms: Literal["x"], Optional[T], etc.
+            let base_name = expr_simple_name(&sub.value);
+            if base_name.as_deref().is_some_and(|n| TYPING_FORMS.contains(&n)) {
+                return false;
+            }
+            true
+        }
         Expr::BinOp(bin) => {
             expr_is_parameterized(&bin.left) || expr_is_parameterized(&bin.right)
         }
