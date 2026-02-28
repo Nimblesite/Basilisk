@@ -305,6 +305,7 @@ fn collect_from_handlers(
 // Class info
 // ---------------------------------------------------------------------------
 
+#[allow(clippy::type_complexity)]
 fn collect_class_body(
     class: &StmtClassDef,
     functions: &mut Vec<FunctionInfo>,
@@ -323,6 +324,7 @@ fn collect_class_body(
                         name_span: text_range_to_span(ann.target.range()),
                         has_annotation: true,
                         annotation_span: Some(text_range_to_span(ann.annotation.range())),
+                        has_value: ann.value.is_some(),
                     });
                 }
             }
@@ -334,6 +336,7 @@ fn collect_class_body(
                             name_span: text_range_to_span(target.range()),
                             has_annotation: false,
                             annotation_span: None,
+                            has_value: true,
                         });
                     }
                 }
@@ -939,9 +942,8 @@ fn collect_module_level_calls(stmts: &[Stmt]) -> Vec<CallSite> {
 /// Returns `true` if an expression is a `TypeVar(...)` or `typing.TypeVar(...)` call.
 fn is_typevar_call(expr: &Expr) -> bool {
     let Expr::Call(call) = expr else { return false };
-    expr_simple_name(&call.func)
-        .as_deref()
-        .map_or(false, |n| n == "TypeVar")
+    (expr_simple_name(&call.func)
+        .as_deref() == Some("TypeVar"))
         || matches!(call.func.as_ref(), Expr::Attribute(a) if a.attr.as_str() == "TypeVar")
 }
 
@@ -985,6 +987,11 @@ fn typevar_call_info_from(name: String, call: &ruff_python_ast::ExprCall) -> Typ
 
 fn collect_typevar_calls(stmts: &[Stmt]) -> Vec<TypeVarCallInfo> {
     let mut out = Vec::new();
+    collect_typevar_calls_from_stmts(stmts, &mut out);
+    out
+}
+
+fn collect_typevar_calls_from_stmts(stmts: &[Stmt], out: &mut Vec<TypeVarCallInfo>) {
     for stmt in stmts {
         match stmt {
             Stmt::Assign(node) => {
@@ -1012,10 +1019,13 @@ fn collect_typevar_calls(stmts: &[Stmt]) -> Vec<TypeVarCallInfo> {
                 };
                 out.push(typevar_call_info_from(name, call));
             }
+            // Also search inside class bodies (TypeVars declared as class attributes).
+            Stmt::ClassDef(cls) => {
+                collect_typevar_calls_from_stmts(&cls.body, out);
+            }
             _ => {}
         }
     }
-    out
 }
 
 /// Collect all `reveal_type(...)` calls found anywhere in the module body.
@@ -1180,7 +1190,15 @@ fn extract_generic_params(class: &StmtClassDef) -> (Vec<GenericParamInfo>, Vec<S
         let mut params = Vec::new();
         let mut non_typevar = Vec::new();
         for e in elts {
-            match expr_simple_name(e) {
+            // A starred expression like `*Ts` is a valid TypeVarTuple unpack.
+            let name_opt = expr_simple_name(e).or_else(|| {
+                if let Expr::Starred(starred) = e {
+                    expr_simple_name(&starred.value)
+                } else {
+                    None
+                }
+            });
+            match name_opt {
                 Some(name) => params.push(GenericParamInfo {
                     span: text_range_to_span(e.range()),
                     name,

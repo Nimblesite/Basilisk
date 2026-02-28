@@ -23,6 +23,54 @@ Key design decisions that make Basilisk **more advanced than Pyright**:
 | Literal type inference | Context-sensitive | Literal-first: widen only when an annotation demands it |
 | Narrowing coverage | `isinstance`, `is None`, TypeGuard, TypeIs | All of the above + **pattern matching exhaustiveness**, **dict key existence**, **attribute presence** |
 | Unannotated functions | Checked via call-site inference | **Error** — every public function must be annotated |
+| Redundant annotations | Silently accepted | **Warning** — redundant explicit annotations must be removed |
+
+### 0.1 The Redundant Annotation Principle
+
+> **This is a critical, non-negotiable design goal.**
+
+But, ignore this section when it conflicts with PEP conformance
+
+Basilisk enforces a **clean separation between what must be annotated and what must not be**. When the type system can infer a type precisely, writing an explicit annotation for that same type is **noise** — it clutters the code, creates maintenance burden, and masks real inference failures.
+
+**Rule**: If Basilisk can infer the type of an expression unambiguously, and the written annotation is identical to the inferred type, Basilisk emits `BSK-W0050: redundant type annotation — inferred type is identical; remove the annotation`.
+
+```python
+# BAD — Basilisk emits BSK-W0050 for every one of these
+x: int = 42                     # inferred: int — annotation redundant
+y: str = "hello"                # inferred: str — annotation redundant
+z: list[int] = [1, 2, 3]        # inferred: list[int] — annotation redundant
+items: list[str] = ["a", "b"]   # inferred: list[str] — annotation redundant
+
+def f(n: int) -> int:
+    result: int = n * 2         # inferred: int — annotation redundant
+    return result
+
+# GOOD — annotation adds information not available from inference alone
+x: float = 42                   # widens int to float — meaningful
+items: list[int | str] = [1]    # widens list[int] to list[int | str] — meaningful
+coords: tuple[float, float] = (0, 0)  # widens tuple[int, int] — meaningful
+```
+
+**Annotation is required when it changes the type** (widens, constrains, or documents a contract). Annotation is forbidden when it merely repeats what inference would produce.
+
+This rule applies to:
+- Local variable assignments
+- Module-level variable assignments
+- Class body variable assignments
+- For-loop target variables
+- With-statement target variables
+- Walrus operator targets
+
+**Exceptions** — annotations are always permitted (and required) even when inference could theoretically determine the type:
+- Function parameters (§4.1) — annotation is always required, never redundant
+- Public function return types (§4.3) — annotation is always required, never redundant
+- `TypedDict` fields — annotation is always required
+- `NamedTuple` fields — annotation is always required
+- `Protocol` member signatures — annotation is always required
+- `ClassVar` and `Final` — the qualifier itself is non-redundant even if the base type is inferrable
+
+**Interaction with conformance**: This rule does not conflict with PEP 526 or any conformance test. The conformance suite tests that annotations are respected when present; it does not require annotations where inference suffices. Basilisk goes further by enforcing that redundant annotations are absent.
 
 ---
 

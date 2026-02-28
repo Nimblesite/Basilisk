@@ -194,6 +194,8 @@ pub struct AttributeInfo {
     pub has_annotation: bool,
     /// The span of the annotation expression, if present.
     pub annotation_span: Option<Span>,
+    /// `true` when a right-hand-side value is present (`name: Type = value`).
+    pub has_value: bool,
 }
 
 /// A class definition with its attributes and method names.
@@ -238,7 +240,7 @@ pub struct ClassInfo {
     /// Used by E0042 to detect traditional `TypeVars` mixed into PEP 695 classes.
     pub base_expression_names: Vec<String>,
     /// Spans of arguments in `Generic[...]` or `Protocol[...]` that are NOT simple names
-    /// (i.e. not plain TypeVar references, but literals, subscripts, etc.).
+    /// (i.e. not plain `TypeVar` references, but literals, subscripts, etc.).
     ///
     /// For `class Foo(Generic[int])`, this would contain the span of `int`.
     /// Used by E0043 to detect non-TypeVar arguments to Generic/Protocol.
@@ -256,6 +258,7 @@ pub struct GenericParamInfo {
 
 /// Information about a module-level `TypeVar(...)` call.
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct TypeVarCallInfo {
     /// The name the `TypeVar` is bound to (LHS of assignment).
     pub name: String,
@@ -265,11 +268,11 @@ pub struct TypeVarCallInfo {
     pub has_default: bool,
     /// Whether a `bound=` keyword argument is present.
     pub has_bound: bool,
-    /// Whether any constraint argument is parameterized by a TypeVar
-    /// (e.g. `TypeVar("T", str, list[T])` — constraint `list[T]` contains a TypeVar).
+    /// Whether any constraint argument is parameterized by a `TypeVar`
+    /// (e.g. `TypeVar("T", str, list[T])` — constraint `list[T]` contains a `TypeVar`).
     pub has_parameterized_constraint: bool,
-    /// Whether the `bound=` expression is itself parameterized by a TypeVar
-    /// (e.g. `TypeVar("T", bound=list[T])` — bound `list[T]` contains a TypeVar).
+    /// Whether the `bound=` expression is itself parameterized by a `TypeVar`
+    /// (e.g. `TypeVar("T", bound=list[T])` — bound `list[T]` contains a `TypeVar`).
     pub has_parameterized_bound: bool,
     /// The span of the entire `TypeVar` call expression.
     pub span: Span,
