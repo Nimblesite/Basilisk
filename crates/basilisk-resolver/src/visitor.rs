@@ -2188,12 +2188,6 @@ fn collect_final_violations(
 /// Collect attribute accesses of `int`-only attributes on `float`-typed parameters.
 ///
 /// Full implementation is pending — returns empty for now.
-fn collect_float_param_int_attr_accesses(
-    _stmts: &[Stmt],
-    _source: &str,
-) -> Vec<FloatParamIntAttrAccess> {
-    Vec::new()
-}
 
 // ---------------------------------------------------------------------------
 // Literal string / enum member mismatch collection (stub)
@@ -2202,12 +2196,6 @@ fn collect_float_param_int_attr_accesses(
 /// Collect `Literal["X.Y"]` vs `Literal[X.Y]` mismatches.
 ///
 /// Full implementation is pending — returns empty for now.
-fn collect_literal_string_enum_mismatches(
-    _stmts: &[Stmt],
-    _source: &str,
-) -> Vec<LiteralStringEnumMismatch> {
-    Vec::new()
-}
 // ---------------------------------------------------------------------------
 // Float parameter int-only attribute access collection
 // ---------------------------------------------------------------------------
