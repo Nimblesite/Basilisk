@@ -32,10 +32,10 @@ HTML_DIR="$REPO_ROOT/target/llvm-cov/html"
 header "Checking prerequisites"
 
 if ! rustup component list --installed | grep -q llvm-tools; then
-    warn "llvm-tools-preview not installed — installing now"
-    rustup component add llvm-tools-preview
+    warn "llvm-tools not installed — installing now"
+    rustup component add llvm-tools
 fi
-ok "llvm-tools-preview present"
+ok "llvm-tools present"
 
 if ! cargo llvm-cov --version &>/dev/null; then
     warn "cargo-llvm-cov not found — installing now"
@@ -65,7 +65,7 @@ ok "HTML report → $HTML_DIR/index.html"
 # ── Summary ──────────────────────────────────────────────────────────────────
 header "Coverage summary"
 
-cargo llvm-cov report --workspace
+cargo llvm-cov report
 
 echo ""
 echo -e "${BOLD}VSCode:${RESET} install 'Coverage Gutters' (ryanluker.vscode-coverage-gutters),"

@@ -1,6 +1,6 @@
 {
     // ── Coverage Gutters ─────────────────────────────────────────────────────
-    // Reads lcov.info produced by scripts/coverage.sh and lights up line gutters.
+    // Reads lcov.info produced by scripts/test.sh and lights up line gutters.
     // Install extension: ryanluker.vscode-coverage-gutters
     "coverage-gutters.coverageFileNames": ["lcov.info"],
     "coverage-gutters.coverageBaseDir": ".",
@@ -12,10 +12,14 @@
     "rust-analyzer.cargo.features": "all",
     "rust-analyzer.check.command": "clippy",
     "rust-analyzer.check.extraArgs": ["--", "-D", "warnings"],
+    // Analyse all targets (lib, bin, tests/) so integration tests are indexed.
+    "rust-analyzer.check.allTargets": true,
+    "rust-analyzer.cargo.allTargets": true,
 
-    // ── Test Explorer (uses rust-analyzer's built-in test support) ───────────
+    // ── Test Explorer ────────────────────────────────────────────────────────
     // Tests appear in the Testing sidebar (beaker icon).
-    // rust-analyzer discovers #[test] functions and integration test binaries.
+    // allTargets above is required — without it rust-analyzer only indexes src/
+    // and never sees the #[test] functions in tests/*.rs.
     "rust-analyzer.testExplorer": true,
 
     // ── Editor ───────────────────────────────────────────────────────────────

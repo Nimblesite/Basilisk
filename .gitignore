@@ -1,3 +1,5 @@
 .commandtree/
 .too_many_cooks/
 target/
+
+lcov.info
