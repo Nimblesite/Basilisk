@@ -1,0 +1,511 @@
+---
+layout: layouts/home.njk
+title: "Basilisk — Complete Type Safety for Python"
+description: "Strict-by-default Python type checker. Every parameter typed. Every return declared. No escape hatches. Built in Rust."
+---
+
+<script src="/assets/js/demo.js" defer></script>
+
+<!-- ═══════════════════════════════════════════════════════
+     HERO
+═══════════════════════════════════════════════════════ -->
+<section class="hero">
+  <div class="container">
+
+    <div class="hero__eyebrow">
+      Strict by Default &mdash; No Exceptions
+    </div>
+
+    <h1 class="hero__headline">
+      Python finally has<br>
+      a type system that <em>means it.</em>
+    </h1>
+
+    <p class="hero__subheadline">
+      Basilisk enforces complete type safety &mdash; every parameter typed, every
+      return declared, <code>Any</code> always explicit. Built in Rust.
+      No Node.js. No permissive modes.
+    </p>
+
+    <div class="hero__cta-group">
+      <a href="/docs/installation/" class="btn btn--primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        Get Started
+      </a>
+      <button class="btn btn--mono" data-copy="cargo install basilisk" title="Copy install command">
+        <span class="copy-text">cargo install basilisk</span>
+        <svg class="copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+        <svg class="copy-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="display:none;color:var(--color-success)"><polyline points="20 6 9 17 4 12"/></svg>
+      </button>
+      <a href="https://github.com/basilisk-lang/basilisk" class="btn btn--secondary" target="_blank" rel="noopener">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.741 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+        GitHub
+      </a>
+    </div>
+
+    <!-- Before / After code demo -->
+    <div class="hero__demo demo-container">
+      <div class="demo-tabs">
+        <button class="demo-tab active" data-tab="before">Before: bad.py</button>
+        <button class="demo-tab" data-tab="after">After: good.py</button>
+      </div>
+      <div class="demo-wrapper">
+
+        <div class="demo-panel active" data-panel="before">
+          <div class="code-window">
+            <div class="code-window__chrome">
+              <span class="code-window__dot code-window__dot--close"></span>
+              <span class="code-window__dot code-window__dot--min"></span>
+              <span class="code-window__dot code-window__dot--expand"></span>
+              <span class="code-window__filename">bad.py</span>
+            </div>
+            <div class="code-window__body">
+<pre><span class="tok-kw">def</span> <span class="tok-fn">process</span>(data):
+<span class="code-error-line">    <span class="tok-kw">return</span> data.upper()
+</span>
+
+<span class="tok-kw">class</span> <span class="tok-fn">User</span>:
+    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, name, age):
+        <span class="tok-kw">self</span>.name <span class="tok-kw">=</span> name
+        <span class="tok-kw">self</span>.age  <span class="tok-kw">=</span> age
+
+    <span class="tok-kw">def</span> <span class="tok-fn">greet</span>(<span class="tok-kw">self</span>):
+<span class="code-error-line">        <span class="tok-kw">return</span> <span class="tok-str">f"Hello, {self.name}"</span>
+</span></pre>
+            </div>
+          </div>
+          <div class="diagnostic-block">
+<span class="diag-prefix">error</span><span class="diag-bar">[</span><span class="diag-code">BSK-E0001</span><span class="diag-bar">]</span><span class="diag-msg">: Missing parameter type annotation</span>
+<span class="diag-bar">  --> </span><span class="diag-path">bad.py:1:12</span>
+<span class="diag-bar">   |</span>
+<span class="diag-bar"> 1 | </span><span class="diag-src">def process(data):</span>
+<span class="diag-bar">   |            </span><span class="diag-caret">^^^^</span> <span class="diag-note">parameter `data` has no type annotation</span>
+<span class="diag-bar">   |</span>
+<span class="diag-bar">   = </span><span class="diag-help">help: add type annotation: `data: str`</span>
+<span class="diag-bar">   = </span><span class="diag-note">note: all parameters must be explicitly typed</span>
+<span class="diag-bar">   = </span><span class="diag-see">see: https://basilisk-lang.org/docs/rules/#BSK-E0001</span>
+
+<span class="diag-prefix">error</span><span class="diag-bar">[</span><span class="diag-code">BSK-E0002</span><span class="diag-bar">]</span><span class="diag-msg">: Missing return type annotation</span>
+<span class="diag-bar">  --> </span><span class="diag-path">bad.py:1:1</span>
+<span class="diag-bar">   |</span>
+<span class="diag-bar"> 1 | </span><span class="diag-src">def process(data):</span>
+<span class="diag-bar">   |     </span><span class="diag-caret">^^^^^^^</span> <span class="diag-note">no return type annotation</span>
+<span class="diag-bar">   |</span>
+<span class="diag-bar">   = </span><span class="diag-help">help: add return type: `def process(data: str) -> str:`</span>
+
+<span class="diag-note">Found 5 errors in 1 file.</span>
+          </div>
+        </div>
+
+        <div class="demo-panel" data-panel="after">
+          <div class="code-window">
+            <div class="code-window__chrome">
+              <span class="code-window__dot code-window__dot--close"></span>
+              <span class="code-window__dot code-window__dot--min"></span>
+              <span class="code-window__dot code-window__dot--expand"></span>
+              <span class="code-window__filename">good.py</span>
+            </div>
+            <div class="code-window__body">
+<pre><span class="tok-kw">def</span> <span class="tok-fn">process</span>(data<span class="tok-type">: str</span>) <span class="tok-kw">-></span> <span class="tok-type">str</span>:
+    <span class="tok-kw">return</span> data.upper()
+
+
+<span class="tok-kw">class</span> <span class="tok-fn">User</span>:
+    name<span class="tok-type">: str</span>
+    age<span class="tok-type">: int</span>
+
+    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, name<span class="tok-type">: str</span>, age<span class="tok-type">: int</span>) <span class="tok-kw">-></span> <span class="tok-type">None</span>:
+        <span class="tok-kw">self</span>.name <span class="tok-kw">=</span> name
+        <span class="tok-kw">self</span>.age  <span class="tok-kw">=</span> age
+
+    <span class="tok-kw">def</span> <span class="tok-fn">greet</span>(<span class="tok-kw">self</span>) <span class="tok-kw">-></span> <span class="tok-type">str</span>:
+        <span class="tok-kw">return</span> <span class="tok-str">f"Hello, {self.name}"</span></pre>
+            </div>
+          </div>
+          <div class="diagnostic-block diagnostic-block--success">
+<span class="diag-prefix" style="color:var(--color-success)">All checked. No issues found.</span>
+<span class="diag-note">Checked 1 file &mdash; 0 errors, 0 warnings.</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     STATS BAR
+═══════════════════════════════════════════════════════ -->
+<div class="stats-bar">
+  <div class="container">
+    <div class="stats-bar__inner">
+
+      <div class="stats-bar__item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        <span>Built in <span class="stats-bar__label">Rust</span></span>
+      </div>
+
+      <div class="stats-bar__item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span><span class="stats-bar__label">&lt;10ms</span> incremental checks</span>
+      </div>
+
+      <div class="stats-bar__item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        <span>No <span class="stats-bar__label">Node.js</span> runtime</span>
+      </div>
+
+      <div class="stats-bar__item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+        <span><span class="stats-bar__label">100%</span> PEP coverage target</span>
+      </div>
+
+      <div class="stats-bar__item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        <span><span class="stats-bar__label">MIT / Apache-2.0</span></span>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     FEATURES
+═══════════════════════════════════════════════════════ -->
+<section class="features section">
+  <div class="container">
+    <h2 class="section__headline">Built different, by design</h2>
+    <p class="section__subhead">
+      Every other Python type checker asks you to opt in to strictness.
+      Basilisk starts there.
+    </p>
+
+    <div class="feature-grid">
+
+      <div class="feature-card">
+        <div class="feature-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <h3 class="feature-card__title">Strict by Default</h3>
+        <p class="feature-card__body">
+          No <code>--strict</code> flag. No gradual mode. No opt-in.
+          Basilisk treats every untyped function as a type error &mdash;
+          because that's what it is. The safe path is the only path.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <h3 class="feature-card__title">Sub-10ms Incremental Checks</h3>
+        <p class="feature-card__body">
+          Powered by Salsa &mdash; the same incremental computation framework
+          behind rust-analyzer. Only recomputes what changed.
+          Keystroke-responsive in any editor.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        </div>
+        <h3 class="feature-card__title">Single Binary, Zero Runtime</h3>
+        <p class="feature-card__body">
+          Ships as a standalone Rust binary. No Node.js. No Python interpreter.
+          No <code>npm install</code>. Drop it in your PATH and it works
+          everywhere Python code lives.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        </div>
+        <h3 class="feature-card__title">Mojo-Inspired Ownership</h3>
+        <p class="feature-card__body">
+          Add <code>Borrowed</code>, <code>InOut</code>, and <code>Owned</code>
+          annotations to express ownership semantics. Catch mutation of borrowed
+          values and use-after-move in standard Python, today.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+        </div>
+        <h3 class="feature-card__title">Complete PEP Conformance</h3>
+        <p class="feature-card__body">
+          Targets 100% conformance with the Python typing specification.
+          Not ~95%. Not ~58%. Every PEP from 484 to 742 &mdash;
+          Protocols, ParamSpec, TypeVarTuple &mdash; enforced correctly.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+        </div>
+        <h3 class="feature-card__title">Secure WASM Plugins</h3>
+        <p class="feature-card__body">
+          Extend Basilisk with WebAssembly plugins for Django, Pydantic,
+          and SQLAlchemy type intelligence. Sandboxed by design.
+          Portable across every platform.
+        </p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     COMPARISON TABLE
+═══════════════════════════════════════════════════════ -->
+<section class="comparison-section section">
+  <div class="container">
+    <h2 class="section__headline">Why teams are moving to Basilisk</h2>
+    <p class="section__subhead">
+      Every other type checker treats strictness as optional. Basilisk doesn't.
+    </p>
+
+    <div class="table-wrapper">
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th class="col-basilisk">Basilisk</th>
+            <th>Pyright</th>
+            <th>mypy</th>
+            <th>ty</th>
+            <th>Pyrefly</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Strict by default</td>
+            <td class="col-basilisk check-yes">&#10003;</td>
+            <td><span class="check-partial">opt-in</span></td>
+            <td><span class="check-partial">opt-in</span></td>
+            <td><span class="check-partial">opt-in</span></td>
+            <td><span class="check-partial">opt-in</span></td>
+          </tr>
+          <tr>
+            <td>PEP conformance</td>
+            <td class="col-basilisk">100% <em style="font-size:var(--text-xs);color:var(--color-text-muted)">(target)</em></td>
+            <td>~95%</td>
+            <td>~85%</td>
+            <td>~15%</td>
+            <td>~58%</td>
+          </tr>
+          <tr>
+            <td>Implementation</td>
+            <td class="col-basilisk">Rust</td>
+            <td><span class="cell-warn">TypeScript</span></td>
+            <td><span class="cell-warn">Python/C</span></td>
+            <td>Rust</td>
+            <td>Rust</td>
+          </tr>
+          <tr>
+            <td>Runtime required</td>
+            <td class="col-basilisk check-yes">None</td>
+            <td><span class="cell-warn">Node.js</span></td>
+            <td><span class="cell-warn">Python</span></td>
+            <td class="check-yes">None</td>
+            <td class="check-yes">None</td>
+          </tr>
+          <tr>
+            <td>Incremental speed</td>
+            <td class="col-basilisk">&lt;10ms</td>
+            <td>~50ms</td>
+            <td>~100ms</td>
+            <td>&lt;10ms</td>
+            <td>&lt;10ms</td>
+          </tr>
+          <tr>
+            <td>Ownership analysis</td>
+            <td class="col-basilisk check-yes">&#10003;</td>
+            <td class="check-no">&mdash;</td>
+            <td class="check-no">&mdash;</td>
+            <td class="check-no">&mdash;</td>
+            <td class="check-no">&mdash;</td>
+          </tr>
+          <tr>
+            <td>Immutability enforcement</td>
+            <td class="col-basilisk check-yes">&#10003;</td>
+            <td class="check-no">&mdash;</td>
+            <td class="check-no">&mdash;</td>
+            <td class="check-no">&mdash;</td>
+            <td class="check-no">&mdash;</td>
+          </tr>
+          <tr>
+            <td>Plugin system</td>
+            <td class="col-basilisk">WASM</td>
+            <td class="check-no">&mdash;</td>
+            <td><span class="check-partial">Python hooks</span></td>
+            <td><span class="check-partial">Planned</span></td>
+            <td class="check-no">&mdash;</td>
+          </tr>
+          <tr>
+            <td>VS Code extension</td>
+            <td class="col-basilisk">Open source</td>
+            <td><span class="cell-warn">Proprietary (Pylance)</span></td>
+            <td class="check-no">&mdash;</td>
+            <td>Open source</td>
+            <td>Open source</td>
+          </tr>
+          <tr>
+            <td>License</td>
+            <td class="col-basilisk">MIT / Apache-2.0</td>
+            <td>MIT</td>
+            <td>MIT</td>
+            <td>MIT</td>
+            <td>MIT</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     INTERACTIVE DEMO
+═══════════════════════════════════════════════════════ -->
+<section class="demo-section section">
+  <div class="container">
+    <h2 class="section__headline">Basilisk in 30 seconds</h2>
+    <p class="section__subhead">
+      Real diagnostic output. Real error codes. Every fix suggested inline.
+    </p>
+
+    <div class="demo-container" style="max-width:860px;margin:0 auto;">
+      <div class="demo-tabs">
+        <button class="demo-tab active" data-tab="tab-missing">Missing Types</button>
+        <button class="demo-tab" data-tab="tab-ownership">Ownership</button>
+        <button class="demo-tab" data-tab="tab-clean">Clean Code</button>
+      </div>
+      <div class="demo-wrapper">
+
+        <!-- Tab: Missing Types -->
+        <div class="demo-panel active" data-panel="tab-missing">
+          <div class="code-window">
+            <div class="code-window__chrome">
+              <span class="code-window__dot code-window__dot--close"></span>
+              <span class="code-window__dot code-window__dot--min"></span>
+              <span class="code-window__dot code-window__dot--expand"></span>
+              <span class="code-window__filename">api.py</span>
+            </div>
+            <div class="code-window__body">
+<pre><span class="tok-kw">from</span> <span class="tok-fn">typing</span> <span class="tok-kw">import</span> Any
+
+<span class="tok-kw">def</span> <span class="tok-fn">fetch_user</span>(user_id):          <span class="tok-cmt">  # BSK-E0001, BSK-E0002</span>
+    ...
+
+<span class="tok-kw">def</span> <span class="tok-fn">save_record</span>(data: Any) <span class="tok-kw">-></span> <span class="tok-type">bool</span>:  <span class="tok-cmt"> # BSK-E0011</span>
+    ...</pre>
+            </div>
+          </div>
+          <div class="diagnostic-block">
+<span class="diag-prefix">error</span><span class="diag-bar">[</span><span class="diag-code">BSK-E0001</span><span class="diag-bar">]: </span><span class="diag-msg">Missing parameter type annotation</span>
+<span class="diag-bar">  --> </span><span class="diag-path">api.py:3:16</span>
+<span class="diag-bar">   |</span>
+<span class="diag-bar"> 3 | </span><span class="diag-src">def fetch_user(user_id):</span>
+<span class="diag-bar">   |               </span><span class="diag-caret">^^^^^^^</span> <span class="diag-note">parameter `user_id` has no type annotation</span>
+<span class="diag-bar">   = </span><span class="diag-help">help: add type annotation: `user_id: int`</span>
+
+<span class="diag-prefix">error</span><span class="diag-bar">[</span><span class="diag-code">BSK-E0011</span><span class="diag-bar">]: </span><span class="diag-msg">Implicit `Any` — explicit annotation required</span>
+<span class="diag-bar">  --> </span><span class="diag-path">api.py:6:20</span>
+<span class="diag-bar">   |</span>
+<span class="diag-bar"> 6 | </span><span class="diag-src">def save_record(data: Any) -> bool:</span>
+<span class="diag-bar">   |                     </span><span class="diag-caret">^^^</span> <span class="diag-note">use of `Any` must be justified</span>
+<span class="diag-bar">   = </span><span class="diag-help">help: replace `Any` with a concrete type, or add a suppression comment with reason</span>
+<span class="diag-bar">   = </span><span class="diag-see">see: https://basilisk-lang.org/docs/rules/#BSK-E0011</span>
+          </div>
+        </div>
+
+        <!-- Tab: Ownership -->
+        <div class="demo-panel" data-panel="tab-ownership">
+          <div class="code-window">
+            <div class="code-window__chrome">
+              <span class="code-window__dot code-window__dot--close"></span>
+              <span class="code-window__dot code-window__dot--min"></span>
+              <span class="code-window__dot code-window__dot--expand"></span>
+              <span class="code-window__filename">transform.py</span>
+            </div>
+            <div class="code-window__body">
+<pre><span class="tok-kw">from</span> <span class="tok-fn">typing</span> <span class="tok-kw">import</span> Annotated
+<span class="tok-kw">from</span> <span class="tok-fn">basilisk</span> <span class="tok-kw">import</span> Borrowed, Owned
+
+<span class="tok-kw">def</span> <span class="tok-fn">summarise</span>(
+    items<span class="tok-type">: Annotated[list[int], Borrowed]</span>,
+) <span class="tok-kw">-></span> <span class="tok-type">int</span>:
+<span class="code-error-line">    items.append(<span class="tok-num">99</span>)  <span class="tok-cmt"># BSK-E0030: mutation of Borrowed</span>
+</span>    <span class="tok-kw">return</span> sum(items)</pre>
+            </div>
+          </div>
+          <div class="diagnostic-block">
+<span class="diag-prefix">error</span><span class="diag-bar">[</span><span class="diag-code">BSK-E0030</span><span class="diag-bar">]: </span><span class="diag-msg">Mutation of `Borrowed` parameter</span>
+<span class="diag-bar">  --> </span><span class="diag-path">transform.py:7:5</span>
+<span class="diag-bar">   |</span>
+<span class="diag-bar"> 7 | </span><span class="diag-src">    items.append(99)</span>
+<span class="diag-bar">   |     </span><span class="diag-caret">^^^^^</span> <span class="diag-note">cannot mutate `items`: parameter is `Borrowed` (read-only)</span>
+<span class="diag-bar">   |</span>
+<span class="diag-bar">   = </span><span class="diag-help">help: change annotation to `Annotated[list[int], InOut]` to allow mutation</span>
+<span class="diag-bar">   = </span><span class="diag-note">note: `Borrowed` parameters are immutable by contract</span>
+<span class="diag-bar">   = </span><span class="diag-see">see: https://basilisk-lang.org/docs/mojo-safety/</span>
+          </div>
+        </div>
+
+        <!-- Tab: Clean Code -->
+        <div class="demo-panel" data-panel="tab-clean">
+          <div class="code-window">
+            <div class="code-window__chrome">
+              <span class="code-window__dot code-window__dot--close"></span>
+              <span class="code-window__dot code-window__dot--min"></span>
+              <span class="code-window__dot code-window__dot--expand"></span>
+              <span class="code-window__filename">service.py</span>
+            </div>
+            <div class="code-window__body">
+<pre><span class="tok-kw">from</span> <span class="tok-fn">dataclasses</span> <span class="tok-kw">import</span> dataclass
+
+<span class="tok-dec">@dataclass</span>(frozen=<span class="tok-fn">True</span>)
+<span class="tok-kw">class</span> <span class="tok-fn">Config</span>:
+    host<span class="tok-type">: str</span>
+    port<span class="tok-type">: int</span>
+    debug<span class="tok-type">: bool</span> <span class="tok-kw">=</span> <span class="tok-fn">False</span>
+
+<span class="tok-kw">def</span> <span class="tok-fn">create_config</span>(
+    host<span class="tok-type">: str</span>,
+    port<span class="tok-type">: int</span>,
+) <span class="tok-kw">-></span> <span class="tok-type">Config</span>:
+    <span class="tok-kw">return</span> Config(host<span class="tok-kw">=</span>host, port<span class="tok-kw">=</span>port)</pre>
+            </div>
+          </div>
+          <div class="diagnostic-block diagnostic-block--success">
+<span class="diag-prefix" style="color:var(--color-success)">All checked. No issues found.</span>
+<span class="diag-note">Checked 1 file &mdash; 0 errors, 0 warnings in 4ms.</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     CTA BANNER
+═══════════════════════════════════════════════════════ -->
+<section class="cta-banner section">
+  <div class="container">
+    <div class="cta-banner__card">
+      <h2>Python's type system.<br>Actually enforced.</h2>
+      <p>
+        Stop treating type annotations as documentation.
+        Start treating them as contracts.
+      </p>
+      <div class="cta-banner__actions">
+        <a href="/docs/" class="btn btn--primary">Read the Docs</a>
+        <a href="https://github.com/basilisk-lang/basilisk" class="btn btn--secondary" target="_blank" rel="noopener">View on GitHub</a>
+      </div>
+    </div>
+  </div>
+</section>

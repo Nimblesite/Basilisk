@@ -1100,3 +1100,34 @@ fn class_with_docstring_not_collected_as_attribute() -> Result<(), Box<dyn std::
     assert_eq!(cls.attributes[0].name, "x");
     Ok(())
 }
+
+/// Module-level call where callee is an Attribute (not a simple Name) →
+/// exercises the `?` early-return in `call_site_from_expr` (visitor.rs line 807).
+#[test]
+fn module_level_method_call_not_collected_as_call_site() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "result = obj.method(42)\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    // obj.method is an Attribute, not a simple Name → call_site_from_expr returns None
+    assert!(
+        resolved.calls.is_empty(),
+        "method call must not be collected as a call site"
+    );
+    Ok(())
+}
+
+/// Module-level `AnnAssign` where target is an Attribute (not a Name) →
+/// exercises the `?` early-return in `ann_assign_info_from` (visitor.rs line 923).
+#[test]
+fn module_level_ann_assign_with_attribute_target_not_collected(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let src = "x.y: int = 0\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    // x.y is an Attribute target → expr_simple_name returns None → no VariableInfo created
+    assert!(
+        resolved.module_vars.is_empty(),
+        "attribute target must not be collected as a module var"
+    );
+    Ok(())
+}

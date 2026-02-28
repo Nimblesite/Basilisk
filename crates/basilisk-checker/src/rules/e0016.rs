@@ -57,7 +57,7 @@ impl Rule for IncompatibleOverride {
                 &module.source,
                 &module.path,
                 diagnostics,
-            )
+            );
         });
     }
 }
