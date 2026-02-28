@@ -27,15 +27,19 @@ pub(crate) struct OverlappingOverloads;
 
 impl Rule for OverlappingOverloads {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        // Group overloaded functions by name.
-        let mut groups: HashMap<&str, Vec<&FunctionInfo>> = HashMap::new();
+        // Group overloaded functions by (class_name, function_name) so overloads
+        // in different classes with the same method name don't cross-contaminate.
+        let mut groups: HashMap<(Option<&str>, &str), Vec<&FunctionInfo>> = HashMap::new();
         for func in &module.functions {
             if has_overload_decorator(&func.decorators) {
-                groups.entry(&func.name).or_default().push(func);
+                groups
+                    .entry((func.class_name.as_deref(), &func.name))
+                    .or_default()
+                    .push(func);
             }
         }
 
-        for (name, funcs) in &groups {
+        for ((_, name), funcs) in &groups {
             check_group(name, funcs, &module.path, diagnostics);
         }
     }
@@ -56,13 +60,15 @@ fn check_group(func_name: &str, funcs: &[&FunctionInfo], path: &str, out: &mut V
 }
 
 /// Two overloads overlap when they have the same number of regular parameters,
-/// the same parameter names in the same order, AND at least one parameter on
-/// each side has no annotation (meaning the signatures are indistinguishable
-/// from a type-annotation perspective).
+/// the same parameter names in the same order, AND at least one non-self/cls
+/// parameter on each side has no annotation (meaning the signatures are
+/// indistinguishable from a type-annotation perspective).
 ///
-/// When all parameters on both overloads carry annotations, the overloads may
-/// be distinguished by their type annotations even if names are identical, so
-/// we conservatively do not flag them in Phase 1.
+/// `self` and `cls` are always unannotated by convention and must be excluded
+/// from the annotation-coverage check.  When all non-self/cls parameters on
+/// both overloads carry annotations, the overloads may be distinguished by
+/// their type annotations even if names are identical, so we conservatively
+/// do not flag them in Phase 1.
 fn signatures_overlap(a: &FunctionInfo, b: &FunctionInfo) -> bool {
     if a.parameters.len() != b.parameters.len() {
         return false;
@@ -78,12 +84,18 @@ fn signatures_overlap(a: &FunctionInfo, b: &FunctionInfo) -> bool {
         return false;
     }
 
-    // If every parameter on both sides is annotated the overloads might differ
-    // by type annotation alone — defer to a future phase.
-    let a_all_annotated = a.parameters.iter().all(|p| p.has_annotation);
-    let b_all_annotated = b.parameters.iter().all(|p| p.has_annotation);
+    // Exclude `self` and `cls` — these are unannotated by convention and
+    // carry no type information that could distinguish overloads.
+    let is_implicit = |p: &&basilisk_resolver::ParameterInfo| {
+        p.name == "self" || p.name == "cls"
+    };
 
-    !a_all_annotated || !b_all_annotated
+    let a_typed = a.parameters.iter().filter(|p| !is_implicit(p)).all(|p| p.has_annotation);
+    let b_typed = b.parameters.iter().filter(|p| !is_implicit(p)).all(|p| p.has_annotation);
+
+    // If every meaningful parameter on both sides is annotated the overloads
+    // might differ by type alone — defer to a future phase.
+    !a_typed || !b_typed
 }
 
 /// Returns `true` if `"overload"` (or `"typing.overload"`) is in the list.

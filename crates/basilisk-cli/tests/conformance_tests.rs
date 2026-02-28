@@ -137,6 +137,23 @@ impl FileResult {
 // ---------------------------------------------------------------------------
 
 fn run_file(path: &Path) -> FileResult {
+    // Rules that are Basilisk-specific strictness requirements not covered by
+    // the PEP conformance suite:
+    //
+    // - E0001–E0005: annotation completeness (PEP suite fixtures are unannotated)
+    // - E0010, E0011: import strictness and Any warnings
+    // - E0025: missing @override (PEP 698 makes @override optional documentation)
+    //
+    // Notes:
+    // - E0019 (unbound variable) is NOT excluded: some conformance files mark
+    //   lines where a variable may be unbound with # E.
+    // - E0023 (non-exhaustive match) is NOT excluded: the conformance suite
+    //   does test that type checkers detect non-exhaustive match statements.
+    const STRICTNESS_ONLY: &[&str] = &[
+        "BSK-E0001", "BSK-E0002", "BSK-E0003", "BSK-E0004", "BSK-E0005", "BSK-E0010",
+        "BSK-E0011", "BSK-E0025",
+    ];
+
     let Ok(source) = fs::read_to_string(path) else {
         return FileResult::default();
     };
@@ -168,16 +185,6 @@ fn run_file(path: &Path) -> FileResult {
     }
 
     // Run the pipeline.
-    // Only Error-severity diagnostics are used for scoring: warnings (e.g. E0011)
-    // are informational and must not be counted as false positives or required hits.
-    //
-    // Additionally, Basilisk-specific strictness rules (E0001–E0005, E0010) are
-    // excluded from FP scoring: the python/typing conformance suite tests PEP
-    // type-checking behaviour, not Basilisk's annotation-completeness requirements.
-    // Those rules fire legitimately on the unannotated test fixtures.
-    const STRICTNESS_ONLY: &[&str] = &[
-        "BSK-E0001", "BSK-E0002", "BSK-E0003", "BSK-E0004", "BSK-E0005", "BSK-E0010",
-    ];
     let diag_lines: HashSet<usize> = match parse_file(path.to_string_lossy().as_ref()) {
         Ok(parsed) => match resolve(&parsed) {
             Ok(resolved) => {

@@ -2,17 +2,14 @@
 
 /* ── Demo tab switching ────────────────────────────────────── */
 document.querySelectorAll(".demo-tabs").forEach((tabGroup) => {
-  const tabs   = tabGroup.querySelectorAll("[data-tab]");
-  const panels = tabGroup
-    .closest(".demo-container")
-    .querySelectorAll("[data-panel]");
+  const tabs    = tabGroup.querySelectorAll("[data-tab]");
+  const wrapper = tabGroup.nextElementSibling; // always the .demo-wrapper
 
   tabs.forEach((tab) => {
     tab.addEventListener("click", () => {
       const target = tab.dataset.tab;
-
       tabs.forEach((t) => t.classList.toggle("active", t === tab));
-      panels.forEach((p) =>
+      wrapper.querySelectorAll("[data-panel]").forEach((p) =>
         p.classList.toggle("active", p.dataset.panel === target)
       );
     });

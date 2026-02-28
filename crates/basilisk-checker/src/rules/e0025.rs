@@ -13,7 +13,7 @@
 
 use std::collections::HashMap;
 
-use basilisk_resolver::{ClassInfo, ResolvedModule};
+use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
@@ -50,8 +50,20 @@ impl Rule for MissingOverrideDecorator {
             })
             .collect();
 
+        // Build a map from (class_name, method_name) → FunctionInfo for span lookup.
+        // For overloaded methods the implementation (last entry) is preferred.
+        let func_map: HashMap<(&str, &str), &FunctionInfo> = module
+            .functions
+            .iter()
+            .filter_map(|f| {
+                f.class_name
+                    .as_deref()
+                    .map(|cls| ((cls, f.name.as_str()), f))
+            })
+            .collect();
+
         module.classes.iter().for_each(|child| {
-            check_class(child, &class_map, &module.path, diagnostics);
+            check_class(child, &class_map, &func_map, &module.path, diagnostics);
         });
     }
 }
@@ -75,6 +87,7 @@ fn is_protocol_transitively<'a>(
 fn check_class(
     child: &ClassInfo,
     class_map: &HashMap<&str, (&ClassInfo, bool)>,
+    func_map: &HashMap<(&str, &str), &FunctionInfo>,
     path: &str,
     out: &mut Vec<Diagnostic>,
 ) {
@@ -97,18 +110,41 @@ fn check_class(
         return;
     }
 
+    // Deduplicate method names: overloaded methods appear once per overload
+    // variant.  We want exactly one diagnostic per unique method name.
+    let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
     for method_name in &child.method_names {
-        if !base_methods.contains(&method_name.as_str()) {
+        let name = method_name.as_str();
+        if !seen.insert(name) {
+            continue; // already processed this name
+        }
+        if !base_methods.contains(&name) {
+            continue;
+        }
+        // Dunder methods (__init__, __post_init__, __eq__, etc.) are part of
+        // Python's data model and are expected to be overridden without @override.
+        if name.starts_with("__") && name.ends_with("__") {
+            continue;
+        }
+        // If ANY occurrence of this method name carries @override (e.g. the
+        // implementation or any overload variant), the whole group is covered.
+        if method_has_override_decorator(&child.method_decorators, name) {
             continue;
         }
 
-        if method_has_override_decorator(&child.method_decorators, method_name) {
+        // Overloaded methods: @override belongs on the implementation, not the
+        // overload variants.  If any occurrence is decorated with @overload,
+        // treat the whole group as present — the checker for override semantics
+        // on overload groups is handled by E0021/E0016, not E0025.
+        if method_has_decorator(&child.method_decorators, name, "overload") {
             continue;
         }
 
-        // Always report at the class name span so the diagnostic sorts before
-        // per-method diagnostics (E0001/E0002) that share the same method position.
-        out.push(make_diagnostic(child, method_name, child.name_span, path));
+        // Report at the method's own span; fall back to the class name span.
+        let span = func_map
+            .get(&(child.name.as_str(), name))
+            .map_or(child.name_span, |f| f.name_span);
+        out.push(make_diagnostic(child, name, span, path));
     }
 }
 
@@ -123,6 +159,19 @@ fn method_has_override_decorator(
         .filter(|(name, _)| name == method_name)
         .flat_map(|(_, decorators)| decorators.iter())
         .any(|d| d == "override" || d.ends_with(".override"))
+}
+
+/// Returns `true` when any occurrence of `method_name` carries the given decorator.
+fn method_has_decorator(
+    method_decorators: &[(String, Vec<String>)],
+    method_name: &str,
+    decorator: &str,
+) -> bool {
+    method_decorators
+        .iter()
+        .filter(|(name, _)| name == method_name)
+        .flat_map(|(_, decorators)| decorators.iter())
+        .any(|d| d == decorator || d.ends_with(&format!(".{decorator}")))
 }
 
 fn make_diagnostic(

@@ -96,6 +96,12 @@ pub struct ReturnStmtInfo {
     pub span: Span,
     /// `true` when the statement has a non-`None` expression (`return expr`).
     pub has_value: bool,
+    /// `true` when the returned expression is a function/method call.
+    ///
+    /// Call expressions may return `None` (e.g. `return f(self)` where `f:
+    /// Callable[..., None]`).  Without full type inference we cannot verify
+    /// the callee's return type, so E0013 conservatively skips these.
+    pub value_is_call: bool,
 }
 
 /// A reference to an unhashable expression used as a dict key.
@@ -192,6 +198,8 @@ pub struct ClassInfo {
     pub is_typed_dict: bool,
     /// Keyword argument names in the class definition (e.g. `metaclass`, `total`, `other`).
     pub class_keywords: Vec<String>,
+    /// `true` when the class is decorated with `@dataclass` or `@dataclass(...)`.
+    pub is_dataclass: bool,
 }
 
 /// Type parameters declared in a `Generic[T1, T2, ...]` base expression.

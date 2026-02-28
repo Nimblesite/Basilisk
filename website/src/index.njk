@@ -8,63 +8,70 @@ permalink: /
 <script src="/assets/js/demo.js" defer></script>
 
 <!-- ═══════════════════════════════════════════════════════
-     HERO
+     HERO — left text / right code, no glows, no grid
 ═══════════════════════════════════════════════════════ -->
 <section class="hero">
   <div class="container">
+    <div class="hero__split">
 
-    <div class="hero__eyebrow">
-      Strict by Default &mdash; No Exceptions
-    </div>
+      <div class="hero__text">
+        <span class="hero__kicker">// basilisk — v0.1 alpha</span>
 
-    <h1 class="hero__headline">
-      Python finally has<br>
-      a type system that <em>means it.</em>
-    </h1>
+        <h1 class="hero__headline">
+          Python&rsquo;s type system.<br>
+          Actually enforced.
+        </h1>
 
-    <p class="hero__subheadline">
-      Basilisk enforces complete type safety &mdash; every parameter typed, every
-      return declared, <code>Any</code> always explicit. Built in Rust.
-      No Node.js. No permissive modes.
-    </p>
+        <p class="hero__subheadline">
+          Basilisk is a strict-by-default static type analyzer for Python.
+          Every parameter must be typed. Every return declared.
+          <code>Any</code> is always explicit. No gradual mode. No escape hatches.
+        </p>
 
-    <div class="hero__cta-group">
-      <a href="/docs/installation/" class="btn btn--primary">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-        Get Started
-      </a>
-      <button class="btn btn--mono" data-copy="cargo install basilisk" title="Copy install command">
-        <span class="copy-text">cargo install basilisk</span>
-        <svg class="copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-        <svg class="copy-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="display:none;color:var(--color-success)"><polyline points="20 6 9 17 4 12"/></svg>
-      </button>
-      <a href="https://github.com/basilisk-lang/basilisk" class="btn btn--secondary" target="_blank" rel="noopener">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.741 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
-        GitHub
-      </a>
-    </div>
+        <div class="hero__cta-group">
+          <a href="/docs/installation/" class="btn btn--primary">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            Get Started
+          </a>
+          <button class="btn btn--mono" data-copy="cargo install basilisk" title="Copy install command">
+            <span class="copy-text">cargo install basilisk</span>
+            <svg class="copy-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            <svg class="copy-check" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="display:none;color:var(--color-success)"><polyline points="20 6 9 17 4 12"/></svg>
+          </button>
+          <a href="https://github.com/basilisk-lang/basilisk" class="btn btn--secondary" target="_blank" rel="noopener">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.741 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+            GitHub
+          </a>
+        </div>
 
-    <!-- Before / After code demo -->
-    <div class="hero__demo demo-container">
-      <div class="demo-tabs">
-        <button class="demo-tab active" data-tab="before">Before: bad.py</button>
-        <button class="demo-tab" data-tab="after">After: good.py</button>
+        <div class="hero__meta">
+          <span>Built in <strong>Rust</strong></span>
+          <span><strong>&lt;10ms</strong> incremental</span>
+          <span>No <strong>Node.js</strong></span>
+          <span><strong>MIT</strong> / Apache-2.0</span>
+        </div>
       </div>
-      <div class="demo-wrapper">
 
-        <div class="demo-panel active" data-panel="before">
-          <div class="code-window">
-            <div class="code-window__chrome">
-              <span class="code-window__dot code-window__dot--close"></span>
-              <span class="code-window__dot code-window__dot--min"></span>
-              <span class="code-window__dot code-window__dot--expand"></span>
-              <span class="code-window__filename">bad.py</span>
-            </div>
-            <div class="code-window__body">
+      <!-- Before / After code demo -->
+      <div class="hero__code hero__demo">
+        <div class="demo-tabs">
+          <button class="demo-tab active" data-tab="before">bad.py</button>
+          <button class="demo-tab" data-tab="after">good.py</button>
+        </div>
+        <div class="demo-wrapper">
+
+          <div class="demo-panel active" data-panel="before">
+            <div class="code-window">
+              <div class="code-window__chrome">
+                <span class="code-window__dot code-window__dot--close"></span>
+                <span class="code-window__dot code-window__dot--min"></span>
+                <span class="code-window__dot code-window__dot--expand"></span>
+                <span class="code-window__filename">bad.py</span>
+              </div>
+              <div class="code-window__body">
 <pre><span class="tok-kw">def</span> <span class="tok-fn">process</span>(data):
 <span class="code-error-line">    <span class="tok-kw">return</span> data.upper()
 </span>
-
 <span class="tok-kw">class</span> <span class="tok-fn">User</span>:
     <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, name, age):
         <span class="tok-kw">self</span>.name <span class="tok-kw">=</span> name
@@ -73,40 +80,29 @@ permalink: /
     <span class="tok-kw">def</span> <span class="tok-fn">greet</span>(<span class="tok-kw">self</span>):
 <span class="code-error-line">        <span class="tok-kw">return</span> <span class="tok-str">f"Hello, {self.name}"</span>
 </span></pre>
+              </div>
             </div>
-          </div>
-          <div class="diagnostic-block">
+            <div class="diagnostic-block">
 <span class="diag-prefix">error</span><span class="diag-bar">[</span><span class="diag-code">BSK-E0001</span><span class="diag-bar">]</span><span class="diag-msg">: Missing parameter type annotation</span>
 <span class="diag-bar">  --> </span><span class="diag-path">bad.py:1:12</span>
 <span class="diag-bar">   |</span>
 <span class="diag-bar"> 1 | </span><span class="diag-src">def process(data):</span>
 <span class="diag-bar">   |            </span><span class="diag-caret">^^^^</span> <span class="diag-note">parameter `data` has no type annotation</span>
-<span class="diag-bar">   |</span>
 <span class="diag-bar">   = </span><span class="diag-help">help: add type annotation: `data: str`</span>
-<span class="diag-bar">   = </span><span class="diag-note">note: all parameters must be explicitly typed</span>
-<span class="diag-bar">   = </span><span class="diag-see">see: https://basilisk-lang.org/docs/rules/#BSK-E0001</span>
-
-<span class="diag-prefix">error</span><span class="diag-bar">[</span><span class="diag-code">BSK-E0002</span><span class="diag-bar">]</span><span class="diag-msg">: Missing return type annotation</span>
-<span class="diag-bar">  --> </span><span class="diag-path">bad.py:1:1</span>
-<span class="diag-bar">   |</span>
-<span class="diag-bar"> 1 | </span><span class="diag-src">def process(data):</span>
-<span class="diag-bar">   |     </span><span class="diag-caret">^^^^^^^</span> <span class="diag-note">no return type annotation</span>
-<span class="diag-bar">   |</span>
-<span class="diag-bar">   = </span><span class="diag-help">help: add return type: `def process(data: str) -> str:`</span>
 
 <span class="diag-note">Found 5 errors in 1 file.</span>
-          </div>
-        </div>
-
-        <div class="demo-panel" data-panel="after">
-          <div class="code-window">
-            <div class="code-window__chrome">
-              <span class="code-window__dot code-window__dot--close"></span>
-              <span class="code-window__dot code-window__dot--min"></span>
-              <span class="code-window__dot code-window__dot--expand"></span>
-              <span class="code-window__filename">good.py</span>
             </div>
-            <div class="code-window__body">
+          </div>
+
+          <div class="demo-panel" data-panel="after">
+            <div class="code-window">
+              <div class="code-window__chrome">
+                <span class="code-window__dot code-window__dot--close"></span>
+                <span class="code-window__dot code-window__dot--min"></span>
+                <span class="code-window__dot code-window__dot--expand"></span>
+                <span class="code-window__filename">good.py</span>
+              </div>
+              <div class="code-window__body">
 <pre><span class="tok-kw">def</span> <span class="tok-fn">process</span>(data<span class="tok-type">: str</span>) <span class="tok-kw">-></span> <span class="tok-type">str</span>:
     <span class="tok-kw">return</span> data.upper()
 
@@ -121,152 +117,191 @@ permalink: /
 
     <span class="tok-kw">def</span> <span class="tok-fn">greet</span>(<span class="tok-kw">self</span>) <span class="tok-kw">-></span> <span class="tok-type">str</span>:
         <span class="tok-kw">return</span> <span class="tok-str">f"Hello, {self.name}"</span></pre>
+              </div>
             </div>
-          </div>
-          <div class="diagnostic-block diagnostic-block--success">
+            <div class="diagnostic-block diagnostic-block--success">
 <span class="diag-prefix" style="color:var(--color-success)">All checked. No issues found.</span>
 <span class="diag-note">Checked 1 file &mdash; 0 errors, 0 warnings.</span>
+            </div>
           </div>
-        </div>
 
+        </div>
       </div>
+
     </div>
   </div>
 </section>
 
 <!-- ═══════════════════════════════════════════════════════
-     STATS BAR
+     PROBLEM — blunt text, no cards
 ═══════════════════════════════════════════════════════ -->
-<div class="stats-bar">
+<section class="problem">
   <div class="container">
-    <div class="stats-bar__inner">
+    <p class="problem__label">The problem</p>
+    <div class="problem__grid">
 
-      <div class="stats-bar__item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-        <span>Built in <span class="stats-bar__label">Rust</span></span>
+      <div class="problem__statement">
+        Every Python type checker asks you to <em>opt in</em> to the thing they were built to do.
       </div>
 
-      <div class="stats-bar__item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        <span><span class="stats-bar__label">&lt;10ms</span> incremental checks</span>
-      </div>
-
-      <div class="stats-bar__item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-        <span>No <span class="stats-bar__label">Node.js</span> runtime</span>
-      </div>
-
-      <div class="stats-bar__item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
-        <span><span class="stats-bar__label">100%</span> PEP coverage target</span>
-      </div>
-
-      <div class="stats-bar__item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-        <span><span class="stats-bar__label">MIT / Apache-2.0</span></span>
-      </div>
+      <ul class="problem__bullets">
+        <li>
+          <span class="problem__num">01</span>
+          <span><strong>Pyright and mypy default to permissive mode.</strong> You get type checking only where you add <code>--strict</code> or configure it per-file. The rest ships unchecked.</span>
+        </li>
+        <li>
+          <span class="problem__num">02</span>
+          <span><strong>Gradual typing is a footgun.</strong> A codebase where 80% is typed is a codebase where 20% of bugs slip through every check. Safety requires 100%.</span>
+        </li>
+        <li>
+          <span class="problem__num">03</span>
+          <span><strong>PEP conformance is nowhere near 100%.</strong> mypy passes ~58% of the typing conformance suite. Pyrefly ~86%. The spec exists — it&rsquo;s just not enforced.</span>
+        </li>
+        <li>
+          <span class="problem__num">04</span>
+          <span><strong>Ownership semantics don&rsquo;t exist in Python.</strong> You can&rsquo;t express &ldquo;this function must not mutate its argument.&rdquo; Basilisk adds this, today, as standard Python annotations.</span>
+        </li>
+      </ul>
 
     </div>
   </div>
-</div>
+</section>
 
 <!-- ═══════════════════════════════════════════════════════
-     FEATURES
+     FEATURES — alternating split rows
 ═══════════════════════════════════════════════════════ -->
-<section class="features section">
-  <div class="container">
-    <h2 class="section__headline">Built different, by design</h2>
-    <p class="section__subhead">
-      Every other Python type checker asks you to opt in to strictness.
-      Basilisk starts there.
-    </p>
+<section class="features">
 
-    <div class="feature-grid">
-
-      <div class="feature-card">
-        <div class="feature-card__icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        </div>
-        <h3 class="feature-card__title">Strict by Default</h3>
-        <p class="feature-card__body">
-          No <code>--strict</code> flag. No gradual mode. No opt-in.
-          Basilisk treats every untyped function as a type error &mdash;
-          because that's what it is. The safe path is the only path.
-        </p>
+  <div class="feature-row">
+    <div class="feature-row__text">
+      <p class="feature-row__num">01 &mdash; Strict by default</p>
+      <h2 class="feature-row__title">No <code>--strict</code> flag.<br>No gradual mode.<br>No opt-in.</h2>
+      <p class="feature-row__body">
+        Basilisk treats every untyped function as a type error &mdash; because that&rsquo;s what it is.
+        There is no configuration key to make it permissive. The safe path is the only path.
+      </p>
+    </div>
+    <div class="feature-row__visual">
+      <div class="stat-block">
+        <span class="stat-block__number">0<span class="stat-block__unit">%</span></span>
+        <span class="stat-block__label">escape hatches</span>
       </div>
-
-      <div class="feature-card">
-        <div class="feature-card__icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        </div>
-        <h3 class="feature-card__title">Sub-10ms Incremental Checks</h3>
-        <p class="feature-card__body">
-          Powered by Salsa &mdash; the same incremental computation framework
-          behind rust-analyzer. Only recomputes what changed.
-          Keystroke-responsive in any editor.
-        </p>
-      </div>
-
-      <div class="feature-card">
-        <div class="feature-card__icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-        </div>
-        <h3 class="feature-card__title">Single Binary, Zero Runtime</h3>
-        <p class="feature-card__body">
-          Ships as a standalone Rust binary. No Node.js. No Python interpreter.
-          No <code>npm install</code>. Drop it in your PATH and it works
-          everywhere Python code lives.
-        </p>
-      </div>
-
-      <div class="feature-card">
-        <div class="feature-card__icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-        </div>
-        <h3 class="feature-card__title">Mojo-Inspired Ownership</h3>
-        <p class="feature-card__body">
-          Add <code>Borrowed</code>, <code>InOut</code>, and <code>Owned</code>
-          annotations to express ownership semantics. Catch mutation of borrowed
-          values and use-after-move in standard Python, today.
-        </p>
-      </div>
-
-      <div class="feature-card">
-        <div class="feature-card__icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
-        </div>
-        <h3 class="feature-card__title">Complete PEP Conformance</h3>
-        <p class="feature-card__body">
-          Targets 100% conformance with the Python typing specification.
-          Not ~95%. Not ~58%. Every PEP from 484 to 742 &mdash;
-          Protocols, ParamSpec, TypeVarTuple &mdash; enforced correctly.
-        </p>
-      </div>
-
-      <div class="feature-card">
-        <div class="feature-card__icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
-        </div>
-        <h3 class="feature-card__title">Secure WASM Plugins</h3>
-        <p class="feature-card__body">
-          Extend Basilisk with WebAssembly plugins for Django, Pydantic,
-          and SQLAlchemy type intelligence. Sandboxed by design.
-          Portable across every platform.
-        </p>
-      </div>
-
     </div>
   </div>
+
+  <div class="feature-row">
+    <div class="feature-row__visual">
+      <div class="stat-block">
+        <span class="stat-block__number">&lt;<span class="stat-block__unit">10</span></span>
+        <span class="stat-block__label">milliseconds, incremental</span>
+      </div>
+    </div>
+    <div class="feature-row__text">
+      <p class="feature-row__num">02 &mdash; Sub-10ms incremental checks</p>
+      <h2 class="feature-row__title">Keystroke-responsive.<br>Every edit.</h2>
+      <p class="feature-row__body">
+        Powered by Salsa &mdash; the same incremental computation framework behind rust-analyzer.
+        Basilisk only recomputes what changed. Cold start on 100K LOC in under 5 seconds.
+        Keystroke-responsive on every subsequent edit.
+      </p>
+    </div>
+  </div>
+
+  <div class="feature-row">
+    <div class="feature-row__text">
+      <p class="feature-row__num">03 &mdash; Ownership semantics</p>
+      <h2 class="feature-row__title">Borrow. Mutate.<br>Move. All enforced.</h2>
+      <p class="feature-row__body">
+        Add <code>Borrowed</code>, <code>InOut</code>, and <code>Owned</code> annotations to express ownership.
+        Standard Python syntax &mdash; no compiler required. Catch mutation of borrowed values
+        and use-after-move before they reach production.
+      </p>
+    </div>
+    <div class="feature-row__visual">
+      <div class="code-window" style="width:100%;max-width:400px">
+        <div class="code-window__chrome">
+          <span class="code-window__dot code-window__dot--close"></span>
+          <span class="code-window__dot code-window__dot--min"></span>
+          <span class="code-window__dot code-window__dot--expand"></span>
+          <span class="code-window__filename">ownership.py</span>
+        </div>
+        <div class="code-window__body">
+<pre><span class="tok-kw">from</span> <span class="tok-fn">basilisk</span> <span class="tok-kw">import</span> Borrowed
+
+<span class="tok-kw">def</span> <span class="tok-fn">summarise</span>(
+  items<span class="tok-type">: Annotated[
+    list[int], Borrowed]</span>,
+) <span class="tok-kw">-></span> <span class="tok-type">int</span>:
+<span class="code-error-line">  items.append(<span class="tok-num">99</span>)  <span class="tok-cmt"># E0030</span>
+</span>  <span class="tok-kw">return</span> sum(items)</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="feature-row">
+    <div class="feature-row__visual">
+      <div class="stat-block">
+        <span class="stat-block__number"><span class="stat-block__unit">100</span>%</span>
+        <span class="stat-block__label">PEP conformance target</span>
+      </div>
+    </div>
+    <div class="feature-row__text">
+      <p class="feature-row__num">04 &mdash; Complete PEP conformance</p>
+      <h2 class="feature-row__title">Not ~95%.<br>Not ~58%.<br>All of it.</h2>
+      <p class="feature-row__body">
+        Every PEP from 484 to 742 &mdash; Protocols, ParamSpec, TypeVarTuple,
+        <code>Self</code>, <code>Never</code> &mdash; implemented and tested
+        against the official Python typing conformance suite.
+        If the spec says it, Basilisk enforces it.
+      </p>
+    </div>
+  </div>
+
+  <div class="feature-row">
+    <div class="feature-row__text">
+      <p class="feature-row__num">05 &mdash; Single binary</p>
+      <h2 class="feature-row__title">Drop it in PATH.<br>That&rsquo;s the whole install.</h2>
+      <p class="feature-row__body">
+        Compiled to a standalone Rust binary. No Node.js. No Python interpreter.
+        No <code>pip install</code>. No <code>npm install</code>.
+        Works on macOS, Linux, and Windows from a single download.
+      </p>
+    </div>
+    <div class="feature-row__visual">
+      <div class="code-window" style="width:100%;max-width:400px">
+        <div class="code-window__chrome">
+          <span class="code-window__dot code-window__dot--close"></span>
+          <span class="code-window__dot code-window__dot--min"></span>
+          <span class="code-window__dot code-window__dot--expand"></span>
+          <span class="code-window__filename">terminal</span>
+        </div>
+        <div class="code-window__body">
+<pre><span class="tok-cmt"># one-time install</span>
+<span class="tok-fn">cargo</span> install basilisk
+
+<span class="tok-cmt"># or download the binary</span>
+<span class="tok-fn">curl</span> -sSfL https://get.basilisk-lang.org | sh
+
+<span class="tok-cmt"># then just run it</span>
+<span class="tok-fn">basilisk</span> check src/</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </section>
 
 <!-- ═══════════════════════════════════════════════════════
      COMPARISON TABLE
 ═══════════════════════════════════════════════════════ -->
-<section class="comparison-section section">
+<section class="comparison-section">
   <div class="container">
-    <h2 class="section__headline">Why teams are moving to Basilisk</h2>
-    <p class="section__subhead">
-      Every other type checker treats strictness as optional. Basilisk doesn't.
+    <p class="section-label">How it compares</p>
+    <h2 class="section-heading">The ecosystem,<br>honestly.</h2>
+    <p class="section-subhead">
+      Every other type checker treats strictness as optional.
+      Basilisk doesn&rsquo;t.
     </p>
 
     <div class="table-wrapper">
@@ -291,8 +326,8 @@ permalink: /
             <td><span class="check-partial">opt-in</span></td>
           </tr>
           <tr>
-            <td>PEP conformance <a href="/docs/comparison/#footnotes" style="color:var(--color-text-muted);font-size:var(--text-xs)">¹</a></td>
-            <td class="col-basilisk">100% <em style="font-size:var(--text-xs);color:var(--color-text-muted)">(target)</em></td>
+            <td>PEP conformance <a href="/docs/comparison/#footnotes" style="color:var(--color-text-muted);font-size:0.75rem">¹</a></td>
+            <td class="col-basilisk">100% <em style="font-size:0.75rem;color:var(--color-text-muted)">(target)</em></td>
             <td>~99%</td>
             <td>~58% full-pass</td>
             <td>alpha</td>
@@ -315,7 +350,7 @@ permalink: /
             <td class="check-yes">None</td>
           </tr>
           <tr>
-            <td>Incremental speed <a href="/docs/comparison/#footnotes" style="color:var(--color-text-muted);font-size:var(--text-xs)">²</a></td>
+            <td>Incremental speed <a href="/docs/comparison/#footnotes" style="color:var(--color-text-muted);font-size:0.75rem">²</a></td>
             <td class="col-basilisk">&lt;10ms</td>
             <td>~386ms</td>
             <td>slower</td>
@@ -371,22 +406,22 @@ permalink: /
 <!-- ═══════════════════════════════════════════════════════
      INTERACTIVE DEMO
 ═══════════════════════════════════════════════════════ -->
-<section class="demo-section section">
+<section class="demo-section">
   <div class="container">
-    <h2 class="section__headline">Basilisk in 30 seconds</h2>
-    <p class="section__subhead">
-      Real diagnostic output. Real error codes. Every fix suggested inline.
+    <p class="section-label">Real diagnostics</p>
+    <h2 class="section-heading">Basilisk in 30 seconds</h2>
+    <p class="section-subhead">
+      Real error codes. Every fix suggested inline. rustc-style output.
     </p>
 
-    <div class="demo-container" style="max-width:860px;margin:0 auto;">
+    <div style="max-width:860px">
       <div class="demo-tabs">
-        <button class="demo-tab active" data-tab="tab-missing">Missing Types</button>
+        <button class="demo-tab active" data-tab="tab-missing">Missing types</button>
         <button class="demo-tab" data-tab="tab-ownership">Ownership</button>
-        <button class="demo-tab" data-tab="tab-clean">Clean Code</button>
+        <button class="demo-tab" data-tab="tab-clean">Clean code</button>
       </div>
       <div class="demo-wrapper">
 
-        <!-- Tab: Missing Types -->
         <div class="demo-panel active" data-panel="tab-missing">
           <div class="code-window">
             <div class="code-window__chrome">
@@ -423,7 +458,6 @@ permalink: /
           </div>
         </div>
 
-        <!-- Tab: Ownership -->
         <div class="demo-panel" data-panel="tab-ownership">
           <div class="code-window">
             <div class="code-window__chrome">
@@ -456,7 +490,6 @@ permalink: /
           </div>
         </div>
 
-        <!-- Tab: Clean Code -->
         <div class="demo-panel" data-panel="tab-clean">
           <div class="code-window">
             <div class="code-window__chrome">
@@ -493,19 +526,22 @@ permalink: /
 </section>
 
 <!-- ═══════════════════════════════════════════════════════
-     CTA BANNER
+     CTA — horizontal split, no glowing card
 ═══════════════════════════════════════════════════════ -->
-<section class="cta-banner section">
+<section class="cta-section">
   <div class="container">
-    <div class="cta-banner__card">
-      <h2>Python's type system.<br>Actually enforced.</h2>
-      <p>
-        Stop treating type annotations as documentation.
-        Start treating them as contracts.
-      </p>
-      <div class="cta-banner__actions">
-        <a href="/docs/" class="btn btn--primary">Read the Docs</a>
-        <a href="https://github.com/basilisk-lang/basilisk" class="btn btn--secondary" target="_blank" rel="noopener">View on GitHub</a>
+    <div class="cta-inner">
+      <h2>Stop letting Python<br>ship untyped.</h2>
+      <div>
+        <p>
+          Basilisk is in alpha. The parser, resolver, and core checker are working.
+          The standard library stubs, LSP, and VS Code extension are in progress.
+          Early adopters shape the roadmap.
+        </p>
+        <div class="cta-inner__actions">
+          <a href="/docs/" class="btn btn--primary">Read the Docs</a>
+          <a href="https://github.com/basilisk-lang/basilisk" class="btn btn--secondary" target="_blank" rel="noopener">View on GitHub</a>
+        </div>
       </div>
     </div>
   </div>

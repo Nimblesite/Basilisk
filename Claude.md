@@ -2,8 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-We are shooting for 100% PEP comformance. Read this document carefully:
+We are shooting for 100% PEP conformance. The conformance test suite requires **Python 3.12** — this is the canonical target version for the entire project. Read the conformance README carefully:
 https://github.com/python/typing/blob/main/conformance/README.md
+
+To run the conformance suite locally:
+```
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -r conformance/requirements.txt
+```
 
 # Rules
 

@@ -20,6 +20,18 @@ use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
 use super::Rule;
 
+// TypedDict subclassing has entirely different rules from normal OOP attribute
+// inheritance — subclasses can narrow ReadOnly items, change Required/NotRequired,
+// etc.  Applying E0017 to TypedDict classes produces only false positives.
+fn is_typed_dict_hierarchy(child: &ClassInfo, class_map: &HashMap<&str, &ClassInfo>) -> bool {
+    if child.is_typed_dict {
+        return true;
+    }
+    child.bases.iter().any(|base| {
+        class_map.get(base.as_str()).is_some_and(|b| b.is_typed_dict)
+    })
+}
+
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0017",
     docs_url: "https://basilisk-lang.org/errors/BSK-E0017",
@@ -31,7 +43,11 @@ pub(crate) struct IncompatibleVariableOverride;
 
 impl Rule for IncompatibleVariableOverride {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        // Build map: class_name → attribute_name → &AttributeInfo
+        // Build map: class_name → &ClassInfo
+        let class_map: HashMap<&str, &ClassInfo> =
+            module.classes.iter().map(|cls| (cls.name.as_str(), cls)).collect();
+
+        // Build map: (class_name, attr_name) → &AttributeInfo
         let attr_map: HashMap<(&str, &str), &AttributeInfo> = module
             .classes
             .iter()
@@ -45,6 +61,10 @@ impl Rule for IncompatibleVariableOverride {
         let class_names: Vec<&str> = module.classes.iter().map(|c| c.name.as_str()).collect();
 
         module.classes.iter().for_each(|child| {
+            // TypedDict hierarchies have their own subtyping rules — skip.
+            if is_typed_dict_hierarchy(child, &class_map) {
+                return;
+            }
             check_class(
                 child,
                 &attr_map,
@@ -89,6 +109,13 @@ fn check_class(
             let child_ann = annotation_text(source, child_attr.annotation_span);
             let base_ann = annotation_text(source, base_attr.annotation_span);
 
+            // Skip when either side uses ReadOnly/Required/NotRequired wrappers.
+            // TypedDict subclasses may legally strip ReadOnly, change Required to
+            // NotRequired, etc. — string comparison cannot verify compatibility here.
+            if uses_typed_dict_qualifier(child_ann) || uses_typed_dict_qualifier(base_ann) {
+                continue;
+            }
+
             if child_ann != base_ann {
                 out.push(make_diagnostic(
                     child_attr,
@@ -102,6 +129,19 @@ fn check_class(
             }
         }
     }
+}
+
+/// Returns `true` when an annotation string contains TypedDict qualifier wrappers.
+///
+/// `ReadOnly`, `Required`, and `NotRequired` change subtyping rules in ways
+/// that a raw string comparison cannot capture — a subclass can legally strip
+/// `ReadOnly` or change `Required` to `NotRequired`.  Skip E0017 for these.
+fn uses_typed_dict_qualifier(ann: Option<&str>) -> bool {
+    ann.is_some_and(|s| {
+        s.contains("ReadOnly")
+            || s.contains("Required")
+            || s.contains("NotRequired")
+    })
 }
 
 /// Extract annotation text from source given an optional span.

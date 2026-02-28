@@ -378,6 +378,16 @@ fn class_info_from(
         })
         .unwrap_or_default();
 
+    let class_decorators: Vec<String> = class
+        .decorator_list
+        .iter()
+        .filter_map(decorator_name)
+        .collect();
+
+    let is_dataclass = class_decorators
+        .iter()
+        .any(|d| d == "dataclass" || d.ends_with(".dataclass"));
+
     ClassInfo {
         name: class.name.to_string(),
         name_span: text_range_to_span(class.name.range),
@@ -389,6 +399,7 @@ fn class_info_from(
         generic_params,
         is_typed_dict,
         class_keywords,
+        is_dataclass,
     }
 }
 
@@ -539,13 +550,13 @@ fn collect_return_stmts(stmts: &[Stmt]) -> Vec<ReturnStmtInfo> {
 }
 
 fn return_stmt_info_from(ret: &StmtReturn) -> ReturnStmtInfo {
-    let has_value = ret
-        .value
-        .as_deref()
-        .is_some_and(|e| !matches!(e, Expr::NoneLiteral(_)));
+    let value_expr = ret.value.as_deref();
+    let has_value = value_expr.is_some_and(|e| !matches!(e, Expr::NoneLiteral(_)));
+    let value_is_call = value_expr.is_some_and(|e| matches!(e, Expr::Call(_)));
     ReturnStmtInfo {
         span: text_range_to_span(ret.range),
         has_value,
+        value_is_call,
     }
 }
 

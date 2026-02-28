@@ -88,7 +88,11 @@ impl Expected {
 /// (sorted by span start), same code/severity/location/message.
 fn assert_diagnostics(source: &str, diags: &[Diagnostic], expected: &[Expected]) {
     let mut sorted = diags.to_vec();
-    sorted.sort_by_key(|d| d.span.start);
+    // Sort by span start, then by code for a stable order when two diagnostics
+    // share the same position (e.g. E0025 and E0002 on the same method line).
+    sorted.sort_by(|a, b| {
+        a.span.start.cmp(&b.span.start).then(a.code.code.cmp(b.code.code))
+    });
 
     assert_eq!(
         sorted.len(),
@@ -532,8 +536,8 @@ fn e0001_and_e0002_subclass_override_missing_annotations() -> Result<(), Box<dyn
         &src,
         &diags,
         &[
-            Expected::error("BSK-E0025", "`process`", 6, 7),
             Expected::error("BSK-E0002", "`process`", 7, 9),
+            Expected::error("BSK-E0025", "`process`", 7, 9),
             Expected::error("BSK-E0001", "`data`", 7, 23),
             Expected::error("BSK-E0002", "`extra`", 10, 9),
             Expected::error("BSK-E0001", "`value`", 10, 21),
