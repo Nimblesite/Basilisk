@@ -10,8 +10,9 @@ use ruff_text_size::{Ranged, TextRange};
 use basilisk_parser::ParsedModule;
 
 use crate::scope::{
-    AttributeInfo, ClassInfo, FunctionInfo, ImportInfo, ImportKind, MatchStmtInfo, ParameterInfo,
-    ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo, RhsKind, Span, VariableInfo,
+    AttributeInfo, CallSite, ClassInfo, FunctionInfo, ImportInfo, ImportKind, MatchStmtInfo,
+    ParameterInfo, ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo, RhsKind, Span,
+    UnhashableKeyRef, VariableInfo,
 };
 
 /// Collect all function definitions and module-level data from the parsed module.
@@ -32,12 +33,15 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         true,
     );
 
+    let calls = collect_module_level_calls(&module.ast.body);
+
     ResolvedModule {
         functions,
         classes,
         module_vars,
         imports,
         match_stmts,
+        calls,
         path: module.path.clone(),
         source: module.source.clone(),
     }
@@ -78,7 +82,7 @@ fn collect_from_stmt(
 ) {
     match stmt {
         Stmt::FunctionDef(func) => {
-            functions.push(function_info_from(func));
+            functions.push(function_info_from(func, None));
             collect_from_body(
                 &func.body,
                 functions,
@@ -313,6 +317,7 @@ fn class_info_from(
                         name,
                         name_span: text_range_to_span(ann.target.range()),
                         has_annotation: true,
+                        annotation_span: Some(text_range_to_span(ann.annotation.range())),
                     });
                 }
             }
@@ -323,12 +328,14 @@ fn class_info_from(
                             name,
                             name_span: text_range_to_span(target.range()),
                             has_annotation: false,
+                            annotation_span: None,
                         });
                     }
                 }
             }
             Stmt::FunctionDef(func) => {
-                let func_info = function_info_from(func);
+                let class_name = class.name.to_string();
+                let func_info = function_info_from(func, Some(class_name));
                 let method_name = func_info.name.clone();
                 let decs = func_info.decorators.clone();
                 functions.push(func_info);
@@ -370,7 +377,7 @@ fn class_info_from(
 // Function info
 // ---------------------------------------------------------------------------
 
-fn function_info_from(func: &StmtFunctionDef) -> FunctionInfo {
+fn function_info_from(func: &StmtFunctionDef, class_name: Option<String>) -> FunctionInfo {
     let params = &func.parameters;
 
     let positional: Vec<ParameterInfo> = params
@@ -395,6 +402,8 @@ fn function_info_from(func: &StmtFunctionDef) -> FunctionInfo {
         .as_deref()
         .map_or(ReturnAnnotationKind::Missing, return_annotation_kind);
 
+    let return_annotation_span = func.returns.as_deref().map(|e| text_range_to_span(e.range()));
+
     let decorators = func
         .decorator_list
         .iter()
@@ -402,6 +411,10 @@ fn function_info_from(func: &StmtFunctionDef) -> FunctionInfo {
         .collect();
 
     let return_stmts = collect_return_stmts(&func.body);
+    let all_local_assigns = collect_all_assigns(&func.body);
+    let unconditional_assigns = collect_unconditional_assigns(&func.body);
+    let return_name_refs = collect_return_name_refs(&func.body);
+    let unhashable_keys = collect_unhashable_keys_from_stmts(&func.body);
 
     FunctionInfo {
         name: func.name.to_string(),
@@ -413,6 +426,12 @@ fn function_info_from(func: &StmtFunctionDef) -> FunctionInfo {
         return_stmts,
         def_span: text_range_to_span(func.range),
         name_span: text_range_to_span(func.name.range),
+        return_annotation_span,
+        class_name,
+        all_local_assigns,
+        unconditional_assigns,
+        return_name_refs,
+        unhashable_keys,
     }
 }
 
@@ -433,6 +452,10 @@ fn parameter_to_info(p: &Parameter) -> ParameterInfo {
         annotation_is_any,
         annotation_is_numeric_literal,
         name_span: text_range_to_span(p.name.range),
+        annotation_span: p
+            .annotation
+            .as_deref()
+            .map(|e| text_range_to_span(e.range())),
     }
 }
 
@@ -482,6 +505,326 @@ fn return_stmt_info_from(ret: &StmtReturn) -> ReturnStmtInfo {
         span: text_range_to_span(ret.range),
         has_value,
     }
+}
+
+// ---------------------------------------------------------------------------
+// Assign name collection helpers
+// ---------------------------------------------------------------------------
+
+/// Extract all simple names from an assignment target expression.
+/// Handles single names, tuples, and nested tuples (e.g. `for (x, y) in ...`).
+fn extract_target_names(expr: &Expr) -> Vec<String> {
+    match expr {
+        Expr::Name(name) => vec![name.id.to_string()],
+        Expr::Tuple(tuple) => tuple
+            .elts
+            .iter()
+            .flat_map(extract_target_names)
+            .collect(),
+        Expr::List(list) => list
+            .elts
+            .iter()
+            .flat_map(extract_target_names)
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// Collect all names assigned anywhere in the function body (not in nested functions).
+fn collect_all_assigns(stmts: &[Stmt]) -> Vec<String> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        match stmt {
+            Stmt::Assign(node) => {
+                out.extend(
+                    node.targets
+                        .iter()
+                        .flat_map(extract_target_names),
+                );
+            }
+            Stmt::AnnAssign(node) => {
+                if let Some(name) = expr_simple_name(&node.target) {
+                    out.push(name);
+                }
+            }
+            Stmt::For(node) => {
+                out.extend(extract_target_names(&node.target));
+                out.extend(collect_all_assigns(&node.body));
+                out.extend(collect_all_assigns(&node.orelse));
+            }
+            Stmt::FunctionDef(func) => {
+                // Nested function name is defined in enclosing scope.
+                out.push(func.name.to_string());
+                // Do NOT recurse into nested function body.
+            }
+            Stmt::If(node) => {
+                out.extend(collect_all_assigns(&node.body));
+                for clause in &node.elif_else_clauses {
+                    out.extend(collect_all_assigns(&clause.body));
+                }
+            }
+            Stmt::While(node) => {
+                out.extend(collect_all_assigns(&node.body));
+                out.extend(collect_all_assigns(&node.orelse));
+            }
+            Stmt::With(node) => {
+                for item in &node.items {
+                    if let Some(var) = item.optional_vars.as_deref() {
+                        out.extend(extract_target_names(var));
+                    }
+                }
+                out.extend(collect_all_assigns(&node.body));
+            }
+            Stmt::Try(node) => {
+                out.extend(collect_all_assigns(&node.body));
+                for handler in &node.handlers {
+                    let ExceptHandler::ExceptHandler(h) = handler;
+                    if let Some(exc_name) = &h.name {
+                        out.push(exc_name.to_string());
+                    }
+                    out.extend(collect_all_assigns(&h.body));
+                }
+                out.extend(collect_all_assigns(&node.orelse));
+                out.extend(collect_all_assigns(&node.finalbody));
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Collect names assigned at the top level of a function body (unconditionally).
+fn collect_unconditional_assigns(stmts: &[Stmt]) -> Vec<String> {
+    stmts
+        .iter()
+        .flat_map(|stmt| match stmt {
+            Stmt::Assign(node) => node
+                .targets
+                .iter()
+                .flat_map(extract_target_names)
+                .collect::<Vec<_>>(),
+            Stmt::AnnAssign(node) => expr_simple_name(&node.target).into_iter().collect(),
+            Stmt::For(node) => {
+                // The for-loop variable(s) are bound whenever the loop body runs.
+                extract_target_names(&node.target)
+            }
+            Stmt::FunctionDef(func) => vec![func.name.to_string()],
+            _ => Vec::new(),
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------
+// Return name ref collection
+// ---------------------------------------------------------------------------
+
+/// Collect `(name, span)` pairs from `return <name>` stmts in a function body.
+/// Does not recurse into nested function definitions.
+fn collect_return_name_refs(stmts: &[Stmt]) -> Vec<(String, Span)> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        match stmt {
+            Stmt::Return(ret) => {
+                if let Some(Expr::Name(name)) = ret.value.as_deref() {
+                    out.push((name.id.to_string(), text_range_to_span(name.range)));
+                }
+            }
+            Stmt::If(node) => {
+                out.extend(collect_return_name_refs(&node.body));
+                for clause in &node.elif_else_clauses {
+                    out.extend(collect_return_name_refs(&clause.body));
+                }
+            }
+            Stmt::For(node) => {
+                out.extend(collect_return_name_refs(&node.body));
+                out.extend(collect_return_name_refs(&node.orelse));
+            }
+            Stmt::While(node) => {
+                out.extend(collect_return_name_refs(&node.body));
+                out.extend(collect_return_name_refs(&node.orelse));
+            }
+            Stmt::With(node) => {
+                out.extend(collect_return_name_refs(&node.body));
+            }
+            Stmt::Try(node) => {
+                out.extend(collect_return_name_refs(&node.body));
+                for handler in &node.handlers {
+                    let ExceptHandler::ExceptHandler(h) = handler;
+                    out.extend(collect_return_name_refs(&h.body));
+                }
+                out.extend(collect_return_name_refs(&node.orelse));
+                out.extend(collect_return_name_refs(&node.finalbody));
+            }
+            // Do NOT recurse into nested FunctionDef.
+            _ => {}
+        }
+    }
+    out
+}
+
+// ---------------------------------------------------------------------------
+// Unhashable key collection
+// ---------------------------------------------------------------------------
+
+/// Walk all statements in a function body looking for dict literals with unhashable keys.
+fn collect_unhashable_keys_from_stmts(stmts: &[Stmt]) -> Vec<UnhashableKeyRef> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        collect_unhashable_keys_from_stmt(stmt, &mut out);
+    }
+    out
+}
+
+#[allow(clippy::too_many_lines)]
+fn collect_unhashable_keys_from_stmt(stmt: &Stmt, out: &mut Vec<UnhashableKeyRef>) {
+    match stmt {
+        Stmt::Assign(node) => collect_unhashable_keys_from_expr(&node.value, out),
+        Stmt::AnnAssign(node) => {
+            if let Some(val) = node.value.as_deref() {
+                collect_unhashable_keys_from_expr(val, out);
+            }
+        }
+        Stmt::Return(node) => {
+            if let Some(val) = node.value.as_deref() {
+                collect_unhashable_keys_from_expr(val, out);
+            }
+        }
+        Stmt::Expr(node) => collect_unhashable_keys_from_expr(&node.value, out),
+        Stmt::If(node) => {
+            collect_unhashable_keys_from_expr(&node.test, out);
+            for s in &node.body {
+                collect_unhashable_keys_from_stmt(s, out);
+            }
+            for clause in &node.elif_else_clauses {
+                if let Some(test) = &clause.test {
+                    collect_unhashable_keys_from_expr(test, out);
+                }
+                for s in &clause.body {
+                    collect_unhashable_keys_from_stmt(s, out);
+                }
+            }
+        }
+        Stmt::For(node) => {
+            collect_unhashable_keys_from_expr(&node.iter, out);
+            for s in &node.body {
+                collect_unhashable_keys_from_stmt(s, out);
+            }
+        }
+        Stmt::While(node) => {
+            collect_unhashable_keys_from_expr(&node.test, out);
+            for s in &node.body {
+                collect_unhashable_keys_from_stmt(s, out);
+            }
+        }
+        Stmt::With(node) => {
+            for s in &node.body {
+                collect_unhashable_keys_from_stmt(s, out);
+            }
+        }
+        Stmt::Try(node) => {
+            for s in &node.body {
+                collect_unhashable_keys_from_stmt(s, out);
+            }
+            for handler in &node.handlers {
+                let ExceptHandler::ExceptHandler(h) = handler;
+                for s in &h.body {
+                    collect_unhashable_keys_from_stmt(s, out);
+                }
+            }
+        }
+        // Do NOT recurse into nested FunctionDef.
+        _ => {}
+    }
+}
+
+fn collect_unhashable_keys_from_expr(expr: &Expr, out: &mut Vec<UnhashableKeyRef>) {
+    match expr {
+        Expr::Dict(dict) => {
+            for item in &dict.items {
+                if let Some(key) = item.key.as_ref() {
+                    let key_type_opt = match key {
+                        Expr::List(_) => Some("list"),
+                        Expr::Set(_) => Some("set"),
+                        Expr::Dict(_) => Some("dict"),
+                        _ => None,
+                    };
+                    if let Some(key_type) = key_type_opt {
+                        out.push(UnhashableKeyRef {
+                            span: text_range_to_span(key.range()),
+                            key_type,
+                        });
+                    }
+                    collect_unhashable_keys_from_expr(key, out);
+                }
+                collect_unhashable_keys_from_expr(&item.value, out);
+            }
+        }
+        Expr::List(list) => {
+            for elt in &list.elts {
+                collect_unhashable_keys_from_expr(elt, out);
+            }
+        }
+        Expr::Tuple(tuple) => {
+            for elt in &tuple.elts {
+                collect_unhashable_keys_from_expr(elt, out);
+            }
+        }
+        Expr::Call(call) => {
+            collect_unhashable_keys_from_expr(&call.func, out);
+            for arg in &call.arguments.args {
+                collect_unhashable_keys_from_expr(arg, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Module-level call site collection
+// ---------------------------------------------------------------------------
+
+/// Collect call sites from module-level statements.
+fn collect_module_level_calls(stmts: &[Stmt]) -> Vec<CallSite> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        match stmt {
+            Stmt::AnnAssign(node) => {
+                if let Some(val) = node.value.as_deref() {
+                    if let Some(site) = call_site_from_expr(val) {
+                        out.push(site);
+                    }
+                }
+            }
+            Stmt::Assign(node) => {
+                if let Some(site) = call_site_from_expr(&node.value) {
+                    out.push(site);
+                }
+            }
+            Stmt::Expr(node) => {
+                if let Some(site) = call_site_from_expr(&node.value) {
+                    out.push(site);
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+fn call_site_from_expr(expr: &Expr) -> Option<CallSite> {
+    let Expr::Call(call) = expr else { return None };
+    let callee = expr_simple_name(&call.func)?;
+    let args: Vec<(RhsKind, Span)> = call
+        .arguments
+        .args
+        .iter()
+        .map(|arg| (classify_rhs(arg), text_range_to_span(arg.range())))
+        .collect();
+    Some(CallSite {
+        callee,
+        args,
+        span: text_range_to_span(call.range()),
+    })
 }
 
 // ---------------------------------------------------------------------------

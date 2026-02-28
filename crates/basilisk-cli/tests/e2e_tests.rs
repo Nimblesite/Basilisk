@@ -875,6 +875,136 @@ fn e0025_override_without_decorator() -> Result<(), Box<dyn std::error::Error>> 
 }
 
 // ---------------------------------------------------------------------------
+// E0011 — Any on vararg, kwarg, and return annotation
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0011_any_on_vararg_kwarg_and_return() -> Result<(), Box<dyn std::error::Error>> {
+    let diags = run("errors/e0011_vararg_kwarg_any.py")?;
+    let src = std::fs::read_to_string(fixture("errors/e0011_vararg_kwarg_any.py"))?;
+    assert_diagnostics(
+        &src,
+        &diags,
+        &[
+            Expected::warning("BSK-E0011", "return annotation", 4, 5),
+            Expected::warning("BSK-E0011", "`args`", 4, 14),
+            Expected::warning("BSK-E0011", "`kwargs`", 4, 27),
+        ],
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// E0024 — numeric literal on vararg, kwarg, and return annotation
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0024_numeric_literal_on_vararg_kwarg_and_return() -> Result<(), Box<dyn std::error::Error>> {
+    let diags = run("errors/e0024_vararg_kwarg_return_literal.py")?;
+    let src = std::fs::read_to_string(fixture("errors/e0024_vararg_kwarg_return_literal.py"))?;
+    assert_diagnostics(
+        &src,
+        &diags,
+        &[
+            Expected::error("BSK-E0024", "return type", 1, 5),
+            Expected::error("BSK-E0024", "`args`", 1, 14),
+            Expected::error("BSK-E0024", "`kwargs`", 1, 26),
+        ],
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// E0014 — bytes literal, float literal, and int-to-bytes mismatches
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0014_bytes_and_float_mismatches() -> Result<(), Box<dyn std::error::Error>> {
+    let diags = run("errors/e0014_bytes_float_mismatches.py")?;
+    let src = std::fs::read_to_string(fixture("errors/e0014_bytes_float_mismatches.py"))?;
+    assert_diagnostics(
+        &src,
+        &diags,
+        &[
+            Expected::error("BSK-E0014", "`ratio`", 1, 1),
+            Expected::error("BSK-E0014", "`name`", 2, 1),
+            Expected::error("BSK-E0014", "`raw`", 3, 1),
+        ],
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// E0015 — set, frozenset, and dict with wrong type argument counts
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0015_set_frozenset_and_dict_wrong_arg_count() -> Result<(), Box<dyn std::error::Error>> {
+    let diags = run("errors/e0015_more_generics.py")?;
+    let src = std::fs::read_to_string(fixture("errors/e0015_more_generics.py"))?;
+    assert_diagnostics(
+        &src,
+        &diags,
+        &[
+            Expected::error("BSK-E0015", "`set[", 1, 11),
+            Expected::error("BSK-E0015", "`frozenset[", 5, 17),
+            Expected::error("BSK-E0015", "`data`", 9, 18),
+        ],
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// E0020 — exact diagnostic: two @overload variants with no implementation
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0020_exact_diagnostic_for_double() -> Result<(), Box<dyn std::error::Error>> {
+    let diags = run("errors/e0020_missing_overload_impl.py")?;
+    let src = std::fs::read_to_string(fixture("errors/e0020_missing_overload_impl.py"))?;
+    assert_diagnostics(
+        &src,
+        &diags,
+        &[Expected::error("BSK-E0020", "`double`", 5, 5)],
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// E0021 — exact diagnostics: overlapping overloads also trigger E0001
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0021_exact_diagnostics_for_overlapping_overloads() -> Result<(), Box<dyn std::error::Error>> {
+    let diags = run("errors/e0021_overlapping_overloads.py")?;
+    let src = std::fs::read_to_string(fixture("errors/e0021_overlapping_overloads.py"))?;
+    assert_diagnostics(
+        &src,
+        &diags,
+        &[
+            Expected::error("BSK-E0001", "`x`", 5, 13),
+            Expected::error("BSK-E0021", "`process`", 9, 5),
+            Expected::error("BSK-E0001", "`x`", 9, 13),
+        ],
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Clean — overloads with different arities must not trigger E0020 or E0021
+// ---------------------------------------------------------------------------
+
+#[test]
+fn clean_overloads_different_arity_is_silent() -> Result<(), Box<dyn std::error::Error>> {
+    let diags = run("clean/typed_overloads_multi_arity.py")?;
+    assert!(
+        diags.is_empty(),
+        "overloads with different arities must produce no diagnostics, got:\n{diags:#?}"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // FAILING TESTS — rules not yet implemented (Phase 1 limitations)
 // These tests document desired behavior and fail to mark missing functionality.
 // ---------------------------------------------------------------------------

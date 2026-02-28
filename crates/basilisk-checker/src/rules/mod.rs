@@ -10,11 +10,17 @@ pub(crate) mod e0004;
 pub(crate) mod e0005;
 pub(crate) mod e0010;
 pub(crate) mod e0011;
+pub(crate) mod e0012;
 pub(crate) mod e0013;
 pub(crate) mod e0014;
 pub(crate) mod e0015;
+pub(crate) mod e0016;
+pub(crate) mod e0017;
+pub(crate) mod e0018;
+pub(crate) mod e0019;
 pub(crate) mod e0020;
 pub(crate) mod e0021;
+pub(crate) mod e0022;
 pub(crate) mod e0023;
 pub(crate) mod e0024;
 pub(crate) mod e0025;
@@ -40,11 +46,17 @@ pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
         &e0005::MissingAttributeAnnotation,
         &e0010::ImportFromUntypedModule,
         &e0011::ImplicitAny,
+        &e0012::ArgumentTypeMismatch,
         &e0013::ReturnTypeMismatch,
         &e0014::AssignmentTypeMismatch,
         &e0015::InvalidTypeArgCount,
+        &e0016::IncompatibleOverride,
+        &e0017::IncompatibleVariableOverride,
+        &e0018::UndefinedVariable,
+        &e0019::UnboundVariable,
         &e0020::MissingOverloadImpl,
         &e0021::OverlappingOverloads,
+        &e0022::UnhashableDictKey,
         &e0023::NonExhaustiveMatch,
         &e0024::InvalidTypeForm,
         &e0025::MissingOverrideDecorator,

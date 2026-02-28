@@ -49,7 +49,7 @@ fn make_diagnostic(var: &VariableInfo, path: &str) -> Diagnostic {
             format!("{}: dict[<key>, <value>] = {{}}", var.name),
         ),
         RhsKind::NoneValue => ("None", format!("{}: <type> | None = None", var.name)),
-        _ => ("expression", format!("{}: <type> = ...", var.name)),
+        _ => unreachable!("make_diagnostic only called for is_unresolvable rhs kinds"),
     };
 
     Diagnostic {

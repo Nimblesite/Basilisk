@@ -22,6 +22,8 @@ pub struct ParameterInfo {
     pub annotation_is_numeric_literal: bool,
     /// The source span of the parameter name token.
     pub name_span: Span,
+    /// The source span of the annotation expression, if present.
+    pub annotation_span: Option<Span>,
 }
 
 /// How a return annotation is classified.
@@ -68,6 +70,18 @@ pub struct FunctionInfo {
     pub def_span: Span,
     /// The span of the function name identifier.
     pub name_span: Span,
+    /// The span of the return annotation expression, if present.
+    pub return_annotation_span: Option<Span>,
+    /// Name of the containing class, if this function is a method.
+    pub class_name: Option<String>,
+    /// All names assigned anywhere in the function body (for scope analysis).
+    pub all_local_assigns: Vec<String>,
+    /// Names assigned at the top level of the function body (unconditionally).
+    pub unconditional_assigns: Vec<String>,
+    /// Names referenced directly in `return` expressions (simple `return name`).
+    pub return_name_refs: Vec<(String, Span)>,
+    /// Unhashable expressions used as dict keys in the function body.
+    pub unhashable_keys: Vec<UnhashableKeyRef>,
 }
 
 /// A `return` statement found inside a function body.
@@ -77,6 +91,26 @@ pub struct ReturnStmtInfo {
     pub span: Span,
     /// `true` when the statement has a non-`None` expression (`return expr`).
     pub has_value: bool,
+}
+
+/// A reference to an unhashable expression used as a dict key.
+#[derive(Debug, Clone)]
+pub struct UnhashableKeyRef {
+    /// The span of the unhashable key expression.
+    pub span: Span,
+    /// A human-readable description of the key type (`"list"`, `"set"`, `"dict"`).
+    pub key_type: &'static str,
+}
+
+/// A call site detected in module-level code.
+#[derive(Debug, Clone)]
+pub struct CallSite {
+    /// The name of the called function (simple name only; complex callees ignored).
+    pub callee: String,
+    /// Kinds and spans of positional arguments at the call site.
+    pub args: Vec<(RhsKind, Span)>,
+    /// The span of the entire call expression.
+    pub span: Span,
 }
 
 /// What kind of right-hand-side expression a variable assignment has.
@@ -126,6 +160,8 @@ pub struct AttributeInfo {
     pub name_span: Span,
     /// `true` when an explicit type annotation is present.
     pub has_annotation: bool,
+    /// The span of the annotation expression, if present.
+    pub annotation_span: Option<Span>,
 }
 
 /// A class definition with its attributes and method names.
@@ -194,6 +230,8 @@ pub struct ResolvedModule {
     pub imports: Vec<ImportInfo>,
     /// All match statements found at any nesting level.
     pub match_stmts: Vec<MatchStmtInfo>,
+    /// Module-level call sites (calls appearing in module-level expressions or assignments).
+    pub calls: Vec<CallSite>,
     /// The source file path.
     pub path: String,
     /// The original source text (forwarded from parser for span resolution).
