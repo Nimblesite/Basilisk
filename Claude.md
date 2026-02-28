@@ -121,10 +121,18 @@ Tier 1 (typeshed, hand-written) â†’ Tier 2 (community-reviewed auto-generated) â
 
 ## Testing Strategy (per SPEC.md)
 
+### Layering
+
+1. E2E <- Most tests are e2e tests. They provide the foundational layer. We run the ACTUAL analyzers and check that they produce the correct result. The LSP and VSIX elements are all combined to test the entire user experience down to the analyzers themselves.
+
+2. Integration: these tests combine various components, largely testing the full components like the analyzers etc. in a standalone capacity from the CLI etc.
+
+3. Unit testing: minimal. We avoid these except for isolating logic and enforcing fine grained behavior - particularly for regressions.
+
 | Layer | Tool | Purpose |
 |---|---|---|
-| Unit tests | `cargo test` | Per-crate correctness |
 | Integration tests | Multi-file scenarios | Cross-module type checking |
+| Unit tests | `cargo test` | Per-crate correctness |
 | Conformance tests | Python typing test suite | PEP compliance (target: 100%) |
 | Golden file tests | Expected diagnostic output | Regression |
 | Fuzzing | `cargo-fuzz` | Crash resistance |
