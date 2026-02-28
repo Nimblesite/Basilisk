@@ -20,9 +20,11 @@ use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
 use super::Rule;
 
-// TypedDict subclassing has entirely different rules from normal OOP attribute
-// inheritance — subclasses can narrow ReadOnly items, change Required/NotRequired,
-// etc.  Applying E0017 to TypedDict classes produces only false positives.
+/// Returns `true` when the child class is a TypedDict or inherits from one.
+///
+/// TypedDict subclassing has entirely different rules from normal OOP attribute
+/// inheritance — subclasses can narrow ReadOnly items, change Required/NotRequired,
+/// etc.  Applying E0017 to TypedDict classes produces only false positives.
 fn is_typed_dict_hierarchy(child: &ClassInfo, class_map: &HashMap<&str, &ClassInfo>) -> bool {
     if child.is_typed_dict {
         return true;
