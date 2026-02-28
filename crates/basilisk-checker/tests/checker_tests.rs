@@ -345,6 +345,17 @@ fn e0015_dict_with_one_arg() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn e0015_list_empty_brackets() {
+    // `list[]` is invalid Python syntax — the ruff parser rejects it before
+    // E0015 can run.  Basilisk correctly reports a parse error for this input.
+    let src = "def foo(x: list[]) -> None: pass\n";
+    assert!(
+        run(src).is_err(),
+        "list[] (invalid Python syntax) must be rejected as a parse error"
+    );
+}
+
+#[test]
 fn e0015_correct_list_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo(x: list[int]) -> None: pass\n";
     let diags = run(src)?;
