@@ -100,3 +100,79 @@ fn render_snippet(source: &str, start: usize, end: usize) {
     );
     println!("{pad}   |");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use basilisk_checker::{ErrorCode, Severity};
+    use basilisk_resolver::Span;
+
+    fn make_diag(help: Option<&str>, note: Option<&str>) -> Diagnostic {
+        Diagnostic {
+            code: ErrorCode {
+                code: "BSK-E0001",
+                docs_url: "https://basilisk-lang.org/errors/BSK-E0001",
+            },
+            severity: Severity::Error,
+            message: "missing annotation for `x`".to_owned(),
+            span: Span { start: 0, end: 1 },
+            path: "test.py".to_owned(),
+            help: help.map(str::to_owned),
+            note: note.map(str::to_owned),
+        }
+    }
+
+    #[test]
+    fn render_diagnostics_counts_only_errors() {
+        let diag = make_diag(Some("add a type"), Some("all params need types"));
+        let sources = vec![FileSource {
+            path: "test.py".to_owned(),
+            text: "x = 1".to_owned(),
+        }];
+        let count = render_diagnostics(&[diag], &sources);
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn render_one_without_source_falls_back_to_path() {
+        // Exercises the `|| diag.path.clone()` closure in map_or_else.
+        let diag = make_diag(Some("help"), Some("note"));
+        render_one(&diag, None);
+    }
+
+    #[test]
+    fn render_one_without_help() {
+        let diag = make_diag(None, Some("note text"));
+        render_one(&diag, Some("def foo(x): pass"));
+    }
+
+    #[test]
+    fn render_one_without_note() {
+        let diag = make_diag(Some("help text"), None);
+        render_one(&diag, Some("def foo(x): pass"));
+    }
+
+    #[test]
+    fn render_one_without_help_or_note() {
+        let diag = make_diag(None, None);
+        render_one(&diag, Some("def foo(x): pass"));
+    }
+
+    #[test]
+    fn byte_offset_to_line_col_second_line() {
+        // Exercises the rfind('\n') Some branch — offset past first newline.
+        let source = "def foo(): pass\ndef bar(x): pass";
+        // byte 16 is the 'd' starting "def bar"
+        let (line, col) = byte_offset_to_line_col(source, 16);
+        assert_eq!(line, 2);
+        assert_eq!(col, 1);
+    }
+
+    #[test]
+    fn render_snippet_on_second_line() {
+        // Exercises rfind('\n') Some branch inside render_snippet.
+        let source = "def foo(): pass\ndef bar(x): pass";
+        // span covers "bar" starting at byte 20
+        render_snippet(source, 20, 23);
+    }
+}

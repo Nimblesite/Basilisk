@@ -134,3 +134,55 @@ fn collect_python_files(paths: &[String]) -> Result<Vec<String>, String> {
 
     Ok(files)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── collect_python_files ──────────────────────────────────────────────────
+
+    #[test]
+    fn collect_python_files_returns_err_for_nonexistent_path() {
+        let result = collect_python_files(&["/no/such/path/ever.py".to_owned()]);
+        assert!(result.is_err(), "nonexistent path must return Err");
+    }
+
+    #[test]
+    fn collect_python_files_skips_non_py_file() {
+        let dir = std::env::temp_dir();
+        let txt = dir.join("basilisk_test_skip.txt");
+        std::fs::write(&txt, b"hello").expect("write temp file");
+        let path = txt.to_string_lossy().into_owned();
+        let files = collect_python_files(&[path]).expect("should succeed");
+        assert!(files.is_empty(), "non-.py file must be skipped");
+        let _ = std::fs::remove_file(&txt);
+    }
+
+    // ── collect_and_check: process_file error branch ─────────────────────────
+
+    #[test]
+    #[cfg(unix)]
+    fn collect_and_check_handles_unreadable_py_file() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = std::env::temp_dir();
+        let py = dir.join("basilisk_test_locked.py");
+        std::fs::write(&py, b"def foo(): pass").expect("write temp file");
+        std::fs::set_permissions(&py, std::fs::Permissions::from_mode(0o000))
+            .expect("chmod 000");
+
+        let path = py.to_string_lossy().into_owned();
+        // collect_and_check prints a warning to stderr and returns Ok with no diags.
+        let result = collect_and_check(&[path]);
+        // Restore permissions before asserting so cleanup can run even on failure.
+        std::fs::set_permissions(&py, std::fs::Permissions::from_mode(0o644))
+            .expect("chmod 644");
+        let _ = std::fs::remove_file(&py);
+
+        let (diags, _) = result.expect("collect_and_check must return Ok");
+        assert!(
+            diags.is_empty(),
+            "unreadable file produces no diagnostics, got: {diags:#?}"
+        );
+    }
+}

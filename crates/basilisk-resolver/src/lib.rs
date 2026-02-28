@@ -1,13 +1,17 @@
 //! Name resolution and scope analysis for Basilisk.
 //!
 //! The resolver walks the parsed AST and produces a [`ResolvedModule`]
-//! containing structured information about every function definition.
-//! The checker operates on [`ResolvedModule`] without touching the raw AST.
+//! containing structured information about every function definition,
+//! class, import, and module-level variable.  The checker operates on
+//! [`ResolvedModule`] without touching the raw AST.
 
 pub mod scope;
 mod visitor;
 
-pub use scope::{FunctionInfo, ParameterInfo, ResolvedModule, Span};
+pub use scope::{
+    AttributeInfo, ClassInfo, FunctionInfo, ImportInfo, ImportKind, MatchStmtInfo, ParameterInfo,
+    ResolvedModule, ReturnStmtInfo, RhsKind, Span, VariableInfo,
+};
 
 use basilisk_parser::ParsedModule;
 
@@ -19,15 +23,15 @@ pub enum ResolveError {
     Internal(String),
 }
 
-/// Resolve all function definitions in a parsed module.
+/// Resolve all definitions in a parsed module.
 ///
-/// Returns a [`ResolvedModule`] describing every function and its
-/// annotation completeness.
+/// Returns a [`ResolvedModule`] describing every function, class, import,
+/// and module-level variable, together with annotation completeness data.
 ///
 /// # Errors
 ///
 /// Currently infallible in Phase 1; future phases may add import resolution
 /// errors.
 pub fn resolve(module: &ParsedModule) -> Result<ResolvedModule, ResolveError> {
-    Ok(visitor::collect_functions(module))
+    Ok(visitor::collect(module))
 }
