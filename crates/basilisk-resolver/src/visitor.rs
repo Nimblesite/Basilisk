@@ -15,7 +15,7 @@ use crate::scope::{
     AssertTypeCallInfo, AttributeInfo, CallSite, ClassInfo, FloatParamIntAttrAccess, FunctionInfo,
     GenericParamInfo, HistoricalPositionalViolation, HistoricalPositionalViolationKind, ImportInfo,
     ImportKind, LiteralStringEnumMismatch, MatchStmtInfo, NamedTupleDefInfo, NewTypeCallInfo,
-    ParameterInfo,
+    ParameterInfo, Pep695BoundViolation, Pep695BoundViolationKind,
     ProtocolSelfViolation, ReadOnlyViolationInfo, ReadOnlyViolationKind, ResolvedModule,
     ReturnAnnotationKind, ReturnStmtInfo, RevealTypeCallInfo, RhsKind, Span, TypeVarCallInfo,
     TypedDictCallInfo, TypedDictSecondArgKind, UnhashableKeyRef, VariableInfo,
