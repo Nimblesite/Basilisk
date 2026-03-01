@@ -196,13 +196,13 @@ fn arg_rhs_mismatch(annotation: &str, rhs: &RhsKind, arg_source: Option<&str>) -
         // A parameter annotated `None` expects the value `None`, not its type.
         ("none", RhsKind::TypeCall) => {
             Some("`type(None)` (a class object, not the value `None`)")
-        }
+        },
         // `type(None)` classified as a generic `CallExpr` by the resolver.
         // When the annotation is `None`, a `type(...)` call produces a class
         // object, which is incompatible with the `None` value type.
         ("none", RhsKind::CallExpr) if is_type_call(arg_source) => {
             Some("`type(None)` (a class object, not the value `None`)")
-        }
+        },
         _ => None,
     }
 }

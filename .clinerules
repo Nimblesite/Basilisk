@@ -12,7 +12,7 @@ Read carefully: coordination/CoordinationSystem.md
 
 Subs take orders from Coordinator. Coordinator DICTATES to others. Subs FOLLOW orders.
 
-Coordinator: Keep messages to roughly 100-200 characters (one line). If you need to specify more detail, put the documentation in a separate markdown file, tell the others about it and then delete the file when the job is complete. You are NOT ALLOWED to write code.
+Coordinator: Keep messages to roughly 100-200 characters (one line). If you need to specify more detail, put the documentation in a separate markdown file, tell the others about it and then delete the file when the job is complete. You are NOT ALLOWED to write code. Make sure the build is clean and tests are passing at all times
 
 Subs (everyone except Coordinator): You MUST continue autonomously and follow the instructions from Coordinator. Do not stop. Your first job is to write your file to the coordination folder based on your name. Then continue on your task indefinitely. STOPPING = 🤬 ILLEGAL
 

@@ -1,8 +1,8 @@
-//! BSK-E0069: Positional argument passed to a keyword-only dataclass field.
+//! BSK-E0069: Dataclass constructor argument violations.
 //!
-//! When a dataclass field is keyword-only (via `_: KW_ONLY` sentinel,
-//! `field(kw_only=True)`, or `@dataclass(kw_only=True)`), it cannot be
-//! passed as a positional argument at the call site.
+//! Reports errors when:
+//! - A positional argument is passed to a keyword-only dataclass field
+//! - A keyword argument targets a field with `init=False` (not part of `__init__`)
 //!
 //! ```python
 //! from dataclasses import dataclass, KW_ONLY
@@ -17,7 +17,7 @@
 //! Point(1.0, 2.0)  # E — y is keyword-only, cannot be passed positionally
 //! ```
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::{ClassInfo, ResolvedModule};
 
@@ -30,57 +30,82 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://basilisk-lang.org/errors/BSK-E0069",
 };
 
-/// Emits BSK-E0069 when a positional argument is passed to a keyword-only
-/// dataclass field.
+/// Emits BSK-E0069 for dataclass constructor argument violations:
+/// positional args to kw_only fields, and keyword args to init=False fields.
 pub(crate) struct DataclassKwOnlyViolation;
 
 impl Rule for DataclassKwOnlyViolation {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        // Build a map from dataclass name → number of positional (non-kw_only) fields.
-        // Inheritance: each base-class positional field count is added to the subclass.
         let positional_counts = build_positional_counts(&module.classes);
+        let init_false_fields = build_init_false_fields(&module.classes);
 
         let path = &module.path;
         for call in &module.calls {
-            let Some(&positional_limit) = positional_counts.get(call.callee.as_str()) else {
-                continue;
-            };
-            if call.args.len() > positional_limit {
-                let extra = call.args.len() - positional_limit;
-                // Span the first extra positional argument.
-                let span = call
-                    .args
-                    .get(positional_limit)
-                    .map_or(call.span, |(_, s)| *s);
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
-                        "Too many positional arguments to `{}`: \
-                         {extra} argument(s) must be passed as keyword arguments",
-                        call.callee
-                    ),
-                    span,
-                    path: path.clone(),
-                    help: Some(format!(
-                        "`{}` has keyword-only fields that cannot be passed positionally",
-                        call.callee
-                    )),
-                    note: Some(
-                        "Use keyword arguments for fields declared with `_: KW_ONLY`, \
-                         `field(kw_only=True)`, or `@dataclass(kw_only=True)`"
-                            .to_owned(),
-                    ),
-                });
+            // Check positional argument limit (kw_only violation).
+            if let Some(&positional_limit) = positional_counts.get(call.callee.as_str()) {
+                if call.args.len() > positional_limit {
+                    let extra = call.args.len() - positional_limit;
+                    let span = call
+                        .args
+                        .get(positional_limit)
+                        .map_or(call.span, |(_, s)| *s);
+                    diagnostics.push(Diagnostic {
+                        code: CODE.clone(),
+                        severity: Severity::Error,
+                        message: format!(
+                            "Too many positional arguments to `{}`: \
+                             {extra} argument(s) must be passed as keyword arguments",
+                            call.callee
+                        ),
+                        span,
+                        path: path.clone(),
+                        help: Some(format!(
+                            "`{}` has keyword-only fields that cannot be passed positionally",
+                            call.callee
+                        )),
+                        note: Some(
+                            "Use keyword arguments for fields declared with `_: KW_ONLY`, \
+                             `field(kw_only=True)`, or `@dataclass(kw_only=True)`"
+                                .to_owned(),
+                        ),
+                    });
+                }
+            }
+
+            // Check keyword arguments targeting init=False fields.
+            if let Some(no_init_names) = init_false_fields.get(call.callee.as_str()) {
+                for (kw_name, _kw_kind) in &call.keywords {
+                    if no_init_names.contains(kw_name.as_str()) {
+                        diagnostics.push(Diagnostic {
+                            code: CODE.clone(),
+                            severity: Severity::Error,
+                            message: format!(
+                                "Unexpected keyword argument `{kw_name}` for `{}`: \
+                                 field `{kw_name}` is not included in `__init__`",
+                                call.callee
+                            ),
+                            span: call.span,
+                            path: path.clone(),
+                            help: Some(format!(
+                                "Field `{kw_name}` has `init=False` and cannot be passed \
+                                 as a constructor argument"
+                            )),
+                            note: Some(
+                                "Fields with `init=False` (or field specifiers that \
+                                 implicitly set `init=False`) are excluded from `__init__`"
+                                    .to_owned(),
+                            ),
+                        });
+                    }
+                }
             }
         }
     }
 }
 
-/// Build a map from dataclass name → number of positional (non-kw_only) fields,
+/// Build a map from dataclass name -> number of positional (non-kw_only, non-init_false) fields,
 /// including inherited positional fields from base dataclasses.
 fn build_positional_counts(classes: &[ClassInfo]) -> HashMap<&str, usize> {
-    // First pass: own positional counts (not accounting for inheritance).
     let own_counts: HashMap<&str, usize> = classes
         .iter()
         .filter(|c| c.is_dataclass)
@@ -88,19 +113,17 @@ fn build_positional_counts(classes: &[ClassInfo]) -> HashMap<&str, usize> {
             let own = c
                 .attributes
                 .iter()
-                .filter(|a| a.has_annotation && !a.is_kw_only)
+                .filter(|a| a.has_annotation && !a.is_kw_only && !a.is_init_false)
                 .count();
             (c.name.as_str(), own)
         })
         .collect();
 
-    // Build a map of class name → ClassInfo for inheritance lookup.
     let class_map: HashMap<&str, &ClassInfo> = classes
         .iter()
         .map(|c| (c.name.as_str(), c))
         .collect();
 
-    // Second pass: for each dataclass, add positional counts from base dataclasses.
     classes
         .iter()
         .filter(|c| c.is_dataclass)
@@ -114,6 +137,27 @@ fn build_positional_counts(classes: &[ClassInfo]) -> HashMap<&str, usize> {
                 .map(|base_class| own_counts.get(base_class.name.as_str()).copied().unwrap_or(0))
                 .sum();
             (c.name.as_str(), own + inherited)
+        })
+        .collect()
+}
+
+/// Build a map from dataclass name -> set of field names that have `init=False`.
+fn build_init_false_fields(classes: &[ClassInfo]) -> HashMap<&str, HashSet<&str>> {
+    classes
+        .iter()
+        .filter(|c| c.is_dataclass)
+        .filter_map(|c| {
+            let init_false: HashSet<&str> = c
+                .attributes
+                .iter()
+                .filter(|a| a.is_init_false)
+                .map(|a| a.name.as_str())
+                .collect();
+            if init_false.is_empty() {
+                None
+            } else {
+                Some((c.name.as_str(), init_false))
+            }
         })
         .collect()
 }

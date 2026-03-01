@@ -95,157 +95,6 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Dataclass-transform post-processing (stub)
-// ---------------------------------------------------------------------------
-
-/// Apply `@dataclass_transform` factory semantics to classes.
-///
-/// This is a stub that does nothing; full implementation is pending.
-#[allow(dead_code)]
-fn apply_dataclass_transform(
-    _stmts: &[Stmt],
-    _classes: &mut [ClassInfo],
-    _functions: &[FunctionInfo],
-) {
-    // No-op stub for dataclass_transform semantics.
-}
-
-// ---------------------------------------------------------------------------
-// Historical positional-only parameter violation detection
-// ---------------------------------------------------------------------------
-
-/// Returns `true` if `name` uses the historical positional-only convention:
-/// starts with `__` but does NOT end with `__`.
-fn is_historical_posonly_name(name: &str) -> bool {
-    name.starts_with("__") && !name.ends_with("__")
-}
-
-/// Collect all historical positional-only parameter violations from a module.
-fn collect_historical_positional_violations(stmts: &[Stmt]) -> Vec<HistoricalPositionalViolation> {
-    let mut out = Vec::new();
-    collect_hist_violations_from_stmts(stmts, &mut out);
-    out
-}
-
-/// Collect historical positional-only parameter violations from module statements.
-fn collect_hist_violations_from_stmts(
-    stmts: &[Stmt],
-    out: &mut Vec<HistoricalPositionalViolation>,
-) {
-    for stmt in stmts {
-        match stmt {
-            Stmt::FunctionDef(func) => {
-                check_func_for_hist_posonly_violation(func, out);
-                collect_hist_violations_from_stmts(&func.body, out);
-            }
-            Stmt::ClassDef(cls) => {
-                collect_hist_violations_from_stmts(&cls.body, out);
-            }
-            Stmt::Expr(e) => {
-                collect_hist_violations_from_expr(&e.value, out);
-            }
-            Stmt::Assign(a) => {
-                collect_hist_violations_from_expr(&a.value, out);
-            }
-            Stmt::AnnAssign(a) => {
-                if let Some(val) = &a.value {
-                    collect_hist_violations_from_expr(val, out);
-                }
-            }
-            Stmt::Return(r) => {
-                if let Some(val) = &r.value {
-                    collect_hist_violations_from_expr(val, out);
-                }
-            }
-            Stmt::If(node) => {
-                collect_hist_violations_from_stmts(&node.body, out);
-                for clause in &node.elif_else_clauses {
-                    collect_hist_violations_from_stmts(&clause.body, out);
-                }
-            }
-            Stmt::For(node) => {
-                collect_hist_violations_from_stmts(&node.body, out);
-                collect_hist_violations_from_stmts(&node.orelse, out);
-            }
-            Stmt::While(node) => {
-                collect_hist_violations_from_stmts(&node.body, out);
-                collect_hist_violations_from_stmts(&node.orelse, out);
-            }
-            Stmt::With(node) => {
-                collect_hist_violations_from_stmts(&node.body, out);
-            }
-            Stmt::Try(node) => {
-                collect_hist_violations_from_stmts(&node.body, out);
-                for handler in &node.handlers {
-                    let ExceptHandler::ExceptHandler(h) = handler;
-                    collect_hist_violations_from_stmts(&h.body, out);
-                }
-                collect_hist_violations_from_stmts(&node.orelse, out);
-                collect_hist_violations_from_stmts(&node.finalbody, out);
-            }
-            _ => {}
-        }
-    }
-}
-
-/// Check a function definition for `PositionalOnlyAfterKeyword` violations.
-fn check_func_for_hist_posonly_violation(
-    func: &StmtFunctionDef,
-    out: &mut Vec<HistoricalPositionalViolation>,
-) {
-    let params = &func.parameters;
-    // Historical convention does NOT apply when PEP 570 `/` is used.
-    if !params.posonlyargs.is_empty() {
-        return;
-    }
-    let mut seen_keyword_param = false;
-    for (i, param) in params.args.iter().enumerate() {
-        let name = param.parameter.name.as_str();
-        // Skip `self` or `cls` at position 0.
-        if i == 0 && (name == "self" || name == "cls") {
-            continue;
-        }
-        if is_historical_posonly_name(name) {
-            if seen_keyword_param {
-                out.push(HistoricalPositionalViolation {
-                    kind: HistoricalPositionalViolationKind::PositionalOnlyAfterKeyword,
-                    span: text_range_to_span(param.parameter.name.range),
-                    name: name.to_string(),
-                });
-            }
-        } else {
-            seen_keyword_param = true;
-        }
-    }
-}
-
-/// Collect call-site historical positional-only violations from an expression.
-///
-/// Emits `KeywordPassedToPositionalOnly` for any keyword argument whose name
-/// follows the `__x` historical positional-only convention.
-fn collect_hist_violations_from_expr(
-    expr: &Expr,
-    out: &mut Vec<HistoricalPositionalViolation>,
-) {
-    if let Expr::Call(call) = expr {
-        for kw in &call.arguments.keywords {
-            if let Some(arg_name) = &kw.arg {
-                if is_historical_posonly_name(arg_name.as_str()) {
-                    out.push(HistoricalPositionalViolation {
-                        kind: HistoricalPositionalViolationKind::KeywordPassedToPositionalOnly,
-                        span: text_range_to_span(kw.range()),
-                        name: arg_name.to_string(),
-                    });
-                }
-            }
-        }
-        for arg in &call.arguments.args {
-            collect_hist_violations_from_expr(arg, out);
-        }
-        collect_hist_violations_from_expr(&call.func, out);
-    }
-}
 
 #[allow(clippy::too_many_arguments)]
 fn collect_from_body(
@@ -715,6 +564,378 @@ fn class_info_from(
         base_expression_names,
         generic_non_typevar_args,
         metaclass_name,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// dataclass_transform post-processing
+// ---------------------------------------------------------------------------
+
+/// A `@dataclass_transform` factory detected at module level.
+#[allow(dead_code)]
+struct DcTransformFactory {
+    /// The function name decorated with `@dataclass_transform(...)`.
+    name: String,
+    /// `kw_only_default` from the decorator (default `false`).
+    kw_only_default: bool,
+    /// Field specifier function names extracted from `field_specifiers=(...)`.
+    field_specifier_names: Vec<String>,
+}
+
+/// Overload parameter info for one definition of a field specifier function.
+#[allow(dead_code)]
+struct FieldSpecOverload {
+    /// Names of keyword-only parameters that do NOT have defaults (required).
+    required_kwargs: Vec<String>,
+    /// Default value of `init` in this overload, if present.
+    init_default: Option<bool>,
+    /// Default value of `kw_only` in this overload, if present.
+    kw_only_default: Option<bool>,
+}
+
+/// Scan module-level statements for `@dataclass_transform(...)` decorated functions
+/// and apply their semantics to classes decorated by those factories.
+#[allow(dead_code)]
+fn apply_dataclass_transform(
+    stmts: &[Stmt],
+    classes: &mut [ClassInfo],
+    functions: &[FunctionInfo],
+) {
+    let factories = collect_dc_transform_factories(stmts);
+    if factories.is_empty() {
+        return;
+    }
+
+    let mut specifier_overloads: std::collections::HashMap<&str, Vec<FieldSpecOverload>> =
+        std::collections::HashMap::new();
+    for factory in &factories {
+        for spec_name in &factory.field_specifier_names {
+            if specifier_overloads.contains_key(spec_name.as_str()) {
+                continue;
+            }
+            let overloads = build_field_specifier_overloads(stmts, spec_name, functions);
+            specifier_overloads.insert(spec_name.as_str(), overloads);
+        }
+    }
+
+    for cls in classes.iter_mut() {
+        let Some(factory) = find_matching_factory(stmts, &cls.name, &factories) else {
+            continue;
+        };
+        cls.is_dataclass = true;
+        cls.is_dataclass_kw_only = factory.kw_only_default;
+
+        if let Some(class_def) = find_class_def(stmts, &cls.name) {
+            resolve_transform_field_attrs(
+                class_def,
+                &mut cls.attributes,
+                &factory.field_specifier_names,
+                &specifier_overloads,
+                factory.kw_only_default,
+            );
+        }
+    }
+}
+
+/// Collect `@dataclass_transform(...)` decorated functions at module level.
+#[allow(dead_code)]
+fn collect_dc_transform_factories(stmts: &[Stmt]) -> Vec<DcTransformFactory> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        let Stmt::FunctionDef(func) = stmt else {
+            continue;
+        };
+        for dec in &func.decorator_list {
+            let (is_dc_transform, kw_only_default, field_specifier_names) =
+                parse_dataclass_transform_decorator(&dec.expression);
+            if is_dc_transform {
+                out.push(DcTransformFactory {
+                    name: func.name.to_string(),
+                    kw_only_default,
+                    field_specifier_names,
+                });
+            }
+        }
+    }
+    out
+}
+
+/// Parse a `@dataclass_transform(...)` expression.
+///
+/// Returns `(is_dc_transform, kw_only_default, field_specifier_names)`.
+fn parse_dataclass_transform_decorator(expr: &Expr) -> (bool, bool, Vec<String>) {
+    let Expr::Call(call) = expr else {
+        if let Expr::Name(n) = expr {
+            if n.id.as_str() == "dataclass_transform" {
+                return (true, false, Vec::new());
+            }
+        }
+        return (false, false, Vec::new());
+    };
+    let is_dc = match call.func.as_ref() {
+        Expr::Name(n) => n.id.as_str() == "dataclass_transform",
+        Expr::Attribute(a) => a.attr.as_str() == "dataclass_transform",
+        _ => false,
+    };
+    if !is_dc {
+        return (false, false, Vec::new());
+    }
+
+    let mut kw_only_default = false;
+    let mut field_specifier_names = Vec::new();
+
+    for kw in &call.arguments.keywords {
+        let Some(arg_name) = kw.arg.as_ref() else {
+            continue;
+        };
+        match arg_name.as_str() {
+            "kw_only_default" => {
+                kw_only_default = matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
+            }
+            "field_specifiers" => {
+                if let Expr::Tuple(tup) = &kw.value {
+                    for elt in &tup.elts {
+                        if let Some(name) = expr_simple_name(elt) {
+                            field_specifier_names.push(name);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    (true, kw_only_default, field_specifier_names)
+}
+
+/// Build overload info for a field specifier function.
+fn build_field_specifier_overloads(
+    stmts: &[Stmt],
+    spec_name: &str,
+    functions: &[FunctionInfo],
+) -> Vec<FieldSpecOverload> {
+    let mut overloads = Vec::new();
+
+    let has_overloads = functions.iter().any(|f| {
+        f.name == spec_name
+            && f.class_name.is_none()
+            && f.decorators.iter().any(|d| d == "overload")
+    });
+
+    for stmt in stmts {
+        let Stmt::FunctionDef(func) = stmt else {
+            continue;
+        };
+        if func.name.as_str() != spec_name {
+            continue;
+        }
+
+        let is_overload = func.decorator_list.iter().any(|d| {
+            matches!(decorator_name(d), Some(n) if n == "overload")
+        });
+
+        if has_overloads && !is_overload {
+            continue;
+        }
+
+        let params = &func.parameters;
+        let mut required_kwargs = Vec::new();
+        let mut init_default = None;
+        let mut kw_only_default = None;
+
+        for pwd in &params.kwonlyargs {
+            let param_name = pwd.parameter.name.as_str();
+            let has_default = pwd.default.is_some();
+
+            if param_name == "init" {
+                if let Some(default_expr) = &pwd.default {
+                    init_default = Some(
+                        matches!(default_expr.as_ref(), Expr::BooleanLiteral(b) if b.value),
+                    );
+                }
+            } else if param_name == "kw_only" {
+                if let Some(default_expr) = &pwd.default {
+                    kw_only_default = Some(
+                        matches!(default_expr.as_ref(), Expr::BooleanLiteral(b) if b.value),
+                    );
+                }
+            }
+
+            if !has_default && param_name != "init" && param_name != "kw_only" {
+                required_kwargs.push(param_name.to_string());
+            }
+        }
+
+        for pwd in params.posonlyargs.iter().chain(params.args.iter()) {
+            let param_name = pwd.parameter.name.as_str();
+            let has_default = pwd.default.is_some();
+
+            if param_name == "init" {
+                if let Some(default_expr) = &pwd.default {
+                    init_default = Some(
+                        matches!(default_expr.as_ref(), Expr::BooleanLiteral(b) if b.value),
+                    );
+                }
+            } else if param_name == "kw_only" {
+                if let Some(default_expr) = &pwd.default {
+                    kw_only_default = Some(
+                        matches!(default_expr.as_ref(), Expr::BooleanLiteral(b) if b.value),
+                    );
+                }
+            }
+
+            if !has_default && param_name != "init" && param_name != "kw_only" {
+                required_kwargs.push(param_name.to_string());
+            }
+        }
+
+        overloads.push(FieldSpecOverload {
+            required_kwargs,
+            init_default,
+            kw_only_default,
+        });
+    }
+
+    overloads
+}
+
+/// Find which factory decorates a class, if any.
+fn find_matching_factory<'a>(
+    stmts: &[Stmt],
+    class_name: &str,
+    factories: &'a [DcTransformFactory],
+) -> Option<&'a DcTransformFactory> {
+    let class_def = find_class_def(stmts, class_name)?;
+    for dec in &class_def.decorator_list {
+        let callee = match &dec.expression {
+            Expr::Call(call) => match call.func.as_ref() {
+                Expr::Name(n) => n.id.as_str(),
+                Expr::Attribute(a) => a.attr.as_str(),
+                _ => continue,
+            },
+            Expr::Name(n) => n.id.as_str(),
+            _ => continue,
+        };
+        for factory in factories {
+            if factory.name == callee {
+                return Some(factory);
+            }
+        }
+    }
+    None
+}
+
+/// Find a class definition by name in the top-level statements.
+fn find_class_def<'a>(stmts: &'a [Stmt], name: &str) -> Option<&'a StmtClassDef> {
+    for stmt in stmts {
+        if let Stmt::ClassDef(cls) = stmt {
+            if cls.name.as_str() == name {
+                return Some(cls);
+            }
+        }
+    }
+    None
+}
+
+/// Resolve `is_init_false` and `is_kw_only` for attributes of a `dataclass_transform` class.
+fn resolve_transform_field_attrs(
+    class_def: &StmtClassDef,
+    attributes: &mut [AttributeInfo],
+    field_specifier_names: &[String],
+    specifier_overloads: &std::collections::HashMap<&str, Vec<FieldSpecOverload>>,
+    kw_only_default: bool,
+) {
+    let mut attr_idx = 0;
+    for stmt in &class_def.body {
+        let Stmt::AnnAssign(ann) = stmt else {
+            continue;
+        };
+        let Some(attr_name) = expr_simple_name(&ann.target) else {
+            continue;
+        };
+        if attr_name == "_" && annotation_is_kw_only(&ann.annotation) {
+            continue;
+        }
+
+        let Some(attr) = attributes.get_mut(attr_idx) else {
+            break;
+        };
+        if attr.name != attr_name {
+            attr_idx += 1;
+            continue;
+        }
+        attr_idx += 1;
+
+        let Some(value_expr) = ann.value.as_deref() else {
+            if kw_only_default {
+                attr.is_kw_only = true;
+            }
+            continue;
+        };
+
+        let Expr::Call(call) = value_expr else {
+            continue;
+        };
+
+        let callee_name = match call.func.as_ref() {
+            Expr::Name(n) => n.id.as_str(),
+            Expr::Attribute(a) => a.attr.as_str(),
+            _ => continue,
+        };
+
+        if !field_specifier_names.iter().any(|n| n == callee_name) {
+            continue;
+        }
+
+        let Some(overloads) = specifier_overloads.get(callee_name) else {
+            continue;
+        };
+
+        let call_kwargs: Vec<&str> = call
+            .arguments
+            .keywords
+            .iter()
+            .filter_map(|kw| kw.arg.as_ref().map(|a| a.as_str()))
+            .collect();
+
+        let explicit_init: Option<bool> = call.arguments.keywords.iter().find_map(|kw| {
+            if kw.arg.as_ref().is_some_and(|a| a.as_str() == "init") {
+                Some(matches!(&kw.value, Expr::BooleanLiteral(b) if b.value))
+            } else {
+                None
+            }
+        });
+
+        let explicit_kw_only: Option<bool> = call.arguments.keywords.iter().find_map(|kw| {
+            if kw.arg.as_ref().is_some_and(|a| a.as_str() == "kw_only") {
+                Some(matches!(&kw.value, Expr::BooleanLiteral(b) if b.value))
+            } else {
+                None
+            }
+        });
+
+        let mut matched_init: Option<bool> = None;
+        let mut matched_kw_only: Option<bool> = None;
+
+        for overload in overloads {
+            let all_required_present = overload
+                .required_kwargs
+                .iter()
+                .all(|req| call_kwargs.contains(&req.as_str()));
+            if all_required_present {
+                matched_init = overload.init_default;
+                matched_kw_only = overload.kw_only_default;
+                break;
+            }
+        }
+
+        let effective_init = explicit_init.or(matched_init);
+        let effective_kw_only = explicit_kw_only.or(matched_kw_only);
+
+        if effective_init == Some(false) {
+            attr.is_init_false = true;
+        }
+        attr.is_kw_only = effective_kw_only.unwrap_or(kw_only_default);
     }
 }
 
@@ -4001,6 +4222,7 @@ fn collect_protocol_violations_from_stmts(
 }
 
 /// Check a single function body for calls that violate protocol `Self` conformance.
+#[allow(dead_code)]
 fn check_protocol_violations_in_function(
     func: &StmtFunctionDef,
     protocol_self_methods: &std::collections::HashMap<&str, Vec<&str>>,

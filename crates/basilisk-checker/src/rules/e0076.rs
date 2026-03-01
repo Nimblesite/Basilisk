@@ -343,7 +343,7 @@ fn split_union_type(annotation: &str) -> Vec<String> {
     {
         return split_type_args(inner)
             .into_iter()
-            .map(|s| s.to_owned())
+            .map(str::to_owned)
             .collect();
     }
 
@@ -351,7 +351,7 @@ fn split_union_type(annotation: &str) -> Vec<String> {
     if trimmed.contains('|') {
         return split_pipe_union(trimmed)
             .into_iter()
-            .map(|s| s.to_owned())
+            .map(str::to_owned)
             .collect();
     }
 

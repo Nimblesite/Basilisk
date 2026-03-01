@@ -1,11 +1,11 @@
-//! BSK-E0073: NamedTuple-to-tuple type incompatibility.
+//! BSK-E0073: `NamedTuple`-to-tuple type incompatibility.
 //!
 //! When a `NamedTuple` instance is assigned to a variable annotated with a
 //! fixed-length `tuple[...]` type, Basilisk verifies:
 //!
-//! 1. The element count matches the number of fields in the NamedTuple.
+//! 1. The element count matches the number of fields in the `NamedTuple`.
 //! 2. Each element type in the tuple annotation is compatible with the
-//!    corresponding NamedTuple field type (with covariance).
+//!    corresponding `NamedTuple` field type (with covariance).
 //!
 //! ```python
 //! class Point(NamedTuple):
@@ -32,7 +32,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://basilisk-lang.org/errors/BSK-E0073",
 };
 
-/// Emits BSK-E0073 when a NamedTuple instance is assigned to an incompatible
+/// Emits BSK-E0073 when a `NamedTuple` instance is assigned to an incompatible
 /// fixed-length `tuple[...]` annotation.
 pub(crate) struct NamedTupleTupleCompat;
 
@@ -42,134 +42,143 @@ impl Rule for NamedTupleTupleCompat {
         let path = &module.path;
 
         // 1. Collect NamedTuple class definitions: class name -> field types.
-        let namedtuple_classes: HashMap<&str, Vec<&str>> = module
-            .classes
-            .iter()
-            .filter(|cls| cls.bases.iter().any(|b| b == "NamedTuple"))
-            .map(|cls| {
-                let field_types: Vec<&str> = cls
-                    .attributes
-                    .iter()
-                    .filter(|attr| attr.has_annotation)
-                    .filter_map(|attr| {
-                        let ann_span = attr.annotation_span?;
-                        source.get(ann_span.start as usize..ann_span.end as usize)
-                    })
-                    .collect();
-                (cls.name.as_str(), field_types)
-            })
-            .collect();
-
+        let namedtuple_classes: HashMap<&str, Vec<&str>> = collect_namedtuple_classes(module);
         if namedtuple_classes.is_empty() {
             return;
         }
 
-        // 2. Build map: variable name -> NamedTuple class name
-        //    from assignments like `p = Point(...)`.
-        let var_to_nt: HashMap<&str, &str> = module
-            .module_vars
-            .iter()
-            .filter(|v| v.rhs_kind == RhsKind::CallExpr)
-            .filter_map(|v| {
-                let rhs_span = v.rhs_span?;
-                let rhs_text =
-                    source.get(rhs_span.start as usize..rhs_span.end as usize)?;
-                let class_name = rhs_text.split('(').next()?.trim();
-                if namedtuple_classes.contains_key(class_name) {
-                    Some((v.name.as_str(), class_name))
-                } else {
-                    None
-                }
-            })
-            .collect();
-
+        // 2. Build map: variable name -> NamedTuple class name.
+        let var_to_nt: HashMap<&str, &str> =
+            build_var_to_nt_map(module, &namedtuple_classes);
         if var_to_nt.is_empty() {
             return;
         }
 
-        // 3. Check annotated variables where:
-        //    - annotation is `tuple[...]` (a fixed-length tuple type)
-        //    - RHS is a name reference to a NamedTuple instance
+        // 3. Check annotated variables with tuple[...] annotations.
         for var in &module.module_vars {
-            if !var.has_annotation {
-                continue;
-            }
-
-            // Extract annotation text.
-            let Some(ann_span) = var.annotation_span else {
-                continue;
-            };
-            let Some(ann_text) =
-                source.get(ann_span.start as usize..ann_span.end as usize)
-            else {
-                continue;
-            };
-
-            // Must be a fixed-length tuple annotation: tuple[T1, T2, ...]
-            let Some(tuple_element_types) = parse_fixed_tuple_annotation(ann_text)
-            else {
-                continue;
-            };
-
-            // Extract the RHS name.
-            let Some(rhs_span) = var.rhs_span else {
-                continue;
-            };
-            let Some(rhs_text) =
-                source.get(rhs_span.start as usize..rhs_span.end as usize)
-            else {
-                continue;
-            };
-            let rhs_name = rhs_text.trim();
-
-            // Must reference a known NamedTuple instance.
-            let Some(nt_class_name) = var_to_nt.get(rhs_name) else {
-                continue;
-            };
-            let Some(nt_field_types) = namedtuple_classes.get(nt_class_name) else {
-                continue;
-            };
-
-            // Check element count.
-            if tuple_element_types.len() != nt_field_types.len() {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
-                        "Incompatible tuple assignment: `{rhs_name}` is a `{nt_class_name}` \
-                         with {} field(s), but `{}` expects {} element(s)",
-                        nt_field_types.len(),
-                        ann_text,
-                        tuple_element_types.len(),
-                    ),
-                    span: var.name_span,
-                    path: path.to_owned(),
-                    help: Some(format!(
-                        "A `{nt_class_name}` is a subtype of `tuple[{}]`",
-                        nt_field_types.join(", "),
-                    )),
-                    note: Some(
-                        "A NamedTuple is a subtype of a tuple with matching element count and types"
-                            .to_owned(),
-                    ),
-                });
-                continue;
-            }
-
-            // Check element type compatibility.
-            check_element_types(
-                &tuple_element_types,
-                nt_field_types,
-                var,
-                ann_text,
-                rhs_name,
-                nt_class_name,
-                ann_span,
-                path,
-                diagnostics,
-            );
+            check_variable(var, source, path, &var_to_nt, &namedtuple_classes, diagnostics);
         }
     }
+}
+
+/// Collect `NamedTuple` class definitions: class name -> field type texts.
+fn collect_namedtuple_classes<'a>(module: &'a ResolvedModule) -> HashMap<&'a str, Vec<&'a str>> {
+    module
+        .classes
+        .iter()
+        .filter(|cls| cls.bases.iter().any(|b| b == "NamedTuple"))
+        .map(|cls| {
+            let field_types: Vec<&str> = cls
+                .attributes
+                .iter()
+                .filter(|attr| attr.has_annotation)
+                .filter_map(|attr| {
+                    let ann_span = attr.annotation_span?;
+                    module
+                        .source
+                        .get(ann_span.start as usize..ann_span.end as usize)
+                })
+                .collect();
+            (cls.name.as_str(), field_types)
+        })
+        .collect()
+}
+
+/// Build map: variable name -> `NamedTuple` class name from constructor calls.
+fn build_var_to_nt_map<'a>(
+    module: &'a ResolvedModule,
+    namedtuple_classes: &HashMap<&str, Vec<&str>>,
+) -> HashMap<&'a str, &'a str> {
+    module
+        .module_vars
+        .iter()
+        .filter(|v| v.rhs_kind == RhsKind::CallExpr)
+        .filter_map(|v| {
+            let rhs_span = v.rhs_span?;
+            let rhs_text = module
+                .source
+                .get(rhs_span.start as usize..rhs_span.end as usize)?;
+            let class_name = rhs_text.split('(').next()?.trim();
+            if namedtuple_classes.contains_key(class_name) {
+                Some((v.name.as_str(), class_name))
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// Check a single annotated variable for `NamedTuple`-to-tuple incompatibility.
+fn check_variable(
+    var: &basilisk_resolver::VariableInfo,
+    source: &str,
+    path: &str,
+    var_to_nt: &HashMap<&str, &str>,
+    namedtuple_classes: &HashMap<&str, Vec<&str>>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    if !var.has_annotation {
+        return;
+    }
+    let Some(ann_span) = var.annotation_span else {
+        return;
+    };
+    let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+        return;
+    };
+    let Some(tuple_element_types) = parse_fixed_tuple_annotation(ann_text) else {
+        return;
+    };
+    let Some(rhs_span) = var.rhs_span else {
+        return;
+    };
+    let Some(rhs_text) = source.get(rhs_span.start as usize..rhs_span.end as usize) else {
+        return;
+    };
+    let rhs_name = rhs_text.trim();
+    let Some(nt_class_name) = var_to_nt.get(rhs_name) else {
+        return;
+    };
+    let Some(nt_field_types) = namedtuple_classes.get(nt_class_name) else {
+        return;
+    };
+
+    if tuple_element_types.len() != nt_field_types.len() {
+        diagnostics.push(Diagnostic {
+            code: CODE.clone(),
+            severity: Severity::Error,
+            message: format!(
+                "Incompatible tuple assignment: `{rhs_name}` is a `{nt_class_name}` \
+                 with {} field(s), but `{}` expects {} element(s)",
+                nt_field_types.len(),
+                ann_text,
+                tuple_element_types.len(),
+            ),
+            span: var.name_span,
+            path: path.to_owned(),
+            help: Some(format!(
+                "A `{nt_class_name}` is a subtype of `tuple[{}]`",
+                nt_field_types.join(", "),
+            )),
+            note: Some(
+                "A `NamedTuple` is a subtype of a tuple with matching element count and types"
+                    .to_owned(),
+            ),
+        });
+        return;
+    }
+
+    check_element_types(
+        &tuple_element_types,
+        nt_field_types,
+        var,
+        ann_text,
+        rhs_name,
+        nt_class_name,
+        ann_span,
+        path,
+        diagnostics,
+    );
 }
 
 /// Parse a fixed-length tuple annotation like `tuple[int, str, float]`.
@@ -225,7 +234,7 @@ fn split_type_args(inner: &str) -> Vec<&str> {
     parts
 }
 
-/// Check each element type in the tuple annotation against the NamedTuple field type.
+/// Check each element type in the tuple annotation against the `NamedTuple` field type.
 #[allow(clippy::too_many_arguments)]
 fn check_element_types(
     tuple_types: &[&str],
@@ -264,7 +273,7 @@ fn check_element_types(
     }
 }
 
-/// Check if `source_type` (the NamedTuple field type) is a subtype of
+/// Check if `source_type` (the `NamedTuple` field type) is a subtype of
 /// `target_type` (the tuple annotation element type).
 ///
 /// This handles common covariant cases:
