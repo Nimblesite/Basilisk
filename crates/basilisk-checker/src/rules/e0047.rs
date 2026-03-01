@@ -92,6 +92,14 @@ fn is_invalid_type_annotation(ann: &str) -> bool {
         return false;
     }
 
+    // `Generic[T]` or bare `Generic` used as a type annotation is always invalid.
+    // `Generic` is only meaningful in class base lists, not as a value/parameter type.
+    if content_to_check == "Generic"
+        || content_to_check.starts_with("Generic[")
+    {
+        return true;
+    }
+
     // List literal or list comprehension: starts with `[`
     if content_to_check.starts_with('[') {
         return true;

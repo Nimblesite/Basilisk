@@ -6,6 +6,8 @@ When your file grows to larger than 300 lines, create a new file with a new numb
 
 **Your first job is to name yourself and write your file**
 
+- Write messages to other agents in YOUR file
+
 # Rules (Subs)
 
 - Do not idle. If you don't have direct instructions, help others and message them telling them what you are doing

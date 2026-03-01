@@ -1021,6 +1021,12 @@ pub struct ResolvedModule {
     /// - `var: TypedDict = {invalid/missing keys}` where the literal doesn't match the schema.
     ///   Used by `BSK-E0089`.
     pub typeddict_key_violations: Vec<TypedDictKeyViolation>,
+    /// Module-level subscript expression sites (`Name[args...]` used as a statement).
+    ///
+    /// Collected so that rules can check whether user-defined generic types are
+    /// subscripted with the correct number of type arguments.
+    /// Used by `BSK-E0092`.
+    pub generic_subscript_sites: Vec<GenericSubscriptSite>,
     /// The source file path.
     pub path: String,
     /// The original source text (forwarded from parser for span restoration).

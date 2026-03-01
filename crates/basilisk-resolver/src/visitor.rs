@@ -13,13 +13,13 @@ use basilisk_parser::ParsedModule;
 
 use crate::scope::{
     AssertTypeCallInfo, AttributeInfo, CallSite, ClassInfo, FloatParamIntAttrAccess, FunctionInfo,
-    GenericParamInfo, HistoricalPositionalViolation, HistoricalPositionalViolationKind, ImportInfo,
-    ImportKind, LiteralStringEnumMismatch, MatchStmtInfo, NamedTupleDefInfo, NewTypeCallInfo,
-    ParameterInfo, Pep695BoundViolation, Pep695BoundViolationKind,
-    ProtocolSelfViolation, ReadOnlyViolationInfo, ReadOnlyViolationKind, ResolvedModule,
-    ReturnAnnotationKind, ReturnStmtInfo, RevealTypeCallInfo, RhsKind, Span, TypeVarCallInfo,
-    TypedDictCallInfo, TypedDictKeyViolation, TypedDictKeyViolationKind, TypedDictSecondArgKind,
-    UnhashableKeyRef, VariableInfo,
+    GenericParamInfo, GenericSubscriptSite, HistoricalPositionalViolation,
+    HistoricalPositionalViolationKind, ImportInfo, ImportKind, LiteralStringEnumMismatch,
+    MatchStmtInfo, NamedTupleDefInfo, NewTypeCallInfo, ParameterInfo, Pep695BoundViolation,
+    Pep695BoundViolationKind, ProtocolSelfViolation, ReadOnlyViolationInfo, ReadOnlyViolationKind,
+    ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo, RevealTypeCallInfo, RhsKind, Span,
+    TypeVarCallInfo, TypedDictCallInfo, TypedDictKeyViolation, TypedDictKeyViolationKind,
+    TypedDictSecondArgKind, UnhashableKeyRef, VariableInfo,
 };
 
 /// Collect all function definitions and module-level data from the parsed module.
@@ -74,6 +74,7 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         .extend(collect_typevar_bound_typeddict_violations(&module.ast.body));
     let typeddict_key_violations =
         collect_typeddict_key_violations(&module.ast.body, &classes, &module.source);
+    let generic_subscript_sites = collect_generic_subscript_sites(&module.ast.body);
     ResolvedModule {
         functions,
         classes,
@@ -109,6 +110,7 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         protocol_self_violations,
         isinstance_typeddict_violations,
         typeddict_key_violations,
+        generic_subscript_sites,
         path: module.path.clone(),
         source: module.source.clone(),
     }
@@ -1652,7 +1654,23 @@ fn collect_module_level_calls(stmts: &[Stmt]) -> Vec<CallSite> {
     out
 }
 
-/// Collect module-level `TypeVar(...)` assignments.
+/// Returns the TypeVar-like callee name (`"TypeVar"`, `"TypeVarTuple"`, or `"ParamSpec"`),
+/// or `None` if the expression is not a TypeVar-like call.
+fn typevar_like_callee(expr: &Expr) -> Option<&str> {
+    let Expr::Call(call) = expr else { return None };
+    match call.func.as_ref() {
+        Expr::Name(n) => match n.id.as_str() {
+            "TypeVar" | "TypeVarTuple" | "ParamSpec" => Some(n.id.as_str()),
+            _ => None,
+        },
+        Expr::Attribute(a) => match a.attr.as_str() {
+            "TypeVar" | "TypeVarTuple" | "ParamSpec" => Some(a.attr.as_str()),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 /// Returns `true` if an expression is a `TypeVar(...)` or `typing.TypeVar(...)` call.
 fn is_typevar_call(expr: &Expr) -> bool {
     let Expr::Call(call) = expr else { return false };
@@ -1660,8 +1678,14 @@ fn is_typevar_call(expr: &Expr) -> bool {
         || matches!(call.func.as_ref(), Expr::Attribute(a) if a.attr.as_str() == "TypeVar")
 }
 
-/// Builds a `TypeVarCallInfo` from a `TypeVar(...)` call expression and a bound name.
-fn typevar_call_info_from(name: String, call: &ruff_python_ast::ExprCall) -> TypeVarCallInfo {
+/// Builds a `TypeVarCallInfo` from a TypeVar-like call expression.
+///
+/// `callee` is `"TypeVar"`, `"TypeVarTuple"`, or `"ParamSpec"`.
+fn typevar_call_info_from(
+    name: String,
+    callee: &str,
+    call: &ruff_python_ast::ExprCall,
+) -> TypeVarCallInfo {
     use ruff_text_size::Ranged as _;
     let positional_args = call.arguments.args.len();
     let constraint_count = positional_args.saturating_sub(1);
@@ -1703,6 +1727,28 @@ fn typevar_call_info_from(name: String, call: &ruff_python_ast::ExprCall) -> Typ
             .is_some_and(|a| a.as_str() == "infer_variance")
             && matches!(&kw.value, Expr::BooleanLiteral(b) if b.value)
     });
+    // Simple name from the `bound=` keyword argument (if present and a plain Name).
+    let bound_type_name = call
+        .arguments
+        .keywords
+        .iter()
+        .find(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "bound"))
+        .and_then(|kw| expr_simple_name(&kw.value));
+    // Simple name from the `default=` keyword argument (if present and a plain Name).
+    let default_type_name = call
+        .arguments
+        .keywords
+        .iter()
+        .find(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "default"))
+        .and_then(|kw| expr_simple_name(&kw.value));
+    // Constraint type names from positional args (skip the first arg which is the TypeVar name).
+    let constraint_type_names: Vec<String> = call
+        .arguments
+        .args
+        .iter()
+        .skip(1)
+        .filter_map(expr_simple_name)
+        .collect();
     TypeVarCallInfo {
         name,
         constraint_count,
@@ -1714,6 +1760,11 @@ fn typevar_call_info_from(name: String, call: &ruff_python_ast::ExprCall) -> Typ
         is_contravariant,
         has_infer_variance,
         span: text_range_to_span(call.range()),
+        bound_type_name,
+        default_type_name,
+        constraint_type_names,
+        is_typevartuple: callee == "TypeVarTuple",
+        is_paramspec: callee == "ParamSpec",
     }
 }
 
@@ -1730,26 +1781,26 @@ fn collect_typevar_calls_from_stmts(stmts: &[Stmt], out: &mut Vec<TypeVarCallInf
                 let Expr::Call(call) = node.value.as_ref() else {
                     continue;
                 };
-                if !is_typevar_call(node.value.as_ref()) {
+                let Some(callee) = typevar_like_callee(node.value.as_ref()) else {
                     continue;
-                }
+                };
                 let Some(name) = node.targets.first().and_then(expr_simple_name) else {
                     continue;
                 };
-                out.push(typevar_call_info_from(name, call));
+                out.push(typevar_call_info_from(name, callee, call));
             }
             Stmt::AnnAssign(node) => {
                 let Some(val) = node.value.as_deref() else {
                     continue;
                 };
                 let Expr::Call(call) = val else { continue };
-                if !is_typevar_call(val) {
+                let Some(callee) = typevar_like_callee(val) else {
                     continue;
-                }
+                };
                 let Some(name) = expr_simple_name(&node.target) else {
                     continue;
                 };
-                out.push(typevar_call_info_from(name, call));
+                out.push(typevar_call_info_from(name, callee, call));
             }
             // Also search inside class bodies (TypeVars declared as class attributes).
             Stmt::ClassDef(cls) => {
@@ -1852,17 +1903,16 @@ fn extract_generic_params(class: &StmtClassDef) -> (Vec<GenericParamInfo>, Vec<S
         let mut non_typevar = Vec::new();
         for e in elts {
             // A starred expression like `*Ts` is a valid TypeVarTuple unpack.
-            let name_opt = expr_simple_name(e).or_else(|| {
-                if let Expr::Starred(starred) = e {
-                    expr_simple_name(&starred.value)
-                } else {
-                    None
-                }
-            });
+            let (name_opt, is_typevartuple) = if let Expr::Starred(starred) = e {
+                (expr_simple_name(&starred.value), true)
+            } else {
+                (expr_simple_name(e), false)
+            };
             match name_opt {
                 Some(name) => params.push(GenericParamInfo {
                     span: text_range_to_span(e.range()),
                     name,
+                    is_typevartuple,
                 }),
                 None => non_typevar.push(text_range_to_span(e.range())),
             }
@@ -3179,7 +3229,17 @@ fn resolve_actual_type(expr: &Expr, params: &[(&str, &str)], _source: &str) -> O
             params
                 .iter()
                 .find(|(n, _)| *n == param_name)
-                .map(|(_, ann)| normalize_type_str(ann))
+                .and_then(|(_, ann)| {
+                    let normalized = normalize_type_str(ann);
+                    // If the normalized annotation still contains quotes, it has forward
+                    // references inside subscripts (e.g. `list["ClassA"]`) that we cannot
+                    // resolve textually — skip the check to avoid false positives.
+                    if normalized.contains('"') || normalized.contains('\'') {
+                        None
+                    } else {
+                        Some(normalized)
+                    }
+                })
         }
         Expr::StringLiteral(_) => Some("str".to_owned()),
         Expr::NumberLiteral(n) => {
@@ -3216,6 +3276,13 @@ fn normalize_type_str(ann: &str) -> String {
     // Strip Annotated[T, ...] → take first argument only.
     if let Some(inner) = strip_annotated_wrapper(trimmed) {
         return normalize_type_str(inner);
+    }
+    // Strip outer string quotes (forward references like `"list[int]"` or `'MyClass'`).
+    if trimmed.len() >= 2
+        && ((trimmed.starts_with('"') && trimmed.ends_with('"'))
+            || (trimmed.starts_with('\'') && trimmed.ends_with('\'')))
+    {
+        return normalize_type_str(&trimmed[1..trimmed.len() - 1]);
     }
     trimmed.to_owned()
 }
@@ -5668,6 +5735,33 @@ fn collect_typevar_bound_typeddict_violations(stmts: &[Stmt]) -> Vec<Span> {
                 });
             }
         }
+    }
+    out
+}
+
+/// Collect module-level subscript expression sites (`Name[args...]` used as a statement).
+///
+/// These are used by BSK-E0092 to check whether user-defined generic types are
+/// subscripted with the correct number of type arguments.
+fn collect_generic_subscript_sites(stmts: &[Stmt]) -> Vec<GenericSubscriptSite> {
+    use ruff_text_size::Ranged as _;
+    let mut out = Vec::new();
+    for stmt in stmts {
+        let Stmt::Expr(expr_stmt) = stmt else { continue };
+        let Expr::Subscript(sub) = expr_stmt.value.as_ref() else { continue };
+        let Some(base_name) = expr_simple_name(sub.value.as_ref()) else { continue };
+        let arg_count = match sub.slice.as_ref() {
+            Expr::Tuple(t) => t.elts.len(),
+            _ => 1,
+        };
+        out.push(GenericSubscriptSite {
+            base_name,
+            arg_count,
+            span: Span {
+                start: sub.range().start().to_u32(),
+                end: sub.range().end().to_u32(),
+            },
+        });
     }
     out
 }

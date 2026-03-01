@@ -5,6 +5,7 @@
 
 pub mod diagnostic;
 pub mod rules;
+pub mod types;
 
 pub use diagnostic::{Diagnostic, ErrorCode, Severity};
 

@@ -731,6 +731,24 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 .demo-panel.active { display: block; }
 .demo-wrapper { border: 1px solid var(--color-border-bright); border-radius: 0 0 var(--radius-lg) var(--radius-lg); overflow: hidden; text-align: left; }
 
+/* ── Benchmark table ────────────────────────────────────────── */
+.benchmark-section {
+  padding: var(--space-20) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.benchmark-table { width: 100%; min-width: 680px; border-collapse: separate; border-spacing: 0; font-size: 0.875rem; }
+.benchmark-table thead { background: var(--color-bg-tertiary); }
+.benchmark-table thead th { padding: var(--space-4) var(--space-5); text-align: center; font-weight: 600; color: var(--color-text-secondary); border-bottom: 1px solid var(--color-border-bright); white-space: nowrap; }
+.benchmark-table thead th:first-child { text-align: left; color: var(--color-text-muted); font-weight: 400; }
+.benchmark-table tbody tr:hover { background: rgba(255,255,255,0.015); }
+.benchmark-table tbody td { padding: var(--space-3) var(--space-5); border-bottom: 1px solid var(--color-border); text-align: center; vertical-align: middle; color: var(--color-text-secondary); }
+.benchmark-table tbody td:first-child { text-align: left; color: var(--color-text-primary); font-weight: 500; }
+.benchmark-table tbody tr:last-child td { border-bottom: none; }
+.benchmark-table .col-basilisk { background: rgba(232,80,10,0.04); border-left: 1px solid rgba(232,80,10,0.3); border-right: 1px solid rgba(232,80,10,0.3); color: var(--color-text-primary); font-weight: 600; }
+.benchmark-table thead th.col-basilisk { color: var(--color-primary); font-weight: 700; font-size: 0.9375rem; border-top: 2px solid var(--color-primary); }
+.benchmark-table tbody tr:last-child td.col-basilisk { border-bottom: 2px solid var(--color-primary); }
+
 /* ── CTA — stripped, typographic ──────────────────────────── */
 .cta-section {
   padding: var(--space-20) 0;

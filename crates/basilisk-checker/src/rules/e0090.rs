@@ -93,54 +93,81 @@ impl Rule for InvalidTupleTypeSyntax {
     }
 }
 
+/// Split `s` by top-level commas (ignoring commas inside `[]`, `()`, `{}`).
+fn split_top_level(s: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut depth = 0i32;
+    let mut start = 0usize;
+    for (i, ch) in s.char_indices() {
+        match ch {
+            '[' | '(' | '{' => depth += 1,
+            ']' | ')' | '}' => depth -= 1,
+            ',' if depth == 0 => {
+                parts.push(s[start..i].trim());
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    parts.push(s[start..].trim());
+    parts
+}
+
 /// Returns `Some(error_message)` if the tuple type annotation has invalid syntax.
+///
+/// Only flags top-level ellipsis misuse; nested `...` inside starred unpacks
+/// like `*tuple[str, ...]` are valid and not flagged.
 fn check_tuple_syntax(annotation: &str) -> Option<&'static str> {
     // Check if this is a tuple annotation
     if !annotation.starts_with("tuple[") || !annotation.ends_with(']') {
         return None;
     }
-    
+
     let inner = annotation["tuple[".len()..annotation.len() - 1].trim();
-    
+
     // Check for empty tuple: tuple[()]
     if inner == "()" {
         return None; // Valid empty tuple syntax
     }
-    
-    // Check for variadic tuple: tuple[T, ...]
-    if inner.ends_with(", ...") {
-        let before_ellipsis = &inner[..inner.len() - 5].trim(); // Remove ", ..."
-        
-        // Check if there's a type before the ellipsis
-        if before_ellipsis.is_empty() {
-            return Some("tuple[...] is invalid — must specify a type before the ellipsis");
-        }
-        
-        // Check if there are multiple types before the ellipsis
-        if before_ellipsis.contains(',') {
-            return Some("tuple[T, U, ...] is invalid — can only have one type before the ellipsis");
-        }
-        
-        // Check for invalid patterns like tuple[..., T] or tuple[T, ..., U]
-        if inner.contains("...,") && !inner.ends_with(", ...") {
-            return Some("ellipsis (...) must appear at the end of the tuple type");
-        }
-        
-        return None; // Valid variadic tuple syntax
+
+    // Split by top-level commas to get individual components.
+    let components = split_top_level(inner);
+
+    // Find positions of top-level `...` components.
+    let ellipsis_positions: Vec<usize> = components
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| **c == "...")
+        .map(|(i, _)| i)
+        .collect();
+
+    if ellipsis_positions.is_empty() {
+        // No top-level `...` — valid fixed tuple (starred unpacks inside are OK).
+        return None;
     }
-    
-    // Check for invalid ellipsis usage (not at the end)
-    if inner.contains("...") {
+
+    // More than one top-level `...` is always invalid.
+    if ellipsis_positions.len() > 1 {
         return Some("ellipsis (...) must appear at the end of the tuple type");
     }
-    
-    // Check for invalid unpack patterns
-    if inner.contains("*tuple[") {
-        // Patterns like tuple[*tuple[str], ...] are invalid
-        if inner.contains(", ...") {
-            return Some("invalid unpack pattern — cannot combine starred tuple unpack with ellipsis");
-        }
+
+    let ellipsis_pos = ellipsis_positions[0];
+
+    // `...` must be the very last component.
+    if ellipsis_pos != components.len() - 1 {
+        return Some("ellipsis (...) must appear at the end of the tuple type");
     }
-    
+
+    // Count non-ellipsis components before `...`.
+    let types_before = ellipsis_pos;
+
+    if types_before == 0 {
+        return Some("tuple[...] is invalid — must specify a type before the ellipsis");
+    }
+
+    if types_before > 1 {
+        return Some("tuple[T, U, ...] is invalid — can only have one type before the ellipsis");
+    }
+
     None
 }
