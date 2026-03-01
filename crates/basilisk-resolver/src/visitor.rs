@@ -68,8 +68,10 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         .filter(|c| c.is_typed_dict)
         .map(|c| c.name.as_str())
         .collect();
-    let isinstance_typeddict_violations =
+    let mut isinstance_typeddict_violations =
         collect_isinstance_typeddict_violations(&module.ast.body, &typeddict_class_names);
+    isinstance_typeddict_violations
+        .extend(collect_typevar_bound_typeddict_violations(&module.ast.body));
     let typeddict_key_violations =
         collect_typeddict_key_violations(&module.ast.body, &classes, &module.source);
     ResolvedModule {
@@ -5380,3 +5382,39 @@ fn collect_isinstance_typeddict_in_expr(
     }
 }
 
+
+// ---------------------------------------------------------------------------
+// TypeVar bound=TypedDict detection
+// ---------------------------------------------------------------------------
+
+/// Collect spans of `TypeVar(...)` calls where `bound=TypedDict` (the abstract class).
+///
+/// PEP 589: `TypedDict` cannot be used as a bound for a `TypeVar`.
+fn collect_typevar_bound_typeddict_violations(stmts: &[Stmt]) -> Vec<Span> {
+    use ruff_text_size::Ranged as _;
+    let mut out = Vec::new();
+    for stmt in stmts {
+        let Stmt::Assign(node) = stmt else { continue };
+        let Expr::Call(call) = node.value.as_ref() else { continue };
+        if !is_typevar_call(node.value.as_ref()) {
+            continue;
+        }
+        for kw in &call.arguments.keywords {
+            let is_bound_kw = kw.arg.as_ref().is_some_and(|a| a.as_str() == "bound");
+            if !is_bound_kw {
+                continue;
+            }
+            let is_typeddict = matches!(
+                &kw.value,
+                Expr::Name(n) if n.id.as_str() == "TypedDict"
+            );
+            if is_typeddict {
+                out.push(Span {
+                    start: call.range().start().to_u32(),
+                    end: call.range().end().to_u32(),
+                });
+            }
+        }
+    }
+    out
+}

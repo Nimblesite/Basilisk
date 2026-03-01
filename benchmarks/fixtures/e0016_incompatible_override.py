@@ -1,6 +1,3 @@
-# BSK-E0016: Incompatible method override
-# 500 child classes with wrong param types
-
 class Base1:
     def method(self, x: int) -> int: return x
 class Child1(Base1):

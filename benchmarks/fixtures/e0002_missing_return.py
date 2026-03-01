@@ -1,6 +1,3 @@
-# BSK-E0002: Missing return type annotations
-# 2000 functions without return type
-
 def f1(a: int, b: int): return a + b
 def f2(a: int, b: int): return a + b
 def f3(a: int, b: int): return a + b

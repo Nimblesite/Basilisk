@@ -1,8 +1,4 @@
 from typing import TypeVar
-
-# BSK-E0026: TypeVar with single constraint
-# 2000 single-constraint TypeVars
-
 T1 = TypeVar("T1", int)
 T2 = TypeVar("T2", int)
 T3 = TypeVar("T3", int)

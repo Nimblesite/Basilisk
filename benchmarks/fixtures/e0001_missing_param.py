@@ -1,6 +1,3 @@
-# BSK-E0001: Missing parameter type annotations
-# 2000 functions, ~6000 untyped params
-
 def f1(a, b, c) -> int: return 0
 def f2(a, b, c) -> int: return 0
 def f3(a, b, c) -> int: return 0

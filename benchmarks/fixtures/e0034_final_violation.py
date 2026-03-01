@@ -1,8 +1,4 @@
 from typing import Final
-
-# BSK-E0034: Final variable reassignment
-# 500 Final violations
-
 def bad1() -> None:
     X1: Final = 1
     X1 = 2
