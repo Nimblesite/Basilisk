@@ -178,8 +178,17 @@ pub struct NamedTupleDefInfo {
     /// Field type texts in declaration order (parallel to `field_names`).
     ///
     /// Contains the source text of each type expression (e.g. `"int"`, `"str"`).
+    /// Empty when `has_types` is `false` (i.e., for `collections.namedtuple`).
     pub field_types: Vec<String>,
-    /// Span of the entire `NamedTuple(...)` call expression.
+    /// Number of trailing fields that have default values.
+    ///
+    /// Set from the `defaults` keyword argument, e.g. `namedtuple("N", "a b c", defaults=(1, 2))`
+    /// yields `defaults_count = 2` (fields `b` and `c` have defaults).
+    pub defaults_count: usize,
+    /// `true` when field type information is available (i.e., `typing.NamedTuple`).
+    /// `false` for `collections.namedtuple` where no type information is given.
+    pub has_types: bool,
+    /// Span of the entire `NamedTuple(...)` or `namedtuple(...)` call expression.
     pub span: Span,
 }
 
@@ -196,6 +205,14 @@ pub enum RhsKind {
     BoolLiteral,
     /// Bytes literal — type is trivially `bytes`.
     BytesLiteral,
+    /// A list literal with known element kinds.
+    List(Vec<RhsKind>),
+    /// A dict literal with known key/value kinds.
+    Dict(Vec<(RhsKind, RhsKind)>),
+    /// A set literal with known element kinds.
+    Set(Vec<RhsKind>),
+    /// A tuple literal with known element kinds.
+    Tuple(Vec<RhsKind>),
     /// Empty list literal `[]` — element type unknown without annotation.
     EmptyList,
     /// Empty dict literal `{}` — key/value types unknown without annotation.
@@ -206,6 +223,8 @@ pub enum RhsKind {
     CallExpr,
     /// A `type(X)` call — returns a class object (e.g. `type(None)` → `NoneType`).
     TypeCall,
+    /// A lambda expression (`lambda x: x + 1`).
+    Lambda,
     /// Any other expression.
     Other,
 }

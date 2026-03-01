@@ -2164,6 +2164,54 @@ fn e0001_regular_params_still_fire() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[test]
+fn self_and_cls_do_not_fire_e0001() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "class MyClass:\n",
+        "    def instance_method(self) -> None:\n",
+        "        pass\n",
+        "    @classmethod\n",
+        "    def class_method(cls) -> None:\n",
+        "        pass\n",
+        "    def regular_method(self, data) -> None:\n",
+        "        pass\n"
+    );
+    let diags = run(src)?;
+    let e1: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0001")
+        .collect();
+    
+    // Should only fire for 'data', not 'self' or 'cls'
+    assert!(
+        !e1.is_empty(),
+        "should have E0001 diagnostics"
+    );
+    
+    let messages: Vec<&str> = e1.iter().map(|d| d.message.as_str()).collect();
+    assert!(
+        messages.iter().any(|m| m.contains("data")),
+        "E0001 should point to 'data' parameter"
+    );
+    assert!(
+        !messages.iter().any(|m| m.contains("self")),
+        "E0001 should NOT point to 'self' parameter"
+    );
+    assert!(
+        !messages.iter().any(|m| m.contains("cls")),
+        "E0001 should NOT point to 'cls' parameter"
+    );
+    
+    // Should have exactly 1 E0001 (for 'data')
+    let data_e1: Vec<_> = e1.iter().filter(|d| d.message.contains("data")).collect();
+    assert_eq!(
+        data_e1.len(), 1,
+        "should have exactly 1 E0001 for 'data' parameter"
+    );
+    
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // E0011 — Return type mismatch: branch coverage
 // ---------------------------------------------------------------------------

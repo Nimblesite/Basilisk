@@ -1477,23 +1477,80 @@ fn collect_all_assigns(stmts: &[Stmt]) -> Vec<String> {
 
 /// Collect names assigned at the top level of a function body (unconditionally).
 fn collect_unconditional_assigns(stmts: &[Stmt]) -> Vec<String> {
-    stmts
-        .iter()
-        .flat_map(|stmt| match stmt {
-            Stmt::Assign(node) => node
-                .targets
-                .iter()
-                .flat_map(extract_target_names)
-                .collect::<Vec<_>>(),
-            Stmt::AnnAssign(node) => expr_simple_name(&node.target).into_iter().collect(),
+    let mut assignments = Vec::new();
+    
+    for stmt in stmts {
+        match stmt {
+            Stmt::Assign(node) => {
+                assignments.extend(node.targets.iter().flat_map(extract_target_names));
+            }
+            Stmt::AnnAssign(node) => {
+                if let Some(name) = expr_simple_name(&node.target) {
+                    assignments.push(name);
+                }
+            }
             Stmt::For(node) => {
                 // The for-loop variable(s) are bound whenever the loop body runs.
-                extract_target_names(&node.target)
+                assignments.extend(extract_target_names(&node.target));
             }
-            Stmt::FunctionDef(func) => vec![func.name.to_string()],
-            _ => Vec::new(),
-        })
-        .collect()
+            Stmt::FunctionDef(func) => {
+                assignments.push(func.name.to_string());
+            }
+            Stmt::If(node) => {
+                // Check if this is an if-else statement that guarantees assignment
+                if let Some(if_else_assignments) = collect_if_else_assignments(node) {
+                    assignments.extend(if_else_assignments);
+                }
+            }
+            _ => {}
+        }
+    }
+    
+    assignments
+}
+
+/// Check if an if statement has both if and else branches that assign the same variables.
+/// Returns the intersection of assignments from all branches if they cover all paths.
+fn collect_if_else_assignments(if_stmt: &ruff_python_ast::StmtIf) -> Option<Vec<String>> {
+    let if_branch_assigns = collect_unconditional_assigns(&if_stmt.body);
+    
+    // Check if there's an else clause
+    let has_else = if_stmt.elif_else_clauses.iter().any(|clause| clause.test.is_none());
+    if !has_else {
+        return None;
+    }
+    
+    // Collect assignments from all elif/else branches
+    let mut all_else_assigns = Vec::new();
+    for clause in &if_stmt.elif_else_clauses {
+        if clause.test.is_none() {
+            // This is the else branch
+            all_else_assigns.extend(collect_unconditional_assigns(&clause.body));
+        } else {
+            // This is an elif branch - for now, we'll be conservative and only handle
+            // simple if-else without elif chains
+            return None;
+        }
+    }
+    
+    // If there are elif branches, we can't guarantee coverage
+    let has_elif = if_stmt.elif_else_clauses.iter().any(|clause| clause.test.is_some());
+    if has_elif {
+        return None;
+    }
+    
+    // Find the intersection of assignments from if and else branches
+    let intersection: Vec<String> = if_branch_assigns
+        .iter()
+        .filter(|name| all_else_assigns.contains(name))
+        .cloned()
+        .collect();
+    
+    if intersection.is_empty() {
+        None
+    } else {
+        Some(intersection)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -2148,9 +2205,27 @@ fn classify_rhs(expr: &Expr) -> RhsKind {
         Expr::StringLiteral(_) | Expr::FString(_) => RhsKind::StrLiteral,
         Expr::BytesLiteral(_) => RhsKind::BytesLiteral,
         Expr::NoneLiteral(_) => RhsKind::NoneValue,
+        Expr::List(list) if !list.elts.is_empty() => {
+            RhsKind::List(list.elts.iter().map(classify_rhs).collect())
+        }
+        Expr::Dict(dict) if !dict.items.is_empty() => {
+            let pairs = dict
+                .items
+                .iter()
+                .filter_map(|item| {
+                    let key = item.key.as_ref().map(classify_rhs)?;
+                    let val = classify_rhs(&item.value);
+                    Some((key, val))
+                })
+                .collect();
+            RhsKind::Dict(pairs)
+        }
+        Expr::Set(set) => RhsKind::Set(set.elts.iter().map(classify_rhs).collect()),
+        Expr::Tuple(tup) => RhsKind::Tuple(tup.elts.iter().map(classify_rhs).collect()),
         Expr::List(list) if list.elts.is_empty() => RhsKind::EmptyList,
         Expr::Dict(dict) if dict.items.is_empty() => RhsKind::EmptyDict,
         Expr::Call(_) => RhsKind::CallExpr,
+        Expr::Lambda(_) => RhsKind::Lambda,
         _ => RhsKind::Other,
     }
 }
@@ -2455,17 +2530,19 @@ fn collect_newtype_calls(stmts: &[Stmt]) -> Vec<NewTypeCallInfo> {
     out
 }
 
-/// Collect functional-form `NamedTuple` definitions from module-level code.
+/// Collect functional-form `NamedTuple` / `namedtuple` definitions from module-level code.
 ///
-/// Matches assignments of the form:
-/// ```python
-/// N = NamedTuple("N", [(field_name, field_type), ...])
-/// ```
+/// Handles all standard forms:
+/// - `typing.NamedTuple("N", [("x", int), ...])` — list form (with types)
+/// - `typing.NamedTuple("N", (("x", int), ...))` — tuple form (with types)
+/// - `collections.namedtuple("N", ["x", "y"])` — list of string literals (no types)
+/// - `collections.namedtuple("N", ("x", "y"))` — tuple of string literals (no types)
+/// - `collections.namedtuple("N", "x y")` — space/comma-separated string (no types)
+/// - Any of the above with `defaults=(v, ...)` keyword
 ///
 /// Field names that reference `Final` string-literal constants are resolved to
 /// the constant's value (e.g. `X: Final = "x"` makes `X` resolve to `"x"`).
 fn collect_namedtuple_defs(stmts: &[Stmt], source: &str) -> Vec<NamedTupleDefInfo> {
-    // First, build a map of Final string-literal constants for field-name resolution.
     let final_string_constants: std::collections::HashMap<&str, &str> =
         collect_final_string_constants(stmts, source);
 
@@ -2475,62 +2552,151 @@ fn collect_namedtuple_defs(stmts: &[Stmt], source: &str) -> Vec<NamedTupleDefInf
         let Expr::Call(call) = node.value.as_ref() else {
             continue;
         };
-        // Callee must be `NamedTuple` or `typing.NamedTuple`.
-        let is_namedtuple = expr_simple_name(&call.func).as_deref() == Some("NamedTuple")
-            || matches!(call.func.as_ref(), Expr::Attribute(a) if a.attr.as_str() == "NamedTuple");
-        if !is_namedtuple {
+
+        // Check callee: `NamedTuple`, `typing.NamedTuple`, `namedtuple`, or
+        // `collections.namedtuple`.
+        let callee_name = match call.func.as_ref() {
+            Expr::Name(n) => Some(n.id.as_str()),
+            Expr::Attribute(a) => Some(a.attr.as_str()),
+            _ => None,
+        };
+        let Some(callee) = callee_name else { continue };
+        let is_typing_nt = callee == "NamedTuple";
+        let is_collections_nt = callee == "namedtuple";
+        if !is_typing_nt && !is_collections_nt {
             continue;
         }
+
         let Some(lhs_name) = node.targets.first().and_then(expr_simple_name) else {
             continue;
         };
-        // Second positional argument should be a list of (name, type) tuples.
         let Some(fields_arg) = call.arguments.args.get(1) else {
             continue;
         };
-        let Expr::List(list_expr) = fields_arg else {
-            continue;
-        };
-        let mut field_names = Vec::new();
-        let mut field_types = Vec::new();
-        for elt in &list_expr.elts {
-            let Expr::Tuple(tuple_expr) = elt else {
-                continue;
+
+        // Parse `defaults` keyword argument to determine how many trailing fields
+        // have default values.
+        let defaults_count = parse_defaults_count(&call.arguments.keywords);
+
+        if is_typing_nt {
+            // typing.NamedTuple: second arg is a list or tuple of (name, type) pairs.
+            let pairs: Option<&[Expr]> = match fields_arg {
+                Expr::List(l) => Some(&l.elts),
+                Expr::Tuple(t) => Some(&t.elts),
+                _ => None,
             };
-            if tuple_expr.elts.len() < 2 {
-                continue;
-            }
-            // Field name: string literal or Final constant reference.
-            let field_name = match &tuple_expr.elts[0] {
-                Expr::StringLiteral(s) => s.value.to_str().to_owned(),
-                Expr::Name(n) => {
-                    if let Some(resolved) = final_string_constants.get(n.id.as_str()) {
-                        (*resolved).to_owned()
-                    } else {
-                        n.id.to_string()
-                    }
+            let Some(elts) = pairs else { continue };
+
+            let mut field_names = Vec::new();
+            let mut field_types = Vec::new();
+            for elt in elts {
+                let Expr::Tuple(tuple_expr) = elt else { continue };
+                if tuple_expr.elts.len() < 2 {
+                    continue;
                 }
-                _ => continue,
-            };
-            // Field type: extract source text.
-            let type_range = tuple_expr.elts[1].range();
-            let field_type = source
-                .get(type_range.start().to_u32() as usize..type_range.end().to_u32() as usize)
-                .unwrap_or("")
-                .to_owned();
-            field_names.push(field_name);
-            field_types.push(field_type);
-        }
-        if !field_names.is_empty() {
-            out.push(NamedTupleDefInfo {
-                lhs_name,
-                field_names,
-                field_types,
-                span: text_range_to_span(call.range()),
-            });
+                let field_name = match &tuple_expr.elts[0] {
+                    Expr::StringLiteral(s) => s.value.to_str().to_owned(),
+                    Expr::Name(n) => {
+                        if let Some(resolved) = final_string_constants.get(n.id.as_str()) {
+                            (*resolved).to_owned()
+                        } else {
+                            n.id.to_string()
+                        }
+                    }
+                    _ => continue,
+                };
+                let type_range = tuple_expr.elts[1].range();
+                let field_type = source
+                    .get(type_range.start().to_u32() as usize..type_range.end().to_u32() as usize)
+                    .unwrap_or("")
+                    .to_owned();
+                field_names.push(field_name);
+                field_types.push(field_type);
+            }
+            if !field_names.is_empty() {
+                out.push(NamedTupleDefInfo {
+                    lhs_name,
+                    field_names,
+                    field_types,
+                    defaults_count,
+                    has_types: true,
+                    span: text_range_to_span(call.range()),
+                });
+            }
+        } else {
+            // collections.namedtuple: second arg gives field names only (no types).
+            let field_names = parse_namedtuple_field_names(fields_arg, &final_string_constants);
+            if !field_names.is_empty() {
+                out.push(NamedTupleDefInfo {
+                    lhs_name,
+                    field_names,
+                    field_types: Vec::new(),
+                    defaults_count,
+                    has_types: false,
+                    span: text_range_to_span(call.range()),
+                });
+            }
         }
     }
     out
+}
+
+/// Parse field names from a `collections.namedtuple` second argument.
+///
+/// Supports:
+/// - `["x", "y"]` — list of string literals
+/// - `("x", "y")` — tuple of string literals
+/// - `"x y"` or `"x, y"` — space/comma-separated string literal
+fn parse_namedtuple_field_names<'a>(
+    fields_arg: &Expr,
+    final_constants: &std::collections::HashMap<&str, &'a str>,
+) -> Vec<String> {
+    match fields_arg {
+        Expr::List(l) => extract_string_list(&l.elts, final_constants),
+        Expr::Tuple(t) => extract_string_list(&t.elts, final_constants),
+        Expr::StringLiteral(s) => {
+            // Split on commas or whitespace.
+            let raw = s.value.to_str();
+            raw.split(|c: char| c == ',' || c.is_whitespace())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_owned)
+                .collect()
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// Extract string literal field names from a list/tuple of string literals.
+fn extract_string_list(
+    elts: &[Expr],
+    final_constants: &std::collections::HashMap<&str, &str>,
+) -> Vec<String> {
+    elts.iter()
+        .filter_map(|elt| match elt {
+            Expr::StringLiteral(s) => Some(s.value.to_str().to_owned()),
+            Expr::Name(n) => final_constants
+                .get(n.id.as_str())
+                .map(|s| (*s).to_owned()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Count defaults from the `defaults=(...)` keyword argument.
+///
+/// Returns 0 if no `defaults` keyword is present or it cannot be parsed.
+fn parse_defaults_count(keywords: &[ruff_python_ast::Keyword]) -> usize {
+    for kw in keywords {
+        if kw.arg.as_ref().map(|a| a.as_str()) == Some("defaults") {
+            return match &kw.value {
+                Expr::Tuple(t) => t.elts.len(),
+                Expr::List(l) => l.elts.len(),
+                _ => 0,
+            };
+        }
+    }
+    0
 }
 
 /// Collect `Final` string-literal constant bindings from module-level statements.

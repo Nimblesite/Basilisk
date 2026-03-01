@@ -493,47 +493,40 @@ impl Rule for InvalidTypeAnnotation {
     }
 }
 
-fn check_invalid_type_annotations(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-    let source = &module.source;
-    let path = &module.path;
-    let non_type_names = collect_non_type_names(module);
-
-    // Build the set of names defined in module scope for circular reference detection.
-    let mut module_scope_names: HashSet<&str> = HashSet::new();
+fn build_module_scope_names<'a>(module: &'a ResolvedModule) -> HashSet<&'a str> {
+    let mut names: HashSet<&'a str> = HashSet::new();
     for cls in &module.classes {
-        module_scope_names.insert(cls.name.as_str());
+        names.insert(cls.name.as_str());
     }
     for var in &module.module_vars {
-        module_scope_names.insert(var.name.as_str());
+        names.insert(var.name.as_str());
     }
     for imp in &module.imports {
         match imp.kind {
             ImportKind::From => {
                 for name in &imp.names {
-                    module_scope_names.insert(name.as_str());
+                    names.insert(name.as_str());
                 }
             }
             ImportKind::Plain => {
                 if let Some(name) = imp.module.split('.').next() {
-                    module_scope_names.insert(name);
+                    names.insert(name);
                 }
             }
             ImportKind::Star => {}
         }
     }
+    names
+}
 
-    let builtin_type_names: HashSet<&str> =
-        PYTHON_BUILTIN_TYPE_NAMES.iter().copied().collect();
-
-    // Collect module-level ParamSpec names for invalid-use-location checks.
-    let paramspec_names: HashSet<&str> = module
-        .typevar_calls
-        .iter()
-        .filter(|tv| tv.is_paramspec)
-        .map(|tv| tv.name.as_str())
-        .collect();
-
-    // Function parameters (including *args, **kwargs, and return type)
+fn check_function_param_annotations(
+    module: &ResolvedModule,
+    non_type_names: &HashSet<String>,
+    paramspec_names: &HashSet<&str>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let source = &module.source;
+    let path = &module.path;
     for func in &module.functions {
         for param in func
             .parameters
@@ -541,7 +534,6 @@ fn check_invalid_type_annotations(module: &ResolvedModule, diagnostics: &mut Vec
             .chain(func.vararg.iter())
             .chain(func.kwarg.iter())
         {
-            // Skip if already caught by E0024 (numeric/boolean literal)
             if param.annotation_is_numeric_literal {
                 continue;
             }
@@ -550,8 +542,8 @@ fn check_invalid_type_annotations(module: &ResolvedModule, diagnostics: &mut Vec
             };
             let ann_trimmed = ann.trim();
             if is_invalid_type_annotation(ann_trimmed)
-                || is_non_type_name(ann_trimmed, &non_type_names)
-                || is_paramspec_invalid_annotation(ann_trimmed, &paramspec_names)
+                || is_non_type_name(ann_trimmed, non_type_names)
+                || is_paramspec_invalid_annotation(ann_trimmed, paramspec_names)
             {
                 diagnostics.push(make_diagnostic(
                     format!(
@@ -564,15 +556,23 @@ fn check_invalid_type_annotations(module: &ResolvedModule, diagnostics: &mut Vec
             }
         }
     }
+}
 
-    // Module-level variables (including TypeAlias RHS check)
+fn check_module_var_annotations(
+    module: &ResolvedModule,
+    non_type_names: &HashSet<String>,
+    paramspec_names: &HashSet<&str>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let source = &module.source;
+    let path = &module.path;
     for var in &module.module_vars {
         let Some(ann) = span_text(source, var.annotation_span) else {
             continue;
         };
         let ann_trimmed = ann.trim();
         if is_invalid_type_annotation(ann_trimmed)
-            || is_non_type_name(ann_trimmed, &non_type_names)
+            || is_non_type_name(ann_trimmed, non_type_names)
         {
             diagnostics.push(make_diagnostic(
                 format!("Invalid type expression in annotation for `{}`", var.name),
@@ -581,8 +581,6 @@ fn check_invalid_type_annotations(module: &ResolvedModule, diagnostics: &mut Vec
             ));
             continue;
         }
-        // Special case: TypeAlias RHS is a bare ParamSpec name.
-        // e.g. `TA1: TypeAlias = P  # E` where P is a ParamSpec.
         if ann_trimmed == "TypeAlias" {
             if let Some(rhs) = span_text(source, var.rhs_span) {
                 let rhs_trimmed = rhs.trim();
@@ -600,8 +598,15 @@ fn check_invalid_type_annotations(module: &ResolvedModule, diagnostics: &mut Vec
             }
         }
     }
+}
 
-    // Function-local annotated variables
+fn check_local_var_annotations(
+    module: &ResolvedModule,
+    non_type_names: &HashSet<String>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let source = &module.source;
+    let path = &module.path;
     for func in &module.functions {
         for var in &func.local_vars {
             let Some(ann) = span_text(source, var.annotation_span) else {
@@ -609,7 +614,7 @@ fn check_invalid_type_annotations(module: &ResolvedModule, diagnostics: &mut Vec
             };
             let ann_trimmed = ann.trim();
             if is_invalid_type_annotation(ann_trimmed)
-                || is_non_type_name(ann_trimmed, &non_type_names)
+                || is_non_type_name(ann_trimmed, non_type_names)
             {
                 diagnostics.push(make_diagnostic(
                     format!(
@@ -622,8 +627,17 @@ fn check_invalid_type_annotations(module: &ResolvedModule, diagnostics: &mut Vec
             }
         }
     }
+}
 
-    // Class attributes
+fn check_class_attr_annotations(
+    module: &ResolvedModule,
+    non_type_names: &HashSet<String>,
+    module_scope_names: &HashSet<&str>,
+    builtin_type_names: &HashSet<&str>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let source = &module.source;
+    let path = &module.path;
     for cls in &module.classes {
         let cls_method_names: HashSet<&str> =
             cls.method_names.iter().map(String::as_str).collect();
@@ -633,7 +647,7 @@ fn check_invalid_type_annotations(module: &ResolvedModule, diagnostics: &mut Vec
             };
             let ann_trimmed = ann.trim();
             if is_invalid_type_annotation(ann_trimmed)
-                || is_non_type_name(ann_trimmed, &non_type_names)
+                || is_non_type_name(ann_trimmed, non_type_names)
             {
                 diagnostics.push(make_diagnostic(
                     format!(
@@ -645,8 +659,6 @@ fn check_invalid_type_annotations(module: &ResolvedModule, diagnostics: &mut Vec
                 ));
                 continue;
             }
-            // Check: bare identifier annotation matches a class method name.
-            // e.g. `def int(self)` in the class body, then `y: int` shadows the built-in.
             if is_bare_identifier(ann_trimmed) && cls_method_names.contains(ann_trimmed) {
                 diagnostics.push(make_diagnostic(
                     format!(
@@ -658,13 +670,11 @@ fn check_invalid_type_annotations(module: &ResolvedModule, diagnostics: &mut Vec
                 ));
                 continue;
             }
-            // Check: circular string annotation.
-            // e.g. `ClassF: "ClassF"` when `ClassF` is not defined in module scope.
             if is_circular_string_annotation(
                 ann_trimmed,
                 &attr.name,
-                &module_scope_names,
-                &builtin_type_names,
+                module_scope_names,
+                builtin_type_names,
             ) {
                 diagnostics.push(make_diagnostic(
                     format!(
@@ -677,4 +687,28 @@ fn check_invalid_type_annotations(module: &ResolvedModule, diagnostics: &mut Vec
             }
         }
     }
+}
+
+fn check_invalid_type_annotations(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    let non_type_names = collect_non_type_names(module);
+    let module_scope_names = build_module_scope_names(module);
+    let builtin_type_names: HashSet<&str> =
+        PYTHON_BUILTIN_TYPE_NAMES.iter().copied().collect();
+    let paramspec_names: HashSet<&str> = module
+        .typevar_calls
+        .iter()
+        .filter(|tv| tv.is_paramspec)
+        .map(|tv| tv.name.as_str())
+        .collect();
+
+    check_function_param_annotations(module, &non_type_names, &paramspec_names, diagnostics);
+    check_module_var_annotations(module, &non_type_names, &paramspec_names, diagnostics);
+    check_local_var_annotations(module, &non_type_names, diagnostics);
+    check_class_attr_annotations(
+        module,
+        &non_type_names,
+        &module_scope_names,
+        &builtin_type_names,
+        diagnostics,
+    );
 }

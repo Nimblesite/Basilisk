@@ -9,6 +9,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
+type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
+
 /// Test fixture for LSP server communication.
 struct LspTestFixture {
     child: Child,
@@ -18,40 +20,44 @@ struct LspTestFixture {
 
 impl LspTestFixture {
     /// Start the basilisk lsp server as a child process.
-    fn new() -> Self {
+    fn new() -> TestResult<Self> {
         let mut child = Command::new("../../target/debug/basilisk")
             .arg("lsp")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .spawn()
-            .expect("failed to start basilisk lsp");
+            .spawn()?;
 
-        let stdin = Arc::new(Mutex::new(child.stdin.take().expect("failed to get stdin")));
-        let stdout = Arc::new(Mutex::new(BufReader::new(
-            child.stdout.take().expect("failed to get stdout"),
-        )));
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or("failed to get stdin")?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or("failed to get stdout")?;
 
-        Self {
+        Ok(Self {
             child,
-            stdin,
-            stdout,
-        }
+            stdin: Arc::new(Mutex::new(stdin)),
+            stdout: Arc::new(Mutex::new(BufReader::new(stdout))),
+        })
     }
 
     /// Send an LSP message to the server.
-    fn send_message(&self, message: &str) {
+    fn send_message(&self, message: &str) -> TestResult<()> {
         let content = format!("Content-Length: {}\r\n\r\n{}", message.len(), message);
-        let mut stdin = self.stdin.lock().unwrap();
-        stdin.write_all(content.as_bytes()).unwrap();
-        stdin.flush().unwrap();
+        let mut stdin = self.stdin.lock().map_err(|e| e.to_string())?;
+        stdin.write_all(content.as_bytes())?;
+        stdin.flush()?;
+        Ok(())
     }
 
     /// Read the next LSP response from the server.
     fn read_response(&self) -> Option<String> {
-        let mut stdout = self.stdout.lock().unwrap();
+        let mut stdout = self.stdout.lock().ok()?;
         let mut line = String::new();
 
-        // Read headers
+        // Read headers until blank line
         loop {
             line.clear();
             stdout.read_line(&mut line).ok()?;
@@ -60,27 +66,36 @@ impl LspTestFixture {
             }
         }
 
-        // Read content length
-        let content_length_header = line
-            .lines()
-            .find(|l| l.starts_with("Content-Length:"))
-            .expect("missing Content-Length header");
-        let content_length: usize = content_length_header
-            .split(':')
-            .nth(1)
-            .unwrap()
-            .trim()
-            .parse()
-            .unwrap();
+        // Re-read to find Content-Length (line was cleared in loop)
+        // We need to read headers properly — restart with a fresh approach
+        // by reading until we get a content-length line
+        drop(stdout);
 
-        // Read the JSON content
-        let mut content = vec![0; content_length];
+        // Simpler approach: read raw header block then content
+        let mut stdout = self.stdout.lock().ok()?;
+        let mut header_line = String::new();
+        let mut content_length: Option<usize> = None;
+
+        loop {
+            header_line.clear();
+            stdout.read_line(&mut header_line).ok()?;
+            let trimmed = header_line.trim();
+            if trimmed.is_empty() {
+                break;
+            }
+            if let Some(rest) = trimmed.strip_prefix("Content-Length:") {
+                content_length = rest.trim().parse().ok();
+            }
+        }
+
+        let length = content_length?;
+        let mut content = vec![0u8; length];
         stdout.read_exact(&mut content).ok()?;
-        Some(String::from_utf8(content).unwrap())
+        String::from_utf8(content).ok()
     }
 
     /// Send initialize request and wait for response.
-    fn initialize(&self) -> String {
+    fn initialize(&self) -> TestResult<String> {
         let init_request = r#"{
             "jsonrpc": "2.0",
             "id": 1,
@@ -93,13 +108,13 @@ impl LspTestFixture {
             }
         }"#;
 
-        self.send_message(init_request);
+        self.send_message(init_request)?;
         thread::sleep(Duration::from_millis(100));
-        self.read_response().expect("no response to initialize")
+        self.read_response().ok_or_else(|| "no response to initialize".into())
     }
 
     /// Send a text document didOpen notification.
-    fn did_open(&self, uri: &str, text: &str) {
+    fn did_open(&self, uri: &str, text: &str) -> TestResult<()> {
         let did_open = format!(
             r#"{{
             "jsonrpc": "2.0",
@@ -117,13 +132,13 @@ impl LspTestFixture {
             text.replace('"', "\\\"")
         );
 
-        self.send_message(&did_open);
-        thread::sleep(Duration::from_millis(200)); // Give time for processing
+        self.send_message(&did_open)?;
+        thread::sleep(Duration::from_millis(200));
+        Ok(())
     }
 
     /// Wait for diagnostics to be published.
     fn wait_for_diagnostics(&self) -> Option<String> {
-        // Read any pending messages
         thread::sleep(Duration::from_millis(300));
         self.read_response()
     }
@@ -137,9 +152,9 @@ impl Drop for LspTestFixture {
 }
 
 #[test]
-fn test_lsp_initialize() {
-    let fixture = LspTestFixture::new();
-    let response = fixture.initialize();
+fn test_lsp_initialize() -> TestResult<()> {
+    let fixture = LspTestFixture::new()?;
+    let response = fixture.initialize()?;
 
     assert!(response.contains("\"jsonrpc\":\"2.0\""));
     assert!(response.contains("\"id\":1"));
@@ -148,75 +163,80 @@ fn test_lsp_initialize() {
     assert!(response.contains("\"textDocumentSync\":1"));
     assert!(response.contains("\"hoverProvider\":true"));
     assert!(response.contains("\"codeActionProvider\":true"));
+    Ok(())
 }
 
 #[test]
-fn test_lsp_did_open_with_type_errors() {
-    let fixture = LspTestFixture::new();
-    fixture.initialize();
+fn test_lsp_did_open_with_type_errors() -> TestResult<()> {
+    let fixture = LspTestFixture::new()?;
+    fixture.initialize()?;
 
     let python_code = r#"def greet(name):
     return f"Hello, {name}!""#;
 
-    fixture.did_open("file:///test.py", python_code);
+    fixture.did_open("file:///test.py", python_code)?;
 
-    let diagnostics_response = fixture.wait_for_diagnostics().expect("no diagnostics published");
+    let diagnostics_response = fixture
+        .wait_for_diagnostics()
+        .ok_or("no diagnostics published")?;
 
     assert!(diagnostics_response.contains("\"method\":\"textDocument/publishDiagnostics\""));
     assert!(diagnostics_response.contains("BSK-E0001"));
     assert!(diagnostics_response.contains("BSK-E0002"));
     assert!(diagnostics_response.contains("Missing parameter type annotation"));
     assert!(diagnostics_response.contains("Missing return type annotation"));
+    Ok(())
 }
 
 #[test]
-fn test_lsp_did_open_with_clean_code() {
-    let fixture = LspTestFixture::new();
-    fixture.initialize();
+fn test_lsp_did_open_with_clean_code() -> TestResult<()> {
+    let fixture = LspTestFixture::new()?;
+    fixture.initialize()?;
 
     let python_code = r#"def greet(name: str) -> str:
     return f"Hello, {name}!""#;
 
-    fixture.did_open("file:///test.py", python_code);
+    fixture.did_open("file:///test.py", python_code)?;
 
-    let diagnostics_response = fixture.wait_for_diagnostics().expect("no diagnostics published");
+    let diagnostics_response = fixture
+        .wait_for_diagnostics()
+        .ok_or("no diagnostics published")?;
 
-    // Clean code should have empty diagnostics array
     assert!(diagnostics_response.contains("\"diagnostics\":[]"));
+    Ok(())
 }
 
 #[test]
-fn test_lsp_did_open_with_syntax_error() {
-    let fixture = LspTestFixture::new();
-    fixture.initialize();
+fn test_lsp_did_open_with_syntax_error() -> TestResult<()> {
+    let fixture = LspTestFixture::new()?;
+    fixture.initialize()?;
 
     let python_code = r#"def greet(name: str) -> str
     return f"Hello, {name}!""#; // Missing colon
 
-    fixture.did_open("file:///test.py", python_code);
+    fixture.did_open("file:///test.py", python_code)?;
 
-    let diagnostics_response = fixture.wait_for_diagnostics().expect("no diagnostics published");
+    let diagnostics_response = fixture
+        .wait_for_diagnostics()
+        .ok_or("no diagnostics published")?;
 
     assert!(diagnostics_response.contains("\"method\":\"textDocument/publishDiagnostics\""));
     assert!(diagnostics_response.contains("BSK-PARSE"));
     assert!(diagnostics_response.contains("Parse error"));
+    Ok(())
 }
 
 #[test]
-fn test_lsp_did_change_updates_diagnostics() {
-    let fixture = LspTestFixture::new();
-    fixture.initialize();
+fn test_lsp_did_change_updates_diagnostics() -> TestResult<()> {
+    let fixture = LspTestFixture::new()?;
+    fixture.initialize()?;
 
-    // Start with code that has errors
     let initial_code = r#"def greet(name):
     return f"Hello, {name}!""#;
 
-    fixture.did_open("file:///test.py", initial_code);
-
-    // Wait for initial diagnostics
+    fixture.did_open("file:///test.py", initial_code)?;
     let _ = fixture.wait_for_diagnostics();
 
-    // Send a change that fixes the errors
     let change_request = r#"{
         "jsonrpc": "2.0",
         "method": "textDocument/didChange",
@@ -233,29 +253,28 @@ fn test_lsp_did_change_updates_diagnostics() {
         }
     }"#;
 
-    fixture.send_message(change_request);
+    fixture.send_message(change_request)?;
     thread::sleep(Duration::from_millis(200));
 
-    let diagnostics_response = fixture.wait_for_diagnostics().expect("no diagnostics published");
+    let diagnostics_response = fixture
+        .wait_for_diagnostics()
+        .ok_or("no diagnostics published")?;
 
-    // After fixing, diagnostics should be empty
     assert!(diagnostics_response.contains("\"diagnostics\":[]"));
+    Ok(())
 }
 
 #[test]
-fn test_lsp_did_close_clears_diagnostics() {
-    let fixture = LspTestFixture::new();
-    fixture.initialize();
+fn test_lsp_did_close_clears_diagnostics() -> TestResult<()> {
+    let fixture = LspTestFixture::new()?;
+    fixture.initialize()?;
 
     let python_code = r#"def greet(name):
     return f"Hello, {name}!""#;
 
-    fixture.did_open("file:///test.py", python_code);
-
-    // Wait for initial diagnostics
+    fixture.did_open("file:///test.py", python_code)?;
     let _ = fixture.wait_for_diagnostics();
 
-    // Send didClose
     let close_request = r#"{
         "jsonrpc": "2.0",
         "method": "textDocument/didClose",
@@ -266,29 +285,28 @@ fn test_lsp_did_close_clears_diagnostics() {
         }
     }"#;
 
-    fixture.send_message(close_request);
+    fixture.send_message(close_request)?;
     thread::sleep(Duration::from_millis(200));
 
-    let diagnostics_response = fixture.wait_for_diagnostics().expect("no diagnostics published");
+    let diagnostics_response = fixture
+        .wait_for_diagnostics()
+        .ok_or("no diagnostics published")?;
 
-    // Closing should clear diagnostics
     assert!(diagnostics_response.contains("\"diagnostics\":[]"));
+    Ok(())
 }
 
 #[test]
-fn test_lsp_hover_on_error_location() {
-    let fixture = LspTestFixture::new();
-    fixture.initialize();
+fn test_lsp_hover_on_error_location() -> TestResult<()> {
+    let fixture = LspTestFixture::new()?;
+    fixture.initialize()?;
 
     let python_code = r#"def greet(name):
     return f"Hello, {name}!""#;
 
-    fixture.did_open("file:///test.py", python_code);
-
-    // Wait for diagnostics to be published
+    fixture.did_open("file:///test.py", python_code)?;
     let _ = fixture.wait_for_diagnostics();
 
-    // Send hover request on the parameter that has an error
     let hover_request = r#"{
         "jsonrpc": "2.0",
         "id": 2,
@@ -304,36 +322,37 @@ fn test_lsp_hover_on_error_location() {
         }
     }"#;
 
-    fixture.send_message(hover_request);
+    fixture.send_message(hover_request)?;
     thread::sleep(Duration::from_millis(200));
 
-    let hover_response = fixture.read_response().expect("no hover response");
+    let hover_response = fixture.read_response().ok_or("no hover response")?;
 
     assert!(hover_response.contains("\"jsonrpc\":\"2.0\""));
     assert!(hover_response.contains("\"id\":2"));
     assert!(hover_response.contains("BSK-E0001"));
     assert!(hover_response.contains("Missing parameter type annotation"));
+    Ok(())
 }
 
 #[test]
-fn test_lsp_malformed_json_handling() {
-    let fixture = LspTestFixture::new();
-    fixture.initialize();
+fn test_lsp_malformed_json_handling() -> TestResult<()> {
+    let fixture = LspTestFixture::new()?;
+    fixture.initialize()?;
 
-    // Send malformed JSON
-    fixture.send_message("{ invalid json }");
+    fixture.send_message("{ invalid json }")?;
 
-    let error_response = fixture.read_response().expect("no error response");
+    let error_response = fixture.read_response().ok_or("no error response")?;
 
     assert!(error_response.contains("\"error\""));
-    assert!(error_response.contains("-32700")); // Parse error code
+    assert!(error_response.contains("-32700"));
     assert!(error_response.contains("Parse error"));
+    Ok(())
 }
 
 #[test]
-fn test_lsp_unknown_method_handling() {
-    let fixture = LspTestFixture::new();
-    fixture.initialize();
+fn test_lsp_unknown_method_handling() -> TestResult<()> {
+    let fixture = LspTestFixture::new()?;
+    fixture.initialize()?;
 
     let unknown_method = r#"{
         "jsonrpc": "2.0",
@@ -342,56 +361,60 @@ fn test_lsp_unknown_method_handling() {
         "params": {}
     }"#;
 
-    fixture.send_message(unknown_method);
+    fixture.send_message(unknown_method)?;
     thread::sleep(Duration::from_millis(100));
 
-    let error_response = fixture.read_response().expect("no error response");
+    let error_response = fixture.read_response().ok_or("no error response")?;
 
     assert!(error_response.contains("\"error\""));
-    assert!(error_response.contains("-32601")); // Method not found
+    assert!(error_response.contains("-32601"));
+    Ok(())
 }
 
 #[test]
-fn test_lsp_concurrent_document_handling() {
-    let fixture = LspTestFixture::new();
-    fixture.initialize();
+fn test_lsp_concurrent_document_handling() -> TestResult<()> {
+    let fixture = LspTestFixture::new()?;
+    fixture.initialize()?;
 
-    // Open two different documents
-    let code1 = r#"def func1(x): pass"#;
-    let code2 = r#"def func2(y): return y"#;
+    let code1 = r"def func1(x): pass";
+    let code2 = r"def func2(y): return y";
 
-    fixture.did_open("file:///doc1.py", code1);
-    fixture.did_open("file:///doc2.py", code2);
+    fixture.did_open("file:///doc1.py", code1)?;
+    fixture.did_open("file:///doc2.py", code2)?;
 
-    // Wait for both sets of diagnostics
-    let response1 = fixture.wait_for_diagnostics().expect("no diagnostics for doc1");
-    let response2 = fixture.wait_for_diagnostics().expect("no diagnostics for doc2");
+    let response1 = fixture
+        .wait_for_diagnostics()
+        .ok_or("no diagnostics for doc1")?;
+    let response2 = fixture
+        .wait_for_diagnostics()
+        .ok_or("no diagnostics for doc2")?;
 
-    // Both should contain their respective diagnostics
     assert!(response1.contains("file:///doc1.py"));
     assert!(response2.contains("file:///doc2.py"));
     assert!(response1.contains("BSK-E0001"));
     assert!(response2.contains("BSK-E0001"));
+    Ok(())
 }
 
 #[test]
-fn test_lsp_large_file_handling() {
-    let fixture = LspTestFixture::new();
-    fixture.initialize();
+fn test_lsp_large_file_handling() -> TestResult<()> {
+    let fixture = LspTestFixture::new()?;
+    fixture.initialize()?;
 
-    // Create a larger Python file with multiple functions
     let mut large_code = String::new();
     for i in 0..50 {
-        large_code.push_str(&format!("def func{}(x): return x\n", i));
+        use std::fmt::Write as _;
+        let _ = writeln!(large_code, "def func{i}(x): return x");
     }
 
-    fixture.did_open("file:///large.py", &large_code);
+    fixture.did_open("file:///large.py", &large_code)?;
 
-    let diagnostics_response = fixture.wait_for_diagnostics().expect("no diagnostics published");
+    let diagnostics_response = fixture
+        .wait_for_diagnostics()
+        .ok_or("no diagnostics published")?;
 
-    // Should handle large files without crashing
     assert!(diagnostics_response.contains("\"method\":\"textDocument/publishDiagnostics\""));
-    // Should have multiple diagnostics (one per function)
     assert!(diagnostics_response.matches("BSK-E0001").count() >= 50);
     assert!(diagnostics_response.matches("BSK-E0002").count() >= 50);
+    Ok(())
 }

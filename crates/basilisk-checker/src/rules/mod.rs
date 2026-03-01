@@ -90,6 +90,7 @@ pub(crate) mod e0089;
 pub(crate) mod e0090;
 pub(crate) mod e0091;
 pub(crate) mod e0092;
+pub(crate) mod e0093;
 pub(crate) mod e0094;
 pub(crate) mod e0095;
 pub(crate) mod e0096;
@@ -193,10 +194,11 @@ pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
         &e0086::MultipleTypeVarTuplesInGeneric,
         &e0087::Pep695InvalidBound,
         &e0088::TypedDictRuntimeViolation,
-        &e0089::TypedDictKeyValidation,
+        &e0089::Pep695InvalidBound,
         &e0090::InvalidTupleTypeSyntax,
         &e0091::TypeVarDefaultIncompatible,
         &e0092::TooFewTypeArguments,
+        &e0093::TypedDictKeyValidation,
         &e0094::SelfInvalidLocation,
         &e0095::InitVarViolation,
         &e0096::DataclassFieldDefaultFactoryMismatch,

@@ -3,6 +3,7 @@
 //! The public API is [`check`], which takes a [`ResolvedModule`] and
 //! returns a list of [`Diagnostic`]s.
 
+pub mod collection_inference;
 pub mod diagnostic;
 pub mod inference;
 pub mod rules;

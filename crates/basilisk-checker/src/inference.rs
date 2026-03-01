@@ -15,10 +15,13 @@ pub fn infer_rhs(rhs: &RhsKind) -> InferredType {
         RhsKind::NoneValue => InferredType::None_,
         RhsKind::EmptyList => InferredType::List(Box::new(InferredType::Never)),
         RhsKind::EmptyDict => InferredType::Dict(
-            Box::new(InferredType::Never), 
+            Box::new(InferredType::Never),
             Box::new(InferredType::Never)
         ),
-        RhsKind::CallExpr | RhsKind::TypeCall | RhsKind::Other => InferredType::Unknown,
+        RhsKind::List(elements) | RhsKind::Set(elements) => crate::collection_inference::infer_collection_type(elements),
+        RhsKind::Dict(pairs) => crate::collection_inference::infer_dict_type(pairs),
+        RhsKind::Tuple(elements) => crate::collection_inference::infer_tuple_type(elements),
+        RhsKind::CallExpr | RhsKind::TypeCall | RhsKind::Other | RhsKind::Lambda => InferredType::Unknown,
     }
 }
 

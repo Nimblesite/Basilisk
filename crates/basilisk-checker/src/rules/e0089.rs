@@ -1,27 +1,29 @@
-//! BSK-E0089: Invalid key or value type in `TypedDict` assignment.
+//! BSK-E0089: Invalid PEP 695 type parameter bound or constraint.
 //!
-//! PEP 589 defines `TypedDict` as a typed dict with a fixed set of keys and associated types.
-//! This rule detects:
-//!
-//! 1. Subscript assignments with invalid (non-existent) keys.
-//! 2. Subscript assignments where the value type is incompatible with the declared field type.
-//! 3. Annotated dict-literal assignments that contain invalid keys or are missing required keys.
+//! PEP 695 introduced a new syntax for declaring type parameters in class and
+//! function definitions.  The bound/constraint expression after `:` is restricted
+//! to specific forms; invalid forms are caught by this rule.
 //!
 //! ```python
-//! from typing import TypedDict
+//! # BAD
+//! class Foo[T: [str, int]]:  # E: list literal is not a valid bound
+//!     ...
 //!
-//! class Movie(TypedDict):
-//!     name: str
-//!     year: int
+//! class Bar[T: ()]:  # E: constraint tuple must have two or more types
+//!     ...
 //!
-//! movie: Movie = {"name": "Blade Runner", "year": 1982}
+//! class Baz[T: (str,)]:  # E: constraint tuple must have two or more types
+//!     ...
 //!
-//! movie["director"] = "Ridley Scott"  # E: invalid key
-//! movie["year"] = "1982"              # E: wrong value type
-//! movie2: Movie = {"title": "Blade Runner", "year": 1982}  # E: invalid/missing keys
+//! t1 = (bytes, str)
+//! class Qux[T: t1]:  # E: constraint must be a literal tuple expression
+//!     ...
+//!
+//! class Bad[T: (3, bytes)]:  # E: 3 is not a valid type expression
+//!     ...
 //! ```
 
-use basilisk_resolver::{ResolvedModule, TypedDictKeyViolationKind};
+use basilisk_resolver::{Pep695BoundViolationKind, ResolvedModule};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
@@ -32,72 +34,42 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://basilisk-lang.org/errors/BSK-E0089",
 };
 
-/// Emits BSK-E0089 for invalid key or value-type violations on `TypedDict` instances.
-pub(crate) struct TypedDictKeyValidation;
+/// Emits BSK-E0089 when a PEP 695 type parameter has an invalid bound or constraint.
+pub(crate) struct Pep695InvalidBound;
 
-impl Rule for TypedDictKeyValidation {
+impl Rule for Pep695InvalidBound {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        for violation in &module.typeddict_key_violations {
+        for violation in &module.pep695_bound_violations {
             let message = match &violation.kind {
-                TypedDictKeyViolationKind::InvalidSubscriptKey { key } => format!(
-                    "`{}` is not a valid key for `TypedDict` `{}`",
-                    key, violation.class_name
+                Pep695BoundViolationKind::ListLiteralBound => format!(
+                    "Type parameter `{}` in class `{}` has a list literal as its bound; \
+                     use a tuple for constraints or a single type for an upper bound",
+                    violation.type_param_name, violation.class_name
                 ),
-                TypedDictKeyViolationKind::WrongSubscriptValueType { key, expected } => format!(
-                    "Value assigned to `TypedDict` `{}` field `{}` has the wrong type; \
-                     expected `{expected}`",
-                    violation.class_name, key
+                Pep695BoundViolationKind::EmptyTuple => format!(
+                    "Type parameter `{}` in class `{}` has an empty constraint tuple; \
+                     constraint tuples must contain two or more types",
+                    violation.type_param_name, violation.class_name
                 ),
-                TypedDictKeyViolationKind::InvalidDictLiteral {
-                    invalid_keys,
-                    missing_keys,
-                } => {
-                    let mut parts = Vec::new();
-                    if !invalid_keys.is_empty() {
-                        let ks = invalid_keys
-                            .iter()
-                            .map(|k| format!("`{k}`"))
-                            .collect::<Vec<_>>()
-                            .join(", ");
-                        parts.push(format!(
-                            "invalid key{} {} for `TypedDict` `{}`",
-                            if invalid_keys.len() == 1 { "" } else { "s" },
-                            ks,
-                            violation.class_name
-                        ));
-                    }
-                    if !missing_keys.is_empty() {
-                        let ks = missing_keys
-                            .iter()
-                            .map(|k| format!("`{k}`"))
-                            .collect::<Vec<_>>()
-                            .join(", ");
-                        parts.push(format!(
-                            "missing required key{} {}",
-                            if missing_keys.len() == 1 { "" } else { "s" },
-                            ks
-                        ));
-                    }
-                    parts.join("; ")
-                }
-                TypedDictKeyViolationKind::SubscriptReadInvalidKey { key } => format!(
-                    "Key `{}` is not a valid key for `TypedDict` `{}`",
-                    key, violation.class_name
+                Pep695BoundViolationKind::SingleElementTuple => format!(
+                    "Type parameter `{}` in class `{}` has a single-element constraint tuple; \
+                     constraint tuples must contain two or more types",
+                    violation.type_param_name, violation.class_name
                 ),
-                TypedDictKeyViolationKind::NonLiteralDictKey => format!(
-                    "Dict literal for `TypedDict` `{}` contains a non-literal key; \
-                     all keys must be string literals",
-                    violation.class_name
+                Pep695BoundViolationKind::NonLiteralConstraint => format!(
+                    "Type parameter `{}` in class `{}` uses a non-literal constraint; \
+                     the constraint must be a literal tuple expression, not a variable",
+                    violation.type_param_name, violation.class_name
                 ),
-                TypedDictKeyViolationKind::DisallowedMethodCall { method } => format!(
-                    "`TypedDict` `{}` does not support `.{}()` — \
-                     TypedDicts have a fixed schema",
-                    violation.class_name, method
+                Pep695BoundViolationKind::InvalidConstraintElement => format!(
+                    "Type parameter `{}` in class `{}` has an invalid constraint element; \
+                     constraint tuple elements must be types, not literal values",
+                    violation.type_param_name, violation.class_name
                 ),
-                TypedDictKeyViolationKind::DeleteSubscript => format!(
-                    "Cannot delete a key from `TypedDict` `{}` — \
-                     TypedDicts have a fixed schema",
-                    violation.class_name
+                Pep695BoundViolationKind::OuterScopeTypeVarInBound => format!(
+                    "Type parameter `{}` in class `{}` references a type variable from an \
+                     outer scope in its bound; this is not allowed",
+                    violation.type_param_name, violation.class_name
                 ),
             };
 

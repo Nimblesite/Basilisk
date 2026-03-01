@@ -12,7 +12,8 @@
 //! f: Callable[[int], int] = lambda x: x + 1  # OK: variable has type annotation
 //! ```
 
-use basilisk_resolver::ResolvedModule;
+use basilisk_resolver::{ResolvedModule, RhsKind};
+
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
 use super::Rule;
@@ -27,36 +28,42 @@ pub(crate) struct LambdaMissingAnnotations;
 
 impl Rule for LambdaMissingAnnotations {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        // Check module-level variables that have lambda expressions
-        // Since we can't easily distinguish lambda calls from other function calls,
-        // we'll use a conservative approach and warn on any unannotated variable
-        // assignment that involves a function call
+        // Module-level: `f = lambda x: x + 1` without annotation
         for var in &module.module_vars {
-            if var.rhs_kind == basilisk_resolver::RhsKind::CallExpr && !var.has_annotation {
+            if var.rhs_kind == RhsKind::Lambda && !var.has_annotation {
                 diagnostics.push(Diagnostic {
                     code: CODE.clone(),
                     severity: Severity::Warning,
-                    message: format!("function/lambda assigned to unannotated variable '{}'", var.name),
+                    message: format!("lambda assigned to unannotated variable '{}'", var.name),
                     span: var.name_span,
                     path: module.path.clone(),
-                    help: Some("Consider adding a type annotation to improve code clarity".to_owned()),
-                    note: Some("This warning appears for function calls which may include lambda expressions".to_owned()),
+                    help: Some(
+                        "Add a type annotation such as `Callable[[int], int]` to improve type safety"
+                            .to_owned(),
+                    ),
+                    note: None,
                 });
             }
         }
-        
-        // Check class attributes that have lambda expressions
+
+        // Class attributes: `converter = lambda x: str(x)` without annotation
         for class in &module.classes {
             for attr in &class.attributes {
                 if attr.rhs_is_lambda && !attr.has_annotation {
                     diagnostics.push(Diagnostic {
                         code: CODE.clone(),
                         severity: Severity::Warning,
-                        message: format!("lambda assigned to unannotated class attribute '{}'", attr.name),
+                        message: format!(
+                            "lambda assigned to unannotated class attribute '{}'",
+                            attr.name
+                        ),
                         span: attr.name_span,
                         path: module.path.clone(),
-                        help: Some("Consider adding a type annotation to improve code clarity".to_owned()),
-                        note: Some("Lambda functions are exempt from strict type requirements but annotations help readability".to_owned()),
+                        help: Some(
+                            "Add a type annotation such as `Callable[[int], int]` to improve type safety"
+                                .to_owned(),
+                        ),
+                        note: None,
                     });
                 }
             }
