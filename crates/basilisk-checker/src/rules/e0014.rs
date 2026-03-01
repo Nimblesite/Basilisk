@@ -269,7 +269,7 @@ fn check_tuple_literal_mismatch(rhs: &str, ann: &str) -> Option<String> {
 
     // Empty tuple: `tuple[()]`
     if inner_ann.trim() == "()" {
-        if !rhs_elems.is_empty() && !(rhs_elems.len() == 1 && rhs_elems[0].trim().is_empty()) {
+        if !(rhs_elems.is_empty() || rhs_elems.len() == 1 && rhs_elems[0].trim().is_empty()) {
             return Some(format!(
                 "a tuple with {} element(s) (expected empty tuple)",
                 rhs_elems.len()
@@ -381,8 +381,7 @@ fn literal_elem_matches(elem: &str, expected: &str) -> bool {
 
     match expected_base {
         "int" => is_int_lit || is_bool_lit,
-        "float" => is_float_lit || is_int_lit || is_bool_lit,
-        "complex" => is_float_lit || is_int_lit || is_bool_lit,
+        "float" | "complex" => is_float_lit || is_int_lit || is_bool_lit,
         "str" => is_str_lit,
         "bytes" => is_bytes_lit,
         "bool" => is_bool_lit,

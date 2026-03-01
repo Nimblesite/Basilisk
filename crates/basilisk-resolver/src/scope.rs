@@ -974,6 +974,11 @@ pub struct ResolvedModule {
     /// is expected, but the class's corresponding method returns a different type.
     /// Used by `BSK-E0073`.
     pub protocol_self_violations: Vec<ProtocolSelfViolation>,
+    /// Spans of `isinstance(x, T)` calls where `T` is a `TypedDict` class.
+    ///
+    /// PEP 589: TypedDict type objects cannot be used in isinstance() tests.
+    /// Used by `BSK-E0088`.
+    pub isinstance_typeddict_violations: Vec<Span>,
     /// The source file path.
     pub path: String,
     /// The original source text (forwarded from parser for span restoration).

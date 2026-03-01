@@ -62,6 +62,13 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
     let readonly_violations = collect_readonly_violations(&module.ast.body, &classes);
     let protocol_self_violations =
         collect_protocol_self_violations(&module.ast.body, &classes, &functions, &module.source);
+    let typeddict_class_names: std::collections::HashSet<&str> = classes
+        .iter()
+        .filter(|c| c.is_typed_dict)
+        .map(|c| c.name.as_str())
+        .collect();
+    let isinstance_typeddict_violations =
+        collect_isinstance_typeddict_violations(&module.ast.body, &typeddict_class_names);
     ResolvedModule {
         functions,
         classes,
@@ -91,10 +98,11 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         literal_string_enum_mismatches,
         enum_value_type_violations: collect_enum_value_type_violations(&module.ast.body, &module.source),
         local_classvar_violations: Vec::new(),
-        pep695_bound_violations: Vec::new(),
+        pep695_bound_violations: collect_pep695_bound_violations(&module.ast.body),
         historical_positional_violations: collect_historical_positional_violations(&module.ast.body),
         invalid_string_annotations: Vec::new(),
         protocol_self_violations,
+        isinstance_typeddict_violations,
         path: module.path.clone(),
         source: module.source.clone(),
     }
@@ -2506,6 +2514,225 @@ fn text_range_to_span(range: TextRange) -> Span {
 }
 
 // ---------------------------------------------------------------------------
+// PEP 695 type parameter bound violation detection (for BSK-E0087)
+// ---------------------------------------------------------------------------
+
+/// Walk all statements and collect PEP 695 type parameter bound violations.
+///
+/// Detects invalid `TypeVar` bound/constraint forms in PEP 695 `class Foo[T: ...]` syntax:
+/// - List literal as bound: `class Foo[T: [str, int]]`
+/// - Empty constraint tuple: `class Foo[T: ()]`
+/// - Single-element constraint tuple: `class Foo[T: (str,)]`
+/// - Non-literal (variable) constraint: `class Foo[T: t1]` where `t1 = (str, bytes)`
+/// - Invalid constraint element: `class Foo[T: (3, bytes)]` (integer literal in tuple)
+fn collect_pep695_bound_violations(stmts: &[Stmt]) -> Vec<Pep695BoundViolation> {
+    let bare_names: std::collections::HashSet<String> = stmts
+        .iter()
+        .filter_map(|stmt| {
+            let Stmt::Assign(node) = stmt else {
+                return None;
+            };
+            node.targets.first().and_then(expr_simple_name)
+        })
+        .collect();
+
+    let mut out = Vec::new();
+    collect_pep695_violations_from_stmts(
+        stmts,
+        &bare_names,
+        &std::collections::HashSet::new(),
+        &mut out,
+    );
+    out
+}
+
+fn collect_pep695_violations_from_stmts(
+    stmts: &[Stmt],
+    bare_names: &std::collections::HashSet<String>,
+    outer_typeparams: &std::collections::HashSet<String>,
+    out: &mut Vec<Pep695BoundViolation>,
+) {
+    for stmt in stmts {
+        let Stmt::ClassDef(cls) = stmt else {
+            continue;
+        };
+        let class_name = cls.name.to_string();
+
+        // Collect the current class's TypeParam names.
+        let current_typeparams: std::collections::HashSet<String> = cls
+            .type_params
+            .as_ref()
+            .map(|tp| {
+                tp.type_params
+                    .iter()
+                    .map(type_param_name)
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        if let Some(type_params) = &cls.type_params {
+            for tp in &type_params.type_params {
+                if let TypeParam::TypeVar(tv) = tp {
+                    if let Some(bound) = &tv.bound {
+                        check_typevar_bound_expr(
+                            bound,
+                            &class_name,
+                            tv.name.as_str(),
+                            bare_names,
+                            &current_typeparams,
+                            outer_typeparams,
+                            out,
+                        );
+                    }
+                }
+            }
+        }
+
+        // When recursing into nested classes, the current TypeParams become outer TypeParams.
+        let mut new_outer = outer_typeparams.clone();
+        new_outer.extend(current_typeparams);
+        collect_pep695_violations_from_stmts(&cls.body, bare_names, &new_outer, out);
+    }
+}
+
+fn check_typevar_bound_expr(
+    bound: &Expr,
+    class_name: &str,
+    type_param: &str,
+    bare_names: &std::collections::HashSet<String>,
+    current_typeparams: &std::collections::HashSet<String>,
+    outer_typeparams: &std::collections::HashSet<String>,
+    out: &mut Vec<Pep695BoundViolation>,
+) {
+    match bound {
+        Expr::List(list) => {
+            out.push(Pep695BoundViolation {
+                kind: Pep695BoundViolationKind::ListLiteralBound,
+                class_name: class_name.to_owned(),
+                type_param_name: type_param.to_owned(),
+                span: text_range_to_span(list.range()),
+            });
+        }
+        Expr::Tuple(tup) => {
+            if tup.elts.is_empty() {
+                out.push(Pep695BoundViolation {
+                    kind: Pep695BoundViolationKind::EmptyTuple,
+                    class_name: class_name.to_owned(),
+                    type_param_name: type_param.to_owned(),
+                    span: text_range_to_span(tup.range()),
+                });
+            } else if tup.elts.len() == 1 {
+                out.push(Pep695BoundViolation {
+                    kind: Pep695BoundViolationKind::SingleElementTuple,
+                    class_name: class_name.to_owned(),
+                    type_param_name: type_param.to_owned(),
+                    span: text_range_to_span(tup.range()),
+                });
+            } else {
+                // Check for invalid elements and outer-scope TypeVar references.
+                let mut emitted = false;
+                for elt in &tup.elts {
+                    if !is_valid_constraint_element(elt) {
+                        out.push(Pep695BoundViolation {
+                            kind: Pep695BoundViolationKind::InvalidConstraintElement,
+                            class_name: class_name.to_owned(),
+                            type_param_name: type_param.to_owned(),
+                            span: text_range_to_span(elt.range()),
+                        });
+                        emitted = true;
+                        break;
+                    }
+                }
+                if !emitted {
+                    for elt in &tup.elts {
+                        if bound_refs_outer_typeparam(elt, current_typeparams, outer_typeparams) {
+                            out.push(Pep695BoundViolation {
+                                kind: Pep695BoundViolationKind::OuterScopeTypeVarInBound,
+                                class_name: class_name.to_owned(),
+                                type_param_name: type_param.to_owned(),
+                                span: text_range_to_span(elt.range()),
+                            });
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        Expr::Name(name) if bare_names.contains(name.id.as_str()) => {
+            out.push(Pep695BoundViolation {
+                kind: Pep695BoundViolationKind::NonLiteralConstraint,
+                class_name: class_name.to_owned(),
+                type_param_name: type_param.to_owned(),
+                span: text_range_to_span(name.range()),
+            });
+        }
+        // Check if the bound itself references an outer-scope TypeVar (e.g. `T: dict[str, V]`).
+        bound_expr if bound_refs_outer_typeparam(bound_expr, current_typeparams, outer_typeparams) => {
+            out.push(Pep695BoundViolation {
+                kind: Pep695BoundViolationKind::OuterScopeTypeVarInBound,
+                class_name: class_name.to_owned(),
+                type_param_name: type_param.to_owned(),
+                span: text_range_to_span(bound_expr.range()),
+            });
+        }
+        _ => {}
+    }
+}
+
+/// Returns `true` if the expression references an outer-scope TypeParam or a
+/// TypeVar-like name that is not in the current class's TypeParam set.
+///
+/// Used to detect cases like `class Nested[T: dict[str, V]]` where `V` is from
+/// an outer class, or `class Foo[T: (list[S], str)]` where `S` is unresolved.
+fn bound_refs_outer_typeparam(
+    expr: &Expr,
+    current_typeparams: &std::collections::HashSet<String>,
+    outer_typeparams: &std::collections::HashSet<String>,
+) -> bool {
+    match expr {
+        Expr::Name(name) => {
+            let n = name.id.as_str();
+            // Explicitly an outer TypeVar, or a TypeVar-like single-letter uppercase name
+            // not in the current class's TypeParam set.
+            outer_typeparams.contains(n)
+                || (is_typevar_like_name(n) && !current_typeparams.contains(n))
+        }
+        Expr::Subscript(sub) => {
+            // Check the type arguments of a generic type expression, not the base type.
+            // e.g. for `list[S]`, we check `S` not `list`.
+            bound_refs_outer_typeparam(&sub.slice, current_typeparams, outer_typeparams)
+        }
+        Expr::Tuple(t) => t
+            .elts
+            .iter()
+            .any(|e| bound_refs_outer_typeparam(e, current_typeparams, outer_typeparams)),
+        Expr::BinOp(bin) => {
+            bound_refs_outer_typeparam(&bin.left, current_typeparams, outer_typeparams)
+                || bound_refs_outer_typeparam(&bin.right, current_typeparams, outer_typeparams)
+        }
+        _ => false,
+    }
+}
+
+/// Returns `true` if the name looks like a TypeVar by the single-letter uppercase convention.
+///
+/// Single-letter uppercase names (e.g. `T`, `S`, `V`) are almost universally TypeVars.
+/// Multi-letter names could be concrete types (e.g. `str`, `int`, `ForwardReference`).
+fn is_typevar_like_name(name: &str) -> bool {
+    let bytes = name.as_bytes();
+    bytes.len() == 1 && bytes[0].is_ascii_uppercase()
+}
+
+/// Returns `false` if this expression is not a valid constraint tuple element.
+///
+/// Valid elements are type expressions: names, subscripts, binary ops, string
+/// literals (forward references), etc.
+/// Invalid elements include numeric and bytes literals (not types).
+fn is_valid_constraint_element(expr: &Expr) -> bool {
+    !matches!(expr, Expr::NumberLiteral(_) | Expr::BytesLiteral(_))
+}
+
+// ---------------------------------------------------------------------------
 // Multiple unbounded tuple detection (for BSK-E0047)
 // ---------------------------------------------------------------------------
 
@@ -3000,25 +3227,6 @@ fn strip_annotated_wrapper(ann: &str) -> Option<&str> {
 /// A type is a user-defined alias when its base identifier (the part before `[`)
 /// starts with an uppercase letter and is not a known typing special form.
 fn is_user_defined_type_alias(ty: &str) -> bool {
-    let base = ty.trim().split('[').next().unwrap_or(ty.trim()).trim();
-    // Must be a plain identifier (no operators or spaces at the top level)
-    if base.is_empty()
-        || base.contains('|')
-        || base.contains(' ')
-        || base.contains(',')
-        || base.contains('(')
-        || base.contains(')')
-    {
-        return false;
-    }
-    // Must start with uppercase
-    let Some(first) = base.chars().next() else {
-        return false;
-    };
-    if !first.is_ascii_uppercase() {
-        return false;
-    }
-    // Known special forms that start with uppercase — these are NOT user aliases
     const KNOWN_FORMS: &[&str] = &[
         "Any",
         "Never",
@@ -3101,7 +3309,6 @@ fn is_user_defined_type_alias(ty: &str) -> bool {
     ];
 
     let base = ty.trim().split('[').next().unwrap_or(ty.trim()).trim();
-    // Must be a plain identifier (no operators or spaces at the top level)
     if base.is_empty()
         || base.contains('|')
         || base.contains(' ')
@@ -3111,7 +3318,6 @@ fn is_user_defined_type_alias(ty: &str) -> bool {
     {
         return false;
     }
-    // Must start with uppercase
     let Some(first) = base.chars().next() else {
         return false;
     };
@@ -4907,6 +5113,96 @@ fn check_protocol_violations_in_function(
                     });
                 }
             }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// isinstance() with TypedDict class detection
+// ---------------------------------------------------------------------------
+
+/// Collect spans of `isinstance(x, T)` calls where `T` is a `TypedDict` class.
+///
+/// PEP 589: TypedDict type objects cannot be used in isinstance() tests.
+fn collect_isinstance_typeddict_violations(
+    stmts: &[Stmt],
+    typeddict_names: &std::collections::HashSet<&str>,
+) -> Vec<Span> {
+    let mut out = Vec::new();
+    collect_isinstance_typeddict_in_stmts(stmts, typeddict_names, &mut out);
+    out
+}
+
+fn collect_isinstance_typeddict_in_stmts(
+    stmts: &[Stmt],
+    typeddict_names: &std::collections::HashSet<&str>,
+    out: &mut Vec<Span>,
+) {
+    for stmt in stmts {
+        match stmt {
+            Stmt::If(node) => {
+                collect_isinstance_typeddict_in_expr(&node.test, typeddict_names, out);
+                collect_isinstance_typeddict_in_stmts(&node.body, typeddict_names, out);
+                for clause in &node.elif_else_clauses {
+                    if let Some(test) = &clause.test {
+                        collect_isinstance_typeddict_in_expr(test, typeddict_names, out);
+                    }
+                    collect_isinstance_typeddict_in_stmts(&clause.body, typeddict_names, out);
+                }
+            }
+            Stmt::Expr(node) => {
+                collect_isinstance_typeddict_in_expr(&node.value, typeddict_names, out);
+            }
+            Stmt::Assign(node) => {
+                collect_isinstance_typeddict_in_expr(&node.value, typeddict_names, out);
+            }
+            Stmt::AnnAssign(node) => {
+                if let Some(val) = &node.value {
+                    collect_isinstance_typeddict_in_expr(val, typeddict_names, out);
+                }
+            }
+            Stmt::While(node) => {
+                collect_isinstance_typeddict_in_expr(&node.test, typeddict_names, out);
+                collect_isinstance_typeddict_in_stmts(&node.body, typeddict_names, out);
+            }
+            Stmt::For(node) => {
+                collect_isinstance_typeddict_in_stmts(&node.body, typeddict_names, out);
+            }
+            Stmt::FunctionDef(node) => {
+                collect_isinstance_typeddict_in_stmts(&node.body, typeddict_names, out);
+            }
+            Stmt::ClassDef(node) => {
+                collect_isinstance_typeddict_in_stmts(&node.body, typeddict_names, out);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn collect_isinstance_typeddict_in_expr(
+    expr: &Expr,
+    typeddict_names: &std::collections::HashSet<&str>,
+    out: &mut Vec<Span>,
+) {
+    use ruff_text_size::Ranged as _;
+    let Expr::Call(call) = expr else { return };
+    let callee_is_isinstance = matches!(
+        call.func.as_ref(),
+        Expr::Name(n) if n.id == "isinstance" || n.id == "issubclass"
+    );
+    if !callee_is_isinstance {
+        return;
+    }
+    let Some(second_arg) = call.arguments.args.get(1) else {
+        return;
+    };
+    if let Expr::Name(name) = second_arg {
+        if typeddict_names.contains(name.id.as_str()) {
+            let range = call.range();
+            out.push(Span {
+                start: range.start().to_u32(),
+                end: range.end().to_u32(),
+            });
         }
     }
 }

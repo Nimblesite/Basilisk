@@ -25,7 +25,8 @@ pub(crate) struct TypeVarTupleUnpackRequired;
 
 impl Rule for TypeVarTupleUnpackRequired {
     fn check(&self, _module: &ResolvedModule, _diagnostics: &mut Vec<Diagnostic>) {
-        // TODO: Implement TypeVarTuple unpacking validation
-        // This rule should check for TypeVarTuple usage without `*` unpacking
+        // TODO: Implement TypeVarTuple unpacking detection
+        // This requires more sophisticated type annotation parsing
+        // Currently disabled due to resolver limitations
     }
 }

@@ -15,16 +15,11 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::Diagnostic;
 
 use super::Rule;
 
-const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0085",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0085",
-};
-
-/// Emits BSK-E0085 when a constructor call has incorrect argument count for TypeVarTuple.
+/// Emits BSK-E0085 when a constructor call has incorrect argument count for `TypeVarTuple`.
 pub(crate) struct TypeVarTupleArgCountMismatch;
 
 impl Rule for TypeVarTupleArgCountMismatch {

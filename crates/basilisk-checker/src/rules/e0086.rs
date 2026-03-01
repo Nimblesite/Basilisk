@@ -17,16 +17,11 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::Diagnostic;
 
 use super::Rule;
 
-const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0086",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0086",
-};
-
-/// Emits BSK-E0086 when multiple TypeVarTuples are used in a generic.
+/// Emits BSK-E0086 when multiple `TypeVarTuples` are used in a generic.
 pub(crate) struct MultipleTypeVarTuplesInGeneric;
 
 impl Rule for MultipleTypeVarTuplesInGeneric {

@@ -15,14 +15,9 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::Diagnostic;
 
 use super::Rule;
-
-const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0084",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0084",
-};
 
 /// Emits BSK-E0084 when a `TypeVarTuple` has invalid parameters.
 pub(crate) struct TypeVarTupleInvalidParams;

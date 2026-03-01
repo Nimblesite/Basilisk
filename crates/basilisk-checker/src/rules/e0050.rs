@@ -438,7 +438,7 @@ fn is_newtype_subscript(ann: &str, newtype_names: &std::collections::HashSet<&st
     newtype_names.contains(name_part)
 }
 
-/// Check calls to NewType constructors for argument type mismatches.
+/// Check calls to `NewType` constructors for argument type mismatches.
 ///
 /// `UserId("user")` when `UserId = NewType("UserId", int)` → error because `str` ≠ `int`.
 fn check_newtype_call_arg_types(
@@ -448,8 +448,6 @@ fn check_newtype_call_arg_types(
     newtype_base: &std::collections::HashMap<&str, &str>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    use basilisk_resolver::RhsKind;
-
     for call in &module.calls {
         let Some(&base_type) = newtype_base.get(call.callee.as_str()) else {
             continue;
@@ -459,7 +457,7 @@ fn check_newtype_call_arg_types(
             continue;
         };
 
-        if let Some(description) = newtype_arg_mismatch(base_type, rhs_kind) {
+        if let Some(_description) = newtype_arg_mismatch(base_type, rhs_kind) {
             let Some(arg_text) = source.get(arg_span.start as usize..arg_span.end as usize) else {
                 continue;
             };
@@ -498,7 +496,7 @@ fn newtype_arg_mismatch(base_type: &str, rhs: &basilisk_resolver::RhsKind) -> Op
     }
 }
 
-/// Check module-level variable assignments where the annotation is a NewType name.
+/// Check module-level variable assignments where the annotation is a `NewType` name.
 ///
 /// `u1: UserId = 42` is wrong because plain `int` literals are not `UserId` values.
 /// Only `UserId(42)` creates a proper `UserId`.
