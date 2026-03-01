@@ -15,7 +15,7 @@ use crate::scope::{
     AssertTypeCallInfo, AttributeInfo, CallSite, ClassInfo, FloatParamIntAttrAccess, FunctionInfo,
     GenericParamInfo, HistoricalPositionalViolation, HistoricalPositionalViolationKind, ImportInfo,
     ImportKind, LiteralStringEnumMismatch, MatchStmtInfo, NewTypeCallInfo, ParameterInfo,
-    ReadOnlyViolationInfo, ReadOnlyViolationKind, ResolvedModule,
+    ProtocolSelfViolation, ReadOnlyViolationInfo, ReadOnlyViolationKind, ResolvedModule,
     ReturnAnnotationKind, ReturnStmtInfo, RevealTypeCallInfo, RhsKind, Span, TypeVarCallInfo,
     TypedDictCallInfo, TypedDictSecondArgKind, UnhashableKeyRef, VariableInfo,
 };
@@ -38,9 +38,6 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         true,
     );
 
-    // Post-process: apply @dataclass_transform factory semantics.
-    apply_dataclass_transform(&module.ast.body, &mut classes, &functions);
-
     let calls = collect_module_level_calls(&module.ast.body);
     let typevar_calls = collect_typevar_calls(&module.ast.body);
     let reveal_type_calls = collect_reveal_type_calls(&module.ast.body);
@@ -58,7 +55,8 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
     let literal_string_enum_mismatches =
         collect_literal_string_enum_mismatches(&module.ast.body, &module.source);
     let readonly_violations = collect_readonly_violations(&module.ast.body, &classes);
-    let protocol_self_violations = Vec::new();
+    let protocol_self_violations =
+        collect_protocol_self_violations(&module.ast.body, &classes, &functions, &module.source);
     ResolvedModule {
         functions,
         classes,
@@ -98,19 +96,19 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
 }
 
 // ---------------------------------------------------------------------------
-// Protocol Self violation detection (stub)
+// Dataclass-transform post-processing (stub)
 // ---------------------------------------------------------------------------
 
-/// Collect protocol Self violations from module-level statements.
+/// Apply `@dataclass_transform` factory semantics to classes.
 ///
-/// This is a stub that returns an empty list; full implementation is pending.
-fn collect_protocol_self_violations(
+/// This is a stub that does nothing; full implementation is pending.
+#[allow(dead_code)]
+fn apply_dataclass_transform(
     _stmts: &[Stmt],
-    _classes: &[ClassInfo],
+    _classes: &mut [ClassInfo],
     _functions: &[FunctionInfo],
-    _source: &str,
-) -> Vec<crate::scope::ProtocolSelfViolation> {
-    Vec::new()
+) {
+    // No-op stub for dataclass_transform semantics.
 }
 
 // ---------------------------------------------------------------------------
@@ -502,7 +500,6 @@ fn collect_class_body(
     functions: &mut Vec<FunctionInfo>,
     match_stmts: &mut Vec<MatchStmtInfo>,
     class_kw_only: bool,
-    field_specifier_names: &[&str],
 ) -> (Vec<AttributeInfo>, Vec<String>, Vec<(String, Vec<String>)>) {
     let mut attributes = Vec::new();
     let mut method_names = Vec::new();
@@ -524,8 +521,7 @@ fn collect_class_body(
                     // Determine kw_only: explicit field() override wins; then sentinel; then class default.
                     let is_kw_only =
                         field_kw_only.unwrap_or(after_kw_only_sentinel || class_kw_only);
-                    let field_init = ann.value.as_deref().and_then(|v| field_init_override(v, field_specifier_names));
-                    let is_init_false = field_init == Some(false);
+                    let is_init_false = ann.value.as_deref().is_some_and(field_init_is_false);
                     attributes.push(AttributeInfo {
                         name,
                         name_span: text_range_to_span(ann.target.range()),
@@ -626,7 +622,7 @@ fn class_info_from(
     let pre_is_dataclass_kw_only = pre_is_dataclass && dataclass_flag(class, "kw_only");
 
     let (attributes, method_names, method_decorators) =
-        collect_class_body(class, functions, match_stmts, pre_is_dataclass_kw_only, &[]);
+        collect_class_body(class, functions, match_stmts, pre_is_dataclass_kw_only);
 
     let (generic_params, generic_non_typevar_args) = extract_generic_params(class);
     let is_typed_dict = bases.iter().any(|b| b == "TypedDict");
@@ -1678,6 +1674,7 @@ fn field_kw_only_override(value: &Expr) -> Option<bool> {
 
 /// For a field value expression, returns `Some(true)` when it is `field(init=True, ...)`
 /// or a field specifier with `init=True`, `Some(false)` when `init=False`, and `None` otherwise.
+#[allow(dead_code)]
 fn field_init_override(value: &Expr, field_specifier_names: &[&str]) -> Option<bool> {
     let Expr::Call(call) = value else { return None };
     let is_field_call = match call.func.as_ref() {
@@ -1702,6 +1699,28 @@ fn field_init_override(value: &Expr, field_specifier_names: &[&str]) -> Option<b
         }
     }
     None
+}
+
+/// Returns `true` when the value expression is a `field(init=False, ...)` call.
+///
+/// Only checks calls to the standard `dataclasses.field` function.  Field specifier
+/// calls from `@dataclass_transform` are resolved in `apply_dataclass_transform`.
+fn field_init_is_false(value: &Expr) -> bool {
+    let Expr::Call(call) = value else { return false };
+    let is_field_call = match call.func.as_ref() {
+        Expr::Name(n) => n.id.as_str() == "field",
+        Expr::Attribute(a) => a.attr.as_str() == "field",
+        _ => false,
+    };
+    if !is_field_call {
+        return false;
+    }
+    call.arguments.keywords.iter().any(|kw| {
+        kw.arg
+            .as_ref()
+            .is_some_and(|a| a.as_str() == "init")
+            && matches!(&kw.value, Expr::BooleanLiteral(b) if !b.value)
+    })
 }
 
 fn dataclass_bool_flag_is_false(class: &StmtClassDef, key: &str) -> bool {
@@ -3845,5 +3864,262 @@ fn collect_order_comparisons_from_expr(
             op: scope_op,
             span: text_range_to_span(expr.range()),
         });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Protocol Self-return conformance violation detection
+// ---------------------------------------------------------------------------
+
+/// Collect protocol `Self`-return conformance violations from function bodies.
+///
+/// When a function has a parameter typed as a `Protocol` with a `Self`-returning
+/// method, and that function is called with an argument whose class's corresponding
+/// method does not return `Self` or the class itself, this is a protocol violation.
+#[allow(dead_code)]
+fn collect_protocol_self_violations(
+    stmts: &[Stmt],
+    classes: &[ClassInfo],
+    functions: &[FunctionInfo],
+    source: &str,
+) -> Vec<ProtocolSelfViolation> {
+    // Build map of protocol class name -> list of method names that return `Self`.
+    let protocol_self_methods: std::collections::HashMap<&str, Vec<&str>> = classes
+        .iter()
+        .filter(|cls| cls.bases.iter().any(|b| b == "Protocol"))
+        .filter_map(|cls| {
+            let self_methods: Vec<&str> = functions
+                .iter()
+                .filter(|f| f.class_name.as_deref() == Some(cls.name.as_str()))
+                .filter(|f| {
+                    f.return_annotation_span.is_some_and(|span| {
+                        source
+                            .get(span.start as usize..span.end as usize)
+                            .map(str::trim)
+                            == Some("Self")
+                    })
+                })
+                .map(|f| f.name.as_str())
+                .collect();
+            if self_methods.is_empty() {
+                None
+            } else {
+                Some((cls.name.as_str(), self_methods))
+            }
+        })
+        .collect();
+
+    if protocol_self_methods.is_empty() {
+        return Vec::new();
+    }
+
+    // Build map of free function name -> parameter annotations (name, annotation text).
+    let func_param_types: std::collections::HashMap<&str, Vec<(&str, &str)>> = functions
+        .iter()
+        .filter(|f| f.class_name.is_none())
+        .map(|f| {
+            let param_types: Vec<(&str, &str)> = f
+                .parameters
+                .iter()
+                .filter_map(|p| {
+                    p.annotation_span.and_then(|span| {
+                        source
+                            .get(span.start as usize..span.end as usize)
+                            .map(|ann_text| (p.name.as_str(), ann_text.trim()))
+                    })
+                })
+                .collect();
+            (f.name.as_str(), param_types)
+        })
+        .collect();
+
+    // Build map of class name -> method name -> return annotation text.
+    let class_method_returns: std::collections::HashMap<
+        &str,
+        std::collections::HashMap<&str, &str>,
+    > = classes
+        .iter()
+        .map(|cls| {
+            let method_returns: std::collections::HashMap<&str, &str> = functions
+                .iter()
+                .filter(|f| f.class_name.as_deref() == Some(cls.name.as_str()))
+                .filter_map(|f| {
+                    f.return_annotation_span.and_then(|span| {
+                        source
+                            .get(span.start as usize..span.end as usize)
+                            .map(|ret_text| (f.name.as_str(), ret_text.trim()))
+                    })
+                })
+                .collect();
+            (cls.name.as_str(), method_returns)
+        })
+        .collect();
+
+    let mut out = Vec::new();
+    collect_protocol_violations_from_stmts(
+        stmts,
+        &protocol_self_methods,
+        &func_param_types,
+        &class_method_returns,
+        source,
+        &mut out,
+    );
+    out
+}
+
+/// Walk statements recursively to find function bodies with protocol violations.
+#[allow(dead_code)]
+fn collect_protocol_violations_from_stmts(
+    stmts: &[Stmt],
+    protocol_self_methods: &std::collections::HashMap<&str, Vec<&str>>,
+    func_param_types: &std::collections::HashMap<&str, Vec<(&str, &str)>>,
+    class_method_returns: &std::collections::HashMap<&str, std::collections::HashMap<&str, &str>>,
+    source: &str,
+    out: &mut Vec<ProtocolSelfViolation>,
+) {
+    for stmt in stmts {
+        if let Stmt::FunctionDef(func) = stmt {
+            check_protocol_violations_in_function(
+                func,
+                protocol_self_methods,
+                func_param_types,
+                class_method_returns,
+                source,
+                out,
+            );
+            // Recurse into nested functions.
+            collect_protocol_violations_from_stmts(
+                &func.body,
+                protocol_self_methods,
+                func_param_types,
+                class_method_returns,
+                source,
+                out,
+            );
+        }
+    }
+}
+
+/// Check a single function body for calls that violate protocol `Self` conformance.
+fn check_protocol_violations_in_function(
+    func: &StmtFunctionDef,
+    protocol_self_methods: &std::collections::HashMap<&str, Vec<&str>>,
+    func_param_types: &std::collections::HashMap<&str, Vec<(&str, &str)>>,
+    class_method_returns: &std::collections::HashMap<&str, std::collections::HashMap<&str, &str>>,
+    source: &str,
+    out: &mut Vec<ProtocolSelfViolation>,
+) {
+    // Build a map from this function's parameter names to their annotation text.
+    let enclosing_param_types: std::collections::HashMap<&str, &str> = func
+        .parameters
+        .posonlyargs
+        .iter()
+        .chain(func.parameters.args.iter())
+        .chain(func.parameters.kwonlyargs.iter())
+        .filter_map(|p| {
+            p.parameter.annotation.as_deref().and_then(|ann| {
+                let range = ann.range();
+                source
+                    .get(range.start().to_u32() as usize..range.end().to_u32() as usize)
+                    .map(|text| (p.parameter.name.as_str(), text.trim()))
+            })
+        })
+        .collect();
+
+    if enclosing_param_types.is_empty() {
+        return;
+    }
+
+    // Walk the function body looking for call expressions.
+    for stmt in &func.body {
+        let call_expr = match stmt {
+            Stmt::Expr(expr_stmt) => {
+                if let Expr::Call(call) = expr_stmt.value.as_ref() {
+                    Some(call)
+                } else {
+                    None
+                }
+            }
+            Stmt::Assign(assign) => {
+                if let Expr::Call(call) = assign.value.as_ref() {
+                    Some(call)
+                } else {
+                    None
+                }
+            }
+            Stmt::AnnAssign(ann_assign) => ann_assign.value.as_deref().and_then(|val| {
+                if let Expr::Call(call) = val {
+                    Some(call)
+                } else {
+                    None
+                }
+            }),
+            _ => None,
+        };
+
+        let Some(call) = call_expr else { continue };
+
+        // Get the callee name (simple function call only).
+        let Some(callee_name) = expr_simple_name(&call.func) else {
+            continue;
+        };
+
+        // Check if the callee function has protocol-typed parameters.
+        let Some(callee_params) = func_param_types.get(callee_name.as_str()) else {
+            continue;
+        };
+
+        // Check each positional argument.
+        for (arg_idx, arg) in call.arguments.args.iter().enumerate() {
+            let Some((_param_name, param_type)) = callee_params.get(arg_idx) else {
+                continue;
+            };
+
+            // Is this parameter typed as a protocol with Self-returning methods?
+            let Some(required_methods) = protocol_self_methods.get(param_type) else {
+                continue;
+            };
+
+            // The argument must be a simple name referencing an enclosing parameter.
+            let Some(arg_name) = expr_simple_name(arg) else {
+                continue;
+            };
+
+            // Resolve the argument's type via the enclosing function's parameters.
+            let Some(arg_class_name) = enclosing_param_types.get(arg_name.as_str()) else {
+                continue;
+            };
+
+            // Look up the argument class's methods.
+            let Some(arg_methods) = class_method_returns.get(arg_class_name) else {
+                continue;
+            };
+
+            // Check each required Self-returning method.
+            for method_name in required_methods {
+                let Some(actual_return) = arg_methods.get(method_name) else {
+                    // Method missing entirely: different violation, skip here.
+                    continue;
+                };
+
+                // The return type is acceptable if it is:
+                // - `Self` (generic self-type)
+                // - The class name itself (concrete self-type)
+                // - A quoted version of the class name (forward reference)
+                let is_self = *actual_return == "Self";
+                let is_own_class = *actual_return == *arg_class_name;
+                let is_quoted_own_class = actual_return.trim_matches('"') == *arg_class_name;
+
+                if !is_self && !is_own_class && !is_quoted_own_class {
+                    out.push(ProtocolSelfViolation {
+                        class_name: (*arg_class_name).to_owned(),
+                        protocol_name: (*param_type).to_owned(),
+                        method_name: (*method_name).to_owned(),
+                        actual_return_type: (*actual_return).to_owned(),
+                        span: text_range_to_span(arg.range()),
+                    });
+                }
+            }
+        }
     }
 }

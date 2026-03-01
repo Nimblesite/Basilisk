@@ -74,6 +74,7 @@ pub(crate) mod e0073;
 pub(crate) mod e0074;
 pub(crate) mod e0075;
 pub(crate) mod e0076;
+pub(crate) mod e0077;
 pub(crate) mod guards;
 
 use basilisk_resolver::ResolvedModule;
@@ -141,7 +142,7 @@ pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
         &e0054::FinalAnnotationViolation,
         &e0055::TypeVarInvalidKwargs,
         &e0056::ReadOnlyTypedDictMutation,
-        &e0057::TypeStatementInvalidRhs, 
+        &e0057::TypeStatementInvalidRhs,
         &e0058::AnnotatedTooFewArguments,
         &e0059::MatchArgsFalseAccess,
         &e0060::CrossTypeDataclassOrderComparison,
@@ -161,6 +162,7 @@ pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
         &e0074::ConstructorCallNewMismatch,
         &e0075::SelfTypeAttributeIncompatible,
         &e0076::OverloadUnionExpansionFailure,
+        &e0077::ProtocolSelfViolation,
     ];
 
     rules.iter().fold(Vec::new(), |mut acc, rule| {

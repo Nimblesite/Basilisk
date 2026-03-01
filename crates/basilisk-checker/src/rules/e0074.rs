@@ -112,19 +112,18 @@ fn check_stmt_for_specialized_constructor_calls(
                 &try_stmt.orelse,
                 &try_stmt.finalbody,
             ] {
-                for s in body.iter() {
+                for s in body {
                     check_stmt_for_specialized_constructor_calls(
                         s, source, path, class_map, method_map, diagnostics,
                     );
                 }
             }
             for handler in &try_stmt.handlers {
-                if let ruff_python_ast::ExceptHandler::ExceptHandler(h) = handler {
-                    for s in &h.body {
-                        check_stmt_for_specialized_constructor_calls(
-                            s, source, path, class_map, method_map, diagnostics,
-                        );
-                    }
+                let ruff_python_ast::ExceptHandler::ExceptHandler(h) = handler;
+                for s in &h.body {
+                    check_stmt_for_specialized_constructor_calls(
+                        s, source, path, class_map, method_map, diagnostics,
+                    );
                 }
             }
         }
@@ -167,7 +166,6 @@ fn check_specialized_constructor_call(
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     use ruff_python_ast::Expr;
-    use ruff_text_size::Ranged as _;
 
     // The callee must be a subscript expression: ClassName[TypeArgs]
     let Expr::Subscript(sub) = call.func.as_ref() else {

@@ -230,101 +230,91 @@ fn check_stmt_for_violations(
     use ruff_python_ast::{Expr, Stmt};
     use ruff_text_size::Ranged as _;
 
-    match stmt {
-        // Case 1: `xs = SubClass(next=ParentClass(...))` -- constructor call with
-        // keyword argument for a Self-typed attribute.
-        Stmt::Assign(assign) => {
-            if let Expr::Call(call) = assign.value.as_ref() {
-                let Some(constructor_class) = callee_class_name_from_call(call) else {
-                    return;
-                };
-                let Some(&(parent_class, self_attrs)) =
+    // Case 1: `xs = SubClass(next=ParentClass(...))` -- constructor call with
+    // keyword argument for a Self-typed attribute.
+    if let Stmt::Assign(assign) = stmt {
+        if let Expr::Call(call) = assign.value.as_ref() {
+            if let Some(constructor_class) = callee_class_name_from_call(call) {
+                if let Some(&(parent_class, self_attrs)) =
                     subclass_self_attrs.get(constructor_class.as_str())
-                else {
-                    return;
-                };
-
-                // Check keyword arguments for Self-typed attributes.
-                for kw in &call.arguments.keywords {
-                    let Some(kw_name) = kw.arg.as_ref() else {
-                        continue;
-                    };
-                    if !self_attrs.contains(kw_name.as_str()) {
-                        continue;
-                    }
-                    // The keyword value must be a call to the parent class.
-                    let Some(value_class) = call_expr_class_name(&kw.value) else {
-                        continue;
-                    };
-                    if is_parent_not_subclass(
-                        &value_class,
-                        &constructor_class,
-                        parent_class,
-                    ) {
-                        let range = assign.value.range();
-                        let span = basilisk_resolver::Span {
-                            start: range.start().to_u32(),
-                            end: range.end().to_u32(),
+                {
+                    for kw in &call.arguments.keywords {
+                        let Some(kw_name) = kw.arg.as_ref() else {
+                            continue;
                         };
-                        diagnostics.push(Diagnostic {
-                            code: CODE.clone(),
-                            severity: Severity::Error,
-                            message: format!(
-                                "Argument `{kw_name}` is typed as `Self` in `{parent_class}`, \
-                                 which resolves to `{constructor_class}` here, but got \
-                                 `{value_class}` instance"
-                            ),
-                            span,
-                            path: path.to_owned(),
-                            help: Some(format!(
-                                "Pass a `{constructor_class}` instance instead of `{value_class}`"
-                            )),
-                            note: Some(
-                                "`Self` in attribute annotations binds to the concrete \
-                                 subclass, not the parent class"
-                                    .to_owned(),
-                            ),
-                        });
+                        if !self_attrs.contains(kw_name.as_str()) {
+                            continue;
+                        }
+                        let Some(value_class) = call_expr_class_name(&kw.value) else {
+                            continue;
+                        };
+                        if is_parent_not_subclass(
+                            &value_class,
+                            &constructor_class,
+                            parent_class,
+                        ) {
+                            let range = assign.value.range();
+                            let span = basilisk_resolver::Span {
+                                start: range.start().to_u32(),
+                                end: range.end().to_u32(),
+                            };
+                            diagnostics.push(Diagnostic {
+                                code: CODE.clone(),
+                                severity: Severity::Error,
+                                message: format!(
+                                    "Argument `{kw_name}` is typed as `Self` in \
+                                     `{parent_class}`, which resolves to \
+                                     `{constructor_class}` here, but got \
+                                     `{value_class}` instance"
+                                ),
+                                span,
+                                path: path.to_owned(),
+                                help: Some(format!(
+                                    "Pass a `{constructor_class}` instance instead \
+                                     of `{value_class}`"
+                                )),
+                                note: Some(
+                                    "`Self` in attribute annotations binds to the \
+                                     concrete subclass, not the parent class"
+                                        .to_owned(),
+                                ),
+                            });
+                        }
                     }
                 }
             }
         }
 
-        // Handle if/elif/else blocks to find nested assignments.
-        Stmt::If(if_stmt) => {
-            for body_stmt in &if_stmt.body {
-                check_stmt_for_violations(
-                    body_stmt,
+        // Case 2: `xs.attr = ParentClass(...)` -- attribute assignment.
+        for target in &assign.targets {
+            if let Expr::Attribute(attr_expr) = target {
+                check_attr_assignment(
+                    attr_expr,
+                    &assign.value,
                     path,
                     subclass_self_attrs,
                     var_class_map,
                     diagnostics,
                 );
             }
-            for clause in &if_stmt.elif_else_clauses {
-                for body_stmt in &clause.body {
-                    check_stmt_for_violations(
-                        body_stmt,
-                        path,
-                        subclass_self_attrs,
-                        var_class_map,
-                        diagnostics,
-                    );
-                }
-            }
         }
-
-        _ => {}
     }
 
-    // Check for attribute assignment: `xs.attr = ParentClass(...)`
-    // This handles both Stmt::Assign targets and any statement form.
-    if let Stmt::Assign(assign) = stmt {
-        for target in &assign.targets {
-            if let Expr::Attribute(attr_expr) = target {
-                check_attr_assignment(
-                    attr_expr,
-                    &assign.value,
+    // Handle if/elif/else blocks to find nested assignments.
+    if let Stmt::If(if_stmt) = stmt {
+        for body_stmt in &if_stmt.body {
+            check_stmt_for_violations(
+                body_stmt,
+                path,
+                subclass_self_attrs,
+                var_class_map,
+                diagnostics,
+            );
+        }
+        for clause in &if_stmt.elif_else_clauses {
+            for body_stmt in &clause.body {
+                check_stmt_for_violations(
+                    body_stmt,
                     path,
                     subclass_self_attrs,
                     var_class_map,
