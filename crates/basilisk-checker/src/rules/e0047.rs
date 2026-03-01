@@ -107,7 +107,9 @@ fn is_invalid_type_annotation(ann: &str) -> bool {
         return true;
     }
 
-    // Negative numeric literal: -1, -3.14 (positive numerics caught by E0024)
+    // Numeric literal (positive or negative): 1, -1, 3.14
+    // Positive numerics as direct annotations are caught by E0024, but when they appear
+    // inside string annotations (e.g. `"1"`, `"3.14"`) E0024 does not fire.
     if content_to_check.starts_with('-')
         && content_to_check[1..]
             .trim()
@@ -115,6 +117,22 @@ fn is_invalid_type_annotation(ann: &str) -> bool {
             .next()
             .is_some_and(|c| c.is_ascii_digit())
     {
+        return true;
+    }
+    // Positive numeric literal inside a string annotation: `"1"`, `"42"`, `"3.14"`
+    if !content_to_check.is_empty()
+        && content_to_check
+            .chars()
+            .all(|c| c.is_ascii_digit() || c == '.')
+        && content_to_check
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_digit())
+    {
+        return true;
+    }
+    // Boolean literal used as a type annotation: `"True"`, `"False"`
+    if content_to_check == "True" || content_to_check == "False" {
         return true;
     }
 

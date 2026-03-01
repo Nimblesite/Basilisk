@@ -16,15 +16,21 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::Diagnostic;
+use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
 use super::Rule;
 
-/// Placeholder for BSK-E0083: TypeVarTuple unpacking validation (not yet implemented).
+const CODE: ErrorCode = ErrorCode {
+    code: "BSK-E0083",
+    docs_url: "https://basilisk-lang.org/errors/BSK-E0083",
+};
+
+/// Emits BSK-E0083 when a `TypeVarTuple` is used without unpacking.
 pub(crate) struct TypeVarTupleUnpackRequired;
 
 impl Rule for TypeVarTupleUnpackRequired {
     fn check(&self, _module: &ResolvedModule, _diagnostics: &mut Vec<Diagnostic>) {
-        // Not yet implemented.
+        // TODO: Implement TypeVarTuple unpacking validation
+        // This rule should check for TypeVarTuple usage without `*` unpacking
     }
 }

@@ -2575,15 +2575,80 @@ fn inner_tuple_is_unbounded(slice: &Expr) -> bool {
     }
 }
 
-/// Returns `true` if the annotation expression is a `tuple[...]` with multiple
-/// unbounded components (more than one `*tuple[T, ...]` or `*Ts`).
+/// Returns `true` if the annotation expression is a `tuple[...]` with an invalid form.
+///
+/// Invalid forms include:
+/// - Multiple unbounded components: `tuple[*tuple[T, ...], *Ts]`
+/// - Bare ellipsis as the only element: `tuple[...]`
+/// - Ellipsis not at the second position (with exactly one preceding type): `tuple[..., int]`,
+///   `tuple[int, ..., int]`
+/// - More than one non-ellipsis type before the ellipsis: `tuple[int, int, ...]`
+/// - Non-variadic starred expression paired with ellipsis: `tuple[*tuple[str], ...]`
 fn annotation_has_multiple_unbounded(expr: &Expr) -> bool {
-    match expr {
-        Expr::Subscript(sub) if expr_simple_name(&sub.value).as_deref() == Some("tuple") => {
-            count_unbounded_in_tuple_slice(&sub.slice) >= 2
+    let Expr::Subscript(sub) = expr else {
+        return false;
+    };
+    if expr_simple_name(&sub.value).as_deref() != Some("tuple") {
+        return false;
+    }
+    // Check for multiple unbounded components (original rule)
+    if count_unbounded_in_tuple_slice(&sub.slice) >= 2 {
+        return true;
+    }
+    // Check for invalid ellipsis forms
+    tuple_slice_has_invalid_ellipsis(&sub.slice)
+}
+
+/// Returns `true` when a `tuple[...]` slice has an invalid ellipsis placement.
+///
+/// Valid: `tuple[T, ...]` — exactly two elements, first is a type, second is `...`
+///   (and the first must not be a non-variadic starred expression)
+/// Everything else with a bare `...` is invalid.
+fn tuple_slice_has_invalid_ellipsis(slice: &Expr) -> bool {
+    match slice {
+        // Single `...` element: `tuple[...]` — invalid
+        Expr::EllipsisLiteral(_) => true,
+        Expr::Tuple(t) => {
+            let elts = &t.elts;
+            // Find all bare EllipsisLiteral positions
+            let ellipsis_count = elts
+                .iter()
+                .filter(|e| matches!(e, Expr::EllipsisLiteral(_)))
+                .count();
+            if ellipsis_count == 0 {
+                return false; // No bare ellipsis — nothing to validate here
+            }
+            // Valid form: exactly 2 elements, first is NOT ellipsis, second IS ellipsis
+            if elts.len() == 2 && matches!(elts[1], Expr::EllipsisLiteral(_)) {
+                // `tuple[T, ...]` is valid only if T is not itself a starred expression.
+                // Both `tuple[*tuple[str], ...]` (non-variadic) and
+                // `tuple[*tuple[str, ...], ...]` (variadic) are invalid.
+                return matches!(elts[0], Expr::Starred(_));
+            }
+            // Any other placement of bare `...` is invalid:
+            // - More than one ellipsis
+            // - Ellipsis not at position 1 (e.g. `tuple[..., int]`)
+            // - More than 2 elements with ellipsis at end (e.g. `tuple[int, int, ...]`)
+            true
         }
         _ => false,
     }
+}
+
+/// Returns `true` when the expression is a starred subscript of a non-variadic tuple,
+/// e.g. `*tuple[str]` (no `...`), which is invalid when paired with a bare `...`.
+fn is_non_variadic_starred_expr(expr: &Expr) -> bool {
+    let Expr::Starred(starred) = expr else {
+        return false;
+    };
+    let Expr::Subscript(sub) = starred.value.as_ref() else {
+        return false;
+    };
+    if expr_simple_name(&sub.value).as_deref() != Some("tuple") {
+        return false;
+    }
+    // `tuple[str]` has no `...` inside → non-variadic
+    !inner_tuple_is_unbounded(&sub.slice)
 }
 
 /// Collect all annotation spans that contain invalid multiple-unbounded-tuple patterns.
@@ -2863,7 +2928,7 @@ fn build_assert_type_call_info(
 /// - If it is a name reference to a known parameter, returns its annotation text (normalized).
 /// - If it is a literal, returns the corresponding primitive type name.
 /// - Otherwise returns `None`.
-fn resolve_actual_type(expr: &Expr, params: &[(&str, &str)], source: &str) -> Option<String> {
+fn resolve_actual_type(expr: &Expr, params: &[(&str, &str)], _source: &str) -> Option<String> {
     match expr {
         Expr::Name(name) => {
             let param_name = name.id.as_str();
@@ -3049,6 +3114,25 @@ fn is_user_defined_type_alias(ty: &str) -> bool {
         "ValuesView",
         "AbstractContextManager",
     ];
+
+    let base = ty.trim().split('[').next().unwrap_or(ty.trim()).trim();
+    // Must be a plain identifier (no operators or spaces at the top level)
+    if base.is_empty()
+        || base.contains('|')
+        || base.contains(' ')
+        || base.contains(',')
+        || base.contains('(')
+        || base.contains(')')
+    {
+        return false;
+    }
+    // Must start with uppercase
+    let Some(first) = base.chars().next() else {
+        return false;
+    };
+    if !first.is_ascii_uppercase() {
+        return false;
+    }
     !KNOWN_FORMS.contains(&base)
 }
 
