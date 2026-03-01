@@ -16,6 +16,7 @@ pub use scope::{
     InvalidStringAnnotationKind, LiteralStringEnumMismatch, LocalClassVarViolation,
     MatchStmtInfo,
     ModuleAttrAccessInfo, ModuleAttrAssignment, ModuleBareAssignment, ModuleOrderComparisonInfo,
+    ModuleProtocolViolation, ModuleProtocolViolationKind,
     NamedTupleDefInfo, NewTypeCallInfo, ParameterInfo, Pep695BoundViolation, ProtocolSelfViolation,
     Pep695BoundViolationKind, ReadOnlyViolationInfo, ReadOnlyViolationKind, ResolvedModule,
     ReturnAnnotationKind, ReturnStmtInfo, RevealTypeCallInfo, RhsKind, Span, TypeAliasTypeCallInfo, TypeStatementInfo, TypeVarCallInfo, TypedDictCallInfo, TypedDictSecondArgKind,

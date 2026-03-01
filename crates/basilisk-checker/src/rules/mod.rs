@@ -75,6 +75,9 @@ pub(crate) mod e0074;
 pub(crate) mod e0075;
 pub(crate) mod e0076;
 pub(crate) mod e0077;
+pub(crate) mod e0078;
+pub(crate) mod e0079;
+pub(crate) mod e0080;
 pub(crate) mod guards;
 
 use basilisk_resolver::ResolvedModule;
@@ -163,6 +166,9 @@ pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
         &e0075::SelfTypeAttributeIncompatible,
         &e0076::OverloadUnionExpansionFailure,
         &e0077::ProtocolSelfViolation,
+        &e0078::SelfTypeViolation,
+        &e0079::ModuleProtocolIncompatible,
+        &e0080::TypeVarBoundViolation,
     ];
 
     rules.iter().fold(Vec::new(), |mut acc, rule| {
