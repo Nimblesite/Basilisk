@@ -12,6 +12,8 @@
 //! result: int = add("hello", "world")   # str literals for int params → E0012
 //! ```
 
+use std::collections::HashMap;
+
 use basilisk_resolver::{FunctionInfo, ResolvedModule, RhsKind, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
@@ -29,16 +31,26 @@ pub(crate) struct ArgumentTypeMismatch;
 
 impl Rule for ArgumentTypeMismatch {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        // Build map from function name → &FunctionInfo (module-level functions only).
-        let func_map: std::collections::HashMap<&str, &FunctionInfo> = module
-            .functions
-            .iter()
-            .filter(|f| f.class_name.is_none())
-            .map(|f| (f.name.as_str(), f))
-            .collect();
+        // Group module-level functions by name → list of overloads/implementations.
+        let mut func_groups: HashMap<&str, Vec<&FunctionInfo>> = HashMap::new();
+        for func in &module.functions {
+            if func.class_name.is_none() {
+                func_groups
+                    .entry(func.name.as_str())
+                    .or_default()
+                    .push(func);
+            }
+        }
 
         for call in &module.calls {
-            let Some(func) = func_map.get(call.callee.as_str()) else {
+            let Some(funcs) = func_groups.get(call.callee.as_str()) else {
+                continue;
+            };
+
+            // Determine which function to check arguments against.
+            let func_to_check = resolve_overload_for_call(funcs, call.args.len(), module);
+
+            let Some(func) = func_to_check else {
                 continue;
             };
 
@@ -57,7 +69,11 @@ impl Rule for ArgumentTypeMismatch {
                     continue;
                 };
 
-                if let Some(description) = arg_rhs_mismatch(ann_text, rhs_kind) {
+                let arg_source = module
+                    .source
+                    .get(arg_span.start as usize..arg_span.end as usize);
+
+                if let Some(description) = arg_rhs_mismatch(ann_text, rhs_kind, arg_source) {
                     diagnostics.push(make_diagnostic(
                         &call.callee,
                         &param.name,
@@ -72,9 +88,88 @@ impl Rule for ArgumentTypeMismatch {
     }
 }
 
+/// For an overloaded function, determine which function signature to check
+/// arguments against.
+///
+/// If there is only one function (no overloads), returns it directly.
+/// If there are overloads, filters by arity — if exactly one overload matches
+/// the provided argument count, returns that overload. Otherwise returns the
+/// implementation (non-overload) function.
+fn resolve_overload_for_call<'a>(
+    funcs: &[&'a FunctionInfo],
+    arg_count: usize,
+    module: &ResolvedModule,
+) -> Option<&'a FunctionInfo> {
+    if funcs.len() <= 1 {
+        return funcs.first().copied();
+    }
+
+    // Separate overload stubs from the implementation.
+    let overloads: Vec<&FunctionInfo> = funcs
+        .iter()
+        .filter(|f| is_overload_stub(f, module))
+        .copied()
+        .collect();
+
+    if overloads.is_empty() {
+        // No @overload decorators — just use the last function.
+        return funcs.last().copied();
+    }
+
+    // Filter overloads by arity: keep those where the argument count is valid.
+    let arity_matches: Vec<&FunctionInfo> = overloads
+        .iter()
+        .filter(|f| {
+            // Skip functions with *args (they accept any number of positional args)
+            if f.vararg.is_some() {
+                return true;
+            }
+            let required = f.parameters.iter().filter(|p| !p.has_default).count();
+            let total = f.parameters.len();
+            arg_count >= required && arg_count <= total
+        })
+        .copied()
+        .collect();
+
+    match arity_matches.len() {
+        0 => {
+            // No overload matches arity — fall back to implementation.
+            funcs
+                .iter()
+                .find(|f| !is_overload_stub(f, module))
+                .copied()
+        }
+        1 => {
+            // Exactly one overload matches arity — check against it.
+            Some(arity_matches[0])
+        }
+        _ => {
+            // Multiple overloads match arity — fall back to implementation
+            // to avoid false positives (full type-based overload resolution
+            // would be needed to pick the right one).
+            funcs
+                .iter()
+                .find(|f| !is_overload_stub(f, module))
+                .copied()
+        }
+    }
+}
+
+/// Returns `true` if the function has an `@overload` decorator and a stub body.
+fn is_overload_stub(func: &FunctionInfo, _module: &ResolvedModule) -> bool {
+    func.is_stub_body
+        && func
+            .decorators
+            .iter()
+            .any(|d| d == "overload" || d.ends_with(".overload"))
+}
+
 /// Returns a human-readable description when `rhs` is incompatible with
 /// the annotation text, or `None` when the pairing is acceptable.
-fn arg_rhs_mismatch(annotation: &str, rhs: &RhsKind) -> Option<&'static str> {
+///
+/// `arg_source` is the raw source text of the argument expression, used to
+/// disambiguate `CallExpr` arguments (e.g. detecting `type(None)` vs other calls).
+fn arg_rhs_mismatch(annotation: &str, rhs: &RhsKind, arg_source: Option<&str>) -> Option<&'static str> {
     let base = annotation
         .split('[')
         .next()
@@ -102,8 +197,23 @@ fn arg_rhs_mismatch(annotation: &str, rhs: &RhsKind) -> Option<&'static str> {
         ("none", RhsKind::TypeCall) => {
             Some("`type(None)` (a class object, not the value `None`)")
         }
+        // `type(None)` classified as a generic `CallExpr` by the resolver.
+        // When the annotation is `None`, a `type(...)` call produces a class
+        // object, which is incompatible with the `None` value type.
+        ("none", RhsKind::CallExpr) if is_type_call(arg_source) => {
+            Some("`type(None)` (a class object, not the value `None`)")
+        }
         _ => None,
     }
+}
+
+/// Returns `true` when the argument source text is a `type(...)` call.
+fn is_type_call(arg_source: Option<&str>) -> bool {
+    let src = match arg_source {
+        Some(s) => s.trim(),
+        None => return false,
+    };
+    src.starts_with("type(") && src.ends_with(')')
 }
 
 fn make_diagnostic(

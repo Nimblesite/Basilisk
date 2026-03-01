@@ -14,11 +14,11 @@ pip install -r conformance/requirements.txt
 
 Read carefully: coordination/CoordinationSystem.md
 
-Opus1 (Claude Code Open 4.6 Model) is the Coordinator. This agent DICTATES to others. Others FOLLOW orders.
+Subs take orders from Coordinator. Coordinator DICTATES to others. Subs FOLLOW orders.
 
-Opus1: Keep messages to roughly 100-200 characters (one line). If you need to specify more detail, put the documentation in a separate markdown file, tell the others about it and then delete the file when the job is complete. You are NOT ALLOWED to write code.
+Coordinator: Keep messages to roughly 100-200 characters (one line). If you need to specify more detail, put the documentation in a separate markdown file, tell the others about it and then delete the file when the job is complete. You are NOT ALLOWED to write code.
 
-Cline/Sub models: You MUST continue autonomously and follow the instructions from Opus. Do not stop. Your first job is to write your file to the coordination folder based on your name. Then continue on your task indefinitely. STOPPING = 🤬 ILLEGAL
+Subs (everyone except Coordinator): You MUST continue autonomously and follow the instructions from Coordinator. Do not stop. Your first job is to write your file to the coordination folder based on your name. Then continue on your task indefinitely. STOPPING = 🤬 ILLEGAL
 
 # Critical Docs
 

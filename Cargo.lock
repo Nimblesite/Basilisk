@@ -97,6 +97,8 @@ version = "0.1.0"
 dependencies = [
  "basilisk-parser",
  "basilisk-resolver",
+ "ruff_python_ast",
+ "ruff_text_size",
 ]
 
 [[package]]

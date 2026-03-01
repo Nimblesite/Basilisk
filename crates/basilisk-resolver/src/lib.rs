@@ -13,12 +13,12 @@ pub use scope::{
     EnumValueTypeViolationInfo, EnumValueTypeViolationKind, FinalViolationInfo, FinalViolationKind,
     FloatParamIntAttrAccess, FunctionInfo, GenericParamInfo, HistoricalPositionalViolation,
     HistoricalPositionalViolationKind, ImportInfo, ImportKind, InvalidStringAnnotation,
-    InvalidStringAnnotationKind, LiteralStringEnumMismatch, LocalClassVarViolation, MatchStmtInfo,
+    InvalidStringAnnotationKind, LiteralStringEnumMismatch, LocalClassVarViolation,
+    MatchStmtInfo,
     ModuleAttrAccessInfo, ModuleAttrAssignment, ModuleBareAssignment, ModuleOrderComparisonInfo,
-    NamedTupleDefInfo, NewTypeCallInfo, ParameterInfo, Pep695BoundViolation,
+    NamedTupleDefInfo, NewTypeCallInfo, ParameterInfo, Pep695BoundViolation, ProtocolSelfViolation,
     Pep695BoundViolationKind, ReadOnlyViolationInfo, ReadOnlyViolationKind, ResolvedModule,
-    ReturnAnnotationKind, ReturnStmtInfo, RevealTypeCallInfo, RhsKind, Span, TypeAliasTypeCallInfo,
-    TypeStatementInfo, TypeVarCallInfo, TypedDictCallInfo, TypedDictSecondArgKind,
+    ReturnAnnotationKind, ReturnStmtInfo, RevealTypeCallInfo, RhsKind, Span, TypeAliasTypeCallInfo, TypeStatementInfo, TypeVarCallInfo, TypedDictCallInfo, TypedDictSecondArgKind,
     UnhashableKeyRef, VariableInfo,
 };
 

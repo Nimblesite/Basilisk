@@ -258,6 +258,13 @@ pub struct AttributeInfo {
     /// - It uses `field(kw_only=True, ...)` as its value.
     /// - The class is `@dataclass(kw_only=True)` and the field does not use `field(kw_only=False)`.
     pub is_kw_only: bool,
+    /// `true` when the field is excluded from the dataclass `__init__`.
+    ///
+    /// A field has `init=False` when:
+    /// - It uses `field(init=False)` as its value.
+    /// - A `dataclass_transform` field specifier function implicitly sets `init=False`
+    ///   (e.g. via an overload with `init: Literal[False]` as default).
+    pub is_init_false: bool,
 }
 
 /// Information about an enum `_value_` type mismatch detected during resolution.
@@ -362,6 +369,11 @@ pub struct ClassInfo {
     /// For `class Foo(Generic[int])`, this would contain the span of `int`.
     /// Used by E0043 to detect non-TypeVar arguments to Generic/Protocol.
     pub generic_non_typevar_args: Vec<Span>,
+    /// The metaclass name if specified via `metaclass=Meta` keyword.
+    ///
+    /// For `class Foo(metaclass=Meta): ...`, this is `Some("Meta")`.
+    /// `None` when no explicit metaclass is specified.
+    pub metaclass_name: Option<String>,
 }
 
 /// Type parameters declared in a `Generic[T1, T2, ...]` base expression.
@@ -796,6 +808,37 @@ pub enum InvalidStringAnnotationKind {
     StringInUnion,
 }
 
+/// A protocol conformance violation where a class is passed where a `Protocol`
+/// with `Self`-returning methods is expected, but the class's corresponding
+/// method does not return `Self` or the class itself.
+///
+/// ```python
+/// class ShapeProtocol(Protocol):
+///     def set_scale(self, scale: float) -> Self: ...
+///
+/// class BadReturn:
+///     def set_scale(self, scale: float) -> int:  # returns int, not Self
+///         return 42
+///
+/// def accepts(s: ShapeProtocol) -> None: ...
+/// accepts(BadReturn())  # E — BadReturn does not conform
+/// ```
+///
+/// Used by `BSK-E0073`.
+#[derive(Debug, Clone)]
+pub struct ProtocolSelfViolation {
+    /// The name of the class that was passed as argument.
+    pub class_name: String,
+    /// The name of the protocol that is expected.
+    pub protocol_name: String,
+    /// The method name with the `Self` return type in the protocol.
+    pub method_name: String,
+    /// What the class's method actually returns (source text of return annotation).
+    pub actual_return_type: String,
+    /// The span of the call argument.
+    pub span: Span,
+}
+
 /// An invalid string annotation detected during AST resolution.
 #[derive(Debug, Clone)]
 pub struct InvalidStringAnnotation {
@@ -925,6 +968,12 @@ pub struct ResolvedModule {
     /// lambda calls, conditional expressions, etc.).
     /// Used by `BSK-E0069`.
     pub invalid_string_annotations: Vec<InvalidStringAnnotation>,
+    /// Protocol `Self`-return conformance violations detected during resolution.
+    ///
+    /// When a class is passed where a `Protocol` with `Self`-returning methods
+    /// is expected, but the class's corresponding method returns a different type.
+    /// Used by `BSK-E0073`.
+    pub protocol_self_violations: Vec<ProtocolSelfViolation>,
     /// The source file path.
     pub path: String,
     /// The original source text (forwarded from parser for span restoration).
