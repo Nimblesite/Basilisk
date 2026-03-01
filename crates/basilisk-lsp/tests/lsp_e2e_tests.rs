@@ -3,7 +3,7 @@
 //! These tests simulate real LSP client interactions and verify
 //! the server produces correct responses for various scenarios.
 
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -19,7 +19,7 @@ struct LspTestFixture {
 impl LspTestFixture {
     /// Start the basilisk lsp server as a child process.
     fn new() -> Self {
-        let mut child = Command::new("target/debug/basilisk")
+        let mut child = Command::new("../../target/debug/basilisk")
             .arg("lsp")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -330,3 +330,68 @@ fn test_lsp_malformed_json_handling() {
     assert!(error_response.contains("Parse error"));
 }
 
+#[test]
+fn test_lsp_unknown_method_handling() {
+    let fixture = LspTestFixture::new();
+    fixture.initialize();
+
+    let unknown_method = r#"{
+        "jsonrpc": "2.0",
+        "id": 99,
+        "method": "textDocument/unknownMethod",
+        "params": {}
+    }"#;
+
+    fixture.send_message(unknown_method);
+    thread::sleep(Duration::from_millis(100));
+
+    let error_response = fixture.read_response().expect("no error response");
+
+    assert!(error_response.contains("\"error\""));
+    assert!(error_response.contains("-32601")); // Method not found
+}
+
+#[test]
+fn test_lsp_concurrent_document_handling() {
+    let fixture = LspTestFixture::new();
+    fixture.initialize();
+
+    // Open two different documents
+    let code1 = r#"def func1(x): pass"#;
+    let code2 = r#"def func2(y): return y"#;
+
+    fixture.did_open("file:///doc1.py", code1);
+    fixture.did_open("file:///doc2.py", code2);
+
+    // Wait for both sets of diagnostics
+    let response1 = fixture.wait_for_diagnostics().expect("no diagnostics for doc1");
+    let response2 = fixture.wait_for_diagnostics().expect("no diagnostics for doc2");
+
+    // Both should contain their respective diagnostics
+    assert!(response1.contains("file:///doc1.py"));
+    assert!(response2.contains("file:///doc2.py"));
+    assert!(response1.contains("BSK-E0001"));
+    assert!(response2.contains("BSK-E0001"));
+}
+
+#[test]
+fn test_lsp_large_file_handling() {
+    let fixture = LspTestFixture::new();
+    fixture.initialize();
+
+    // Create a larger Python file with multiple functions
+    let mut large_code = String::new();
+    for i in 0..50 {
+        large_code.push_str(&format!("def func{}(x): return x\n", i));
+    }
+
+    fixture.did_open("file:///large.py", &large_code);
+
+    let diagnostics_response = fixture.wait_for_diagnostics().expect("no diagnostics published");
+
+    // Should handle large files without crashing
+    assert!(diagnostics_response.contains("\"method\":\"textDocument/publishDiagnostics\""));
+    // Should have multiple diagnostics (one per function)
+    assert!(diagnostics_response.matches("BSK-E0001").count() >= 50);
+    assert!(diagnostics_response.matches("BSK-E0002").count() >= 50);
+}

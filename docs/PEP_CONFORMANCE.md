@@ -60,126 +60,36 @@ The output is a scorecard broken down by PEP category. This is an example only. 
 ╔══════════════════════════════════════════════════════════════╗
 ║           BASILISK PEP CONFORMANCE SCORECARD                 ║
 ╠══════════════════════════════════════════════════════════════╣
-║  Files:     145 total │   58 pass │   87 fail            ║
-║  Score:    40.0%                                           ║
-║  Required:  206 caught │  732 missed                       ║
-║  Tagged:     21 groups ok │   38 groups missed              ║
-║  False+:     83 unexpected diagnostics                       ║
+║  Files:     145 total │   86 pass │   59 fail            ║
+║  Score:    59.3%                                           ║
+║  Required:  343 caught │  595 missed                       ║
+║  Tagged:     13 groups ok │   46 groups missed              ║
+║  False+:     39 unexpected diagnostics                       ║
 ╠══════════════════════════════════════════════════════════════╣
 ║  Category breakdown                                          ║
 ╠══════════════════════════════════════════════════════════════╣
 ║                          7/7   100.0%  ████████████████████  ║
-║  aliases                 0/7     0.0%  ░░░░░░░░░░░░░░░░░░░░  ║
-║  annotations             3/5    60.0%  ████████████░░░░░░░░  ║
+║  aliases                 1/7    14.3%  ███░░░░░░░░░░░░░░░░░  ║
+║  annotations             4/5    80.0%  ████████████████░░░░  ║
 ║  callables               0/4     0.0%  ░░░░░░░░░░░░░░░░░░░░  ║
 ║  classes                 1/2    50.0%  ██████████░░░░░░░░░░  ║
-║  constructors            1/6    16.7%  ███░░░░░░░░░░░░░░░░░  ║
-║  dataclasses             8/16   50.0%  ██████████░░░░░░░░░░  ║
+║  constructors            3/6    50.0%  ██████████░░░░░░░░░░  ║
+║  dataclasses            11/16   68.8%  ██████████████░░░░░░  ║
 ║  directives              9/10   90.0%  ██████████████████░░  ║
 ║  enums                   6/6   100.0%  ████████████████████  ║
 ║  exceptions              1/1   100.0%  ████████████████████  ║
-║  generics                4/30   13.3%  ███░░░░░░░░░░░░░░░░░  ║
-║  historical              0/1     0.0%  ░░░░░░░░░░░░░░░░░░░░  ║
+║  generics               14/30   46.7%  █████████░░░░░░░░░░░  ║
+║  historical              1/1   100.0%  ████████████████████  ║
 ║  literals                1/4    25.0%  █████░░░░░░░░░░░░░░░  ║
-║  namedtuples             0/4     0.0%  ░░░░░░░░░░░░░░░░░░░░  ║
+║  namedtuples             1/4    25.0%  █████░░░░░░░░░░░░░░░  ║
 ║  narrowing               0/2     0.0%  ░░░░░░░░░░░░░░░░░░░░  ║
-║  overloads               2/4    50.0%  ██████████░░░░░░░░░░  ║
-║  protocols               2/11   18.2%  ████░░░░░░░░░░░░░░░░  ║
-║  qualifiers              2/3    66.7%  █████████████░░░░░░░  ║
-║  specialtypes            2/5    40.0%  ████████░░░░░░░░░░░░  ║
-║  tuples                  1/3    33.3%  ███████░░░░░░░░░░░░░  ║
-║  typeddicts              8/14   57.1%  ███████████░░░░░░░░░  ║
+║  overloads               4/4   100.0%  ████████████████████  ║
+║  protocols               3/11   27.3%  █████░░░░░░░░░░░░░░░  ║
+║  qualifiers              3/3   100.0%  ████████████████████  ║
+║  specialtypes            4/5    80.0%  ████████████████░░░░  ║
+║  tuples                  2/3    66.7%  █████████████░░░░░░░  ║
+║  typeddicts             10/14   71.4%  ██████████████░░░░░░  ║
 ╠══════════════════════════════════════════════════════════════╣
-║  Failing files                                               ║
-╠══════════════════════════════════════════════════════════════╣
-║  ✗ aliases_explicit.py (missed 9, fp 15)                     ║
-║  ✗ aliases_implicit.py (missed 18, fp 13)                    ║
-║  ✗ aliases_newtype.py (missed 2, fp 1)                       ║
-║  ✗ aliases_recursive.py (missed 11, fp 0)                    ║
-║  ✗ aliases_type_statement.py (missed 25, fp 0)               ║
-║  ✗ aliases_typealiastype.py (missed 22, fp 0)                ║
-║  ✗ aliases_variance.py (missed 4, fp 0)                      ║
-║  ✗ annotations_forward_refs.py (missed 6, fp 4)              ║
-║  ✗ annotations_generators.py (missed 10, fp 0)               ║
-║  ✗ callables_annotation.py (missed 16, fp 0)                 ║
-║  ✗ callables_kwargs.py (missed 13, fp 0)                     ║
-║  ✗ callables_protocol.py (missed 17, fp 0)                   ║
-║  ✗ callables_subtyping.py (missed 32, fp 0)                  ║
-║  ✗ classes_classvar.py (missed 12, fp 0)                     ║
-║  ✗ constructors_call_init.py (missed 5, fp 0)                ║
-║  ✗ constructors_call_metaclass.py (missed 2, fp 0)           ║
-║  ✗ constructors_call_new.py (missed 2, fp 0)                 ║
-║  ✗ constructors_call_type.py (missed 8, fp 0)                ║
-║  ✗ constructors_callable.py (missed 12, fp 0)                ║
-║  ✗ dataclasses_postinit.py (missed 4, fp 0)                  ║
-║  ✗ dataclasses_slots.py (missed 4, fp 0)                     ║
-║  ✗ dataclasses_transform_class.py (missed 6, fp 0)           ║
-║  ✗ dataclasses_transform_converter.py (missed 9, fp 0)       ║
-║  ✗ dataclasses_transform_field.py (missed 2, fp 0)           ║
-║  ✗ dataclasses_transform_func.py (missed 5, fp 0)            ║
-║  ✗ dataclasses_transform_meta.py (missed 6, fp 0)            ║
-║  ✗ dataclasses_usage.py (missed 6, fp 0)                     ║
-║  ✗ directives_deprecated.py (missed 12, fp 0)                ║
-║  ✗ generics_base_class.py (missed 6, fp 0)                   ║
-║  ✗ generics_basic.py (missed 8, fp 0)                        ║
-║  ✗ generics_defaults.py (missed 4, fp 0)                     ║
-║  ✗ generics_defaults_referential.py (missed 7, fp 0)         ║
-║  ✗ generics_defaults_specialization.py (missed 2, fp 2)      ║
-║  ✗ generics_paramspec_basic.py (missed 7, fp 0)              ║
-║  ✗ generics_paramspec_components.py (missed 16, fp 0)        ║
-║  ✗ generics_paramspec_semantics.py (missed 9, fp 0)          ║
-║  ✗ generics_paramspec_specialization.py (missed 5, fp 0)     ║
-║  ✗ generics_scoping.py (missed 10, fp 0)                     ║
-║  ✗ generics_self_attributes.py (missed 2, fp 0)              ║
-║  ✗ generics_self_basic.py (missed 3, fp 0)                   ║
-║  ✗ generics_self_protocols.py (missed 2, fp 0)               ║
-║  ✗ generics_self_usage.py (missed 10, fp 0)                  ║
-║  ✗ generics_syntax_declarations.py (missed 8, fp 0)          ║
-║  ✗ generics_syntax_infer_variance.py (missed 17, fp 0)       ║
-║  ✗ generics_syntax_scoping.py (missed 7, fp 0)               ║
-║  ✗ generics_type_erasure.py (missed 7, fp 0)                 ║
-║  ✗ generics_typevartuple_args.py (missed 10, fp 0)           ║
-║  ✗ generics_typevartuple_basic.py (missed 14, fp 0)          ║
-║  ✗ generics_typevartuple_callable.py (missed 1, fp 0)        ║
-║  ✗ generics_typevartuple_specialization.py (missed 6, fp 12) ║
-║  ✗ generics_typevartuple_unpack.py (missed 1, fp 0)          ║
-║  ✗ generics_upper_bound.py (missed 1, fp 0)                  ║
-║  ✗ generics_variance.py (missed 8, fp 0)                     ║
-║  ✗ generics_variance_inference.py (missed 23, fp 0)          ║
-║  ✗ historical_positional.py (missed 4, fp 0)                 ║
-║  ✗ literals_interactions.py (missed 4, fp 4)                 ║
-║  ✗ literals_literalstring.py (missed 7, fp 3)                ║
-║  ✗ literals_semantics.py (missed 4, fp 0)                    ║
-║  ✗ namedtuples_define_class.py (missed 14, fp 0)             ║
-║  ✗ namedtuples_define_functional.py (missed 9, fp 0)         ║
-║  ✗ namedtuples_type_compat.py (missed 2, fp 0)               ║
-║  ✗ namedtuples_usage.py (missed 8, fp 0)                     ║
-║  ✗ narrowing_typeguard.py (missed 4, fp 2)                   ║
-║  ✗ narrowing_typeis.py (missed 9, fp 2)                      ║
-║  ✗ overloads_basic.py (missed 1, fp 0)                       ║
-║  ✗ overloads_evaluation.py (missed 2, fp 0)                  ║
-║  ✗ protocols_class_objects.py (missed 8, fp 0)               ║
-║  ✗ protocols_definition.py (missed 21, fp 0)                 ║
-║  ✗ protocols_explicit.py (missed 6, fp 0)                    ║
-║  ✗ protocols_generic.py (missed 9, fp 0)                     ║
-║  ✗ protocols_merging.py (missed 6, fp 0)                     ║
-║  ✗ protocols_modules.py (missed 3, fp 0)                     ║
-║  ✗ protocols_runtime_checkable.py (missed 6, fp 0)           ║
-║  ✗ protocols_subtyping.py (missed 7, fp 0)                   ║
-║  ✗ protocols_variance.py (missed 5, fp 0)                    ║
-║  ✗ qualifiers_final_annotation.py (missed 16, fp 0)          ║
-║  ✗ specialtypes_never.py (missed 2, fp 0)                    ║
-║  ✗ specialtypes_none.py (missed 1, fp 0)                     ║
-║  ✗ specialtypes_type.py (missed 8, fp 5)                     ║
-║  ✗ tuples_type_compat.py (missed 16, fp 0)                   ║
-║  ✗ tuples_type_form.py (missed 11, fp 0)                     ║
-║  ✗ typeddicts_extra_items.py (missed 23, fp 0)               ║
-║  ✗ typeddicts_operations.py (missed 11, fp 0)                ║
-║  ✗ typeddicts_readonly_consistency.py (missed 7, fp 0)       ║
-║  ✗ typeddicts_readonly_inheritance.py (missed 10, fp 0)      ║
-║  ✗ typeddicts_type_consistency.py (missed 9, fp 0)           ║
-║  ✗ typeddicts_usage.py (missed 5, fp 0)                      ║
-╚══════════════════════════════════════════════════════════════╝
 
 ```
 

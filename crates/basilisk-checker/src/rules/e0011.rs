@@ -46,22 +46,8 @@ impl Rule for ReturnTypeMismatch {
     }
 }
 
-fn check_function_return_types(func: &FunctionInfo, path: &str, out: &mut Vec<Diagnostic>) {
-    // Placeholder: This will be implemented once we have proper return expression inference
-    // For now, we'll just check if there are any return statements with values
-    let has_return_with_value = func.return_stmts.iter().any(|stmt| stmt.has_value);
-    
-    if has_return_with_value {
-        // TODO: Implement proper return type inference once we have expression analysis
-        // For now, we'll emit a diagnostic indicating this feature is not yet implemented
-        out.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!("Return type inference for function `{}` not yet implemented", func.name),
-            span: func.name_span,
-            path: path.to_owned(),
-            help: Some("Return type inference is part of the ongoing type inference sprint".to_owned()),
-            note: Some("This check will be enhanced to properly infer return expression types".to_owned()),
-        });
-    }
+fn check_function_return_types(func: &FunctionInfo, _path: &str, _out: &mut Vec<Diagnostic>) {
+    // TODO: Implement proper return type inference once we have expression analysis
+    // This is disabled for now until the type inference system is complete
+    // Placeholder: No-op implementation
 }

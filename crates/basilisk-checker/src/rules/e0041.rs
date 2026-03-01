@@ -19,7 +19,7 @@
 
 use std::collections::HashMap;
 
-use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule};
+use basilisk_resolver::{AttributeInfo, ClassInfo, FunctionInfo, RhsKind, ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
@@ -166,6 +166,128 @@ fn metaclass_passes_through(
     call_fn.vararg.is_some() && call_fn.kwarg.is_some()
 }
 
+/// Returns `true` when the annotation text denotes a `ClassVar[...]` type.
+///
+/// `ClassVar` fields are excluded from the dataclass `__init__` parameter list.
+fn annotation_is_classvar(source: &str, span: Option<Span>) -> bool {
+    let Some(span) = span else {
+        return false;
+    };
+    let Some(text) = source.get(span.start as usize..span.end as usize) else {
+        return false;
+    };
+    let t = text.trim();
+    t.starts_with("ClassVar[")
+        || t.starts_with("ClassVar ")
+        || t == "ClassVar"
+        || t.contains(".ClassVar[")
+}
+
+/// Collects the positional (non-kw_only, non-init_false, non-ClassVar) fields of a
+/// dataclass in declaration order. These are the fields that correspond positionally
+/// to constructor arguments when no keyword arguments are used.
+fn positional_dataclass_fields<'a>(
+    class_info: &'a ClassInfo,
+    source: &str,
+) -> Vec<&'a AttributeInfo> {
+    class_info
+        .attributes
+        .iter()
+        .filter(|a| {
+            a.has_annotation
+                && !a.is_init_false
+                && !a.is_kw_only
+                && !a.is_init_var
+                && !annotation_is_classvar(source, a.annotation_span)
+        })
+        .collect()
+}
+
+/// Counts the required (no-default) positional dataclass fields.
+fn required_dataclass_field_count(class_info: &ClassInfo, source: &str) -> usize {
+    positional_dataclass_fields(class_info, source)
+        .into_iter()
+        .filter(|a| !a.has_value)
+        .count()
+}
+
+/// Maps a [`RhsKind`] literal to its Python type name, or `None` for non-literals.
+fn rhs_kind_to_type_name(kind: &RhsKind) -> Option<&'static str> {
+    match kind {
+        RhsKind::IntLiteral => Some("int"),
+        RhsKind::FloatLiteral => Some("float"),
+        RhsKind::StrLiteral => Some("str"),
+        RhsKind::BoolLiteral => Some("bool"),
+        RhsKind::BytesLiteral => Some("bytes"),
+        _ => None,
+    }
+}
+
+/// Returns `true` when passing a value of `arg_type` to a parameter annotated
+/// `param_ann` is clearly a type mismatch.
+///
+/// Only flags clear incompatibilities between primitive literal types to avoid
+/// false positives on complex or unknown types.
+fn is_clearly_incompatible(arg_type: &str, param_ann: &str) -> bool {
+    let param = param_ann.trim();
+    // Remove optional suffix / union — only check the primary type name.
+    // e.g. "int | None" → still allow "int" args; "str" args would be wrong.
+    let primary = param.split('|').next().unwrap_or(param).trim();
+    match arg_type {
+        "str" => matches!(primary, "int" | "float" | "bool" | "bytes"),
+        "bytes" => matches!(primary, "int" | "float" | "bool" | "str"),
+        "int" => matches!(primary, "str" | "bytes"),
+        "float" => matches!(primary, "str" | "bytes"),
+        _ => false,
+    }
+}
+
+/// Check positional argument types against the dataclass field types.
+///
+/// Only emits errors when a literal argument type is clearly incompatible
+/// with the corresponding field annotation.
+fn check_dataclass_arg_types(
+    class_info: &ClassInfo,
+    call: &basilisk_resolver::CallSite,
+    source: &str,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let fields = positional_dataclass_fields(class_info, source);
+
+    for (idx, (arg_kind, arg_span)) in call.args.iter().enumerate() {
+        let Some(field) = fields.get(idx) else {
+            break;
+        };
+        let Some(arg_type) = rhs_kind_to_type_name(arg_kind) else {
+            continue;
+        };
+        let Some(ann_span) = field.annotation_span else {
+            continue;
+        };
+        let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+            continue;
+        };
+        if is_clearly_incompatible(arg_type, ann_text) {
+            diagnostics.push(Diagnostic {
+                code: CODE.clone(),
+                severity: Severity::Error,
+                message: format!(
+                    "Argument {} to `{}()` has type `{arg_type}` but field `{}` expects `{}`",
+                    idx + 1,
+                    class_info.name,
+                    field.name,
+                    ann_text.trim(),
+                ),
+                span: *arg_span,
+                path: path.to_owned(),
+                help: None,
+                note: None,
+            });
+        }
+    }
+}
+
 /// Check constructor calls (class instantiation) for too few arguments.
 ///
 /// When a class is called as a constructor, we validate arguments against the
@@ -211,48 +333,120 @@ fn check_constructor_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagno
 
         // Find the constructor method to validate against.
         // Priority: __new__ first, then __init__.
-        let constructor_method = find_constructor_method(
-            class_info,
-            &method_map,
-        );
+        let constructor_method = find_constructor_method(class_info, &method_map);
 
-        let Some(constructor) = constructor_method else {
-            continue;
-        };
+        if let Some(constructor) = constructor_method {
+            // For constructor methods, the first parameter (cls/self) is implicit.
+            // Skip it when counting required parameters.
+            let required_count = constructor
+                .parameters
+                .iter()
+                .skip(1) // skip cls/self
+                .filter(|p| !p.has_default)
+                .count();
 
-        // For constructor methods, the first parameter (cls/self) is implicit.
-        // Skip it when counting required parameters.
-        let required_count = constructor
-            .parameters
-            .iter()
-            .skip(1) // skip cls/self
-            .filter(|p| !p.has_default)
-            .count();
+            // Constructor with *args accepts any number of positional args
+            if constructor.vararg.is_some() {
+                continue;
+            }
 
-        // Constructor with *args accepts any number of positional args
-        if constructor.vararg.is_some() {
-            continue;
+            let provided_count = call.args.len();
+            if provided_count < required_count {
+                let missing = required_count - provided_count;
+                let class_name = &class_info.name;
+                let method_name = &constructor.name;
+                diagnostics.push(Diagnostic {
+                    code: CODE.clone(),
+                    severity: Severity::Error,
+                    message: format!(
+                        "Call to `{class_name}()` is missing {missing} required argument{} \
+                         for `{method_name}` (expected {required_count}, got {provided_count})",
+                        if missing == 1 { "" } else { "s" },
+                    ),
+                    span: call.span,
+                    path: module.path.clone(),
+                    help: None,
+                    note: None,
+                });
+            }
+        } else if class_info.is_dataclass {
+            check_dataclass_no_explicit_constructor(
+                class_info,
+                call,
+                &module.source,
+                &module.path,
+                diagnostics,
+            );
         }
+    }
+}
 
-        let provided_count = call.args.len();
-        if provided_count < required_count {
-            let missing = required_count - provided_count;
-            let class_name = &class_info.name;
-            let method_name = &constructor.name;
+/// Validate a call to a dataclass that has no explicit `__new__` or `__init__`.
+///
+/// Two sub-cases:
+/// 1. `@dataclass(init=False)` with no custom `__init__`: any positional
+///    arguments are an error (the class falls back to `object.__init__` which
+///    accepts no positional args).
+/// 2. Normal dataclass (synthesised `__init__`): check that the caller
+///    provides at least as many positional arguments as there are required
+///    fields, and that each literal argument is compatible with the
+///    corresponding field type.
+fn check_dataclass_no_explicit_constructor(
+    class_info: &ClassInfo,
+    call: &basilisk_resolver::CallSite,
+    source: &str,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let provided_count = call.args.len();
+
+    if class_info.is_dataclass_init_false {
+        // init=False with no custom __init__: object.__init__ accepts 0 args.
+        if provided_count > 0 {
             diagnostics.push(Diagnostic {
                 code: CODE.clone(),
                 severity: Severity::Error,
                 message: format!(
-                    "Call to `{class_name}()` is missing {missing} required argument{} \
-                     for `{method_name}` (expected {required_count}, got {provided_count})",
-                    if missing == 1 { "" } else { "s" },
+                    "Cannot pass arguments to `{}()`: `@dataclass(init=False)` is set \
+                     with no explicit `__init__` method defined",
+                    class_info.name
                 ),
                 span: call.span,
-                path: module.path.clone(),
-                help: None,
+                path: path.to_owned(),
+                help: Some(
+                    "Define an explicit `__init__` method or remove the `init=False` flag"
+                        .to_owned(),
+                ),
                 note: None,
             });
         }
+        return;
+    }
+
+    // Normal synthesised __init__: check required field count.
+    let required_count = required_dataclass_field_count(class_info, source);
+
+    if provided_count < required_count {
+        let missing = required_count - provided_count;
+        diagnostics.push(Diagnostic {
+            code: CODE.clone(),
+            severity: Severity::Error,
+            message: format!(
+                "Call to `{}()` is missing {missing} required field argument{} \
+                 (expected at least {required_count}, got {provided_count})",
+                class_info.name,
+                if missing == 1 { "" } else { "s" },
+            ),
+            span: call.span,
+            path: path.to_owned(),
+            help: None,
+            note: None,
+        });
+    }
+
+    // Also check argument types for literal arguments.
+    if provided_count > 0 {
+        check_dataclass_arg_types(class_info, call, source, path, diagnostics);
     }
 }
 
@@ -291,4 +485,3 @@ fn find_constructor_method<'a>(
 
     None
 }
-

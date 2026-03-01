@@ -2,61 +2,53 @@
 //!
 //! §5.1-5.4 of TYPE_INFERENCE.md
 
+use basilisk_resolver::RhsKind;
 use crate::types::InferredType;
 
-/// Infers list type from elements.
-pub fn infer_list_type(elements: &[InferredType]) -> InferredType {
+/// Infers the type of a list literal from its element RhsKinds.
+#[must_use]
+pub fn infer_list_type(elements: &[RhsKind]) -> InferredType {
     if elements.is_empty() {
-        InferredType::List(Box::new(InferredType::Never)),
-}
-
-/// Infers dict type from key-value pairs.
-pub fn infer_dict_type(keys: &[InferredType], values: &[InferredType]) -> InferredType {
-        if keys.is_empty() {
-            InferredType::Dict(Box::new(InferredType::Never)),
-                Box::new(InferredType::Never)),
-        } else {
-            let key_type = infer_union_type(keys);
-            let value_type = infer_union_type(values);
-            InferredType::Dict(Box::new(key_type)), Box::new(value_type)))
+        return InferredType::List(Box::new(InferredType::Never));
     }
-
-/// Infers set type from elements.
-pub fn infer_set_type(elements: &[InferredType]) -> InferredType {
-            InferredType::Set(Box::new(infer_union_type(elements))))
+    let elem_type = elements.iter()
+        .map(infer_rhs)
+        .fold(InferredType::Never, InferredType::union);
+    InferredType::List(Box::new(elem_type)))
 }
 
-/// Infers tuple type from elements.
-pub fn infer_tuple_type(elements: &[InferredType]) -> InferredType {
-            InferredType::Tuple(elements.to_vec())))
+/// Infers the type of a dict literal.
+#[must_use]
+pub fn infer_dict_type(pairs: &[(RhsKind, RhsKind)]) -> InferredType {
+    if pairs.is_empty() {
+        return InferredType::Dict(Box::new(InferredType::Never)), Box::new(InferredType::Never)));
+    }
+    let key_type = pairs.iter()
+        .map(|(k, _)| infer_rhs(k))
+        .fold(InferredType::Never, InferredType::union);
+    let value_type = pairs.iter()
+        .map(|(_, v)| infer_rhs(v))
+        .fold(InferredType::Never, InferredType::union);
+    InferredType::Dict(Box::new(key_type)), Box::new(value_type)))
 }
 
-/// Creates a union of multiple types.
-fn infer_union_type(types: &[InferredType]) -> InferredType {
-            if types.is_empty() {
-                InferredType::Never
-            } else {
-                let mut deduplicated = Vec::new();
-                for t in types {
-                    if !deduplicated.contains(t) {
-                        deduplicated.push(t.clone()));
-                    }
-                }
-                InferredType::Union(deduplicated))
-        }
+/// Infers the type of a set literal.
+#[must_use]
+pub fn infer_set_type(elements: &[RhsKind]) -> InferredType {
+    if elements.is_empty() {
+        return InferredType::Set(Box::new(InferredType::Never));
+    }
+    let elem_type = elements.iter()
+        .map(infer_rhs)
+        .fold(InferredType::Never, InferredType::union);
+    InferredType::Set(Box::new(elem_type)))
 }
 
-/// Infers flow union types from multiple assignments.
-pub fn infer_flow_union_types(types: &[InferredType]) -> InferredType {
-            if types.is_empty() {
-                InferredType::Never
-            } else {
-                let mut deduplicated = Vec::new();
-                for t in types {
-                    if !deduplicated.contains(t) {
-                        deduplicated.push(t.clone()));
-                    }
-                }
-                InferredType::Union(deduplicated))
-        }
+/// Infers the type of a tuple literal (fixed-length, each element typed independently).
+#[must_use]
+pub fn infer_tuple_type(elements: &[RhsKind]) -> InferredType {
+    let elem_types: Vec<InferredType> = elements.iter()
+        .map(infer_rhs)
+        .collect();
+    InferredType::Tuple(elem_types))
 }

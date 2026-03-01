@@ -2163,3 +2163,151 @@ fn e0001_regular_params_still_fire() -> Result<(), Box<dyn std::error::Error>> {
     );
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// E0011 — Return type mismatch: branch coverage
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0011_int_return_for_str_annotation_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "def foo() -> str:\n    return 42\n";
+    let diags = run(src)?;
+    let e11: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0011")
+        .collect();
+    assert!(
+        !e11.is_empty(),
+        "int return for str annotation must fire E0011"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0011_str_return_for_int_annotation_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "def foo() -> int:\n    return \"hello\"\n";
+    let diags = run(src)?;
+    let e11: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0011")
+        .collect();
+    assert!(
+        !e11.is_empty(),
+        "str return for int annotation must fire E0011"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0011_compatible_return_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "def foo() -> int:\n    return 42\n";
+    let diags = run(src)?;
+    let e11: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0011")
+        .collect();
+    assert!(
+        e11.is_empty(),
+        "compatible int return for int annotation must not fire E0011"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0011_call_return_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "def helper() -> int: return 42\ndef foo() -> str:\n    return helper()\n";
+    let diags = run(src)?;
+    let e11: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0011")
+        .collect();
+    assert!(
+        e11.is_empty(),
+        "call return without full inference must not fire E0011"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0011_unannotated_return_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "def foo():\n    return 42\n";
+    let diags = run(src)?;
+    let e11: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0011")
+        .collect();
+    assert!(
+        e11.is_empty(),
+        "unannotated return must not fire E0011"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// W0040 — Lambda function missing type annotations
+// ---------------------------------------------------------------------------
+
+#[test]
+fn w0040_lambda_assigned_to_unannotated_var_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "f = lambda x: x + 1\n";
+    let diags = run(src)?;
+    let w40: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-W0040")
+        .collect();
+    assert!(
+        !w40.is_empty(),
+        "lambda assigned to unannotated variable must fire W0040"
+    );
+    assert_eq!(
+        w40[0].severity,
+        Severity::Warning,
+        "W0040 must be a warning, not an error"
+    );
+    Ok(())
+}
+
+#[test]
+fn w0040_lambda_assigned_to_annotated_var_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "f: Callable[[int], int] = lambda x: x + 1\n";
+    let diags = run(src)?;
+    let w40: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-W0040")
+        .collect();
+    assert!(
+        w40.is_empty(),
+        "lambda assigned to annotated variable must not fire W0040"
+    );
+    Ok(())
+}
+
+#[test]
+fn w0040_lambda_class_attribute_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "class Config:\n    handler = lambda x: x + 1\n";
+    let diags = run(src)?;
+    let w40: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-W0040")
+        .collect();
+    assert!(
+        !w40.is_empty(),
+        "lambda assigned to unannotated class attribute must fire W0040"
+    );
+    Ok(())
+}
+
+#[test]
+fn w0040_annotated_class_attribute_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "class Config:\n    handler: Callable[[int], int] = lambda x: x + 1\n";
+    let diags = run(src)?;
+    let w40: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-W0040")
+        .collect();
+    assert!(
+        w40.is_empty(),
+        "lambda assigned to annotated class attribute must not fire W0040"
+    );
+    Ok(())
+}
