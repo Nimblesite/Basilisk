@@ -4,6 +4,7 @@
 //! returns a list of [`Diagnostic`]s.
 
 pub mod diagnostic;
+pub mod inference;
 pub mod rules;
 pub mod types;
 

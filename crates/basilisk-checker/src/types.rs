@@ -219,17 +219,17 @@ mod tests {
         let int = InferredType::Int;
         let str = InferredType::Str;
         
-        let union1 = InferredType::union(int, str);
-        assert!(matches!(union1, InferredType::Union(types) if types.len() == 2));
+        let union1 = InferredType::union(int.clone(), str.clone());
+        assert!(matches!(union1, InferredType::Union(ref types) if types.len() == 2));
         
         let float = InferredType::Float;
-        let union2 = InferredType::union(union1, float);
-        assert!(matches!(union2, InferredType::Union(types) if types.len() == 3));
+        let union2 = InferredType::union(union1, float.clone());
+        assert!(matches!(union2, InferredType::Union(ref types) if types.len() == 3));
         
         let bool = InferredType::Bool;
         let existing_union = InferredType::Union(vec![bool]);
-        let union3 = InferredType::union(existing_union, float);
-        assert!(matches!(union3, InferredType::Union(types) if types.len() == 2));
+        let union3 = InferredType::union(existing_union, float.clone());
+        assert!(matches!(union3, InferredType::Union(ref types) if types.len() == 2));
     }
 
     #[test]
