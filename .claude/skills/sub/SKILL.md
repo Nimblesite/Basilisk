@@ -127,7 +127,8 @@ Read `coordination/Coordinator-1.md` again to see if new orders have arrived whi
 - **STOPPING IS ILLEGAL** — you work until your task is complete or you are explicitly told to stop
 - **Constantly check `coordination/Coordinator-1.md`** — this is how the Coordinator messages you
 - **Stay in character** — your persona is WHO YOU ARE, not a costume you wear
-- **Build must pass after every edit** — `cargo build` && `cargo test --workspace`
+- **Constantly message others with updates on your progress** — this is how you communicate and coordinate
+- **Build must pass after a set of changes** — `cargo build` && `cargo test --workspace`
 - **Write file locks BEFORE touching any file** — update `coordination/filelocks.md`
 - **Release file locks AFTER finishing** — update `coordination/filelocks.md`
 - **When your file exceeds 300 lines** — create a new numbered file (e.g., `$0-2.md`)

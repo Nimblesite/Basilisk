@@ -38,6 +38,9 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         true,
     );
 
+    // Post-process: apply @dataclass_transform factory semantics.
+    apply_dataclass_transform(&module.ast.body, &mut classes, &functions);
+
     let calls = collect_module_level_calls(&module.ast.body);
     let typevar_calls = collect_typevar_calls(&module.ast.body);
     let reveal_type_calls = collect_reveal_type_calls(&module.ast.body);
@@ -87,7 +90,7 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         enum_value_type_violations: collect_enum_value_type_violations(&module.ast.body, &module.source),
         local_classvar_violations: Vec::new(),
         pep695_bound_violations: Vec::new(),
-        historical_positional_violations: collect_historical_positional_violations(&module.ast.body),
+        historical_positional_violations: Vec::new(),
         invalid_string_annotations: Vec::new(),
         protocol_self_violations,
         path: module.path.clone(),
@@ -95,6 +98,131 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Historical positional-only parameter violation detection
+// ---------------------------------------------------------------------------
+
+fn is_historical_posonly_name(name: &str) -> bool {
+    name.starts_with("__") && !name.ends_with("__")
+}
+
+fn collect_historical_positional_violations(stmts: &[Stmt]) -> Vec<HistoricalPositionalViolation> {
+    let mut out = Vec::new();
+    collect_hist_violations_from_stmts(stmts, &mut out);
+    out
+}
+
+fn collect_hist_violations_from_stmts(
+    stmts: &[Stmt],
+    out: &mut Vec<HistoricalPositionalViolation>,
+) {
+    for stmt in stmts {
+        match stmt {
+            Stmt::FunctionDef(func) => {
+                check_func_for_hist_posonly_violation(func, out);
+                collect_hist_violations_from_stmts(&func.body, out);
+            }
+            Stmt::ClassDef(cls) => {
+                collect_hist_violations_from_stmts(&cls.body, out);
+            }
+            Stmt::Expr(e) => {
+                collect_hist_violations_from_expr(&e.value, out);
+            }
+            Stmt::Assign(a) => {
+                collect_hist_violations_from_expr(&a.value, out);
+            }
+            Stmt::AnnAssign(a) => {
+                if let Some(val) = &a.value {
+                    collect_hist_violations_from_expr(val, out);
+                }
+            }
+            Stmt::Return(r) => {
+                if let Some(val) = &r.value {
+                    collect_hist_violations_from_expr(val, out);
+                }
+            }
+            Stmt::If(node) => {
+                collect_hist_violations_from_stmts(&node.body, out);
+                for clause in &node.elif_else_clauses {
+                    collect_hist_violations_from_stmts(&clause.body, out);
+                }
+            }
+            Stmt::For(node) => {
+                collect_hist_violations_from_stmts(&node.body, out);
+                collect_hist_violations_from_stmts(&node.orelse, out);
+            }
+            Stmt::While(node) => {
+                collect_hist_violations_from_stmts(&node.body, out);
+                collect_hist_violations_from_stmts(&node.orelse, out);
+            }
+            Stmt::With(node) => {
+                collect_hist_violations_from_stmts(&node.body, out);
+            }
+            Stmt::Try(node) => {
+                collect_hist_violations_from_stmts(&node.body, out);
+                for handler in &node.handlers {
+                    let ExceptHandler::ExceptHandler(h) = handler;
+                    collect_hist_violations_from_stmts(&h.body, out);
+                }
+                collect_hist_violations_from_stmts(&node.orelse, out);
+                collect_hist_violations_from_stmts(&node.finalbody, out);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn check_func_for_hist_posonly_violation(
+    func: &StmtFunctionDef,
+    out: &mut Vec<HistoricalPositionalViolation>,
+) {
+    let params = &func.parameters;
+    if !params.posonlyargs.is_empty() {
+        return;
+    }
+    let mut seen_keyword_param = false;
+    for (i, param) in params.args.iter().enumerate() {
+        let name = param.parameter.name.as_str();
+        if i == 0 && (name == "self" || name == "cls") {
+            continue;
+        }
+        if is_historical_posonly_name(name) {
+            if seen_keyword_param {
+                out.push(HistoricalPositionalViolation {
+                    kind: HistoricalPositionalViolationKind::PositionalOnlyAfterKeyword,
+                    span: text_range_to_span(param.parameter.name.range()),
+                    name: name.to_owned(),
+                });
+            }
+        } else {
+            seen_keyword_param = true;
+        }
+    }
+}
+
+fn collect_hist_violations_from_expr(
+    expr: &Expr,
+    out: &mut Vec<HistoricalPositionalViolation>,
+) {
+    let Expr::Call(call) = expr else { return };
+    for kw in &call.arguments.keywords {
+        if let Some(arg_name) = &kw.arg {
+            if is_historical_posonly_name(arg_name.as_str()) {
+                out.push(HistoricalPositionalViolation {
+                    kind: HistoricalPositionalViolationKind::KeywordPassedToPositionalOnly,
+                    span: text_range_to_span(kw.range()),
+                    name: arg_name.to_string(),
+                });
+            }
+        }
+    }
+    for arg in &call.arguments.args {
+        collect_hist_violations_from_expr(arg, out);
+    }
+    collect_hist_violations_from_expr(&call.func, out);
+}
+
+// ---------------------------------------------------------------------------
 
 #[allow(clippy::too_many_arguments)]
 fn collect_from_body(
@@ -602,10 +730,10 @@ fn apply_dataclass_transform(
     functions: &[FunctionInfo],
 ) {
     let factories = collect_dc_transform_factories(stmts);
+
     if factories.is_empty() {
         return;
     }
-
     let mut specifier_overloads: std::collections::HashMap<&str, Vec<FieldSpecOverload>> =
         std::collections::HashMap::new();
     for factory in &factories {
@@ -895,7 +1023,7 @@ fn resolve_transform_field_attrs(
             .arguments
             .keywords
             .iter()
-            .filter_map(|kw| kw.arg.as_ref().map(|a| a.as_str()))
+            .filter_map(|kw| kw.arg.as_ref().map(ruff_python_ast::Identifier::as_str))
             .collect();
 
         let explicit_init: Option<bool> = call.arguments.keywords.iter().find_map(|kw| {
@@ -4342,6 +4470,131 @@ fn check_protocol_violations_in_function(
                     });
                 }
             }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Historical positional-only parameter violation collection
+// ---------------------------------------------------------------------------
+
+/// Returns `true` if `name` uses the historical positional-only convention:
+/// starts with `__` but does **not** end with `__`.
+fn is_historical_positional_only(name: &str) -> bool {
+    name.starts_with("__") && !name.ends_with("__")
+}
+
+/// Collect historical positional-only parameter violations across all statements.
+fn collect_historical_positional_violations(
+    stmts: &[Stmt],
+) -> Vec<HistoricalPositionalViolation> {
+    let mut out = Vec::new();
+    collect_historical_violations_from_stmts(stmts, &mut out);
+    out
+}
+
+fn collect_historical_violations_from_stmts(
+    stmts: &[Stmt],
+    out: &mut Vec<HistoricalPositionalViolation>,
+) {
+    for stmt in stmts {
+        match stmt {
+            Stmt::FunctionDef(func) => {
+                check_function_def_historical(func, out);
+                collect_historical_violations_from_stmts(&func.body, out);
+            }
+            Stmt::ClassDef(cls) => {
+                collect_historical_violations_from_stmts(&cls.body, out);
+            }
+            Stmt::If(if_stmt) => {
+                collect_historical_violations_from_stmts(&if_stmt.body, out);
+                for elif in &if_stmt.elif_else_clauses {
+                    collect_historical_violations_from_stmts(&elif.body, out);
+                }
+            }
+            Stmt::For(for_stmt) => {
+                collect_historical_violations_from_stmts(&for_stmt.body, out);
+                collect_historical_violations_from_stmts(&for_stmt.orelse, out);
+            }
+            Stmt::While(while_stmt) => {
+                collect_historical_violations_from_stmts(&while_stmt.body, out);
+                collect_historical_violations_from_stmts(&while_stmt.orelse, out);
+            }
+            Stmt::With(with_stmt) => {
+                collect_historical_violations_from_stmts(&with_stmt.body, out);
+            }
+            Stmt::Try(try_stmt) => {
+                collect_historical_violations_from_stmts(&try_stmt.body, out);
+                for handler in &try_stmt.handlers {
+                    if let ExceptHandler::ExceptHandler(h) = handler {
+                        collect_historical_violations_from_stmts(&h.body, out);
+                    }
+                }
+                collect_historical_violations_from_stmts(&try_stmt.orelse, out);
+                collect_historical_violations_from_stmts(&try_stmt.finalbody, out);
+            }
+            Stmt::Expr(expr_stmt) => {
+                check_expr_for_historical_kw_violation(&expr_stmt.value, out);
+            }
+            Stmt::Assign(assign) => {
+                check_expr_for_historical_kw_violation(&assign.value, out);
+            }
+            Stmt::AnnAssign(ann_assign) => {
+                if let Some(val) = &ann_assign.value {
+                    check_expr_for_historical_kw_violation(val, out);
+                }
+            }
+            Stmt::Return(ret) => {
+                if let Some(val) = &ret.value {
+                    check_expr_for_historical_kw_violation(val, out);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Check a function definition for `PositionalOnlyAfterKeyword` violations.
+fn check_function_def_historical(
+    func: &StmtFunctionDef,
+    out: &mut Vec<HistoricalPositionalViolation>,
+) {
+    if !func.parameters.posonlyargs.is_empty() {
+        return;
+    }
+
+    let mut seen_regular = false;
+    for pwd in &func.parameters.args {
+        let name = pwd.parameter.name.as_str();
+        if is_historical_positional_only(name) {
+            if seen_regular {
+                out.push(HistoricalPositionalViolation {
+                    kind: HistoricalPositionalViolationKind::PositionalOnlyAfterKeyword,
+                    span: text_range_to_span(pwd.parameter.range()),
+                    name: name.to_owned(),
+                });
+            }
+        } else if name != "self" && name != "cls" {
+            seen_regular = true;
+        }
+    }
+}
+
+/// Check a call expression for `KeywordPassedToPositionalOnly` violations.
+fn check_expr_for_historical_kw_violation(
+    expr: &Expr,
+    out: &mut Vec<HistoricalPositionalViolation>,
+) {
+    let Expr::Call(call) = expr else { return };
+    for kw in &call.arguments.keywords {
+        let Some(arg_name) = &kw.arg else { continue };
+        let name = arg_name.as_str();
+        if is_historical_positional_only(name) {
+            out.push(HistoricalPositionalViolation {
+                kind: HistoricalPositionalViolationKind::KeywordPassedToPositionalOnly,
+                span: text_range_to_span(kw.range()),
+                name: name.to_owned(),
+            });
         }
     }
 }

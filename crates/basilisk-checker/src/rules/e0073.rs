@@ -62,7 +62,7 @@ impl Rule for NamedTupleTupleCompat {
 }
 
 /// Collect `NamedTuple` class definitions: class name -> field type texts.
-fn collect_namedtuple_classes<'a>(module: &'a ResolvedModule) -> HashMap<&'a str, Vec<&'a str>> {
+fn collect_namedtuple_classes(module: &ResolvedModule) -> HashMap<&str, Vec<&str>> {
     module
         .classes
         .iter()

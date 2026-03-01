@@ -31,7 +31,7 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 /// Emits BSK-E0069 for dataclass constructor argument violations:
-/// positional args to kw_only fields, and keyword args to init=False fields.
+/// positional args to `kw_only` fields, and keyword args to `init=False` fields.
 pub(crate) struct DataclassKwOnlyViolation;
 
 impl Rule for DataclassKwOnlyViolation {
