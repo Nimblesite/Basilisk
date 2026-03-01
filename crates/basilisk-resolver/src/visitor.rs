@@ -669,6 +669,7 @@ fn collect_class_body(
     (attributes, method_names, method_decorators)
 }
 
+#[allow(clippy::too_many_lines)]
 fn class_info_from(
     class: &StmtClassDef,
     functions: &mut Vec<FunctionInfo>,

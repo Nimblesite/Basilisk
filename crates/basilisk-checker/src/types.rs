@@ -139,16 +139,13 @@ impl InferredType {
     #[must_use]
     pub fn is_assignable_to(&self, other: &InferredType) -> bool {
         match (self, other) {
-            // Any is assignable to everything
-            (_, InferredType::Any) => true,
-            // Never is assignable to everything
-            (InferredType::Never, _) => true,
+            // Any target or Never source is always assignable
+            (_, InferredType::Any) | (InferredType::Never, _) => true,
             // Same types are assignable
             (a, b) if a == b => true,
-            // Int is assignable to float
-            (InferredType::Int, InferredType::Float) => true,
-            // Literal types are assignable to their base types
-            (
+            // Int→float widening, or Literal assignable to its base type
+            (InferredType::Int, InferredType::Float)
+            | (
                 InferredType::Literal(_),
                 InferredType::Int | InferredType::Str | InferredType::Float | InferredType::Bool,
             ) => true,
@@ -162,7 +159,9 @@ impl InferredType {
             (inner, InferredType::Union(types)) => {
                 types.iter().any(|t| inner.is_assignable_to(t))
             }
-            // Container types require element type assignability
+            // Container types require element type assignability.
+            // List and Set cannot use or-patterns — that would incorrectly allow cross-matching.
+            #[allow(clippy::match_same_arms)]
             (InferredType::List(a), InferredType::List(b)) => a.is_assignable_to(b),
             (InferredType::Dict(a_key, a_val), InferredType::Dict(b_key, b_val)) => {
                 a_key.is_assignable_to(b_key) && a_val.is_assignable_to(b_val)
