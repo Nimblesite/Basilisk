@@ -80,6 +80,25 @@ impl Rule for TypedDictKeyValidation {
                     }
                     parts.join("; ")
                 }
+                TypedDictKeyViolationKind::SubscriptReadInvalidKey { key } => format!(
+                    "Key `{}` is not a valid key for `TypedDict` `{}`",
+                    key, violation.class_name
+                ),
+                TypedDictKeyViolationKind::NonLiteralDictKey => format!(
+                    "Dict literal for `TypedDict` `{}` contains a non-literal key; \
+                     all keys must be string literals",
+                    violation.class_name
+                ),
+                TypedDictKeyViolationKind::DisallowedMethodCall { method } => format!(
+                    "`TypedDict` `{}` does not support `.{}()` — \
+                     TypedDicts have a fixed schema",
+                    violation.class_name, method
+                ),
+                TypedDictKeyViolationKind::DeleteSubscript => format!(
+                    "Cannot delete a key from `TypedDict` `{}` — \
+                     TypedDicts have a fixed schema",
+                    violation.class_name
+                ),
             };
 
             diagnostics.push(Diagnostic {

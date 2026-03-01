@@ -326,6 +326,8 @@ pub struct ClassInfo {
     pub generic_params: Vec<GenericParamInfo>,
     /// `true` when the class inherits from `TypedDict`.
     pub is_typed_dict: bool,
+    /// `true` when the `TypedDict` has `total=True` (the default). `false` when `total=False`.
+    pub is_typeddict_total: bool,
     /// Keyword argument names in the class definition (e.g. `metaclass`, `total`, `other`).
     pub class_keywords: Vec<String>,
     /// `true` when the class is decorated with `@dataclass` or `@dataclass(...)`.
@@ -388,6 +390,20 @@ pub struct GenericParamInfo {
     pub name: String,
     /// The source span of this parameter name inside `Generic[...]`.
     pub span: Span,
+    /// `true` when this param was extracted from a starred expression (`*Ts`),
+    /// indicating it is a `TypeVarTuple` unpack in `Generic[...]`.
+    pub is_typevartuple: bool,
+}
+
+/// A module-level subscript expression (e.g. `MyGeneric[int]`) used as a statement.
+#[derive(Debug, Clone)]
+pub struct GenericSubscriptSite {
+    /// The name of the subscripted type (e.g. `"MyGeneric"`).
+    pub base_name: String,
+    /// Number of type arguments supplied.
+    pub arg_count: usize,
+    /// Span of the subscript expression.
+    pub span: Span,
 }
 
 /// Information about a module-level `TypeVar(...)` call.
@@ -416,6 +432,19 @@ pub struct TypeVarCallInfo {
     pub has_infer_variance: bool,
     /// The span of the entire `TypeVar` call expression.
     pub span: Span,
+    /// Simple type name from the `bound=` keyword argument (e.g. `"str"` from `bound=str`).
+    /// `None` if not present or not a simple name.
+    pub bound_type_name: Option<String>,
+    /// Simple type name from the `default=` keyword argument (e.g. `"int"` from `default=int`).
+    /// `None` if not present or not a simple name.
+    pub default_type_name: Option<String>,
+    /// Type names from positional constraint arguments (excluding the TypeVar name string arg).
+    /// Empty when there are no constraints.
+    pub constraint_type_names: Vec<String>,
+    /// `true` when this is a `TypeVarTuple(...)` call rather than `TypeVar(...)`.
+    pub is_typevartuple: bool,
+    /// `true` when this is a `ParamSpec(...)` call rather than `TypeVar(...)`.
+    pub is_paramspec: bool,
 }
 
 /// How an import statement is structured.
@@ -1031,4 +1060,18 @@ pub enum TypedDictKeyViolationKind {
         /// Required `TypedDict` fields missing from the dict literal.
         missing_keys: Vec<String>,
     },
+    /// Subscript read access with a key that is not a valid `TypedDict` field.
+    SubscriptReadInvalidKey {
+        /// The invalid key name.
+        key: String,
+    },
+    /// Dict literal used for a `TypedDict` variable contains a non-literal (variable) key.
+    NonLiteralDictKey,
+    /// A call to a method that is disallowed on `TypedDict` instances (e.g. `.clear()`).
+    DisallowedMethodCall {
+        /// The method name.
+        method: String,
+    },
+    /// A `del` statement on a `TypedDict` subscript.
+    DeleteSubscript,
 }

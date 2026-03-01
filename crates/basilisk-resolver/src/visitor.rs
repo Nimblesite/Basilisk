@@ -690,6 +690,13 @@ fn class_info_from(
 
     let (generic_params, generic_non_typevar_args) = extract_generic_params(class);
     let is_typed_dict = bases.iter().any(|b| b == "TypedDict");
+    // Detect `total=False` keyword in TypedDict subclass definitions.
+    let is_typeddict_total = !is_typed_dict || !class.arguments.as_ref().is_some_and(|args| {
+        args.keywords.iter().any(|kw| {
+            kw.arg.as_ref().is_some_and(|a| a.as_str() == "total")
+                && matches!(&kw.value, ruff_python_ast::Expr::BooleanLiteral(b) if !b.value)
+        })
+    });
 
     let class_keywords: Vec<String> = class
         .arguments
@@ -764,6 +771,7 @@ fn class_info_from(
         method_decorators,
         generic_params,
         is_typed_dict,
+        is_typeddict_total,
         class_keywords,
         is_dataclass,
         is_dataclass_frozen,
@@ -3559,19 +3567,24 @@ fn build_var_type_map<'a>(
     map
 }
 
-/// Collect `TypedDict` key/value violations from module-level statements.
+/// Collect `TypedDict` key/value violations from module-level statements and function bodies.
 ///
 /// Detects:
 /// - Subscript assignments with invalid keys: `movie["director"] = "Ridley Scott"`
 /// - Subscript assignments with wrong value type: `movie["year"] = "1982"`
-/// - Annotated dict literal assignments with invalid or missing keys: `movie2: Movie = {"title": ...}`
+/// - Annotated dict literal assignments with invalid or missing keys
+/// - Regular dict assignments to TypedDict variables with wrong keys/types
+/// - Subscript read access with invalid keys: `print(movie["unknown"])`
+/// - Disallowed method calls: `movie.clear()`
+/// - Delete operations on required TypedDict keys: `del movie["name"]`
 fn collect_typeddict_key_violations<'a>(
     stmts: &[Stmt],
     classes: &'a [ClassInfo],
     source: &'a str,
 ) -> Vec<TypedDictKeyViolation> {
     use std::collections::HashMap;
-    type FieldMap<'x> = HashMap<&'x str, (Vec<&'x str>, HashMap<&'x str, String>)>;
+    // (all_fields, field_types, is_total)
+    type FieldMap<'x> = HashMap<&'x str, (Vec<&'x str>, HashMap<&'x str, String>, bool)>;
 
     let typeddict_fields: FieldMap<'a> = classes
         .iter()
@@ -3587,7 +3600,7 @@ fn collect_typeddict_key_violations<'a>(
                     Some((a.name.as_str(), type_text))
                 })
                 .collect();
-            (c.name.as_str(), (all_fields, field_types))
+            (c.name.as_str(), (all_fields, field_types, c.is_typeddict_total))
         })
         .collect();
 
@@ -3595,46 +3608,129 @@ fn collect_typeddict_key_violations<'a>(
         return Vec::new();
     }
 
-    let var_type: HashMap<String, &str> = stmts
-        .iter()
-        .filter_map(|s| {
-            let Stmt::AnnAssign(ann) = s else { return None };
-            let var_name = expr_simple_name(&ann.target)?;
-            let Expr::Name(type_name) = ann.annotation.as_ref() else { return None };
-            let class_name = type_name.id.as_str();
-            typeddict_fields.contains_key(class_name).then_some((var_name, class_name))
-        })
-        .collect();
-
+    let var_type = td_var_type_from_stmts(stmts, &typeddict_fields);
     let mut out = Vec::new();
-    for stmt in stmts {
-        match stmt {
-            Stmt::Assign(node) => check_subscript_violations(node, &var_type, &typeddict_fields, &mut out),
-            Stmt::AnnAssign(node) => check_ann_assign_violations(node, &typeddict_fields, &mut out),
-            _ => {}
-        }
-    }
+    check_td_stmts(&typeddict_fields, &var_type, stmts, &mut out);
     out
 }
 
-fn check_subscript_violations<'a>(
+/// `(all_fields, field_types, is_total)` map keyed by class name.
+type TdFieldMap<'a> = std::collections::HashMap<
+    &'a str,
+    (Vec<&'a str>, std::collections::HashMap<&'a str, String>, bool),
+>;
+
+/// Build a variable-name → TypedDict-class-name map from annotated assignments in `stmts`.
+fn td_var_type_from_stmts<'a>(
+    stmts: &[Stmt],
+    fields: &TdFieldMap<'a>,
+) -> std::collections::HashMap<String, String> {
+    let mut map = std::collections::HashMap::new();
+    for stmt in stmts {
+        let Stmt::AnnAssign(ann) = stmt else { continue };
+        let Some(var_name) = expr_simple_name(&ann.target) else { continue };
+        let Expr::Name(type_name) = ann.annotation.as_ref() else { continue };
+        let class_name = type_name.id.as_str();
+        if fields.contains_key(class_name) {
+            map.insert(var_name, class_name.to_owned());
+        }
+    }
+    map
+}
+
+/// Recursively check statements for TypedDict violations.
+fn check_td_stmts<'a>(
+    fields: &TdFieldMap<'a>,
+    var_type: &std::collections::HashMap<String, String>,
+    stmts: &[Stmt],
+    out: &mut Vec<TypedDictKeyViolation>,
+) {
+    use ruff_text_size::Ranged as _;
+    for stmt in stmts {
+        match stmt {
+            Stmt::Assign(node) => {
+                td_check_subscript_assign(node, var_type, fields, out);
+                td_check_regular_assign(node, var_type, fields, out);
+                td_check_expr_reads(&node.value, var_type, fields, out);
+            }
+            Stmt::AnnAssign(node) => {
+                td_check_ann_assign(node, fields, out);
+                if let Some(val) = &node.value {
+                    td_check_expr_reads(val, var_type, fields, out);
+                }
+            }
+            Stmt::Expr(expr_stmt) => {
+                // Detect disallowed method calls: movie.clear()
+                if let Expr::Call(call) = expr_stmt.value.as_ref() {
+                    if let Expr::Attribute(attr) = call.func.as_ref() {
+                        if let Some(var_name) = expr_simple_name(&attr.value) {
+                            if let Some(class_name) = var_type.get(&var_name) {
+                                if fields.contains_key(class_name.as_str()) {
+                                    const DISALLOWED: &[&str] =
+                                        &["clear", "pop", "popitem", "setdefault", "update"];
+                                    let method = attr.attr.as_str();
+                                    if DISALLOWED.contains(&method) {
+                                        out.push(TypedDictKeyViolation {
+                                            span: text_range_to_span(expr_stmt.value.range()),
+                                            class_name: class_name.clone(),
+                                            kind: TypedDictKeyViolationKind::DisallowedMethodCall {
+                                                method: method.to_owned(),
+                                            },
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                td_check_expr_reads(&expr_stmt.value, var_type, fields, out);
+            }
+            Stmt::Delete(del) => {
+                // Detect del movie["key"] — only an error for total=True TypedDicts
+                for target in &del.targets {
+                    let Expr::Subscript(sub) = target else { continue };
+                    let Some(var_name) = expr_simple_name(&sub.value) else { continue };
+                    let Some(class_name) = var_type.get(&var_name) else { continue };
+                    let Some((_, _, is_total)) = fields.get(class_name.as_str()) else { continue };
+                    if *is_total {
+                        out.push(TypedDictKeyViolation {
+                            span: text_range_to_span(del.range()),
+                            class_name: class_name.clone(),
+                            kind: TypedDictKeyViolationKind::DeleteSubscript,
+                        });
+                    }
+                }
+            }
+            Stmt::FunctionDef(func) => {
+                // Recurse with a local var_type that includes function-level annotated vars
+                let mut local_vars = var_type.clone();
+                local_vars.extend(td_var_type_from_stmts(&func.body, fields));
+                check_td_stmts(fields, &local_vars, &func.body, out);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Check `movie["key"] = value` subscript-assignment statements.
+fn td_check_subscript_assign<'a>(
     node: &StmtAssign,
-    var_type: &std::collections::HashMap<String, &'a str>,
-    typeddict_fields: &std::collections::HashMap<&'a str, (Vec<&'a str>, std::collections::HashMap<&'a str, String>)>,
+    var_type: &std::collections::HashMap<String, String>,
+    fields: &TdFieldMap<'a>,
     out: &mut Vec<TypedDictKeyViolation>,
 ) {
     use ruff_text_size::Ranged as _;
     for target in &node.targets {
         let Expr::Subscript(sub) = target else { continue };
         let Some(var_name) = expr_simple_name(&sub.value) else { continue };
-        let Some(&class_name) = var_type.get(&var_name) else { continue };
-        let Some((all_fields, field_types)) = typeddict_fields.get(class_name) else { continue };
+        let Some(class_name) = var_type.get(&var_name) else { continue };
+        let Some((all_fields, field_types, _)) = fields.get(class_name.as_str()) else { continue };
         let Expr::StringLiteral(key_str) = sub.slice.as_ref() else { continue };
         let key = key_str.value.to_string();
         if !all_fields.contains(&key.as_str()) {
             out.push(TypedDictKeyViolation {
                 span: text_range_to_span(node.range()),
-                class_name: class_name.to_owned(),
+                class_name: class_name.clone(),
                 kind: TypedDictKeyViolationKind::InvalidSubscriptKey { key },
             });
         } else if let Some(expected) = field_types.get(key.as_str()) {
@@ -3642,7 +3738,7 @@ fn check_subscript_violations<'a>(
                 if !typeddict_field_type_compatible(actual, expected) {
                     out.push(TypedDictKeyViolation {
                         span: text_range_to_span(node.range()),
-                        class_name: class_name.to_owned(),
+                        class_name: class_name.clone(),
                         kind: TypedDictKeyViolationKind::WrongSubscriptValueType {
                             key,
                             expected: expected.clone(),
@@ -3654,29 +3750,142 @@ fn check_subscript_violations<'a>(
     }
 }
 
-fn check_ann_assign_violations<'a>(
+/// Check `movie = {...}` regular assignments to TypedDict variables.
+fn td_check_regular_assign<'a>(
+    node: &StmtAssign,
+    var_type: &std::collections::HashMap<String, String>,
+    fields: &TdFieldMap<'a>,
+    out: &mut Vec<TypedDictKeyViolation>,
+) {
+    use ruff_text_size::Ranged as _;
+    for target in &node.targets {
+        let Some(var_name) = expr_simple_name(target) else { continue };
+        let Some(class_name) = var_type.get(&var_name) else { continue };
+        let Some((all_fields, field_types, is_total)) = fields.get(class_name.as_str()) else { continue };
+        let Expr::Dict(dict) = node.value.as_ref() else { continue };
+
+        // Flag any non-literal (variable) key in the dict
+        let has_non_literal = dict
+            .items
+            .iter()
+            .any(|item| item.key.as_ref().is_some_and(|k| !matches!(k, Expr::StringLiteral(_))));
+        if has_non_literal {
+            out.push(TypedDictKeyViolation {
+                span: text_range_to_span(node.range()),
+                class_name: class_name.clone(),
+                kind: TypedDictKeyViolationKind::NonLiteralDictKey,
+            });
+            continue;
+        }
+
+        let literal_keys: Vec<String> = dict
+            .items
+            .iter()
+            .filter_map(|item| {
+                let Expr::StringLiteral(s) = item.key.as_ref()? else { return None };
+                Some(s.value.to_string())
+            })
+            .collect();
+
+        let invalid_keys: Vec<String> = literal_keys
+            .iter()
+            .filter(|k| !all_fields.contains(&k.as_str()))
+            .cloned()
+            .collect();
+        let missing_keys: Vec<String> = if *is_total {
+            all_fields
+                .iter()
+                .filter(|&&f| !literal_keys.iter().any(|k| k == f))
+                .map(|s| (*s).to_owned())
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        if !invalid_keys.is_empty() || !missing_keys.is_empty() {
+            out.push(TypedDictKeyViolation {
+                span: text_range_to_span(node.range()),
+                class_name: class_name.clone(),
+                kind: TypedDictKeyViolationKind::InvalidDictLiteral { invalid_keys, missing_keys },
+            });
+        }
+
+        // Check value types for each key-value pair
+        for item in &dict.items {
+            let Some(key_expr) = &item.key else { continue };
+            let Expr::StringLiteral(s) = key_expr else { continue };
+            let key = s.value.to_string();
+            if !all_fields.contains(&key.as_str()) {
+                continue; // Already flagged as invalid key
+            }
+            if let Some(expected) = field_types.get(key.as_str()) {
+                if let Some(actual) = expr_literal_type_name(&item.value) {
+                    if !typeddict_field_type_compatible(actual, expected) {
+                        out.push(TypedDictKeyViolation {
+                            span: text_range_to_span(node.range()),
+                            class_name: class_name.clone(),
+                            kind: TypedDictKeyViolationKind::WrongSubscriptValueType {
+                                key,
+                                expected: expected.clone(),
+                            },
+                        });
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Check annotated assignments `var: TypedDict = {...}`.
+fn td_check_ann_assign<'a>(
     node: &StmtAnnAssign,
-    typeddict_fields: &std::collections::HashMap<&'a str, (Vec<&'a str>, std::collections::HashMap<&'a str, String>)>,
+    fields: &TdFieldMap<'a>,
     out: &mut Vec<TypedDictKeyViolation>,
 ) {
     use ruff_text_size::Ranged as _;
     let Some(value) = &node.value else { return };
     let Expr::Name(ann_name) = node.annotation.as_ref() else { return };
     let class_name = ann_name.id.as_str();
-    let Some((all_fields, _)) = typeddict_fields.get(class_name) else { return };
+    let Some((all_fields, _, is_total)) = fields.get(class_name) else { return };
     let Expr::Dict(dict) = value.as_ref() else { return };
 
-    let literal_keys: Vec<String> = dict.items.iter().filter_map(|item| {
-        let key = item.key.as_ref()?;
-        let Expr::StringLiteral(s) = key else { return None };
-        Some(s.value.to_string())
-    }).collect();
+    // Flag any non-literal (variable) key
+    let has_non_literal = dict
+        .items
+        .iter()
+        .any(|item| item.key.as_ref().is_some_and(|k| !matches!(k, Expr::StringLiteral(_))));
+    if has_non_literal {
+        out.push(TypedDictKeyViolation {
+            span: text_range_to_span(node.range()),
+            class_name: class_name.to_owned(),
+            kind: TypedDictKeyViolationKind::NonLiteralDictKey,
+        });
+        return;
+    }
 
-    let invalid_keys: Vec<String> = literal_keys.iter()
-        .filter(|k| !all_fields.contains(&k.as_str())).cloned().collect();
-    let missing_keys: Vec<String> = all_fields.iter()
-        .filter(|&&f| !literal_keys.iter().any(|k| k == f))
-        .map(|s| (*s).to_owned()).collect();
+    let literal_keys: Vec<String> = dict
+        .items
+        .iter()
+        .filter_map(|item| {
+            let Expr::StringLiteral(s) = item.key.as_ref()? else { return None };
+            Some(s.value.to_string())
+        })
+        .collect();
+
+    let invalid_keys: Vec<String> = literal_keys
+        .iter()
+        .filter(|k| !all_fields.contains(&k.as_str()))
+        .cloned()
+        .collect();
+    let missing_keys: Vec<String> = if *is_total {
+        all_fields
+            .iter()
+            .filter(|&&f| !literal_keys.iter().any(|k| k == f))
+            .map(|s| (*s).to_owned())
+            .collect()
+    } else {
+        Vec::new()
+    };
 
     if !invalid_keys.is_empty() || !missing_keys.is_empty() {
         out.push(TypedDictKeyViolation {
@@ -3684,6 +3893,50 @@ fn check_ann_assign_violations<'a>(
             class_name: class_name.to_owned(),
             kind: TypedDictKeyViolationKind::InvalidDictLiteral { invalid_keys, missing_keys },
         });
+    }
+}
+
+/// Walk an expression and report subscript reads with invalid TypedDict keys.
+fn td_check_expr_reads<'a>(
+    expr: &Expr,
+    var_type: &std::collections::HashMap<String, String>,
+    fields: &TdFieldMap<'a>,
+    out: &mut Vec<TypedDictKeyViolation>,
+) {
+    use ruff_text_size::Ranged as _;
+    match expr {
+        Expr::Subscript(sub) => {
+            if let Some(var_name) = expr_simple_name(&sub.value) {
+                if let Some(class_name) = var_type.get(&var_name) {
+                    if let Some((all_fields, _, _)) = fields.get(class_name.as_str()) {
+                        if let Expr::StringLiteral(key_str) = sub.slice.as_ref() {
+                            let key = key_str.value.to_string();
+                            if !all_fields.contains(&key.as_str()) {
+                                out.push(TypedDictKeyViolation {
+                                    span: text_range_to_span(sub.range()),
+                                    class_name: class_name.clone(),
+                                    kind: TypedDictKeyViolationKind::SubscriptReadInvalidKey { key },
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            td_check_expr_reads(&sub.value, var_type, fields, out);
+            td_check_expr_reads(&sub.slice, var_type, fields, out);
+        }
+        Expr::Call(call) => {
+            td_check_expr_reads(&call.func, var_type, fields, out);
+            for arg in &call.arguments.args {
+                td_check_expr_reads(arg, var_type, fields, out);
+            }
+        }
+        Expr::BinOp(binop) => {
+            td_check_expr_reads(&binop.left, var_type, fields, out);
+            td_check_expr_reads(&binop.right, var_type, fields, out);
+        }
+        Expr::UnaryOp(unary) => td_check_expr_reads(&unary.operand, var_type, fields, out),
+        _ => {}
     }
 }
 
