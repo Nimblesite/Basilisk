@@ -741,6 +741,7 @@ fn class_info_from(
     let is_dataclass_order = is_dataclass && dataclass_flag(class, "order");
     let is_dataclass_unsafe_hash = is_dataclass && dataclass_flag(class, "unsafe_hash");
     let is_dataclass_eq_false = is_dataclass && dataclass_bool_flag_is_false(class, "eq");
+    let is_dataclass_init_false = is_dataclass && dataclass_bool_flag_is_false(class, "init");
 
     let is_final = class_decorators
         .iter()
@@ -789,6 +790,7 @@ fn class_info_from(
         is_dataclass_order,
         is_dataclass_unsafe_hash,
         is_dataclass_eq_false,
+        is_dataclass_init_false,
         is_final,
         is_enum,
         has_pep695_type_params,

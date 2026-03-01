@@ -362,6 +362,11 @@ pub struct ClassInfo {
     /// When `eq=False`, `__hash__` is not touched by the dataclass machinery,
     /// so the class retains the inherited `__hash__` from `object`.
     pub is_dataclass_eq_false: bool,
+    /// `true` when the dataclass is decorated with `init=False`.
+    ///
+    /// When `init=False`, no `__init__` is synthesized.  If the class also
+    /// defines no explicit `__init__`, calling it with arguments is an error.
+    pub is_dataclass_init_false: bool,
     /// `true` when the class is decorated with `@final` or `typing.final`.
     pub is_final: bool,
     /// `true` when the class directly or transitively inherits from an `Enum` family class.
