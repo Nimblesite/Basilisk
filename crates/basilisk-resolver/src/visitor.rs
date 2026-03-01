@@ -3640,10 +3640,10 @@ fn build_var_type_map<'a>(
 /// - Subscript assignments with invalid keys: `movie["director"] = "Ridley Scott"`
 /// - Subscript assignments with wrong value type: `movie["year"] = "1982"`
 /// - Annotated dict literal assignments with invalid or missing keys
-/// - Regular dict assignments to TypedDict variables with wrong keys/types
+/// - Regular dict assignments to `TypedDict` variables with wrong keys/types
 /// - Subscript read access with invalid keys: `print(movie["unknown"])`
 /// - Disallowed method calls: `movie.clear()`
-/// - Delete operations on required TypedDict keys: `del movie["name"]`
+/// - Delete operations on required `TypedDict` keys: `del movie["name"]`
 fn collect_typeddict_key_violations<'a>(
     stmts: &[Stmt],
     classes: &'a [ClassInfo],
@@ -3688,9 +3688,9 @@ type TdFieldMap<'a> = std::collections::HashMap<
 >;
 
 /// Build a variable-name → TypedDict-class-name map from annotated assignments in `stmts`.
-fn td_var_type_from_stmts<'a>(
+fn td_var_type_from_stmts(
     stmts: &[Stmt],
-    fields: &TdFieldMap<'a>,
+    fields: &TdFieldMap<'_>,
 ) -> std::collections::HashMap<String, String> {
     let mut map = std::collections::HashMap::new();
     for stmt in stmts {
@@ -3705,9 +3705,9 @@ fn td_var_type_from_stmts<'a>(
     map
 }
 
-/// Recursively check statements for TypedDict violations.
-fn check_td_stmts<'a>(
-    fields: &TdFieldMap<'a>,
+/// Recursively check statements for `TypedDict` violations.
+fn check_td_stmts(
+    fields: &TdFieldMap<'_>,
     var_type: &std::collections::HashMap<String, String>,
     stmts: &[Stmt],
     out: &mut Vec<TypedDictKeyViolation>,
@@ -3780,10 +3780,10 @@ fn check_td_stmts<'a>(
 }
 
 /// Check `movie["key"] = value` subscript-assignment statements.
-fn td_check_subscript_assign<'a>(
+fn td_check_subscript_assign(
     node: &StmtAssign,
     var_type: &std::collections::HashMap<String, String>,
-    fields: &TdFieldMap<'a>,
+    fields: &TdFieldMap<'_>,
     out: &mut Vec<TypedDictKeyViolation>,
 ) {
     use ruff_text_size::Ranged as _;
@@ -3817,11 +3817,11 @@ fn td_check_subscript_assign<'a>(
     }
 }
 
-/// Check `movie = {...}` regular assignments to TypedDict variables.
-fn td_check_regular_assign<'a>(
+/// Check `movie = {...}` regular assignments to `TypedDict` variables.
+fn td_check_regular_assign(
     node: &StmtAssign,
     var_type: &std::collections::HashMap<String, String>,
-    fields: &TdFieldMap<'a>,
+    fields: &TdFieldMap<'_>,
     out: &mut Vec<TypedDictKeyViolation>,
 ) {
     use ruff_text_size::Ranged as _;
@@ -3904,9 +3904,9 @@ fn td_check_regular_assign<'a>(
 }
 
 /// Check annotated assignments `var: TypedDict = {...}`.
-fn td_check_ann_assign<'a>(
+fn td_check_ann_assign(
     node: &StmtAnnAssign,
-    fields: &TdFieldMap<'a>,
+    fields: &TdFieldMap<'_>,
     out: &mut Vec<TypedDictKeyViolation>,
 ) {
     use ruff_text_size::Ranged as _;
@@ -3963,11 +3963,11 @@ fn td_check_ann_assign<'a>(
     }
 }
 
-/// Walk an expression and report subscript reads with invalid TypedDict keys.
-fn td_check_expr_reads<'a>(
+/// Walk an expression and report subscript reads with invalid `TypedDict` keys.
+fn td_check_expr_reads(
     expr: &Expr,
     var_type: &std::collections::HashMap<String, String>,
-    fields: &TdFieldMap<'a>,
+    fields: &TdFieldMap<'_>,
     out: &mut Vec<TypedDictKeyViolation>,
 ) {
     use ruff_text_size::Ranged as _;

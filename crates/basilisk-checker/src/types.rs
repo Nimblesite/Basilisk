@@ -65,19 +65,19 @@ impl fmt::Display for InferredType {
             InferredType::Bool => write!(f, "bool"),
             InferredType::Bytes => write!(f, "bytes"),
             InferredType::None_ => write!(f, "None"),
-            InferredType::Literal(lit) => write!(f, "Literal[{}]", lit),
-            InferredType::List(elem_type) => write!(f, "list[{}]", elem_type),
+            InferredType::Literal(lit) => write!(f, "Literal[{lit}]"),
+            InferredType::List(elem_type) => write!(f, "list[{elem_type}]"),
             InferredType::Dict(key_type, value_type) => {
-                write!(f, "dict[{}, {}]", key_type, value_type)
+                write!(f, "dict[{key_type}, {value_type}]")
             }
-            InferredType::Set(elem_type) => write!(f, "set[{}]", elem_type),
+            InferredType::Set(elem_type) => write!(f, "set[{elem_type}]"),
             InferredType::Tuple(elem_types) => {
                 write!(f, "tuple[")?;
                 for (i, elem_type) in elem_types.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{}", elem_type)?;
+                    write!(f, "{elem_type}")?;
                 }
                 write!(f, "]")
             }
@@ -86,15 +86,15 @@ impl fmt::Display for InferredType {
                     if i > 0 {
                         write!(f, " | ")?;
                     }
-                    write!(f, "{}", t)?;
+                    write!(f, "{t}")?;
                 }
                 Ok(())
             }
-            InferredType::Optional(inner) => write!(f, "Optional[{}]", inner),
+            InferredType::Optional(inner) => write!(f, "Optional[{inner}]"),
             InferredType::Any => write!(f, "Any"),
             InferredType::Never => write!(f, "Never"),
             InferredType::Unknown => write!(f, "Unknown"),
-            InferredType::Named(name) => write!(f, "{}", name),
+            InferredType::Named(name) => write!(f, "{name}"),
         }
     }
 }
@@ -102,17 +102,21 @@ impl fmt::Display for InferredType {
 impl fmt::Display for LiteralValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            LiteralValue::Int(val) => write!(f, "{}", val),
-            LiteralValue::Str(val) => write!(f, "\"{}\"", val),
-            LiteralValue::Float(val) => write!(f, "{}", val),
-            LiteralValue::Bool(val) => write!(f, "{}", val),
-            LiteralValue::Bytes(val) => write!(f, "b\"{}\"", String::from_utf8_lossy(val)),
+            LiteralValue::Int(val) => write!(f, "{val}"),
+            LiteralValue::Str(val) => write!(f, "\"{val}\""),
+            LiteralValue::Float(val) => write!(f, "{val}"),
+            LiteralValue::Bool(val) => write!(f, "{val}"),
+            LiteralValue::Bytes(val) => {
+                let lossy = String::from_utf8_lossy(val);
+                write!(f, "b\"{lossy}\"")
+            }
         }
     }
 }
 
 impl InferredType {
     /// Creates a union of two types, flattening nested unions.
+    #[must_use]
     pub fn union(a: InferredType, b: InferredType) -> InferredType {
         match (a, b) {
             (InferredType::Union(mut types_a), InferredType::Union(types_b)) => {
@@ -132,6 +136,7 @@ impl InferredType {
     }
 
     /// Returns true if this type is assignable to the other type.
+    #[must_use]
     pub fn is_assignable_to(&self, other: &InferredType) -> bool {
         match (self, other) {
             // Any is assignable to everything
@@ -143,10 +148,10 @@ impl InferredType {
             // Int is assignable to float
             (InferredType::Int, InferredType::Float) => true,
             // Literal types are assignable to their base types
-            (InferredType::Literal(_), InferredType::Int) => true,
-            (InferredType::Literal(_), InferredType::Str) => true,
-            (InferredType::Literal(_), InferredType::Float) => true,
-            (InferredType::Literal(_), InferredType::Bool) => true,
+            (
+                InferredType::Literal(_),
+                InferredType::Int | InferredType::Str | InferredType::Float | InferredType::Bool,
+            ) => true,
             // Optional types are assignable to their non-optional counterparts
             (InferredType::Optional(inner), other) => inner.is_assignable_to(other),
             (inner, InferredType::Optional(other)) => inner.is_assignable_to(other),

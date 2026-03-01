@@ -4,6 +4,7 @@ use basilisk_resolver::{RhsKind, VariableInfo};
 use crate::types::InferredType;
 
 /// Infers the type of a right-hand-side expression.
+#[must_use]
 pub fn infer_rhs(rhs: &RhsKind) -> InferredType {
     match rhs {
         RhsKind::IntLiteral => InferredType::Int,
@@ -22,6 +23,10 @@ pub fn infer_rhs(rhs: &RhsKind) -> InferredType {
 }
 
 /// Checks if a variable assignment is valid given its annotation and inferred RHS type.
+///
+/// # Errors
+///
+/// Returns an error if the RHS type cannot be inferred (i.e., it is `Unknown`).
 pub fn check_annotated_variable(var_info: &VariableInfo) -> Result<(), String> {
     if var_info.has_annotation {
         let rhs_type = infer_rhs(&var_info.rhs_kind);
@@ -37,13 +42,12 @@ pub fn check_annotated_variable(var_info: &VariableInfo) -> Result<(), String> {
 }
 
 /// Infers the type for a variable based on its RHS kind and annotation.
+#[must_use]
 pub fn infer_variable_type(var_info: &VariableInfo) -> InferredType {
-    let inferred = infer_rhs(&var_info.rhs_kind);
-    
     // If there's an annotation, we need to check assignability
     // For now, we just return the inferred type
     // In a full implementation, we would validate against the annotation
-    inferred
+    infer_rhs(&var_info.rhs_kind)
 }
 
 #[cfg(test)]

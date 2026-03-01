@@ -1,4 +1,4 @@
-//! BSK-E0088: TypedDict runtime violation.
+//! BSK-E0088: `TypedDict` runtime violation.
 //!
 //! PEP 589 defines constraints on what you can do with `TypedDict` type objects at runtime:
 //!
@@ -28,7 +28,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://basilisk-lang.org/errors/BSK-E0088",
 };
 
-/// Emits BSK-E0088 for TypedDict runtime violations.
+/// Emits BSK-E0088 for `TypedDict` runtime violations.
 pub(crate) struct TypedDictRuntimeViolation;
 
 impl Rule for TypedDictRuntimeViolation {

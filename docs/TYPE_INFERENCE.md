@@ -1,5 +1,7 @@
 # Basilisk Type Inference Specification
 
+Basilisk implements premium type inference that not only improves type safety - it enforces the removal of redundant type annotations. The aim is to achieve something in the ballpark of Hindley Milner style functionality where we do not specify types unless there is a special reason to. We want to avoid forcing Python developers to specify types unless it's absolutely necessary. This means that Python continues to be a less verbose language with full type safety.
+
 > **Status**: Draft — Basilisk is in the specification stage. This document defines the target behavior for the type inference engine. Don't get stuck going down the rabbit hole of expecting type inference infrastructure at this point. Focus on other parts of the system until we have some infastructure built
 >
 > **Canonical Python version**: 3.12

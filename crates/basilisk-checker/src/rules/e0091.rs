@@ -46,7 +46,7 @@ fn is_numeric_subtype(child: &str, parent: &str) -> bool {
     }
 }
 
-/// Emits BSK-E0091 for TypeVar bound/constraint vs default incompatibilities.
+/// Emits BSK-E0091 for `TypeVar` bound/constraint vs default incompatibilities.
 pub(crate) struct TypeVarDefaultIncompatible;
 
 impl Rule for TypeVarDefaultIncompatible {

@@ -54,9 +54,9 @@ impl Rule for InvalidTupleTypeSyntax {
                 diagnostics.push(Diagnostic {
                     code: CODE.clone(),
                     severity: Severity::Error,
-                    message: format!("Invalid tuple type syntax: {}", error_msg),
+                    message: format!("Invalid tuple type syntax: {error_msg}"),
                     span: ann_span,
-                    path: module.path.to_owned(),
+                    path: module.path.clone(),
                     help: Some("Use valid tuple type syntax according to PEP 646".to_owned()),
                     note: Some(
                         "Tuple types must follow the pattern `tuple[T, ...]` with exactly one type before the ellipsis"
@@ -78,9 +78,9 @@ impl Rule for InvalidTupleTypeSyntax {
                     diagnostics.push(Diagnostic {
                         code: CODE.clone(),
                         severity: Severity::Error,
-                        message: format!("Invalid tuple type syntax: {}", error_msg),
+                        message: format!("Invalid tuple type syntax: {error_msg}"),
                         span: ret_span,
-                        path: module.path.to_owned(),
+                        path: module.path.clone(),
                         help: Some("Use valid tuple type syntax according to PEP 646".to_owned()),
                         note: Some(
                             "Tuple types must follow the pattern `tuple[T, ...]` with exactly one type before the ellipsis"

@@ -438,7 +438,7 @@ pub struct TypeVarCallInfo {
     /// Simple type name from the `default=` keyword argument (e.g. `"int"` from `default=int`).
     /// `None` if not present or not a simple name.
     pub default_type_name: Option<String>,
-    /// Type names from positional constraint arguments (excluding the TypeVar name string arg).
+    /// Type names from positional constraint arguments (excluding the `TypeVar` name string arg).
     /// Empty when there are no constraints.
     pub constraint_type_names: Vec<String>,
     /// `true` when this is a `TypeVarTuple(...)` call rather than `TypeVar(...)`.
