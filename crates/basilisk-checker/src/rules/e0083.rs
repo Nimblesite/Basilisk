@@ -16,14 +16,9 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::Diagnostic;
 
 use super::Rule;
-
-const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0083",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0083",
-};
 
 /// Emits BSK-E0083 when a `TypeVarTuple` is used without unpacking.
 pub(crate) struct TypeVarTupleUnpackRequired;

@@ -23,7 +23,7 @@ echo ""
 
 PYRIGHT="python3 -m pyright"
 MYPY="python3 -m mypy --ignore-missing-imports --no-error-summary"
-PYREFLY="python3 -m pyrefly"
+PYREFLY="pyrefly"
 TY="python3 -m ty"
 
 # Detect available tools

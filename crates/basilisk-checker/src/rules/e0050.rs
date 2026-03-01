@@ -255,10 +255,22 @@ impl Rule for InvalidNewType {
             return;
         }
 
+        // Build map: newtype_name → base_type_text
+        let newtype_base: std::collections::HashMap<&str, &str> = module
+            .newtype_calls
+            .iter()
+            .filter_map(|nt| {
+                let base_text = span_text(source, nt.base_type_span)?;
+                Some((nt.lhs_name.as_str(), base_text.trim()))
+            })
+            .collect();
+
         check_newtype_subclassing(module, &newtype_names, diagnostics);
         check_newtype_subscript_uses(module, source, path, &newtype_names, diagnostics);
         check_newtype_assigned_to_type(module, source, path, &newtype_names, diagnostics);
         check_isinstance_with_newtype(module, source, path, &newtype_names, diagnostics);
+        check_newtype_call_arg_types(module, source, path, &newtype_base, diagnostics);
+        check_newtype_var_literal_assignments(module, source, path, &newtype_names, diagnostics);
     }
 }
 
@@ -424,4 +436,117 @@ fn is_newtype_subscript(ann: &str, newtype_names: &std::collections::HashSet<&st
     let Some(bracket_pos) = ann.find('[') else { return false };
     let name_part = ann[..bracket_pos].trim();
     newtype_names.contains(name_part)
+}
+
+/// Check calls to NewType constructors for argument type mismatches.
+///
+/// `UserId("user")` when `UserId = NewType("UserId", int)` → error because `str` ≠ `int`.
+fn check_newtype_call_arg_types(
+    module: &ResolvedModule,
+    source: &str,
+    path: &str,
+    newtype_base: &std::collections::HashMap<&str, &str>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    use basilisk_resolver::RhsKind;
+
+    for call in &module.calls {
+        let Some(&base_type) = newtype_base.get(call.callee.as_str()) else {
+            continue;
+        };
+
+        let Some((rhs_kind, arg_span)) = call.args.first() else {
+            continue;
+        };
+
+        if let Some(description) = newtype_arg_mismatch(base_type, rhs_kind) {
+            let Some(arg_text) = source.get(arg_span.start as usize..arg_span.end as usize) else {
+                continue;
+            };
+            diagnostics.push(Diagnostic {
+                code: CODE.clone(),
+                severity: Severity::Error,
+                message: format!(
+                    "Argument to `{}` ({}) is not compatible with its base type `{base_type}`",
+                    call.callee, arg_text.trim()
+                ),
+                span: call.span,
+                path: path.to_owned(),
+                help: Some(format!(
+                    "Pass a value of type `{base_type}` to the `{}` constructor",
+                    call.callee
+                )),
+                note: Some(
+                    "NewType constructors accept only values of the base type".to_owned(),
+                ),
+            });
+        }
+    }
+}
+
+/// Returns a description of the mismatch when `rhs` is incompatible with `base_type`, else `None`.
+fn newtype_arg_mismatch(base_type: &str, rhs: &basilisk_resolver::RhsKind) -> Option<&'static str> {
+    use basilisk_resolver::RhsKind;
+
+    let base = base_type.trim().to_ascii_lowercase();
+    match (base.as_str(), rhs) {
+        ("int" | "float" | "bool" | "bytes", RhsKind::StrLiteral) => Some("str literal"),
+        ("int" | "str" | "float", RhsKind::BytesLiteral) => Some("bytes literal"),
+        ("int" | "str" | "bool", RhsKind::FloatLiteral) => Some("float literal"),
+        ("str" | "bytes", RhsKind::IntLiteral) => Some("int literal"),
+        _ => None,
+    }
+}
+
+/// Check module-level variable assignments where the annotation is a NewType name.
+///
+/// `u1: UserId = 42` is wrong because plain `int` literals are not `UserId` values.
+/// Only `UserId(42)` creates a proper `UserId`.
+fn check_newtype_var_literal_assignments(
+    module: &ResolvedModule,
+    source: &str,
+    path: &str,
+    newtype_names: &std::collections::HashSet<&str>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    use basilisk_resolver::RhsKind;
+
+    for var in &module.module_vars {
+        let Some(ann_text) = span_text(source, var.annotation_span) else {
+            continue;
+        };
+        let ann = ann_text.trim();
+        if !newtype_names.contains(ann) {
+            continue;
+        }
+
+        // A literal value can never be a NewType instance — you must call the constructor.
+        let is_bare_literal = matches!(
+            var.rhs_kind,
+            RhsKind::IntLiteral
+                | RhsKind::FloatLiteral
+                | RhsKind::StrLiteral
+                | RhsKind::BytesLiteral
+                | RhsKind::BoolLiteral
+                | RhsKind::NoneValue
+        );
+
+        if is_bare_literal {
+            diagnostics.push(Diagnostic {
+                code: CODE.clone(),
+                severity: Severity::Error,
+                message: format!(
+                    "Cannot assign a literal value directly to `{ann}`; \
+                     use `{ann}(value)` to create a `{ann}` instance"
+                ),
+                span: var.name_span,
+                path: path.to_owned(),
+                help: Some(format!("Replace the literal with `{ann}(value)`")),
+                note: Some(
+                    "NewType creates a distinct type; only the constructor call is valid"
+                        .to_owned(),
+                ),
+            });
+        }
+    }
 }

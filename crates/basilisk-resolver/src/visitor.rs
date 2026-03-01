@@ -2635,21 +2635,6 @@ fn tuple_slice_has_invalid_ellipsis(slice: &Expr) -> bool {
     }
 }
 
-/// Returns `true` when the expression is a starred subscript of a non-variadic tuple,
-/// e.g. `*tuple[str]` (no `...`), which is invalid when paired with a bare `...`.
-fn is_non_variadic_starred_expr(expr: &Expr) -> bool {
-    let Expr::Starred(starred) = expr else {
-        return false;
-    };
-    let Expr::Subscript(sub) = starred.value.as_ref() else {
-        return false;
-    };
-    if expr_simple_name(&sub.value).as_deref() != Some("tuple") {
-        return false;
-    }
-    // `tuple[str]` has no `...` inside → non-variadic
-    !inner_tuple_is_unbounded(&sub.slice)
-}
 
 /// Collect all annotation spans that contain invalid multiple-unbounded-tuple patterns.
 fn collect_multiple_unbounded_tuple_spans(stmts: &[Stmt]) -> Vec<Span> {

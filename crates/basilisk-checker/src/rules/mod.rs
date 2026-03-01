@@ -81,6 +81,9 @@ pub(crate) mod e0080;
 pub(crate) mod e0081;
 pub(crate) mod e0082;
 pub(crate) mod e0083;
+pub(crate) mod e0084;
+pub(crate) mod e0085;
+pub(crate) mod e0086;
 pub(crate) mod guards;
 
 use basilisk_resolver::ResolvedModule;
@@ -175,6 +178,9 @@ pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
         &e0081::TypeVarTupleUnpackViolation,
         &e0082::TypeVarTupleCallableMismatch,
         &e0083::TypeVarTupleUnpackRequired,
+        &e0084::TypeVarTupleInvalidParams,
+        &e0085::TypeVarTupleArgCountMismatch,
+        &e0086::MultipleTypeVarTuplesInGeneric,
     ];
 
     rules.iter().fold(Vec::new(), |mut acc, rule| {
