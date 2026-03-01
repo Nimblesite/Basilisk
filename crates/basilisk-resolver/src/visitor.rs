@@ -15,9 +15,10 @@ use crate::scope::{
     AssertTypeCallInfo, AttributeInfo, CallSite, ClassInfo, FloatParamIntAttrAccess, FunctionInfo,
     GenericParamInfo, HistoricalPositionalViolation, HistoricalPositionalViolationKind, ImportInfo,
     ImportKind, LiteralStringEnumMismatch, MatchStmtInfo, NamedTupleDefInfo, NewTypeCallInfo,
-    ParameterInfo, ProtocolSelfViolation, ReadOnlyViolationInfo, ReadOnlyViolationKind,
-    ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo, RevealTypeCallInfo, RhsKind, Span,
-    TypeVarCallInfo, TypedDictCallInfo, TypedDictSecondArgKind, UnhashableKeyRef, VariableInfo,
+    ParameterInfo,
+    ProtocolSelfViolation, ReadOnlyViolationInfo, ReadOnlyViolationKind, ResolvedModule,
+    ReturnAnnotationKind, ReturnStmtInfo, RevealTypeCallInfo, RhsKind, Span, TypeVarCallInfo,
+    TypedDictCallInfo, TypedDictSecondArgKind, UnhashableKeyRef, VariableInfo,
 };
 
 /// Collect all function definitions and module-level data from the parsed module.
@@ -48,6 +49,7 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         collect_assert_type_calls_from_stmts(&module.ast.body, &[], &module.source);
     let typeddict_calls = collect_typeddict_calls(&module.ast.body);
     let newtype_calls = collect_newtype_calls(&module.ast.body);
+    let namedtuple_defs = collect_namedtuple_defs(&module.ast.body, &module.source);
     let multiple_unbounded_tuple_spans = collect_multiple_unbounded_tuple_spans(&module.ast.body);
 
     let module_bare_assignments = collect_module_bare_assignments(&module.ast.body);
@@ -84,7 +86,7 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         type_alias_type_calls: Vec::new(),
         type_statements: Vec::new(),
         annotated_too_few_args: Vec::new(),
-        namedtuple_defs: Vec::new(),
+        namedtuple_defs,
         float_param_int_attr_accesses,
         literal_string_enum_mismatches,
         enum_value_type_violations: collect_enum_value_type_violations(&module.ast.body, &module.source),
@@ -93,7 +95,6 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         historical_positional_violations: collect_historical_positional_violations(&module.ast.body),
         invalid_string_annotations: Vec::new(),
         protocol_self_violations,
-        module_protocol_violations: Vec::new(),
         path: module.path.clone(),
         source: module.source.clone(),
     }
@@ -208,8 +209,8 @@ fn collect_hist_violations_from_stmts(
             Stmt::Try(node) => {
                 collect_hist_violations_from_stmts(&node.body, posonly_map, out);
                 for handler in &node.handlers {
-                    let ExceptHandler::ExceptHandler(h) = handler;
-                    collect_hist_violations_from_stmts(&h.body, posonly_map, out);
+                    let ExceptHandler::ExceptHandler(eh) = handler;
+                    collect_hist_violations_from_stmts(&eh.body, posonly_map, out);
                 }
                 collect_hist_violations_from_stmts(&node.orelse, posonly_map, out);
                 collect_hist_violations_from_stmts(&node.finalbody, posonly_map, out);
@@ -2378,6 +2379,7 @@ fn collect_namedtuple_defs(stmts: &[Stmt], source: &str) -> Vec<NamedTupleDefInf
 /// Returns a map from variable name to the string value (e.g., `X: Final = "x"` yields
 /// `"X" -> "x"`).  Only `Final` / `Final[str]` annotations with string-literal RHS
 /// are included.
+#[allow(dead_code)]
 fn collect_final_string_constants<'a>(
     stmts: &'a [Stmt],
     source: &'a str,
@@ -2837,8 +2839,13 @@ fn build_assert_type_call_info(
     let expected_type = extract_type_text(second_arg, source);
 
     // Compare normalized forms.
+    // Skip when the actual type is a user-defined type alias that we cannot expand
+    // without a full type engine — comparing alias names to their expansions produces
+    // false positives (e.g. `GoodTypeAlias1` != `int | str` even though they're equal).
     let type_mismatch = match (&actual_type, &expected_type) {
-        (Some(actual), Some(expected)) => !types_match(actual, expected),
+        (Some(actual), Some(expected)) => {
+            !types_match(actual, expected) && !is_user_defined_type_alias(actual)
+        }
         _ => false,
     };
 
@@ -2876,15 +2883,10 @@ fn resolve_actual_type(expr: &Expr, params: &[(&str, &str)], source: &str) -> Op
         Expr::BooleanLiteral(_) => Some("bool".to_owned()),
         Expr::BytesLiteral(_) => Some("bytes".to_owned()),
         Expr::NoneLiteral(_) => Some("None".to_owned()),
-        // Attribute accesses (`X.y`, `obj.attr`) cannot be typed without inference.
-        Expr::Attribute(_) | Expr::Subscript(_) | Expr::Call(_) => None,
-        _ => {
-            // For other expressions, try to get the source text.
-            let range = expr.range();
-            source
-                .get(range.start().to_u32() as usize..range.end().to_u32() as usize)
-                .map(normalize_type_str)
-        }
+        // Complex expressions (attribute access, subscripts, calls, binary ops, etc.)
+        // cannot be typed without full type inference — returning source text produces
+        // false positives when compared against expected types textually.
+        _ => None,
     }
 }
 
@@ -2941,9 +2943,158 @@ fn strip_annotated_wrapper(ann: &str) -> Option<&str> {
     Some(inner[..end].trim())
 }
 
+/// Returns `true` when `actual` type is a user-defined type alias that cannot be
+/// resolved without a full type engine. These produce false positives because we
+/// compare annotation text without expanding aliases.
+///
+/// A type is a user-defined alias when its base identifier (the part before `[`)
+/// starts with an uppercase letter and is not a known typing special form.
+fn is_user_defined_type_alias(ty: &str) -> bool {
+    let base = ty.trim().split('[').next().unwrap_or(ty.trim()).trim();
+    // Must be a plain identifier (no operators or spaces at the top level)
+    if base.is_empty()
+        || base.contains('|')
+        || base.contains(' ')
+        || base.contains(',')
+        || base.contains('(')
+        || base.contains(')')
+    {
+        return false;
+    }
+    // Must start with uppercase
+    let Some(first) = base.chars().next() else {
+        return false;
+    };
+    if !first.is_ascii_uppercase() {
+        return false;
+    }
+    // Known special forms that start with uppercase — these are NOT user aliases
+    const KNOWN_FORMS: &[&str] = &[
+        "Any",
+        "Never",
+        "NoReturn",
+        "Self",
+        "LiteralString",
+        "TypeGuard",
+        "TypeIs",
+        "Literal",
+        "Optional",
+        "Union",
+        "Annotated",
+        "Callable",
+        "ClassVar",
+        "Final",
+        "Protocol",
+        "TypedDict",
+        "NamedTuple",
+        "Generic",
+        "Tuple",
+        "List",
+        "Dict",
+        "Set",
+        "FrozenSet",
+        "Type",
+        "Deque",
+        "None",
+        "Awaitable",
+        "Coroutine",
+        "AsyncGenerator",
+        "Generator",
+        "Iterator",
+        "Iterable",
+        "Sequence",
+        "Mapping",
+        "MutableMapping",
+        "MutableSequence",
+        "MutableSet",
+        "ChainMap",
+        "Counter",
+        "DefaultDict",
+        "OrderedDict",
+        "Concatenate",
+        "ParamSpec",
+        "ParamSpecArgs",
+        "ParamSpecKwargs",
+        "TypeVar",
+        "TypeVarTuple",
+        "Unpack",
+        "Required",
+        "NotRequired",
+        "ReadOnly",
+        "TypeAlias",
+        "SupportsInt",
+        "SupportsFloat",
+        "SupportsComplex",
+        "SupportsBytes",
+        "SupportsAbs",
+        "SupportsRound",
+        "AbstractSet",
+        "ByteString",
+        "IO",
+        "TextIO",
+        "BinaryIO",
+        "Pattern",
+        "Match",
+        "AnyStr",
+        "Text",
+        "ContextManager",
+        "AsyncContextManager",
+        "Hashable",
+        "Sized",
+        "Reversible",
+        "Collection",
+        "Container",
+        "ItemsView",
+        "KeysView",
+        "ValuesView",
+        "AbstractContextManager",
+    ];
+    !KNOWN_FORMS.contains(&base)
+}
+
 /// Returns `true` when `actual` and `expected` are equivalent types (textual comparison).
+///
+/// Handles common equivalences:
+/// - Direct string equality
+/// - Bare generic vs `Generic[Any]` (e.g. `list` == `list[Any]`)
+/// - `type` == `type[Any]`
+/// - Quoted forward references: `"ClassA"` == `ClassA`
 fn types_match(actual: &str, expected: &str) -> bool {
-    actual == expected
+    let actual = actual.trim();
+    let expected = expected.trim();
+
+    if actual == expected {
+        return true;
+    }
+
+    // Handle quoted forward references: `"ClassA"` == `ClassA`
+    let actual_unquoted = if (actual.starts_with('"') && actual.ends_with('"'))
+        || (actual.starts_with('\'') && actual.ends_with('\''))
+    {
+        &actual[1..actual.len() - 1]
+    } else {
+        actual
+    };
+    if actual_unquoted != actual && actual_unquoted == expected {
+        return true;
+    }
+
+    // Handle bare generic == specialized with All-Any params.
+    // e.g. `list` == `list[Any]`, `type` == `type[Any]`, `dict` == `dict[Any, Any]`
+    if !actual.contains('[') && !actual.contains('|') {
+        if let Some(rest) = expected.strip_prefix(actual) {
+            if let Some(inner) = rest.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
+                let all_any = inner
+                    .split(',')
+                    .all(|p| matches!(p.trim(), "Any" | "..." | "*tuple[Any, ...]"));
+                if all_any {
+                    return true;
+                }
+            }
+        }
+    }
+
+    false
 }
 
 /// Recursively check if an expression contains `ReadOnly`.

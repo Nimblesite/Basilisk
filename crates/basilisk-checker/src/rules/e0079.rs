@@ -97,7 +97,7 @@ impl Rule for ModuleProtocolIncompatible {
                 &protocol_classes,
                 &protocol_method_returns,
                 &imported_modules,
-                &module_dir,
+                module_dir.as_ref(),
                 diagnostics,
             );
         }
@@ -112,8 +112,7 @@ fn extract_return_type(func: &basilisk_resolver::FunctionInfo, source: &str) -> 
             if let Some(ann_span) = func.return_annotation_span {
                 source
                     .get(ann_span.start as usize..ann_span.end as usize)
-                    .map(|s| s.trim().to_owned())
-                    .unwrap_or_else(|| "object".to_owned())
+                    .map_or_else(|| "object".to_owned(), |s| s.trim().to_owned())
             } else {
                 "object".to_owned()
             }
@@ -133,9 +132,9 @@ struct ModuleInterface {
 /// Load a companion module's interface by parsing its source file.
 fn load_module_interface(
     module_name: &str,
-    module_dir: &Option<std::path::PathBuf>,
+    module_dir: Option<&std::path::PathBuf>,
 ) -> Option<ModuleInterface> {
-    let dir = module_dir.as_ref()?;
+    let dir = module_dir?;
     let file_path = dir.join(format!("{module_name}.py"));
 
     let source = std::fs::read_to_string(&file_path).ok()?;
@@ -193,7 +192,7 @@ fn check_annotated_assign(
     protocol_classes: &HashMap<&str, &basilisk_resolver::ClassInfo>,
     protocol_method_returns: &HashMap<(&str, &str), String>,
     imported_modules: &HashSet<&str>,
-    module_dir: &Option<std::path::PathBuf>,
+    module_dir: Option<&std::path::PathBuf>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     use ruff_python_ast::{Expr, Stmt};
@@ -283,8 +282,7 @@ fn check_protocol_compatibility(
         let protocol_type = if let Some(ann_span) = attr.annotation_span {
             source
                 .get(ann_span.start as usize..ann_span.end as usize)
-                .map(|s| s.trim().to_owned())
-                .unwrap_or_else(|| "object".to_owned())
+                .map_or_else(|| "object".to_owned(), |s| s.trim().to_owned())
         } else {
             "object".to_owned()
         };

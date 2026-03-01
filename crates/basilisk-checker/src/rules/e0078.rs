@@ -75,7 +75,7 @@ fn check_stmt(
     for body_stmt in &cls.body {
         if let Stmt::FunctionDef(func_def) = body_stmt {
             check_method_self_return(func_def, class_name, source, path, diagnostics);
-            check_self_subscript_in_params(func_def, source, path, diagnostics);
+            check_self_subscript_in_params(func_def, path, diagnostics);
         }
     }
 }
@@ -106,7 +106,7 @@ fn check_method_self_return(
 
     // Walk the function body for return statements returning a concrete class constructor.
     for body_stmt in &func_def.body {
-        check_return_stmt_for_concrete_class(body_stmt, class_name, source, path, diagnostics);
+        check_return_stmt_for_concrete_class(body_stmt, class_name, path, diagnostics);
     }
 }
 
@@ -114,7 +114,6 @@ fn check_method_self_return(
 fn check_return_stmt_for_concrete_class(
     stmt: &ruff_python_ast::Stmt,
     class_name: &str,
-    source: &str,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
@@ -155,7 +154,8 @@ fn check_return_stmt_for_concrete_class(
                     span,
                     path: path.to_owned(),
                     help: Some(format!(
-                        "Return `self` (or `cls()` in a classmethod) instead of `{class_name}()`"
+                        "Return `self` (or `cls()` in a classmethod) instead of \
+                         `{class_name}()`"
                     )),
                     note: Some(
                         "`Self` resolves to the concrete subclass type, not the parent class"
@@ -167,13 +167,13 @@ fn check_return_stmt_for_concrete_class(
         Stmt::If(if_stmt) => {
             for body_stmt in &if_stmt.body {
                 check_return_stmt_for_concrete_class(
-                    body_stmt, class_name, source, path, diagnostics,
+                    body_stmt, class_name, path, diagnostics,
                 );
             }
             for clause in &if_stmt.elif_else_clauses {
                 for body_stmt in &clause.body {
                     check_return_stmt_for_concrete_class(
-                        body_stmt, class_name, source, path, diagnostics,
+                        body_stmt, class_name, path, diagnostics,
                     );
                 }
             }
@@ -181,14 +181,14 @@ fn check_return_stmt_for_concrete_class(
         Stmt::For(for_stmt) => {
             for body_stmt in &for_stmt.body {
                 check_return_stmt_for_concrete_class(
-                    body_stmt, class_name, source, path, diagnostics,
+                    body_stmt, class_name, path, diagnostics,
                 );
             }
         }
         Stmt::While(while_stmt) => {
             for body_stmt in &while_stmt.body {
                 check_return_stmt_for_concrete_class(
-                    body_stmt, class_name, source, path, diagnostics,
+                    body_stmt, class_name, path, diagnostics,
                 );
             }
         }
@@ -199,7 +199,6 @@ fn check_return_stmt_for_concrete_class(
 /// Check parameter annotations in a method for `Self[...]` subscript usage.
 fn check_self_subscript_in_params(
     func_def: &ruff_python_ast::StmtFunctionDef,
-    source: &str,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
@@ -207,19 +206,19 @@ fn check_self_subscript_in_params(
     for param_with_default in &func_def.parameters.args {
         let param = &param_with_default.parameter;
         if let Some(ann) = &param.annotation {
-            check_expr_for_self_subscript(ann, source, path, diagnostics);
+            check_expr_for_self_subscript(ann, path, diagnostics);
         }
     }
 
     // Check *args and **kwargs annotations too.
     if let Some(vararg) = &func_def.parameters.vararg {
         if let Some(ann) = &vararg.annotation {
-            check_expr_for_self_subscript(ann, source, path, diagnostics);
+            check_expr_for_self_subscript(ann, path, diagnostics);
         }
     }
     if let Some(kwarg) = &func_def.parameters.kwarg {
         if let Some(ann) = &kwarg.annotation {
-            check_expr_for_self_subscript(ann, source, path, diagnostics);
+            check_expr_for_self_subscript(ann, path, diagnostics);
         }
     }
 }
@@ -227,7 +226,6 @@ fn check_self_subscript_in_params(
 /// Check if an expression is a `Self[...]` subscript.
 fn check_expr_for_self_subscript(
     expr: &ruff_python_ast::Expr,
-    source: &str,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
@@ -247,7 +245,6 @@ fn check_expr_for_self_subscript(
     }
 
     let range = sub.range();
-    let _ = source; // source available for future span text extraction
     let span = Span {
         start: range.start().to_u32(),
         end: range.end().to_u32(),

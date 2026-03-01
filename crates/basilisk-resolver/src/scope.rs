@@ -839,60 +839,6 @@ pub struct ProtocolSelfViolation {
     pub span: Span,
 }
 
-/// A module-to-protocol assignment violation.
-///
-/// When a module object is assigned to a variable annotated with a `Protocol`
-/// type, but the module does not satisfy the protocol requirements.
-///
-/// ```python
-/// class Options(Protocol):
-///     timeout: int
-///
-/// import config_module
-/// opts: Options = config_module  # E if config_module.timeout is not int
-/// ```
-///
-/// Used by `BSK-E0078`.
-#[derive(Debug, Clone)]
-pub struct ModuleProtocolViolation {
-    /// The name of the module that was assigned.
-    pub module_name: String,
-    /// The name of the protocol that is expected.
-    pub protocol_name: String,
-    /// A description of why the module does not satisfy the protocol.
-    pub reason: ModuleProtocolViolationKind,
-    /// The span of the assignment (RHS).
-    pub span: Span,
-}
-
-/// What kind of module-protocol violation was detected.
-#[derive(Debug, Clone)]
-pub enum ModuleProtocolViolationKind {
-    /// The module is missing a member required by the protocol.
-    MissingMember {
-        /// The name of the missing member.
-        member_name: String,
-    },
-    /// The module has the member but its type doesn't match the protocol.
-    TypeMismatch {
-        /// The name of the member.
-        member_name: String,
-        /// The expected type (from the protocol).
-        expected: String,
-        /// The actual type (from the module).
-        actual: String,
-    },
-    /// The module has the method but with an incompatible return type.
-    ReturnTypeMismatch {
-        /// The method name.
-        method_name: String,
-        /// The expected return type (from the protocol).
-        expected: String,
-        /// The actual return type (from the module).
-        actual: String,
-    },
-}
-
 /// An invalid string annotation detected during AST resolution.
 #[derive(Debug, Clone)]
 pub struct InvalidStringAnnotation {
@@ -1028,12 +974,6 @@ pub struct ResolvedModule {
     /// is expected, but the class's corresponding method returns a different type.
     /// Used by `BSK-E0073`.
     pub protocol_self_violations: Vec<ProtocolSelfViolation>,
-    /// Module-to-protocol assignment violations detected during resolution.
-    ///
-    /// When a module object is assigned to a variable typed as a `Protocol`,
-    /// but the module does not satisfy the protocol (missing members, type mismatches).
-    /// Used by `BSK-E0078`.
-    pub module_protocol_violations: Vec<ModuleProtocolViolation>,
     /// The source file path.
     pub path: String,
     /// The original source text (forwarded from parser for span restoration).

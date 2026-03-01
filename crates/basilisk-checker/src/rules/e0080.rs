@@ -1,4 +1,4 @@
-//! BSK-E0080: TypeVar upper bound violation at call site.
+//! BSK-E0080: `TypeVar` upper bound violation at call site.
 //!
 //! When a function parameter is annotated with a `TypeVar` that has an upper
 //! bound (e.g. `bound=Sized`), and the call site passes a literal value whose
