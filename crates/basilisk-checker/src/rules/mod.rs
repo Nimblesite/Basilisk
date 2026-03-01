@@ -90,6 +90,8 @@ pub(crate) mod e0089;
 pub(crate) mod e0090;
 pub(crate) mod e0091;
 pub(crate) mod e0092;
+pub(crate) mod e0094;
+pub(crate) mod e0095;
 pub(crate) mod guards;
 
 use basilisk_resolver::ResolvedModule;
@@ -112,7 +114,7 @@ pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
         &e0004::MissingVarArgAnnotation,
         &e0005::MissingAttributeAnnotation,
         &e0010::ImportFromUntypedModule,
-        &e0011::ImplicitAny,
+        &e0011::ReturnTypeMismatch,
         &e0012::ArgumentTypeMismatch,
         &e0013::ReturnTypeMismatch,
         &e0014::AssignmentTypeMismatch,
@@ -193,6 +195,8 @@ pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
         &e0090::InvalidTupleTypeSyntax,
         &e0091::TypeVarDefaultIncompatible,
         &e0092::TooFewTypeArguments,
+        &e0094::SelfInvalidLocation,
+        &e0095::InitVarViolation,
     ];
 
     rules.iter().fold(Vec::new(), |mut acc, rule| {

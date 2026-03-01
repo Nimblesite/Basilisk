@@ -53,7 +53,7 @@ fn make_diag(msg: String, span: basilisk_resolver::Span, path: &str) -> Diagnost
     }
 }
 
-fn span_text<'a>(source: &'a str, span: Option<basilisk_resolver::Span>) -> Option<&'a str> {
+fn span_text(source: &str, span: Option<basilisk_resolver::Span>) -> Option<&str> {
     let span = span?;
     source.get(span.start as usize..span.end as usize)
 }

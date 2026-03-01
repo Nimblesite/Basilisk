@@ -18,7 +18,9 @@ pub use scope::{
     ModuleAttrAccessInfo, ModuleAttrAssignment, ModuleBareAssignment, ModuleOrderComparisonInfo,
     NamedTupleDefInfo, NewTypeCallInfo, ParameterInfo, Pep695BoundViolation, ProtocolSelfViolation,
     Pep695BoundViolationKind, ReadOnlyViolationInfo, ReadOnlyViolationKind, ResolvedModule,
-    ReturnAnnotationKind, ReturnStmtInfo, RevealTypeCallInfo, RhsKind, Span, TypeAliasTypeCallInfo, TypeStatementInfo, TypeVarCallInfo, TypedDictCallInfo, TypedDictKeyViolation, TypedDictKeyViolationKind, TypedDictSecondArgKind,
+    ReturnAnnotationKind, ReturnStmtInfo, RevealTypeCallInfo, RhsKind, Span, TypeAliasDefInfo,
+    TypeAliasTypeCallInfo, TypeStatementInfo, TypeVarCallInfo, TypedDictCallInfo,
+    TypedDictKeyViolation, TypedDictKeyViolationKind, TypedDictSecondArgKind,
     UnhashableKeyRef, VariableInfo,
 };
 

@@ -39,6 +39,17 @@
           "type": "boolean",
           "default": true,
           "description": "Enable or disable the Basilisk type checker."
+        },
+        "basilisk.useLsp": {
+          "type": "boolean",
+          "default": false,
+          "description": "Use the LSP server instead of the subprocess approach. Enable once basilisk lsp is stable."
+        },
+        "basilisk.trace.server": {
+          "type": "string",
+          "enum": ["off", "messages", "verbose"],
+          "default": "off",
+          "description": "Trace LSP communication for debugging."
         }
       }
     }
@@ -48,6 +59,9 @@
     "watch": "tsc -watch -p ./",
     "vscode:prepublish": "npm run compile",
     "package": "vsce package"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

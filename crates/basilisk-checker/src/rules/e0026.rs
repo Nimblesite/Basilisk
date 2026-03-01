@@ -22,6 +22,35 @@ pub(crate) struct TypeVarSingleConstraint;
 impl Rule for TypeVarSingleConstraint {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         for tv in &module.typevar_calls {
+            // Name inconsistency: variable name must match the string argument.
+            if let Some(ref string_name) = tv.string_name {
+                if string_name != &tv.name {
+                    let kind = if tv.is_typevartuple { "TypeVarTuple" }
+                        else if tv.is_paramspec { "ParamSpec" }
+                        else { "TypeVar" };
+                    diagnostics.push(Diagnostic {
+                        code: CODE.clone(),
+                        severity: Severity::Error,
+                        message: format!(
+                            "Variable name `{}` does not match the name string `{string_name}` \
+                             passed to `{kind}`",
+                            tv.name,
+                        ),
+                        span: tv.span,
+                        path: module.path.clone(),
+                        help: Some(format!(
+                            "Rename the variable to `{string_name}` or change the name string \
+                             to `\"{}\"`",
+                            tv.name
+                        )),
+                        note: Some(
+                            "PEP 484: the variable name and the string argument must match"
+                                .to_owned(),
+                        ),
+                    });
+                }
+            }
+
             if tv.constraint_count == 1 {
                 diagnostics.push(Diagnostic {
                     code: CODE.clone(),

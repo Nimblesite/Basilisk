@@ -1,16 +1,21 @@
 /**
  * Basilisk VS Code Extension
  *
- * Runs `basilisk check --output json` on every Python file save/open and
- * pushes the resulting diagnostics into VSCode's Problems panel.
- *
- * NOTE: This extension uses the subprocess approach (no LSP).
- * LSP integration is deferred to a future phase — see docs/lsp-plan.md.
+ * Supports both subprocess mode (basilisk check --output json) and
+ * LSP mode (basilisk lsp) based on configuration.
  */
 
 import * as vscode from "vscode";
 import { execFile } from "child_process";
 import * as path from "path";
+import {
+  LanguageClient,
+  LanguageClientOptions,
+  ServerOptions,
+  TransportKind,
+} from "vscode-languageclient/node";
+
+let client: LanguageClient | undefined;
 
 /** Shape of a single diagnostic emitted by `basilisk check --output json`. */
 interface BasiliskDiagnostic {
@@ -31,15 +36,56 @@ interface BasiliskDiagnostic {
 const COLLECTION_NAME = "basilisk";
 
 export function activate(context: vscode.ExtensionContext): void {
-  const collection =
-    vscode.languages.createDiagnosticCollection(COLLECTION_NAME);
+  const cfg = vscode.workspace.getConfiguration("basilisk");
+  const executablePath = cfg.get<string>("executablePath") ?? "basilisk";
+  const useLsp = cfg.get<boolean>("useLsp") ?? false;
+
+  if (useLsp) {
+    startLspClient(context, executablePath);
+  } else {
+    startSubprocessMode(context, executablePath);
+  }
+}
+
+export function deactivate(): Promise<void> | undefined {
+  return client?.stop();
+}
+
+function startLspClient(context: vscode.ExtensionContext, executablePath: string): void {
+  const serverOptions: ServerOptions = {
+    command: executablePath,
+    args: ["lsp"],
+    transport: TransportKind.stdio,
+  };
+
+  const clientOptions: LanguageClientOptions = {
+    documentSelector: [{ scheme: "file", language: "python" }],
+    synchronize: {
+      configurationSection: "basilisk",
+    },
+    traceOutputChannel: vscode.window.createOutputChannel("Basilisk LSP Trace"),
+  };
+
+  client = new LanguageClient(
+    "basilisk",
+    "Basilisk Type Checker",
+    serverOptions,
+    clientOptions
+  );
+
+  client.start();
+  context.subscriptions.push(client);
+}
+
+function startSubprocessMode(context: vscode.ExtensionContext, executablePath: string): void {
+  const collection = vscode.languages.createDiagnosticCollection(COLLECTION_NAME);
   context.subscriptions.push(collection);
 
   // Check on open.
   context.subscriptions.push(
     vscode.workspace.onDidOpenTextDocument((doc) => {
       if (doc.languageId === "python") {
-        checkDocument(doc, collection);
+        checkDocument(doc, collection, executablePath);
       }
     })
   );
@@ -48,7 +94,7 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.workspace.onDidSaveTextDocument((doc) => {
       if (doc.languageId === "python") {
-        checkDocument(doc, collection);
+        checkDocument(doc, collection, executablePath);
       }
     })
   );
@@ -63,28 +109,18 @@ export function activate(context: vscode.ExtensionContext): void {
   // Check all already-open Python documents on activation.
   for (const doc of vscode.workspace.textDocuments) {
     if (doc.languageId === "python") {
-      checkDocument(doc, collection);
+      checkDocument(doc, collection, executablePath);
     }
   }
 }
 
-export function deactivate(): void {
-  // Nothing to tear down; the DiagnosticCollection is disposed via subscriptions.
-}
-
-function getConfig(): { executablePath: string; enabled: boolean } {
-  const cfg = vscode.workspace.getConfiguration("basilisk");
-  return {
-    executablePath: cfg.get<string>("executablePath") ?? "basilisk",
-    enabled: cfg.get<boolean>("enabled") ?? true,
-  };
-}
-
 function checkDocument(
   doc: vscode.TextDocument,
-  collection: vscode.DiagnosticCollection
+  collection: vscode.DiagnosticCollection,
+  executablePath: string
 ): void {
-  const { executablePath, enabled } = getConfig();
+  const cfg = vscode.workspace.getConfiguration("basilisk");
+  const enabled = cfg.get<boolean>("enabled") ?? true;
 
   if (!enabled) {
     collection.delete(doc.uri);

@@ -18,8 +18,8 @@ use crate::scope::{
     MatchStmtInfo, NamedTupleDefInfo, NewTypeCallInfo, ParameterInfo, Pep695BoundViolation,
     Pep695BoundViolationKind, ProtocolSelfViolation, ReadOnlyViolationInfo, ReadOnlyViolationKind,
     ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo, RevealTypeCallInfo, RhsKind, Span,
-    TypeVarCallInfo, TypedDictCallInfo, TypedDictKeyViolation, TypedDictKeyViolationKind,
-    TypedDictSecondArgKind, UnhashableKeyRef, VariableInfo,
+    TypeAliasDefInfo, TypeVarCallInfo, TypedDictCallInfo, TypedDictKeyViolation,
+    TypedDictKeyViolationKind, TypedDictSecondArgKind, UnhashableKeyRef, VariableInfo,
 };
 
 /// Collect all function definitions and module-level data from the parsed module.
@@ -75,6 +75,7 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
     let typeddict_key_violations =
         collect_typeddict_key_violations(&module.ast.body, &classes, &module.source);
     let generic_subscript_sites = collect_generic_subscript_sites(&module.ast.body);
+    let type_alias_defs = collect_type_alias_defs(&module.ast.body);
     ResolvedModule {
         functions,
         classes,
@@ -110,6 +111,7 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         protocol_self_violations,
         isinstance_typeddict_violations,
         typeddict_key_violations,
+        type_alias_defs,
         generic_subscript_sites,
         path: module.path.clone(),
         source: module.source.clone(),
@@ -752,15 +754,19 @@ fn class_info_from(
         .as_deref()
         .map(|tp| tp.type_params.iter().map(type_param_name).collect())
         .unwrap_or_default();
-    let base_expression_names: Vec<String> = class
+    let (base_expression_names, has_subscript_base) = class
         .arguments
         .as_ref()
         .map(|args| {
             let mut names = Vec::new();
+            let mut has_sub = false;
             for expr in &args.args {
                 collect_name_refs_from_expr(expr, &mut names);
+                if matches!(expr, Expr::Subscript(_)) {
+                    has_sub = true;
+                }
             }
-            names
+            (names, has_sub)
         })
         .unwrap_or_default();
 
@@ -790,6 +796,7 @@ fn class_info_from(
         base_expression_names,
         generic_non_typevar_args,
         metaclass_name,
+        has_subscript_base,
     }
 }
 
@@ -1218,6 +1225,7 @@ fn function_info_from(func: &StmtFunctionDef, class_name: Option<String>) -> Fun
         .as_deref()
         .map(|tp| tp.type_params.iter().map(type_param_name).collect())
         .unwrap_or_default();
+    let local_vars = collect_local_annotated_vars(&func.body);
 
     FunctionInfo {
         name: func.name.to_string(),
@@ -1244,6 +1252,7 @@ fn function_info_from(func: &StmtFunctionDef, class_name: Option<String>) -> Fun
         }),
         has_pep695_type_params,
         pep695_type_param_names,
+        local_vars,
     }
 }
 
@@ -1265,6 +1274,52 @@ fn body_is_stub(stmts: &[Stmt]) -> bool {
     non_docstring
         .iter()
         .all(|s| matches!(s, Stmt::Expr(e) if matches!(e.value.as_ref(), Expr::EllipsisLiteral(_))))
+}
+
+/// Collect annotated local variable declarations (`x: T` or `x: T = v`) from a
+/// function body, recursing into nested blocks but not into nested function bodies.
+///
+/// Used to populate `FunctionInfo::local_vars` for downstream rules (e.g. E0047).
+fn collect_local_annotated_vars(stmts: &[Stmt]) -> Vec<VariableInfo> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        match stmt {
+            Stmt::AnnAssign(node) => {
+                if let Some(info) = ann_assign_info_from(node) {
+                    out.push(info);
+                }
+            }
+            Stmt::If(node) => {
+                out.extend(collect_local_annotated_vars(&node.body));
+                for clause in &node.elif_else_clauses {
+                    out.extend(collect_local_annotated_vars(&clause.body));
+                }
+            }
+            Stmt::For(node) => {
+                out.extend(collect_local_annotated_vars(&node.body));
+                out.extend(collect_local_annotated_vars(&node.orelse));
+            }
+            Stmt::While(node) => {
+                out.extend(collect_local_annotated_vars(&node.body));
+                out.extend(collect_local_annotated_vars(&node.orelse));
+            }
+            Stmt::With(node) => {
+                out.extend(collect_local_annotated_vars(&node.body));
+            }
+            Stmt::Try(node) => {
+                out.extend(collect_local_annotated_vars(&node.body));
+                for handler in &node.handlers {
+                    let ExceptHandler::ExceptHandler(h) = handler;
+                    out.extend(collect_local_annotated_vars(&h.body));
+                }
+                out.extend(collect_local_annotated_vars(&node.orelse));
+                out.extend(collect_local_annotated_vars(&node.finalbody));
+            }
+            // Do NOT recurse into nested function or class definitions.
+            _ => {}
+        }
+    }
+    out
 }
 
 fn param_with_default_to_info(p: &ParameterWithDefault) -> ParameterInfo {
@@ -1750,6 +1805,14 @@ fn typevar_call_info_from(
         .skip(1)
         .filter_map(expr_simple_name)
         .collect();
+    // Extract the string value of the first positional argument (the name string).
+    let string_name = call.arguments.args.first().and_then(|arg| {
+        if let Expr::StringLiteral(s) = arg {
+            Some(s.value.to_str().to_owned())
+        } else {
+            None
+        }
+    });
     TypeVarCallInfo {
         name,
         constraint_count,
@@ -1766,6 +1829,7 @@ fn typevar_call_info_from(
         constraint_type_names,
         is_typevartuple: callee == "TypeVarTuple",
         is_paramspec: callee == "ParamSpec",
+        string_name,
     }
 }
 
@@ -5740,7 +5804,8 @@ fn collect_typevar_bound_typeddict_violations(stmts: &[Stmt]) -> Vec<Span> {
     out
 }
 
-/// Collect module-level subscript expression sites (`Name[args...]` used as a statement).
+/// Collect module-level subscript expression sites (`Name[args...]` used as a statement
+/// or as the annotation in an annotated assignment).
 ///
 /// These are used by BSK-E0092 to check whether user-defined generic types are
 /// subscripted with the correct number of type arguments.
@@ -5748,21 +5813,71 @@ fn collect_generic_subscript_sites(stmts: &[Stmt]) -> Vec<GenericSubscriptSite> 
     use ruff_text_size::Ranged as _;
     let mut out = Vec::new();
     for stmt in stmts {
-        let Stmt::Expr(expr_stmt) = stmt else { continue };
-        let Expr::Subscript(sub) = expr_stmt.value.as_ref() else { continue };
-        let Some(base_name) = expr_simple_name(sub.value.as_ref()) else { continue };
-        let arg_count = match sub.slice.as_ref() {
-            Expr::Tuple(t) => t.elts.len(),
-            _ => 1,
-        };
-        out.push(GenericSubscriptSite {
-            base_name,
-            arg_count,
-            span: Span {
-                start: sub.range().start().to_u32(),
-                end: sub.range().end().to_u32(),
-            },
-        });
+        match stmt {
+            // Bare expression statement: `LinkedList[int, str]`
+            Stmt::Expr(expr_stmt) => {
+                if let Expr::Subscript(sub) = expr_stmt.value.as_ref() {
+                    if let Some(base_name) = expr_simple_name(sub.value.as_ref()) {
+                        let arg_count = match sub.slice.as_ref() {
+                            Expr::Tuple(t) => t.elts.len(),
+                            _ => 1,
+                        };
+                        out.push(GenericSubscriptSite {
+                            base_name,
+                            arg_count,
+                            span: Span {
+                                start: sub.range().start().to_u32(),
+                                end: sub.range().end().to_u32(),
+                            },
+                        });
+                    }
+                }
+            }
+            // Annotated assignment: `x: LinkedList[int, str]` or `x: LinkedList[int, str] = ...`
+            Stmt::AnnAssign(ann_assign) => {
+                if let Expr::Subscript(sub) = ann_assign.annotation.as_ref() {
+                    if let Some(base_name) = expr_simple_name(sub.value.as_ref()) {
+                        let arg_count = match sub.slice.as_ref() {
+                            Expr::Tuple(t) => t.elts.len(),
+                            _ => 1,
+                        };
+                        out.push(GenericSubscriptSite {
+                            base_name,
+                            arg_count,
+                            span: Span {
+                                start: sub.range().start().to_u32(),
+                                end: sub.range().end().to_u32(),
+                            },
+                        });
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Collect module-level `TypeAlias` annotated assignments.
+///
+/// Finds all statements of the form `Name: TypeAlias = expr` at the top level
+/// and returns the alias name along with all simple names referenced in `expr`.
+fn collect_type_alias_defs(stmts: &[Stmt]) -> Vec<TypeAliasDefInfo> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        let Stmt::AnnAssign(ann) = stmt else { continue };
+        let is_type_alias = matches!(
+            ann.annotation.as_ref(),
+            Expr::Name(n) if n.id.as_str() == "TypeAlias"
+        );
+        if !is_type_alias {
+            continue;
+        }
+        let Some(name) = expr_simple_name(ann.target.as_ref()) else { continue };
+        let Some(rhs) = ann.value.as_ref() else { continue };
+        let mut rhs_names = Vec::new();
+        collect_name_refs_from_expr(rhs, &mut rhs_names);
+        out.push(TypeAliasDefInfo { name, rhs_names });
     }
     out
 }

@@ -38,6 +38,7 @@ basilisk-db       = { path = "crates/basilisk-db" }
 basilisk-parser   = { path = "crates/basilisk-parser" }
 basilisk-resolver = { path = "crates/basilisk-resolver" }
 basilisk-checker  = { path = "crates/basilisk-checker" }
+basilisk-lsp      = { path = "crates/basilisk-lsp" }
 
 [workspace.lints.rust]
 unsafe_code  = "deny"

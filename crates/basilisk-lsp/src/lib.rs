@@ -1,16 +1,9 @@
 //! Language Server Protocol support for Basilisk.
 //!
-//! # Current state
-//!
-//! This crate exposes [`check_source`], which runs the full checker pipeline
-//! on an in-memory Python source string and returns diagnostic messages.
-//! It is used directly by the VS Code extension (subprocess approach) and
-//! will become the foundation for a full LSP server in a later phase.
-//!
-//! # LSP server
-//!
-//! A full `textDocument/publishDiagnostics` server is deferred — see
-//! `docs/lsp-plan.md` for the implementation plan.
+//! This crate provides both a simple `check_source` function for subprocess
+//! usage and a full LSP server implementation.
+
+pub mod server;
 
 /// Run the Basilisk checker on a Python source string.
 ///
@@ -54,3 +47,9 @@ fn byte_offset_to_line_col(source: &str, offset: usize) -> (usize, usize) {
     let col = before.rfind('\n').map_or(clamped, |pos| clamped - pos - 1) + 1;
     (line, col)
 }
+
+/// Start the Basilisk LSP server.
+///
+/// This function starts a JSON-RPC server on stdio that implements the
+/// Language Server Protocol. It's intended to be called from the CLI.
+pub use server::run_server;

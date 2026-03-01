@@ -15,16 +15,59 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::Diagnostic;
+use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
 use super::Rule;
+
+const CODE: ErrorCode = ErrorCode {
+    code: "BSK-E0084",
+    docs_url: "https://basilisk-lang.org/errors/BSK-E0084",
+};
 
 /// Emits BSK-E0084 when a `TypeVarTuple` has invalid parameters.
 pub(crate) struct TypeVarTupleInvalidParams;
 
 impl Rule for TypeVarTupleInvalidParams {
-    fn check(&self, _module: &ResolvedModule, _diagnostics: &mut Vec<Diagnostic>) {
-        // TODO: Implement TypeVarTuple parameter validation
-        // This rule should check for variance, bounds, constraints on TypeVarTuple
+    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+        for call in &module.calls {
+            if call.callee != "TypeVarTuple" {
+                continue;
+            }
+
+            let has_variance = call
+                .keywords
+                .iter()
+                .any(|(name, _)| name == "covariant" || name == "contravariant");
+            let has_bound = call.keywords.iter().any(|(name, _)| name == "bound");
+            // args[0] is the name string; any further positional args are constraints
+            let has_constraints = call.args.len() > 1;
+
+            let error_msg = if has_variance {
+                Some("`TypeVarTuple` does not support variance specification")
+            } else if has_bound {
+                Some("`TypeVarTuple` does not support bounds")
+            } else if has_constraints {
+                Some("`TypeVarTuple` does not support type constraints")
+            } else {
+                None
+            };
+
+            if let Some(msg) = error_msg {
+                diagnostics.push(Diagnostic {
+                    code: CODE.clone(),
+                    severity: Severity::Error,
+                    message: format!("Invalid `TypeVarTuple` parameters: {msg}"),
+                    span: call.span,
+                    path: module.path.clone(),
+                    help: Some(
+                        "Use `TypeVarTuple(\"Ts\")` without additional parameters".to_owned(),
+                    ),
+                    note: Some(
+                        "`TypeVarTuple` does not support variance, bounds, or constraints"
+                            .to_owned(),
+                    ),
+                });
+            }
+        }
     }
 }

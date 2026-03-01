@@ -2,11 +2,8 @@
 /**
  * Basilisk VS Code Extension
  *
- * Runs `basilisk check --output json` on every Python file save/open and
- * pushes the resulting diagnostics into VSCode's Problems panel.
- *
- * NOTE: This extension uses the subprocess approach (no LSP).
- * LSP integration is deferred to a future phase — see docs/lsp-plan.md.
+ * Supports both subprocess mode (basilisk check --output json) and
+ * LSP mode (basilisk lsp) based on configuration.
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -47,20 +44,53 @@ exports.deactivate = deactivate;
 const vscode = __importStar(require("vscode"));
 const child_process_1 = require("child_process");
 const path = __importStar(require("path"));
+const node_1 = require("vscode-languageclient/node");
+let client;
 const COLLECTION_NAME = "basilisk";
 function activate(context) {
+    const cfg = vscode.workspace.getConfiguration("basilisk");
+    const executablePath = cfg.get("executablePath") ?? "basilisk";
+    const useLsp = cfg.get("useLsp") ?? false;
+    if (useLsp) {
+        startLspClient(context, executablePath);
+    }
+    else {
+        startSubprocessMode(context, executablePath);
+    }
+}
+function deactivate() {
+    return client?.stop();
+}
+function startLspClient(context, executablePath) {
+    const serverOptions = {
+        command: executablePath,
+        args: ["lsp"],
+        transport: node_1.TransportKind.stdio,
+    };
+    const clientOptions = {
+        documentSelector: [{ scheme: "file", language: "python" }],
+        synchronize: {
+            configurationSection: "basilisk",
+        },
+        traceOutputChannel: vscode.window.createOutputChannel("Basilisk LSP Trace"),
+    };
+    client = new node_1.LanguageClient("basilisk", "Basilisk Type Checker", serverOptions, clientOptions);
+    client.start();
+    context.subscriptions.push(client);
+}
+function startSubprocessMode(context, executablePath) {
     const collection = vscode.languages.createDiagnosticCollection(COLLECTION_NAME);
     context.subscriptions.push(collection);
     // Check on open.
     context.subscriptions.push(vscode.workspace.onDidOpenTextDocument((doc) => {
         if (doc.languageId === "python") {
-            checkDocument(doc, collection);
+            checkDocument(doc, collection, executablePath);
         }
     }));
     // Check on save.
     context.subscriptions.push(vscode.workspace.onDidSaveTextDocument((doc) => {
         if (doc.languageId === "python") {
-            checkDocument(doc, collection);
+            checkDocument(doc, collection, executablePath);
         }
     }));
     // Clear diagnostics when a file is closed.
@@ -70,22 +100,13 @@ function activate(context) {
     // Check all already-open Python documents on activation.
     for (const doc of vscode.workspace.textDocuments) {
         if (doc.languageId === "python") {
-            checkDocument(doc, collection);
+            checkDocument(doc, collection, executablePath);
         }
     }
 }
-function deactivate() {
-    // Nothing to tear down; the DiagnosticCollection is disposed via subscriptions.
-}
-function getConfig() {
+function checkDocument(doc, collection, executablePath) {
     const cfg = vscode.workspace.getConfiguration("basilisk");
-    return {
-        executablePath: cfg.get("executablePath") ?? "basilisk",
-        enabled: cfg.get("enabled") ?? true,
-    };
-}
-function checkDocument(doc, collection) {
-    const { executablePath, enabled } = getConfig();
+    const enabled = cfg.get("enabled") ?? true;
     if (!enabled) {
         collection.delete(doc.uri);
         return;

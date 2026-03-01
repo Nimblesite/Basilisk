@@ -35,6 +35,8 @@ enum Command {
         #[arg(long, default_value = "text")]
         output: OutputFormat,
     },
+    /// Start the Basilisk Language Server (JSON-RPC over stdio).
+    Lsp,
 }
 
 fn main() {
@@ -42,6 +44,13 @@ fn main() {
 
     let exit_code = match cli.command {
         Command::Check { paths, output } => run_check(&paths, output),
+        Command::Lsp => match basilisk_lsp::run_server() {
+            Ok(()) => 0,
+            Err(e) => {
+                eprintln!("error: failed to start LSP server: {e}");
+                1
+            }
+        },
     };
 
     process::exit(exit_code);

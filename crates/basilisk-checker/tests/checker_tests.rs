@@ -2104,3 +2104,62 @@ fn debug_all_diags_qualifiers_annotated() -> Result<(), Box<dyn std::error::Erro
     }
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// §4.4 — Self/Cls Inference: E0001 does NOT fire for self/cls parameters
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0001_self_param_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "class MyClass:\n    def method(self) -> None:\n        pass\n";
+    let diags = run(src)?;
+    let e1: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0001")
+        .collect();
+    assert!(
+        e1.is_empty(),
+        "self parameter must not trigger E0001, got: {e1:#?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0001_cls_param_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "class MyClass:\n    @classmethod\n    def method(cls) -> None:\n        pass\n";
+    let diags = run(src)?;
+    let e1: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0001")
+        .collect();
+    assert!(
+        e1.is_empty(),
+        "cls parameter must not trigger E0001, got: {e1:#?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0001_regular_params_still_fire() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "class MyClass:\n    def method(self, data) -> None:\n        pass\n";
+    let diags = run(src)?;
+    let e1: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0001")
+        .collect();
+    assert!(
+        !e1.is_empty(),
+        "regular unannotated parameters must still fire E0001"
+    );
+    // Should only fire for 'data', not 'self'
+    let messages: Vec<&str> = e1.iter().map(|d| d.message.as_str()).collect();
+    assert!(
+        messages.iter().any(|m| m.contains("data")),
+        "E0001 should point to 'data' parameter"
+    );
+    assert!(
+        !messages.iter().any(|m| m.contains("self")),
+        "E0001 should NOT point to 'self' parameter"
+    );
+    Ok(())
+}

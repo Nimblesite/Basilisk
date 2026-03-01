@@ -329,6 +329,161 @@ fn is_non_type_name(ann: &str, non_type_names: &HashSet<String>) -> bool {
     non_type_names.contains(content_to_check)
 }
 
+/// Returns `true` when the annotation uses a `ParamSpec` in an invalid position.
+///
+/// Valid positions for `P` (a `ParamSpec`):
+/// - As the parameters argument of `Callable`: `Callable[P, ReturnType]`
+/// - Inside `Concatenate` as the LAST argument: `Concatenate[T, P]` inside Callable
+/// - As a type parameter in `Generic[P]`
+///
+/// Invalid positions (detected here):
+/// - Bare `P` as a direct annotation
+/// - `Concatenate[...]` used outside of `Callable`
+/// - `P` inside a non-Callable subscript: `list[P]`, `dict[str, P]`
+/// - `P` as the return type of `Callable`: `Callable[[int, str], P]`
+fn is_paramspec_invalid_annotation(ann: &str, paramspec_names: &HashSet<&str>) -> bool {
+    let ann = ann.trim();
+    if ann.is_empty() || paramspec_names.is_empty() {
+        return false;
+    }
+
+    // Case 1: bare ParamSpec name used as a direct annotation.
+    if paramspec_names.contains(ann) {
+        return true;
+    }
+
+    // Case 2: `Concatenate[...]` used outside of a `Callable` context.
+    // When `Concatenate` appears as a direct annotation (not inside `Callable[...]`),
+    // it's always invalid.
+    if ann.starts_with("Concatenate[") {
+        return true;
+    }
+
+    // For the remaining cases, we only check subscript annotations.
+    if !ann.contains('[') {
+        return false;
+    }
+
+    // Case 3: ParamSpec inside a non-Callable subscript (e.g. `list[P]`).
+    // If the annotation starts with something other than `Callable[`, look for ParamSpec names.
+    if !ann.starts_with("Callable[") {
+        for name in paramspec_names {
+            if ann.contains(name) {
+                // Make sure it's not just a substring of a longer identifier.
+                // Check that the name appears surrounded by non-identifier chars.
+                let name_len = name.len();
+                let ann_bytes = ann.as_bytes();
+                for start in 0..ann.len().saturating_sub(name_len - 1) {
+                    if ann[start..].starts_with(name) {
+                        let end = start + name_len;
+                        let before_ok = start == 0
+                            || !ann_bytes[start - 1].is_ascii_alphanumeric()
+                            && ann_bytes[start - 1] != b'_';
+                        let after_ok = end >= ann.len()
+                            || !ann_bytes[end].is_ascii_alphanumeric()
+                            && ann_bytes[end] != b'_';
+                        if before_ok && after_ok {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    // Case 4: `Callable[[int, str], P]` — ParamSpec as the return type of Callable.
+    // The return type is the last top-level argument to Callable[...].
+    // We detect this by finding the last top-level comma, then checking if what follows is a ParamSpec name.
+    let inner = ann.trim_start_matches("Callable[").trim_end_matches(']');
+    let last_arg = last_top_level_arg(inner);
+    if let Some(last) = last_arg {
+        let last_trimmed = last.trim();
+        if paramspec_names.contains(last_trimmed) {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Python built-in type names that are always valid as forward references in annotations.
+/// Used to avoid false positives in the circular reference check.
+const PYTHON_BUILTIN_TYPE_NAMES: &[&str] = &[
+    "int", "str", "float", "bool", "bytes", "complex", "bytearray",
+    "memoryview", "object", "type", "None", "list", "dict", "set",
+    "frozenset", "tuple", "range", "slice", "super",
+    "classmethod", "staticmethod", "property",
+    "Exception", "BaseException", "ValueError", "TypeError",
+    "AttributeError", "KeyError", "IndexError", "RuntimeError",
+    "StopIteration", "NotImplementedError", "OSError", "IOError",
+    "FileNotFoundError", "PermissionError", "TimeoutError",
+    "ConnectionError", "ArithmeticError", "OverflowError",
+    "ZeroDivisionError", "ImportError", "ModuleNotFoundError",
+    "NameError", "UnboundLocalError", "LookupError", "SyntaxError",
+    "SystemExit", "KeyboardInterrupt", "GeneratorExit",
+    "UnicodeError", "UnicodeDecodeError", "UnicodeEncodeError",
+    "Any", "Union", "Optional", "Callable", "Tuple", "List", "Dict",
+    "Set", "FrozenSet", "Type", "ClassVar", "Final", "Literal",
+    "TypeVar", "Generic", "Protocol", "TypedDict", "NamedTuple",
+    "Annotated", "TypeAlias", "TypeGuard", "ParamSpec", "TypeVarTuple",
+    "Concatenate", "Never", "LiteralString", "Self", "Unpack",
+    "overload", "cast", "assert_type", "reveal_type",
+    "Iterable", "Iterator", "Generator", "Sequence", "Mapping",
+    "MutableMapping", "MutableSequence", "MutableSet", "Coroutine",
+    "AsyncIterator", "AsyncIterable", "AsyncGenerator",
+    "Pattern", "Match", "IO", "TextIO", "BinaryIO", "AbstractSet",
+];
+
+/// Returns `true` when `ann` is a bare identifier (only alphanumeric chars and underscores,
+/// no string quotes, brackets, dots, parens, spaces, or operators).
+fn is_bare_identifier(ann: &str) -> bool {
+    !ann.is_empty()
+        && !ann.starts_with('"')
+        && !ann.starts_with('\'')
+        && ann.chars().all(|c| c.is_alphanumeric() || c == '_')
+}
+
+/// Returns `true` when the annotation is a string literal whose inner content equals
+/// the attribute name, and that name is not defined in the module scope or as a Python
+/// built-in type.
+///
+/// This detects circular forward references like `ClassF: "ClassF"` when `ClassF` has
+/// no other definition reachable at module scope.
+fn is_circular_string_annotation(
+    ann: &str,
+    attr_name: &str,
+    module_scope_names: &HashSet<&str>,
+    builtin_names: &HashSet<&str>,
+) -> bool {
+    let content = if (ann.starts_with('"') && ann.ends_with('"') && ann.len() >= 2)
+        || (ann.starts_with('\'') && ann.ends_with('\'') && ann.len() >= 2)
+    {
+        &ann[1..ann.len() - 1]
+    } else {
+        return false;
+    };
+    content == attr_name
+        && !module_scope_names.contains(content)
+        && !builtin_names.contains(content)
+}
+
+/// Return the last top-level comma-separated argument from a subscript's inner text.
+fn last_top_level_arg(inner: &str) -> Option<&str> {
+    let mut depth = 0i32;
+    let mut last_comma = None;
+    let bytes = inner.as_bytes();
+    for (i, &b) in bytes.iter().enumerate() {
+        match b {
+            b'[' | b'(' | b'{' => depth += 1,
+            b']' | b')' | b'}' => depth -= 1,
+            b',' if depth == 0 => last_comma = Some(i),
+            _ => {}
+        }
+    }
+    last_comma.map(|pos| &inner[pos + 1..])
+}
+
 /// Emits BSK-E0047 when an annotation contains an invalid type expression.
 pub(crate) struct InvalidTypeAnnotation;
 
@@ -338,7 +493,42 @@ impl Rule for InvalidTypeAnnotation {
         let path = &module.path;
         let non_type_names = collect_non_type_names(module);
 
-        // Function parameters
+        // Build the set of names defined in module scope for circular reference detection.
+        let mut module_scope_names: HashSet<&str> = HashSet::new();
+        for cls in &module.classes {
+            module_scope_names.insert(cls.name.as_str());
+        }
+        for var in &module.module_vars {
+            module_scope_names.insert(var.name.as_str());
+        }
+        for imp in &module.imports {
+            match imp.kind {
+                ImportKind::From => {
+                    for name in &imp.names {
+                        module_scope_names.insert(name.as_str());
+                    }
+                }
+                ImportKind::Plain => {
+                    if let Some(name) = imp.module.split('.').next() {
+                        module_scope_names.insert(name);
+                    }
+                }
+                ImportKind::Star => {}
+            }
+        }
+
+        let builtin_type_names: HashSet<&str> =
+            PYTHON_BUILTIN_TYPE_NAMES.iter().copied().collect();
+
+        // Collect module-level ParamSpec names for invalid-use-location checks.
+        let paramspec_names: HashSet<&str> = module
+            .typevar_calls
+            .iter()
+            .filter(|tv| tv.is_paramspec)
+            .map(|tv| tv.name.as_str())
+            .collect();
+
+        // Function parameters (including *args, **kwargs, and return type)
         for func in &module.functions {
             for param in func
                 .parameters
@@ -356,6 +546,7 @@ impl Rule for InvalidTypeAnnotation {
                 let ann_trimmed = ann.trim();
                 if is_invalid_type_annotation(ann_trimmed)
                     || is_non_type_name(ann_trimmed, &non_type_names)
+                    || is_paramspec_invalid_annotation(ann_trimmed, &paramspec_names)
                 {
                     diagnostics.push(make_diagnostic(
                         format!(
@@ -369,7 +560,7 @@ impl Rule for InvalidTypeAnnotation {
             }
         }
 
-        // Module-level variables
+        // Module-level variables (including TypeAlias RHS check)
         for var in &module.module_vars {
             let Some(ann) = span_text(source, var.annotation_span) else {
                 continue;
@@ -383,11 +574,54 @@ impl Rule for InvalidTypeAnnotation {
                     var.name_span,
                     path,
                 ));
+                continue;
+            }
+            // Special case: TypeAlias RHS is a bare ParamSpec name.
+            // e.g. `TA1: TypeAlias = P  # E` where P is a ParamSpec.
+            if ann_trimmed == "TypeAlias" {
+                if let Some(rhs) = span_text(source, var.rhs_span) {
+                    let rhs_trimmed = rhs.trim();
+                    if paramspec_names.contains(rhs_trimmed) {
+                        diagnostics.push(make_diagnostic(
+                            format!(
+                                "`TypeAlias` `{}` has a `ParamSpec` as its type, which is invalid; \
+                                 `ParamSpec` can only be used in `Callable[P, ReturnType]`",
+                                var.name
+                            ),
+                            var.name_span,
+                            path,
+                        ));
+                    }
+                }
+            }
+        }
+
+        // Function-local annotated variables
+        for func in &module.functions {
+            for var in &func.local_vars {
+                let Some(ann) = span_text(source, var.annotation_span) else {
+                    continue;
+                };
+                let ann_trimmed = ann.trim();
+                if is_invalid_type_annotation(ann_trimmed)
+                    || is_non_type_name(ann_trimmed, &non_type_names)
+                {
+                    diagnostics.push(make_diagnostic(
+                        format!(
+                            "Invalid type expression in annotation for local variable `{}`",
+                            var.name
+                        ),
+                        var.name_span,
+                        path,
+                    ));
+                }
             }
         }
 
         // Class attributes
         for cls in &module.classes {
+            let cls_method_names: HashSet<&str> =
+                cls.method_names.iter().map(String::as_str).collect();
             for attr in &cls.attributes {
                 let Some(ann) = span_text(source, attr.annotation_span) else {
                     continue;
@@ -396,6 +630,37 @@ impl Rule for InvalidTypeAnnotation {
                 if is_invalid_type_annotation(ann_trimmed)
                     || is_non_type_name(ann_trimmed, &non_type_names)
                 {
+                    diagnostics.push(make_diagnostic(
+                        format!(
+                            "Invalid type expression in annotation for attribute `{}`",
+                            attr.name
+                        ),
+                        attr.name_span,
+                        path,
+                    ));
+                    continue;
+                }
+                // Check: bare identifier annotation matches a class method name.
+                // e.g. `def int(self)` in the class body, then `y: int` shadows the built-in.
+                if is_bare_identifier(ann_trimmed) && cls_method_names.contains(ann_trimmed) {
+                    diagnostics.push(make_diagnostic(
+                        format!(
+                            "Invalid type expression in annotation for attribute `{}`",
+                            attr.name
+                        ),
+                        attr.name_span,
+                        path,
+                    ));
+                    continue;
+                }
+                // Check: circular string annotation.
+                // e.g. `ClassF: "ClassF"` when `ClassF` is not defined in module scope.
+                if is_circular_string_annotation(
+                    ann_trimmed,
+                    &attr.name,
+                    &module_scope_names,
+                    &builtin_type_names,
+                ) {
                     diagnostics.push(make_diagnostic(
                         format!(
                             "Invalid type expression in annotation for attribute `{}`",

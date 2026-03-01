@@ -108,6 +108,13 @@ pub struct FunctionInfo {
     ///
     /// For `def foo[T, *Ts, **P](): ...`, this is `["T", "Ts", "P"]`.
     pub pep695_type_param_names: Vec<String>,
+    /// Annotated local variables declared anywhere in the function body
+    /// (excluding nested function bodies).
+    ///
+    /// For `x: int = 0` inside the function, this contains a `VariableInfo`
+    /// with `has_annotation = true`.  Used by E0047 to check for invalid type
+    /// annotations in local variable declarations.
+    pub local_vars: Vec<VariableInfo>,
 }
 
 /// A `return` statement found inside a function body.
@@ -381,6 +388,12 @@ pub struct ClassInfo {
     /// For `class Foo(metaclass=Meta): ...`, this is `Some("Meta")`.
     /// `None` when no explicit metaclass is specified.
     pub metaclass_name: Option<String>,
+    /// `true` when at least one base class expression is a subscript.
+    ///
+    /// For example, `class Foo(SubclassMe[float])` has a subscript base.
+    /// Used by `BSK-E0092` to detect classes that have fully specialised their
+    /// generic bases and therefore cannot be further subscripted.
+    pub has_subscript_base: bool,
 }
 
 /// Type parameters declared in a `Generic[T1, T2, ...]` base expression.
@@ -393,6 +406,19 @@ pub struct GenericParamInfo {
     /// `true` when this param was extracted from a starred expression (`*Ts`),
     /// indicating it is a `TypeVarTuple` unpack in `Generic[...]`.
     pub is_typevartuple: bool,
+}
+
+/// A module-level `TypeAlias` annotated assignment.
+///
+/// Represents `MyAlias: TypeAlias = SomeGeneric[int, T]` at module level.
+/// The `rhs_names` field contains all simple names referenced in the RHS expression.
+/// Used by `BSK-E0092` to check that subscript sites respect the alias arity.
+#[derive(Debug, Clone)]
+pub struct TypeAliasDefInfo {
+    /// The alias name (e.g. `"MyAlias"`).
+    pub name: String,
+    /// All simple names referenced in the RHS expression (includes both `TypeVar`s and non-`TypeVar`s).
+    pub rhs_names: Vec<String>,
 }
 
 /// A module-level subscript expression (e.g. `MyGeneric[int]`) used as a statement.
@@ -445,6 +471,11 @@ pub struct TypeVarCallInfo {
     pub is_typevartuple: bool,
     /// `true` when this is a `ParamSpec(...)` call rather than `TypeVar(...)`.
     pub is_paramspec: bool,
+    /// The string value of the first positional argument (the name string passed to the call).
+    ///
+    /// For `T = TypeVar("T")`, this is `Some("T")`.
+    /// `None` when the first argument is not a plain string literal.
+    pub string_name: Option<String>,
 }
 
 /// How an import statement is structured.
@@ -1021,6 +1052,11 @@ pub struct ResolvedModule {
     /// - `var: TypedDict = {invalid/missing keys}` where the literal doesn't match the schema.
     ///   Used by `BSK-E0089`.
     pub typeddict_key_violations: Vec<TypedDictKeyViolation>,
+    /// Module-level `TypeAlias` annotated assignments.
+    ///
+    /// Each entry represents `Name: TypeAlias = expr` at module level.
+    /// Used by `BSK-E0092` to check that subscript sites respect the alias arity.
+    pub type_alias_defs: Vec<TypeAliasDefInfo>,
     /// Module-level subscript expression sites (`Name[args...]` used as a statement).
     ///
     /// Collected so that rules can check whether user-defined generic types are
