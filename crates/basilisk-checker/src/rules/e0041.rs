@@ -19,7 +19,9 @@
 
 use std::collections::HashMap;
 
-use basilisk_resolver::{AttributeInfo, ClassInfo, FunctionInfo, RhsKind, ResolvedModule, Span};
+use basilisk_resolver::{
+    AttributeInfo, ClassInfo, FunctionInfo, NamedTupleDefInfo, RhsKind, ResolvedModule, Span,
+};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
@@ -30,6 +32,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://basilisk-lang.org/errors/BSK-E0041",
 };
 
+
 /// Emits BSK-E0041 for call sites with too few positional arguments.
 pub(crate) struct TooFewArguments;
 
@@ -37,6 +40,7 @@ impl Rule for TooFewArguments {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         check_plain_function_calls(module, diagnostics);
         check_constructor_calls(module, diagnostics);
+        check_namedtuple_calls(module, diagnostics);
     }
 }
 
@@ -484,4 +488,68 @@ fn find_constructor_method<'a>(
     }
 
     None
+}
+
+/// Check calls to functional-form `NamedTuple` / `namedtuple` for argument count errors.
+///
+/// Validates:
+/// - Too few positional args (below required field count, considering defaults)
+/// - Too many positional args (above total field count)
+fn check_namedtuple_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    let nt_map: HashMap<&str, &NamedTupleDefInfo> = module
+        .namedtuple_defs
+        .iter()
+        .map(|nt| (nt.lhs_name.as_str(), nt))
+        .collect();
+
+    for call in &module.calls {
+        let Some(nt) = nt_map.get(call.callee.as_str()) else {
+            continue;
+        };
+
+        let total_fields = nt.field_names.len();
+        let required_fields = total_fields.saturating_sub(nt.defaults_count);
+        let positional_count = call.args.len();
+        // Keywords that are valid field names count toward satisfying field requirements.
+        let keyword_field_count = call
+            .keywords
+            .iter()
+            .filter(|(kw, _)| nt.field_names.iter().any(|f| f == kw))
+            .count();
+        let total_provided = positional_count + keyword_field_count;
+
+        if total_provided < required_fields {
+            let missing = required_fields - total_provided;
+            diagnostics.push(Diagnostic {
+                code: CODE.clone(),
+                severity: Severity::Error,
+                message: format!(
+                    "Call to `{}()` is missing {missing} required argument{} \
+                     (expected at least {required_fields}, got {positional_count})",
+                    nt.lhs_name,
+                    if missing == 1 { "" } else { "s" },
+                ),
+                span: call.span,
+                path: module.path.clone(),
+                help: None,
+                note: None,
+            });
+        } else if positional_count > total_fields {
+            let extra = positional_count - total_fields;
+            diagnostics.push(Diagnostic {
+                code: CODE.clone(),
+                severity: Severity::Error,
+                message: format!(
+                    "Call to `{}()` has {extra} too many positional argument{} \
+                     (expected at most {total_fields}, got {positional_count})",
+                    nt.lhs_name,
+                    if extra == 1 { "" } else { "s" },
+                ),
+                span: call.span,
+                path: module.path.clone(),
+                help: None,
+                note: None,
+            });
+        }
+    }
 }

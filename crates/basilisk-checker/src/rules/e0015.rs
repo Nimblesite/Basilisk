@@ -102,8 +102,25 @@ fn check_annotation(annotation: &str) -> Option<Violation> {
     let arg_count = count_type_args(inner);
 
     let expected: usize = match generic_name.as_str() {
-        "list" | "set" | "frozenset" | "type" => 1,
+        "list" | "set" | "frozenset" | "type" | "optional" => 1,
         "dict" => 2,
+        "callable" => {
+            // Callable has special syntax: Callable[[arg_types], return_type]
+            // We need to handle this differently
+            if inner.starts_with('[') && inner.contains("],") {
+                2 // Callable[[args], return_type] - 2 arguments
+            } else {
+                1 // Malformed callable
+            }
+        }
+        "union" => {
+            // Union can have any number of arguments, but at least 2
+            if arg_count < 2 {
+                2 // Union needs at least 2 arguments
+            } else {
+                return None; // Valid union
+            }
+        }
         _ => return None,
     };
 

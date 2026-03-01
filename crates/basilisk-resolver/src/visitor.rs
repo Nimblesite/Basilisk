@@ -2574,6 +2574,17 @@ fn collect_namedtuple_defs(stmts: &[Stmt], source: &str) -> Vec<NamedTupleDefInf
             continue;
         };
 
+        // Skip `namedtuple(..., rename=True)` — the renamed field names cannot be
+        // determined statically (e.g. `_0`, `_1`, ...) so we don't track these.
+        let has_rename_true = is_collections_nt
+            && call.arguments.keywords.iter().any(|kw| {
+                kw.arg.as_ref().map(ruff_python_ast::Identifier::as_str) == Some("rename")
+                    && matches!(&kw.value, Expr::BooleanLiteral(b) if b.value)
+            });
+        if has_rename_true {
+            continue;
+        }
+
         // Parse `defaults` keyword argument to determine how many trailing fields
         // have default values.
         let defaults_count = parse_defaults_count(&call.arguments.keywords);
@@ -2647,9 +2658,9 @@ fn collect_namedtuple_defs(stmts: &[Stmt], source: &str) -> Vec<NamedTupleDefInf
 /// - `["x", "y"]` — list of string literals
 /// - `("x", "y")` — tuple of string literals
 /// - `"x y"` or `"x, y"` — space/comma-separated string literal
-fn parse_namedtuple_field_names<'a>(
+fn parse_namedtuple_field_names(
     fields_arg: &Expr,
-    final_constants: &std::collections::HashMap<&str, &'a str>,
+    final_constants: &std::collections::HashMap<&str, &str>,
 ) -> Vec<String> {
     match fields_arg {
         Expr::List(l) => extract_string_list(&l.elts, final_constants),
@@ -2688,7 +2699,7 @@ fn extract_string_list(
 /// Returns 0 if no `defaults` keyword is present or it cannot be parsed.
 fn parse_defaults_count(keywords: &[ruff_python_ast::Keyword]) -> usize {
     for kw in keywords {
-        if kw.arg.as_ref().map(|a| a.as_str()) == Some("defaults") {
+        if kw.arg.as_ref().map(ruff_python_ast::Identifier::as_str) == Some("defaults") {
             return match &kw.value {
                 Expr::Tuple(t) => t.elts.len(),
                 Expr::List(l) => l.elts.len(),

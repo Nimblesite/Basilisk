@@ -224,8 +224,7 @@ fn test_e0014_int_assigned_to_str() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_e2e("x: str = 42\n")?;
     let e0014: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
-        .collect();
+        .filter(|d| d.code.code == "BSK-E0014")?;
     assert!(!e0014.is_empty(), "int assigned to str should fire E0014");
     Ok(())
 }
