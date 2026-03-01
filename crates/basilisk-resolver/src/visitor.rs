@@ -18,7 +18,8 @@ use crate::scope::{
     ParameterInfo, Pep695BoundViolation, Pep695BoundViolationKind,
     ProtocolSelfViolation, ReadOnlyViolationInfo, ReadOnlyViolationKind, ResolvedModule,
     ReturnAnnotationKind, ReturnStmtInfo, RevealTypeCallInfo, RhsKind, Span, TypeVarCallInfo,
-    TypedDictCallInfo, TypedDictSecondArgKind, UnhashableKeyRef, VariableInfo,
+    TypedDictCallInfo, TypedDictKeyViolation, TypedDictKeyViolationKind, TypedDictSecondArgKind,
+    UnhashableKeyRef, VariableInfo,
 };
 
 /// Collect all function definitions and module-level data from the parsed module.
@@ -69,6 +70,8 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         .collect();
     let isinstance_typeddict_violations =
         collect_isinstance_typeddict_violations(&module.ast.body, &typeddict_class_names);
+    let typeddict_key_violations =
+        collect_typeddict_key_violations(&module.ast.body, &classes, &module.source);
     ResolvedModule {
         functions,
         classes,
@@ -103,6 +106,7 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         invalid_string_annotations: Vec::new(),
         protocol_self_violations,
         isinstance_typeddict_violations,
+        typeddict_key_violations,
         path: module.path.clone(),
         source: module.source.clone(),
     }
@@ -2004,13 +2008,11 @@ fn ann_assign_info_from(node: &StmtAnnAssign) -> Option<VariableInfo> {
 fn classify_rhs(expr: &Expr) -> RhsKind {
     match expr {
         Expr::BooleanLiteral(_) => RhsKind::BoolLiteral,
-        Expr::NumberLiteral(n) => {
-            if matches!(n.value, ruff_python_ast::Number::Float(_)) {
-                RhsKind::FloatLiteral
-            } else {
-                RhsKind::IntLiteral
-            }
-        }
+        Expr::NumberLiteral(n) => match n.value {
+            ruff_python_ast::Number::Float(_) => RhsKind::FloatLiteral,
+            ruff_python_ast::Number::Complex { .. } => RhsKind::Other,
+            _ => RhsKind::IntLiteral,
+        },
         Expr::StringLiteral(_) | Expr::FString(_) => RhsKind::StrLiteral,
         Expr::BytesLiteral(_) => RhsKind::BytesLiteral,
         Expr::NoneLiteral(_) => RhsKind::NoneValue,
@@ -2679,8 +2681,8 @@ fn check_typevar_bound_expr(
     }
 }
 
-/// Returns `true` if the expression references an outer-scope TypeParam or a
-/// TypeVar-like name that is not in the current class's TypeParam set.
+/// Returns `true` if the expression references an outer-scope `TypeParam` or a
+/// TypeVar-like name that is not in the current class's `TypeParam` set.
 ///
 /// Used to detect cases like `class Nested[T: dict[str, V]]` where `V` is from
 /// an outer class, or `class Foo[T: (list[S], str)]` where `S` is unresolved.
@@ -2714,9 +2716,9 @@ fn bound_refs_outer_typeparam(
     }
 }
 
-/// Returns `true` if the name looks like a TypeVar by the single-letter uppercase convention.
+/// Returns `true` if the name looks like a `TypeVar` by the single-letter uppercase convention.
 ///
-/// Single-letter uppercase names (e.g. `T`, `S`, `V`) are almost universally TypeVars.
+/// Single-letter uppercase names (e.g. `T`, `S`, `V`) are almost universally `TypeVars`.
 /// Multi-letter names could be concrete types (e.g. `str`, `int`, `ForwardReference`).
 fn is_typevar_like_name(name: &str) -> bool {
     let bytes = name.as_bytes();
@@ -5123,7 +5125,7 @@ fn check_protocol_violations_in_function(
 
 /// Collect spans of `isinstance(x, T)` calls where `T` is a `TypedDict` class.
 ///
-/// PEP 589: TypedDict type objects cannot be used in isinstance() tests.
+/// PEP 589: `TypedDict` type objects cannot be used in `isinstance()` tests.
 fn collect_isinstance_typeddict_violations(
     stmts: &[Stmt],
     typeddict_names: &std::collections::HashSet<&str>,

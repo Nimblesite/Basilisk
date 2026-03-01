@@ -3,7 +3,7 @@
 //! `TypedDict` classes cannot be used with `isinstance()` or as a `TypeVar` bound.
 //!
 //! PEP 589 specifies that:
-//! - TypedDict type objects cannot be used in `isinstance()` tests.
+//! - `TypedDict` type objects cannot be used in `isinstance()` tests.
 //! - `TypedDict` (the abstract base) cannot be used as a bound for a `TypeVar`.
 //!
 //! ```python

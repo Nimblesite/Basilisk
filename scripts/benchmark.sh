@@ -101,15 +101,6 @@ with open(path, "w") as f:
         f.write(f"    def method(self, x: str) -> str: return x\n\n")
 print(f"  {os.path.basename(path)}: {SCALE_MULTI} class pairs (~{SCALE_MULTI * 5} lines)")
 
-# E0018: Undefined variable references
-path = os.path.join(FX, "e0018_undefined_variable.py")
-with open(path, "w") as f:
-    f.write(f"# BSK-E0018: Undefined variable references\n")
-    f.write(f"# {SCALE} undefined variable uses\n\n")
-    for i in range(1, SCALE + 1):
-        f.write(f"x{i} = undefined_var_{i}\n")
-print(f"  {os.path.basename(path)}: {SCALE} references ({SCALE} lines)")
-
 # E0023: Non-exhaustive match (Literal types, ~7 lines each)
 path = os.path.join(FX, "e0023_nonexhaustive_match.py")
 with open(path, "w") as f:
@@ -170,7 +161,6 @@ FIXTURES=(
   "e0001_missing_param.py:E0001 Missing param annotations"
   "e0002_missing_return.py:E0002 Missing return annotations"
   "e0016_incompatible_override.py:E0016 Incompatible override"
-  "e0018_undefined_variable.py:E0018 Undefined variable"
   "e0023_nonexhaustive_match.py:E0023 Non-exhaustive match"
   "e0026_typevar_single_constraint.py:E0026 TypeVar single constraint"
   "e0022_unhashable_dict_key.py:E0022 Unhashable dict key"

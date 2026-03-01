@@ -86,6 +86,7 @@ pub(crate) mod e0085;
 pub(crate) mod e0086;
 pub(crate) mod e0087;
 pub(crate) mod e0088;
+pub(crate) mod e0089;
 pub(crate) mod guards;
 
 use basilisk_resolver::ResolvedModule;
@@ -185,6 +186,7 @@ pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
         &e0086::MultipleTypeVarTuplesInGeneric,
         &e0087::Pep695InvalidBound,
         &e0088::TypedDictRuntimeViolation,
+        &e0089::TypedDictKeyValidation,
     ];
 
     rules.iter().fold(Vec::new(), |mut acc, rule| {
