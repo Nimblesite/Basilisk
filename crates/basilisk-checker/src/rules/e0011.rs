@@ -34,20 +34,108 @@ impl Rule for ReturnTypeMismatch {
                 continue;
             }
             
-            // Skip if no return annotation or annotation is Any
+            // Skip if no return annotation
             if !func.return_annotation.is_present() {
                 continue;
             }
             
-            // For now, we'll skip this check until we have proper return expression inference
-            // This is a placeholder implementation that will be enhanced
-            check_function_return_types(func, &module.path, diagnostics);
+            check_function_return_types(func, module, diagnostics);
         }
     }
 }
 
-fn check_function_return_types(func: &FunctionInfo, _path: &str, _out: &mut Vec<Diagnostic>) {
-    // TODO: Implement proper return type inference once we have expression analysis
-    // This is disabled for now until the type inference system is complete
-    // Placeholder: No-op implementation
+fn check_function_return_types(func: &FunctionInfo, module: &ResolvedModule, out: &mut Vec<Diagnostic>) {
+    // Check if the function has a return statement with a literal value
+    // that clearly doesn't match the annotation
+    if let Some(return_expr) = &func.return_expression {
+        match return_expr {
+            basilisk_resolver::ReturnExpression::Literal(lit) => {
+                // Get the annotation text from the source
+                let Some(ann_span) = func.return_annotation_span else {
+                    return;
+                };
+                let Some(ann_text) = module
+                    .source
+                    .get(ann_span.start as usize..ann_span.end as usize)
+                else {
+                    return;
+                };
+
+                // Check if the literal type is incompatible with the annotation
+                if is_incompatible_literal(lit, ann_text) {
+                    out.push(Diagnostic {
+                        code: CODE.clone(),
+                        severity: Severity::Error,
+                        message: format!("return type mismatch: {} is not assignable to {}", 
+                                       lit_type_name(lit), ann_text),
+                        span: func.name_span,
+                        path: module.path.to_owned(),
+                        help: Some("Check the return type annotation and return statements".to_owned()),
+                        note: None,
+                    });
+                }
+            }
+            basilisk_resolver::ReturnExpression::Call(_) => {
+                // For call expressions, we can't determine the return type without
+                // full inference, so we'll be conservative and not fire E0011
+                // This matches the test expectations
+            }
+            basilisk_resolver::ReturnExpression::None => {
+                // No return expression - this is handled by E0013
+            }
+        }
+    }
+}
+
+fn is_incompatible_literal(lit: &basilisk_resolver::Literal, annotation: &str) -> bool {
+    let base = annotation
+        .split('[')
+        .next()
+        .unwrap_or(annotation)
+        .trim()
+        .to_ascii_lowercase();
+
+    // Simple compatibility check based on literal type and annotation text
+    match lit {
+        basilisk_resolver::Literal::Int(_) => {
+            // int literals are compatible with int annotations
+            base != "int" && base != "any"
+        }
+        basilisk_resolver::Literal::Str(_) => {
+            // str literals are compatible with str annotations
+            base != "str" && base != "any"
+        }
+        basilisk_resolver::Literal::Float(_) => {
+            // float literals are compatible with float annotations
+            base != "float" && base != "any"
+        }
+        basilisk_resolver::Literal::Bool(_) => {
+            // bool literals are compatible with bool annotations
+            base != "bool" && base != "any"
+        }
+        basilisk_resolver::Literal::Bytes(_) => {
+            // bytes literals are compatible with bytes annotations
+            base != "bytes" && base != "any"
+        }
+        basilisk_resolver::Literal::NoneValue => {
+            // None is compatible with None/Any annotations
+            base != "none" && base != "any"
+        }
+        _ => {
+            // For other literal types, be conservative
+            false
+        }
+    }
+}
+
+fn lit_type_name(lit: &basilisk_resolver::Literal) -> &'static str {
+    match lit {
+        basilisk_resolver::Literal::Int(_) => "int",
+        basilisk_resolver::Literal::Str(_) => "str",
+        basilisk_resolver::Literal::Float(_) => "float",
+        basilisk_resolver::Literal::Bool(_) => "bool",
+        basilisk_resolver::Literal::Bytes(_) => "bytes",
+        basilisk_resolver::Literal::NoneValue => "None",
+        _ => "unknown",
+    }
 }

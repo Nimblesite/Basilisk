@@ -489,126 +489,108 @@ pub(crate) struct InvalidTypeAnnotation;
 
 impl Rule for InvalidTypeAnnotation {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let source = &module.source;
-        let path = &module.path;
-        let non_type_names = collect_non_type_names(module);
+        check_invalid_type_annotations(module, diagnostics);
+    }
+}
 
-        // Build the set of names defined in module scope for circular reference detection.
-        let mut module_scope_names: HashSet<&str> = HashSet::new();
-        for cls in &module.classes {
-            module_scope_names.insert(cls.name.as_str());
-        }
-        for var in &module.module_vars {
-            module_scope_names.insert(var.name.as_str());
-        }
-        for imp in &module.imports {
-            match imp.kind {
-                ImportKind::From => {
-                    for name in &imp.names {
-                        module_scope_names.insert(name.as_str());
-                    }
+fn check_invalid_type_annotations(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    let source = &module.source;
+    let path = &module.path;
+    let non_type_names = collect_non_type_names(module);
+
+    // Build the set of names defined in module scope for circular reference detection.
+    let mut module_scope_names: HashSet<&str> = HashSet::new();
+    for cls in &module.classes {
+        module_scope_names.insert(cls.name.as_str());
+    }
+    for var in &module.module_vars {
+        module_scope_names.insert(var.name.as_str());
+    }
+    for imp in &module.imports {
+        match imp.kind {
+            ImportKind::From => {
+                for name in &imp.names {
+                    module_scope_names.insert(name.as_str());
                 }
-                ImportKind::Plain => {
-                    if let Some(name) = imp.module.split('.').next() {
-                        module_scope_names.insert(name);
-                    }
-                }
-                ImportKind::Star => {}
             }
+            ImportKind::Plain => {
+                if let Some(name) = imp.module.split('.').next() {
+                    module_scope_names.insert(name);
+                }
+            }
+            ImportKind::Star => {}
         }
+    }
 
-        let builtin_type_names: HashSet<&str> =
-            PYTHON_BUILTIN_TYPE_NAMES.iter().copied().collect();
+    let builtin_type_names: HashSet<&str> =
+        PYTHON_BUILTIN_TYPE_NAMES.iter().copied().collect();
 
-        // Collect module-level ParamSpec names for invalid-use-location checks.
-        let paramspec_names: HashSet<&str> = module
-            .typevar_calls
+    // Collect module-level ParamSpec names for invalid-use-location checks.
+    let paramspec_names: HashSet<&str> = module
+        .typevar_calls
+        .iter()
+        .filter(|tv| tv.is_paramspec)
+        .map(|tv| tv.name.as_str())
+        .collect();
+
+    // Function parameters (including *args, **kwargs, and return type)
+    for func in &module.functions {
+        for param in func
+            .parameters
             .iter()
-            .filter(|tv| tv.is_paramspec)
-            .map(|tv| tv.name.as_str())
-            .collect();
-
-        // Function parameters (including *args, **kwargs, and return type)
-        for func in &module.functions {
-            for param in func
-                .parameters
-                .iter()
-                .chain(func.vararg.iter())
-                .chain(func.kwarg.iter())
-            {
-                // Skip if already caught by E0024 (numeric/boolean literal)
-                if param.annotation_is_numeric_literal {
-                    continue;
-                }
-                let Some(ann) = span_text(source, param.annotation_span) else {
-                    continue;
-                };
-                let ann_trimmed = ann.trim();
-                if is_invalid_type_annotation(ann_trimmed)
-                    || is_non_type_name(ann_trimmed, &non_type_names)
-                    || is_paramspec_invalid_annotation(ann_trimmed, &paramspec_names)
-                {
-                    diagnostics.push(make_diagnostic(
-                        format!(
-                            "Invalid type expression in annotation for parameter `{}`",
-                            param.name
-                        ),
-                        param.name_span,
-                        path,
-                    ));
-                }
+            .chain(func.vararg.iter())
+            .chain(func.kwarg.iter())
+        {
+            // Skip if already caught by E0024 (numeric/boolean literal)
+            if param.annotation_is_numeric_literal {
+                continue;
             }
-        }
-
-        // Module-level variables (including TypeAlias RHS check)
-        for var in &module.module_vars {
-            let Some(ann) = span_text(source, var.annotation_span) else {
+            let Some(ann) = span_text(source, param.annotation_span) else {
                 continue;
             };
             let ann_trimmed = ann.trim();
             if is_invalid_type_annotation(ann_trimmed)
                 || is_non_type_name(ann_trimmed, &non_type_names)
+                || is_paramspec_invalid_annotation(ann_trimmed, &paramspec_names)
             {
                 diagnostics.push(make_diagnostic(
-                    format!("Invalid type expression in annotation for `{}`", var.name),
-                    var.name_span,
+                    format!(
+                        "Invalid type expression in annotation for parameter `{}`",
+                        param.name
+                    ),
+                    param.name_span,
                     path,
                 ));
-                continue;
-            }
-            // Special case: TypeAlias RHS is a bare ParamSpec name.
-            // e.g. `TA1: TypeAlias = P  # E` where P is a ParamSpec.
-            if ann_trimmed == "TypeAlias" {
-                if let Some(rhs) = span_text(source, var.rhs_span) {
-                    let rhs_trimmed = rhs.trim();
-                    if paramspec_names.contains(rhs_trimmed) {
-                        diagnostics.push(make_diagnostic(
-                            format!(
-                                "`TypeAlias` `{}` has a `ParamSpec` as its type, which is invalid; \
-                                 `ParamSpec` can only be used in `Callable[P, ReturnType]`",
-                                var.name
-                            ),
-                            var.name_span,
-                            path,
-                        ));
-                    }
-                }
             }
         }
+    }
 
-        // Function-local annotated variables
-        for func in &module.functions {
-            for var in &func.local_vars {
-                let Some(ann) = span_text(source, var.annotation_span) else {
-                    continue;
-                };
-                let ann_trimmed = ann.trim();
-                if is_invalid_type_annotation(ann_trimmed)
-                    || is_non_type_name(ann_trimmed, &non_type_names)
-                {
+    // Module-level variables (including TypeAlias RHS check)
+    for var in &module.module_vars {
+        let Some(ann) = span_text(source, var.annotation_span) else {
+            continue;
+        };
+        let ann_trimmed = ann.trim();
+        if is_invalid_type_annotation(ann_trimmed)
+            || is_non_type_name(ann_trimmed, &non_type_names)
+        {
+            diagnostics.push(make_diagnostic(
+                format!("Invalid type expression in annotation for `{}`", var.name),
+                var.name_span,
+                path,
+            ));
+            continue;
+        }
+        // Special case: TypeAlias RHS is a bare ParamSpec name.
+        // e.g. `TA1: TypeAlias = P  # E` where P is a ParamSpec.
+        if ann_trimmed == "TypeAlias" {
+            if let Some(rhs) = span_text(source, var.rhs_span) {
+                let rhs_trimmed = rhs.trim();
+                if paramspec_names.contains(rhs_trimmed) {
                     diagnostics.push(make_diagnostic(
                         format!(
-                            "Invalid type expression in annotation for local variable `{}`",
+                            "`TypeAlias` `{}` has a `ParamSpec` as its type, which is invalid; \
+                             `ParamSpec` can only be used in `Callable[P, ReturnType]`",
                             var.name
                         ),
                         var.name_span,
@@ -617,59 +599,81 @@ impl Rule for InvalidTypeAnnotation {
                 }
             }
         }
+    }
 
-        // Class attributes
-        for cls in &module.classes {
-            let cls_method_names: HashSet<&str> =
-                cls.method_names.iter().map(String::as_str).collect();
-            for attr in &cls.attributes {
-                let Some(ann) = span_text(source, attr.annotation_span) else {
-                    continue;
-                };
-                let ann_trimmed = ann.trim();
-                if is_invalid_type_annotation(ann_trimmed)
-                    || is_non_type_name(ann_trimmed, &non_type_names)
-                {
-                    diagnostics.push(make_diagnostic(
-                        format!(
-                            "Invalid type expression in annotation for attribute `{}`",
-                            attr.name
-                        ),
-                        attr.name_span,
-                        path,
-                    ));
-                    continue;
-                }
-                // Check: bare identifier annotation matches a class method name.
-                // e.g. `def int(self)` in the class body, then `y: int` shadows the built-in.
-                if is_bare_identifier(ann_trimmed) && cls_method_names.contains(ann_trimmed) {
-                    diagnostics.push(make_diagnostic(
-                        format!(
-                            "Invalid type expression in annotation for attribute `{}`",
-                            attr.name
-                        ),
-                        attr.name_span,
-                        path,
-                    ));
-                    continue;
-                }
-                // Check: circular string annotation.
-                // e.g. `ClassF: "ClassF"` when `ClassF` is not defined in module scope.
-                if is_circular_string_annotation(
-                    ann_trimmed,
-                    &attr.name,
-                    &module_scope_names,
-                    &builtin_type_names,
-                ) {
-                    diagnostics.push(make_diagnostic(
-                        format!(
-                            "Invalid type expression in annotation for attribute `{}`",
-                            attr.name
-                        ),
-                        attr.name_span,
-                        path,
-                    ));
-                }
+    // Function-local annotated variables
+    for func in &module.functions {
+        for var in &func.local_vars {
+            let Some(ann) = span_text(source, var.annotation_span) else {
+                continue;
+            };
+            let ann_trimmed = ann.trim();
+            if is_invalid_type_annotation(ann_trimmed)
+                || is_non_type_name(ann_trimmed, &non_type_names)
+            {
+                diagnostics.push(make_diagnostic(
+                    format!(
+                        "Invalid type expression in annotation for local variable `{}`",
+                        var.name
+                    ),
+                    var.name_span,
+                    path,
+                ));
+            }
+        }
+    }
+
+    // Class attributes
+    for cls in &module.classes {
+        let cls_method_names: HashSet<&str> =
+            cls.method_names.iter().map(String::as_str).collect();
+        for attr in &cls.attributes {
+            let Some(ann) = span_text(source, attr.annotation_span) else {
+                continue;
+            };
+            let ann_trimmed = ann.trim();
+            if is_invalid_type_annotation(ann_trimmed)
+                || is_non_type_name(ann_trimmed, &non_type_names)
+            {
+                diagnostics.push(make_diagnostic(
+                    format!(
+                        "Invalid type expression in annotation for attribute `{}`",
+                        attr.name
+                    ),
+                    attr.name_span,
+                    path,
+                ));
+                continue;
+            }
+            // Check: bare identifier annotation matches a class method name.
+            // e.g. `def int(self)` in the class body, then `y: int` shadows the built-in.
+            if is_bare_identifier(ann_trimmed) && cls_method_names.contains(ann_trimmed) {
+                diagnostics.push(make_diagnostic(
+                    format!(
+                        "Invalid type expression in annotation for attribute `{}`",
+                        attr.name
+                    ),
+                    attr.name_span,
+                    path,
+                ));
+                continue;
+            }
+            // Check: circular string annotation.
+            // e.g. `ClassF: "ClassF"` when `ClassF` is not defined in module scope.
+            if is_circular_string_annotation(
+                ann_trimmed,
+                &attr.name,
+                &module_scope_names,
+                &builtin_type_names,
+            ) {
+                diagnostics.push(make_diagnostic(
+                    format!(
+                        "Invalid type expression in annotation for attribute `{}`",
+                        attr.name
+                    ),
+                    attr.name_span,
+                    path,
+                ));
             }
         }
     }

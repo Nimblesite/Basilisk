@@ -94,6 +94,7 @@ pub(crate) mod e0094;
 pub(crate) mod e0095;
 pub(crate) mod e0096;
 pub(crate) mod guards;
+pub(crate) mod w0040;
 
 use basilisk_resolver::ResolvedModule;
 
@@ -199,6 +200,7 @@ pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
         &e0094::SelfInvalidLocation,
         &e0095::InitVarViolation,
         &e0096::DataclassFieldDefaultFactoryMismatch,
+        &w0040::LambdaMissingAnnotations,
     ];
 
     rules.iter().fold(Vec::new(), |mut acc, rule| {

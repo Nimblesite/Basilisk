@@ -130,6 +130,10 @@ pub struct ReturnStmtInfo {
     /// Callable[..., None]`).  Without full type inference we cannot verify
     /// the callee's return type, so E0013 conservatively skips these.
     pub value_is_call: bool,
+    /// What kind of expression is returned, if any.
+    ///
+    /// Used for return type inference in E0002.
+    pub rhs_kind: RhsKind,
 }
 
 /// A reference to an unhashable expression used as a dict key.

@@ -226,7 +226,7 @@ fn test_flow_union_inference_multiple_variables() {
 // E2E Tests using real Python code through the full pipeline
 // ---------------------------------------------------------------------------
 
-use basilisk_checker::{check, Severity};
+use basilisk_checker::check;
 use basilisk_parser::parse_source;
 use basilisk_resolver::resolve;
 

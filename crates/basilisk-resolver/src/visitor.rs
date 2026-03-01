@@ -1392,10 +1392,12 @@ fn return_stmt_info_from(ret: &StmtReturn) -> ReturnStmtInfo {
     let value_expr = ret.value.as_deref();
     let has_value = value_expr.is_some_and(|e| !matches!(e, Expr::NoneLiteral(_)));
     let value_is_call = value_expr.is_some_and(|e| matches!(e, Expr::Call(_)));
+    let rhs_kind = value_expr.map_or(RhsKind::Other, classify_rhs);
     ReturnStmtInfo {
         span: text_range_to_span(ret.range),
         has_value,
         value_is_call,
+        rhs_kind,
     }
 }
 

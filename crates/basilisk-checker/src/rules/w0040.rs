@@ -12,7 +12,7 @@
 //! f: Callable[[int], int] = lambda x: x + 1  # OK: variable has type annotation
 //! ```
 
-use basilisk_resolver::{ResolvedModule, VariableInfo};
+use basilisk_resolver::ResolvedModule;
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
 use super::Rule;
