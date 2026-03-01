@@ -1,6 +1,6 @@
 //! BSK-E0089: Invalid key or value type in `TypedDict` assignment.
 //!
-//! PEP 589 defines TypedDict as a typed dict with a fixed set of keys and associated types.
+//! PEP 589 defines `TypedDict` as a typed dict with a fixed set of keys and associated types.
 //! This rule detects:
 //!
 //! 1. Subscript assignments with invalid (non-existent) keys.
@@ -32,7 +32,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://basilisk-lang.org/errors/BSK-E0089",
 };
 
-/// Emits BSK-E0089 for invalid key or value-type violations on TypedDict instances.
+/// Emits BSK-E0089 for invalid key or value-type violations on `TypedDict` instances.
 pub(crate) struct TypedDictKeyValidation;
 
 impl Rule for TypedDictKeyValidation {

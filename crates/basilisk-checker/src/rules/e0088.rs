@@ -1,27 +1,23 @@
-//! BSK-E0088: Invalid use of `TypedDict` as a runtime type.
+//! BSK-E0088: Invalid tuple type syntax.
 //!
-//! `TypedDict` classes cannot be used with `isinstance()` or as a `TypeVar` bound.
+//! Validates tuple type annotations according to PEP 646 rules:
 //!
-//! PEP 589 specifies that:
-//! - `TypedDict` type objects cannot be used in `isinstance()` tests.
-//! - `TypedDict` (the abstract base) cannot be used as a bound for a `TypeVar`.
+//! - `tuple[T, ...]` must have exactly one type before `...`
+//! - `tuple[...]` is invalid (must specify a type)
+//! - `tuple[T, ..., U]` is invalid (`...` can only appear at the end)
+//! - `tuple[T, U, ...]` is invalid (can't have multiple fixed types before `...`)
+//! - Invalid unpack patterns like `tuple[*tuple[str], ...]`
 //!
 //! ```python
-//! from typing import TypeVar, TypedDict
-//!
-//! class Movie(TypedDict):
-//!     name: str
-//!     year: int
-//!
-//! movie: Movie = {"name": "Blade Runner", "year": 1982}
-//!
-//! if isinstance(movie, Movie):  # E: TypedDict in isinstance
-//!     pass
-//!
-//! T = TypeVar("T", bound=TypedDict)  # E: TypedDict as TypeVar bound
+//! t1: tuple[int, ...]        # OK
+//! t2: tuple[int, int, ...]   # E — multiple fixed types before ...
+//! t3: tuple[...]             # E — missing type before ...
+//! t4: tuple[..., int]         # E — ... must be at the end
+//! t5: tuple[int, ..., int]    # E — ... must be at the end
+//! t6: tuple[*tuple[str], ...] # E — invalid unpack pattern
 //! ```
 
-use basilisk_resolver::ResolvedModule;
+use basilisk_resolver::{ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
@@ -32,97 +28,119 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://basilisk-lang.org/errors/BSK-E0088",
 };
 
-/// Emits BSK-E0088 for invalid runtime uses of `TypedDict`.
-pub(crate) struct TypedDictRuntimeViolation;
+/// Emits BSK-E0088 for invalid tuple type syntax.
+pub(crate) struct InvalidTupleTypeSyntax;
 
-impl Rule for TypedDictRuntimeViolation {
+impl Rule for InvalidTupleTypeSyntax {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        // isinstance(x, TypedDictClass) violations
-        for &span in &module.isinstance_typeddict_violations {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: "TypedDict classes cannot be used as the second argument to `isinstance()`; \
-                          TypedDict types are not runtime classes"
-                    .to_owned(),
-                span,
-                path: module.path.clone(),
-                help: Some(
-                    "Use a regular `dict` check or restructure to avoid runtime TypedDict inspection"
-                        .to_owned(),
-                ),
-                note: Some(
-                    "PEP 589: TypedDict type objects have no runtime type identity".to_owned(),
-                ),
-            });
-        }
-
-        // TypeVar("T", bound=TypedDict) violations
         let source = &module.source;
-        for tv in &module.typevar_calls {
-            if !tv.has_bound {
+        
+        // Check all variable annotations for tuple type syntax violations
+        for var in &module.module_vars {
+            if !var.has_annotation {
                 continue;
             }
-            let Some(bound_text) = extract_bound_text(source, tv.span) else {
+            
+            let Some(ann_span) = var.annotation_span else {
                 continue;
             };
-            if bound_text == "TypedDict" || bound_text == "typing.TypedDict" {
+            
+            let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+                continue;
+            };
+            
+            let ann_trimmed = ann_text.trim();
+            if let Some(error_msg) = check_tuple_syntax(ann_trimmed) {
                 diagnostics.push(Diagnostic {
                     code: CODE.clone(),
                     severity: Severity::Error,
-                    message: format!(
-                        "`TypedDict` cannot be used as a `TypeVar` bound for `{}`; \
-                         TypedDict is a special form, not a class",
-                        tv.name
-                    ),
-                    span: tv.span,
-                    path: module.path.clone(),
-                    help: Some(
-                        "Use a concrete TypedDict subclass or a Protocol as the bound instead"
-                            .to_owned(),
-                    ),
+                    message: format!("Invalid tuple type syntax: {}", error_msg),
+                    span: ann_span,
+                    path: module.path.to_owned(),
+                    help: Some("Use valid tuple type syntax according to PEP 646".to_owned()),
                     note: Some(
-                        "PEP 589: TypedDict is a special typing form and cannot be used as a TypeVar bound"
+                        "Tuple types must follow the pattern `tuple[T, ...]` with exactly one type before the ellipsis"
                             .to_owned(),
                     ),
                 });
             }
         }
+        
+        // Also check function return type annotations
+        for func in &module.functions {
+            if let Some(ret_span) = func.return_annotation_span {
+                let Some(ret_text) = source.get(ret_span.start as usize..ret_span.end as usize) else {
+                    continue;
+                };
+                
+                let ret_trimmed = ret_text.trim();
+                if let Some(error_msg) = check_tuple_syntax(ret_trimmed) {
+                    diagnostics.push(Diagnostic {
+                        code: CODE.clone(),
+                        severity: Severity::Error,
+                        message: format!("Invalid tuple type syntax: {}", error_msg),
+                        span: ret_span,
+                        path: module.path.to_owned(),
+                        help: Some("Use valid tuple type syntax according to PEP 646".to_owned()),
+                        note: Some(
+                            "Tuple types must follow the pattern `tuple[T, ...]` with exactly one type before the ellipsis"
+                                .to_owned(),
+                        ),
+                    });
+                }
+            }
+        }
     }
 }
 
-/// Extract the bound text from a `TypeVar("Name", bound=X)` call in source.
-fn extract_bound_text(source: &str, span: basilisk_resolver::Span) -> Option<String> {
-    let call_text = source.get(span.start as usize..span.end as usize)?;
-    let bound_idx = call_text.find("bound=")?;
-    let after_bound = &call_text[bound_idx + "bound=".len()..];
-
-    let mut depth = 0u32;
-    let mut end = after_bound.len();
-    for (idx, ch) in after_bound.char_indices() {
-        match ch {
-            '[' | '(' => depth = depth.saturating_add(1),
-            ']' | ')' => {
-                if depth == 0 {
-                    end = idx;
-                    break;
-                }
-                depth = depth.saturating_sub(1);
-            }
-            ',' if depth == 0 => {
-                end = idx;
-                break;
-            }
-            _ => {}
-        }
-    }
-    let bound_text = after_bound[..end].trim();
-    let bound_text = bound_text
-        .strip_prefix('"')
-        .and_then(|s| s.strip_suffix('"'))
-        .unwrap_or(bound_text);
-    if bound_text.is_empty() {
+/// Returns `Some(error_message)` if the tuple type annotation has invalid syntax.
+fn check_tuple_syntax(annotation: &str) -> Option<&'static str> {
+    // Check if this is a tuple annotation
+    if !annotation.starts_with("tuple[") || !annotation.ends_with(']') {
         return None;
     }
-    Some(bound_text.to_owned())
+    
+    let inner = &annotation["tuple[".len()..annotation.len() - 1].trim();
+    
+    // Check for empty tuple: tuple[()]
+    if inner == "()" {
+        return None; // Valid empty tuple syntax
+    }
+    
+    // Check for variadic tuple: tuple[T, ...]
+    if inner.ends_with(", ...") {
+        let before_ellipsis = &inner[..inner.len() - 5].trim(); // Remove ", ..."
+        
+        // Check if there's a type before the ellipsis
+        if before_ellipsis.is_empty() {
+            return Some("tuple[...] is invalid — must specify a type before the ellipsis");
+        }
+        
+        // Check if there are multiple types before the ellipsis
+        if before_ellipsis.contains(',') {
+            return Some("tuple[T, U, ...] is invalid — can only have one type before the ellipsis");
+        }
+        
+        // Check for invalid patterns like tuple[..., T] or tuple[T, ..., U]
+        if inner.contains("...,") && !inner.ends_with(", ...") {
+            return Some("ellipsis (...) must appear at the end of the tuple type");
+        }
+        
+        return None; // Valid variadic tuple syntax
+    }
+    
+    // Check for invalid ellipsis usage (not at the end)
+    if inner.contains("...") {
+        return Some("ellipsis (...) must appear at the end of the tuple type");
+    }
+    
+    // Check for invalid unpack patterns
+    if inner.contains("*tuple[") {
+        // Patterns like tuple[*tuple[str], ...] are invalid
+        if inner.contains(", ...") {
+            return Some("invalid unpack pattern — cannot combine starred tuple unpack with ellipsis");
+        }
+    }
+    
+    None
 }

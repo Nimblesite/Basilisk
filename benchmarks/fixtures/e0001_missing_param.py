@@ -1,2003 +1,2003 @@
 # BSK-E0001: Missing parameter type annotations
 # 2000 functions, ~6000 untyped params
 
-def f1(a, b, c): return 0
-def f2(a, b, c): return 0
-def f3(a, b, c): return 0
-def f4(a, b, c): return 0
-def f5(a, b, c): return 0
-def f6(a, b, c): return 0
-def f7(a, b, c): return 0
-def f8(a, b, c): return 0
-def f9(a, b, c): return 0
-def f10(a, b, c): return 0
-def f11(a, b, c): return 0
-def f12(a, b, c): return 0
-def f13(a, b, c): return 0
-def f14(a, b, c): return 0
-def f15(a, b, c): return 0
-def f16(a, b, c): return 0
-def f17(a, b, c): return 0
-def f18(a, b, c): return 0
-def f19(a, b, c): return 0
-def f20(a, b, c): return 0
-def f21(a, b, c): return 0
-def f22(a, b, c): return 0
-def f23(a, b, c): return 0
-def f24(a, b, c): return 0
-def f25(a, b, c): return 0
-def f26(a, b, c): return 0
-def f27(a, b, c): return 0
-def f28(a, b, c): return 0
-def f29(a, b, c): return 0
-def f30(a, b, c): return 0
-def f31(a, b, c): return 0
-def f32(a, b, c): return 0
-def f33(a, b, c): return 0
-def f34(a, b, c): return 0
-def f35(a, b, c): return 0
-def f36(a, b, c): return 0
-def f37(a, b, c): return 0
-def f38(a, b, c): return 0
-def f39(a, b, c): return 0
-def f40(a, b, c): return 0
-def f41(a, b, c): return 0
-def f42(a, b, c): return 0
-def f43(a, b, c): return 0
-def f44(a, b, c): return 0
-def f45(a, b, c): return 0
-def f46(a, b, c): return 0
-def f47(a, b, c): return 0
-def f48(a, b, c): return 0
-def f49(a, b, c): return 0
-def f50(a, b, c): return 0
-def f51(a, b, c): return 0
-def f52(a, b, c): return 0
-def f53(a, b, c): return 0
-def f54(a, b, c): return 0
-def f55(a, b, c): return 0
-def f56(a, b, c): return 0
-def f57(a, b, c): return 0
-def f58(a, b, c): return 0
-def f59(a, b, c): return 0
-def f60(a, b, c): return 0
-def f61(a, b, c): return 0
-def f62(a, b, c): return 0
-def f63(a, b, c): return 0
-def f64(a, b, c): return 0
-def f65(a, b, c): return 0
-def f66(a, b, c): return 0
-def f67(a, b, c): return 0
-def f68(a, b, c): return 0
-def f69(a, b, c): return 0
-def f70(a, b, c): return 0
-def f71(a, b, c): return 0
-def f72(a, b, c): return 0
-def f73(a, b, c): return 0
-def f74(a, b, c): return 0
-def f75(a, b, c): return 0
-def f76(a, b, c): return 0
-def f77(a, b, c): return 0
-def f78(a, b, c): return 0
-def f79(a, b, c): return 0
-def f80(a, b, c): return 0
-def f81(a, b, c): return 0
-def f82(a, b, c): return 0
-def f83(a, b, c): return 0
-def f84(a, b, c): return 0
-def f85(a, b, c): return 0
-def f86(a, b, c): return 0
-def f87(a, b, c): return 0
-def f88(a, b, c): return 0
-def f89(a, b, c): return 0
-def f90(a, b, c): return 0
-def f91(a, b, c): return 0
-def f92(a, b, c): return 0
-def f93(a, b, c): return 0
-def f94(a, b, c): return 0
-def f95(a, b, c): return 0
-def f96(a, b, c): return 0
-def f97(a, b, c): return 0
-def f98(a, b, c): return 0
-def f99(a, b, c): return 0
-def f100(a, b, c): return 0
-def f101(a, b, c): return 0
-def f102(a, b, c): return 0
-def f103(a, b, c): return 0
-def f104(a, b, c): return 0
-def f105(a, b, c): return 0
-def f106(a, b, c): return 0
-def f107(a, b, c): return 0
-def f108(a, b, c): return 0
-def f109(a, b, c): return 0
-def f110(a, b, c): return 0
-def f111(a, b, c): return 0
-def f112(a, b, c): return 0
-def f113(a, b, c): return 0
-def f114(a, b, c): return 0
-def f115(a, b, c): return 0
-def f116(a, b, c): return 0
-def f117(a, b, c): return 0
-def f118(a, b, c): return 0
-def f119(a, b, c): return 0
-def f120(a, b, c): return 0
-def f121(a, b, c): return 0
-def f122(a, b, c): return 0
-def f123(a, b, c): return 0
-def f124(a, b, c): return 0
-def f125(a, b, c): return 0
-def f126(a, b, c): return 0
-def f127(a, b, c): return 0
-def f128(a, b, c): return 0
-def f129(a, b, c): return 0
-def f130(a, b, c): return 0
-def f131(a, b, c): return 0
-def f132(a, b, c): return 0
-def f133(a, b, c): return 0
-def f134(a, b, c): return 0
-def f135(a, b, c): return 0
-def f136(a, b, c): return 0
-def f137(a, b, c): return 0
-def f138(a, b, c): return 0
-def f139(a, b, c): return 0
-def f140(a, b, c): return 0
-def f141(a, b, c): return 0
-def f142(a, b, c): return 0
-def f143(a, b, c): return 0
-def f144(a, b, c): return 0
-def f145(a, b, c): return 0
-def f146(a, b, c): return 0
-def f147(a, b, c): return 0
-def f148(a, b, c): return 0
-def f149(a, b, c): return 0
-def f150(a, b, c): return 0
-def f151(a, b, c): return 0
-def f152(a, b, c): return 0
-def f153(a, b, c): return 0
-def f154(a, b, c): return 0
-def f155(a, b, c): return 0
-def f156(a, b, c): return 0
-def f157(a, b, c): return 0
-def f158(a, b, c): return 0
-def f159(a, b, c): return 0
-def f160(a, b, c): return 0
-def f161(a, b, c): return 0
-def f162(a, b, c): return 0
-def f163(a, b, c): return 0
-def f164(a, b, c): return 0
-def f165(a, b, c): return 0
-def f166(a, b, c): return 0
-def f167(a, b, c): return 0
-def f168(a, b, c): return 0
-def f169(a, b, c): return 0
-def f170(a, b, c): return 0
-def f171(a, b, c): return 0
-def f172(a, b, c): return 0
-def f173(a, b, c): return 0
-def f174(a, b, c): return 0
-def f175(a, b, c): return 0
-def f176(a, b, c): return 0
-def f177(a, b, c): return 0
-def f178(a, b, c): return 0
-def f179(a, b, c): return 0
-def f180(a, b, c): return 0
-def f181(a, b, c): return 0
-def f182(a, b, c): return 0
-def f183(a, b, c): return 0
-def f184(a, b, c): return 0
-def f185(a, b, c): return 0
-def f186(a, b, c): return 0
-def f187(a, b, c): return 0
-def f188(a, b, c): return 0
-def f189(a, b, c): return 0
-def f190(a, b, c): return 0
-def f191(a, b, c): return 0
-def f192(a, b, c): return 0
-def f193(a, b, c): return 0
-def f194(a, b, c): return 0
-def f195(a, b, c): return 0
-def f196(a, b, c): return 0
-def f197(a, b, c): return 0
-def f198(a, b, c): return 0
-def f199(a, b, c): return 0
-def f200(a, b, c): return 0
-def f201(a, b, c): return 0
-def f202(a, b, c): return 0
-def f203(a, b, c): return 0
-def f204(a, b, c): return 0
-def f205(a, b, c): return 0
-def f206(a, b, c): return 0
-def f207(a, b, c): return 0
-def f208(a, b, c): return 0
-def f209(a, b, c): return 0
-def f210(a, b, c): return 0
-def f211(a, b, c): return 0
-def f212(a, b, c): return 0
-def f213(a, b, c): return 0
-def f214(a, b, c): return 0
-def f215(a, b, c): return 0
-def f216(a, b, c): return 0
-def f217(a, b, c): return 0
-def f218(a, b, c): return 0
-def f219(a, b, c): return 0
-def f220(a, b, c): return 0
-def f221(a, b, c): return 0
-def f222(a, b, c): return 0
-def f223(a, b, c): return 0
-def f224(a, b, c): return 0
-def f225(a, b, c): return 0
-def f226(a, b, c): return 0
-def f227(a, b, c): return 0
-def f228(a, b, c): return 0
-def f229(a, b, c): return 0
-def f230(a, b, c): return 0
-def f231(a, b, c): return 0
-def f232(a, b, c): return 0
-def f233(a, b, c): return 0
-def f234(a, b, c): return 0
-def f235(a, b, c): return 0
-def f236(a, b, c): return 0
-def f237(a, b, c): return 0
-def f238(a, b, c): return 0
-def f239(a, b, c): return 0
-def f240(a, b, c): return 0
-def f241(a, b, c): return 0
-def f242(a, b, c): return 0
-def f243(a, b, c): return 0
-def f244(a, b, c): return 0
-def f245(a, b, c): return 0
-def f246(a, b, c): return 0
-def f247(a, b, c): return 0
-def f248(a, b, c): return 0
-def f249(a, b, c): return 0
-def f250(a, b, c): return 0
-def f251(a, b, c): return 0
-def f252(a, b, c): return 0
-def f253(a, b, c): return 0
-def f254(a, b, c): return 0
-def f255(a, b, c): return 0
-def f256(a, b, c): return 0
-def f257(a, b, c): return 0
-def f258(a, b, c): return 0
-def f259(a, b, c): return 0
-def f260(a, b, c): return 0
-def f261(a, b, c): return 0
-def f262(a, b, c): return 0
-def f263(a, b, c): return 0
-def f264(a, b, c): return 0
-def f265(a, b, c): return 0
-def f266(a, b, c): return 0
-def f267(a, b, c): return 0
-def f268(a, b, c): return 0
-def f269(a, b, c): return 0
-def f270(a, b, c): return 0
-def f271(a, b, c): return 0
-def f272(a, b, c): return 0
-def f273(a, b, c): return 0
-def f274(a, b, c): return 0
-def f275(a, b, c): return 0
-def f276(a, b, c): return 0
-def f277(a, b, c): return 0
-def f278(a, b, c): return 0
-def f279(a, b, c): return 0
-def f280(a, b, c): return 0
-def f281(a, b, c): return 0
-def f282(a, b, c): return 0
-def f283(a, b, c): return 0
-def f284(a, b, c): return 0
-def f285(a, b, c): return 0
-def f286(a, b, c): return 0
-def f287(a, b, c): return 0
-def f288(a, b, c): return 0
-def f289(a, b, c): return 0
-def f290(a, b, c): return 0
-def f291(a, b, c): return 0
-def f292(a, b, c): return 0
-def f293(a, b, c): return 0
-def f294(a, b, c): return 0
-def f295(a, b, c): return 0
-def f296(a, b, c): return 0
-def f297(a, b, c): return 0
-def f298(a, b, c): return 0
-def f299(a, b, c): return 0
-def f300(a, b, c): return 0
-def f301(a, b, c): return 0
-def f302(a, b, c): return 0
-def f303(a, b, c): return 0
-def f304(a, b, c): return 0
-def f305(a, b, c): return 0
-def f306(a, b, c): return 0
-def f307(a, b, c): return 0
-def f308(a, b, c): return 0
-def f309(a, b, c): return 0
-def f310(a, b, c): return 0
-def f311(a, b, c): return 0
-def f312(a, b, c): return 0
-def f313(a, b, c): return 0
-def f314(a, b, c): return 0
-def f315(a, b, c): return 0
-def f316(a, b, c): return 0
-def f317(a, b, c): return 0
-def f318(a, b, c): return 0
-def f319(a, b, c): return 0
-def f320(a, b, c): return 0
-def f321(a, b, c): return 0
-def f322(a, b, c): return 0
-def f323(a, b, c): return 0
-def f324(a, b, c): return 0
-def f325(a, b, c): return 0
-def f326(a, b, c): return 0
-def f327(a, b, c): return 0
-def f328(a, b, c): return 0
-def f329(a, b, c): return 0
-def f330(a, b, c): return 0
-def f331(a, b, c): return 0
-def f332(a, b, c): return 0
-def f333(a, b, c): return 0
-def f334(a, b, c): return 0
-def f335(a, b, c): return 0
-def f336(a, b, c): return 0
-def f337(a, b, c): return 0
-def f338(a, b, c): return 0
-def f339(a, b, c): return 0
-def f340(a, b, c): return 0
-def f341(a, b, c): return 0
-def f342(a, b, c): return 0
-def f343(a, b, c): return 0
-def f344(a, b, c): return 0
-def f345(a, b, c): return 0
-def f346(a, b, c): return 0
-def f347(a, b, c): return 0
-def f348(a, b, c): return 0
-def f349(a, b, c): return 0
-def f350(a, b, c): return 0
-def f351(a, b, c): return 0
-def f352(a, b, c): return 0
-def f353(a, b, c): return 0
-def f354(a, b, c): return 0
-def f355(a, b, c): return 0
-def f356(a, b, c): return 0
-def f357(a, b, c): return 0
-def f358(a, b, c): return 0
-def f359(a, b, c): return 0
-def f360(a, b, c): return 0
-def f361(a, b, c): return 0
-def f362(a, b, c): return 0
-def f363(a, b, c): return 0
-def f364(a, b, c): return 0
-def f365(a, b, c): return 0
-def f366(a, b, c): return 0
-def f367(a, b, c): return 0
-def f368(a, b, c): return 0
-def f369(a, b, c): return 0
-def f370(a, b, c): return 0
-def f371(a, b, c): return 0
-def f372(a, b, c): return 0
-def f373(a, b, c): return 0
-def f374(a, b, c): return 0
-def f375(a, b, c): return 0
-def f376(a, b, c): return 0
-def f377(a, b, c): return 0
-def f378(a, b, c): return 0
-def f379(a, b, c): return 0
-def f380(a, b, c): return 0
-def f381(a, b, c): return 0
-def f382(a, b, c): return 0
-def f383(a, b, c): return 0
-def f384(a, b, c): return 0
-def f385(a, b, c): return 0
-def f386(a, b, c): return 0
-def f387(a, b, c): return 0
-def f388(a, b, c): return 0
-def f389(a, b, c): return 0
-def f390(a, b, c): return 0
-def f391(a, b, c): return 0
-def f392(a, b, c): return 0
-def f393(a, b, c): return 0
-def f394(a, b, c): return 0
-def f395(a, b, c): return 0
-def f396(a, b, c): return 0
-def f397(a, b, c): return 0
-def f398(a, b, c): return 0
-def f399(a, b, c): return 0
-def f400(a, b, c): return 0
-def f401(a, b, c): return 0
-def f402(a, b, c): return 0
-def f403(a, b, c): return 0
-def f404(a, b, c): return 0
-def f405(a, b, c): return 0
-def f406(a, b, c): return 0
-def f407(a, b, c): return 0
-def f408(a, b, c): return 0
-def f409(a, b, c): return 0
-def f410(a, b, c): return 0
-def f411(a, b, c): return 0
-def f412(a, b, c): return 0
-def f413(a, b, c): return 0
-def f414(a, b, c): return 0
-def f415(a, b, c): return 0
-def f416(a, b, c): return 0
-def f417(a, b, c): return 0
-def f418(a, b, c): return 0
-def f419(a, b, c): return 0
-def f420(a, b, c): return 0
-def f421(a, b, c): return 0
-def f422(a, b, c): return 0
-def f423(a, b, c): return 0
-def f424(a, b, c): return 0
-def f425(a, b, c): return 0
-def f426(a, b, c): return 0
-def f427(a, b, c): return 0
-def f428(a, b, c): return 0
-def f429(a, b, c): return 0
-def f430(a, b, c): return 0
-def f431(a, b, c): return 0
-def f432(a, b, c): return 0
-def f433(a, b, c): return 0
-def f434(a, b, c): return 0
-def f435(a, b, c): return 0
-def f436(a, b, c): return 0
-def f437(a, b, c): return 0
-def f438(a, b, c): return 0
-def f439(a, b, c): return 0
-def f440(a, b, c): return 0
-def f441(a, b, c): return 0
-def f442(a, b, c): return 0
-def f443(a, b, c): return 0
-def f444(a, b, c): return 0
-def f445(a, b, c): return 0
-def f446(a, b, c): return 0
-def f447(a, b, c): return 0
-def f448(a, b, c): return 0
-def f449(a, b, c): return 0
-def f450(a, b, c): return 0
-def f451(a, b, c): return 0
-def f452(a, b, c): return 0
-def f453(a, b, c): return 0
-def f454(a, b, c): return 0
-def f455(a, b, c): return 0
-def f456(a, b, c): return 0
-def f457(a, b, c): return 0
-def f458(a, b, c): return 0
-def f459(a, b, c): return 0
-def f460(a, b, c): return 0
-def f461(a, b, c): return 0
-def f462(a, b, c): return 0
-def f463(a, b, c): return 0
-def f464(a, b, c): return 0
-def f465(a, b, c): return 0
-def f466(a, b, c): return 0
-def f467(a, b, c): return 0
-def f468(a, b, c): return 0
-def f469(a, b, c): return 0
-def f470(a, b, c): return 0
-def f471(a, b, c): return 0
-def f472(a, b, c): return 0
-def f473(a, b, c): return 0
-def f474(a, b, c): return 0
-def f475(a, b, c): return 0
-def f476(a, b, c): return 0
-def f477(a, b, c): return 0
-def f478(a, b, c): return 0
-def f479(a, b, c): return 0
-def f480(a, b, c): return 0
-def f481(a, b, c): return 0
-def f482(a, b, c): return 0
-def f483(a, b, c): return 0
-def f484(a, b, c): return 0
-def f485(a, b, c): return 0
-def f486(a, b, c): return 0
-def f487(a, b, c): return 0
-def f488(a, b, c): return 0
-def f489(a, b, c): return 0
-def f490(a, b, c): return 0
-def f491(a, b, c): return 0
-def f492(a, b, c): return 0
-def f493(a, b, c): return 0
-def f494(a, b, c): return 0
-def f495(a, b, c): return 0
-def f496(a, b, c): return 0
-def f497(a, b, c): return 0
-def f498(a, b, c): return 0
-def f499(a, b, c): return 0
-def f500(a, b, c): return 0
-def f501(a, b, c): return 0
-def f502(a, b, c): return 0
-def f503(a, b, c): return 0
-def f504(a, b, c): return 0
-def f505(a, b, c): return 0
-def f506(a, b, c): return 0
-def f507(a, b, c): return 0
-def f508(a, b, c): return 0
-def f509(a, b, c): return 0
-def f510(a, b, c): return 0
-def f511(a, b, c): return 0
-def f512(a, b, c): return 0
-def f513(a, b, c): return 0
-def f514(a, b, c): return 0
-def f515(a, b, c): return 0
-def f516(a, b, c): return 0
-def f517(a, b, c): return 0
-def f518(a, b, c): return 0
-def f519(a, b, c): return 0
-def f520(a, b, c): return 0
-def f521(a, b, c): return 0
-def f522(a, b, c): return 0
-def f523(a, b, c): return 0
-def f524(a, b, c): return 0
-def f525(a, b, c): return 0
-def f526(a, b, c): return 0
-def f527(a, b, c): return 0
-def f528(a, b, c): return 0
-def f529(a, b, c): return 0
-def f530(a, b, c): return 0
-def f531(a, b, c): return 0
-def f532(a, b, c): return 0
-def f533(a, b, c): return 0
-def f534(a, b, c): return 0
-def f535(a, b, c): return 0
-def f536(a, b, c): return 0
-def f537(a, b, c): return 0
-def f538(a, b, c): return 0
-def f539(a, b, c): return 0
-def f540(a, b, c): return 0
-def f541(a, b, c): return 0
-def f542(a, b, c): return 0
-def f543(a, b, c): return 0
-def f544(a, b, c): return 0
-def f545(a, b, c): return 0
-def f546(a, b, c): return 0
-def f547(a, b, c): return 0
-def f548(a, b, c): return 0
-def f549(a, b, c): return 0
-def f550(a, b, c): return 0
-def f551(a, b, c): return 0
-def f552(a, b, c): return 0
-def f553(a, b, c): return 0
-def f554(a, b, c): return 0
-def f555(a, b, c): return 0
-def f556(a, b, c): return 0
-def f557(a, b, c): return 0
-def f558(a, b, c): return 0
-def f559(a, b, c): return 0
-def f560(a, b, c): return 0
-def f561(a, b, c): return 0
-def f562(a, b, c): return 0
-def f563(a, b, c): return 0
-def f564(a, b, c): return 0
-def f565(a, b, c): return 0
-def f566(a, b, c): return 0
-def f567(a, b, c): return 0
-def f568(a, b, c): return 0
-def f569(a, b, c): return 0
-def f570(a, b, c): return 0
-def f571(a, b, c): return 0
-def f572(a, b, c): return 0
-def f573(a, b, c): return 0
-def f574(a, b, c): return 0
-def f575(a, b, c): return 0
-def f576(a, b, c): return 0
-def f577(a, b, c): return 0
-def f578(a, b, c): return 0
-def f579(a, b, c): return 0
-def f580(a, b, c): return 0
-def f581(a, b, c): return 0
-def f582(a, b, c): return 0
-def f583(a, b, c): return 0
-def f584(a, b, c): return 0
-def f585(a, b, c): return 0
-def f586(a, b, c): return 0
-def f587(a, b, c): return 0
-def f588(a, b, c): return 0
-def f589(a, b, c): return 0
-def f590(a, b, c): return 0
-def f591(a, b, c): return 0
-def f592(a, b, c): return 0
-def f593(a, b, c): return 0
-def f594(a, b, c): return 0
-def f595(a, b, c): return 0
-def f596(a, b, c): return 0
-def f597(a, b, c): return 0
-def f598(a, b, c): return 0
-def f599(a, b, c): return 0
-def f600(a, b, c): return 0
-def f601(a, b, c): return 0
-def f602(a, b, c): return 0
-def f603(a, b, c): return 0
-def f604(a, b, c): return 0
-def f605(a, b, c): return 0
-def f606(a, b, c): return 0
-def f607(a, b, c): return 0
-def f608(a, b, c): return 0
-def f609(a, b, c): return 0
-def f610(a, b, c): return 0
-def f611(a, b, c): return 0
-def f612(a, b, c): return 0
-def f613(a, b, c): return 0
-def f614(a, b, c): return 0
-def f615(a, b, c): return 0
-def f616(a, b, c): return 0
-def f617(a, b, c): return 0
-def f618(a, b, c): return 0
-def f619(a, b, c): return 0
-def f620(a, b, c): return 0
-def f621(a, b, c): return 0
-def f622(a, b, c): return 0
-def f623(a, b, c): return 0
-def f624(a, b, c): return 0
-def f625(a, b, c): return 0
-def f626(a, b, c): return 0
-def f627(a, b, c): return 0
-def f628(a, b, c): return 0
-def f629(a, b, c): return 0
-def f630(a, b, c): return 0
-def f631(a, b, c): return 0
-def f632(a, b, c): return 0
-def f633(a, b, c): return 0
-def f634(a, b, c): return 0
-def f635(a, b, c): return 0
-def f636(a, b, c): return 0
-def f637(a, b, c): return 0
-def f638(a, b, c): return 0
-def f639(a, b, c): return 0
-def f640(a, b, c): return 0
-def f641(a, b, c): return 0
-def f642(a, b, c): return 0
-def f643(a, b, c): return 0
-def f644(a, b, c): return 0
-def f645(a, b, c): return 0
-def f646(a, b, c): return 0
-def f647(a, b, c): return 0
-def f648(a, b, c): return 0
-def f649(a, b, c): return 0
-def f650(a, b, c): return 0
-def f651(a, b, c): return 0
-def f652(a, b, c): return 0
-def f653(a, b, c): return 0
-def f654(a, b, c): return 0
-def f655(a, b, c): return 0
-def f656(a, b, c): return 0
-def f657(a, b, c): return 0
-def f658(a, b, c): return 0
-def f659(a, b, c): return 0
-def f660(a, b, c): return 0
-def f661(a, b, c): return 0
-def f662(a, b, c): return 0
-def f663(a, b, c): return 0
-def f664(a, b, c): return 0
-def f665(a, b, c): return 0
-def f666(a, b, c): return 0
-def f667(a, b, c): return 0
-def f668(a, b, c): return 0
-def f669(a, b, c): return 0
-def f670(a, b, c): return 0
-def f671(a, b, c): return 0
-def f672(a, b, c): return 0
-def f673(a, b, c): return 0
-def f674(a, b, c): return 0
-def f675(a, b, c): return 0
-def f676(a, b, c): return 0
-def f677(a, b, c): return 0
-def f678(a, b, c): return 0
-def f679(a, b, c): return 0
-def f680(a, b, c): return 0
-def f681(a, b, c): return 0
-def f682(a, b, c): return 0
-def f683(a, b, c): return 0
-def f684(a, b, c): return 0
-def f685(a, b, c): return 0
-def f686(a, b, c): return 0
-def f687(a, b, c): return 0
-def f688(a, b, c): return 0
-def f689(a, b, c): return 0
-def f690(a, b, c): return 0
-def f691(a, b, c): return 0
-def f692(a, b, c): return 0
-def f693(a, b, c): return 0
-def f694(a, b, c): return 0
-def f695(a, b, c): return 0
-def f696(a, b, c): return 0
-def f697(a, b, c): return 0
-def f698(a, b, c): return 0
-def f699(a, b, c): return 0
-def f700(a, b, c): return 0
-def f701(a, b, c): return 0
-def f702(a, b, c): return 0
-def f703(a, b, c): return 0
-def f704(a, b, c): return 0
-def f705(a, b, c): return 0
-def f706(a, b, c): return 0
-def f707(a, b, c): return 0
-def f708(a, b, c): return 0
-def f709(a, b, c): return 0
-def f710(a, b, c): return 0
-def f711(a, b, c): return 0
-def f712(a, b, c): return 0
-def f713(a, b, c): return 0
-def f714(a, b, c): return 0
-def f715(a, b, c): return 0
-def f716(a, b, c): return 0
-def f717(a, b, c): return 0
-def f718(a, b, c): return 0
-def f719(a, b, c): return 0
-def f720(a, b, c): return 0
-def f721(a, b, c): return 0
-def f722(a, b, c): return 0
-def f723(a, b, c): return 0
-def f724(a, b, c): return 0
-def f725(a, b, c): return 0
-def f726(a, b, c): return 0
-def f727(a, b, c): return 0
-def f728(a, b, c): return 0
-def f729(a, b, c): return 0
-def f730(a, b, c): return 0
-def f731(a, b, c): return 0
-def f732(a, b, c): return 0
-def f733(a, b, c): return 0
-def f734(a, b, c): return 0
-def f735(a, b, c): return 0
-def f736(a, b, c): return 0
-def f737(a, b, c): return 0
-def f738(a, b, c): return 0
-def f739(a, b, c): return 0
-def f740(a, b, c): return 0
-def f741(a, b, c): return 0
-def f742(a, b, c): return 0
-def f743(a, b, c): return 0
-def f744(a, b, c): return 0
-def f745(a, b, c): return 0
-def f746(a, b, c): return 0
-def f747(a, b, c): return 0
-def f748(a, b, c): return 0
-def f749(a, b, c): return 0
-def f750(a, b, c): return 0
-def f751(a, b, c): return 0
-def f752(a, b, c): return 0
-def f753(a, b, c): return 0
-def f754(a, b, c): return 0
-def f755(a, b, c): return 0
-def f756(a, b, c): return 0
-def f757(a, b, c): return 0
-def f758(a, b, c): return 0
-def f759(a, b, c): return 0
-def f760(a, b, c): return 0
-def f761(a, b, c): return 0
-def f762(a, b, c): return 0
-def f763(a, b, c): return 0
-def f764(a, b, c): return 0
-def f765(a, b, c): return 0
-def f766(a, b, c): return 0
-def f767(a, b, c): return 0
-def f768(a, b, c): return 0
-def f769(a, b, c): return 0
-def f770(a, b, c): return 0
-def f771(a, b, c): return 0
-def f772(a, b, c): return 0
-def f773(a, b, c): return 0
-def f774(a, b, c): return 0
-def f775(a, b, c): return 0
-def f776(a, b, c): return 0
-def f777(a, b, c): return 0
-def f778(a, b, c): return 0
-def f779(a, b, c): return 0
-def f780(a, b, c): return 0
-def f781(a, b, c): return 0
-def f782(a, b, c): return 0
-def f783(a, b, c): return 0
-def f784(a, b, c): return 0
-def f785(a, b, c): return 0
-def f786(a, b, c): return 0
-def f787(a, b, c): return 0
-def f788(a, b, c): return 0
-def f789(a, b, c): return 0
-def f790(a, b, c): return 0
-def f791(a, b, c): return 0
-def f792(a, b, c): return 0
-def f793(a, b, c): return 0
-def f794(a, b, c): return 0
-def f795(a, b, c): return 0
-def f796(a, b, c): return 0
-def f797(a, b, c): return 0
-def f798(a, b, c): return 0
-def f799(a, b, c): return 0
-def f800(a, b, c): return 0
-def f801(a, b, c): return 0
-def f802(a, b, c): return 0
-def f803(a, b, c): return 0
-def f804(a, b, c): return 0
-def f805(a, b, c): return 0
-def f806(a, b, c): return 0
-def f807(a, b, c): return 0
-def f808(a, b, c): return 0
-def f809(a, b, c): return 0
-def f810(a, b, c): return 0
-def f811(a, b, c): return 0
-def f812(a, b, c): return 0
-def f813(a, b, c): return 0
-def f814(a, b, c): return 0
-def f815(a, b, c): return 0
-def f816(a, b, c): return 0
-def f817(a, b, c): return 0
-def f818(a, b, c): return 0
-def f819(a, b, c): return 0
-def f820(a, b, c): return 0
-def f821(a, b, c): return 0
-def f822(a, b, c): return 0
-def f823(a, b, c): return 0
-def f824(a, b, c): return 0
-def f825(a, b, c): return 0
-def f826(a, b, c): return 0
-def f827(a, b, c): return 0
-def f828(a, b, c): return 0
-def f829(a, b, c): return 0
-def f830(a, b, c): return 0
-def f831(a, b, c): return 0
-def f832(a, b, c): return 0
-def f833(a, b, c): return 0
-def f834(a, b, c): return 0
-def f835(a, b, c): return 0
-def f836(a, b, c): return 0
-def f837(a, b, c): return 0
-def f838(a, b, c): return 0
-def f839(a, b, c): return 0
-def f840(a, b, c): return 0
-def f841(a, b, c): return 0
-def f842(a, b, c): return 0
-def f843(a, b, c): return 0
-def f844(a, b, c): return 0
-def f845(a, b, c): return 0
-def f846(a, b, c): return 0
-def f847(a, b, c): return 0
-def f848(a, b, c): return 0
-def f849(a, b, c): return 0
-def f850(a, b, c): return 0
-def f851(a, b, c): return 0
-def f852(a, b, c): return 0
-def f853(a, b, c): return 0
-def f854(a, b, c): return 0
-def f855(a, b, c): return 0
-def f856(a, b, c): return 0
-def f857(a, b, c): return 0
-def f858(a, b, c): return 0
-def f859(a, b, c): return 0
-def f860(a, b, c): return 0
-def f861(a, b, c): return 0
-def f862(a, b, c): return 0
-def f863(a, b, c): return 0
-def f864(a, b, c): return 0
-def f865(a, b, c): return 0
-def f866(a, b, c): return 0
-def f867(a, b, c): return 0
-def f868(a, b, c): return 0
-def f869(a, b, c): return 0
-def f870(a, b, c): return 0
-def f871(a, b, c): return 0
-def f872(a, b, c): return 0
-def f873(a, b, c): return 0
-def f874(a, b, c): return 0
-def f875(a, b, c): return 0
-def f876(a, b, c): return 0
-def f877(a, b, c): return 0
-def f878(a, b, c): return 0
-def f879(a, b, c): return 0
-def f880(a, b, c): return 0
-def f881(a, b, c): return 0
-def f882(a, b, c): return 0
-def f883(a, b, c): return 0
-def f884(a, b, c): return 0
-def f885(a, b, c): return 0
-def f886(a, b, c): return 0
-def f887(a, b, c): return 0
-def f888(a, b, c): return 0
-def f889(a, b, c): return 0
-def f890(a, b, c): return 0
-def f891(a, b, c): return 0
-def f892(a, b, c): return 0
-def f893(a, b, c): return 0
-def f894(a, b, c): return 0
-def f895(a, b, c): return 0
-def f896(a, b, c): return 0
-def f897(a, b, c): return 0
-def f898(a, b, c): return 0
-def f899(a, b, c): return 0
-def f900(a, b, c): return 0
-def f901(a, b, c): return 0
-def f902(a, b, c): return 0
-def f903(a, b, c): return 0
-def f904(a, b, c): return 0
-def f905(a, b, c): return 0
-def f906(a, b, c): return 0
-def f907(a, b, c): return 0
-def f908(a, b, c): return 0
-def f909(a, b, c): return 0
-def f910(a, b, c): return 0
-def f911(a, b, c): return 0
-def f912(a, b, c): return 0
-def f913(a, b, c): return 0
-def f914(a, b, c): return 0
-def f915(a, b, c): return 0
-def f916(a, b, c): return 0
-def f917(a, b, c): return 0
-def f918(a, b, c): return 0
-def f919(a, b, c): return 0
-def f920(a, b, c): return 0
-def f921(a, b, c): return 0
-def f922(a, b, c): return 0
-def f923(a, b, c): return 0
-def f924(a, b, c): return 0
-def f925(a, b, c): return 0
-def f926(a, b, c): return 0
-def f927(a, b, c): return 0
-def f928(a, b, c): return 0
-def f929(a, b, c): return 0
-def f930(a, b, c): return 0
-def f931(a, b, c): return 0
-def f932(a, b, c): return 0
-def f933(a, b, c): return 0
-def f934(a, b, c): return 0
-def f935(a, b, c): return 0
-def f936(a, b, c): return 0
-def f937(a, b, c): return 0
-def f938(a, b, c): return 0
-def f939(a, b, c): return 0
-def f940(a, b, c): return 0
-def f941(a, b, c): return 0
-def f942(a, b, c): return 0
-def f943(a, b, c): return 0
-def f944(a, b, c): return 0
-def f945(a, b, c): return 0
-def f946(a, b, c): return 0
-def f947(a, b, c): return 0
-def f948(a, b, c): return 0
-def f949(a, b, c): return 0
-def f950(a, b, c): return 0
-def f951(a, b, c): return 0
-def f952(a, b, c): return 0
-def f953(a, b, c): return 0
-def f954(a, b, c): return 0
-def f955(a, b, c): return 0
-def f956(a, b, c): return 0
-def f957(a, b, c): return 0
-def f958(a, b, c): return 0
-def f959(a, b, c): return 0
-def f960(a, b, c): return 0
-def f961(a, b, c): return 0
-def f962(a, b, c): return 0
-def f963(a, b, c): return 0
-def f964(a, b, c): return 0
-def f965(a, b, c): return 0
-def f966(a, b, c): return 0
-def f967(a, b, c): return 0
-def f968(a, b, c): return 0
-def f969(a, b, c): return 0
-def f970(a, b, c): return 0
-def f971(a, b, c): return 0
-def f972(a, b, c): return 0
-def f973(a, b, c): return 0
-def f974(a, b, c): return 0
-def f975(a, b, c): return 0
-def f976(a, b, c): return 0
-def f977(a, b, c): return 0
-def f978(a, b, c): return 0
-def f979(a, b, c): return 0
-def f980(a, b, c): return 0
-def f981(a, b, c): return 0
-def f982(a, b, c): return 0
-def f983(a, b, c): return 0
-def f984(a, b, c): return 0
-def f985(a, b, c): return 0
-def f986(a, b, c): return 0
-def f987(a, b, c): return 0
-def f988(a, b, c): return 0
-def f989(a, b, c): return 0
-def f990(a, b, c): return 0
-def f991(a, b, c): return 0
-def f992(a, b, c): return 0
-def f993(a, b, c): return 0
-def f994(a, b, c): return 0
-def f995(a, b, c): return 0
-def f996(a, b, c): return 0
-def f997(a, b, c): return 0
-def f998(a, b, c): return 0
-def f999(a, b, c): return 0
-def f1000(a, b, c): return 0
-def f1001(a, b, c): return 0
-def f1002(a, b, c): return 0
-def f1003(a, b, c): return 0
-def f1004(a, b, c): return 0
-def f1005(a, b, c): return 0
-def f1006(a, b, c): return 0
-def f1007(a, b, c): return 0
-def f1008(a, b, c): return 0
-def f1009(a, b, c): return 0
-def f1010(a, b, c): return 0
-def f1011(a, b, c): return 0
-def f1012(a, b, c): return 0
-def f1013(a, b, c): return 0
-def f1014(a, b, c): return 0
-def f1015(a, b, c): return 0
-def f1016(a, b, c): return 0
-def f1017(a, b, c): return 0
-def f1018(a, b, c): return 0
-def f1019(a, b, c): return 0
-def f1020(a, b, c): return 0
-def f1021(a, b, c): return 0
-def f1022(a, b, c): return 0
-def f1023(a, b, c): return 0
-def f1024(a, b, c): return 0
-def f1025(a, b, c): return 0
-def f1026(a, b, c): return 0
-def f1027(a, b, c): return 0
-def f1028(a, b, c): return 0
-def f1029(a, b, c): return 0
-def f1030(a, b, c): return 0
-def f1031(a, b, c): return 0
-def f1032(a, b, c): return 0
-def f1033(a, b, c): return 0
-def f1034(a, b, c): return 0
-def f1035(a, b, c): return 0
-def f1036(a, b, c): return 0
-def f1037(a, b, c): return 0
-def f1038(a, b, c): return 0
-def f1039(a, b, c): return 0
-def f1040(a, b, c): return 0
-def f1041(a, b, c): return 0
-def f1042(a, b, c): return 0
-def f1043(a, b, c): return 0
-def f1044(a, b, c): return 0
-def f1045(a, b, c): return 0
-def f1046(a, b, c): return 0
-def f1047(a, b, c): return 0
-def f1048(a, b, c): return 0
-def f1049(a, b, c): return 0
-def f1050(a, b, c): return 0
-def f1051(a, b, c): return 0
-def f1052(a, b, c): return 0
-def f1053(a, b, c): return 0
-def f1054(a, b, c): return 0
-def f1055(a, b, c): return 0
-def f1056(a, b, c): return 0
-def f1057(a, b, c): return 0
-def f1058(a, b, c): return 0
-def f1059(a, b, c): return 0
-def f1060(a, b, c): return 0
-def f1061(a, b, c): return 0
-def f1062(a, b, c): return 0
-def f1063(a, b, c): return 0
-def f1064(a, b, c): return 0
-def f1065(a, b, c): return 0
-def f1066(a, b, c): return 0
-def f1067(a, b, c): return 0
-def f1068(a, b, c): return 0
-def f1069(a, b, c): return 0
-def f1070(a, b, c): return 0
-def f1071(a, b, c): return 0
-def f1072(a, b, c): return 0
-def f1073(a, b, c): return 0
-def f1074(a, b, c): return 0
-def f1075(a, b, c): return 0
-def f1076(a, b, c): return 0
-def f1077(a, b, c): return 0
-def f1078(a, b, c): return 0
-def f1079(a, b, c): return 0
-def f1080(a, b, c): return 0
-def f1081(a, b, c): return 0
-def f1082(a, b, c): return 0
-def f1083(a, b, c): return 0
-def f1084(a, b, c): return 0
-def f1085(a, b, c): return 0
-def f1086(a, b, c): return 0
-def f1087(a, b, c): return 0
-def f1088(a, b, c): return 0
-def f1089(a, b, c): return 0
-def f1090(a, b, c): return 0
-def f1091(a, b, c): return 0
-def f1092(a, b, c): return 0
-def f1093(a, b, c): return 0
-def f1094(a, b, c): return 0
-def f1095(a, b, c): return 0
-def f1096(a, b, c): return 0
-def f1097(a, b, c): return 0
-def f1098(a, b, c): return 0
-def f1099(a, b, c): return 0
-def f1100(a, b, c): return 0
-def f1101(a, b, c): return 0
-def f1102(a, b, c): return 0
-def f1103(a, b, c): return 0
-def f1104(a, b, c): return 0
-def f1105(a, b, c): return 0
-def f1106(a, b, c): return 0
-def f1107(a, b, c): return 0
-def f1108(a, b, c): return 0
-def f1109(a, b, c): return 0
-def f1110(a, b, c): return 0
-def f1111(a, b, c): return 0
-def f1112(a, b, c): return 0
-def f1113(a, b, c): return 0
-def f1114(a, b, c): return 0
-def f1115(a, b, c): return 0
-def f1116(a, b, c): return 0
-def f1117(a, b, c): return 0
-def f1118(a, b, c): return 0
-def f1119(a, b, c): return 0
-def f1120(a, b, c): return 0
-def f1121(a, b, c): return 0
-def f1122(a, b, c): return 0
-def f1123(a, b, c): return 0
-def f1124(a, b, c): return 0
-def f1125(a, b, c): return 0
-def f1126(a, b, c): return 0
-def f1127(a, b, c): return 0
-def f1128(a, b, c): return 0
-def f1129(a, b, c): return 0
-def f1130(a, b, c): return 0
-def f1131(a, b, c): return 0
-def f1132(a, b, c): return 0
-def f1133(a, b, c): return 0
-def f1134(a, b, c): return 0
-def f1135(a, b, c): return 0
-def f1136(a, b, c): return 0
-def f1137(a, b, c): return 0
-def f1138(a, b, c): return 0
-def f1139(a, b, c): return 0
-def f1140(a, b, c): return 0
-def f1141(a, b, c): return 0
-def f1142(a, b, c): return 0
-def f1143(a, b, c): return 0
-def f1144(a, b, c): return 0
-def f1145(a, b, c): return 0
-def f1146(a, b, c): return 0
-def f1147(a, b, c): return 0
-def f1148(a, b, c): return 0
-def f1149(a, b, c): return 0
-def f1150(a, b, c): return 0
-def f1151(a, b, c): return 0
-def f1152(a, b, c): return 0
-def f1153(a, b, c): return 0
-def f1154(a, b, c): return 0
-def f1155(a, b, c): return 0
-def f1156(a, b, c): return 0
-def f1157(a, b, c): return 0
-def f1158(a, b, c): return 0
-def f1159(a, b, c): return 0
-def f1160(a, b, c): return 0
-def f1161(a, b, c): return 0
-def f1162(a, b, c): return 0
-def f1163(a, b, c): return 0
-def f1164(a, b, c): return 0
-def f1165(a, b, c): return 0
-def f1166(a, b, c): return 0
-def f1167(a, b, c): return 0
-def f1168(a, b, c): return 0
-def f1169(a, b, c): return 0
-def f1170(a, b, c): return 0
-def f1171(a, b, c): return 0
-def f1172(a, b, c): return 0
-def f1173(a, b, c): return 0
-def f1174(a, b, c): return 0
-def f1175(a, b, c): return 0
-def f1176(a, b, c): return 0
-def f1177(a, b, c): return 0
-def f1178(a, b, c): return 0
-def f1179(a, b, c): return 0
-def f1180(a, b, c): return 0
-def f1181(a, b, c): return 0
-def f1182(a, b, c): return 0
-def f1183(a, b, c): return 0
-def f1184(a, b, c): return 0
-def f1185(a, b, c): return 0
-def f1186(a, b, c): return 0
-def f1187(a, b, c): return 0
-def f1188(a, b, c): return 0
-def f1189(a, b, c): return 0
-def f1190(a, b, c): return 0
-def f1191(a, b, c): return 0
-def f1192(a, b, c): return 0
-def f1193(a, b, c): return 0
-def f1194(a, b, c): return 0
-def f1195(a, b, c): return 0
-def f1196(a, b, c): return 0
-def f1197(a, b, c): return 0
-def f1198(a, b, c): return 0
-def f1199(a, b, c): return 0
-def f1200(a, b, c): return 0
-def f1201(a, b, c): return 0
-def f1202(a, b, c): return 0
-def f1203(a, b, c): return 0
-def f1204(a, b, c): return 0
-def f1205(a, b, c): return 0
-def f1206(a, b, c): return 0
-def f1207(a, b, c): return 0
-def f1208(a, b, c): return 0
-def f1209(a, b, c): return 0
-def f1210(a, b, c): return 0
-def f1211(a, b, c): return 0
-def f1212(a, b, c): return 0
-def f1213(a, b, c): return 0
-def f1214(a, b, c): return 0
-def f1215(a, b, c): return 0
-def f1216(a, b, c): return 0
-def f1217(a, b, c): return 0
-def f1218(a, b, c): return 0
-def f1219(a, b, c): return 0
-def f1220(a, b, c): return 0
-def f1221(a, b, c): return 0
-def f1222(a, b, c): return 0
-def f1223(a, b, c): return 0
-def f1224(a, b, c): return 0
-def f1225(a, b, c): return 0
-def f1226(a, b, c): return 0
-def f1227(a, b, c): return 0
-def f1228(a, b, c): return 0
-def f1229(a, b, c): return 0
-def f1230(a, b, c): return 0
-def f1231(a, b, c): return 0
-def f1232(a, b, c): return 0
-def f1233(a, b, c): return 0
-def f1234(a, b, c): return 0
-def f1235(a, b, c): return 0
-def f1236(a, b, c): return 0
-def f1237(a, b, c): return 0
-def f1238(a, b, c): return 0
-def f1239(a, b, c): return 0
-def f1240(a, b, c): return 0
-def f1241(a, b, c): return 0
-def f1242(a, b, c): return 0
-def f1243(a, b, c): return 0
-def f1244(a, b, c): return 0
-def f1245(a, b, c): return 0
-def f1246(a, b, c): return 0
-def f1247(a, b, c): return 0
-def f1248(a, b, c): return 0
-def f1249(a, b, c): return 0
-def f1250(a, b, c): return 0
-def f1251(a, b, c): return 0
-def f1252(a, b, c): return 0
-def f1253(a, b, c): return 0
-def f1254(a, b, c): return 0
-def f1255(a, b, c): return 0
-def f1256(a, b, c): return 0
-def f1257(a, b, c): return 0
-def f1258(a, b, c): return 0
-def f1259(a, b, c): return 0
-def f1260(a, b, c): return 0
-def f1261(a, b, c): return 0
-def f1262(a, b, c): return 0
-def f1263(a, b, c): return 0
-def f1264(a, b, c): return 0
-def f1265(a, b, c): return 0
-def f1266(a, b, c): return 0
-def f1267(a, b, c): return 0
-def f1268(a, b, c): return 0
-def f1269(a, b, c): return 0
-def f1270(a, b, c): return 0
-def f1271(a, b, c): return 0
-def f1272(a, b, c): return 0
-def f1273(a, b, c): return 0
-def f1274(a, b, c): return 0
-def f1275(a, b, c): return 0
-def f1276(a, b, c): return 0
-def f1277(a, b, c): return 0
-def f1278(a, b, c): return 0
-def f1279(a, b, c): return 0
-def f1280(a, b, c): return 0
-def f1281(a, b, c): return 0
-def f1282(a, b, c): return 0
-def f1283(a, b, c): return 0
-def f1284(a, b, c): return 0
-def f1285(a, b, c): return 0
-def f1286(a, b, c): return 0
-def f1287(a, b, c): return 0
-def f1288(a, b, c): return 0
-def f1289(a, b, c): return 0
-def f1290(a, b, c): return 0
-def f1291(a, b, c): return 0
-def f1292(a, b, c): return 0
-def f1293(a, b, c): return 0
-def f1294(a, b, c): return 0
-def f1295(a, b, c): return 0
-def f1296(a, b, c): return 0
-def f1297(a, b, c): return 0
-def f1298(a, b, c): return 0
-def f1299(a, b, c): return 0
-def f1300(a, b, c): return 0
-def f1301(a, b, c): return 0
-def f1302(a, b, c): return 0
-def f1303(a, b, c): return 0
-def f1304(a, b, c): return 0
-def f1305(a, b, c): return 0
-def f1306(a, b, c): return 0
-def f1307(a, b, c): return 0
-def f1308(a, b, c): return 0
-def f1309(a, b, c): return 0
-def f1310(a, b, c): return 0
-def f1311(a, b, c): return 0
-def f1312(a, b, c): return 0
-def f1313(a, b, c): return 0
-def f1314(a, b, c): return 0
-def f1315(a, b, c): return 0
-def f1316(a, b, c): return 0
-def f1317(a, b, c): return 0
-def f1318(a, b, c): return 0
-def f1319(a, b, c): return 0
-def f1320(a, b, c): return 0
-def f1321(a, b, c): return 0
-def f1322(a, b, c): return 0
-def f1323(a, b, c): return 0
-def f1324(a, b, c): return 0
-def f1325(a, b, c): return 0
-def f1326(a, b, c): return 0
-def f1327(a, b, c): return 0
-def f1328(a, b, c): return 0
-def f1329(a, b, c): return 0
-def f1330(a, b, c): return 0
-def f1331(a, b, c): return 0
-def f1332(a, b, c): return 0
-def f1333(a, b, c): return 0
-def f1334(a, b, c): return 0
-def f1335(a, b, c): return 0
-def f1336(a, b, c): return 0
-def f1337(a, b, c): return 0
-def f1338(a, b, c): return 0
-def f1339(a, b, c): return 0
-def f1340(a, b, c): return 0
-def f1341(a, b, c): return 0
-def f1342(a, b, c): return 0
-def f1343(a, b, c): return 0
-def f1344(a, b, c): return 0
-def f1345(a, b, c): return 0
-def f1346(a, b, c): return 0
-def f1347(a, b, c): return 0
-def f1348(a, b, c): return 0
-def f1349(a, b, c): return 0
-def f1350(a, b, c): return 0
-def f1351(a, b, c): return 0
-def f1352(a, b, c): return 0
-def f1353(a, b, c): return 0
-def f1354(a, b, c): return 0
-def f1355(a, b, c): return 0
-def f1356(a, b, c): return 0
-def f1357(a, b, c): return 0
-def f1358(a, b, c): return 0
-def f1359(a, b, c): return 0
-def f1360(a, b, c): return 0
-def f1361(a, b, c): return 0
-def f1362(a, b, c): return 0
-def f1363(a, b, c): return 0
-def f1364(a, b, c): return 0
-def f1365(a, b, c): return 0
-def f1366(a, b, c): return 0
-def f1367(a, b, c): return 0
-def f1368(a, b, c): return 0
-def f1369(a, b, c): return 0
-def f1370(a, b, c): return 0
-def f1371(a, b, c): return 0
-def f1372(a, b, c): return 0
-def f1373(a, b, c): return 0
-def f1374(a, b, c): return 0
-def f1375(a, b, c): return 0
-def f1376(a, b, c): return 0
-def f1377(a, b, c): return 0
-def f1378(a, b, c): return 0
-def f1379(a, b, c): return 0
-def f1380(a, b, c): return 0
-def f1381(a, b, c): return 0
-def f1382(a, b, c): return 0
-def f1383(a, b, c): return 0
-def f1384(a, b, c): return 0
-def f1385(a, b, c): return 0
-def f1386(a, b, c): return 0
-def f1387(a, b, c): return 0
-def f1388(a, b, c): return 0
-def f1389(a, b, c): return 0
-def f1390(a, b, c): return 0
-def f1391(a, b, c): return 0
-def f1392(a, b, c): return 0
-def f1393(a, b, c): return 0
-def f1394(a, b, c): return 0
-def f1395(a, b, c): return 0
-def f1396(a, b, c): return 0
-def f1397(a, b, c): return 0
-def f1398(a, b, c): return 0
-def f1399(a, b, c): return 0
-def f1400(a, b, c): return 0
-def f1401(a, b, c): return 0
-def f1402(a, b, c): return 0
-def f1403(a, b, c): return 0
-def f1404(a, b, c): return 0
-def f1405(a, b, c): return 0
-def f1406(a, b, c): return 0
-def f1407(a, b, c): return 0
-def f1408(a, b, c): return 0
-def f1409(a, b, c): return 0
-def f1410(a, b, c): return 0
-def f1411(a, b, c): return 0
-def f1412(a, b, c): return 0
-def f1413(a, b, c): return 0
-def f1414(a, b, c): return 0
-def f1415(a, b, c): return 0
-def f1416(a, b, c): return 0
-def f1417(a, b, c): return 0
-def f1418(a, b, c): return 0
-def f1419(a, b, c): return 0
-def f1420(a, b, c): return 0
-def f1421(a, b, c): return 0
-def f1422(a, b, c): return 0
-def f1423(a, b, c): return 0
-def f1424(a, b, c): return 0
-def f1425(a, b, c): return 0
-def f1426(a, b, c): return 0
-def f1427(a, b, c): return 0
-def f1428(a, b, c): return 0
-def f1429(a, b, c): return 0
-def f1430(a, b, c): return 0
-def f1431(a, b, c): return 0
-def f1432(a, b, c): return 0
-def f1433(a, b, c): return 0
-def f1434(a, b, c): return 0
-def f1435(a, b, c): return 0
-def f1436(a, b, c): return 0
-def f1437(a, b, c): return 0
-def f1438(a, b, c): return 0
-def f1439(a, b, c): return 0
-def f1440(a, b, c): return 0
-def f1441(a, b, c): return 0
-def f1442(a, b, c): return 0
-def f1443(a, b, c): return 0
-def f1444(a, b, c): return 0
-def f1445(a, b, c): return 0
-def f1446(a, b, c): return 0
-def f1447(a, b, c): return 0
-def f1448(a, b, c): return 0
-def f1449(a, b, c): return 0
-def f1450(a, b, c): return 0
-def f1451(a, b, c): return 0
-def f1452(a, b, c): return 0
-def f1453(a, b, c): return 0
-def f1454(a, b, c): return 0
-def f1455(a, b, c): return 0
-def f1456(a, b, c): return 0
-def f1457(a, b, c): return 0
-def f1458(a, b, c): return 0
-def f1459(a, b, c): return 0
-def f1460(a, b, c): return 0
-def f1461(a, b, c): return 0
-def f1462(a, b, c): return 0
-def f1463(a, b, c): return 0
-def f1464(a, b, c): return 0
-def f1465(a, b, c): return 0
-def f1466(a, b, c): return 0
-def f1467(a, b, c): return 0
-def f1468(a, b, c): return 0
-def f1469(a, b, c): return 0
-def f1470(a, b, c): return 0
-def f1471(a, b, c): return 0
-def f1472(a, b, c): return 0
-def f1473(a, b, c): return 0
-def f1474(a, b, c): return 0
-def f1475(a, b, c): return 0
-def f1476(a, b, c): return 0
-def f1477(a, b, c): return 0
-def f1478(a, b, c): return 0
-def f1479(a, b, c): return 0
-def f1480(a, b, c): return 0
-def f1481(a, b, c): return 0
-def f1482(a, b, c): return 0
-def f1483(a, b, c): return 0
-def f1484(a, b, c): return 0
-def f1485(a, b, c): return 0
-def f1486(a, b, c): return 0
-def f1487(a, b, c): return 0
-def f1488(a, b, c): return 0
-def f1489(a, b, c): return 0
-def f1490(a, b, c): return 0
-def f1491(a, b, c): return 0
-def f1492(a, b, c): return 0
-def f1493(a, b, c): return 0
-def f1494(a, b, c): return 0
-def f1495(a, b, c): return 0
-def f1496(a, b, c): return 0
-def f1497(a, b, c): return 0
-def f1498(a, b, c): return 0
-def f1499(a, b, c): return 0
-def f1500(a, b, c): return 0
-def f1501(a, b, c): return 0
-def f1502(a, b, c): return 0
-def f1503(a, b, c): return 0
-def f1504(a, b, c): return 0
-def f1505(a, b, c): return 0
-def f1506(a, b, c): return 0
-def f1507(a, b, c): return 0
-def f1508(a, b, c): return 0
-def f1509(a, b, c): return 0
-def f1510(a, b, c): return 0
-def f1511(a, b, c): return 0
-def f1512(a, b, c): return 0
-def f1513(a, b, c): return 0
-def f1514(a, b, c): return 0
-def f1515(a, b, c): return 0
-def f1516(a, b, c): return 0
-def f1517(a, b, c): return 0
-def f1518(a, b, c): return 0
-def f1519(a, b, c): return 0
-def f1520(a, b, c): return 0
-def f1521(a, b, c): return 0
-def f1522(a, b, c): return 0
-def f1523(a, b, c): return 0
-def f1524(a, b, c): return 0
-def f1525(a, b, c): return 0
-def f1526(a, b, c): return 0
-def f1527(a, b, c): return 0
-def f1528(a, b, c): return 0
-def f1529(a, b, c): return 0
-def f1530(a, b, c): return 0
-def f1531(a, b, c): return 0
-def f1532(a, b, c): return 0
-def f1533(a, b, c): return 0
-def f1534(a, b, c): return 0
-def f1535(a, b, c): return 0
-def f1536(a, b, c): return 0
-def f1537(a, b, c): return 0
-def f1538(a, b, c): return 0
-def f1539(a, b, c): return 0
-def f1540(a, b, c): return 0
-def f1541(a, b, c): return 0
-def f1542(a, b, c): return 0
-def f1543(a, b, c): return 0
-def f1544(a, b, c): return 0
-def f1545(a, b, c): return 0
-def f1546(a, b, c): return 0
-def f1547(a, b, c): return 0
-def f1548(a, b, c): return 0
-def f1549(a, b, c): return 0
-def f1550(a, b, c): return 0
-def f1551(a, b, c): return 0
-def f1552(a, b, c): return 0
-def f1553(a, b, c): return 0
-def f1554(a, b, c): return 0
-def f1555(a, b, c): return 0
-def f1556(a, b, c): return 0
-def f1557(a, b, c): return 0
-def f1558(a, b, c): return 0
-def f1559(a, b, c): return 0
-def f1560(a, b, c): return 0
-def f1561(a, b, c): return 0
-def f1562(a, b, c): return 0
-def f1563(a, b, c): return 0
-def f1564(a, b, c): return 0
-def f1565(a, b, c): return 0
-def f1566(a, b, c): return 0
-def f1567(a, b, c): return 0
-def f1568(a, b, c): return 0
-def f1569(a, b, c): return 0
-def f1570(a, b, c): return 0
-def f1571(a, b, c): return 0
-def f1572(a, b, c): return 0
-def f1573(a, b, c): return 0
-def f1574(a, b, c): return 0
-def f1575(a, b, c): return 0
-def f1576(a, b, c): return 0
-def f1577(a, b, c): return 0
-def f1578(a, b, c): return 0
-def f1579(a, b, c): return 0
-def f1580(a, b, c): return 0
-def f1581(a, b, c): return 0
-def f1582(a, b, c): return 0
-def f1583(a, b, c): return 0
-def f1584(a, b, c): return 0
-def f1585(a, b, c): return 0
-def f1586(a, b, c): return 0
-def f1587(a, b, c): return 0
-def f1588(a, b, c): return 0
-def f1589(a, b, c): return 0
-def f1590(a, b, c): return 0
-def f1591(a, b, c): return 0
-def f1592(a, b, c): return 0
-def f1593(a, b, c): return 0
-def f1594(a, b, c): return 0
-def f1595(a, b, c): return 0
-def f1596(a, b, c): return 0
-def f1597(a, b, c): return 0
-def f1598(a, b, c): return 0
-def f1599(a, b, c): return 0
-def f1600(a, b, c): return 0
-def f1601(a, b, c): return 0
-def f1602(a, b, c): return 0
-def f1603(a, b, c): return 0
-def f1604(a, b, c): return 0
-def f1605(a, b, c): return 0
-def f1606(a, b, c): return 0
-def f1607(a, b, c): return 0
-def f1608(a, b, c): return 0
-def f1609(a, b, c): return 0
-def f1610(a, b, c): return 0
-def f1611(a, b, c): return 0
-def f1612(a, b, c): return 0
-def f1613(a, b, c): return 0
-def f1614(a, b, c): return 0
-def f1615(a, b, c): return 0
-def f1616(a, b, c): return 0
-def f1617(a, b, c): return 0
-def f1618(a, b, c): return 0
-def f1619(a, b, c): return 0
-def f1620(a, b, c): return 0
-def f1621(a, b, c): return 0
-def f1622(a, b, c): return 0
-def f1623(a, b, c): return 0
-def f1624(a, b, c): return 0
-def f1625(a, b, c): return 0
-def f1626(a, b, c): return 0
-def f1627(a, b, c): return 0
-def f1628(a, b, c): return 0
-def f1629(a, b, c): return 0
-def f1630(a, b, c): return 0
-def f1631(a, b, c): return 0
-def f1632(a, b, c): return 0
-def f1633(a, b, c): return 0
-def f1634(a, b, c): return 0
-def f1635(a, b, c): return 0
-def f1636(a, b, c): return 0
-def f1637(a, b, c): return 0
-def f1638(a, b, c): return 0
-def f1639(a, b, c): return 0
-def f1640(a, b, c): return 0
-def f1641(a, b, c): return 0
-def f1642(a, b, c): return 0
-def f1643(a, b, c): return 0
-def f1644(a, b, c): return 0
-def f1645(a, b, c): return 0
-def f1646(a, b, c): return 0
-def f1647(a, b, c): return 0
-def f1648(a, b, c): return 0
-def f1649(a, b, c): return 0
-def f1650(a, b, c): return 0
-def f1651(a, b, c): return 0
-def f1652(a, b, c): return 0
-def f1653(a, b, c): return 0
-def f1654(a, b, c): return 0
-def f1655(a, b, c): return 0
-def f1656(a, b, c): return 0
-def f1657(a, b, c): return 0
-def f1658(a, b, c): return 0
-def f1659(a, b, c): return 0
-def f1660(a, b, c): return 0
-def f1661(a, b, c): return 0
-def f1662(a, b, c): return 0
-def f1663(a, b, c): return 0
-def f1664(a, b, c): return 0
-def f1665(a, b, c): return 0
-def f1666(a, b, c): return 0
-def f1667(a, b, c): return 0
-def f1668(a, b, c): return 0
-def f1669(a, b, c): return 0
-def f1670(a, b, c): return 0
-def f1671(a, b, c): return 0
-def f1672(a, b, c): return 0
-def f1673(a, b, c): return 0
-def f1674(a, b, c): return 0
-def f1675(a, b, c): return 0
-def f1676(a, b, c): return 0
-def f1677(a, b, c): return 0
-def f1678(a, b, c): return 0
-def f1679(a, b, c): return 0
-def f1680(a, b, c): return 0
-def f1681(a, b, c): return 0
-def f1682(a, b, c): return 0
-def f1683(a, b, c): return 0
-def f1684(a, b, c): return 0
-def f1685(a, b, c): return 0
-def f1686(a, b, c): return 0
-def f1687(a, b, c): return 0
-def f1688(a, b, c): return 0
-def f1689(a, b, c): return 0
-def f1690(a, b, c): return 0
-def f1691(a, b, c): return 0
-def f1692(a, b, c): return 0
-def f1693(a, b, c): return 0
-def f1694(a, b, c): return 0
-def f1695(a, b, c): return 0
-def f1696(a, b, c): return 0
-def f1697(a, b, c): return 0
-def f1698(a, b, c): return 0
-def f1699(a, b, c): return 0
-def f1700(a, b, c): return 0
-def f1701(a, b, c): return 0
-def f1702(a, b, c): return 0
-def f1703(a, b, c): return 0
-def f1704(a, b, c): return 0
-def f1705(a, b, c): return 0
-def f1706(a, b, c): return 0
-def f1707(a, b, c): return 0
-def f1708(a, b, c): return 0
-def f1709(a, b, c): return 0
-def f1710(a, b, c): return 0
-def f1711(a, b, c): return 0
-def f1712(a, b, c): return 0
-def f1713(a, b, c): return 0
-def f1714(a, b, c): return 0
-def f1715(a, b, c): return 0
-def f1716(a, b, c): return 0
-def f1717(a, b, c): return 0
-def f1718(a, b, c): return 0
-def f1719(a, b, c): return 0
-def f1720(a, b, c): return 0
-def f1721(a, b, c): return 0
-def f1722(a, b, c): return 0
-def f1723(a, b, c): return 0
-def f1724(a, b, c): return 0
-def f1725(a, b, c): return 0
-def f1726(a, b, c): return 0
-def f1727(a, b, c): return 0
-def f1728(a, b, c): return 0
-def f1729(a, b, c): return 0
-def f1730(a, b, c): return 0
-def f1731(a, b, c): return 0
-def f1732(a, b, c): return 0
-def f1733(a, b, c): return 0
-def f1734(a, b, c): return 0
-def f1735(a, b, c): return 0
-def f1736(a, b, c): return 0
-def f1737(a, b, c): return 0
-def f1738(a, b, c): return 0
-def f1739(a, b, c): return 0
-def f1740(a, b, c): return 0
-def f1741(a, b, c): return 0
-def f1742(a, b, c): return 0
-def f1743(a, b, c): return 0
-def f1744(a, b, c): return 0
-def f1745(a, b, c): return 0
-def f1746(a, b, c): return 0
-def f1747(a, b, c): return 0
-def f1748(a, b, c): return 0
-def f1749(a, b, c): return 0
-def f1750(a, b, c): return 0
-def f1751(a, b, c): return 0
-def f1752(a, b, c): return 0
-def f1753(a, b, c): return 0
-def f1754(a, b, c): return 0
-def f1755(a, b, c): return 0
-def f1756(a, b, c): return 0
-def f1757(a, b, c): return 0
-def f1758(a, b, c): return 0
-def f1759(a, b, c): return 0
-def f1760(a, b, c): return 0
-def f1761(a, b, c): return 0
-def f1762(a, b, c): return 0
-def f1763(a, b, c): return 0
-def f1764(a, b, c): return 0
-def f1765(a, b, c): return 0
-def f1766(a, b, c): return 0
-def f1767(a, b, c): return 0
-def f1768(a, b, c): return 0
-def f1769(a, b, c): return 0
-def f1770(a, b, c): return 0
-def f1771(a, b, c): return 0
-def f1772(a, b, c): return 0
-def f1773(a, b, c): return 0
-def f1774(a, b, c): return 0
-def f1775(a, b, c): return 0
-def f1776(a, b, c): return 0
-def f1777(a, b, c): return 0
-def f1778(a, b, c): return 0
-def f1779(a, b, c): return 0
-def f1780(a, b, c): return 0
-def f1781(a, b, c): return 0
-def f1782(a, b, c): return 0
-def f1783(a, b, c): return 0
-def f1784(a, b, c): return 0
-def f1785(a, b, c): return 0
-def f1786(a, b, c): return 0
-def f1787(a, b, c): return 0
-def f1788(a, b, c): return 0
-def f1789(a, b, c): return 0
-def f1790(a, b, c): return 0
-def f1791(a, b, c): return 0
-def f1792(a, b, c): return 0
-def f1793(a, b, c): return 0
-def f1794(a, b, c): return 0
-def f1795(a, b, c): return 0
-def f1796(a, b, c): return 0
-def f1797(a, b, c): return 0
-def f1798(a, b, c): return 0
-def f1799(a, b, c): return 0
-def f1800(a, b, c): return 0
-def f1801(a, b, c): return 0
-def f1802(a, b, c): return 0
-def f1803(a, b, c): return 0
-def f1804(a, b, c): return 0
-def f1805(a, b, c): return 0
-def f1806(a, b, c): return 0
-def f1807(a, b, c): return 0
-def f1808(a, b, c): return 0
-def f1809(a, b, c): return 0
-def f1810(a, b, c): return 0
-def f1811(a, b, c): return 0
-def f1812(a, b, c): return 0
-def f1813(a, b, c): return 0
-def f1814(a, b, c): return 0
-def f1815(a, b, c): return 0
-def f1816(a, b, c): return 0
-def f1817(a, b, c): return 0
-def f1818(a, b, c): return 0
-def f1819(a, b, c): return 0
-def f1820(a, b, c): return 0
-def f1821(a, b, c): return 0
-def f1822(a, b, c): return 0
-def f1823(a, b, c): return 0
-def f1824(a, b, c): return 0
-def f1825(a, b, c): return 0
-def f1826(a, b, c): return 0
-def f1827(a, b, c): return 0
-def f1828(a, b, c): return 0
-def f1829(a, b, c): return 0
-def f1830(a, b, c): return 0
-def f1831(a, b, c): return 0
-def f1832(a, b, c): return 0
-def f1833(a, b, c): return 0
-def f1834(a, b, c): return 0
-def f1835(a, b, c): return 0
-def f1836(a, b, c): return 0
-def f1837(a, b, c): return 0
-def f1838(a, b, c): return 0
-def f1839(a, b, c): return 0
-def f1840(a, b, c): return 0
-def f1841(a, b, c): return 0
-def f1842(a, b, c): return 0
-def f1843(a, b, c): return 0
-def f1844(a, b, c): return 0
-def f1845(a, b, c): return 0
-def f1846(a, b, c): return 0
-def f1847(a, b, c): return 0
-def f1848(a, b, c): return 0
-def f1849(a, b, c): return 0
-def f1850(a, b, c): return 0
-def f1851(a, b, c): return 0
-def f1852(a, b, c): return 0
-def f1853(a, b, c): return 0
-def f1854(a, b, c): return 0
-def f1855(a, b, c): return 0
-def f1856(a, b, c): return 0
-def f1857(a, b, c): return 0
-def f1858(a, b, c): return 0
-def f1859(a, b, c): return 0
-def f1860(a, b, c): return 0
-def f1861(a, b, c): return 0
-def f1862(a, b, c): return 0
-def f1863(a, b, c): return 0
-def f1864(a, b, c): return 0
-def f1865(a, b, c): return 0
-def f1866(a, b, c): return 0
-def f1867(a, b, c): return 0
-def f1868(a, b, c): return 0
-def f1869(a, b, c): return 0
-def f1870(a, b, c): return 0
-def f1871(a, b, c): return 0
-def f1872(a, b, c): return 0
-def f1873(a, b, c): return 0
-def f1874(a, b, c): return 0
-def f1875(a, b, c): return 0
-def f1876(a, b, c): return 0
-def f1877(a, b, c): return 0
-def f1878(a, b, c): return 0
-def f1879(a, b, c): return 0
-def f1880(a, b, c): return 0
-def f1881(a, b, c): return 0
-def f1882(a, b, c): return 0
-def f1883(a, b, c): return 0
-def f1884(a, b, c): return 0
-def f1885(a, b, c): return 0
-def f1886(a, b, c): return 0
-def f1887(a, b, c): return 0
-def f1888(a, b, c): return 0
-def f1889(a, b, c): return 0
-def f1890(a, b, c): return 0
-def f1891(a, b, c): return 0
-def f1892(a, b, c): return 0
-def f1893(a, b, c): return 0
-def f1894(a, b, c): return 0
-def f1895(a, b, c): return 0
-def f1896(a, b, c): return 0
-def f1897(a, b, c): return 0
-def f1898(a, b, c): return 0
-def f1899(a, b, c): return 0
-def f1900(a, b, c): return 0
-def f1901(a, b, c): return 0
-def f1902(a, b, c): return 0
-def f1903(a, b, c): return 0
-def f1904(a, b, c): return 0
-def f1905(a, b, c): return 0
-def f1906(a, b, c): return 0
-def f1907(a, b, c): return 0
-def f1908(a, b, c): return 0
-def f1909(a, b, c): return 0
-def f1910(a, b, c): return 0
-def f1911(a, b, c): return 0
-def f1912(a, b, c): return 0
-def f1913(a, b, c): return 0
-def f1914(a, b, c): return 0
-def f1915(a, b, c): return 0
-def f1916(a, b, c): return 0
-def f1917(a, b, c): return 0
-def f1918(a, b, c): return 0
-def f1919(a, b, c): return 0
-def f1920(a, b, c): return 0
-def f1921(a, b, c): return 0
-def f1922(a, b, c): return 0
-def f1923(a, b, c): return 0
-def f1924(a, b, c): return 0
-def f1925(a, b, c): return 0
-def f1926(a, b, c): return 0
-def f1927(a, b, c): return 0
-def f1928(a, b, c): return 0
-def f1929(a, b, c): return 0
-def f1930(a, b, c): return 0
-def f1931(a, b, c): return 0
-def f1932(a, b, c): return 0
-def f1933(a, b, c): return 0
-def f1934(a, b, c): return 0
-def f1935(a, b, c): return 0
-def f1936(a, b, c): return 0
-def f1937(a, b, c): return 0
-def f1938(a, b, c): return 0
-def f1939(a, b, c): return 0
-def f1940(a, b, c): return 0
-def f1941(a, b, c): return 0
-def f1942(a, b, c): return 0
-def f1943(a, b, c): return 0
-def f1944(a, b, c): return 0
-def f1945(a, b, c): return 0
-def f1946(a, b, c): return 0
-def f1947(a, b, c): return 0
-def f1948(a, b, c): return 0
-def f1949(a, b, c): return 0
-def f1950(a, b, c): return 0
-def f1951(a, b, c): return 0
-def f1952(a, b, c): return 0
-def f1953(a, b, c): return 0
-def f1954(a, b, c): return 0
-def f1955(a, b, c): return 0
-def f1956(a, b, c): return 0
-def f1957(a, b, c): return 0
-def f1958(a, b, c): return 0
-def f1959(a, b, c): return 0
-def f1960(a, b, c): return 0
-def f1961(a, b, c): return 0
-def f1962(a, b, c): return 0
-def f1963(a, b, c): return 0
-def f1964(a, b, c): return 0
-def f1965(a, b, c): return 0
-def f1966(a, b, c): return 0
-def f1967(a, b, c): return 0
-def f1968(a, b, c): return 0
-def f1969(a, b, c): return 0
-def f1970(a, b, c): return 0
-def f1971(a, b, c): return 0
-def f1972(a, b, c): return 0
-def f1973(a, b, c): return 0
-def f1974(a, b, c): return 0
-def f1975(a, b, c): return 0
-def f1976(a, b, c): return 0
-def f1977(a, b, c): return 0
-def f1978(a, b, c): return 0
-def f1979(a, b, c): return 0
-def f1980(a, b, c): return 0
-def f1981(a, b, c): return 0
-def f1982(a, b, c): return 0
-def f1983(a, b, c): return 0
-def f1984(a, b, c): return 0
-def f1985(a, b, c): return 0
-def f1986(a, b, c): return 0
-def f1987(a, b, c): return 0
-def f1988(a, b, c): return 0
-def f1989(a, b, c): return 0
-def f1990(a, b, c): return 0
-def f1991(a, b, c): return 0
-def f1992(a, b, c): return 0
-def f1993(a, b, c): return 0
-def f1994(a, b, c): return 0
-def f1995(a, b, c): return 0
-def f1996(a, b, c): return 0
-def f1997(a, b, c): return 0
-def f1998(a, b, c): return 0
-def f1999(a, b, c): return 0
-def f2000(a, b, c): return 0
+def f1(a, b, c) -> int: return 0
+def f2(a, b, c) -> int: return 0
+def f3(a, b, c) -> int: return 0
+def f4(a, b, c) -> int: return 0
+def f5(a, b, c) -> int: return 0
+def f6(a, b, c) -> int: return 0
+def f7(a, b, c) -> int: return 0
+def f8(a, b, c) -> int: return 0
+def f9(a, b, c) -> int: return 0
+def f10(a, b, c) -> int: return 0
+def f11(a, b, c) -> int: return 0
+def f12(a, b, c) -> int: return 0
+def f13(a, b, c) -> int: return 0
+def f14(a, b, c) -> int: return 0
+def f15(a, b, c) -> int: return 0
+def f16(a, b, c) -> int: return 0
+def f17(a, b, c) -> int: return 0
+def f18(a, b, c) -> int: return 0
+def f19(a, b, c) -> int: return 0
+def f20(a, b, c) -> int: return 0
+def f21(a, b, c) -> int: return 0
+def f22(a, b, c) -> int: return 0
+def f23(a, b, c) -> int: return 0
+def f24(a, b, c) -> int: return 0
+def f25(a, b, c) -> int: return 0
+def f26(a, b, c) -> int: return 0
+def f27(a, b, c) -> int: return 0
+def f28(a, b, c) -> int: return 0
+def f29(a, b, c) -> int: return 0
+def f30(a, b, c) -> int: return 0
+def f31(a, b, c) -> int: return 0
+def f32(a, b, c) -> int: return 0
+def f33(a, b, c) -> int: return 0
+def f34(a, b, c) -> int: return 0
+def f35(a, b, c) -> int: return 0
+def f36(a, b, c) -> int: return 0
+def f37(a, b, c) -> int: return 0
+def f38(a, b, c) -> int: return 0
+def f39(a, b, c) -> int: return 0
+def f40(a, b, c) -> int: return 0
+def f41(a, b, c) -> int: return 0
+def f42(a, b, c) -> int: return 0
+def f43(a, b, c) -> int: return 0
+def f44(a, b, c) -> int: return 0
+def f45(a, b, c) -> int: return 0
+def f46(a, b, c) -> int: return 0
+def f47(a, b, c) -> int: return 0
+def f48(a, b, c) -> int: return 0
+def f49(a, b, c) -> int: return 0
+def f50(a, b, c) -> int: return 0
+def f51(a, b, c) -> int: return 0
+def f52(a, b, c) -> int: return 0
+def f53(a, b, c) -> int: return 0
+def f54(a, b, c) -> int: return 0
+def f55(a, b, c) -> int: return 0
+def f56(a, b, c) -> int: return 0
+def f57(a, b, c) -> int: return 0
+def f58(a, b, c) -> int: return 0
+def f59(a, b, c) -> int: return 0
+def f60(a, b, c) -> int: return 0
+def f61(a, b, c) -> int: return 0
+def f62(a, b, c) -> int: return 0
+def f63(a, b, c) -> int: return 0
+def f64(a, b, c) -> int: return 0
+def f65(a, b, c) -> int: return 0
+def f66(a, b, c) -> int: return 0
+def f67(a, b, c) -> int: return 0
+def f68(a, b, c) -> int: return 0
+def f69(a, b, c) -> int: return 0
+def f70(a, b, c) -> int: return 0
+def f71(a, b, c) -> int: return 0
+def f72(a, b, c) -> int: return 0
+def f73(a, b, c) -> int: return 0
+def f74(a, b, c) -> int: return 0
+def f75(a, b, c) -> int: return 0
+def f76(a, b, c) -> int: return 0
+def f77(a, b, c) -> int: return 0
+def f78(a, b, c) -> int: return 0
+def f79(a, b, c) -> int: return 0
+def f80(a, b, c) -> int: return 0
+def f81(a, b, c) -> int: return 0
+def f82(a, b, c) -> int: return 0
+def f83(a, b, c) -> int: return 0
+def f84(a, b, c) -> int: return 0
+def f85(a, b, c) -> int: return 0
+def f86(a, b, c) -> int: return 0
+def f87(a, b, c) -> int: return 0
+def f88(a, b, c) -> int: return 0
+def f89(a, b, c) -> int: return 0
+def f90(a, b, c) -> int: return 0
+def f91(a, b, c) -> int: return 0
+def f92(a, b, c) -> int: return 0
+def f93(a, b, c) -> int: return 0
+def f94(a, b, c) -> int: return 0
+def f95(a, b, c) -> int: return 0
+def f96(a, b, c) -> int: return 0
+def f97(a, b, c) -> int: return 0
+def f98(a, b, c) -> int: return 0
+def f99(a, b, c) -> int: return 0
+def f100(a, b, c) -> int: return 0
+def f101(a, b, c) -> int: return 0
+def f102(a, b, c) -> int: return 0
+def f103(a, b, c) -> int: return 0
+def f104(a, b, c) -> int: return 0
+def f105(a, b, c) -> int: return 0
+def f106(a, b, c) -> int: return 0
+def f107(a, b, c) -> int: return 0
+def f108(a, b, c) -> int: return 0
+def f109(a, b, c) -> int: return 0
+def f110(a, b, c) -> int: return 0
+def f111(a, b, c) -> int: return 0
+def f112(a, b, c) -> int: return 0
+def f113(a, b, c) -> int: return 0
+def f114(a, b, c) -> int: return 0
+def f115(a, b, c) -> int: return 0
+def f116(a, b, c) -> int: return 0
+def f117(a, b, c) -> int: return 0
+def f118(a, b, c) -> int: return 0
+def f119(a, b, c) -> int: return 0
+def f120(a, b, c) -> int: return 0
+def f121(a, b, c) -> int: return 0
+def f122(a, b, c) -> int: return 0
+def f123(a, b, c) -> int: return 0
+def f124(a, b, c) -> int: return 0
+def f125(a, b, c) -> int: return 0
+def f126(a, b, c) -> int: return 0
+def f127(a, b, c) -> int: return 0
+def f128(a, b, c) -> int: return 0
+def f129(a, b, c) -> int: return 0
+def f130(a, b, c) -> int: return 0
+def f131(a, b, c) -> int: return 0
+def f132(a, b, c) -> int: return 0
+def f133(a, b, c) -> int: return 0
+def f134(a, b, c) -> int: return 0
+def f135(a, b, c) -> int: return 0
+def f136(a, b, c) -> int: return 0
+def f137(a, b, c) -> int: return 0
+def f138(a, b, c) -> int: return 0
+def f139(a, b, c) -> int: return 0
+def f140(a, b, c) -> int: return 0
+def f141(a, b, c) -> int: return 0
+def f142(a, b, c) -> int: return 0
+def f143(a, b, c) -> int: return 0
+def f144(a, b, c) -> int: return 0
+def f145(a, b, c) -> int: return 0
+def f146(a, b, c) -> int: return 0
+def f147(a, b, c) -> int: return 0
+def f148(a, b, c) -> int: return 0
+def f149(a, b, c) -> int: return 0
+def f150(a, b, c) -> int: return 0
+def f151(a, b, c) -> int: return 0
+def f152(a, b, c) -> int: return 0
+def f153(a, b, c) -> int: return 0
+def f154(a, b, c) -> int: return 0
+def f155(a, b, c) -> int: return 0
+def f156(a, b, c) -> int: return 0
+def f157(a, b, c) -> int: return 0
+def f158(a, b, c) -> int: return 0
+def f159(a, b, c) -> int: return 0
+def f160(a, b, c) -> int: return 0
+def f161(a, b, c) -> int: return 0
+def f162(a, b, c) -> int: return 0
+def f163(a, b, c) -> int: return 0
+def f164(a, b, c) -> int: return 0
+def f165(a, b, c) -> int: return 0
+def f166(a, b, c) -> int: return 0
+def f167(a, b, c) -> int: return 0
+def f168(a, b, c) -> int: return 0
+def f169(a, b, c) -> int: return 0
+def f170(a, b, c) -> int: return 0
+def f171(a, b, c) -> int: return 0
+def f172(a, b, c) -> int: return 0
+def f173(a, b, c) -> int: return 0
+def f174(a, b, c) -> int: return 0
+def f175(a, b, c) -> int: return 0
+def f176(a, b, c) -> int: return 0
+def f177(a, b, c) -> int: return 0
+def f178(a, b, c) -> int: return 0
+def f179(a, b, c) -> int: return 0
+def f180(a, b, c) -> int: return 0
+def f181(a, b, c) -> int: return 0
+def f182(a, b, c) -> int: return 0
+def f183(a, b, c) -> int: return 0
+def f184(a, b, c) -> int: return 0
+def f185(a, b, c) -> int: return 0
+def f186(a, b, c) -> int: return 0
+def f187(a, b, c) -> int: return 0
+def f188(a, b, c) -> int: return 0
+def f189(a, b, c) -> int: return 0
+def f190(a, b, c) -> int: return 0
+def f191(a, b, c) -> int: return 0
+def f192(a, b, c) -> int: return 0
+def f193(a, b, c) -> int: return 0
+def f194(a, b, c) -> int: return 0
+def f195(a, b, c) -> int: return 0
+def f196(a, b, c) -> int: return 0
+def f197(a, b, c) -> int: return 0
+def f198(a, b, c) -> int: return 0
+def f199(a, b, c) -> int: return 0
+def f200(a, b, c) -> int: return 0
+def f201(a, b, c) -> int: return 0
+def f202(a, b, c) -> int: return 0
+def f203(a, b, c) -> int: return 0
+def f204(a, b, c) -> int: return 0
+def f205(a, b, c) -> int: return 0
+def f206(a, b, c) -> int: return 0
+def f207(a, b, c) -> int: return 0
+def f208(a, b, c) -> int: return 0
+def f209(a, b, c) -> int: return 0
+def f210(a, b, c) -> int: return 0
+def f211(a, b, c) -> int: return 0
+def f212(a, b, c) -> int: return 0
+def f213(a, b, c) -> int: return 0
+def f214(a, b, c) -> int: return 0
+def f215(a, b, c) -> int: return 0
+def f216(a, b, c) -> int: return 0
+def f217(a, b, c) -> int: return 0
+def f218(a, b, c) -> int: return 0
+def f219(a, b, c) -> int: return 0
+def f220(a, b, c) -> int: return 0
+def f221(a, b, c) -> int: return 0
+def f222(a, b, c) -> int: return 0
+def f223(a, b, c) -> int: return 0
+def f224(a, b, c) -> int: return 0
+def f225(a, b, c) -> int: return 0
+def f226(a, b, c) -> int: return 0
+def f227(a, b, c) -> int: return 0
+def f228(a, b, c) -> int: return 0
+def f229(a, b, c) -> int: return 0
+def f230(a, b, c) -> int: return 0
+def f231(a, b, c) -> int: return 0
+def f232(a, b, c) -> int: return 0
+def f233(a, b, c) -> int: return 0
+def f234(a, b, c) -> int: return 0
+def f235(a, b, c) -> int: return 0
+def f236(a, b, c) -> int: return 0
+def f237(a, b, c) -> int: return 0
+def f238(a, b, c) -> int: return 0
+def f239(a, b, c) -> int: return 0
+def f240(a, b, c) -> int: return 0
+def f241(a, b, c) -> int: return 0
+def f242(a, b, c) -> int: return 0
+def f243(a, b, c) -> int: return 0
+def f244(a, b, c) -> int: return 0
+def f245(a, b, c) -> int: return 0
+def f246(a, b, c) -> int: return 0
+def f247(a, b, c) -> int: return 0
+def f248(a, b, c) -> int: return 0
+def f249(a, b, c) -> int: return 0
+def f250(a, b, c) -> int: return 0
+def f251(a, b, c) -> int: return 0
+def f252(a, b, c) -> int: return 0
+def f253(a, b, c) -> int: return 0
+def f254(a, b, c) -> int: return 0
+def f255(a, b, c) -> int: return 0
+def f256(a, b, c) -> int: return 0
+def f257(a, b, c) -> int: return 0
+def f258(a, b, c) -> int: return 0
+def f259(a, b, c) -> int: return 0
+def f260(a, b, c) -> int: return 0
+def f261(a, b, c) -> int: return 0
+def f262(a, b, c) -> int: return 0
+def f263(a, b, c) -> int: return 0
+def f264(a, b, c) -> int: return 0
+def f265(a, b, c) -> int: return 0
+def f266(a, b, c) -> int: return 0
+def f267(a, b, c) -> int: return 0
+def f268(a, b, c) -> int: return 0
+def f269(a, b, c) -> int: return 0
+def f270(a, b, c) -> int: return 0
+def f271(a, b, c) -> int: return 0
+def f272(a, b, c) -> int: return 0
+def f273(a, b, c) -> int: return 0
+def f274(a, b, c) -> int: return 0
+def f275(a, b, c) -> int: return 0
+def f276(a, b, c) -> int: return 0
+def f277(a, b, c) -> int: return 0
+def f278(a, b, c) -> int: return 0
+def f279(a, b, c) -> int: return 0
+def f280(a, b, c) -> int: return 0
+def f281(a, b, c) -> int: return 0
+def f282(a, b, c) -> int: return 0
+def f283(a, b, c) -> int: return 0
+def f284(a, b, c) -> int: return 0
+def f285(a, b, c) -> int: return 0
+def f286(a, b, c) -> int: return 0
+def f287(a, b, c) -> int: return 0
+def f288(a, b, c) -> int: return 0
+def f289(a, b, c) -> int: return 0
+def f290(a, b, c) -> int: return 0
+def f291(a, b, c) -> int: return 0
+def f292(a, b, c) -> int: return 0
+def f293(a, b, c) -> int: return 0
+def f294(a, b, c) -> int: return 0
+def f295(a, b, c) -> int: return 0
+def f296(a, b, c) -> int: return 0
+def f297(a, b, c) -> int: return 0
+def f298(a, b, c) -> int: return 0
+def f299(a, b, c) -> int: return 0
+def f300(a, b, c) -> int: return 0
+def f301(a, b, c) -> int: return 0
+def f302(a, b, c) -> int: return 0
+def f303(a, b, c) -> int: return 0
+def f304(a, b, c) -> int: return 0
+def f305(a, b, c) -> int: return 0
+def f306(a, b, c) -> int: return 0
+def f307(a, b, c) -> int: return 0
+def f308(a, b, c) -> int: return 0
+def f309(a, b, c) -> int: return 0
+def f310(a, b, c) -> int: return 0
+def f311(a, b, c) -> int: return 0
+def f312(a, b, c) -> int: return 0
+def f313(a, b, c) -> int: return 0
+def f314(a, b, c) -> int: return 0
+def f315(a, b, c) -> int: return 0
+def f316(a, b, c) -> int: return 0
+def f317(a, b, c) -> int: return 0
+def f318(a, b, c) -> int: return 0
+def f319(a, b, c) -> int: return 0
+def f320(a, b, c) -> int: return 0
+def f321(a, b, c) -> int: return 0
+def f322(a, b, c) -> int: return 0
+def f323(a, b, c) -> int: return 0
+def f324(a, b, c) -> int: return 0
+def f325(a, b, c) -> int: return 0
+def f326(a, b, c) -> int: return 0
+def f327(a, b, c) -> int: return 0
+def f328(a, b, c) -> int: return 0
+def f329(a, b, c) -> int: return 0
+def f330(a, b, c) -> int: return 0
+def f331(a, b, c) -> int: return 0
+def f332(a, b, c) -> int: return 0
+def f333(a, b, c) -> int: return 0
+def f334(a, b, c) -> int: return 0
+def f335(a, b, c) -> int: return 0
+def f336(a, b, c) -> int: return 0
+def f337(a, b, c) -> int: return 0
+def f338(a, b, c) -> int: return 0
+def f339(a, b, c) -> int: return 0
+def f340(a, b, c) -> int: return 0
+def f341(a, b, c) -> int: return 0
+def f342(a, b, c) -> int: return 0
+def f343(a, b, c) -> int: return 0
+def f344(a, b, c) -> int: return 0
+def f345(a, b, c) -> int: return 0
+def f346(a, b, c) -> int: return 0
+def f347(a, b, c) -> int: return 0
+def f348(a, b, c) -> int: return 0
+def f349(a, b, c) -> int: return 0
+def f350(a, b, c) -> int: return 0
+def f351(a, b, c) -> int: return 0
+def f352(a, b, c) -> int: return 0
+def f353(a, b, c) -> int: return 0
+def f354(a, b, c) -> int: return 0
+def f355(a, b, c) -> int: return 0
+def f356(a, b, c) -> int: return 0
+def f357(a, b, c) -> int: return 0
+def f358(a, b, c) -> int: return 0
+def f359(a, b, c) -> int: return 0
+def f360(a, b, c) -> int: return 0
+def f361(a, b, c) -> int: return 0
+def f362(a, b, c) -> int: return 0
+def f363(a, b, c) -> int: return 0
+def f364(a, b, c) -> int: return 0
+def f365(a, b, c) -> int: return 0
+def f366(a, b, c) -> int: return 0
+def f367(a, b, c) -> int: return 0
+def f368(a, b, c) -> int: return 0
+def f369(a, b, c) -> int: return 0
+def f370(a, b, c) -> int: return 0
+def f371(a, b, c) -> int: return 0
+def f372(a, b, c) -> int: return 0
+def f373(a, b, c) -> int: return 0
+def f374(a, b, c) -> int: return 0
+def f375(a, b, c) -> int: return 0
+def f376(a, b, c) -> int: return 0
+def f377(a, b, c) -> int: return 0
+def f378(a, b, c) -> int: return 0
+def f379(a, b, c) -> int: return 0
+def f380(a, b, c) -> int: return 0
+def f381(a, b, c) -> int: return 0
+def f382(a, b, c) -> int: return 0
+def f383(a, b, c) -> int: return 0
+def f384(a, b, c) -> int: return 0
+def f385(a, b, c) -> int: return 0
+def f386(a, b, c) -> int: return 0
+def f387(a, b, c) -> int: return 0
+def f388(a, b, c) -> int: return 0
+def f389(a, b, c) -> int: return 0
+def f390(a, b, c) -> int: return 0
+def f391(a, b, c) -> int: return 0
+def f392(a, b, c) -> int: return 0
+def f393(a, b, c) -> int: return 0
+def f394(a, b, c) -> int: return 0
+def f395(a, b, c) -> int: return 0
+def f396(a, b, c) -> int: return 0
+def f397(a, b, c) -> int: return 0
+def f398(a, b, c) -> int: return 0
+def f399(a, b, c) -> int: return 0
+def f400(a, b, c) -> int: return 0
+def f401(a, b, c) -> int: return 0
+def f402(a, b, c) -> int: return 0
+def f403(a, b, c) -> int: return 0
+def f404(a, b, c) -> int: return 0
+def f405(a, b, c) -> int: return 0
+def f406(a, b, c) -> int: return 0
+def f407(a, b, c) -> int: return 0
+def f408(a, b, c) -> int: return 0
+def f409(a, b, c) -> int: return 0
+def f410(a, b, c) -> int: return 0
+def f411(a, b, c) -> int: return 0
+def f412(a, b, c) -> int: return 0
+def f413(a, b, c) -> int: return 0
+def f414(a, b, c) -> int: return 0
+def f415(a, b, c) -> int: return 0
+def f416(a, b, c) -> int: return 0
+def f417(a, b, c) -> int: return 0
+def f418(a, b, c) -> int: return 0
+def f419(a, b, c) -> int: return 0
+def f420(a, b, c) -> int: return 0
+def f421(a, b, c) -> int: return 0
+def f422(a, b, c) -> int: return 0
+def f423(a, b, c) -> int: return 0
+def f424(a, b, c) -> int: return 0
+def f425(a, b, c) -> int: return 0
+def f426(a, b, c) -> int: return 0
+def f427(a, b, c) -> int: return 0
+def f428(a, b, c) -> int: return 0
+def f429(a, b, c) -> int: return 0
+def f430(a, b, c) -> int: return 0
+def f431(a, b, c) -> int: return 0
+def f432(a, b, c) -> int: return 0
+def f433(a, b, c) -> int: return 0
+def f434(a, b, c) -> int: return 0
+def f435(a, b, c) -> int: return 0
+def f436(a, b, c) -> int: return 0
+def f437(a, b, c) -> int: return 0
+def f438(a, b, c) -> int: return 0
+def f439(a, b, c) -> int: return 0
+def f440(a, b, c) -> int: return 0
+def f441(a, b, c) -> int: return 0
+def f442(a, b, c) -> int: return 0
+def f443(a, b, c) -> int: return 0
+def f444(a, b, c) -> int: return 0
+def f445(a, b, c) -> int: return 0
+def f446(a, b, c) -> int: return 0
+def f447(a, b, c) -> int: return 0
+def f448(a, b, c) -> int: return 0
+def f449(a, b, c) -> int: return 0
+def f450(a, b, c) -> int: return 0
+def f451(a, b, c) -> int: return 0
+def f452(a, b, c) -> int: return 0
+def f453(a, b, c) -> int: return 0
+def f454(a, b, c) -> int: return 0
+def f455(a, b, c) -> int: return 0
+def f456(a, b, c) -> int: return 0
+def f457(a, b, c) -> int: return 0
+def f458(a, b, c) -> int: return 0
+def f459(a, b, c) -> int: return 0
+def f460(a, b, c) -> int: return 0
+def f461(a, b, c) -> int: return 0
+def f462(a, b, c) -> int: return 0
+def f463(a, b, c) -> int: return 0
+def f464(a, b, c) -> int: return 0
+def f465(a, b, c) -> int: return 0
+def f466(a, b, c) -> int: return 0
+def f467(a, b, c) -> int: return 0
+def f468(a, b, c) -> int: return 0
+def f469(a, b, c) -> int: return 0
+def f470(a, b, c) -> int: return 0
+def f471(a, b, c) -> int: return 0
+def f472(a, b, c) -> int: return 0
+def f473(a, b, c) -> int: return 0
+def f474(a, b, c) -> int: return 0
+def f475(a, b, c) -> int: return 0
+def f476(a, b, c) -> int: return 0
+def f477(a, b, c) -> int: return 0
+def f478(a, b, c) -> int: return 0
+def f479(a, b, c) -> int: return 0
+def f480(a, b, c) -> int: return 0
+def f481(a, b, c) -> int: return 0
+def f482(a, b, c) -> int: return 0
+def f483(a, b, c) -> int: return 0
+def f484(a, b, c) -> int: return 0
+def f485(a, b, c) -> int: return 0
+def f486(a, b, c) -> int: return 0
+def f487(a, b, c) -> int: return 0
+def f488(a, b, c) -> int: return 0
+def f489(a, b, c) -> int: return 0
+def f490(a, b, c) -> int: return 0
+def f491(a, b, c) -> int: return 0
+def f492(a, b, c) -> int: return 0
+def f493(a, b, c) -> int: return 0
+def f494(a, b, c) -> int: return 0
+def f495(a, b, c) -> int: return 0
+def f496(a, b, c) -> int: return 0
+def f497(a, b, c) -> int: return 0
+def f498(a, b, c) -> int: return 0
+def f499(a, b, c) -> int: return 0
+def f500(a, b, c) -> int: return 0
+def f501(a, b, c) -> int: return 0
+def f502(a, b, c) -> int: return 0
+def f503(a, b, c) -> int: return 0
+def f504(a, b, c) -> int: return 0
+def f505(a, b, c) -> int: return 0
+def f506(a, b, c) -> int: return 0
+def f507(a, b, c) -> int: return 0
+def f508(a, b, c) -> int: return 0
+def f509(a, b, c) -> int: return 0
+def f510(a, b, c) -> int: return 0
+def f511(a, b, c) -> int: return 0
+def f512(a, b, c) -> int: return 0
+def f513(a, b, c) -> int: return 0
+def f514(a, b, c) -> int: return 0
+def f515(a, b, c) -> int: return 0
+def f516(a, b, c) -> int: return 0
+def f517(a, b, c) -> int: return 0
+def f518(a, b, c) -> int: return 0
+def f519(a, b, c) -> int: return 0
+def f520(a, b, c) -> int: return 0
+def f521(a, b, c) -> int: return 0
+def f522(a, b, c) -> int: return 0
+def f523(a, b, c) -> int: return 0
+def f524(a, b, c) -> int: return 0
+def f525(a, b, c) -> int: return 0
+def f526(a, b, c) -> int: return 0
+def f527(a, b, c) -> int: return 0
+def f528(a, b, c) -> int: return 0
+def f529(a, b, c) -> int: return 0
+def f530(a, b, c) -> int: return 0
+def f531(a, b, c) -> int: return 0
+def f532(a, b, c) -> int: return 0
+def f533(a, b, c) -> int: return 0
+def f534(a, b, c) -> int: return 0
+def f535(a, b, c) -> int: return 0
+def f536(a, b, c) -> int: return 0
+def f537(a, b, c) -> int: return 0
+def f538(a, b, c) -> int: return 0
+def f539(a, b, c) -> int: return 0
+def f540(a, b, c) -> int: return 0
+def f541(a, b, c) -> int: return 0
+def f542(a, b, c) -> int: return 0
+def f543(a, b, c) -> int: return 0
+def f544(a, b, c) -> int: return 0
+def f545(a, b, c) -> int: return 0
+def f546(a, b, c) -> int: return 0
+def f547(a, b, c) -> int: return 0
+def f548(a, b, c) -> int: return 0
+def f549(a, b, c) -> int: return 0
+def f550(a, b, c) -> int: return 0
+def f551(a, b, c) -> int: return 0
+def f552(a, b, c) -> int: return 0
+def f553(a, b, c) -> int: return 0
+def f554(a, b, c) -> int: return 0
+def f555(a, b, c) -> int: return 0
+def f556(a, b, c) -> int: return 0
+def f557(a, b, c) -> int: return 0
+def f558(a, b, c) -> int: return 0
+def f559(a, b, c) -> int: return 0
+def f560(a, b, c) -> int: return 0
+def f561(a, b, c) -> int: return 0
+def f562(a, b, c) -> int: return 0
+def f563(a, b, c) -> int: return 0
+def f564(a, b, c) -> int: return 0
+def f565(a, b, c) -> int: return 0
+def f566(a, b, c) -> int: return 0
+def f567(a, b, c) -> int: return 0
+def f568(a, b, c) -> int: return 0
+def f569(a, b, c) -> int: return 0
+def f570(a, b, c) -> int: return 0
+def f571(a, b, c) -> int: return 0
+def f572(a, b, c) -> int: return 0
+def f573(a, b, c) -> int: return 0
+def f574(a, b, c) -> int: return 0
+def f575(a, b, c) -> int: return 0
+def f576(a, b, c) -> int: return 0
+def f577(a, b, c) -> int: return 0
+def f578(a, b, c) -> int: return 0
+def f579(a, b, c) -> int: return 0
+def f580(a, b, c) -> int: return 0
+def f581(a, b, c) -> int: return 0
+def f582(a, b, c) -> int: return 0
+def f583(a, b, c) -> int: return 0
+def f584(a, b, c) -> int: return 0
+def f585(a, b, c) -> int: return 0
+def f586(a, b, c) -> int: return 0
+def f587(a, b, c) -> int: return 0
+def f588(a, b, c) -> int: return 0
+def f589(a, b, c) -> int: return 0
+def f590(a, b, c) -> int: return 0
+def f591(a, b, c) -> int: return 0
+def f592(a, b, c) -> int: return 0
+def f593(a, b, c) -> int: return 0
+def f594(a, b, c) -> int: return 0
+def f595(a, b, c) -> int: return 0
+def f596(a, b, c) -> int: return 0
+def f597(a, b, c) -> int: return 0
+def f598(a, b, c) -> int: return 0
+def f599(a, b, c) -> int: return 0
+def f600(a, b, c) -> int: return 0
+def f601(a, b, c) -> int: return 0
+def f602(a, b, c) -> int: return 0
+def f603(a, b, c) -> int: return 0
+def f604(a, b, c) -> int: return 0
+def f605(a, b, c) -> int: return 0
+def f606(a, b, c) -> int: return 0
+def f607(a, b, c) -> int: return 0
+def f608(a, b, c) -> int: return 0
+def f609(a, b, c) -> int: return 0
+def f610(a, b, c) -> int: return 0
+def f611(a, b, c) -> int: return 0
+def f612(a, b, c) -> int: return 0
+def f613(a, b, c) -> int: return 0
+def f614(a, b, c) -> int: return 0
+def f615(a, b, c) -> int: return 0
+def f616(a, b, c) -> int: return 0
+def f617(a, b, c) -> int: return 0
+def f618(a, b, c) -> int: return 0
+def f619(a, b, c) -> int: return 0
+def f620(a, b, c) -> int: return 0
+def f621(a, b, c) -> int: return 0
+def f622(a, b, c) -> int: return 0
+def f623(a, b, c) -> int: return 0
+def f624(a, b, c) -> int: return 0
+def f625(a, b, c) -> int: return 0
+def f626(a, b, c) -> int: return 0
+def f627(a, b, c) -> int: return 0
+def f628(a, b, c) -> int: return 0
+def f629(a, b, c) -> int: return 0
+def f630(a, b, c) -> int: return 0
+def f631(a, b, c) -> int: return 0
+def f632(a, b, c) -> int: return 0
+def f633(a, b, c) -> int: return 0
+def f634(a, b, c) -> int: return 0
+def f635(a, b, c) -> int: return 0
+def f636(a, b, c) -> int: return 0
+def f637(a, b, c) -> int: return 0
+def f638(a, b, c) -> int: return 0
+def f639(a, b, c) -> int: return 0
+def f640(a, b, c) -> int: return 0
+def f641(a, b, c) -> int: return 0
+def f642(a, b, c) -> int: return 0
+def f643(a, b, c) -> int: return 0
+def f644(a, b, c) -> int: return 0
+def f645(a, b, c) -> int: return 0
+def f646(a, b, c) -> int: return 0
+def f647(a, b, c) -> int: return 0
+def f648(a, b, c) -> int: return 0
+def f649(a, b, c) -> int: return 0
+def f650(a, b, c) -> int: return 0
+def f651(a, b, c) -> int: return 0
+def f652(a, b, c) -> int: return 0
+def f653(a, b, c) -> int: return 0
+def f654(a, b, c) -> int: return 0
+def f655(a, b, c) -> int: return 0
+def f656(a, b, c) -> int: return 0
+def f657(a, b, c) -> int: return 0
+def f658(a, b, c) -> int: return 0
+def f659(a, b, c) -> int: return 0
+def f660(a, b, c) -> int: return 0
+def f661(a, b, c) -> int: return 0
+def f662(a, b, c) -> int: return 0
+def f663(a, b, c) -> int: return 0
+def f664(a, b, c) -> int: return 0
+def f665(a, b, c) -> int: return 0
+def f666(a, b, c) -> int: return 0
+def f667(a, b, c) -> int: return 0
+def f668(a, b, c) -> int: return 0
+def f669(a, b, c) -> int: return 0
+def f670(a, b, c) -> int: return 0
+def f671(a, b, c) -> int: return 0
+def f672(a, b, c) -> int: return 0
+def f673(a, b, c) -> int: return 0
+def f674(a, b, c) -> int: return 0
+def f675(a, b, c) -> int: return 0
+def f676(a, b, c) -> int: return 0
+def f677(a, b, c) -> int: return 0
+def f678(a, b, c) -> int: return 0
+def f679(a, b, c) -> int: return 0
+def f680(a, b, c) -> int: return 0
+def f681(a, b, c) -> int: return 0
+def f682(a, b, c) -> int: return 0
+def f683(a, b, c) -> int: return 0
+def f684(a, b, c) -> int: return 0
+def f685(a, b, c) -> int: return 0
+def f686(a, b, c) -> int: return 0
+def f687(a, b, c) -> int: return 0
+def f688(a, b, c) -> int: return 0
+def f689(a, b, c) -> int: return 0
+def f690(a, b, c) -> int: return 0
+def f691(a, b, c) -> int: return 0
+def f692(a, b, c) -> int: return 0
+def f693(a, b, c) -> int: return 0
+def f694(a, b, c) -> int: return 0
+def f695(a, b, c) -> int: return 0
+def f696(a, b, c) -> int: return 0
+def f697(a, b, c) -> int: return 0
+def f698(a, b, c) -> int: return 0
+def f699(a, b, c) -> int: return 0
+def f700(a, b, c) -> int: return 0
+def f701(a, b, c) -> int: return 0
+def f702(a, b, c) -> int: return 0
+def f703(a, b, c) -> int: return 0
+def f704(a, b, c) -> int: return 0
+def f705(a, b, c) -> int: return 0
+def f706(a, b, c) -> int: return 0
+def f707(a, b, c) -> int: return 0
+def f708(a, b, c) -> int: return 0
+def f709(a, b, c) -> int: return 0
+def f710(a, b, c) -> int: return 0
+def f711(a, b, c) -> int: return 0
+def f712(a, b, c) -> int: return 0
+def f713(a, b, c) -> int: return 0
+def f714(a, b, c) -> int: return 0
+def f715(a, b, c) -> int: return 0
+def f716(a, b, c) -> int: return 0
+def f717(a, b, c) -> int: return 0
+def f718(a, b, c) -> int: return 0
+def f719(a, b, c) -> int: return 0
+def f720(a, b, c) -> int: return 0
+def f721(a, b, c) -> int: return 0
+def f722(a, b, c) -> int: return 0
+def f723(a, b, c) -> int: return 0
+def f724(a, b, c) -> int: return 0
+def f725(a, b, c) -> int: return 0
+def f726(a, b, c) -> int: return 0
+def f727(a, b, c) -> int: return 0
+def f728(a, b, c) -> int: return 0
+def f729(a, b, c) -> int: return 0
+def f730(a, b, c) -> int: return 0
+def f731(a, b, c) -> int: return 0
+def f732(a, b, c) -> int: return 0
+def f733(a, b, c) -> int: return 0
+def f734(a, b, c) -> int: return 0
+def f735(a, b, c) -> int: return 0
+def f736(a, b, c) -> int: return 0
+def f737(a, b, c) -> int: return 0
+def f738(a, b, c) -> int: return 0
+def f739(a, b, c) -> int: return 0
+def f740(a, b, c) -> int: return 0
+def f741(a, b, c) -> int: return 0
+def f742(a, b, c) -> int: return 0
+def f743(a, b, c) -> int: return 0
+def f744(a, b, c) -> int: return 0
+def f745(a, b, c) -> int: return 0
+def f746(a, b, c) -> int: return 0
+def f747(a, b, c) -> int: return 0
+def f748(a, b, c) -> int: return 0
+def f749(a, b, c) -> int: return 0
+def f750(a, b, c) -> int: return 0
+def f751(a, b, c) -> int: return 0
+def f752(a, b, c) -> int: return 0
+def f753(a, b, c) -> int: return 0
+def f754(a, b, c) -> int: return 0
+def f755(a, b, c) -> int: return 0
+def f756(a, b, c) -> int: return 0
+def f757(a, b, c) -> int: return 0
+def f758(a, b, c) -> int: return 0
+def f759(a, b, c) -> int: return 0
+def f760(a, b, c) -> int: return 0
+def f761(a, b, c) -> int: return 0
+def f762(a, b, c) -> int: return 0
+def f763(a, b, c) -> int: return 0
+def f764(a, b, c) -> int: return 0
+def f765(a, b, c) -> int: return 0
+def f766(a, b, c) -> int: return 0
+def f767(a, b, c) -> int: return 0
+def f768(a, b, c) -> int: return 0
+def f769(a, b, c) -> int: return 0
+def f770(a, b, c) -> int: return 0
+def f771(a, b, c) -> int: return 0
+def f772(a, b, c) -> int: return 0
+def f773(a, b, c) -> int: return 0
+def f774(a, b, c) -> int: return 0
+def f775(a, b, c) -> int: return 0
+def f776(a, b, c) -> int: return 0
+def f777(a, b, c) -> int: return 0
+def f778(a, b, c) -> int: return 0
+def f779(a, b, c) -> int: return 0
+def f780(a, b, c) -> int: return 0
+def f781(a, b, c) -> int: return 0
+def f782(a, b, c) -> int: return 0
+def f783(a, b, c) -> int: return 0
+def f784(a, b, c) -> int: return 0
+def f785(a, b, c) -> int: return 0
+def f786(a, b, c) -> int: return 0
+def f787(a, b, c) -> int: return 0
+def f788(a, b, c) -> int: return 0
+def f789(a, b, c) -> int: return 0
+def f790(a, b, c) -> int: return 0
+def f791(a, b, c) -> int: return 0
+def f792(a, b, c) -> int: return 0
+def f793(a, b, c) -> int: return 0
+def f794(a, b, c) -> int: return 0
+def f795(a, b, c) -> int: return 0
+def f796(a, b, c) -> int: return 0
+def f797(a, b, c) -> int: return 0
+def f798(a, b, c) -> int: return 0
+def f799(a, b, c) -> int: return 0
+def f800(a, b, c) -> int: return 0
+def f801(a, b, c) -> int: return 0
+def f802(a, b, c) -> int: return 0
+def f803(a, b, c) -> int: return 0
+def f804(a, b, c) -> int: return 0
+def f805(a, b, c) -> int: return 0
+def f806(a, b, c) -> int: return 0
+def f807(a, b, c) -> int: return 0
+def f808(a, b, c) -> int: return 0
+def f809(a, b, c) -> int: return 0
+def f810(a, b, c) -> int: return 0
+def f811(a, b, c) -> int: return 0
+def f812(a, b, c) -> int: return 0
+def f813(a, b, c) -> int: return 0
+def f814(a, b, c) -> int: return 0
+def f815(a, b, c) -> int: return 0
+def f816(a, b, c) -> int: return 0
+def f817(a, b, c) -> int: return 0
+def f818(a, b, c) -> int: return 0
+def f819(a, b, c) -> int: return 0
+def f820(a, b, c) -> int: return 0
+def f821(a, b, c) -> int: return 0
+def f822(a, b, c) -> int: return 0
+def f823(a, b, c) -> int: return 0
+def f824(a, b, c) -> int: return 0
+def f825(a, b, c) -> int: return 0
+def f826(a, b, c) -> int: return 0
+def f827(a, b, c) -> int: return 0
+def f828(a, b, c) -> int: return 0
+def f829(a, b, c) -> int: return 0
+def f830(a, b, c) -> int: return 0
+def f831(a, b, c) -> int: return 0
+def f832(a, b, c) -> int: return 0
+def f833(a, b, c) -> int: return 0
+def f834(a, b, c) -> int: return 0
+def f835(a, b, c) -> int: return 0
+def f836(a, b, c) -> int: return 0
+def f837(a, b, c) -> int: return 0
+def f838(a, b, c) -> int: return 0
+def f839(a, b, c) -> int: return 0
+def f840(a, b, c) -> int: return 0
+def f841(a, b, c) -> int: return 0
+def f842(a, b, c) -> int: return 0
+def f843(a, b, c) -> int: return 0
+def f844(a, b, c) -> int: return 0
+def f845(a, b, c) -> int: return 0
+def f846(a, b, c) -> int: return 0
+def f847(a, b, c) -> int: return 0
+def f848(a, b, c) -> int: return 0
+def f849(a, b, c) -> int: return 0
+def f850(a, b, c) -> int: return 0
+def f851(a, b, c) -> int: return 0
+def f852(a, b, c) -> int: return 0
+def f853(a, b, c) -> int: return 0
+def f854(a, b, c) -> int: return 0
+def f855(a, b, c) -> int: return 0
+def f856(a, b, c) -> int: return 0
+def f857(a, b, c) -> int: return 0
+def f858(a, b, c) -> int: return 0
+def f859(a, b, c) -> int: return 0
+def f860(a, b, c) -> int: return 0
+def f861(a, b, c) -> int: return 0
+def f862(a, b, c) -> int: return 0
+def f863(a, b, c) -> int: return 0
+def f864(a, b, c) -> int: return 0
+def f865(a, b, c) -> int: return 0
+def f866(a, b, c) -> int: return 0
+def f867(a, b, c) -> int: return 0
+def f868(a, b, c) -> int: return 0
+def f869(a, b, c) -> int: return 0
+def f870(a, b, c) -> int: return 0
+def f871(a, b, c) -> int: return 0
+def f872(a, b, c) -> int: return 0
+def f873(a, b, c) -> int: return 0
+def f874(a, b, c) -> int: return 0
+def f875(a, b, c) -> int: return 0
+def f876(a, b, c) -> int: return 0
+def f877(a, b, c) -> int: return 0
+def f878(a, b, c) -> int: return 0
+def f879(a, b, c) -> int: return 0
+def f880(a, b, c) -> int: return 0
+def f881(a, b, c) -> int: return 0
+def f882(a, b, c) -> int: return 0
+def f883(a, b, c) -> int: return 0
+def f884(a, b, c) -> int: return 0
+def f885(a, b, c) -> int: return 0
+def f886(a, b, c) -> int: return 0
+def f887(a, b, c) -> int: return 0
+def f888(a, b, c) -> int: return 0
+def f889(a, b, c) -> int: return 0
+def f890(a, b, c) -> int: return 0
+def f891(a, b, c) -> int: return 0
+def f892(a, b, c) -> int: return 0
+def f893(a, b, c) -> int: return 0
+def f894(a, b, c) -> int: return 0
+def f895(a, b, c) -> int: return 0
+def f896(a, b, c) -> int: return 0
+def f897(a, b, c) -> int: return 0
+def f898(a, b, c) -> int: return 0
+def f899(a, b, c) -> int: return 0
+def f900(a, b, c) -> int: return 0
+def f901(a, b, c) -> int: return 0
+def f902(a, b, c) -> int: return 0
+def f903(a, b, c) -> int: return 0
+def f904(a, b, c) -> int: return 0
+def f905(a, b, c) -> int: return 0
+def f906(a, b, c) -> int: return 0
+def f907(a, b, c) -> int: return 0
+def f908(a, b, c) -> int: return 0
+def f909(a, b, c) -> int: return 0
+def f910(a, b, c) -> int: return 0
+def f911(a, b, c) -> int: return 0
+def f912(a, b, c) -> int: return 0
+def f913(a, b, c) -> int: return 0
+def f914(a, b, c) -> int: return 0
+def f915(a, b, c) -> int: return 0
+def f916(a, b, c) -> int: return 0
+def f917(a, b, c) -> int: return 0
+def f918(a, b, c) -> int: return 0
+def f919(a, b, c) -> int: return 0
+def f920(a, b, c) -> int: return 0
+def f921(a, b, c) -> int: return 0
+def f922(a, b, c) -> int: return 0
+def f923(a, b, c) -> int: return 0
+def f924(a, b, c) -> int: return 0
+def f925(a, b, c) -> int: return 0
+def f926(a, b, c) -> int: return 0
+def f927(a, b, c) -> int: return 0
+def f928(a, b, c) -> int: return 0
+def f929(a, b, c) -> int: return 0
+def f930(a, b, c) -> int: return 0
+def f931(a, b, c) -> int: return 0
+def f932(a, b, c) -> int: return 0
+def f933(a, b, c) -> int: return 0
+def f934(a, b, c) -> int: return 0
+def f935(a, b, c) -> int: return 0
+def f936(a, b, c) -> int: return 0
+def f937(a, b, c) -> int: return 0
+def f938(a, b, c) -> int: return 0
+def f939(a, b, c) -> int: return 0
+def f940(a, b, c) -> int: return 0
+def f941(a, b, c) -> int: return 0
+def f942(a, b, c) -> int: return 0
+def f943(a, b, c) -> int: return 0
+def f944(a, b, c) -> int: return 0
+def f945(a, b, c) -> int: return 0
+def f946(a, b, c) -> int: return 0
+def f947(a, b, c) -> int: return 0
+def f948(a, b, c) -> int: return 0
+def f949(a, b, c) -> int: return 0
+def f950(a, b, c) -> int: return 0
+def f951(a, b, c) -> int: return 0
+def f952(a, b, c) -> int: return 0
+def f953(a, b, c) -> int: return 0
+def f954(a, b, c) -> int: return 0
+def f955(a, b, c) -> int: return 0
+def f956(a, b, c) -> int: return 0
+def f957(a, b, c) -> int: return 0
+def f958(a, b, c) -> int: return 0
+def f959(a, b, c) -> int: return 0
+def f960(a, b, c) -> int: return 0
+def f961(a, b, c) -> int: return 0
+def f962(a, b, c) -> int: return 0
+def f963(a, b, c) -> int: return 0
+def f964(a, b, c) -> int: return 0
+def f965(a, b, c) -> int: return 0
+def f966(a, b, c) -> int: return 0
+def f967(a, b, c) -> int: return 0
+def f968(a, b, c) -> int: return 0
+def f969(a, b, c) -> int: return 0
+def f970(a, b, c) -> int: return 0
+def f971(a, b, c) -> int: return 0
+def f972(a, b, c) -> int: return 0
+def f973(a, b, c) -> int: return 0
+def f974(a, b, c) -> int: return 0
+def f975(a, b, c) -> int: return 0
+def f976(a, b, c) -> int: return 0
+def f977(a, b, c) -> int: return 0
+def f978(a, b, c) -> int: return 0
+def f979(a, b, c) -> int: return 0
+def f980(a, b, c) -> int: return 0
+def f981(a, b, c) -> int: return 0
+def f982(a, b, c) -> int: return 0
+def f983(a, b, c) -> int: return 0
+def f984(a, b, c) -> int: return 0
+def f985(a, b, c) -> int: return 0
+def f986(a, b, c) -> int: return 0
+def f987(a, b, c) -> int: return 0
+def f988(a, b, c) -> int: return 0
+def f989(a, b, c) -> int: return 0
+def f990(a, b, c) -> int: return 0
+def f991(a, b, c) -> int: return 0
+def f992(a, b, c) -> int: return 0
+def f993(a, b, c) -> int: return 0
+def f994(a, b, c) -> int: return 0
+def f995(a, b, c) -> int: return 0
+def f996(a, b, c) -> int: return 0
+def f997(a, b, c) -> int: return 0
+def f998(a, b, c) -> int: return 0
+def f999(a, b, c) -> int: return 0
+def f1000(a, b, c) -> int: return 0
+def f1001(a, b, c) -> int: return 0
+def f1002(a, b, c) -> int: return 0
+def f1003(a, b, c) -> int: return 0
+def f1004(a, b, c) -> int: return 0
+def f1005(a, b, c) -> int: return 0
+def f1006(a, b, c) -> int: return 0
+def f1007(a, b, c) -> int: return 0
+def f1008(a, b, c) -> int: return 0
+def f1009(a, b, c) -> int: return 0
+def f1010(a, b, c) -> int: return 0
+def f1011(a, b, c) -> int: return 0
+def f1012(a, b, c) -> int: return 0
+def f1013(a, b, c) -> int: return 0
+def f1014(a, b, c) -> int: return 0
+def f1015(a, b, c) -> int: return 0
+def f1016(a, b, c) -> int: return 0
+def f1017(a, b, c) -> int: return 0
+def f1018(a, b, c) -> int: return 0
+def f1019(a, b, c) -> int: return 0
+def f1020(a, b, c) -> int: return 0
+def f1021(a, b, c) -> int: return 0
+def f1022(a, b, c) -> int: return 0
+def f1023(a, b, c) -> int: return 0
+def f1024(a, b, c) -> int: return 0
+def f1025(a, b, c) -> int: return 0
+def f1026(a, b, c) -> int: return 0
+def f1027(a, b, c) -> int: return 0
+def f1028(a, b, c) -> int: return 0
+def f1029(a, b, c) -> int: return 0
+def f1030(a, b, c) -> int: return 0
+def f1031(a, b, c) -> int: return 0
+def f1032(a, b, c) -> int: return 0
+def f1033(a, b, c) -> int: return 0
+def f1034(a, b, c) -> int: return 0
+def f1035(a, b, c) -> int: return 0
+def f1036(a, b, c) -> int: return 0
+def f1037(a, b, c) -> int: return 0
+def f1038(a, b, c) -> int: return 0
+def f1039(a, b, c) -> int: return 0
+def f1040(a, b, c) -> int: return 0
+def f1041(a, b, c) -> int: return 0
+def f1042(a, b, c) -> int: return 0
+def f1043(a, b, c) -> int: return 0
+def f1044(a, b, c) -> int: return 0
+def f1045(a, b, c) -> int: return 0
+def f1046(a, b, c) -> int: return 0
+def f1047(a, b, c) -> int: return 0
+def f1048(a, b, c) -> int: return 0
+def f1049(a, b, c) -> int: return 0
+def f1050(a, b, c) -> int: return 0
+def f1051(a, b, c) -> int: return 0
+def f1052(a, b, c) -> int: return 0
+def f1053(a, b, c) -> int: return 0
+def f1054(a, b, c) -> int: return 0
+def f1055(a, b, c) -> int: return 0
+def f1056(a, b, c) -> int: return 0
+def f1057(a, b, c) -> int: return 0
+def f1058(a, b, c) -> int: return 0
+def f1059(a, b, c) -> int: return 0
+def f1060(a, b, c) -> int: return 0
+def f1061(a, b, c) -> int: return 0
+def f1062(a, b, c) -> int: return 0
+def f1063(a, b, c) -> int: return 0
+def f1064(a, b, c) -> int: return 0
+def f1065(a, b, c) -> int: return 0
+def f1066(a, b, c) -> int: return 0
+def f1067(a, b, c) -> int: return 0
+def f1068(a, b, c) -> int: return 0
+def f1069(a, b, c) -> int: return 0
+def f1070(a, b, c) -> int: return 0
+def f1071(a, b, c) -> int: return 0
+def f1072(a, b, c) -> int: return 0
+def f1073(a, b, c) -> int: return 0
+def f1074(a, b, c) -> int: return 0
+def f1075(a, b, c) -> int: return 0
+def f1076(a, b, c) -> int: return 0
+def f1077(a, b, c) -> int: return 0
+def f1078(a, b, c) -> int: return 0
+def f1079(a, b, c) -> int: return 0
+def f1080(a, b, c) -> int: return 0
+def f1081(a, b, c) -> int: return 0
+def f1082(a, b, c) -> int: return 0
+def f1083(a, b, c) -> int: return 0
+def f1084(a, b, c) -> int: return 0
+def f1085(a, b, c) -> int: return 0
+def f1086(a, b, c) -> int: return 0
+def f1087(a, b, c) -> int: return 0
+def f1088(a, b, c) -> int: return 0
+def f1089(a, b, c) -> int: return 0
+def f1090(a, b, c) -> int: return 0
+def f1091(a, b, c) -> int: return 0
+def f1092(a, b, c) -> int: return 0
+def f1093(a, b, c) -> int: return 0
+def f1094(a, b, c) -> int: return 0
+def f1095(a, b, c) -> int: return 0
+def f1096(a, b, c) -> int: return 0
+def f1097(a, b, c) -> int: return 0
+def f1098(a, b, c) -> int: return 0
+def f1099(a, b, c) -> int: return 0
+def f1100(a, b, c) -> int: return 0
+def f1101(a, b, c) -> int: return 0
+def f1102(a, b, c) -> int: return 0
+def f1103(a, b, c) -> int: return 0
+def f1104(a, b, c) -> int: return 0
+def f1105(a, b, c) -> int: return 0
+def f1106(a, b, c) -> int: return 0
+def f1107(a, b, c) -> int: return 0
+def f1108(a, b, c) -> int: return 0
+def f1109(a, b, c) -> int: return 0
+def f1110(a, b, c) -> int: return 0
+def f1111(a, b, c) -> int: return 0
+def f1112(a, b, c) -> int: return 0
+def f1113(a, b, c) -> int: return 0
+def f1114(a, b, c) -> int: return 0
+def f1115(a, b, c) -> int: return 0
+def f1116(a, b, c) -> int: return 0
+def f1117(a, b, c) -> int: return 0
+def f1118(a, b, c) -> int: return 0
+def f1119(a, b, c) -> int: return 0
+def f1120(a, b, c) -> int: return 0
+def f1121(a, b, c) -> int: return 0
+def f1122(a, b, c) -> int: return 0
+def f1123(a, b, c) -> int: return 0
+def f1124(a, b, c) -> int: return 0
+def f1125(a, b, c) -> int: return 0
+def f1126(a, b, c) -> int: return 0
+def f1127(a, b, c) -> int: return 0
+def f1128(a, b, c) -> int: return 0
+def f1129(a, b, c) -> int: return 0
+def f1130(a, b, c) -> int: return 0
+def f1131(a, b, c) -> int: return 0
+def f1132(a, b, c) -> int: return 0
+def f1133(a, b, c) -> int: return 0
+def f1134(a, b, c) -> int: return 0
+def f1135(a, b, c) -> int: return 0
+def f1136(a, b, c) -> int: return 0
+def f1137(a, b, c) -> int: return 0
+def f1138(a, b, c) -> int: return 0
+def f1139(a, b, c) -> int: return 0
+def f1140(a, b, c) -> int: return 0
+def f1141(a, b, c) -> int: return 0
+def f1142(a, b, c) -> int: return 0
+def f1143(a, b, c) -> int: return 0
+def f1144(a, b, c) -> int: return 0
+def f1145(a, b, c) -> int: return 0
+def f1146(a, b, c) -> int: return 0
+def f1147(a, b, c) -> int: return 0
+def f1148(a, b, c) -> int: return 0
+def f1149(a, b, c) -> int: return 0
+def f1150(a, b, c) -> int: return 0
+def f1151(a, b, c) -> int: return 0
+def f1152(a, b, c) -> int: return 0
+def f1153(a, b, c) -> int: return 0
+def f1154(a, b, c) -> int: return 0
+def f1155(a, b, c) -> int: return 0
+def f1156(a, b, c) -> int: return 0
+def f1157(a, b, c) -> int: return 0
+def f1158(a, b, c) -> int: return 0
+def f1159(a, b, c) -> int: return 0
+def f1160(a, b, c) -> int: return 0
+def f1161(a, b, c) -> int: return 0
+def f1162(a, b, c) -> int: return 0
+def f1163(a, b, c) -> int: return 0
+def f1164(a, b, c) -> int: return 0
+def f1165(a, b, c) -> int: return 0
+def f1166(a, b, c) -> int: return 0
+def f1167(a, b, c) -> int: return 0
+def f1168(a, b, c) -> int: return 0
+def f1169(a, b, c) -> int: return 0
+def f1170(a, b, c) -> int: return 0
+def f1171(a, b, c) -> int: return 0
+def f1172(a, b, c) -> int: return 0
+def f1173(a, b, c) -> int: return 0
+def f1174(a, b, c) -> int: return 0
+def f1175(a, b, c) -> int: return 0
+def f1176(a, b, c) -> int: return 0
+def f1177(a, b, c) -> int: return 0
+def f1178(a, b, c) -> int: return 0
+def f1179(a, b, c) -> int: return 0
+def f1180(a, b, c) -> int: return 0
+def f1181(a, b, c) -> int: return 0
+def f1182(a, b, c) -> int: return 0
+def f1183(a, b, c) -> int: return 0
+def f1184(a, b, c) -> int: return 0
+def f1185(a, b, c) -> int: return 0
+def f1186(a, b, c) -> int: return 0
+def f1187(a, b, c) -> int: return 0
+def f1188(a, b, c) -> int: return 0
+def f1189(a, b, c) -> int: return 0
+def f1190(a, b, c) -> int: return 0
+def f1191(a, b, c) -> int: return 0
+def f1192(a, b, c) -> int: return 0
+def f1193(a, b, c) -> int: return 0
+def f1194(a, b, c) -> int: return 0
+def f1195(a, b, c) -> int: return 0
+def f1196(a, b, c) -> int: return 0
+def f1197(a, b, c) -> int: return 0
+def f1198(a, b, c) -> int: return 0
+def f1199(a, b, c) -> int: return 0
+def f1200(a, b, c) -> int: return 0
+def f1201(a, b, c) -> int: return 0
+def f1202(a, b, c) -> int: return 0
+def f1203(a, b, c) -> int: return 0
+def f1204(a, b, c) -> int: return 0
+def f1205(a, b, c) -> int: return 0
+def f1206(a, b, c) -> int: return 0
+def f1207(a, b, c) -> int: return 0
+def f1208(a, b, c) -> int: return 0
+def f1209(a, b, c) -> int: return 0
+def f1210(a, b, c) -> int: return 0
+def f1211(a, b, c) -> int: return 0
+def f1212(a, b, c) -> int: return 0
+def f1213(a, b, c) -> int: return 0
+def f1214(a, b, c) -> int: return 0
+def f1215(a, b, c) -> int: return 0
+def f1216(a, b, c) -> int: return 0
+def f1217(a, b, c) -> int: return 0
+def f1218(a, b, c) -> int: return 0
+def f1219(a, b, c) -> int: return 0
+def f1220(a, b, c) -> int: return 0
+def f1221(a, b, c) -> int: return 0
+def f1222(a, b, c) -> int: return 0
+def f1223(a, b, c) -> int: return 0
+def f1224(a, b, c) -> int: return 0
+def f1225(a, b, c) -> int: return 0
+def f1226(a, b, c) -> int: return 0
+def f1227(a, b, c) -> int: return 0
+def f1228(a, b, c) -> int: return 0
+def f1229(a, b, c) -> int: return 0
+def f1230(a, b, c) -> int: return 0
+def f1231(a, b, c) -> int: return 0
+def f1232(a, b, c) -> int: return 0
+def f1233(a, b, c) -> int: return 0
+def f1234(a, b, c) -> int: return 0
+def f1235(a, b, c) -> int: return 0
+def f1236(a, b, c) -> int: return 0
+def f1237(a, b, c) -> int: return 0
+def f1238(a, b, c) -> int: return 0
+def f1239(a, b, c) -> int: return 0
+def f1240(a, b, c) -> int: return 0
+def f1241(a, b, c) -> int: return 0
+def f1242(a, b, c) -> int: return 0
+def f1243(a, b, c) -> int: return 0
+def f1244(a, b, c) -> int: return 0
+def f1245(a, b, c) -> int: return 0
+def f1246(a, b, c) -> int: return 0
+def f1247(a, b, c) -> int: return 0
+def f1248(a, b, c) -> int: return 0
+def f1249(a, b, c) -> int: return 0
+def f1250(a, b, c) -> int: return 0
+def f1251(a, b, c) -> int: return 0
+def f1252(a, b, c) -> int: return 0
+def f1253(a, b, c) -> int: return 0
+def f1254(a, b, c) -> int: return 0
+def f1255(a, b, c) -> int: return 0
+def f1256(a, b, c) -> int: return 0
+def f1257(a, b, c) -> int: return 0
+def f1258(a, b, c) -> int: return 0
+def f1259(a, b, c) -> int: return 0
+def f1260(a, b, c) -> int: return 0
+def f1261(a, b, c) -> int: return 0
+def f1262(a, b, c) -> int: return 0
+def f1263(a, b, c) -> int: return 0
+def f1264(a, b, c) -> int: return 0
+def f1265(a, b, c) -> int: return 0
+def f1266(a, b, c) -> int: return 0
+def f1267(a, b, c) -> int: return 0
+def f1268(a, b, c) -> int: return 0
+def f1269(a, b, c) -> int: return 0
+def f1270(a, b, c) -> int: return 0
+def f1271(a, b, c) -> int: return 0
+def f1272(a, b, c) -> int: return 0
+def f1273(a, b, c) -> int: return 0
+def f1274(a, b, c) -> int: return 0
+def f1275(a, b, c) -> int: return 0
+def f1276(a, b, c) -> int: return 0
+def f1277(a, b, c) -> int: return 0
+def f1278(a, b, c) -> int: return 0
+def f1279(a, b, c) -> int: return 0
+def f1280(a, b, c) -> int: return 0
+def f1281(a, b, c) -> int: return 0
+def f1282(a, b, c) -> int: return 0
+def f1283(a, b, c) -> int: return 0
+def f1284(a, b, c) -> int: return 0
+def f1285(a, b, c) -> int: return 0
+def f1286(a, b, c) -> int: return 0
+def f1287(a, b, c) -> int: return 0
+def f1288(a, b, c) -> int: return 0
+def f1289(a, b, c) -> int: return 0
+def f1290(a, b, c) -> int: return 0
+def f1291(a, b, c) -> int: return 0
+def f1292(a, b, c) -> int: return 0
+def f1293(a, b, c) -> int: return 0
+def f1294(a, b, c) -> int: return 0
+def f1295(a, b, c) -> int: return 0
+def f1296(a, b, c) -> int: return 0
+def f1297(a, b, c) -> int: return 0
+def f1298(a, b, c) -> int: return 0
+def f1299(a, b, c) -> int: return 0
+def f1300(a, b, c) -> int: return 0
+def f1301(a, b, c) -> int: return 0
+def f1302(a, b, c) -> int: return 0
+def f1303(a, b, c) -> int: return 0
+def f1304(a, b, c) -> int: return 0
+def f1305(a, b, c) -> int: return 0
+def f1306(a, b, c) -> int: return 0
+def f1307(a, b, c) -> int: return 0
+def f1308(a, b, c) -> int: return 0
+def f1309(a, b, c) -> int: return 0
+def f1310(a, b, c) -> int: return 0
+def f1311(a, b, c) -> int: return 0
+def f1312(a, b, c) -> int: return 0
+def f1313(a, b, c) -> int: return 0
+def f1314(a, b, c) -> int: return 0
+def f1315(a, b, c) -> int: return 0
+def f1316(a, b, c) -> int: return 0
+def f1317(a, b, c) -> int: return 0
+def f1318(a, b, c) -> int: return 0
+def f1319(a, b, c) -> int: return 0
+def f1320(a, b, c) -> int: return 0
+def f1321(a, b, c) -> int: return 0
+def f1322(a, b, c) -> int: return 0
+def f1323(a, b, c) -> int: return 0
+def f1324(a, b, c) -> int: return 0
+def f1325(a, b, c) -> int: return 0
+def f1326(a, b, c) -> int: return 0
+def f1327(a, b, c) -> int: return 0
+def f1328(a, b, c) -> int: return 0
+def f1329(a, b, c) -> int: return 0
+def f1330(a, b, c) -> int: return 0
+def f1331(a, b, c) -> int: return 0
+def f1332(a, b, c) -> int: return 0
+def f1333(a, b, c) -> int: return 0
+def f1334(a, b, c) -> int: return 0
+def f1335(a, b, c) -> int: return 0
+def f1336(a, b, c) -> int: return 0
+def f1337(a, b, c) -> int: return 0
+def f1338(a, b, c) -> int: return 0
+def f1339(a, b, c) -> int: return 0
+def f1340(a, b, c) -> int: return 0
+def f1341(a, b, c) -> int: return 0
+def f1342(a, b, c) -> int: return 0
+def f1343(a, b, c) -> int: return 0
+def f1344(a, b, c) -> int: return 0
+def f1345(a, b, c) -> int: return 0
+def f1346(a, b, c) -> int: return 0
+def f1347(a, b, c) -> int: return 0
+def f1348(a, b, c) -> int: return 0
+def f1349(a, b, c) -> int: return 0
+def f1350(a, b, c) -> int: return 0
+def f1351(a, b, c) -> int: return 0
+def f1352(a, b, c) -> int: return 0
+def f1353(a, b, c) -> int: return 0
+def f1354(a, b, c) -> int: return 0
+def f1355(a, b, c) -> int: return 0
+def f1356(a, b, c) -> int: return 0
+def f1357(a, b, c) -> int: return 0
+def f1358(a, b, c) -> int: return 0
+def f1359(a, b, c) -> int: return 0
+def f1360(a, b, c) -> int: return 0
+def f1361(a, b, c) -> int: return 0
+def f1362(a, b, c) -> int: return 0
+def f1363(a, b, c) -> int: return 0
+def f1364(a, b, c) -> int: return 0
+def f1365(a, b, c) -> int: return 0
+def f1366(a, b, c) -> int: return 0
+def f1367(a, b, c) -> int: return 0
+def f1368(a, b, c) -> int: return 0
+def f1369(a, b, c) -> int: return 0
+def f1370(a, b, c) -> int: return 0
+def f1371(a, b, c) -> int: return 0
+def f1372(a, b, c) -> int: return 0
+def f1373(a, b, c) -> int: return 0
+def f1374(a, b, c) -> int: return 0
+def f1375(a, b, c) -> int: return 0
+def f1376(a, b, c) -> int: return 0
+def f1377(a, b, c) -> int: return 0
+def f1378(a, b, c) -> int: return 0
+def f1379(a, b, c) -> int: return 0
+def f1380(a, b, c) -> int: return 0
+def f1381(a, b, c) -> int: return 0
+def f1382(a, b, c) -> int: return 0
+def f1383(a, b, c) -> int: return 0
+def f1384(a, b, c) -> int: return 0
+def f1385(a, b, c) -> int: return 0
+def f1386(a, b, c) -> int: return 0
+def f1387(a, b, c) -> int: return 0
+def f1388(a, b, c) -> int: return 0
+def f1389(a, b, c) -> int: return 0
+def f1390(a, b, c) -> int: return 0
+def f1391(a, b, c) -> int: return 0
+def f1392(a, b, c) -> int: return 0
+def f1393(a, b, c) -> int: return 0
+def f1394(a, b, c) -> int: return 0
+def f1395(a, b, c) -> int: return 0
+def f1396(a, b, c) -> int: return 0
+def f1397(a, b, c) -> int: return 0
+def f1398(a, b, c) -> int: return 0
+def f1399(a, b, c) -> int: return 0
+def f1400(a, b, c) -> int: return 0
+def f1401(a, b, c) -> int: return 0
+def f1402(a, b, c) -> int: return 0
+def f1403(a, b, c) -> int: return 0
+def f1404(a, b, c) -> int: return 0
+def f1405(a, b, c) -> int: return 0
+def f1406(a, b, c) -> int: return 0
+def f1407(a, b, c) -> int: return 0
+def f1408(a, b, c) -> int: return 0
+def f1409(a, b, c) -> int: return 0
+def f1410(a, b, c) -> int: return 0
+def f1411(a, b, c) -> int: return 0
+def f1412(a, b, c) -> int: return 0
+def f1413(a, b, c) -> int: return 0
+def f1414(a, b, c) -> int: return 0
+def f1415(a, b, c) -> int: return 0
+def f1416(a, b, c) -> int: return 0
+def f1417(a, b, c) -> int: return 0
+def f1418(a, b, c) -> int: return 0
+def f1419(a, b, c) -> int: return 0
+def f1420(a, b, c) -> int: return 0
+def f1421(a, b, c) -> int: return 0
+def f1422(a, b, c) -> int: return 0
+def f1423(a, b, c) -> int: return 0
+def f1424(a, b, c) -> int: return 0
+def f1425(a, b, c) -> int: return 0
+def f1426(a, b, c) -> int: return 0
+def f1427(a, b, c) -> int: return 0
+def f1428(a, b, c) -> int: return 0
+def f1429(a, b, c) -> int: return 0
+def f1430(a, b, c) -> int: return 0
+def f1431(a, b, c) -> int: return 0
+def f1432(a, b, c) -> int: return 0
+def f1433(a, b, c) -> int: return 0
+def f1434(a, b, c) -> int: return 0
+def f1435(a, b, c) -> int: return 0
+def f1436(a, b, c) -> int: return 0
+def f1437(a, b, c) -> int: return 0
+def f1438(a, b, c) -> int: return 0
+def f1439(a, b, c) -> int: return 0
+def f1440(a, b, c) -> int: return 0
+def f1441(a, b, c) -> int: return 0
+def f1442(a, b, c) -> int: return 0
+def f1443(a, b, c) -> int: return 0
+def f1444(a, b, c) -> int: return 0
+def f1445(a, b, c) -> int: return 0
+def f1446(a, b, c) -> int: return 0
+def f1447(a, b, c) -> int: return 0
+def f1448(a, b, c) -> int: return 0
+def f1449(a, b, c) -> int: return 0
+def f1450(a, b, c) -> int: return 0
+def f1451(a, b, c) -> int: return 0
+def f1452(a, b, c) -> int: return 0
+def f1453(a, b, c) -> int: return 0
+def f1454(a, b, c) -> int: return 0
+def f1455(a, b, c) -> int: return 0
+def f1456(a, b, c) -> int: return 0
+def f1457(a, b, c) -> int: return 0
+def f1458(a, b, c) -> int: return 0
+def f1459(a, b, c) -> int: return 0
+def f1460(a, b, c) -> int: return 0
+def f1461(a, b, c) -> int: return 0
+def f1462(a, b, c) -> int: return 0
+def f1463(a, b, c) -> int: return 0
+def f1464(a, b, c) -> int: return 0
+def f1465(a, b, c) -> int: return 0
+def f1466(a, b, c) -> int: return 0
+def f1467(a, b, c) -> int: return 0
+def f1468(a, b, c) -> int: return 0
+def f1469(a, b, c) -> int: return 0
+def f1470(a, b, c) -> int: return 0
+def f1471(a, b, c) -> int: return 0
+def f1472(a, b, c) -> int: return 0
+def f1473(a, b, c) -> int: return 0
+def f1474(a, b, c) -> int: return 0
+def f1475(a, b, c) -> int: return 0
+def f1476(a, b, c) -> int: return 0
+def f1477(a, b, c) -> int: return 0
+def f1478(a, b, c) -> int: return 0
+def f1479(a, b, c) -> int: return 0
+def f1480(a, b, c) -> int: return 0
+def f1481(a, b, c) -> int: return 0
+def f1482(a, b, c) -> int: return 0
+def f1483(a, b, c) -> int: return 0
+def f1484(a, b, c) -> int: return 0
+def f1485(a, b, c) -> int: return 0
+def f1486(a, b, c) -> int: return 0
+def f1487(a, b, c) -> int: return 0
+def f1488(a, b, c) -> int: return 0
+def f1489(a, b, c) -> int: return 0
+def f1490(a, b, c) -> int: return 0
+def f1491(a, b, c) -> int: return 0
+def f1492(a, b, c) -> int: return 0
+def f1493(a, b, c) -> int: return 0
+def f1494(a, b, c) -> int: return 0
+def f1495(a, b, c) -> int: return 0
+def f1496(a, b, c) -> int: return 0
+def f1497(a, b, c) -> int: return 0
+def f1498(a, b, c) -> int: return 0
+def f1499(a, b, c) -> int: return 0
+def f1500(a, b, c) -> int: return 0
+def f1501(a, b, c) -> int: return 0
+def f1502(a, b, c) -> int: return 0
+def f1503(a, b, c) -> int: return 0
+def f1504(a, b, c) -> int: return 0
+def f1505(a, b, c) -> int: return 0
+def f1506(a, b, c) -> int: return 0
+def f1507(a, b, c) -> int: return 0
+def f1508(a, b, c) -> int: return 0
+def f1509(a, b, c) -> int: return 0
+def f1510(a, b, c) -> int: return 0
+def f1511(a, b, c) -> int: return 0
+def f1512(a, b, c) -> int: return 0
+def f1513(a, b, c) -> int: return 0
+def f1514(a, b, c) -> int: return 0
+def f1515(a, b, c) -> int: return 0
+def f1516(a, b, c) -> int: return 0
+def f1517(a, b, c) -> int: return 0
+def f1518(a, b, c) -> int: return 0
+def f1519(a, b, c) -> int: return 0
+def f1520(a, b, c) -> int: return 0
+def f1521(a, b, c) -> int: return 0
+def f1522(a, b, c) -> int: return 0
+def f1523(a, b, c) -> int: return 0
+def f1524(a, b, c) -> int: return 0
+def f1525(a, b, c) -> int: return 0
+def f1526(a, b, c) -> int: return 0
+def f1527(a, b, c) -> int: return 0
+def f1528(a, b, c) -> int: return 0
+def f1529(a, b, c) -> int: return 0
+def f1530(a, b, c) -> int: return 0
+def f1531(a, b, c) -> int: return 0
+def f1532(a, b, c) -> int: return 0
+def f1533(a, b, c) -> int: return 0
+def f1534(a, b, c) -> int: return 0
+def f1535(a, b, c) -> int: return 0
+def f1536(a, b, c) -> int: return 0
+def f1537(a, b, c) -> int: return 0
+def f1538(a, b, c) -> int: return 0
+def f1539(a, b, c) -> int: return 0
+def f1540(a, b, c) -> int: return 0
+def f1541(a, b, c) -> int: return 0
+def f1542(a, b, c) -> int: return 0
+def f1543(a, b, c) -> int: return 0
+def f1544(a, b, c) -> int: return 0
+def f1545(a, b, c) -> int: return 0
+def f1546(a, b, c) -> int: return 0
+def f1547(a, b, c) -> int: return 0
+def f1548(a, b, c) -> int: return 0
+def f1549(a, b, c) -> int: return 0
+def f1550(a, b, c) -> int: return 0
+def f1551(a, b, c) -> int: return 0
+def f1552(a, b, c) -> int: return 0
+def f1553(a, b, c) -> int: return 0
+def f1554(a, b, c) -> int: return 0
+def f1555(a, b, c) -> int: return 0
+def f1556(a, b, c) -> int: return 0
+def f1557(a, b, c) -> int: return 0
+def f1558(a, b, c) -> int: return 0
+def f1559(a, b, c) -> int: return 0
+def f1560(a, b, c) -> int: return 0
+def f1561(a, b, c) -> int: return 0
+def f1562(a, b, c) -> int: return 0
+def f1563(a, b, c) -> int: return 0
+def f1564(a, b, c) -> int: return 0
+def f1565(a, b, c) -> int: return 0
+def f1566(a, b, c) -> int: return 0
+def f1567(a, b, c) -> int: return 0
+def f1568(a, b, c) -> int: return 0
+def f1569(a, b, c) -> int: return 0
+def f1570(a, b, c) -> int: return 0
+def f1571(a, b, c) -> int: return 0
+def f1572(a, b, c) -> int: return 0
+def f1573(a, b, c) -> int: return 0
+def f1574(a, b, c) -> int: return 0
+def f1575(a, b, c) -> int: return 0
+def f1576(a, b, c) -> int: return 0
+def f1577(a, b, c) -> int: return 0
+def f1578(a, b, c) -> int: return 0
+def f1579(a, b, c) -> int: return 0
+def f1580(a, b, c) -> int: return 0
+def f1581(a, b, c) -> int: return 0
+def f1582(a, b, c) -> int: return 0
+def f1583(a, b, c) -> int: return 0
+def f1584(a, b, c) -> int: return 0
+def f1585(a, b, c) -> int: return 0
+def f1586(a, b, c) -> int: return 0
+def f1587(a, b, c) -> int: return 0
+def f1588(a, b, c) -> int: return 0
+def f1589(a, b, c) -> int: return 0
+def f1590(a, b, c) -> int: return 0
+def f1591(a, b, c) -> int: return 0
+def f1592(a, b, c) -> int: return 0
+def f1593(a, b, c) -> int: return 0
+def f1594(a, b, c) -> int: return 0
+def f1595(a, b, c) -> int: return 0
+def f1596(a, b, c) -> int: return 0
+def f1597(a, b, c) -> int: return 0
+def f1598(a, b, c) -> int: return 0
+def f1599(a, b, c) -> int: return 0
+def f1600(a, b, c) -> int: return 0
+def f1601(a, b, c) -> int: return 0
+def f1602(a, b, c) -> int: return 0
+def f1603(a, b, c) -> int: return 0
+def f1604(a, b, c) -> int: return 0
+def f1605(a, b, c) -> int: return 0
+def f1606(a, b, c) -> int: return 0
+def f1607(a, b, c) -> int: return 0
+def f1608(a, b, c) -> int: return 0
+def f1609(a, b, c) -> int: return 0
+def f1610(a, b, c) -> int: return 0
+def f1611(a, b, c) -> int: return 0
+def f1612(a, b, c) -> int: return 0
+def f1613(a, b, c) -> int: return 0
+def f1614(a, b, c) -> int: return 0
+def f1615(a, b, c) -> int: return 0
+def f1616(a, b, c) -> int: return 0
+def f1617(a, b, c) -> int: return 0
+def f1618(a, b, c) -> int: return 0
+def f1619(a, b, c) -> int: return 0
+def f1620(a, b, c) -> int: return 0
+def f1621(a, b, c) -> int: return 0
+def f1622(a, b, c) -> int: return 0
+def f1623(a, b, c) -> int: return 0
+def f1624(a, b, c) -> int: return 0
+def f1625(a, b, c) -> int: return 0
+def f1626(a, b, c) -> int: return 0
+def f1627(a, b, c) -> int: return 0
+def f1628(a, b, c) -> int: return 0
+def f1629(a, b, c) -> int: return 0
+def f1630(a, b, c) -> int: return 0
+def f1631(a, b, c) -> int: return 0
+def f1632(a, b, c) -> int: return 0
+def f1633(a, b, c) -> int: return 0
+def f1634(a, b, c) -> int: return 0
+def f1635(a, b, c) -> int: return 0
+def f1636(a, b, c) -> int: return 0
+def f1637(a, b, c) -> int: return 0
+def f1638(a, b, c) -> int: return 0
+def f1639(a, b, c) -> int: return 0
+def f1640(a, b, c) -> int: return 0
+def f1641(a, b, c) -> int: return 0
+def f1642(a, b, c) -> int: return 0
+def f1643(a, b, c) -> int: return 0
+def f1644(a, b, c) -> int: return 0
+def f1645(a, b, c) -> int: return 0
+def f1646(a, b, c) -> int: return 0
+def f1647(a, b, c) -> int: return 0
+def f1648(a, b, c) -> int: return 0
+def f1649(a, b, c) -> int: return 0
+def f1650(a, b, c) -> int: return 0
+def f1651(a, b, c) -> int: return 0
+def f1652(a, b, c) -> int: return 0
+def f1653(a, b, c) -> int: return 0
+def f1654(a, b, c) -> int: return 0
+def f1655(a, b, c) -> int: return 0
+def f1656(a, b, c) -> int: return 0
+def f1657(a, b, c) -> int: return 0
+def f1658(a, b, c) -> int: return 0
+def f1659(a, b, c) -> int: return 0
+def f1660(a, b, c) -> int: return 0
+def f1661(a, b, c) -> int: return 0
+def f1662(a, b, c) -> int: return 0
+def f1663(a, b, c) -> int: return 0
+def f1664(a, b, c) -> int: return 0
+def f1665(a, b, c) -> int: return 0
+def f1666(a, b, c) -> int: return 0
+def f1667(a, b, c) -> int: return 0
+def f1668(a, b, c) -> int: return 0
+def f1669(a, b, c) -> int: return 0
+def f1670(a, b, c) -> int: return 0
+def f1671(a, b, c) -> int: return 0
+def f1672(a, b, c) -> int: return 0
+def f1673(a, b, c) -> int: return 0
+def f1674(a, b, c) -> int: return 0
+def f1675(a, b, c) -> int: return 0
+def f1676(a, b, c) -> int: return 0
+def f1677(a, b, c) -> int: return 0
+def f1678(a, b, c) -> int: return 0
+def f1679(a, b, c) -> int: return 0
+def f1680(a, b, c) -> int: return 0
+def f1681(a, b, c) -> int: return 0
+def f1682(a, b, c) -> int: return 0
+def f1683(a, b, c) -> int: return 0
+def f1684(a, b, c) -> int: return 0
+def f1685(a, b, c) -> int: return 0
+def f1686(a, b, c) -> int: return 0
+def f1687(a, b, c) -> int: return 0
+def f1688(a, b, c) -> int: return 0
+def f1689(a, b, c) -> int: return 0
+def f1690(a, b, c) -> int: return 0
+def f1691(a, b, c) -> int: return 0
+def f1692(a, b, c) -> int: return 0
+def f1693(a, b, c) -> int: return 0
+def f1694(a, b, c) -> int: return 0
+def f1695(a, b, c) -> int: return 0
+def f1696(a, b, c) -> int: return 0
+def f1697(a, b, c) -> int: return 0
+def f1698(a, b, c) -> int: return 0
+def f1699(a, b, c) -> int: return 0
+def f1700(a, b, c) -> int: return 0
+def f1701(a, b, c) -> int: return 0
+def f1702(a, b, c) -> int: return 0
+def f1703(a, b, c) -> int: return 0
+def f1704(a, b, c) -> int: return 0
+def f1705(a, b, c) -> int: return 0
+def f1706(a, b, c) -> int: return 0
+def f1707(a, b, c) -> int: return 0
+def f1708(a, b, c) -> int: return 0
+def f1709(a, b, c) -> int: return 0
+def f1710(a, b, c) -> int: return 0
+def f1711(a, b, c) -> int: return 0
+def f1712(a, b, c) -> int: return 0
+def f1713(a, b, c) -> int: return 0
+def f1714(a, b, c) -> int: return 0
+def f1715(a, b, c) -> int: return 0
+def f1716(a, b, c) -> int: return 0
+def f1717(a, b, c) -> int: return 0
+def f1718(a, b, c) -> int: return 0
+def f1719(a, b, c) -> int: return 0
+def f1720(a, b, c) -> int: return 0
+def f1721(a, b, c) -> int: return 0
+def f1722(a, b, c) -> int: return 0
+def f1723(a, b, c) -> int: return 0
+def f1724(a, b, c) -> int: return 0
+def f1725(a, b, c) -> int: return 0
+def f1726(a, b, c) -> int: return 0
+def f1727(a, b, c) -> int: return 0
+def f1728(a, b, c) -> int: return 0
+def f1729(a, b, c) -> int: return 0
+def f1730(a, b, c) -> int: return 0
+def f1731(a, b, c) -> int: return 0
+def f1732(a, b, c) -> int: return 0
+def f1733(a, b, c) -> int: return 0
+def f1734(a, b, c) -> int: return 0
+def f1735(a, b, c) -> int: return 0
+def f1736(a, b, c) -> int: return 0
+def f1737(a, b, c) -> int: return 0
+def f1738(a, b, c) -> int: return 0
+def f1739(a, b, c) -> int: return 0
+def f1740(a, b, c) -> int: return 0
+def f1741(a, b, c) -> int: return 0
+def f1742(a, b, c) -> int: return 0
+def f1743(a, b, c) -> int: return 0
+def f1744(a, b, c) -> int: return 0
+def f1745(a, b, c) -> int: return 0
+def f1746(a, b, c) -> int: return 0
+def f1747(a, b, c) -> int: return 0
+def f1748(a, b, c) -> int: return 0
+def f1749(a, b, c) -> int: return 0
+def f1750(a, b, c) -> int: return 0
+def f1751(a, b, c) -> int: return 0
+def f1752(a, b, c) -> int: return 0
+def f1753(a, b, c) -> int: return 0
+def f1754(a, b, c) -> int: return 0
+def f1755(a, b, c) -> int: return 0
+def f1756(a, b, c) -> int: return 0
+def f1757(a, b, c) -> int: return 0
+def f1758(a, b, c) -> int: return 0
+def f1759(a, b, c) -> int: return 0
+def f1760(a, b, c) -> int: return 0
+def f1761(a, b, c) -> int: return 0
+def f1762(a, b, c) -> int: return 0
+def f1763(a, b, c) -> int: return 0
+def f1764(a, b, c) -> int: return 0
+def f1765(a, b, c) -> int: return 0
+def f1766(a, b, c) -> int: return 0
+def f1767(a, b, c) -> int: return 0
+def f1768(a, b, c) -> int: return 0
+def f1769(a, b, c) -> int: return 0
+def f1770(a, b, c) -> int: return 0
+def f1771(a, b, c) -> int: return 0
+def f1772(a, b, c) -> int: return 0
+def f1773(a, b, c) -> int: return 0
+def f1774(a, b, c) -> int: return 0
+def f1775(a, b, c) -> int: return 0
+def f1776(a, b, c) -> int: return 0
+def f1777(a, b, c) -> int: return 0
+def f1778(a, b, c) -> int: return 0
+def f1779(a, b, c) -> int: return 0
+def f1780(a, b, c) -> int: return 0
+def f1781(a, b, c) -> int: return 0
+def f1782(a, b, c) -> int: return 0
+def f1783(a, b, c) -> int: return 0
+def f1784(a, b, c) -> int: return 0
+def f1785(a, b, c) -> int: return 0
+def f1786(a, b, c) -> int: return 0
+def f1787(a, b, c) -> int: return 0
+def f1788(a, b, c) -> int: return 0
+def f1789(a, b, c) -> int: return 0
+def f1790(a, b, c) -> int: return 0
+def f1791(a, b, c) -> int: return 0
+def f1792(a, b, c) -> int: return 0
+def f1793(a, b, c) -> int: return 0
+def f1794(a, b, c) -> int: return 0
+def f1795(a, b, c) -> int: return 0
+def f1796(a, b, c) -> int: return 0
+def f1797(a, b, c) -> int: return 0
+def f1798(a, b, c) -> int: return 0
+def f1799(a, b, c) -> int: return 0
+def f1800(a, b, c) -> int: return 0
+def f1801(a, b, c) -> int: return 0
+def f1802(a, b, c) -> int: return 0
+def f1803(a, b, c) -> int: return 0
+def f1804(a, b, c) -> int: return 0
+def f1805(a, b, c) -> int: return 0
+def f1806(a, b, c) -> int: return 0
+def f1807(a, b, c) -> int: return 0
+def f1808(a, b, c) -> int: return 0
+def f1809(a, b, c) -> int: return 0
+def f1810(a, b, c) -> int: return 0
+def f1811(a, b, c) -> int: return 0
+def f1812(a, b, c) -> int: return 0
+def f1813(a, b, c) -> int: return 0
+def f1814(a, b, c) -> int: return 0
+def f1815(a, b, c) -> int: return 0
+def f1816(a, b, c) -> int: return 0
+def f1817(a, b, c) -> int: return 0
+def f1818(a, b, c) -> int: return 0
+def f1819(a, b, c) -> int: return 0
+def f1820(a, b, c) -> int: return 0
+def f1821(a, b, c) -> int: return 0
+def f1822(a, b, c) -> int: return 0
+def f1823(a, b, c) -> int: return 0
+def f1824(a, b, c) -> int: return 0
+def f1825(a, b, c) -> int: return 0
+def f1826(a, b, c) -> int: return 0
+def f1827(a, b, c) -> int: return 0
+def f1828(a, b, c) -> int: return 0
+def f1829(a, b, c) -> int: return 0
+def f1830(a, b, c) -> int: return 0
+def f1831(a, b, c) -> int: return 0
+def f1832(a, b, c) -> int: return 0
+def f1833(a, b, c) -> int: return 0
+def f1834(a, b, c) -> int: return 0
+def f1835(a, b, c) -> int: return 0
+def f1836(a, b, c) -> int: return 0
+def f1837(a, b, c) -> int: return 0
+def f1838(a, b, c) -> int: return 0
+def f1839(a, b, c) -> int: return 0
+def f1840(a, b, c) -> int: return 0
+def f1841(a, b, c) -> int: return 0
+def f1842(a, b, c) -> int: return 0
+def f1843(a, b, c) -> int: return 0
+def f1844(a, b, c) -> int: return 0
+def f1845(a, b, c) -> int: return 0
+def f1846(a, b, c) -> int: return 0
+def f1847(a, b, c) -> int: return 0
+def f1848(a, b, c) -> int: return 0
+def f1849(a, b, c) -> int: return 0
+def f1850(a, b, c) -> int: return 0
+def f1851(a, b, c) -> int: return 0
+def f1852(a, b, c) -> int: return 0
+def f1853(a, b, c) -> int: return 0
+def f1854(a, b, c) -> int: return 0
+def f1855(a, b, c) -> int: return 0
+def f1856(a, b, c) -> int: return 0
+def f1857(a, b, c) -> int: return 0
+def f1858(a, b, c) -> int: return 0
+def f1859(a, b, c) -> int: return 0
+def f1860(a, b, c) -> int: return 0
+def f1861(a, b, c) -> int: return 0
+def f1862(a, b, c) -> int: return 0
+def f1863(a, b, c) -> int: return 0
+def f1864(a, b, c) -> int: return 0
+def f1865(a, b, c) -> int: return 0
+def f1866(a, b, c) -> int: return 0
+def f1867(a, b, c) -> int: return 0
+def f1868(a, b, c) -> int: return 0
+def f1869(a, b, c) -> int: return 0
+def f1870(a, b, c) -> int: return 0
+def f1871(a, b, c) -> int: return 0
+def f1872(a, b, c) -> int: return 0
+def f1873(a, b, c) -> int: return 0
+def f1874(a, b, c) -> int: return 0
+def f1875(a, b, c) -> int: return 0
+def f1876(a, b, c) -> int: return 0
+def f1877(a, b, c) -> int: return 0
+def f1878(a, b, c) -> int: return 0
+def f1879(a, b, c) -> int: return 0
+def f1880(a, b, c) -> int: return 0
+def f1881(a, b, c) -> int: return 0
+def f1882(a, b, c) -> int: return 0
+def f1883(a, b, c) -> int: return 0
+def f1884(a, b, c) -> int: return 0
+def f1885(a, b, c) -> int: return 0
+def f1886(a, b, c) -> int: return 0
+def f1887(a, b, c) -> int: return 0
+def f1888(a, b, c) -> int: return 0
+def f1889(a, b, c) -> int: return 0
+def f1890(a, b, c) -> int: return 0
+def f1891(a, b, c) -> int: return 0
+def f1892(a, b, c) -> int: return 0
+def f1893(a, b, c) -> int: return 0
+def f1894(a, b, c) -> int: return 0
+def f1895(a, b, c) -> int: return 0
+def f1896(a, b, c) -> int: return 0
+def f1897(a, b, c) -> int: return 0
+def f1898(a, b, c) -> int: return 0
+def f1899(a, b, c) -> int: return 0
+def f1900(a, b, c) -> int: return 0
+def f1901(a, b, c) -> int: return 0
+def f1902(a, b, c) -> int: return 0
+def f1903(a, b, c) -> int: return 0
+def f1904(a, b, c) -> int: return 0
+def f1905(a, b, c) -> int: return 0
+def f1906(a, b, c) -> int: return 0
+def f1907(a, b, c) -> int: return 0
+def f1908(a, b, c) -> int: return 0
+def f1909(a, b, c) -> int: return 0
+def f1910(a, b, c) -> int: return 0
+def f1911(a, b, c) -> int: return 0
+def f1912(a, b, c) -> int: return 0
+def f1913(a, b, c) -> int: return 0
+def f1914(a, b, c) -> int: return 0
+def f1915(a, b, c) -> int: return 0
+def f1916(a, b, c) -> int: return 0
+def f1917(a, b, c) -> int: return 0
+def f1918(a, b, c) -> int: return 0
+def f1919(a, b, c) -> int: return 0
+def f1920(a, b, c) -> int: return 0
+def f1921(a, b, c) -> int: return 0
+def f1922(a, b, c) -> int: return 0
+def f1923(a, b, c) -> int: return 0
+def f1924(a, b, c) -> int: return 0
+def f1925(a, b, c) -> int: return 0
+def f1926(a, b, c) -> int: return 0
+def f1927(a, b, c) -> int: return 0
+def f1928(a, b, c) -> int: return 0
+def f1929(a, b, c) -> int: return 0
+def f1930(a, b, c) -> int: return 0
+def f1931(a, b, c) -> int: return 0
+def f1932(a, b, c) -> int: return 0
+def f1933(a, b, c) -> int: return 0
+def f1934(a, b, c) -> int: return 0
+def f1935(a, b, c) -> int: return 0
+def f1936(a, b, c) -> int: return 0
+def f1937(a, b, c) -> int: return 0
+def f1938(a, b, c) -> int: return 0
+def f1939(a, b, c) -> int: return 0
+def f1940(a, b, c) -> int: return 0
+def f1941(a, b, c) -> int: return 0
+def f1942(a, b, c) -> int: return 0
+def f1943(a, b, c) -> int: return 0
+def f1944(a, b, c) -> int: return 0
+def f1945(a, b, c) -> int: return 0
+def f1946(a, b, c) -> int: return 0
+def f1947(a, b, c) -> int: return 0
+def f1948(a, b, c) -> int: return 0
+def f1949(a, b, c) -> int: return 0
+def f1950(a, b, c) -> int: return 0
+def f1951(a, b, c) -> int: return 0
+def f1952(a, b, c) -> int: return 0
+def f1953(a, b, c) -> int: return 0
+def f1954(a, b, c) -> int: return 0
+def f1955(a, b, c) -> int: return 0
+def f1956(a, b, c) -> int: return 0
+def f1957(a, b, c) -> int: return 0
+def f1958(a, b, c) -> int: return 0
+def f1959(a, b, c) -> int: return 0
+def f1960(a, b, c) -> int: return 0
+def f1961(a, b, c) -> int: return 0
+def f1962(a, b, c) -> int: return 0
+def f1963(a, b, c) -> int: return 0
+def f1964(a, b, c) -> int: return 0
+def f1965(a, b, c) -> int: return 0
+def f1966(a, b, c) -> int: return 0
+def f1967(a, b, c) -> int: return 0
+def f1968(a, b, c) -> int: return 0
+def f1969(a, b, c) -> int: return 0
+def f1970(a, b, c) -> int: return 0
+def f1971(a, b, c) -> int: return 0
+def f1972(a, b, c) -> int: return 0
+def f1973(a, b, c) -> int: return 0
+def f1974(a, b, c) -> int: return 0
+def f1975(a, b, c) -> int: return 0
+def f1976(a, b, c) -> int: return 0
+def f1977(a, b, c) -> int: return 0
+def f1978(a, b, c) -> int: return 0
+def f1979(a, b, c) -> int: return 0
+def f1980(a, b, c) -> int: return 0
+def f1981(a, b, c) -> int: return 0
+def f1982(a, b, c) -> int: return 0
+def f1983(a, b, c) -> int: return 0
+def f1984(a, b, c) -> int: return 0
+def f1985(a, b, c) -> int: return 0
+def f1986(a, b, c) -> int: return 0
+def f1987(a, b, c) -> int: return 0
+def f1988(a, b, c) -> int: return 0
+def f1989(a, b, c) -> int: return 0
+def f1990(a, b, c) -> int: return 0
+def f1991(a, b, c) -> int: return 0
+def f1992(a, b, c) -> int: return 0
+def f1993(a, b, c) -> int: return 0
+def f1994(a, b, c) -> int: return 0
+def f1995(a, b, c) -> int: return 0
+def f1996(a, b, c) -> int: return 0
+def f1997(a, b, c) -> int: return 0
+def f1998(a, b, c) -> int: return 0
+def f1999(a, b, c) -> int: return 0
+def f2000(a, b, c) -> int: return 0

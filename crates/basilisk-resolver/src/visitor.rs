@@ -575,27 +575,29 @@ fn collect_class_body(
                         after_kw_only_sentinel = true;
                         continue;
                     }
-                    let is_readonly = annotation_contains_readonly_expr(&ann.annotation);
-                    let field_kw_only = ann.value.as_deref().and_then(field_kw_only_override);
-                    // Determine kw_only: explicit field() override wins; then sentinel; then class default.
-                    let is_kw_only =
-                        field_kw_only.unwrap_or(after_kw_only_sentinel || class_kw_only);
-                    let is_init_false = ann.value.as_deref().is_some_and(field_init_is_false);
-                    attributes.push(AttributeInfo {
-                        name,
-                        name_span: text_range_to_span(ann.target.range()),
-                        has_annotation: true,
-                        annotation_span: Some(text_range_to_span(ann.annotation.range())),
-                        has_value: ann.value.is_some(),
-                        rhs_kind: RhsKind::Other,
-                        rhs_span: ann.value.as_ref().map(|v| text_range_to_span(v.range())),
-                        rhs_is_nonmember_call: false,
-                        rhs_is_lambda: false,
-                        rhs_is_descriptor_call: false,
-                        is_readonly,
-                        is_kw_only,
-                        is_init_false,
-                    });
+                let is_readonly = annotation_contains_readonly_expr(&ann.annotation);
+                let is_init_var = annotation_is_init_var(&ann.annotation);
+                let field_kw_only = ann.value.as_deref().and_then(field_kw_only_override);
+                // Determine kw_only: explicit field() override wins; then sentinel; then class default.
+                let is_kw_only =
+                    field_kw_only.unwrap_or(after_kw_only_sentinel || class_kw_only);
+                let is_init_false = ann.value.as_deref().is_some_and(field_init_is_false);
+                attributes.push(AttributeInfo {
+                    name,
+                    name_span: text_range_to_span(ann.target.range()),
+                    has_annotation: true,
+                    annotation_span: Some(text_range_to_span(ann.annotation.range())),
+                    has_value: ann.value.is_some(),
+                    rhs_kind: RhsKind::Other,
+                    rhs_span: ann.value.as_ref().map(|v| text_range_to_span(v.range())),
+                    rhs_is_nonmember_call: false,
+                    rhs_is_lambda: false,
+                    rhs_is_descriptor_call: false,
+                    is_readonly,
+                    is_kw_only,
+                    is_init_false,
+                    is_init_var,
+                });
                 }
             }
             Stmt::Assign(assign) => {
@@ -627,6 +629,7 @@ fn collect_class_body(
                             is_readonly: false,
                             is_kw_only: false,
                             is_init_false: false,
+                            is_init_var: false,
                         });
                     }
                 }
@@ -2011,7 +2014,7 @@ fn classify_rhs(expr: &Expr) -> RhsKind {
         Expr::NumberLiteral(n) => match n.value {
             ruff_python_ast::Number::Float(_) => RhsKind::FloatLiteral,
             ruff_python_ast::Number::Complex { .. } => RhsKind::Other,
-            _ => RhsKind::IntLiteral,
+            ruff_python_ast::Number::Int(_) => RhsKind::IntLiteral,
         },
         Expr::StringLiteral(_) | Expr::FString(_) => RhsKind::StrLiteral,
         Expr::BytesLiteral(_) => RhsKind::BytesLiteral,
@@ -2079,6 +2082,23 @@ fn dataclass_flag(class: &StmtClassDef, key: &str) -> bool {
 /// (the sentinel that makes all following fields keyword-only).
 fn annotation_is_kw_only(ann: &Expr) -> bool {
     matches!(ann, Expr::Name(n) if n.id.as_str() == "KW_ONLY")
+}
+
+/// Returns `true` when the annotation expression is `InitVar[T]`.
+///
+/// Matches both `InitVar[T]` and `dataclasses.InitVar[T]`.
+fn annotation_is_init_var(ann: &Expr) -> bool {
+    match ann {
+        Expr::Subscript(sub) => {
+            // Check if the base is "InitVar" or "dataclasses.InitVar"
+            match sub.value.as_ref() {
+                Expr::Name(n) => n.id.as_str() == "InitVar",
+                Expr::Attribute(attr) => attr.attr.as_str() == "InitVar",
+                _ => false,
+            }
+        }
+        _ => false,
+    }
 }
 
 /// For a field value expression, returns `Some(true)` when it is `field(kw_only=True, ...)`,
@@ -3536,6 +3556,157 @@ fn build_var_type_map<'a>(
     }
     map
 }
+
+/// Collect `TypedDict` key/value violations from module-level statements.
+///
+/// Detects:
+/// - Subscript assignments with invalid keys: `movie["director"] = "Ridley Scott"`
+/// - Subscript assignments with wrong value type: `movie["year"] = "1982"`
+/// - Annotated dict literal assignments with invalid or missing keys: `movie2: Movie = {"title": ...}`
+fn collect_typeddict_key_violations<'a>(
+    stmts: &[Stmt],
+    classes: &'a [ClassInfo],
+    source: &'a str,
+) -> Vec<TypedDictKeyViolation> {
+    use std::collections::HashMap;
+    type FieldMap<'x> = HashMap<&'x str, (Vec<&'x str>, HashMap<&'x str, String>)>;
+
+    let typeddict_fields: FieldMap<'a> = classes
+        .iter()
+        .filter(|c| c.is_typed_dict)
+        .map(|c| {
+            let all_fields: Vec<&str> = c.attributes.iter().map(|a| a.name.as_str()).collect();
+            let field_types: HashMap<&str, String> = c
+                .attributes
+                .iter()
+                .filter_map(|a| {
+                    let span = a.annotation_span?;
+                    let type_text = source.get(span.start as usize..span.end as usize)?.trim().to_owned();
+                    Some((a.name.as_str(), type_text))
+                })
+                .collect();
+            (c.name.as_str(), (all_fields, field_types))
+        })
+        .collect();
+
+    if typeddict_fields.is_empty() {
+        return Vec::new();
+    }
+
+    let var_type: HashMap<String, &str> = stmts
+        .iter()
+        .filter_map(|s| {
+            let Stmt::AnnAssign(ann) = s else { return None };
+            let var_name = expr_simple_name(&ann.target)?;
+            let Expr::Name(type_name) = ann.annotation.as_ref() else { return None };
+            let class_name = type_name.id.as_str();
+            typeddict_fields.contains_key(class_name).then_some((var_name, class_name))
+        })
+        .collect();
+
+    let mut out = Vec::new();
+    for stmt in stmts {
+        match stmt {
+            Stmt::Assign(node) => check_subscript_violations(node, &var_type, &typeddict_fields, &mut out),
+            Stmt::AnnAssign(node) => check_ann_assign_violations(node, &typeddict_fields, &mut out),
+            _ => {}
+        }
+    }
+    out
+}
+
+fn check_subscript_violations<'a>(
+    node: &StmtAssign,
+    var_type: &std::collections::HashMap<String, &'a str>,
+    typeddict_fields: &std::collections::HashMap<&'a str, (Vec<&'a str>, std::collections::HashMap<&'a str, String>)>,
+    out: &mut Vec<TypedDictKeyViolation>,
+) {
+    use ruff_text_size::Ranged as _;
+    for target in &node.targets {
+        let Expr::Subscript(sub) = target else { continue };
+        let Some(var_name) = expr_simple_name(&sub.value) else { continue };
+        let Some(&class_name) = var_type.get(&var_name) else { continue };
+        let Some((all_fields, field_types)) = typeddict_fields.get(class_name) else { continue };
+        let Expr::StringLiteral(key_str) = sub.slice.as_ref() else { continue };
+        let key = key_str.value.to_string();
+        if !all_fields.contains(&key.as_str()) {
+            out.push(TypedDictKeyViolation {
+                span: text_range_to_span(node.range()),
+                class_name: class_name.to_owned(),
+                kind: TypedDictKeyViolationKind::InvalidSubscriptKey { key },
+            });
+        } else if let Some(expected) = field_types.get(key.as_str()) {
+            if let Some(actual) = expr_literal_type_name(&node.value) {
+                if !typeddict_field_type_compatible(actual, expected) {
+                    out.push(TypedDictKeyViolation {
+                        span: text_range_to_span(node.range()),
+                        class_name: class_name.to_owned(),
+                        kind: TypedDictKeyViolationKind::WrongSubscriptValueType {
+                            key,
+                            expected: expected.clone(),
+                        },
+                    });
+                }
+            }
+        }
+    }
+}
+
+fn check_ann_assign_violations<'a>(
+    node: &StmtAnnAssign,
+    typeddict_fields: &std::collections::HashMap<&'a str, (Vec<&'a str>, std::collections::HashMap<&'a str, String>)>,
+    out: &mut Vec<TypedDictKeyViolation>,
+) {
+    use ruff_text_size::Ranged as _;
+    let Some(value) = &node.value else { return };
+    let Expr::Name(ann_name) = node.annotation.as_ref() else { return };
+    let class_name = ann_name.id.as_str();
+    let Some((all_fields, _)) = typeddict_fields.get(class_name) else { return };
+    let Expr::Dict(dict) = value.as_ref() else { return };
+
+    let literal_keys: Vec<String> = dict.items.iter().filter_map(|item| {
+        let key = item.key.as_ref()?;
+        let Expr::StringLiteral(s) = key else { return None };
+        Some(s.value.to_string())
+    }).collect();
+
+    let invalid_keys: Vec<String> = literal_keys.iter()
+        .filter(|k| !all_fields.contains(&k.as_str())).cloned().collect();
+    let missing_keys: Vec<String> = all_fields.iter()
+        .filter(|&&f| !literal_keys.iter().any(|k| k == f))
+        .map(|s| (*s).to_owned()).collect();
+
+    if !invalid_keys.is_empty() || !missing_keys.is_empty() {
+        out.push(TypedDictKeyViolation {
+            span: text_range_to_span(node.range()),
+            class_name: class_name.to_owned(),
+            kind: TypedDictKeyViolationKind::InvalidDictLiteral { invalid_keys, missing_keys },
+        });
+    }
+}
+
+/// Return the inferred type name for a literal expression, or `None` if not a literal.
+fn expr_literal_type_name(expr: &Expr) -> Option<&'static str> {
+    match expr {
+        Expr::StringLiteral(_) | Expr::FString(_) => Some("str"),
+        Expr::NumberLiteral(n) => Some(match n.value {
+            ruff_python_ast::Number::Float(_) => "float",
+            ruff_python_ast::Number::Complex { .. } => "complex",
+            ruff_python_ast::Number::Int(_) => "int",
+        }),
+        Expr::BooleanLiteral(_) => Some("bool"),
+        Expr::NoneLiteral(_) => Some("None"),
+        _ => None,
+    }
+}
+
+/// Return `true` if an actual literal type is compatible with an expected `TypedDict` field type.
+fn typeddict_field_type_compatible(actual: &str, expected: &str) -> bool {
+    actual == expected
+        || (actual == "bool" && expected == "int")
+        || (actual == "int" && expected == "float")
+}
+
 
 /// Collect `ReadOnly` violations from module-level statements and function bodies.
 fn collect_readonly_violations(

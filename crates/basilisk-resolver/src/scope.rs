@@ -265,6 +265,11 @@ pub struct AttributeInfo {
     /// - A `dataclass_transform` field specifier function implicitly sets `init=False`
     ///   (e.g. via an overload with `init: Literal[False]` as default).
     pub is_init_false: bool,
+    /// `true` when the field is an `InitVar[T]` annotation.
+    ///
+    /// `InitVar` fields are not real attributes — they are passed as parameters
+    /// to `__post_init__` and cannot be accessed as instance attributes.
+    pub is_init_var: bool,
 }
 
 /// Information about an enum `_value_` type mismatch detected during resolution.
@@ -979,13 +984,13 @@ pub struct ResolvedModule {
     /// PEP 589: `TypedDict` type objects cannot be used in `isinstance()` tests.
     /// Used by `BSK-E0088`.
     pub isinstance_typeddict_violations: Vec<Span>,
-    /// TypedDict subscript key/value violations and invalid dict-literal assignments.
+    /// `TypedDict` subscript key/value violations and invalid dict-literal assignments.
     ///
     /// Covers:
-    /// - `td["invalid_key"] = val` where `"invalid_key"` is not a TypedDict field.
+    /// - `td["invalid_key"] = val` where `"invalid_key"` is not a `TypedDict` field.
     /// - `td["field"] = wrong_type_val` where the value type mismatches the field type.
     /// - `var: TypedDict = {invalid/missing keys}` where the literal doesn't match the schema.
-    /// Used by `BSK-E0089`.
+    ///   Used by `BSK-E0089`.
     pub typeddict_key_violations: Vec<TypedDictKeyViolation>,
     /// The source file path.
     pub path: String,
@@ -993,18 +998,18 @@ pub struct ResolvedModule {
     pub source: String,
 }
 
-/// A TypedDict key/value violation detected during resolution.
+/// A `TypedDict` key/value violation detected during resolution.
 #[derive(Debug, Clone)]
 pub struct TypedDictKeyViolation {
     /// The span of the offending expression.
     pub span: Span,
-    /// The name of the TypedDict class.
+    /// The name of the `TypedDict` class.
     pub class_name: String,
     /// The kind of violation.
     pub kind: TypedDictKeyViolationKind,
 }
 
-/// Kind of TypedDict key/value violation.
+/// Kind of `TypedDict` key/value violation.
 #[derive(Debug, Clone)]
 pub enum TypedDictKeyViolationKind {
     /// Subscript assignment with an invalid key: `td["invalid_key"] = val`.
@@ -1021,9 +1026,9 @@ pub enum TypedDictKeyViolationKind {
     },
     /// Annotated assignment with a dict literal containing invalid or missing keys.
     InvalidDictLiteral {
-        /// Keys in the dict that are not in the TypedDict schema.
+        /// Keys in the dict that are not in the `TypedDict` schema.
         invalid_keys: Vec<String>,
-        /// Required TypedDict fields missing from the dict literal.
+        /// Required `TypedDict` fields missing from the dict literal.
         missing_keys: Vec<String>,
     },
 }

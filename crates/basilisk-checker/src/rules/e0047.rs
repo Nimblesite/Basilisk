@@ -162,7 +162,61 @@ fn is_invalid_type_annotation(ann: &str) -> bool {
         return true;
     }
 
+    // String literal used as an operand in a `|` union expression.
+    // e.g. `"ClassA" | int` or `int | "ClassA"` — causes a runtime TypeError.
+    // Valid form would be `"ClassA | int"` (entire union as a string) or `Union["ClassA", int]`.
+    if has_string_literal_in_pipe_union(content_to_check) {
+        return true;
+    }
+
     false
+}
+
+/// Returns `true` when the text contains a `|` union at depth 0 where one of the
+/// pipe-separated parts is a quoted string literal (a misused forward reference).
+fn has_string_literal_in_pipe_union(s: &str) -> bool {
+    // Walk through and collect top-level | splits
+    let bytes = s.as_bytes();
+    let mut depth = 0i32;
+    let mut in_string = false;
+    let mut string_char = b'"';
+    let mut part_start = 0usize;
+
+    let mut parts: Vec<&str> = Vec::new();
+    let mut i = 0;
+    while i < bytes.len() {
+        let ch = bytes[i];
+        if in_string {
+            if ch == string_char && (i == 0 || bytes[i - 1] != b'\\') {
+                in_string = false;
+            }
+        } else {
+            match ch {
+                b'"' | b'\'' => {
+                    in_string = true;
+                    string_char = ch;
+                }
+                b'[' | b'(' | b'{' => depth += 1,
+                b']' | b')' | b'}' => depth -= 1,
+                b'|' if depth == 0 => {
+                    parts.push(s[part_start..i].trim());
+                    part_start = i + 1;
+                }
+                _ => {}
+            }
+        }
+        i += 1;
+    }
+    if parts.is_empty() {
+        return false; // no top-level | found
+    }
+    parts.push(s[part_start..].trim());
+
+    parts.iter().any(|part| {
+        let p = part.trim();
+        (p.starts_with('"') && p.ends_with('"') && p.len() >= 2)
+            || (p.starts_with('\'') && p.ends_with('\'') && p.len() >= 2)
+    })
 }
 
 /// Returns `true` when the text contains `token` at bracket depth 0.
