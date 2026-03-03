@@ -192,7 +192,6 @@ pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
         &e0084::TypeVarTupleInvalidParams,
         &e0085::TypeVarTupleArgCountMismatch,
         &e0086::MultipleTypeVarTuplesInGeneric,
-        &e0087::Pep695InvalidBound,
         &e0088::TypedDictRuntimeViolation,
         &e0089::Pep695InvalidBound,
         &e0090::InvalidTupleTypeSyntax,

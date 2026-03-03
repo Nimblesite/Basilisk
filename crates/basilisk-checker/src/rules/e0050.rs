@@ -186,8 +186,8 @@ fn check_newtype_call(
     typeddict_names: &[&str],
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    // Too many arguments
-    if info.positional_arg_count > 2 {
+    // Wrong number of arguments
+    if info.positional_arg_count != 2 {
         diagnostics.push(make_diagnostic(
             format!(
                 "`NewType` takes exactly 2 arguments ({} given) for `{}`",

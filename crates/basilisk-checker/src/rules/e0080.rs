@@ -39,89 +39,173 @@ impl Rule for TypeVarBoundViolation {
         let source = &module.source;
 
         // Step 1: Build a map of TypeVar name -> bound text.
-        let mut typevar_bounds: HashMap<&str, String> = HashMap::new();
-        for tv in &module.typevar_calls {
-            if !tv.has_bound {
-                continue;
-            }
-            if let Some(bound_text) = extract_bound_text(source, tv.span) {
-                typevar_bounds.insert(tv.name.as_str(), bound_text);
-            }
-        }
-
+        let typevar_bounds = build_typevar_bounds(module, source);
         if typevar_bounds.is_empty() {
             return;
         }
 
         // Step 2: Build a map of function name -> list of (param_index, bound_text).
-        let mut func_param_bounds: HashMap<&str, Vec<(usize, String)>> = HashMap::new();
-        for func in &module.functions {
-            if func.class_name.is_some() {
-                continue;
-            }
-            let mut param_bounds = Vec::new();
-            for (idx, param) in func.parameters.iter().enumerate() {
-                let Some(ann_span) = param.annotation_span else {
-                    continue;
-                };
-                let Some(ann_text) =
-                    source.get(ann_span.start as usize..ann_span.end as usize)
-                else {
-                    continue;
-                };
-                let ann_text = ann_text.trim();
-                if let Some(bound) = typevar_bounds.get(ann_text) {
-                    param_bounds.push((idx, bound.clone()));
-                }
-            }
-            if !param_bounds.is_empty() {
-                func_param_bounds.insert(func.name.as_str(), param_bounds);
-            }
-        }
-
+        let func_param_bounds = build_func_param_bounds(module, source, &typevar_bounds);
         if func_param_bounds.is_empty() {
             return;
         }
 
         // Step 3: Check call sites.
-        for call in &module.calls {
-            let Some(param_bounds) = func_param_bounds.get(call.callee.as_str()) else {
+        check_call_sites(module, source, &typevar_bounds, &func_param_bounds, diagnostics);
+    }
+}
+
+/// Step 1: Build a map of `TypeVar` name -> bound text.
+fn build_typevar_bounds<'a>(module: &'a ResolvedModule, source: &'a str) -> HashMap<&'a str, String> {
+    let mut typevar_bounds: HashMap<&'a str, String> = HashMap::new();
+    for tv in &module.typevar_calls {
+        if !tv.has_bound {
+            continue;
+        }
+        if let Some(bound_text) = extract_bound_text(source, tv.span) {
+            typevar_bounds.insert(tv.name.as_str(), bound_text);
+        }
+    }
+    println!("DEBUG: typevar_bounds: {typevar_bounds:?}");
+    typevar_bounds
+}
+
+/// Step 2: Build a map of function name -> list of (`param_index`, `bound_text`).
+fn build_func_param_bounds<'a>(
+    module: &'a ResolvedModule, 
+    source: &'a str, 
+    typevar_bounds: &'a HashMap<&'a str, String>
+) -> HashMap<&'a str, Vec<(usize, String)>> {
+    let mut func_param_bounds: HashMap<&'a str, Vec<(usize, String)>> = HashMap::new();
+    for func in &module.functions {
+        let mut param_bounds = Vec::new();
+        for (idx, param) in func.parameters.iter().enumerate() {
+            let Some(ann_span) = param.annotation_span else {
                 continue;
             };
-
-            for &(param_idx, ref bound_text) in param_bounds {
-                let Some((rhs_kind, _arg_span)) = call.args.get(param_idx) else {
-                    continue;
-                };
-
-                let Some(lit_type) = literal_type_name(rhs_kind) else {
-                    continue;
-                };
-
-                if !type_satisfies_bound(lit_type, bound_text) {
-                    diagnostics.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
-                            "Argument of type `{lit_type}` does not satisfy \
-                             `TypeVar` bound `{bound_text}` for `{}`",
-                            call.callee
-                        ),
-                        span: call.span,
-                        path: module.path.clone(),
-                        help: Some(format!(
-                            "Pass a value that satisfies `{bound_text}` \
-                             (e.g. a type implementing `__len__`)"
-                        )),
-                        note: Some(format!(
-                            "TypeVar bound `{bound_text}` requires the argument type to \
-                             be a subtype of `{bound_text}`"
-                        )),
-                    });
-                    // Only one diagnostic per call.
-                    break;
-                }
+            let Some(ann_text) =
+                source.get(ann_span.start as usize..ann_span.end as usize)
+            else {
+                continue;
+            };
+            let ann_text = ann_text.trim();
+            println!("DEBUG: Function {} param {} annotation: '{ann_text}'", func.name, idx);
+            if let Some(bound) = typevar_bounds.get(ann_text) {
+                param_bounds.push((idx, bound.clone()));
             }
+        }
+        if !param_bounds.is_empty() {
+            func_param_bounds.insert(func.name.as_str(), param_bounds);
+        }
+    }
+    println!("DEBUG: func_param_bounds: {func_param_bounds:?}");
+    func_param_bounds
+}
+
+/// Step 3: Check call sites for violations.
+fn check_call_sites(
+    module: &ResolvedModule,
+    source: &str,
+    typevar_bounds: &HashMap<&str, String>,
+    _func_param_bounds: &HashMap<&str, Vec<(usize, String)>>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    println!("DEBUG: All calls in module:");
+    for call in &module.calls {
+        println!("  Call to '{}' at span {:?}", call.callee, call.span);
+    }
+    
+    for call in &module.calls {
+        println!("DEBUG: Checking call to '{}'", call.callee);
+        
+        // Find all functions with this name (could be multiple due to methods)
+        let matching_functions: Vec<&basilisk_resolver::FunctionInfo> = module
+            .functions
+            .iter()
+            .filter(|f| f.name == call.callee)
+            .collect();
+
+        println!("DEBUG: Matching functions: {}", matching_functions.len());
+
+        if matching_functions.is_empty() {
+            continue;
+        }
+
+        // For each matching function, check its parameter bounds
+        for func in matching_functions {
+            check_function_call(func, call, source, typevar_bounds, &module.path, diagnostics);
+        }
+    }
+}
+
+/// Check a specific function call for `TypeVar` bound violations.
+fn check_function_call(
+    func: &basilisk_resolver::FunctionInfo,
+    call: &basilisk_resolver::CallSite,
+    source: &str,
+    typevar_bounds: &HashMap<&str, String>,
+    module_path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let param_bounds: Vec<(usize, String)> = func
+        .parameters
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, param)| {
+            let ann_span = param.annotation_span?;
+            let ann_text = source.get(ann_span.start as usize..ann_span.end as usize)?;
+            let ann_text = ann_text.trim();
+            println!("DEBUG: Function {} param {} annotation: '{ann_text}'", func.name, idx);
+            typevar_bounds.get(ann_text).map(|bound| (idx, bound.clone()))
+        })
+        .collect();
+
+    println!("DEBUG: param_bounds for {}: {param_bounds:?}", func.name);
+
+    if param_bounds.is_empty() {
+        return;
+    }
+
+    for (param_idx, bound_text) in param_bounds {
+        let Some((rhs_kind, _arg_span)) = call.args.get(param_idx) else {
+            continue;
+        };
+
+        let Some(lit_type) = literal_type_name(rhs_kind) else {
+            continue;
+        };
+
+        println!("DEBUG: Checking param {param_idx}: lit_type={lit_type}, bound_text={bound_text}");
+
+        if !type_satisfies_bound(lit_type, &bound_text) {
+            let func_name = if let Some(class_name) = &func.class_name {
+                format!("{}.{}", class_name, func.name)
+            } else {
+                func.name.clone()
+            };
+
+            println!("DEBUG: Adding diagnostic for {func_name} with type {lit_type} violating bound {bound_text}");
+            
+            diagnostics.push(Diagnostic {
+                code: CODE.clone(),
+                severity: Severity::Error,
+                message: format!(
+                    "Argument of type `{lit_type}` does not satisfy \
+                     `TypeVar` bound `{bound_text}` for `{func_name}`"
+                ),
+                span: call.span,
+                path: module_path.to_string(),
+                help: Some(format!(
+                    "Pass a value that satisfies `{bound_text}` \
+                     (e.g. a type implementing `__len__`)"
+                )),
+                note: Some(format!(
+                    "TypeVar bound `{bound_text}` requires the argument type to \
+                     be a subtype of `{bound_text}`"
+                )),
+            });
+            // Only one diagnostic per call.
+            break;
         }
     }
 }
@@ -188,6 +272,12 @@ fn type_satisfies_bound(concrete_type: &str, bound: &str) -> bool {
             concrete_type,
             "str" | "bytes" | "list" | "tuple" | "dict" | "set" | "frozenset"
         ),
+        // For custom bounds like "int", check if the concrete type matches the bound.
+        "int" => concrete_type == "int",
+        "str" => concrete_type == "str",
+        "float" => concrete_type == "float",
+        "bool" => concrete_type == "bool",
+        "bytes" => concrete_type == "bytes",
         // For other bounds, be conservative and assume satisfied.
         _ => true,
     }

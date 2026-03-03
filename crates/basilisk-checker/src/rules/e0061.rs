@@ -34,7 +34,6 @@ pub(crate) struct AssertTypeEnumLiteralMismatch;
 impl Rule for AssertTypeEnumLiteralMismatch {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         let path = &module.path;
-        let source = &module.source;
 
         // Build a map of enum class names → ClassInfo for lookup
         let enum_classes: std::collections::HashMap<&str, _> = module

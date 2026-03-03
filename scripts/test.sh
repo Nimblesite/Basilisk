@@ -44,14 +44,16 @@ fi
 ok "cargo-llvm-cov present"
 
 # ── Tests + coverage ─────────────────────────────────────────────────────────
-header "Running tests with coverage instrumentation"
+header "Running tests with coverage instrumentation (LSP excluded — use scripts/test-lsp.sh)"
 
 # Capture test exit code — intentional Phase-1-limitation failures (E0012,
 # E0016-E0019, E0022) panic with "not yet implemented" messages and are
 # expected to fail.  We still want coverage data even when they do.
+# basilisk-lsp is excluded: its e2e tests require a live LSP process and hang.
 TESTS_EXIT=0
 cargo llvm-cov \
     --workspace \
+    --exclude basilisk-lsp \
     --all-targets \
     --lcov \
     --output-path "$LCOV_FILE" || TESTS_EXIT=$?
@@ -60,6 +62,7 @@ ok "lcov.info → $LCOV_FILE"
 
 cargo llvm-cov \
     --workspace \
+    --exclude basilisk-lsp \
     --all-targets \
     --html \
     --output-dir "$HTML_DIR" 2>/dev/null || true

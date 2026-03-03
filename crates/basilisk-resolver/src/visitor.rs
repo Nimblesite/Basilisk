@@ -43,7 +43,7 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
     // Post-process: apply @dataclass_transform factory semantics.
     apply_dataclass_transform(&module.ast.body, &mut classes, &functions);
 
-    let calls = collect_module_level_calls(&module.ast.body);
+    let calls = collect_calls_from_stmts(&module.ast.body);
     let typevar_calls = collect_typevar_calls(&module.ast.body);
     let reveal_type_calls = collect_reveal_type_calls(&module.ast.body);
     let assert_type_calls =
@@ -1743,33 +1743,6 @@ fn collect_unhashable_keys_from_expr(expr: &Expr, out: &mut Vec<UnhashableKeyRef
 // Module-level call site collection
 // ---------------------------------------------------------------------------
 
-/// Collect call sites from module-level statements.
-fn collect_module_level_calls(stmts: &[Stmt]) -> Vec<CallSite> {
-    let mut out = Vec::new();
-    for stmt in stmts {
-        match stmt {
-            Stmt::AnnAssign(node) => {
-                if let Some(val) = node.value.as_deref() {
-                    if let Some(site) = call_site_from_expr(val) {
-                        out.push(site);
-                    }
-                }
-            }
-            Stmt::Assign(node) => {
-                if let Some(site) = call_site_from_expr(&node.value) {
-                    out.push(site);
-                }
-            }
-            Stmt::Expr(node) => {
-                if let Some(site) = call_site_from_expr(&node.value) {
-                    out.push(site);
-                }
-            }
-            _ => {}
-        }
-    }
-    out
-}
 
 /// Returns the TypeVar-like callee name (`"TypeVar"`, `"TypeVarTuple"`, or `"ParamSpec"`),
 /// or `None` if the expression is not a TypeVar-like call.
@@ -1942,6 +1915,79 @@ fn collect_reveal_type_calls(stmts: &[Stmt]) -> Vec<RevealTypeCallInfo> {
     let mut out = Vec::new();
     collect_reveal_type_calls_from_stmts(stmts, &mut out);
     out
+}
+
+/// Collect call sites from statements, including those inside function bodies.
+fn collect_calls_from_stmts(stmts: &[Stmt]) -> Vec<CallSite> {
+    let mut out = Vec::new();
+    collect_calls_from_stmts_internal(stmts, &mut out);
+    out
+}
+
+fn collect_calls_from_stmts_internal(stmts: &[Stmt], out: &mut Vec<CallSite>) {
+    for stmt in stmts {
+        collect_calls_from_stmt(stmt, out);
+    }
+}
+
+fn collect_calls_from_stmt(stmt: &Stmt, out: &mut Vec<CallSite>) {
+    match stmt {
+        Stmt::AnnAssign(node) => {
+            if let Some(val) = node.value.as_deref() {
+                if let Some(site) = call_site_from_expr(val) {
+                    out.push(site);
+                }
+            }
+        }
+        Stmt::Assign(node) => {
+            if let Some(site) = call_site_from_expr(&node.value) {
+                out.push(site);
+            }
+        }
+        Stmt::Expr(node) => {
+            if let Some(site) = call_site_from_expr(&node.value) {
+                out.push(site);
+            }
+        }
+        Stmt::FunctionDef(func) => {
+            collect_calls_from_stmts_internal(&func.body, out);
+        }
+        Stmt::ClassDef(cls) => {
+            collect_calls_from_stmts_internal(&cls.body, out);
+        }
+        Stmt::If(node) => {
+            collect_calls_from_stmts_internal(&node.body, out);
+            for clause in &node.elif_else_clauses {
+                collect_calls_from_stmts_internal(&clause.body, out);
+            }
+        }
+        Stmt::For(node) => {
+            collect_calls_from_stmts_internal(&node.body, out);
+            collect_calls_from_stmts_internal(&node.orelse, out);
+        }
+        Stmt::While(node) => {
+            collect_calls_from_stmts_internal(&node.body, out);
+            collect_calls_from_stmts_internal(&node.orelse, out);
+        }
+        Stmt::With(node) => {
+            collect_calls_from_stmts_internal(&node.body, out);
+        }
+        Stmt::Try(node) => {
+            collect_calls_from_stmts_internal(&node.body, out);
+            for handler in &node.handlers {
+                let ExceptHandler::ExceptHandler(h) = handler;
+                collect_calls_from_stmts_internal(&h.body, out);
+            }
+            collect_calls_from_stmts_internal(&node.orelse, out);
+            collect_calls_from_stmts_internal(&node.finalbody, out);
+        }
+        Stmt::Match(node) => {
+            for case in &node.cases {
+                collect_calls_from_stmts_internal(&case.body, out);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn collect_reveal_type_calls_from_stmts(stmts: &[Stmt], out: &mut Vec<RevealTypeCallInfo>) {
