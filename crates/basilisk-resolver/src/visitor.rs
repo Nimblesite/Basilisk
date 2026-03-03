@@ -2364,7 +2364,7 @@ fn field_kw_only_override(value: &Expr) -> Option<bool> {
         return None;
     }
     for kw in &call.arguments.keywords {
-        if kw.arg.as_ref().map(ruff_python_ast::Identifier::as_str) == Some("kw_only") {
+        if kw.arg.as_ref().is_some_and(|arg| arg.as_str() == "kw_only") {
             return Some(matches!(&kw.value, Expr::BooleanLiteral(b) if b.value));
         }
     }
@@ -2624,7 +2624,7 @@ fn collect_namedtuple_defs(stmts: &[Stmt], source: &str) -> Vec<NamedTupleDefInf
         // determined statically (e.g. `_0`, `_1`, ...) so we don't track these.
         let has_rename_true = is_collections_nt
             && call.arguments.keywords.iter().any(|kw| {
-                kw.arg.as_ref().map(ruff_python_ast::Identifier::as_str) == Some("rename")
+                kw.arg.as_ref().is_some_and(|arg| arg.as_str() == "rename")
                     && matches!(&kw.value, Expr::BooleanLiteral(b) if b.value)
             });
         if has_rename_true {
@@ -2745,7 +2745,7 @@ fn extract_string_list(
 /// Returns 0 if no `defaults` keyword is present or it cannot be parsed.
 fn parse_defaults_count(keywords: &[ruff_python_ast::Keyword]) -> usize {
     for kw in keywords {
-        if kw.arg.as_ref().map(ruff_python_ast::Identifier::as_str) == Some("defaults") {
+        if kw.arg.as_ref().is_some_and(|arg| arg.as_str() == "defaults") {
             return match &kw.value {
                 Expr::Tuple(t) => t.elts.len(),
                 Expr::List(l) => l.elts.len(),

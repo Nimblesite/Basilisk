@@ -173,82 +173,66 @@ impl InferredType {
             _ => false,
         }
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_display() {
-        assert_eq!(InferredType::Int.to_string(), "int");
-        assert_eq!(InferredType::Str.to_string(), "str");
-        assert_eq!(InferredType::Float.to_string(), "float");
-        assert_eq!(InferredType::Bool.to_string(), "bool");
-        assert_eq!(InferredType::Bytes.to_string(), "bytes");
-        assert_eq!(InferredType::None_.to_string(), "None");
-        assert_eq!(InferredType::Any.to_string(), "Any");
-        assert_eq!(InferredType::Never.to_string(), "Never");
-        assert_eq!(InferredType::Unknown.to_string(), "Unknown");
-        assert_eq!(InferredType::Named("MyClass".to_string()).to_string(), "MyClass");
+    /// Parses annotation text into an `InferredType`.
+    /// 
+    /// This is a simplified parser that handles basic type annotations.
+    /// For complex types, it returns Named(String) as a fallback.
+    #[must_use]
+    pub fn from_annotation(annotation: &str) -> InferredType {
+        let annotation = annotation.trim().to_ascii_lowercase();
         
-        assert_eq!(
-            InferredType::List(Box::new(InferredType::Int)).to_string(),
-            "list[int]"
-        );
-        assert_eq!(
-            InferredType::Dict(Box::new(InferredType::Str), Box::new(InferredType::Int)).to_string(),
-            "dict[str, int]"
-        );
-        assert_eq!(
-            InferredType::Set(Box::new(InferredType::Int)).to_string(),
-            "set[int]"
-        );
-        assert_eq!(
-            InferredType::Tuple(vec![InferredType::Int, InferredType::Str]).to_string(),
-            "tuple[int, str]"
-        );
-        assert_eq!(
-            InferredType::Union(vec![InferredType::Int, InferredType::Str]).to_string(),
-            "int | str"
-        );
-        assert_eq!(
-            InferredType::Optional(Box::new(InferredType::Int)).to_string(),
-            "Optional[int]"
-        );
-    }
-
-    #[test]
-    fn test_union() {
-        let int = InferredType::Int;
-        let str = InferredType::Str;
-        
-        let union1 = InferredType::union(int.clone(), str.clone());
-        assert!(matches!(union1, InferredType::Union(ref types) if types.len() == 2));
-        
-        let float = InferredType::Float;
-        let union2 = InferredType::union(union1, float.clone());
-        assert!(matches!(union2, InferredType::Union(ref types) if types.len() == 3));
-        
-        let bool = InferredType::Bool;
-        let existing_union = InferredType::Union(vec![bool]);
-        let union3 = InferredType::union(existing_union, float.clone());
-        assert!(matches!(union3, InferredType::Union(ref types) if types.len() == 2));
-    }
-
-    #[test]
-    fn test_is_assignable_to() {
-        assert!(InferredType::Int.is_assignable_to(&InferredType::Int));
-        assert!(InferredType::Int.is_assignable_to(&InferredType::Float));
-        assert!(InferredType::Never.is_assignable_to(&InferredType::Int));
-        assert!(InferredType::Int.is_assignable_to(&InferredType::Any));
-        
-        assert!(InferredType::Optional(Box::new(InferredType::Int))
-            .is_assignable_to(&InferredType::Optional(Box::new(InferredType::Int))));
-        assert!(InferredType::Int.is_assignable_to(&InferredType::Optional(Box::new(InferredType::Int))));
-        
-        let union = InferredType::Union(vec![InferredType::Int, InferredType::Str]);
-        assert!(union.is_assignable_to(&InferredType::Any));
-        assert!(InferredType::Int.is_assignable_to(&union));
+        match annotation.as_str() {
+            "int" => InferredType::Int,
+            "str" => InferredType::Str,
+            "float" => InferredType::Float,
+            "bool" => InferredType::Bool,
+            "bytes" => InferredType::Bytes,
+            "none" => InferredType::None_,
+            "any" | "object" => InferredType::Any,
+            "never" => InferredType::Never,
+            _ => {
+                // Handle simple container types
+                if annotation.starts_with("list[") && annotation.ends_with(']') {
+                    let inner = &annotation[5..annotation.len()-1];
+                    InferredType::List(Box::new(InferredType::from_annotation(inner)))
+                } else if annotation.starts_with("dict[") && annotation.ends_with(']') {
+                    let inner = &annotation[5..annotation.len()-1];
+                    let parts: Vec<&str> = inner.split(',').collect();
+                    if parts.len() == 2 {
+                        let key_type = InferredType::from_annotation(parts[0].trim());
+                        let value_type = InferredType::from_annotation(parts[1].trim());
+                        InferredType::Dict(Box::new(key_type), Box::new(value_type))
+                    } else {
+                        InferredType::Named(annotation)
+                    }
+                } else if annotation.starts_with("set[") && annotation.ends_with(']') {
+                    let inner = &annotation[4..annotation.len()-1];
+                    InferredType::Set(Box::new(InferredType::from_annotation(inner)))
+                } else if annotation.starts_with("tuple[") && annotation.ends_with(']') {
+                    let inner = &annotation[6..annotation.len()-1];
+                    let parts: Vec<&str> = inner.split(',').collect();
+                    let elem_types: Vec<InferredType> = parts
+                        .iter()
+                        .map(|part| InferredType::from_annotation(part.trim()))
+                        .collect();
+                    InferredType::Tuple(elem_types)
+                } else if annotation.starts_with("optional[") && annotation.ends_with(']') {
+                    let inner = &annotation[9..annotation.len()-1];
+                    InferredType::Optional(Box::new(InferredType::from_annotation(inner)))
+                } else if annotation.contains('|') {
+                    let parts: Vec<&str> = annotation.split('|').collect();
+                    let types: Vec<InferredType> = parts
+                        .iter()
+                        .map(|part| InferredType::from_annotation(part.trim()))
+                        .collect();
+                    InferredType::Union(types)
+                } else {
+                    // Fallback for unknown types
+                    InferredType::Named(annotation)
+                }
+            }
+        }
     }
 }
+

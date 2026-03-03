@@ -13,7 +13,9 @@
 //! The check is performed by extracting the annotation text from the source
 //! around the variable's name span and comparing it against the RHS kind.
 
-use basilisk_resolver::{ResolvedModule, RhsKind, Span, VariableInfo};
+use basilisk_resolver::{ResolvedModule, Span, VariableInfo};
+use crate::inference::infer_rhs;
+use crate::types::InferredType;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
@@ -35,65 +37,52 @@ impl Rule for AssignmentTypeMismatch {
             .iter()
             .filter(|var| var.has_annotation)
             .filter_map(|var| {
-                let annotation = extract_annotation(&module.source, var.name_span)?;
-                let mismatch = annotation_rhs_mismatch(annotation, &var.rhs_kind)?;
-                Some((var, annotation.to_owned(), mismatch))
+                let annotation_text = extract_annotation(&module.source, var.name_span)?;
+                
+                // Use inference system instead of pattern matching
+                let inferred_type = infer_rhs(&var.rhs_kind);
+                
+                // Parse annotation text to InferredType using the new function
+                let declared_type = InferredType::from_annotation(annotation_text);
+                
+                // Check assignability using inference system
+                if inferred_type.is_assignable_to(&declared_type) {
+                    None
+                } else {
+                    Some((var, annotation_text.to_owned(), inferred_type, declared_type))
+                }
             })
-            .for_each(|(var, annotation, mismatch)| {
-                diagnostics.push(make_diagnostic(var, &annotation, &mismatch, &module.path));
+            .for_each(|(var, annotation, inferred, declared)| {
+                diagnostics.push(make_diagnostic(var, &annotation, &inferred, &declared, &module.path));
             });
 
         check_tuple_reassignments(module, diagnostics);
     }
 }
 
-/// Describes why an annotation/RHS pair is incompatible.
-#[derive(Copy, Clone)]
-struct Mismatch {
-    rhs_description: &'static str,
-}
-
-/// Returns `Some(Mismatch)` when the annotation text and RHS kind are
-/// clearly incompatible; `None` when the pairing is acceptable or unknown.
-fn annotation_rhs_mismatch(annotation: &str, rhs: &RhsKind) -> Option<Mismatch> {
-    // Normalise: strip generic parameters and whitespace, lower-case.
-    let base = annotation
-        .split('[')
-        .next()
-        .unwrap_or(annotation)
-        .trim()
-        .to_ascii_lowercase();
-
-    match (base.as_str(), rhs) {
-        // String annotation incompatible with non-str numeric literals
-        ("int" | "bool" | "float" | "bytes", RhsKind::StrLiteral) => Some(Mismatch {
-            rhs_description: "a `str` literal",
-        }),
-
-        ("int" | "str" | "float", RhsKind::BytesLiteral) => Some(Mismatch {
-            rhs_description: "a `bytes` literal",
-        }),
-
-        ("int" | "str" | "bool", RhsKind::FloatLiteral) => Some(Mismatch {
-            rhs_description: "a `float` literal",
-        }),
-
-        ("str" | "bytes", RhsKind::IntLiteral) => Some(Mismatch {
-            rhs_description: "an `int` literal",
-        }),
-
-        // `None` is not a valid value for container/iterable types.
-        // These annotations (without Optional/union wrappers) cannot hold None.
-        (
-            "iterable" | "iterator" | "sequence" | "list" | "set" | "frozenset"
-            | "dict" | "mapping" | "mutablemapping" | "mutablesequence"
-            | "collection" | "sized" | "container",
-            RhsKind::NoneValue,
-        ) => Some(Mismatch {
-            rhs_description: "`None` (not iterable/subscriptable)",
-        }),
-
-        _ => None,
+/// Create diagnostic for inference-based type mismatch
+fn make_diagnostic(
+    var: &VariableInfo,
+    annotation: &str,
+    inferred: &InferredType,
+    declared: &InferredType,
+    path: &str,
+) -> Diagnostic {
+    Diagnostic {
+        code: CODE.clone(),
+        severity: Severity::Error,
+        message: format!(
+            "Type mismatch: `{}` is annotated `{annotation}` ({}) but assigned {}",
+            var.name, declared, inferred
+        ),
+        span: var.name_span,
+        path: path.to_owned(),
+        help: Some(format!(
+            "Either change the annotation to match the value, or change the value to `{annotation}`"
+        )),
+        note: Some(
+            "Basilisk requires the inferred type to be assignable to the declared type".to_owned(),
+        ),
     }
 }
 
@@ -130,30 +119,6 @@ fn extract_annotation(source: &str, name_span: Span) -> Option<&str> {
         None
     } else {
         Some(annotation)
-    }
-}
-
-fn make_diagnostic(
-    var: &VariableInfo,
-    annotation: &str,
-    mismatch: &Mismatch,
-    path: &str,
-) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
-            "Type mismatch: `{}` is annotated `{annotation}` but assigned {}",
-            var.name, mismatch.rhs_description
-        ),
-        span: var.name_span,
-        path: path.to_owned(),
-        help: Some(format!(
-            "Either change the annotation to match the value, or change the value to `{annotation}`"
-        )),
-        note: Some(
-            "Basilisk requires the literal kind to be compatible with the declared type".to_owned(),
-        ),
     }
 }
 

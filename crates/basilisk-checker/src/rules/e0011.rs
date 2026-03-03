@@ -28,8 +28,10 @@
 //! ```
 
 use basilisk_resolver::{
-    FunctionInfo, ParameterInfo, ResolvedModule, ReturnAnnotationKind, RhsKind,
+    FunctionInfo, ParameterInfo, ResolvedModule, ReturnAnnotationKind,
 };
+use crate::inference::infer_rhs;
+use crate::types::InferredType;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
@@ -141,6 +143,12 @@ fn check_return_type_mismatch(
             continue;
         }
 
+        // Skip call expressions: without full type inference we cannot prove the
+        // callee returns an incompatible type
+        if return_stmt.value_is_call {
+            continue;
+        }
+
         let Some(ann_span) = func.return_annotation_span else {
             continue;
         };
@@ -151,14 +159,24 @@ fn check_return_type_mismatch(
             continue;
         };
 
-        if is_incompatible_rhs_kind(&return_stmt.rhs_kind, ann_text) {
-            out.push(Diagnostic {
+        // Use inference system to get RHS type
+        let inferred_type = infer_rhs(&return_stmt.rhs_kind);
+        
+        // Skip Unknown types - we can't prove they're incompatible
+        if matches!(inferred_type, InferredType::Unknown) {
+            continue;
+        }
+        
+        // Parse annotation text to InferredType
+        let declared_type = InferredType::from_annotation(ann_text);
+        
+        // Check assignability using inference system
+        if !inferred_type.is_assignable_to(&declared_type) {
+                out.push(Diagnostic {
                 code: CODE.clone(),
                 severity: Severity::Error,
                 message: format!(
-                    "return type mismatch: {} is not assignable to {}",
-                    rhs_kind_type_name(&return_stmt.rhs_kind),
-                    ann_text
+                    "return type mismatch: {inferred_type} is not assignable to {declared_type}"
                 ),
                 span: func.name_span,
                 path: module.path.clone(),
@@ -168,36 +186,5 @@ fn check_return_type_mismatch(
                 note: None,
             });
         }
-    }
-}
-
-fn is_incompatible_rhs_kind(rhs_kind: &RhsKind, annotation: &str) -> bool {
-    let base = annotation
-        .split('[')
-        .next()
-        .unwrap_or(annotation)
-        .trim()
-        .to_ascii_lowercase();
-
-    match rhs_kind {
-        RhsKind::IntLiteral => base != "int" && base != "any",
-        RhsKind::StrLiteral => base != "str" && base != "any",
-        RhsKind::FloatLiteral => base != "float" && base != "any",
-        RhsKind::BoolLiteral => base != "bool" && base != "any",
-        RhsKind::BytesLiteral => base != "bytes" && base != "any",
-        RhsKind::NoneValue => base != "none" && base != "any",
-        _ => false,
-    }
-}
-
-fn rhs_kind_type_name(rhs_kind: &RhsKind) -> &'static str {
-    match rhs_kind {
-        RhsKind::IntLiteral => "int",
-        RhsKind::StrLiteral => "str",
-        RhsKind::FloatLiteral => "float",
-        RhsKind::BoolLiteral => "bool",
-        RhsKind::BytesLiteral => "bytes",
-        RhsKind::NoneValue => "None",
-        _ => "unknown",
     }
 }

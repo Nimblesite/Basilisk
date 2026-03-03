@@ -96,6 +96,7 @@ pub(crate) mod e0095;
 pub(crate) mod e0096;
 pub(crate) mod guards;
 pub(crate) mod w0040;
+pub(crate) mod w0050;
 
 use basilisk_resolver::ResolvedModule;
 
@@ -202,6 +203,7 @@ pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
         &e0095::InitVarViolation,
         &e0096::DataclassFieldDefaultFactoryMismatch,
         &w0040::LambdaMissingAnnotations,
+        &w0050::RedundantAnnotationWarning,
     ];
 
     rules.iter().fold(Vec::new(), |mut acc, rule| {

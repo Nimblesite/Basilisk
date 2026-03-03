@@ -275,7 +275,7 @@ fn type_satisfies_bound(concrete_type: &str, bound: &str) -> bool {
         // For custom bounds like "int", check if the concrete type matches the bound.
         "int" => concrete_type == "int",
         "str" => concrete_type == "str",
-        "float" => concrete_type == "float",
+        "float" => concrete_type == "float" || concrete_type == "int", // int→float widening
         "bool" => concrete_type == "bool",
         "bytes" => concrete_type == "bytes",
         // For other bounds, be conservative and assume satisfied.

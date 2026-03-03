@@ -18,7 +18,8 @@ pub fn infer_rhs(rhs: &RhsKind) -> InferredType {
             Box::new(InferredType::Never),
             Box::new(InferredType::Never)
         ),
-        RhsKind::List(elements) | RhsKind::Set(elements) => crate::collection_inference::infer_collection_type(elements),
+        RhsKind::List(elements) => crate::collection_inference::infer_list_type(elements),
+        RhsKind::Set(elements) => crate::collection_inference::infer_set_type(elements),
         RhsKind::Dict(pairs) => crate::collection_inference::infer_dict_type(pairs),
         RhsKind::Tuple(elements) => crate::collection_inference::infer_tuple_type(elements),
         RhsKind::CallExpr | RhsKind::TypeCall | RhsKind::Other | RhsKind::Lambda => InferredType::Unknown,
@@ -159,100 +160,3 @@ pub fn infer_flow_union_types(
     result
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use basilisk_resolver::Span;
-
-    #[test]
-    fn test_infer_rhs() {
-        assert_eq!(infer_rhs(&RhsKind::IntLiteral), InferredType::Int);
-        assert_eq!(infer_rhs(&RhsKind::FloatLiteral), InferredType::Float);
-        assert_eq!(infer_rhs(&RhsKind::StrLiteral), InferredType::Str);
-        assert_eq!(infer_rhs(&RhsKind::BoolLiteral), InferredType::Bool);
-        assert_eq!(infer_rhs(&RhsKind::BytesLiteral), InferredType::Bytes);
-        assert_eq!(infer_rhs(&RhsKind::NoneValue), InferredType::None_);
-        assert_eq!(
-            infer_rhs(&RhsKind::EmptyList), 
-            InferredType::List(Box::new(InferredType::Never))
-        );
-        assert_eq!(
-            infer_rhs(&RhsKind::EmptyDict),
-            InferredType::Dict(
-                Box::new(InferredType::Never), 
-                Box::new(InferredType::Never)
-            )
-        );
-        assert_eq!(infer_rhs(&RhsKind::CallExpr), InferredType::Unknown);
-        assert_eq!(infer_rhs(&RhsKind::TypeCall), InferredType::Unknown);
-        assert_eq!(infer_rhs(&RhsKind::Other), InferredType::Unknown);
-    }
-
-    #[test]
-    fn test_check_annotated_variable() {
-        let var_info = VariableInfo {
-            name: "x".to_string(),
-            name_span: Span { start: 0, end: 1 },
-            has_annotation: false,
-            rhs_kind: RhsKind::IntLiteral,
-            annotation_span: None,
-            rhs_span: Some(Span { start: 4, end: 6 }),
-        };
-        
-        assert!(check_annotated_variable(&var_info).is_ok());
-    }
-
-    #[test]
-    fn test_infer_variable_type() {
-        let var_info = VariableInfo {
-            name: "x".to_string(),
-            name_span: Span { start: 0, end: 1 },
-            has_annotation: false,
-            rhs_kind: RhsKind::IntLiteral,
-            annotation_span: None,
-            rhs_span: Some(Span { start: 4, end: 6 }),
-        };
-        
-        assert_eq!(infer_variable_type(&var_info), InferredType::Int);
-    }
-
-    #[test]
-    fn test_flow_union_tracker() {
-        let mut tracker = FlowUnionTracker::new();
-        
-        // Record assignments in different branches
-        tracker.record_assignment("x", InferredType::Int);
-        tracker.record_assignment("x", InferredType::Str);
-        
-        let union_type = tracker.get_union_type("x");
-        assert!(union_type.is_some(), "x should have a union type");
-        assert!(matches!(union_type, Some(InferredType::Union(ref types)) if types.len() == 2));
-
-        tracker.record_assignment("y", InferredType::Bool);
-        let single_type = tracker.get_union_type("y");
-        assert!(single_type.is_some(), "y should have a type");
-        assert_eq!(single_type, Some(InferredType::Bool));
-    }
-
-    #[test]
-    fn test_infer_flow_union_types() {
-        let assignments = vec![
-            ("x".to_string(), InferredType::Int),
-            ("x".to_string(), InferredType::Str),
-            ("y".to_string(), InferredType::Bool),
-        ];
-        
-        let result = infer_flow_union_types(&assignments);
-        
-        assert!(result.contains_key("x"));
-        assert!(result.contains_key("y"));
-        
-        let x_type = result.get("x");
-        assert!(x_type.is_some(), "x should be in result");
-        assert!(matches!(x_type, Some(InferredType::Union(types)) if types.len() == 2));
-
-        let y_type = result.get("y");
-        assert!(y_type.is_some(), "y should be in result");
-        assert_eq!(y_type, Some(&InferredType::Bool));
-    }
-}

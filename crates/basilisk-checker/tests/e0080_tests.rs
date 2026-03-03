@@ -234,3 +234,94 @@ process(b"hello")  # OK -- bytes implements Sized
     assert!(e0080.is_empty(), "bytes should satisfy Sized bound");
     Ok(())
 }
+
+#[test]
+fn test_e0080_int_satisfies_int_bound() -> Result<(), Box<dyn std::error::Error>> {
+    let src = r#"
+from typing import TypeVar
+
+T = TypeVar("T", bound="int")
+
+def process(x: T) -> T:
+    return x
+
+process(42)  # OK -- int satisfies int bound
+"#;
+    let diags = run_e2e(src)?;
+    let e0080: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0080")
+        .collect();
+    assert!(e0080.is_empty(), "int should satisfy int bound");
+    Ok(())
+}
+
+#[test]
+fn test_e0080_int_satisfies_float_bound() -> Result<(), Box<dyn std::error::Error>> {
+    let src = r#"
+from typing import TypeVar
+
+T = TypeVar("T", bound="float")
+
+def process(x: T) -> T:
+    return x
+
+process(42)  # OK -- int satisfies float bound (widening)
+"#;
+    let diags = run_e2e(src)?;
+    let e0080: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0080")
+        .collect();
+    assert!(e0080.is_empty(), "int should satisfy float bound");
+    Ok(())
+}
+
+#[test]
+fn test_e0080_unbound_typevar_no_error() -> Result<(), Box<dyn std::error::Error>> {
+    let src = r#"
+from typing import TypeVar
+
+T = TypeVar("T")  # No bound
+
+def process(x: T) -> T:
+    return x
+
+process(42)  # OK -- unbound TypeVar accepts any type
+process("hello")  # OK -- unbound TypeVar accepts any type
+process(3.14)  # OK -- unbound TypeVar accepts any type
+"#;
+    let diags = run_e2e(src)?;
+    let e0080: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0080")
+        .collect();
+    assert!(e0080.is_empty(), "unbound TypeVar should accept any type");
+    Ok(())
+}
+
+#[test]
+fn test_e0080_protocol_bound_violation() -> Result<(), Box<dyn std::error::Error>> {
+    let src = r#"
+from typing import Protocol, TypeVar
+
+class SomeProtocol(Protocol):
+    def method(self) -> None: ...
+
+T = TypeVar("T", bound=SomeProtocol)
+
+def process(x: T) -> T:
+    return x
+
+process(42)  # E -- int does not implement SomeProtocol
+"#;
+    let diags = run_e2e(src)?;
+    let e0080: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0080")
+        .collect();
+    // This test may fail if the rule doesn't handle custom protocol bounds yet
+    // That's OK - failing test shows missing functionality
+    assert!(!e0080.is_empty(), "int should violate SomeProtocol bound");
+    Ok(())
+}
