@@ -42,8 +42,8 @@
         },
         "basilisk.useLsp": {
           "type": "boolean",
-          "default": false,
-          "description": "Use the LSP server instead of the subprocess approach. Enable once basilisk lsp is stable."
+          "default": true,
+          "description": "Use the LSP server for real-time diagnostics. Disable to fall back to subprocess mode."
         },
         "basilisk.trace.server": {
           "type": "string",

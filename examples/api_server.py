@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from typing import Any, overload
 
-
+ 
 # ── BSK-E0003: can't infer type from empty dict literal ─────────────────────
 _route_table = {}                          # BSK-E0003: empty dict, no annotation
 _middleware_stack = []                     # BSK-E0003: empty list, no annotation
