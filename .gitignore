@@ -31,3 +31,5 @@ vscode-extension/basilisk-0.1.0.vsix
 
 .mypy_cache
 vscode-extension/out/
+
+vscode-extension/.vscode-test/

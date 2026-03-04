@@ -925,8 +925,7 @@ async fn test_ws_code_action_missing_param_annotation() -> TestResult<()> {
     let new_text = edits[0]["newText"].as_str().unwrap_or("");
     assert!(
         new_text.contains(": Any"),
-        "text edit newText should contain ': Any', got '{}': {resp}",
-        new_text
+        "text edit newText should contain ': Any', got '{new_text}': {resp}"
     );
     Ok(())
 }
