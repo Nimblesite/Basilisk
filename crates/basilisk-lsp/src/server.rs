@@ -10,16 +10,16 @@ use tower_lsp::lsp_types::{
     CodeActionParams, CodeActionProviderCapability, CodeActionResponse,
     CodeDescription, CompletionOptions, CompletionParams, CompletionResponse, Diagnostic,
     DiagnosticSeverity, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
-    DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentSymbolParams,
-    DocumentSymbolResponse, ExecuteCommandOptions, ExecuteCommandParams, GotoDefinitionParams,
-    GotoDefinitionResponse, Hover, HoverParams, HoverProviderCapability, InitializeParams,
-    InitializeResult, InitializedParams, InlayHint, InlayHintParams, Location, MessageType,
-    NumberOrString, OneOf, Position, PrepareRenameResponse, Range, ReferenceParams, RenameOptions,
-    RenameParams, SemanticTokens, SemanticTokensFullOptions, SemanticTokensLegend,
+    DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentFormattingParams,
+    DocumentSymbolParams, DocumentSymbolResponse, ExecuteCommandOptions, ExecuteCommandParams,
+    GotoDefinitionParams, GotoDefinitionResponse, Hover, HoverParams, HoverProviderCapability,
+    InitializeParams, InitializeResult, InitializedParams, InlayHint, InlayHintParams, Location,
+    MessageType, NumberOrString, OneOf, Position, PrepareRenameResponse, Range, ReferenceParams,
+    RenameOptions, RenameParams, SemanticTokens, SemanticTokensFullOptions, SemanticTokensLegend,
     SemanticTokensOptions, SemanticTokensParams, SemanticTokensResult,
     SemanticTokensServerCapabilities, ServerCapabilities, ServerInfo, SignatureHelpOptions,
     SignatureHelpParams, TextDocumentPositionParams, TextDocumentSyncCapability,
-    TextDocumentSyncKind, Url, WorkDoneProgressOptions, WorkspaceEdit,
+    TextDocumentSyncKind, TextEdit, Url, WorkDoneProgressOptions, WorkspaceEdit,
 };
 use tower_lsp::{Client, LspService, Server};
 
