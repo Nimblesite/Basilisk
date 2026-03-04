@@ -150,18 +150,26 @@ fn types_match_for_w0050(inferred: &InferredType, declared: &InferredType) -> bo
         (List(a), List(_)) if matches!(a.as_ref(), Never) => false,
         (Dict(ak, _), Dict(_, _)) if matches!(ak.as_ref(), Never) => false,
         (Set(a), Set(_)) if matches!(a.as_ref(), Never) => false,
-        // Basic types (exact) and non-empty collection types (outer type sufficient)
+        // Basic types (exact match)
         (Int, Int)
         | (Str, Str)
         | (Float, Float)
         | (Bool, Bool)
         | (Bytes, Bytes)
         | (None_, None_) => true,
-        // Collection types need element type comparison
-        (List(a), List(b)) => a == b,
-        (Dict(ak, av), Dict(bk, bv)) => ak == bk && av == bv,
-        (Set(a), Set(b)) => a == b,
-        (Tuple(a), Tuple(b)) => a == b,
+        // For collection types, check if they're equivalent (bidirectionally assignable)
+        (List(a), List(b)) => a.is_assignable_to(b) && b.is_assignable_to(a),
+        (Dict(ak, av), Dict(bk, bv)) => {
+            ak.is_assignable_to(bk) && bk.is_assignable_to(ak) &&
+            av.is_assignable_to(bv) && bv.is_assignable_to(av)
+        }
+        (Set(a), Set(b)) => a.is_assignable_to(b) && b.is_assignable_to(a),
+        (Tuple(a), Tuple(b)) => {
+            a.len() == b.len() && 
+            a.iter().zip(b.iter()).all(|(a_elem, b_elem)| 
+                a_elem.is_assignable_to(b_elem) && b_elem.is_assignable_to(a_elem)
+            )
+        }
         // Default case - no match
         _ => false,
     }

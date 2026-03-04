@@ -443,6 +443,237 @@ suite('LSP Integration Tests', () => {
             `Expected symbols to include 'standalone_function'. Got: ${allNames.join(', ')}`
         );
     });
+
+    // ----------------------------------------------------------------
+    // 7. didChange updates diagnostics
+    // ----------------------------------------------------------------
+    test('did_change updates diagnostics', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS * 2 + 10_000);
+        if (!basiliskBinary) {
+            this.skip();
+            return;
+        }
+
+        // Open a fully typed file — should produce zero Basilisk diagnostics.
+        const { doc, uri } = await openPythonFile(
+            tmpDir,
+            'test_didchange.py',
+            'def greet(name: str) -> str:\n    return name\n'
+        );
+
+        // Wait for the server to finish analysing the clean file.
+        await new Promise<void>((resolve) => setTimeout(resolve, NO_DIAGNOSTIC_WAIT_MS));
+
+        const diagsBefore = vscode.languages.getDiagnostics(uri);
+        const basiliskBefore = diagsBefore.filter(
+            (d) =>
+                d.source === 'basilisk' ||
+                (typeof d.code === 'object' &&
+                    d.code !== null &&
+                    'value' in d.code &&
+                    typeof d.code.value === 'string' &&
+                    d.code.value.startsWith('BSK-'))
+        );
+        assert.strictEqual(
+            basiliskBefore.length,
+            0,
+            `Expected zero Basilisk diagnostics for clean code before edit, ` +
+            `but found ${basiliskBefore.length}`
+        );
+
+        // Apply an edit that removes the type annotation, introducing an error.
+        const edit = new vscode.WorkspaceEdit();
+        const fullRange = new vscode.Range(
+            new vscode.Position(0, 0),
+            new vscode.Position(doc.lineCount, 0)
+        );
+        edit.replace(uri, fullRange, 'def greet(name):\n    return name\n');
+        const applied = await vscode.workspace.applyEdit(edit);
+        assert.ok(applied, 'Expected the workspace edit to be applied successfully');
+
+        // Wait for diagnostics to appear after the change.
+        const diagsAfter = await waitForDiagnostics(uri, DIAGNOSTIC_TIMEOUT_MS);
+
+        assert.ok(
+            diagsAfter.length > 0,
+            'Expected at least one diagnostic after removing the type annotation'
+        );
+
+        const basiliskAfter = diagsAfter.filter(
+            (d) =>
+                d.source === 'basilisk' ||
+                (typeof d.code === 'object' &&
+                    d.code !== null &&
+                    'value' in d.code &&
+                    typeof d.code.value === 'string' &&
+                    d.code.value.startsWith('BSK-E'))
+        );
+        assert.ok(
+            basiliskAfter.length > 0,
+            `Expected Basilisk diagnostics after removing annotation. ` +
+            `Got: ${diagsAfter.map((d) => `source=${d.source}, code=${JSON.stringify(d.code)}`).join('; ')}`
+        );
+    });
+
+    // ----------------------------------------------------------------
+    // 8. Go-to-definition works through extension
+    // ----------------------------------------------------------------
+    test('go-to-definition works through extension', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + 5_000);
+        if (!basiliskBinary) {
+            this.skip();
+            return;
+        }
+
+        const { uri } = await openPythonFile(
+            tmpDir,
+            'test_goto_def.py',
+            [
+                'def add_numbers(a: int, b: int) -> int:',
+                '    return a + b',
+                '',
+                'result: int = add_numbers(1, 2)',
+                '',
+            ].join('\n')
+        );
+
+        // Give the server time to index the file.
+        await new Promise<void>((resolve) => setTimeout(resolve, 3_000));
+
+        // Execute go-to-definition at the call site "add_numbers" on line 3.
+        // "add_numbers" starts at column 14 in "result: int = add_numbers(1, 2)".
+        const callPosition = new vscode.Position(3, 18);
+        const locations = await vscode.commands.executeCommand<vscode.Location[]>(
+            'vscode.executeDefinitionProvider',
+            uri,
+            callPosition
+        );
+
+        assert.ok(locations, 'Expected definition locations to be defined');
+        assert.ok(
+            locations.length > 0,
+            'Expected at least one definition location for the function call'
+        );
+
+        // The definition should point to the function definition on line 0.
+        const defLocation = locations[0];
+        assert.strictEqual(
+            defLocation.uri.toString(),
+            uri.toString(),
+            'Expected definition to be in the same file'
+        );
+        assert.strictEqual(
+            defLocation.range.start.line,
+            0,
+            `Expected definition to be on line 0 (the function def), ` +
+            `but got line ${defLocation.range.start.line}`
+        );
+    });
+
+    // ----------------------------------------------------------------
+    // 9. Signature help works through extension
+    // ----------------------------------------------------------------
+    test('signature help works through extension', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + 5_000);
+        if (!basiliskBinary) {
+            this.skip();
+            return;
+        }
+
+        const { uri } = await openPythonFile(
+            tmpDir,
+            'test_sig_help.py',
+            [
+                'def greet(name: str, age: int) -> str:',
+                '    return f"{name} is {age}"',
+                '',
+                'greet()',
+                '',
+            ].join('\n')
+        );
+
+        // Give the server time to index the file.
+        await new Promise<void>((resolve) => setTimeout(resolve, 3_000));
+
+        // Place cursor inside the parens of "greet()" on line 3, col 6
+        // i.e. right after the opening "(".
+        const position = new vscode.Position(3, 6);
+        const signatureHelp = await vscode.commands.executeCommand<vscode.SignatureHelp>(
+            'vscode.executeSignatureHelpProvider',
+            uri,
+            position,
+            '('
+        );
+
+        assert.ok(signatureHelp, 'Expected signature help result to be defined');
+        assert.ok(
+            signatureHelp.signatures.length > 0,
+            'Expected at least one signature in signature help'
+        );
+
+        // Verify the signature contains both parameter names.
+        const sig = signatureHelp.signatures[0];
+        const paramLabels = sig.parameters.map((p) =>
+            typeof p.label === 'string' ? p.label : sig.label.slice(p.label[0], p.label[1])
+        );
+        const allParamText = paramLabels.join(' ');
+
+        assert.ok(
+            allParamText.includes('name'),
+            `Expected signature parameters to include 'name'. Got: ${paramLabels.join(', ')}`
+        );
+        assert.ok(
+            allParamText.includes('age'),
+            `Expected signature parameters to include 'age'. Got: ${paramLabels.join(', ')}`
+        );
+    });
+
+    // ----------------------------------------------------------------
+    // 10. Code actions provided for diagnostics
+    // ----------------------------------------------------------------
+    test('code actions provided for diagnostics', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + 10_000);
+        if (!basiliskBinary) {
+            this.skip();
+            return;
+        }
+
+        const { uri } = await openPythonFile(
+            tmpDir,
+            'test_code_actions.py',
+            'def broken(x):\n    return x\n'
+        );
+
+        // Wait for diagnostics to appear (missing type annotation).
+        const diagnostics = await waitForDiagnostics(uri, DIAGNOSTIC_TIMEOUT_MS);
+
+        assert.ok(
+            diagnostics.length > 0,
+            'Expected at least one diagnostic for the untyped parameter'
+        );
+
+        // Use the range of the first diagnostic to request code actions.
+        const diagRange = diagnostics[0].range;
+        const codeActions = await vscode.commands.executeCommand<vscode.CodeAction[]>(
+            'vscode.executeCodeActionProvider',
+            uri,
+            diagRange
+        );
+
+        assert.ok(codeActions, 'Expected code actions result to be defined');
+        assert.ok(
+            codeActions.length > 0,
+            `Expected at least one code action for the diagnostic. ` +
+            `Diagnostic: ${diagnostics[0].message}`
+        );
+
+        // Verify the code action has a title (i.e. is well-formed).
+        const firstAction = codeActions[0];
+        assert.ok(
+            firstAction.title && firstAction.title.length > 0,
+            `Expected code action to have a non-empty title, got: "${firstAction.title}"`
+        );
+    });
 });
 
 /**
