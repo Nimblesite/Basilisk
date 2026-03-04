@@ -1585,6 +1585,7 @@ async fn test_ws_initialize_advertises_all_phase2_capabilities() -> TestResult<(
     assert!(response.contains("\"renameProvider\""), "should advertise rename: {response}");
     assert!(response.contains("\"inlayHintProvider\""), "should advertise inlay hints: {response}");
     assert!(response.contains("\"semanticTokensProvider\""), "should advertise semantic tokens: {response}");
+    assert!(response.contains("\"documentFormattingProvider\""), "should advertise document formatting: {response}");
     Ok(())
 }
 
@@ -2175,5 +2176,69 @@ result: str = greet(name=\"world\", )
         resp.contains("\"label\":\"greeting=\""),
         "should suggest remaining 'greeting=' kwarg: {resp}"
     );
+    Ok(())
+}
+
+// ── Phase 4: Document Formatting ────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_format_document() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    // Badly formatted Python: inconsistent spacing, missing trailing newline.
+    let code = "x:int=1\ny:str=\"hello\"\ndef   greet( name:str )->str:\n    return f\"Hello, {name}!\"";
+    fixture
+        .did_open("file:///ws_format.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            600,
+            "textDocument/formatting",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_format.py" },
+                "options": { "tabSize": 4, "insertSpaces": true }
+            }),
+        )
+        .await?
+        .ok_or("no formatting response")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let result = &parsed["result"];
+
+    // If ruff is available, we should get text edits back.
+    // If ruff is not installed, result may be null — that's acceptable.
+    if !result.is_null() {
+        let edits = result
+            .as_array()
+            .ok_or("formatting result should be an array of TextEdits")?;
+        assert!(
+            !edits.is_empty(),
+            "formatting should produce at least one TextEdit for badly formatted code: {resp}"
+        );
+
+        // Verify the edit has a range and newText.
+        let first_edit = &edits[0];
+        assert!(
+            first_edit.get("range").is_some(),
+            "TextEdit should have a range: {resp}"
+        );
+        assert!(
+            first_edit.get("newText").is_some(),
+            "TextEdit should have newText: {resp}"
+        );
+
+        // The formatted text should differ from the original.
+        let new_text = first_edit["newText"]
+            .as_str()
+            .ok_or("newText should be a string")?;
+        assert_ne!(
+            new_text, code,
+            "formatted text should differ from original"
+        );
+    }
+
     Ok(())
 }

@@ -14,6 +14,7 @@
 //! - Completion (symbol + dot + builtins)
 //! - Code Actions (quick fixes)
 //! - Document Formatting (via Ruff)
+//! - Selection Ranges (Smart Select)
 //! - Semantic Tokens (syntax-aware highlighting)
 
 pub mod code_actions;
@@ -23,6 +24,7 @@ pub mod formatting;
 pub mod hover;
 pub mod inlay_hints;
 pub mod references;
+pub mod selection;
 pub mod semantic_tokens;
 pub mod server;
 pub mod signature;

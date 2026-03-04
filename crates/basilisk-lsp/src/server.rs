@@ -18,13 +18,14 @@ use tower_lsp::lsp_types::{
     RenameOptions, RenameParams, SemanticTokens, SemanticTokensFullOptions, SemanticTokensLegend,
     SemanticTokensOptions, SemanticTokensParams, SemanticTokensResult,
     SemanticTokensServerCapabilities, ServerCapabilities, ServerInfo, SignatureHelpOptions,
-    SignatureHelpParams, TextDocumentPositionParams, TextDocumentSyncCapability,
+    SignatureHelpParams, SymbolInformation, TextDocumentPositionParams, TextDocumentSyncCapability,
     TextDocumentSyncKind, TextEdit, Url, WorkDoneProgressOptions, WorkspaceEdit,
+    WorkspaceSymbolParams,
 };
 use tower_lsp::{Client, LspService, Server};
 
 use crate::util::{byte_offset_to_position, position_to_byte_offset};
-use crate::{code_actions, completion, definition, hover, inlay_hints, references, signature, symbols};
+use crate::{code_actions, completion, definition, formatting, hover, inlay_hints, references, signature, symbols};
 
 /// Fallback docs URL used when a diagnostic code URL fails to parse.
 const FALLBACK_DOCS_URL: &str = "https://basilisk-lang.org";
@@ -198,7 +199,9 @@ impl tower_lsp::LanguageServer for LspServer {
                     ..Default::default()
                 }),
                 definition_provider: Some(OneOf::Left(true)),
+                document_formatting_provider: Some(OneOf::Left(true)),
                 document_symbol_provider: Some(OneOf::Left(true)),
+                workspace_symbol_provider: Some(OneOf::Left(true)),
                 signature_help_provider: Some(SignatureHelpOptions {
                     trigger_characters: Some(vec!["(".to_owned(), ",".to_owned()]),
                     retrigger_characters: None,
@@ -315,6 +318,32 @@ impl tower_lsp::LanguageServer for LspServer {
             Ok(None)
         } else {
             Ok(Some(DocumentSymbolResponse::Nested(syms)))
+        }
+    }
+
+    // ── Workspace Symbols ─────────────────────────────────────────────────────
+
+    #[allow(deprecated)]
+    async fn symbol(
+        &self,
+        params: WorkspaceSymbolParams,
+    ) -> LspResult<Option<Vec<SymbolInformation>>> {
+        let query = &params.query;
+        let docs: Vec<_> = self
+            .documents
+            .iter()
+            .filter_map(|entry| {
+                let uri = entry.key().clone();
+                let text = entry.text.clone();
+                let resolved = entry.resolved.clone()?;
+                Some((uri, resolved, text))
+            })
+            .collect();
+        let syms = symbols::workspace_symbols(&docs, query);
+        if syms.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(syms))
         }
     }
 
@@ -518,6 +547,23 @@ impl tower_lsp::LanguageServer for LspServer {
         } else {
             Ok(Some(CompletionResponse::Array(items)))
         }
+    }
+
+    // ── Document Formatting ─────────────────────────────────────────────────
+
+    async fn formatting(
+        &self,
+        params: DocumentFormattingParams,
+    ) -> LspResult<Option<Vec<TextEdit>>> {
+        let uri = params.text_document.uri;
+        let Some(entry) = self.documents.get(&uri) else {
+            return Ok(None);
+        };
+        let text = entry.text.clone();
+        drop(entry);
+        let file_path = uri.to_file_path().unwrap_or_default();
+        let path_str = file_path.to_string_lossy().into_owned();
+        Ok(formatting::format_document(&text, &path_str))
     }
 }
 

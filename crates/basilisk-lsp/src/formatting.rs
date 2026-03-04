@@ -45,11 +45,14 @@ pub fn format_document(source: &str, file_path: &str) -> Option<Vec<TextEdit>> {
     // Compute the range spanning the entire original document.
     let line_count = source.lines().count();
     let last_line = if line_count == 0 { 0 } else { line_count - 1 };
-    let last_col = source.lines().last().map_or(0, |l| l.len());
+    let last_col = source.lines().last().map_or(0, str::len);
+
+    let last_line_u32 = u32::try_from(last_line).unwrap_or(u32::MAX);
+    let last_col_u32 = u32::try_from(last_col).unwrap_or(u32::MAX);
 
     let range = Range {
         start: Position::new(0, 0),
-        end: Position::new(last_line as u32, last_col as u32),
+        end: Position::new(last_line_u32, last_col_u32),
     };
 
     Some(vec![TextEdit {

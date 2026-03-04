@@ -1,7 +1,9 @@
-//! Document Symbols handler (Outline view).
+//! Document Symbols handler (Outline view) and workspace symbol search.
+
+use std::sync::Arc;
 
 #[allow(deprecated)]
-use tower_lsp::lsp_types::{DocumentSymbol, SymbolKind};
+use tower_lsp::lsp_types::{DocumentSymbol, Location, SymbolInformation, SymbolKind, Url};
 
 use basilisk_resolver::ResolvedModule;
 
@@ -98,6 +100,109 @@ use crate::util::span_to_range;
     }
 
     top_level
+}
+
+/// Aggregate symbols across all open documents, filtered by a query string.
+///
+/// Returns a flat `Vec<SymbolInformation>` for `workspace/symbol`.
+/// Each entry in `documents` is `(uri, resolved_module, source_text)`.
+/// Symbols whose names contain `query` (case-insensitive) are included.
+/// An empty `query` returns every symbol from every document.
+#[allow(deprecated)]
+#[must_use]
+pub fn workspace_symbols(
+    documents: &[(Url, Arc<ResolvedModule>, String)],
+    query: &str,
+) -> Vec<SymbolInformation> {
+    let query_lower = query.to_lowercase();
+    let mut result = Vec::new();
+    for (uri, resolved, source) in documents {
+        collect_for_doc(uri, resolved, source, &query_lower, &mut result);
+    }
+    result
+}
+
+/// Collect flat `SymbolInformation` entries for one document.
+#[allow(deprecated)]
+fn collect_for_doc(
+    uri: &Url,
+    resolved: &ResolvedModule,
+    source: &str,
+    query_lower: &str,
+    out: &mut Vec<SymbolInformation>,
+) {
+    for class in &resolved.classes {
+        if matches_query(&class.name, query_lower) {
+            out.push(SymbolInformation {
+                name: class.name.clone(),
+                kind: SymbolKind::CLASS,
+                location: Location {
+                    uri: uri.clone(),
+                    range: span_to_range(source, class.name_span),
+                },
+                container_name: None,
+                tags: None,
+                deprecated: None,
+            });
+        }
+        for attr in &class.attributes {
+            if matches_query(&attr.name, query_lower) {
+                out.push(SymbolInformation {
+                    name: attr.name.clone(),
+                    kind: SymbolKind::FIELD,
+                    location: Location {
+                        uri: uri.clone(),
+                        range: span_to_range(source, attr.name_span),
+                    },
+                    container_name: Some(class.name.clone()),
+                    tags: None,
+                    deprecated: None,
+                });
+            }
+        }
+    }
+
+    for func in &resolved.functions {
+        if matches_query(&func.name, query_lower) {
+            let (kind, container_name) = match &func.class_name {
+                Some(class_name) => (SymbolKind::METHOD, Some(class_name.clone())),
+                None => (SymbolKind::FUNCTION, None),
+            };
+            out.push(SymbolInformation {
+                name: func.name.clone(),
+                kind,
+                location: Location {
+                    uri: uri.clone(),
+                    range: span_to_range(source, func.name_span),
+                },
+                container_name,
+                tags: None,
+                deprecated: None,
+            });
+        }
+    }
+
+    for var in &resolved.module_vars {
+        if matches_query(&var.name, query_lower) {
+            out.push(SymbolInformation {
+                name: var.name.clone(),
+                kind: SymbolKind::VARIABLE,
+                location: Location {
+                    uri: uri.clone(),
+                    range: span_to_range(source, var.name_span),
+                },
+                container_name: None,
+                tags: None,
+                deprecated: None,
+            });
+        }
+    }
+}
+
+/// Returns `true` if `name` contains `query_lower` (case-insensitive).
+/// Always returns `true` when `query_lower` is empty.
+fn matches_query(name: &str, query_lower: &str) -> bool {
+    query_lower.is_empty() || name.to_lowercase().contains(query_lower)
 }
 
 /// Build a detail string for a function's parameters.
