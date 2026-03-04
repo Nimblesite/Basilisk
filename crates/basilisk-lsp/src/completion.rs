@@ -1,7 +1,7 @@
 //! Completion (`IntelliSense`) handler.
 //!
 //! Provides symbol completions, dot completions, import completions,
-//! and Python builtin completions.
+//! keyword argument completions, and Python builtin completions.
 
 use std::collections::HashSet;
 
@@ -19,6 +19,8 @@ pub fn complete(
     let prefix = extract_prefix(text, byte_offset);
     if is_dot_completion(text, byte_offset) {
         dot_completions(resolved, text, byte_offset)
+    } else if let Some(kwarg_items) = kwarg_completions(resolved, text, byte_offset, &prefix) {
+        kwarg_items
     } else {
         symbol_completions(resolved, &prefix)
     }
@@ -151,6 +153,147 @@ fn class_member_items(
         });
     }
     items
+}
+
+// ── Keyword argument completions ──────────────────────────────────────────────
+
+/// If the cursor is inside a function call (between `(` and `)`), return
+/// `param_name=` completion items for each parameter of the called function
+/// that hasn't already been supplied as a keyword argument.
+fn kwarg_completions(
+    resolved: &basilisk_resolver::ResolvedModule,
+    text: &str,
+    byte_offset: usize,
+    prefix: &str,
+) -> Option<Vec<CompletionItem>> {
+    let callee = find_enclosing_call(text, byte_offset)?;
+    let func = find_function(resolved, &callee)?;
+    let already_provided = already_provided_kwargs(text, byte_offset);
+
+    let items = func
+        .parameters
+        .iter()
+        .filter(|p| !is_self_or_cls(&p.name))
+        .filter(|p| !already_provided.contains(&p.name))
+        .filter(|p| {
+            let label = format!("{}=", p.name);
+            prefix.is_empty() || label.starts_with(prefix) || p.name.starts_with(prefix)
+        })
+        .map(|p| CompletionItem {
+            label: format!("{}=", p.name),
+            kind: Some(CompletionItemKind::KEYWORD),
+            detail: Some(format!("keyword argument for {callee}")),
+            ..Default::default()
+        })
+        .collect::<Vec<_>>();
+
+    if items.is_empty() { None } else { Some(items) }
+}
+
+/// Scan backwards from `byte_offset` to find an unmatched `(`, then extract
+/// the callee name (the identifier immediately before the `(`).
+fn find_enclosing_call(text: &str, byte_offset: usize) -> Option<String> {
+    let before = &text[..byte_offset.min(text.len())];
+    let mut depth: i32 = 0;
+    let mut paren_pos = None;
+
+    for (idx, ch) in before.char_indices().rev() {
+        match ch {
+            ')' => depth += 1,
+            '(' => {
+                if depth == 0 {
+                    paren_pos = Some(idx);
+                    break;
+                }
+                depth -= 1;
+            }
+            _ => {}
+        }
+    }
+
+    let paren_idx = paren_pos?;
+    let before_paren = &text[..paren_idx];
+    let name: String = before_paren
+        .chars()
+        .rev()
+        .take_while(|c| c.is_alphanumeric() || *c == '_')
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect();
+
+    if name.is_empty() { None } else { Some(name) }
+}
+
+/// Look up a `FunctionInfo` by name in the resolved module.
+fn find_function<'a>(
+    resolved: &'a basilisk_resolver::ResolvedModule,
+    name: &str,
+) -> Option<&'a basilisk_resolver::scope::FunctionInfo> {
+    resolved.functions.iter().find(|f| f.name == name)
+}
+
+/// Scan the text between the enclosing `(` and the cursor for keyword
+/// arguments that have already been provided (patterns like `name=`).
+fn already_provided_kwargs(text: &str, byte_offset: usize) -> HashSet<String> {
+    let before = &text[..byte_offset.min(text.len())];
+    let mut result = HashSet::new();
+
+    // Find the unmatched `(` position
+    let mut depth: i32 = 0;
+    let mut paren_pos = None;
+    for (idx, ch) in before.char_indices().rev() {
+        match ch {
+            ')' => depth += 1,
+            '(' => {
+                if depth == 0 {
+                    paren_pos = Some(idx);
+                    break;
+                }
+                depth -= 1;
+            }
+            _ => {}
+        }
+    }
+
+    let Some(start) = paren_pos else {
+        return result;
+    };
+
+    // Scan the argument region for `identifier=` patterns (not `==`)
+    let args_region = &text[start + 1..byte_offset.min(text.len())];
+    let chars: Vec<char> = args_region.chars().collect();
+    let len = chars.len();
+    let mut idx = 0;
+
+    while idx < len {
+        // Skip whitespace
+        if chars[idx].is_whitespace() || chars[idx] == ',' {
+            idx += 1;
+            continue;
+        }
+        // Try to read an identifier
+        if chars[idx].is_alphabetic() || chars[idx] == '_' {
+            let start_idx = idx;
+            while idx < len && (chars[idx].is_alphanumeric() || chars[idx] == '_') {
+                idx += 1;
+            }
+            let ident: String = chars[start_idx..idx].iter().collect();
+            // Check if followed by `=` but not `==`
+            if idx < len && chars[idx] == '=' && (idx + 1 >= len || chars[idx + 1] != '=') {
+                result.insert(ident);
+            }
+        } else {
+            idx += 1;
+        }
+    }
+
+    result
+}
+
+/// Returns `true` if the parameter name is `self` or `cls` (method receivers).
+fn is_self_or_cls(name: &str) -> bool {
+    name == "self" || name == "cls"
 }
 
 // ── Symbol completions (functions, classes, vars, imports, builtins) ──────────

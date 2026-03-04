@@ -134,7 +134,7 @@ fn suppress_with_type_ignore(uri: &Url, diag: &Diagnostic, source: &str) -> Code
 /// Run `ruff check --select I --fix` on the document source and return a
 /// full-file replacement [`CodeAction`], or `None` if ruff is not installed or
 /// the source is already sorted.
-fn organize_imports(uri: &Url, source: &str) -> Option<CodeAction> {
+pub(crate) fn organize_imports(uri: &Url, source: &str) -> Option<CodeAction> {
     let id = TMP_COUNTER.fetch_add(1, Ordering::Relaxed);
     let tmp_path = std::env::temp_dir().join(format!("basilisk_org_{id}.py"));
 

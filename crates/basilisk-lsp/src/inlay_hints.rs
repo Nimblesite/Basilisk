@@ -15,6 +15,9 @@ use crate::util::byte_offset_to_position;
     // Parameter name hints at call sites.
     parameter_name_hints(resolved, source, &mut hints);
 
+    // Return type hints for functions without explicit annotations.
+    function_return_type_hints(resolved, source, &mut hints);
+
     hints
 }
 
@@ -119,6 +122,101 @@ fn parameter_name_hints(
             });
         }
     }
+}
+
+/// Add return type hints for functions without explicit return annotations.
+fn function_return_type_hints(
+    resolved: &ResolvedModule,
+    source: &str,
+    hints: &mut Vec<InlayHint>,
+) {
+    for func in &resolved.functions {
+        // Skip functions that already have an explicit return annotation.
+        if func.return_annotation_span.is_some() {
+            continue;
+        }
+
+        let inferred = infer_return_type(func);
+        if inferred.is_empty() {
+            continue;
+        }
+
+        // Find the closing `)` of the parameter list by scanning from after the
+        // function name.  We track parenthesis nesting so nested default-value
+        // expressions (e.g. `def f(x=(1,2)):`) do not fool us.
+        let Some(paren_close) =
+            find_closing_paren(source, func.name_span.end as usize)
+        else {
+            continue;
+        };
+
+        hints.push(InlayHint {
+            position: byte_offset_to_position(source, paren_close + 1),
+            label: InlayHintLabel::String(format!(" -> {inferred}")),
+            kind: Some(InlayHintKind::TYPE),
+            text_edits: None,
+            tooltip: None,
+            padding_left: None,
+            padding_right: None,
+            data: None,
+        });
+    }
+}
+
+/// Infer the return type of a function from its `return` statements.
+///
+/// Returns an empty string when the type cannot be determined.
+fn infer_return_type(func: &basilisk_resolver::FunctionInfo) -> &'static str {
+    if func.return_stmts.is_empty() {
+        return "None";
+    }
+
+    // Collect the display names for every return statement.
+    let mut common_type: Option<&'static str> = None;
+    for ret in &func.return_stmts {
+        let display = rhs_type_display(&ret.rhs_kind);
+        // If any return has an uninferrable type, bail out.
+        if display.is_empty() {
+            return "";
+        }
+        match common_type {
+            None => common_type = Some(display),
+            Some(prev) if prev == display => {}
+            Some(_) => return "", // mixed return types — cannot infer
+        }
+    }
+
+    common_type.unwrap_or("None")
+}
+
+/// Find the byte offset of the closing `)` of the parameter list starting
+/// from `start` (just after the function name).  Returns `None` when the
+/// source is malformed.
+fn find_closing_paren(source: &str, start: usize) -> Option<usize> {
+    let bytes = source.as_bytes();
+    // First, find the opening `(`.
+    let mut pos = start;
+    while pos < bytes.len() && bytes[pos] != b'(' {
+        pos += 1;
+    }
+    if pos >= bytes.len() {
+        return None;
+    }
+    // Now track nesting to find the matching `)`.
+    let mut depth: u32 = 0;
+    for (idx, &byte) in bytes.iter().enumerate().skip(pos) {
+        match byte {
+            b'(' => depth += 1,
+            b')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(idx);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 /// Simple type name from `RhsKind`.

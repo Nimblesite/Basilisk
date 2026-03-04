@@ -11,14 +11,15 @@ use tower_lsp::lsp_types::{
     CodeDescription, CompletionOptions, CompletionParams, CompletionResponse, Diagnostic,
     DiagnosticSeverity, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
     DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentSymbolParams,
-    DocumentSymbolResponse, GotoDefinitionParams, GotoDefinitionResponse, Hover, HoverParams,
-    HoverProviderCapability, InitializeParams, InitializeResult, InitializedParams, InlayHint,
-    InlayHintParams, Location, MessageType, NumberOrString, OneOf, Position, PrepareRenameResponse,
-    Range, ReferenceParams, RenameOptions, RenameParams, SemanticTokens,
-    SemanticTokensFullOptions, SemanticTokensLegend, SemanticTokensOptions, SemanticTokensParams,
-    SemanticTokensResult, SemanticTokensServerCapabilities, ServerCapabilities, ServerInfo,
-    SignatureHelpOptions, SignatureHelpParams, TextDocumentPositionParams,
-    TextDocumentSyncCapability, TextDocumentSyncKind, Url, WorkDoneProgressOptions, WorkspaceEdit,
+    DocumentSymbolResponse, ExecuteCommandOptions, ExecuteCommandParams, GotoDefinitionParams,
+    GotoDefinitionResponse, Hover, HoverParams, HoverProviderCapability, InitializeParams,
+    InitializeResult, InitializedParams, InlayHint, InlayHintParams, Location, MessageType,
+    NumberOrString, OneOf, Position, PrepareRenameResponse, Range, ReferenceParams, RenameOptions,
+    RenameParams, SemanticTokens, SemanticTokensFullOptions, SemanticTokensLegend,
+    SemanticTokensOptions, SemanticTokensParams, SemanticTokensResult,
+    SemanticTokensServerCapabilities, ServerCapabilities, ServerInfo, SignatureHelpOptions,
+    SignatureHelpParams, TextDocumentPositionParams, TextDocumentSyncCapability,
+    TextDocumentSyncKind, Url, WorkDoneProgressOptions, WorkspaceEdit,
 };
 use tower_lsp::{Client, LspService, Server};
 
@@ -208,6 +209,10 @@ impl tower_lsp::LanguageServer for LspServer {
                     prepare_provider: Some(true),
                     work_done_progress_options: WorkDoneProgressOptions::default(),
                 })),
+                execute_command_provider: Some(ExecuteCommandOptions {
+                    commands: vec!["basilisk.organizeImports".to_owned()],
+                    work_done_progress_options: WorkDoneProgressOptions::default(),
+                }),
                 inlay_hint_provider: Some(OneOf::Left(true)),
                 semantic_tokens_provider: Some(
                     SemanticTokensServerCapabilities::SemanticTokensOptions(
@@ -435,6 +440,47 @@ impl tower_lsp::LanguageServer for LspServer {
         } else {
             Ok(Some(actions))
         }
+    }
+
+    // ── Execute Command ──────────────────────────────────────────────────────
+
+    async fn execute_command(
+        &self,
+        params: ExecuteCommandParams,
+    ) -> LspResult<Option<serde_json::Value>> {
+        if params.command != "basilisk.organizeImports" {
+            return Ok(None);
+        }
+
+        let Some(uri_value) = params.arguments.first() else {
+            return Ok(None);
+        };
+        let Some(uri_str) = uri_value.as_str() else {
+            return Ok(None);
+        };
+        let Ok(uri) = Url::parse(uri_str) else {
+            return Ok(None);
+        };
+
+        let source = self
+            .documents
+            .get(&uri)
+            .map(|d| d.text.clone())
+            .unwrap_or_default();
+
+        if source.is_empty() {
+            return Ok(None);
+        }
+
+        let Some(action) = code_actions::organize_imports(&uri, &source) else {
+            return Ok(None);
+        };
+
+        if let Some(edit) = action.edit {
+            let _ = self.client.apply_edit(edit).await;
+        }
+
+        Ok(None)
     }
 
     // ── Completion ───────────────────────────────────────────────────────────

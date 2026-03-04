@@ -1587,3 +1587,593 @@ async fn test_ws_initialize_advertises_all_phase2_capabilities() -> TestResult<(
     assert!(response.contains("\"semanticTokensProvider\""), "should advertise semantic tokens: {response}");
     Ok(())
 }
+
+// ── Edge-case robustness tests ─────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_hover_unknown_position_returns_null() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "x: int = 42\n";
+    fixture.did_open("file:///ws_edge_hover.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Hover on an empty line / far beyond content — should return null, not crash.
+    let resp = fixture
+        .request(
+            400,
+            "textDocument/hover",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_edge_hover.py" },
+                "position": { "line": 5, "character": 0 }
+            }),
+        )
+        .await?
+        .ok_or("no hover response for unknown position")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert!(
+        parsed["result"].is_null(),
+        "hover on empty position should return null result: {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_goto_def_no_symbol_returns_null() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "x: int = 42\n";
+    fixture.did_open("file:///ws_edge_gotodef.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Goto definition on whitespace / non-symbol position.
+    let resp = fixture
+        .request(
+            401,
+            "textDocument/definition",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_edge_gotodef.py" },
+                "position": { "line": 5, "character": 0 }
+            }),
+        )
+        .await?
+        .ok_or("no definition response for empty position")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert!(
+        parsed["result"].is_null(),
+        "goto-def on non-symbol position should return null: {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_document_symbols_empty_file_returns_empty() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    fixture
+        .did_open("file:///ws_edge_symbols.py", "")
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            402,
+            "textDocument/documentSymbol",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_edge_symbols.py" }
+            }),
+        )
+        .await?
+        .ok_or("no document symbols response for empty file")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let result = &parsed["result"];
+    assert!(
+        result.is_null() || result.as_array().is_some_and(|a| a.is_empty()),
+        "document symbols on empty file should be null or empty array: {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_signature_help_outside_call_returns_null() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n\nx: int = 42\n";
+    fixture
+        .did_open("file:///ws_edge_sighelp.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Cursor on `x: int = 42` — not inside a function call.
+    let resp = fixture
+        .request(
+            403,
+            "textDocument/signatureHelp",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_edge_sighelp.py" },
+                "position": { "line": 3, "character": 0 }
+            }),
+        )
+        .await?
+        .ok_or("no signature help response")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert!(
+        parsed["result"].is_null(),
+        "signature help outside a call should return null: {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_find_references_unknown_symbol_returns_null() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "x: int = 42\n";
+    fixture
+        .did_open("file:///ws_edge_refs.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Find references at a position with no symbol.
+    let resp = fixture
+        .request(
+            404,
+            "textDocument/references",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_edge_refs.py" },
+                "position": { "line": 5, "character": 0 },
+                "context": { "includeDeclaration": true }
+            }),
+        )
+        .await?
+        .ok_or("no references response for unknown symbol")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let result = &parsed["result"];
+    assert!(
+        result.is_null() || result.as_array().is_some_and(|a| a.is_empty()),
+        "find references on unknown symbol should return null or empty: {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_rename_non_symbol_position_returns_null() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "x: int = 42\n";
+    fixture
+        .did_open("file:///ws_edge_rename.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Rename at an empty position — should return null.
+    let resp = fixture
+        .request(
+            405,
+            "textDocument/rename",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_edge_rename.py" },
+                "position": { "line": 5, "character": 0 },
+                "newName": "should_not_work"
+            }),
+        )
+        .await?
+        .ok_or("no rename response for non-symbol position")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert!(
+        parsed["result"].is_null(),
+        "rename on non-symbol position should return null: {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_inlay_hints_fully_annotated_returns_empty() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    // Every variable has explicit type annotations — no inlay hints needed.
+    let code = "x: int = 42\ny: str = \"hello\"\nz: bool = True\n";
+    fixture
+        .did_open("file:///ws_edge_inlay.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            406,
+            "textDocument/inlayHint",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_edge_inlay.py" },
+                "range": {
+                    "start": { "line": 0, "character": 0 },
+                    "end": { "line": 3, "character": 0 }
+                }
+            }),
+        )
+        .await?
+        .ok_or("no inlay hint response")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let result = &parsed["result"];
+    assert!(
+        result.is_null() || result.as_array().is_some_and(|a| a.is_empty()),
+        "inlay hints on fully-annotated code should be empty: {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_hover_method_shows_class_prefix() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+class Animal:
+    name: str
+    def speak(self) -> str:
+        return self.name
+";
+    fixture
+        .did_open("file:///ws_edge_hover_method.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Hover on "speak" — line 2, character 8 (after "    def ")
+    let resp = fixture
+        .request(
+            407,
+            "textDocument/hover",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_edge_hover_method.py" },
+                "position": { "line": 2, "character": 8 }
+            }),
+        )
+        .await?
+        .ok_or("no hover response for method")?;
+
+    assert!(
+        resp.contains("(method)"),
+        "hover on method should show '(method)' prefix: {resp}"
+    );
+    assert!(
+        resp.contains("Animal.speak"),
+        "hover on method should show class prefix 'Animal.speak': {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_signature_help_active_parameter_index() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+def add(a: int, b: int) -> int:
+    return a + b
+
+result: int = add(1, 2)
+";
+    fixture
+        .did_open("file:///ws_edge_sighelp_idx.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Cursor after the comma inside add(1, |2) — line 3
+    // "result: int = add(1, " is 21 chars, so character 21 is after comma
+    let resp = fixture
+        .request(
+            408,
+            "textDocument/signatureHelp",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_edge_sighelp_idx.py" },
+                "position": { "line": 3, "character": 21 }
+            }),
+        )
+        .await?
+        .ok_or("no signature help response")?;
+
+    assert!(
+        resp.contains("activeParameter"),
+        "signature help should include activeParameter: {resp}"
+    );
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let active_param = &parsed["result"]["activeParameter"];
+    assert!(
+        !active_param.is_null(),
+        "activeParameter should not be null: {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_code_action_e0003_all_variants() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    // All three E0003 variants in one file: empty list, empty dict, None
+    let code = "items = []\nmapping = {}\nvalue = None\n";
+    fixture
+        .did_open("file:///ws_edge_ca_e0003.py", code)
+        .await?;
+
+    let diag_msg = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics published")?;
+
+    let diag_json: serde_json::Value = serde_json::from_str(&diag_msg)?;
+    let diagnostics = diag_json["params"]["diagnostics"]
+        .as_array()
+        .ok_or("expected diagnostics array")?;
+
+    // Verify all three E0003 diagnostics are present.
+    let e0003_diags: Vec<&serde_json::Value> = diagnostics
+        .iter()
+        .filter(|d| d["code"].as_str() == Some("BSK-E0003"))
+        .collect();
+    assert!(
+        e0003_diags.len() >= 3,
+        "should have at least 3 E0003 diagnostics (list, dict, None), got {}: {diag_msg}",
+        e0003_diags.len()
+    );
+
+    // Request code actions for each E0003 diagnostic.
+    for (idx, target_diag) in e0003_diags.iter().enumerate() {
+        let action_id = 410 + idx as u64;
+        let resp = fixture
+            .request(
+                action_id,
+                "textDocument/codeAction",
+                serde_json::json!({
+                    "textDocument": { "uri": "file:///ws_edge_ca_e0003.py" },
+                    "range": target_diag["range"],
+                    "context": { "diagnostics": [target_diag] }
+                }),
+            )
+            .await?
+            .ok_or(format!("no code action response for E0003 variant {idx}"))?;
+
+        assert!(
+            resp.contains("quickfix"),
+            "E0003 code action variant {idx} should be quickfix: {resp}"
+        );
+    }
+    Ok(())
+}
+
+// ── Execute Command tests ────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_initialize_advertises_execute_command_provider() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let response = fixture.initialize().await?;
+
+    assert!(
+        response.contains("executeCommandProvider"),
+        "initialize response should advertise executeCommandProvider: {response}"
+    );
+    assert!(
+        response.contains("basilisk.organizeImports"),
+        "executeCommandProvider should list basilisk.organizeImports command: {response}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_execute_command_organize_imports_returns_success() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    // Open a document with unsorted imports so the command has something to work with.
+    let code = "import os\nimport sys\n\nx: int = 42\n";
+    fixture
+        .did_open("file:///ws_exec_cmd_org.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Send workspace/executeCommand with basilisk.organizeImports.
+    let resp = fixture
+        .request(
+            500,
+            "workspace/executeCommand",
+            serde_json::json!({
+                "command": "basilisk.organizeImports",
+                "arguments": ["file:///ws_exec_cmd_org.py"]
+            }),
+        )
+        .await?
+        .ok_or("no response to workspace/executeCommand")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    // The command returns Ok(None), which serializes as {"result": null}.
+    assert!(
+        parsed.get("result").is_some(),
+        "executeCommand should return a result (even if null): {resp}"
+    );
+    // Must not have an error field.
+    assert!(
+        parsed.get("error").is_none(),
+        "executeCommand should not return an error: {resp}"
+    );
+    Ok(())
+}
+
+// ── Phase 2: Function Return Type Inlay Hints ─────────────────────────────
+
+#[tokio::test]
+async fn test_ws_inlay_hint_return_type_inferred() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    // Function without return annotation — should get a `-> int` inlay hint.
+    let code = "def add(a: int, b: int):\n    return 42\n";
+    fixture
+        .did_open("file:///ws_ret_hint.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            510,
+            "textDocument/inlayHint",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_ret_hint.py" },
+                "range": {
+                    "start": { "line": 0, "character": 0 },
+                    "end": { "line": 2, "character": 0 }
+                }
+            }),
+        )
+        .await?
+        .ok_or("no inlay hint response")?;
+
+    assert!(
+        resp.contains("-> int"),
+        "should show inferred return type '-> int' for function returning 42: {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_inlay_hint_return_type_not_shown_when_annotated() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    // Function WITH explicit return annotation — no return-type inlay hint.
+    let code = "def greet(name: str) -> str:\n    return \"hi\"\n";
+    fixture
+        .did_open("file:///ws_ret_hint_ann.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            511,
+            "textDocument/inlayHint",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_ret_hint_ann.py" },
+                "range": {
+                    "start": { "line": 0, "character": 0 },
+                    "end": { "line": 2, "character": 0 }
+                }
+            }),
+        )
+        .await?
+        .ok_or("no inlay hint response")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let result = &parsed["result"];
+
+    // If there are hints, none should be a return-type hint (no "-> " prefix).
+    if let Some(arr) = result.as_array() {
+        for hint in arr {
+            let label = hint["label"].as_str().unwrap_or("");
+            assert!(
+                !label.starts_with(" -> "),
+                "annotated function should NOT get a return-type inlay hint: {resp}"
+            );
+        }
+    }
+    Ok(())
+}
+
+// ── Phase 2: Keyword Argument Completions ──────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_completion_kwarg_suggests_param_names() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+def greet(name: str, greeting: str) -> str:
+    return f\"{greeting}, {name}!\"
+
+result: str = greet()
+";
+    fixture
+        .did_open("file:///ws_kwarg_comp.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Cursor inside greet() — line 3, character 20 (after the opening paren)
+    let resp = fixture
+        .request(
+            520,
+            "textDocument/completion",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_kwarg_comp.py" },
+                "position": { "line": 3, "character": 20 }
+            }),
+        )
+        .await?
+        .ok_or("no completion response for kwarg")?;
+
+    assert!(
+        resp.contains("\"label\":\"name=\""),
+        "should suggest 'name=' kwarg completion: {resp}"
+    );
+    assert!(
+        resp.contains("\"label\":\"greeting=\""),
+        "should suggest 'greeting=' kwarg completion: {resp}"
+    );
+    // Kind should be KEYWORD (14 in LSP spec)
+    assert!(
+        resp.contains("\"kind\":14"),
+        "kwarg completions should have kind KEYWORD (14): {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_completion_kwarg_skips_already_provided() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+def greet(name: str, greeting: str) -> str:
+    return f\"{greeting}, {name}!\"
+
+result: str = greet(name=\"world\", )
+";
+    fixture
+        .did_open("file:///ws_kwarg_skip.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Cursor after "name=\"world\", " — line 3, character 33
+    let resp = fixture
+        .request(
+            521,
+            "textDocument/completion",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_kwarg_skip.py" },
+                "position": { "line": 3, "character": 33 }
+            }),
+        )
+        .await?
+        .ok_or("no completion response for kwarg skip")?;
+
+    // 'name=' was already provided, so only 'greeting=' should appear.
+    assert!(
+        !resp.contains("\"label\":\"name=\""),
+        "should NOT suggest already-provided 'name=' kwarg: {resp}"
+    );
+    assert!(
+        resp.contains("\"label\":\"greeting=\""),
+        "should suggest remaining 'greeting=' kwarg: {resp}"
+    );
+    Ok(())
+}

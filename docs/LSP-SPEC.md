@@ -14,9 +14,9 @@
 - Signature Help — parameter hints on `(` and `,`
 - Find All References — all usages in current file
 - Rename Symbol (F2) — prepareRename + rename across current file
-- Inlay Hints — inferred variable types
+- Inlay Hints — inferred variable types, parameter name labels at call sites
 - Semantic Tokens — function, class, parameter, variable, property, decorator classification
-- Code actions: quick fixes for BSK-E0001 (`: Any`) and BSK-E0002 (`-> None`)
+- Code actions: quick fixes for BSK-E0001 (`: Any`), BSK-E0002 (`-> None`), BSK-E0003 (variable annotation), suppress with `# type: ignore`, organize imports (Ruff)
 - Completion: symbol + dot + imports + 78 builtins
 - Full document sync, DashMap document store, UTF-16 position handling
 - VS Code extension: status bar, restart command, show output, auto-restart, error recovery, organize imports (Ruff)
@@ -29,7 +29,7 @@
 - Format Document (Ruff delegation)
 - Cross-module Go to Definition / References / Rename
 - Auto-import suggestions
-- Inlay hints: parameter name labels at call sites, function return types
+- Inlay hints: function return types
 
 ---
 
@@ -607,7 +607,7 @@ This table maps every publicly documented Pylance/Pyright feature to its Basilis
 | `textDocument/references` — Find All References | ✅ | ✅ DONE | **2** |
 | `textDocument/prepareRename` + `textDocument/rename` — F2 rename | ✅ | ✅ DONE | **2** |
 | `textDocument/codeAction` — quick fixes (BSK-E0001, BSK-E0002) | ✅ | ✅ DONE | — |
-| `textDocument/codeAction` — expanded quick fixes (E0003, suppress, organize imports) | ✅ | ☐ TODO | **2** |
+| `textDocument/codeAction` — expanded quick fixes (E0003, suppress, organize imports) | ✅ | ✅ DONE | **2** |
 | `textDocument/inlayHint` — inferred variable types + parameter names | ✅ | ✅ DONE | **3** |
 | `textDocument/semanticTokens/full` — semantic syntax highlighting | ✅ | ✅ DONE | **3** |
 | `textDocument/formatting` — Format Document (Ruff delegation) | ✅ | ☐ TODO | **4** |
@@ -617,7 +617,7 @@ This table maps every publicly documented Pylance/Pyright feature to its Basilis
 | `textDocument/codeLens` — run/debug inline lens | ✅ | ☐ TODO | 5 |
 | `textDocument/prepareCallHierarchy` + incoming/outgoing calls | ✅ | ☐ TODO | 5 |
 | `textDocument/prepareTypeHierarchy` + supertypes/subtypes | ✅ | ☐ TODO | 5 |
-| `workspace/executeCommand` — `basilisk.organizeImports` | ✅ | ☐ TODO | **2** |
+| `workspace/executeCommand` — `basilisk.organizeImports` | ✅ | ✅ DONE | **2** |
 
 ### Completion Quality
 
@@ -639,9 +639,9 @@ This table maps every publicly documented Pylance/Pyright feature to its Basilis
 |--------|---------|---------|-------|
 | Add missing parameter annotation (BSK-E0001) | ✅ | ✅ DONE | — |
 | Add missing return annotation (BSK-E0002) | ✅ | ✅ DONE | — |
-| Add variable annotation (BSK-E0003) | ✅ | ☐ TODO | **2** |
-| Suppress with `# type: ignore` | ✅ | ☐ TODO | **2** |
-| Organize imports (`ruff check --select I --fix`) | ✅ | ☐ TODO | **2** |
+| Add variable annotation (BSK-E0003) | ✅ | ✅ DONE | **2** |
+| Suppress with `# type: ignore` | ✅ | ✅ DONE | **2** |
+| Organize imports (`ruff check --select I --fix`) | ✅ | ✅ DONE | **2** |
 | Expand wildcard import (`from foo import *` → explicit names) | ✅ | ☐ TODO | 5 |
 | Extract variable | ✅ | ☐ TODO | 5 |
 | Extract method | ✅ | ☐ TODO | 5 |
@@ -657,7 +657,7 @@ This table maps every publicly documented Pylance/Pyright feature to its Basilis
 |-----------|---------|---------|-------|
 | Variable inferred types (`x: int`) | ✅ | ✅ DONE | **3** |
 | Function return types | ✅ | ☐ TODO | **3** |
-| Parameter name labels at call sites (`greet(name= "Alice")`) | ✅ | ☐ TODO | **3** |
+| Parameter name labels at call sites (`greet(name= "Alice")`) | ✅ | ✅ DONE | **3** |
 | Pytest fixture parameter hints | ✅ | ✗ out of scope | — |
 | Generic type parameter hints | ✅ | ☐ TODO | 5 |
 

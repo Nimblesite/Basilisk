@@ -50,21 +50,23 @@ impl LspTestFixture {
         // Background reader: parse LSP frames and push bodies into the channel.
         thread::spawn(move || {
             let mut reader = BufReader::new(stdout);
+            let mut line = String::new();
             loop {
                 let mut content_length: Option<usize> = None;
-                let mut line = String::new();
 
                 // Read headers until the blank line separator.
+                // Skip leading blank lines that may appear between messages.
                 loop {
                     line.clear();
-                    let bytes_read = reader.read_line(&mut line).unwrap_or(0);
-                    if bytes_read == 0 {
-                        eprintln!("[reader] EOF on header read");
+                    if reader.read_line(&mut line).unwrap_or(0) == 0 {
                         return; // EOF — server exited
                     }
                     let trimmed = line.trim();
                     if trimmed.is_empty() {
-                        break;
+                        if content_length.is_some() {
+                            break; // genuine header terminator
+                        }
+                        continue; // stray blank line before headers — skip
                     }
                     if let Some(rest) = trimmed.strip_prefix("Content-Length:") {
                         content_length = rest.trim().parse().ok();
@@ -72,18 +74,14 @@ impl LspTestFixture {
                 }
 
                 let Some(length) = content_length else {
-                    eprintln!("[reader] no Content-Length found, exiting");
-                    return;
+                    continue; // no Content-Length yet — keep reading
                 };
                 let mut buf = vec![0u8; length];
                 if reader.read_exact(&mut buf).is_err() {
-                    eprintln!("[reader] read_exact failed for {length} bytes");
                     return;
                 }
                 if let Ok(body) = String::from_utf8(buf) {
-                    eprintln!("[reader] got message: {}...", &body[..body.len().min(80)]);
                     if tx.send(body).is_err() {
-                        eprintln!("[reader] send failed (receiver dropped)");
                         return; // receiver dropped
                     }
                 }
@@ -704,18 +702,9 @@ fn send_request(
         "params": params
     }))?;
 
-    // Check if the child process is still alive before waiting for response.
-    match fixture.child.try_wait() {
-        Ok(Some(status)) => eprintln!("[send_request id={id}] child already exited: {status}"),
-        Ok(None) => eprintln!("[send_request id={id}] child still running"),
-        Err(e) => eprintln!("[send_request id={id}] try_wait error: {e}"),
-    }
-
     let id_str = format!("\"id\":{id}");
-    for iteration in 0..10 {
-        let msg = fixture.recv();
-        eprintln!("[send_request id={id}] iteration={iteration} got={}", msg.as_deref().unwrap_or("NONE"));
-        let Some(msg) = msg else { break };
+    for _ in 0..10 {
+        let Some(msg) = fixture.recv() else { break };
         if msg.contains(&id_str) {
             return Ok(Some(msg));
         }
