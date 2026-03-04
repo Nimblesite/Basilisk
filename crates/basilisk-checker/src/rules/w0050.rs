@@ -156,11 +156,12 @@ fn types_match_for_w0050(inferred: &InferredType, declared: &InferredType) -> bo
         | (Float, Float)
         | (Bool, Bool)
         | (Bytes, Bytes)
-        | (None_, None_)
-        | (List(_), List(_))
-        | (Dict(..), Dict(..))
-        | (Set(_), Set(_))
-        | (Tuple(_), Tuple(_)) => true,
+        | (None_, None_) => true,
+        // Collection types need element type comparison
+        (List(a), List(b)) => a == b,
+        (Dict(ak, av), Dict(bk, bv)) => ak == bk && av == bv,
+        (Set(a), Set(b)) => a == b,
+        (Tuple(a), Tuple(b)) => a == b,
         // Default case - no match
         _ => false,
     }

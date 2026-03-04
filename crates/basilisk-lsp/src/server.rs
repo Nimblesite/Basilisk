@@ -10,8 +10,8 @@ use tower_lsp::lsp_types::{
     CallHierarchyIncomingCall, CallHierarchyIncomingCallsParams, CallHierarchyItem,
     CallHierarchyOutgoingCall, CallHierarchyOutgoingCallsParams, CallHierarchyPrepareParams,
     CallHierarchyServerCapability, CodeActionKind, CodeActionOptions, CodeActionParams,
-    CodeActionProviderCapability, CodeActionResponse, CodeDescription, CompletionOptions,
-    CompletionParams, CompletionResponse,
+    CodeActionProviderCapability, CodeActionResponse, CodeDescription, CodeLens, CodeLensOptions,
+    CodeLensParams, CompletionOptions, CompletionParams, CompletionResponse,
     Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
     DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentHighlight,
     DocumentHighlightParams, DocumentFormattingParams, DocumentSymbolParams,
@@ -24,13 +24,15 @@ use tower_lsp::lsp_types::{
     SemanticTokens, SemanticTokensFullOptions, SemanticTokensLegend, SemanticTokensOptions,
     SemanticTokensParams, SemanticTokensResult, SemanticTokensServerCapabilities,
     ServerCapabilities, ServerInfo, SignatureHelpOptions, SignatureHelpParams, SymbolInformation,
-    TextDocumentPositionParams, TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, Url,
-    WorkDoneProgressOptions, WorkspaceEdit, WorkspaceSymbolParams,
+    TextDocumentPositionParams, TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit,
+    TypeHierarchyItem, TypeHierarchyPrepareParams, TypeHierarchySubtypesParams,
+    TypeHierarchySupertypesParams, Url, WorkDoneProgressOptions, WorkspaceEdit,
+    WorkspaceSymbolParams,
 };
 use tower_lsp::{Client, LspService, Server};
 
 use crate::util::{byte_offset_to_position, position_to_byte_offset};
-use crate::{call_hierarchy, code_actions, completion, definition, folding, formatting, highlight, hover, inlay_hints, references, selection, signature, symbols};
+use crate::{call_hierarchy, code_actions, code_lens, completion, definition, folding, formatting, highlight, hover, inlay_hints, references, selection, signature, symbols, type_hierarchy};
 
 /// Fallback docs URL used when a diagnostic code URL fails to parse.
 const FALLBACK_DOCS_URL: &str = "https://basilisk-lang.org";
@@ -199,6 +201,7 @@ impl tower_lsp::LanguageServer for LspServer {
                 )),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 call_hierarchy_provider: Some(CallHierarchyServerCapability::Simple(true)),
+                code_lens_provider: Some(CodeLensOptions { resolve_provider: Some(false) }),
                 code_action_provider: Some(CodeActionProviderCapability::Options(
                     CodeActionOptions {
                         code_action_kinds: Some(vec![
@@ -691,6 +694,88 @@ impl tower_lsp::LanguageServer for LspServer {
             Ok(None)
         } else {
             Ok(Some(calls))
+        }
+    }
+
+    // ── Code Lens ─────────────────────────────────────────────────────────
+
+    async fn code_lens(
+        &self,
+        params: CodeLensParams,
+    ) -> LspResult<Option<Vec<CodeLens>>> {
+        let uri = params.text_document.uri;
+        let Some((text, resolved, _)) = self.get_document_data(&uri) else {
+            return Ok(None);
+        };
+        let lenses = code_lens::code_lenses(&resolved, &text);
+        if lenses.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(lenses))
+        }
+    }
+
+    // ── Type Hierarchy ──────────────────────────────────────────────────
+
+    async fn prepare_type_hierarchy(
+        &self,
+        params: TypeHierarchyPrepareParams,
+    ) -> LspResult<Option<Vec<TypeHierarchyItem>>> {
+        let uri = params.text_document_position_params.text_document.uri;
+        let pos = params.text_document_position_params.position;
+        let Some((text, resolved, _)) = self.get_document_data(&uri) else {
+            return Ok(None);
+        };
+        let byte_offset = position_to_byte_offset(&text, pos);
+        let items = type_hierarchy::prepare(&resolved, &text, byte_offset, &uri);
+        if items.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(items))
+        }
+    }
+
+    async fn supertypes(
+        &self,
+        params: TypeHierarchySupertypesParams,
+    ) -> LspResult<Option<Vec<TypeHierarchyItem>>> {
+        let uri = params.item.uri.clone();
+        let class_name = params
+            .item
+            .data
+            .as_ref()
+            .and_then(|d| d.as_str())
+            .unwrap_or(&params.item.name);
+        let Some((text, resolved, _)) = self.get_document_data(&uri) else {
+            return Ok(None);
+        };
+        let items = type_hierarchy::supertypes(&resolved, &text, class_name, &uri);
+        if items.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(items))
+        }
+    }
+
+    async fn subtypes(
+        &self,
+        params: TypeHierarchySubtypesParams,
+    ) -> LspResult<Option<Vec<TypeHierarchyItem>>> {
+        let uri = params.item.uri.clone();
+        let class_name = params
+            .item
+            .data
+            .as_ref()
+            .and_then(|d| d.as_str())
+            .unwrap_or(&params.item.name);
+        let Some((text, resolved, _)) = self.get_document_data(&uri) else {
+            return Ok(None);
+        };
+        let items = type_hierarchy::subtypes(&resolved, &text, class_name, &uri);
+        if items.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(items))
         }
     }
 }

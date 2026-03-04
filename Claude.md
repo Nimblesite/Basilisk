@@ -14,7 +14,7 @@ pip install -r conformance/requirements.txt
 
 COORDINATOR: dictate the orders to others through your plans and messages
 
-OTHERS: do exactly as the coordinator says
+OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK YOUR MESSAGES AND DO WHAT THE COORDINATOR SAYS!!!
 
 Lock files before editing. Don't edit locked files. Check messages ROUTINELY
 

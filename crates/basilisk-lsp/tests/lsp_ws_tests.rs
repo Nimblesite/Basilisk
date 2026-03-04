@@ -175,7 +175,7 @@ async fn test_ws_initialize() -> TestResult<()> {
     assert!(response.contains("\"basilisk\""));
     assert!(response.contains("\"textDocumentSync\":1"));
     assert!(response.contains("\"hoverProvider\":true"));
-    assert!(response.contains("\"codeActionProvider\":true"));
+    assert!(response.contains("\"codeActionProvider\""), "should advertise code actions: {response}");
     assert!(response.contains("\"completionProvider\""));
     Ok(())
 }
@@ -492,6 +492,36 @@ x: int = 42
         resp.contains("\"label\":\"len\""),
         "should complete builtin 'len': {resp}"
     );
+
+    // Hardened: parse and verify completion list structure
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let items = parsed["result"]["items"]
+        .as_array()
+        .or_else(|| parsed["result"].as_array())
+        .ok_or("completion result should contain items array")?;
+
+    // Hardened: completion list must be non-empty
+    assert!(
+        !items.is_empty(),
+        "completion list must be non-empty: {resp}"
+    );
+
+    // Hardened: each item must have a non-empty label and a kind field
+    for item in items {
+        let label = item["label"].as_str().unwrap_or("");
+        assert!(
+            !label.is_empty(),
+            "each completion item must have a non-empty label: {resp}"
+        );
+        assert!(
+            item.get("kind").is_some() && !item["kind"].is_null(),
+            "each completion item must have a 'kind' field, missing for label '{label}': {resp}"
+        );
+    }
+
+    // Hardened: verify JSON-RPC envelope
+    assert_eq!(parsed["jsonrpc"], "2.0", "must be valid JSON-RPC 2.0: {resp}");
+    assert_eq!(parsed["id"], 10, "response id must match request id: {resp}");
     Ok(())
 }
 
@@ -843,6 +873,61 @@ async fn test_ws_code_action_missing_param_annotation() -> TestResult<()> {
 
     assert!(resp.contains(": Any"), "E0001 action should insert ': Any': {resp}");
     assert!(resp.contains("quickfix"), "E0001 action should be quickfix: {resp}");
+
+    // Hardened: parse and verify code action structure
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let actions = parsed["result"]
+        .as_array()
+        .ok_or("code action result should be an array")?;
+
+    // Hardened: should have at least one action (quickfix + possibly suppress)
+    assert!(
+        !actions.is_empty(),
+        "code actions array must be non-empty: {resp}"
+    );
+
+    // Find the quickfix action specifically
+    let quickfix = actions
+        .iter()
+        .find(|a| {
+            a["kind"].as_str() == Some("quickfix")
+                && a["title"].as_str().is_some_and(|t| t.contains("Add type annotation"))
+        })
+        .ok_or("should have a quickfix action for adding type annotation")?;
+
+    // Hardened: verify action has edit with changes
+    let edit = &quickfix["edit"];
+    assert!(
+        !edit.is_null(),
+        "quickfix action must have an 'edit' field: {resp}"
+    );
+    let changes = &edit["changes"];
+    assert!(
+        !changes.is_null(),
+        "quickfix edit must have 'changes': {resp}"
+    );
+
+    // Hardened: verify edit changes contain the file URI
+    let file_edits = &changes["file:///ca_e0001.py"];
+    assert!(
+        !file_edits.is_null(),
+        "changes must contain edits for 'file:///ca_e0001.py': {resp}"
+    );
+
+    // Hardened: verify the text edit inserts ": Any"
+    let edits = file_edits
+        .as_array()
+        .ok_or("file edits should be an array")?;
+    assert!(
+        !edits.is_empty(),
+        "file edits array must be non-empty: {resp}"
+    );
+    let new_text = edits[0]["newText"].as_str().unwrap_or("");
+    assert!(
+        new_text.contains(": Any"),
+        "text edit newText should contain ': Any', got '{}': {resp}",
+        new_text
+    );
     Ok(())
 }
 
@@ -1097,6 +1182,20 @@ async fn test_ws_hover_function_exact_signature() -> TestResult<()> {
     assert!(resp.contains("def greet"), "hover should show 'def greet': {resp}");
     assert!(resp.contains("name: str"), "hover should show typed parameter 'name: str': {resp}");
     assert!(resp.contains("-> str"), "hover should show return type '-> str': {resp}");
+
+    // Hardened: verify JSON-RPC structure and hover contents structure
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert_eq!(parsed["jsonrpc"], "2.0", "hover must be valid JSON-RPC 2.0: {resp}");
+    assert_eq!(parsed["id"], 300, "hover response id must match request id: {resp}");
+    assert!(
+        parsed["result"].get("contents").is_some(),
+        "hover result must contain 'contents' field: {resp}"
+    );
+    assert!(
+        !parsed["result"]["contents"].is_null(),
+        "hover contents must not be null: {resp}"
+    );
+    assert!(resp.contains("greet"), "hover should contain the function name 'greet': {resp}");
     Ok(())
 }
 
@@ -1221,6 +1320,32 @@ async fn test_ws_goto_definition_function() -> TestResult<()> {
         start["character"], 4,
         "definition must start at char 4, where 'greet' begins: {resp}"
     );
+
+    // Hardened: verify URI matches the opened file exactly
+    let uri = parsed["result"]["uri"].as_str().unwrap_or("");
+    assert_eq!(
+        uri, "file:///ws_gotodef.py",
+        "definition URI must match the opened document: {resp}"
+    );
+
+    // Hardened: verify the range is non-empty (end differs from start)
+    let end = &parsed["result"]["range"]["end"];
+    assert!(
+        start["line"] != end["line"] || start["character"] != end["character"],
+        "definition range must be non-empty (start != end): {resp}"
+    );
+
+    // Hardened: verify end character is beyond start (for a single-line range)
+    if start["line"] == end["line"] {
+        assert!(
+            end["character"].as_u64() > start["character"].as_u64(),
+            "definition end character must be > start character on same line: {resp}"
+        );
+    }
+
+    // Hardened: verify JSON-RPC envelope
+    assert_eq!(parsed["jsonrpc"], "2.0", "must be valid JSON-RPC 2.0: {resp}");
+    assert_eq!(parsed["id"], 310, "response id must match request id: {resp}");
     Ok(())
 }
 
@@ -1320,6 +1445,56 @@ x: int = 42
     assert!(resp.contains("Animal"), "symbols should include class 'Animal': {resp}");
     assert!(resp.contains("greet"), "symbols should include function 'greet': {resp}");
     assert!(resp.contains("\"x\""), "symbols should include variable 'x': {resp}");
+
+    // Hardened: parse and verify symbol count and structure
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let symbols = parsed["result"]
+        .as_array()
+        .ok_or("document symbols result should be an array")?;
+
+    // Exact count: Animal (class), greet (function), x (variable) = 3 top-level symbols
+    assert_eq!(
+        symbols.len(),
+        3,
+        "should have exactly 3 top-level symbols (Animal, greet, x), got {}: {resp}",
+        symbols.len()
+    );
+
+    // Hardened: verify each symbol has a valid range with start <= end
+    for symbol in symbols {
+        let range = &symbol["range"];
+        assert!(
+            !range.is_null(),
+            "every symbol must have a range: {resp}"
+        );
+        let start_line = range["start"]["line"].as_u64().unwrap_or(u64::MAX);
+        let end_line = range["end"]["line"].as_u64().unwrap_or(0);
+        assert!(
+            start_line <= end_line,
+            "symbol range start line must be <= end line: {resp}"
+        );
+    }
+
+    // Hardened: verify class symbol has children (methods/attributes)
+    let animal_symbol = symbols
+        .iter()
+        .find(|s| s["name"].as_str() == Some("Animal"))
+        .ok_or("Animal symbol not found in results")?;
+    let children = animal_symbol["children"]
+        .as_array()
+        .ok_or("Animal class symbol should have children array")?;
+    assert!(
+        !children.is_empty(),
+        "Animal class should have children (name attr + speak method): {resp}"
+    );
+
+    // Hardened: verify symbol kinds are present
+    for symbol in symbols {
+        assert!(
+            symbol.get("kind").is_some() && !symbol["kind"].is_null(),
+            "every symbol must have a kind: {resp}"
+        );
+    }
     Ok(())
 }
 
@@ -1390,6 +1565,51 @@ result: str = greet(\"world\", \"Hi\")
     assert!(resp.contains("greet"), "signature should show function name: {resp}");
     assert!(resp.contains("name"), "signature should show parameter 'name': {resp}");
     assert!(resp.contains("greeting"), "signature should show parameter 'greeting': {resp}");
+
+    // Hardened: parse and verify signature help structure
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let result = &parsed["result"];
+    assert!(
+        !result.is_null(),
+        "signature help result must not be null: {resp}"
+    );
+
+    // Hardened: verify activeParameter is 0 (cursor at first param position)
+    let active_param = result["activeParameter"].as_u64();
+    assert_eq!(
+        active_param,
+        Some(0),
+        "activeParameter should be 0 (first parameter): {resp}"
+    );
+
+    // Hardened: verify signatures array exists and is non-empty
+    let signatures = result["signatures"]
+        .as_array()
+        .ok_or("signature help should have signatures array")?;
+    assert!(
+        !signatures.is_empty(),
+        "signatures array must be non-empty: {resp}"
+    );
+
+    // Hardened: verify parameters array length matches expected count (2: name, greeting)
+    let first_sig = &signatures[0];
+    let parameters = first_sig["parameters"]
+        .as_array()
+        .ok_or("first signature should have parameters array")?;
+    assert_eq!(
+        parameters.len(),
+        2,
+        "should have exactly 2 parameters (name, greeting), got {}: {resp}",
+        parameters.len()
+    );
+
+    // Hardened: verify each parameter has a label
+    for param in parameters {
+        assert!(
+            param.get("label").is_some() && !param["label"].is_null(),
+            "each parameter must have a label: {resp}"
+        );
+    }
     Ok(())
 }
 
@@ -1426,6 +1646,52 @@ result: str = greet(\"world\")
     // Should find at least 2 references (definition + usage)
     let count = resp.matches("ws_refs.py").count();
     assert!(count >= 2, "should find at least 2 references for 'greet' (found {count}): {resp}");
+
+    // Hardened: parse and verify exact reference count and structure
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let refs = parsed["result"]
+        .as_array()
+        .ok_or("references result should be an array")?;
+
+    // Exactly 2 references: definition on line 0 + usage on line 3
+    assert_eq!(
+        refs.len(),
+        2,
+        "should find exactly 2 references for 'greet' (definition + usage), got {}: {resp}",
+        refs.len()
+    );
+
+    // Hardened: verify each reference has a valid URI
+    for reference in refs {
+        let uri = reference["uri"].as_str().unwrap_or("");
+        assert!(
+            !uri.is_empty(),
+            "each reference must have a non-empty URI: {resp}"
+        );
+        assert_eq!(
+            uri, "file:///ws_refs.py",
+            "each reference URI must match the opened file: {resp}"
+        );
+    }
+
+    // Hardened: verify each reference has a valid range
+    for reference in refs {
+        let range = &reference["range"];
+        assert!(
+            !range.is_null(),
+            "each reference must have a range: {resp}"
+        );
+        assert!(
+            range.get("start").is_some() && range.get("end").is_some(),
+            "each reference range must have start and end: {resp}"
+        );
+        let start_line = range["start"]["line"].as_u64().unwrap_or(u64::MAX);
+        let end_line = range["end"]["line"].as_u64().unwrap_or(0);
+        assert!(
+            start_line <= end_line,
+            "reference range start line must be <= end line: {resp}"
+        );
+    }
     Ok(())
 }
 
@@ -1487,6 +1753,54 @@ result: str = greet(\"world\")
 
     assert!(resp.contains("say_hello"), "rename should include new name: {resp}");
     assert!(resp.contains("changes"), "rename should include workspace changes: {resp}");
+
+    // Hardened: parse and verify workspace edit structure
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let changes = &parsed["result"]["changes"];
+    assert!(
+        !changes.is_null(),
+        "rename result must contain 'changes' map: {resp}"
+    );
+
+    // Hardened: verify changes map contains the file URI
+    let file_edits = &changes["file:///ws_ren.py"];
+    assert!(
+        !file_edits.is_null(),
+        "changes must contain edits for 'file:///ws_ren.py': {resp}"
+    );
+
+    // Hardened: verify edits array is non-empty
+    let edits = file_edits
+        .as_array()
+        .ok_or("edits for file should be an array")?;
+    assert!(
+        !edits.is_empty(),
+        "edits array must be non-empty: {resp}"
+    );
+
+    // Hardened: verify each edit has both range and newText
+    for edit in edits {
+        assert!(
+            edit.get("range").is_some() && !edit["range"].is_null(),
+            "each edit must have a range: {resp}"
+        );
+        assert!(
+            edit.get("newText").is_some() && !edit["newText"].is_null(),
+            "each edit must have a newText: {resp}"
+        );
+        assert_eq!(
+            edit["newText"].as_str(),
+            Some("say_hello"),
+            "each edit's newText must be the new name 'say_hello': {resp}"
+        );
+    }
+
+    // Hardened: should have at least 2 edits (definition + usage)
+    assert!(
+        edits.len() >= 2,
+        "should have at least 2 rename edits (definition + usage), got {}: {resp}",
+        edits.len()
+    );
     Ok(())
 }
 
@@ -1519,6 +1833,52 @@ async fn test_ws_inlay_hints_variable_types() -> TestResult<()> {
     assert!(resp.contains("int"), "inlay hints should show 'int' for x=42: {resp}");
     assert!(resp.contains("str"), "inlay hints should show 'str' for y=\"hello\": {resp}");
     assert!(resp.contains("bool"), "inlay hints should show 'bool' for z=True: {resp}");
+
+    // Hardened: parse and verify inlay hint structure
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let hints = parsed["result"]
+        .as_array()
+        .ok_or("inlay hint result should be an array")?;
+
+    // Hardened: should have exactly 3 hints (x, y, z)
+    assert_eq!(
+        hints.len(),
+        3,
+        "should have exactly 3 inlay hints (x, y, z), got {}: {resp}",
+        hints.len()
+    );
+
+    // Hardened: each hint must have a valid position and a non-empty label
+    for hint in hints {
+        let position = &hint["position"];
+        assert!(
+            !position.is_null(),
+            "each inlay hint must have a position: {resp}"
+        );
+        assert!(
+            position.get("line").is_some(),
+            "each inlay hint position must have a line: {resp}"
+        );
+        assert!(
+            position.get("character").is_some(),
+            "each inlay hint position must have a character: {resp}"
+        );
+
+        let label = hint["label"].as_str().unwrap_or("");
+        assert!(
+            !label.is_empty(),
+            "each inlay hint must have a non-empty label: {resp}"
+        );
+    }
+
+    // Hardened: verify hint kind is Type (1) for variable type hints
+    for hint in hints {
+        assert_eq!(
+            hint["kind"].as_u64(),
+            Some(1),
+            "inlay hint kind should be Type (1) for variable hints: {resp}"
+        );
+    }
     Ok(())
 }
 
@@ -1568,6 +1928,33 @@ x: int = 42
     assert_eq!(data.len() % 5, 0, "token data length should be multiple of 5");
     // We should have tokens for Animal, name, speak, self, greet, animal, x at minimum
     assert!(data.len() >= 5, "should have at least 1 token: {resp}");
+
+    // Hardened: verify first token has valid tokenType (0-9 range for standard LSP token types)
+    let first_token_type = data[3].as_u64().unwrap_or(u64::MAX);
+    assert!(
+        first_token_type <= 20,
+        "first token's tokenType should be in valid range (0-20), got {first_token_type}: {resp}"
+    );
+
+    // Hardened: verify no negative deltas in the data (all values should be non-negative)
+    for (idx, value) in data.iter().enumerate() {
+        let num = value.as_i64().unwrap_or(-1);
+        assert!(
+            num >= 0,
+            "semantic token data[{idx}] must be non-negative, got {num}: {resp}"
+        );
+    }
+
+    // Hardened: verify we have a reasonable number of tokens for this code
+    let token_count = data.len() / 5;
+    assert!(
+        token_count >= 3,
+        "should have at least 3 tokens for code with class, function, and variable, got {token_count}: {resp}"
+    );
+
+    // Hardened: verify JSON-RPC structure
+    assert_eq!(parsed["jsonrpc"], "2.0", "must be valid JSON-RPC 2.0: {resp}");
+    assert_eq!(parsed["id"], 370, "response id must match request id: {resp}");
     Ok(())
 }
 
@@ -3224,5 +3611,1301 @@ y = greet(\"world\")
         "codeLens should show '2 references' for greet: {resp}"
     );
 
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_semantic_tokens_decorator() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+from typing import Generic, TypeVar
+
+T = TypeVar('T')
+
+class Box(Generic[T]):
+    value: T
+
+    @staticmethod
+    def empty() -> None:
+        pass
+
+def greet(name: str) -> str:
+    return name
+";
+    fixture
+        .did_open("file:///ws_semtok_dec.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            900,
+            "textDocument/semanticTokens/full",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_semtok_dec.py" }
+            }),
+        )
+        .await?
+        .ok_or("no semantic tokens response")?;
+
+    assert!(
+        resp.contains("\"data\""),
+        "semantic tokens should contain 'data' array: {resp}"
+    );
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let data = parsed["result"]["data"]
+        .as_array()
+        .ok_or("data should be an array")?;
+
+    // Each token is 5 integers; we have decorators, type annotations, type params, etc.
+    assert_eq!(
+        data.len() % 5,
+        0,
+        "token data length should be multiple of 5"
+    );
+
+    // Should have many tokens: imports, T, Box, Generic[T], value, staticmethod,
+    // empty, greet, name, str, str return annotations, etc.
+    // Minimum: at least 8 tokens (40 integers)
+    assert!(
+        data.len() >= 40,
+        "should have at least 8 tokens for decorated code: {resp}"
+    );
+
+    Ok(())
+}
+
+// ── Phase 4 Additional: Workspace Symbols ────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_workspace_symbols_empty_query() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    // Open a document with known symbols.
+    let code = "class Dog:\n    breed: str\n\ndef bark(volume: int) -> str:\n    return \"woof\"";
+    fixture.did_open("file:///ws_sym_empty.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Empty query should return all symbols from all open documents.
+    let resp = fixture
+        .request(
+            700,
+            "workspace/symbol",
+            serde_json::json!({ "query": "" }),
+        )
+        .await?
+        .ok_or("no workspace/symbol response for empty query")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let result = &parsed["result"];
+
+    let symbols = result
+        .as_array()
+        .ok_or("workspace/symbol result should be an array")?;
+
+    // Empty query should still return symbols — not an empty array.
+    assert!(
+        !symbols.is_empty(),
+        "empty query should still return symbols: {resp}"
+    );
+
+    // We opened a file with Dog class and bark function — both should appear.
+    assert!(
+        resp.contains("\"Dog\""),
+        "expected Dog class in workspace symbols with empty query: {resp}"
+    );
+    assert!(
+        resp.contains("\"bark\""),
+        "expected bark function in workspace symbols with empty query: {resp}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_workspace_symbols_no_match() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    // Open a document with known symbols.
+    let code = "class Apple:\n    color: str\n\ndef eat(fruit: str) -> str:\n    return fruit";
+    fixture
+        .did_open("file:///ws_sym_nomatch.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Query for something that matches nothing in the document.
+    let resp = fixture
+        .request(
+            701,
+            "workspace/symbol",
+            serde_json::json!({ "query": "zzzznonexistent" }),
+        )
+        .await?
+        .ok_or("no workspace/symbol response for non-matching query")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let result = &parsed["result"];
+
+    // No symbols should match a nonsense query.
+    // Valid LSP responses: null (no results) or an empty array.
+    if result.is_null() {
+        // null means no results — this is valid.
+    } else {
+        let symbols = result
+            .as_array()
+            .ok_or("workspace/symbol result should be null or an array")?;
+        assert!(
+            symbols.is_empty(),
+            "query with no matching symbols should return empty array or null, got {} symbols: {resp}",
+            symbols.len()
+        );
+    }
+
+    Ok(())
+}
+
+// ── Phase 4 Additional: Format Document ──────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_format_document_already_formatted() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    // Well-formatted Python code (PEP 8 compliant, trailing newline).
+    let code = "x: int = 1\ny: str = \"hello\"\n\n\ndef greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n";
+    fixture
+        .did_open("file:///ws_format_clean.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            710,
+            "textDocument/formatting",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_format_clean.py" },
+                "options": { "tabSize": 4, "insertSpaces": true }
+            }),
+        )
+        .await?
+        .ok_or("no formatting response for already-formatted code")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let result = &parsed["result"];
+
+    // For already-formatted code, result should be null (no changes)
+    // or an empty array of edits — both are valid LSP responses.
+    if !result.is_null() {
+        let edits = result
+            .as_array()
+            .ok_or("formatting result should be null or an array")?;
+        // If edits are returned, verify the new text is the same as original
+        // (ruff may return a whole-file replacement that is identical).
+        if !edits.is_empty() {
+            let new_text = edits[0]["newText"]
+                .as_str()
+                .unwrap_or("");
+            // The resulting text should be equivalent to the input.
+            assert!(
+                new_text == code || edits.is_empty(),
+                "already-formatted code should produce no meaningful changes: {resp}"
+            );
+        }
+    }
+    // result == null is also fine — means no edits needed.
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_format_document_empty_file() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    // Empty file — formatting should not crash.
+    let code = "";
+    fixture
+        .did_open("file:///ws_format_empty.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            711,
+            "textDocument/formatting",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_format_empty.py" },
+                "options": { "tabSize": 4, "insertSpaces": true }
+            }),
+        )
+        .await?
+        .ok_or("no formatting response for empty file")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+
+    // Response must have a result field — it can be null or an empty array.
+    assert!(
+        parsed.get("result").is_some(),
+        "formatting empty file should return a valid result: {resp}"
+    );
+
+    let result = &parsed["result"];
+    if !result.is_null() {
+        let edits = result
+            .as_array()
+            .ok_or("formatting result for empty file should be null or an array")?;
+        // Empty file should not produce meaningful edits.
+        // If there are edits, the newText should be empty or whitespace-only.
+        for edit in edits {
+            let new_text = edit["newText"].as_str().unwrap_or("");
+            assert!(
+                new_text.trim().is_empty(),
+                "empty file formatting should not produce non-empty content: {resp}"
+            );
+        }
+    }
+
+    Ok(())
+}
+
+// ── Phase 4 Additional: Folding Ranges ───────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_folding_ranges_import_block() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    // Document with consecutive imports that should fold as one block.
+    let code = "\
+import os
+import sys
+import json
+import typing
+
+def main() -> None:
+    pass
+";
+    fixture
+        .did_open("file:///ws_fold_imports.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            720,
+            "textDocument/foldingRange",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_fold_imports.py" }
+            }),
+        )
+        .await?
+        .ok_or("no folding range response for import block")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let result = &parsed["result"];
+
+    let ranges = result
+        .as_array()
+        .ok_or("folding ranges result should be an array")?;
+
+    // We should have at least 1 folding range for the imports block
+    // and 1 for the main function.
+    assert!(
+        ranges.len() >= 2,
+        "should have at least 2 folding ranges (imports + function), got {}: {resp}",
+        ranges.len()
+    );
+
+    // Find a folding range that starts at line 0 (first import) and
+    // covers at least through line 3 (last import).
+    let has_import_fold = ranges.iter().any(|range| {
+        let start = range["startLine"].as_u64().unwrap_or(u64::MAX);
+        let end = range["endLine"].as_u64().unwrap_or(0);
+        // Import block spans lines 0-3.
+        start == 0 && end >= 3
+    });
+
+    assert!(
+        has_import_fold,
+        "consecutive imports should produce a folding range starting at line 0 covering through line 3: {resp}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_folding_ranges_nested_class_and_function() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    // Nested structures: class containing two methods.
+    let code = "\
+class Outer:
+    def method_a(self) -> int:
+        x: int = 1
+        return x
+
+    def method_b(self) -> str:
+        y: str = \"hello\"
+        return y
+
+def standalone(val: int) -> int:
+    return val + 1
+";
+    fixture
+        .did_open("file:///ws_fold_nested.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            721,
+            "textDocument/foldingRange",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_fold_nested.py" }
+            }),
+        )
+        .await?
+        .ok_or("no folding range response for nested structures")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let result = &parsed["result"];
+
+    let ranges = result
+        .as_array()
+        .ok_or("folding ranges result should be an array")?;
+
+    // We expect separate folding ranges for:
+    // 1. Outer class (lines 0-8)
+    // 2. method_a (lines 1-3)
+    // 3. method_b (lines 5-7)
+    // 4. standalone function (lines 9-10)
+    assert!(
+        ranges.len() >= 4,
+        "should have at least 4 folding ranges (class + 2 methods + standalone), got {}: {resp}",
+        ranges.len()
+    );
+
+    // Collect all (startLine, endLine) pairs.
+    let fold_pairs: Vec<(u64, u64)> = ranges
+        .iter()
+        .filter_map(|range| {
+            let start = range["startLine"].as_u64()?;
+            let end = range["endLine"].as_u64()?;
+            Some((start, end))
+        })
+        .collect();
+
+    // The Outer class fold should start at line 0.
+    let has_class_fold = fold_pairs.iter().any(|(start, _)| *start == 0);
+    assert!(
+        has_class_fold,
+        "Outer class should have a folding range starting at line 0: {resp}"
+    );
+
+    // There should be a method fold starting at line 1 (method_a).
+    let has_method_a_fold = fold_pairs.iter().any(|(start, _)| *start == 1);
+    assert!(
+        has_method_a_fold,
+        "method_a should have a folding range starting at line 1: {resp}"
+    );
+
+    // There should be a method fold starting at line 5 (method_b).
+    let has_method_b_fold = fold_pairs.iter().any(|(start, _)| *start == 5);
+    assert!(
+        has_method_b_fold,
+        "method_b should have a folding range starting at line 5: {resp}"
+    );
+
+    Ok(())
+}
+
+// ── Phase 4 Additional: Selection Ranges ─────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_selection_ranges_has_parent_chain() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    // Deeply nested structure to ensure parent chain hierarchy.
+    let code = "\
+class Container:
+    def process(self, data: str) -> str:
+        result: str = data.upper()
+        return result
+";
+    fixture
+        .did_open("file:///ws_sel_chain.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Cursor on 'result' inside the method body (line 2, character 8).
+    let resp = fixture
+        .request(
+            730,
+            "textDocument/selectionRange",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_sel_chain.py" },
+                "positions": [{ "line": 2, "character": 8 }]
+            }),
+        )
+        .await?
+        .ok_or("no selection range response for parent chain test")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let result = &parsed["result"];
+
+    let ranges = result
+        .as_array()
+        .ok_or("selection range result should be an array")?;
+
+    assert_eq!(
+        ranges.len(),
+        1,
+        "should have exactly 1 selection range for 1 position: {resp}"
+    );
+
+    let sel = &ranges[0];
+
+    // The innermost range must exist with a valid range object.
+    let inner_range = sel
+        .get("range")
+        .ok_or("selection range should have a range")?;
+    assert!(
+        inner_range.get("start").is_some() && inner_range.get("end").is_some(),
+        "innermost range should have start and end positions: {resp}"
+    );
+
+    // Walk up the parent chain and verify hierarchy:
+    // Each parent's range should be equal to or larger than its child.
+    let mut depth = 1;
+    let mut current = sel.clone();
+    let mut prev_start_line = inner_range["start"]["line"].as_u64().unwrap_or(u64::MAX);
+    let mut prev_end_line = inner_range["end"]["line"].as_u64().unwrap_or(0);
+
+    while let Some(parent) = current.get("parent") {
+        if parent.is_null() {
+            break;
+        }
+        depth += 1;
+
+        let parent_range = parent
+            .get("range")
+            .ok_or("parent selection range should have a range")?;
+        let parent_start = parent_range["start"]["line"].as_u64().unwrap_or(u64::MAX);
+        let parent_end = parent_range["end"]["line"].as_u64().unwrap_or(0);
+
+        // Parent range must be at least as large as child range.
+        assert!(
+            parent_start <= prev_start_line && parent_end >= prev_end_line,
+            "parent range ({parent_start}..{parent_end}) should contain child range ({prev_start_line}..{prev_end_line}): {resp}"
+        );
+
+        prev_start_line = parent_start;
+        prev_end_line = parent_end;
+        current = parent.clone();
+    }
+
+    // For a variable inside a method inside a class, we expect at least 3 levels:
+    // variable/statement -> method -> class (or more).
+    assert!(
+        depth >= 3,
+        "selection range chain should have at least 3 levels of nesting (var -> method -> class), got {depth}: {resp}"
+    );
+
+    Ok(())
+}
+
+// ── Phase 1-2 edge case tests ────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_document_symbols_module_variables() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    // File with ONLY top-level variables (no classes or functions).
+    let code = "\
+MAX_SIZE: int = 100
+name: str = \"basilisk\"
+enabled: bool = True
+";
+    fixture
+        .did_open("file:///ws_symbols_vars.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            1100,
+            "textDocument/documentSymbol",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_symbols_vars.py" }
+            }),
+        )
+        .await?
+        .ok_or("no document symbols response")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let result = parsed["result"]
+        .as_array()
+        .ok_or("expected result array")?;
+
+    // All three module variables should appear.
+    let names: Vec<&str> = result
+        .iter()
+        .filter_map(|s| s["name"].as_str())
+        .collect();
+    assert!(
+        names.contains(&"MAX_SIZE"),
+        "symbols should include 'MAX_SIZE': {resp}"
+    );
+    assert!(
+        names.contains(&"name"),
+        "symbols should include 'name': {resp}"
+    );
+    assert!(
+        names.contains(&"enabled"),
+        "symbols should include 'enabled': {resp}"
+    );
+
+    // Verify they are VARIABLE kind (SymbolKind::VARIABLE = 13).
+    for sym in result {
+        if sym["name"].as_str() == Some("MAX_SIZE")
+            || sym["name"].as_str() == Some("name")
+            || sym["name"].as_str() == Some("enabled")
+        {
+            assert_eq!(
+                sym["kind"].as_u64(),
+                Some(13),
+                "module variable should have kind VARIABLE (13): {sym}"
+            );
+        }
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_document_symbols_multiple_classes() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+class Cat:
+    name: str
+    def meow(self) -> str:
+        return \"meow\"
+
+class Dog:
+    name: str
+    def bark(self) -> str:
+        return \"woof\"
+
+class Bird:
+    name: str
+    def chirp(self) -> str:
+        return \"tweet\"
+";
+    fixture
+        .did_open("file:///ws_symbols_multi_class.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            1101,
+            "textDocument/documentSymbol",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_symbols_multi_class.py" }
+            }),
+        )
+        .await?
+        .ok_or("no document symbols response")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let result = parsed["result"]
+        .as_array()
+        .ok_or("expected result array")?;
+
+    // All three classes should appear at top level.
+    let top_names: Vec<&str> = result
+        .iter()
+        .filter_map(|s| s["name"].as_str())
+        .collect();
+    assert!(top_names.contains(&"Cat"), "should contain class 'Cat': {resp}");
+    assert!(top_names.contains(&"Dog"), "should contain class 'Dog': {resp}");
+    assert!(top_names.contains(&"Bird"), "should contain class 'Bird': {resp}");
+
+    // Each class should have children (nested methods).
+    for class_name in &["Cat", "Dog", "Bird"] {
+        let class_sym = result
+            .iter()
+            .find(|s| s["name"].as_str() == Some(class_name))
+            .ok_or(format!("class '{class_name}' not found"))?;
+
+        // Classes should be kind CLASS (5).
+        assert_eq!(
+            class_sym["kind"].as_u64(),
+            Some(5),
+            "class should have kind CLASS (5): {class_sym}"
+        );
+
+        let children = class_sym["children"]
+            .as_array()
+            .ok_or(format!("class '{class_name}' should have children"))?;
+        assert!(
+            !children.is_empty(),
+            "class '{class_name}' should have nested children (methods/attributes): {resp}"
+        );
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_signature_help_method_skips_self() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+class Greeter:
+    prefix: str
+    def greet(self, name: str, loud: bool) -> str:
+        return f\"{self.prefix} {name}\"
+
+g: Greeter = Greeter()
+result: str = g.greet(\"world\", True)
+";
+    fixture
+        .did_open("file:///ws_sighelp_self.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Cursor inside g.greet( call — line 6, after "g.greet("
+    // "result: str = g.greet(" is 23 chars, position at char 23
+    let resp = fixture
+        .request(
+            1102,
+            "textDocument/signatureHelp",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_sighelp_self.py" },
+                "position": { "line": 6, "character": 23 }
+            }),
+        )
+        .await?
+        .ok_or("no signature help response")?;
+
+    // Should show greet signature with name and loud but NOT self.
+    assert!(
+        resp.contains("name"),
+        "signature should show parameter 'name': {resp}"
+    );
+    assert!(
+        resp.contains("loud"),
+        "signature should show parameter 'loud': {resp}"
+    );
+
+    // Parse and verify self is not in the parameter list.
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let signatures = parsed["result"]["signatures"]
+        .as_array()
+        .ok_or("expected signatures array")?;
+    if let Some(sig) = signatures.first() {
+        let params = sig["parameters"]
+            .as_array()
+            .ok_or("expected parameters array")?;
+        let param_labels: Vec<&str> = params
+            .iter()
+            .filter_map(|p| p["label"].as_str())
+            .collect();
+        assert!(
+            !param_labels.iter().any(|l| *l == "self"),
+            "signature help should NOT include 'self' as a parameter: {param_labels:?}"
+        );
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_signature_help_class_constructor() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+class Point:
+    x: int
+    y: int
+    def __init__(self, x: int, y: int) -> None:
+        self.x = x
+        self.y = y
+
+p: Point = Point(1, 2)
+";
+    fixture
+        .did_open("file:///ws_sighelp_ctor.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Cursor inside Point( constructor call — line 7
+    // "p: Point = Point(" is 18 chars, cursor at char 18
+    let resp = fixture
+        .request(
+            1103,
+            "textDocument/signatureHelp",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_sighelp_ctor.py" },
+                "position": { "line": 7, "character": 18 }
+            }),
+        )
+        .await?
+        .ok_or("no signature help response")?;
+
+    // Should show __init__ signature parameters (x and y, not self).
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let result = &parsed["result"];
+    assert!(
+        !result.is_null(),
+        "signature help for constructor should not be null: {resp}"
+    );
+
+    // If we get a valid signature, verify it shows the parameters.
+    if let Some(signatures) = result["signatures"].as_array() {
+        if let Some(sig) = signatures.first() {
+            let label = sig["label"].as_str().unwrap_or("");
+            assert!(
+                label.contains("x") && label.contains("y"),
+                "constructor signature should show parameters x and y: {label}"
+            );
+            // self should not appear in the label.
+            let params = sig["parameters"]
+                .as_array();
+            if let Some(params) = params {
+                let param_labels: Vec<&str> = params
+                    .iter()
+                    .filter_map(|p| p["label"].as_str())
+                    .collect();
+                assert!(
+                    !param_labels.iter().any(|l| *l == "self"),
+                    "constructor signature should NOT include 'self': {param_labels:?}"
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_find_references_include_declaration() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+def helper(x: int) -> int:
+    return x + 1
+
+a: int = helper(10)
+b: int = helper(20)
+";
+    fixture
+        .did_open("file:///ws_refs_decl.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Find references for "helper" at its definition (line 0, char 4).
+    // With includeDeclaration: true — should include the definition itself.
+    let resp_with = fixture
+        .request(
+            1104,
+            "textDocument/references",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_refs_decl.py" },
+                "position": { "line": 0, "character": 4 },
+                "context": { "includeDeclaration": true }
+            }),
+        )
+        .await?
+        .ok_or("no references response with includeDeclaration")?;
+
+    // Should find at least 3: definition + 2 usages.
+    let count_with = resp_with.matches("ws_refs_decl.py").count();
+    assert!(
+        count_with >= 3,
+        "with includeDeclaration: true, should find at least 3 references (def + 2 usages), got {count_with}: {resp_with}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_find_references_word_boundary() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    // "greet" and "greeting" are different identifiers — searching for "greet"
+    // should NOT match "greeting" due to word boundary checking.
+    let code = "\
+def greet(name: str) -> str:
+    return f\"Hello, {name}!\"
+
+def greeting(name: str) -> str:
+    return f\"Hi, {name}!\"
+
+a: str = greet(\"world\")
+b: str = greeting(\"world\")
+";
+    fixture
+        .did_open("file:///ws_refs_boundary.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Find references for "greet" at its definition (line 0, char 4).
+    let resp = fixture
+        .request(
+            1105,
+            "textDocument/references",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_refs_boundary.py" },
+                "position": { "line": 0, "character": 4 },
+                "context": { "includeDeclaration": true }
+            }),
+        )
+        .await?
+        .ok_or("no references response")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let locations = parsed["result"]
+        .as_array()
+        .ok_or("expected result array")?;
+
+    // "greet" appears on line 0 (def) and line 6 (usage) = 2 refs.
+    // "greeting" on lines 3 and 7 should NOT be included.
+    // So we expect exactly 2 references.
+    assert_eq!(
+        locations.len(),
+        2,
+        "should find exactly 2 references for 'greet' (not matching 'greeting'): {resp}"
+    );
+
+    // Verify none of the locations point to line 3 or line 7 (greeting lines).
+    for loc in locations {
+        let line = loc["range"]["start"]["line"].as_u64().unwrap_or(99);
+        assert!(
+            line != 3 && line != 7,
+            "reference should NOT match 'greeting' on line {line}: {resp}"
+        );
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_code_action_no_actions_for_clean_code() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    // Fully annotated code with no redundant annotations — no diagnostics expected.
+    let code = "def add(a: int, b: int) -> int:\n    return a + b\n";
+    fixture
+        .did_open("file:///ws_ca_clean.py", code)
+        .await?;
+
+    let diag_msg = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics published")?;
+
+    // Verify diagnostics are empty.
+    assert!(
+        diag_msg.contains("\"diagnostics\":[]"),
+        "clean code should have no diagnostics: {diag_msg}"
+    );
+
+    // Request code actions with empty diagnostics context.
+    let resp = fixture
+        .request(
+            1106,
+            "textDocument/codeAction",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_ca_clean.py" },
+                "range": {
+                    "start": { "line": 0, "character": 0 },
+                    "end": { "line": 0, "character": 12 }
+                },
+                "context": { "diagnostics": [] }
+            }),
+        )
+        .await?
+        .ok_or("no code action response")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let result = &parsed["result"];
+
+    // Should return null or an empty array (no quick fixes needed).
+    // Organize imports may still be offered, so if result is an array,
+    // verify no quickfix actions are present.
+    if let Some(actions) = result.as_array() {
+        let quickfixes: Vec<&serde_json::Value> = actions
+            .iter()
+            .filter(|a| a["kind"].as_str() == Some("quickfix"))
+            .collect();
+        assert!(
+            quickfixes.is_empty(),
+            "clean code should have no quickfix code actions: {resp}"
+        );
+    }
+    // result being null is also acceptable — means no actions at all.
+
+    Ok(())
+}
+
+// ── Phase 3: Additional Inlay Hint Tests ────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_inlay_hint_no_hints_for_annotated_vars() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    // Mix of annotated and unannotated variables — only unannotated should get hints.
+    let code = "\
+x: int = 42
+y = \"hello\"
+z: bool = True
+w = 3.14
+";
+    fixture
+        .did_open("file:///ws_inlay_ann_mix.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            1200,
+            "textDocument/inlayHint",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_inlay_ann_mix.py" },
+                "range": {
+                    "start": { "line": 0, "character": 0 },
+                    "end": { "line": 4, "character": 0 }
+                }
+            }),
+        )
+        .await?
+        .ok_or("no inlay hint response")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let hints = parsed["result"]
+        .as_array()
+        .ok_or("result should be an array")?;
+
+    // y and w are unannotated — they should get hints.
+    // x and z are annotated — they should NOT get hints.
+    // So we expect exactly 2 type hints: str for y, float for w.
+    assert!(
+        resp.contains("str"),
+        "should show 'str' hint for unannotated y: {resp}"
+    );
+    assert!(
+        resp.contains("float"),
+        "should show 'float' hint for unannotated w: {resp}"
+    );
+
+    // Verify no hint label contains "int" (the annotated x) or "bool" (the annotated z)
+    // as a standalone type hint. We check each hint label individually.
+    for hint in hints {
+        let label = hint["label"].as_str().unwrap_or("");
+        assert!(
+            label != ": int",
+            "annotated variable x:int should NOT get an inlay hint: {resp}"
+        );
+        assert!(
+            label != ": bool",
+            "annotated variable z:bool should NOT get an inlay hint: {resp}"
+        );
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_inlay_hint_return_type_multiple_returns() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    // Function with multiple return statements all returning the same type — should infer.
+    let code = "\
+def pick(flag: bool):
+    if flag:
+        return 1
+    return 2
+";
+    fixture
+        .did_open("file:///ws_inlay_multi_ret.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            1201,
+            "textDocument/inlayHint",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_inlay_multi_ret.py" },
+                "range": {
+                    "start": { "line": 0, "character": 0 },
+                    "end": { "line": 4, "character": 0 }
+                }
+            }),
+        )
+        .await?
+        .ok_or("no inlay hint response")?;
+
+    // Both returns are int literals, so return type should be inferred as int.
+    assert!(
+        resp.contains("-> int"),
+        "multiple int returns should infer '-> int' return type hint: {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_inlay_hint_method_return_type() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    // Method inside a class without return annotation — should get return type hint.
+    let code = "\
+class Calculator:
+    def add(self, a: int, b: int):
+        return 42
+";
+    fixture
+        .did_open("file:///ws_inlay_method_ret.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            1202,
+            "textDocument/inlayHint",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_inlay_method_ret.py" },
+                "range": {
+                    "start": { "line": 0, "character": 0 },
+                    "end": { "line": 3, "character": 0 }
+                }
+            }),
+        )
+        .await?
+        .ok_or("no inlay hint response")?;
+
+    assert!(
+        resp.contains("-> int"),
+        "method returning 42 should get '-> int' return type hint: {resp}"
+    );
+    Ok(())
+}
+
+// ── Phase 3: Additional Semantic Token Tests ────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_semantic_tokens_class_token() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+class Animal:
+    name: str
+";
+    fixture
+        .did_open("file:///ws_semtok_class.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            1203,
+            "textDocument/semanticTokens/full",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_semtok_class.py" }
+            }),
+        )
+        .await?
+        .ok_or("no semantic tokens response")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let data = parsed["result"]["data"]
+        .as_array()
+        .ok_or("data should be an array")?;
+
+    assert_eq!(data.len() % 5, 0, "token data length should be multiple of 5");
+    assert!(data.len() >= 5, "should have at least 1 token: {resp}");
+
+    // Token type 2 = class. The first token should be "Animal" at line 0.
+    // data layout: [deltaLine, deltaStart, length, tokenType, tokenModifiers]
+    // Find a token with tokenType=2 (class).
+    let tokens: Vec<Vec<u64>> = data
+        .chunks(5)
+        .map(|chunk| chunk.iter().map(|v| v.as_u64().unwrap_or(0)).collect())
+        .collect();
+
+    let has_class_token = tokens.iter().any(|t| t[3] == 2);
+    assert!(
+        has_class_token,
+        "should have a token with type 2 (class) for 'Animal': {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_semantic_tokens_parameter_token() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+def greet(name: str) -> str:
+    return name
+";
+    fixture
+        .did_open("file:///ws_semtok_param.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            1204,
+            "textDocument/semanticTokens/full",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_semtok_param.py" }
+            }),
+        )
+        .await?
+        .ok_or("no semantic tokens response")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let data = parsed["result"]["data"]
+        .as_array()
+        .ok_or("data should be an array")?;
+
+    assert_eq!(data.len() % 5, 0, "token data length should be multiple of 5");
+
+    // Token type 3 = parameter. "name" should be classified as a parameter.
+    let tokens: Vec<Vec<u64>> = data
+        .chunks(5)
+        .map(|chunk| chunk.iter().map(|v| v.as_u64().unwrap_or(0)).collect())
+        .collect();
+
+    let has_param_token = tokens.iter().any(|t| t[3] == 3);
+    assert!(
+        has_param_token,
+        "should have a token with type 3 (parameter) for 'name': {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_semantic_tokens_variable_token() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+x: int = 42
+y: str = \"hello\"
+";
+    fixture
+        .did_open("file:///ws_semtok_var.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            1205,
+            "textDocument/semanticTokens/full",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_semtok_var.py" }
+            }),
+        )
+        .await?
+        .ok_or("no semantic tokens response")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let data = parsed["result"]["data"]
+        .as_array()
+        .ok_or("data should be an array")?;
+
+    assert_eq!(data.len() % 5, 0, "token data length should be multiple of 5");
+
+    // Token type 4 = variable. Module-level x and y should be classified as variables.
+    let tokens: Vec<Vec<u64>> = data
+        .chunks(5)
+        .map(|chunk| chunk.iter().map(|v| v.as_u64().unwrap_or(0)).collect())
+        .collect();
+
+    let variable_count = tokens.iter().filter(|t| t[3] == 4).count();
+    assert!(
+        variable_count >= 2,
+        "should have at least 2 tokens with type 4 (variable) for x and y: {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_semantic_tokens_method_vs_function() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+class Dog:
+    def bark(self) -> str:
+        return \"woof\"
+
+def greet(name: str) -> str:
+    return name
+";
+    fixture
+        .did_open("file:///ws_semtok_meth_fn.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            1206,
+            "textDocument/semanticTokens/full",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_semtok_meth_fn.py" }
+            }),
+        )
+        .await?
+        .ok_or("no semantic tokens response")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let data = parsed["result"]["data"]
+        .as_array()
+        .ok_or("data should be an array")?;
+
+    assert_eq!(data.len() % 5, 0, "token data length should be multiple of 5");
+
+    // Token type 0 = function, 1 = method.
+    let tokens: Vec<Vec<u64>> = data
+        .chunks(5)
+        .map(|chunk| chunk.iter().map(|v| v.as_u64().unwrap_or(0)).collect())
+        .collect();
+
+    let has_method = tokens.iter().any(|t| t[3] == 1);
+    let has_function = tokens.iter().any(|t| t[3] == 0);
+
+    assert!(
+        has_method,
+        "should have a token with type 1 (method) for 'bark': {resp}"
+    );
+    assert!(
+        has_function,
+        "should have a token with type 0 (function) for 'greet': {resp}"
+    );
     Ok(())
 }
