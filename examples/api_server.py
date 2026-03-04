@@ -76,7 +76,7 @@ class PrefixRouter(Router):
     prefix: str = "/api"
 
     def resolve(self, path: str) -> str:  # BSK-E0025: missing @override
-        return self.prefix + path
+        return self.p + path
 
 
 # ── BSK-E0019: variable assigned inside if, returned outside ─────────────────

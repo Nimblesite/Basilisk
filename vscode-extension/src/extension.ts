@@ -12,7 +12,6 @@ import {
   LanguageClient,
   LanguageClientOptions,
   ServerOptions,
-  TransportKind,
 } from "vscode-languageclient/node";
 
 let client: LanguageClient | undefined;
@@ -38,7 +37,7 @@ const COLLECTION_NAME = "basilisk";
 export function activate(context: vscode.ExtensionContext): void {
   const cfg = vscode.workspace.getConfiguration("basilisk");
   const executablePath = cfg.get<string>("executablePath") ?? "basilisk";
-  const useLsp = cfg.get<boolean>("useLsp") ?? false;
+  const useLsp = cfg.get<boolean>("useLsp") ?? true;
 
   if (useLsp) {
     startLspClient(context, executablePath);
@@ -55,7 +54,6 @@ function startLspClient(context: vscode.ExtensionContext, executablePath: string
   const serverOptions: ServerOptions = {
     command: executablePath,
     args: ["lsp"],
-    transport: TransportKind.stdio,
   };
 
   const clientOptions: LanguageClientOptions = {
