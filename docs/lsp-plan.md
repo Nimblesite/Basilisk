@@ -13,7 +13,7 @@
 | **2** | Signature Help, Find References, Rename, Expanded Code Actions, Kwarg Completions | **P2** | DONE |
 | **3** | Inlay Hints (types + params + return), Semantic Tokens | **P3** | DONE |
 | **4** | Workspace Symbols, Format Document, Folding, Selection Ranges | **P4** | DONE |
-| **5** | Document Highlight, Call Hierarchy, Type Hierarchy, Code Lens | **P5** | IN PROGRESS |
+| **5** | Document Highlight, Call Hierarchy, Type Hierarchy, Code Lens | **P5** | DONE |
 | **6** | Cross-module, Auto-import, Incremental Sync, Salsa | Future | NOT STARTED |
 
 ---
@@ -81,16 +81,16 @@
 
 ---
 
-## Phase 5 — Advanced Features (IN PROGRESS)
+## Phase 5 — Advanced Features (DONE)
 
 | Task | File(s) | Description | Status |
 |------|---------|-------------|--------|
 | 5.1 | `src/highlight.rs` | Document Highlight — symbol occurrences | DONE |
 | 5.2 | `src/call_hierarchy.rs` | Call Hierarchy — incoming/outgoing calls | DONE |
-| 5.3 | `src/type_hierarchy.rs` | Type Hierarchy — supertypes/subtypes | IN PROGRESS |
-| 5.4 | `src/code_lens.rs` | Code Lens — "N references" above functions/classes | IN PROGRESS |
-| 5.5 | `src/semantic_tokens.rs` | Add decorator/type/typeParameter tokens + declaration/static/deprecated modifiers | IN PROGRESS |
-| 5.6 | `src/server.rs` | Register codeActionKinds explicitly | IN PROGRESS |
+| 5.3 | `src/type_hierarchy.rs` | Type Hierarchy — supertypes/subtypes (capability injected via WS bridge) | DONE |
+| 5.4 | `src/code_lens.rs` | Code Lens — "N references" above functions/classes | DONE |
+| 5.5 | `src/semantic_tokens.rs` | 10 token types + 5 modifiers (decorator, type, typeParameter, static, deprecated) | DONE |
+| 5.6 | `src/server.rs` | Register codeActionKinds explicitly | DONE |
 
 ---
 
@@ -135,9 +135,9 @@
 | `textDocument/foldingRange` | ✅ | ✅ DONE | **4** |
 | `textDocument/selectionRange` | ✅ | ✅ DONE | **4** |
 | `textDocument/documentHighlight` | ✅ | ✅ DONE | **5** |
-| `textDocument/codeLens` | ✅ | IN PROGRESS | **5** |
+| `textDocument/codeLens` | ✅ | ✅ DONE | **5** |
 | `textDocument/prepareCallHierarchy` + calls | ✅ | ✅ DONE | **5** |
-| `textDocument/prepareTypeHierarchy` + types | ✅ | IN PROGRESS | **5** |
+| `textDocument/prepareTypeHierarchy` + types | ✅ | ✅ DONE | **5** |
 | `workspace/executeCommand` | ✅ | ✅ DONE | **2** |
 
 ### Completion Quality

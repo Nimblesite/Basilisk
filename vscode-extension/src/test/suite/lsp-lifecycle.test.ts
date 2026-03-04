@@ -139,26 +139,20 @@ async function closeAllEditors(): Promise<void> {
 
 /**
  * Replace the entire contents of a document with new text.
+ * Uses WorkspaceEdit for reliability — editor.edit() can fail when
+ * the editor state is transitioning (e.g. after a server restart).
  */
 async function replaceDocumentContent(
     doc: vscode.TextDocument,
     newContent: string
 ): Promise<boolean> {
-    const editor = vscode.window.activeTextEditor;
-    if (!editor || editor.document.uri.toString() !== doc.uri.toString()) {
-        return false;
-    }
+    const edit = new vscode.WorkspaceEdit();
     const fullRange = new vscode.Range(
-        doc.positionAt(0),
-        doc.positionAt(doc.getText().length)
+        new vscode.Position(0, 0),
+        new vscode.Position(doc.lineCount, 0)
     );
-    const applied = await editor.edit((editBuilder) => {
-        editBuilder.replace(fullRange, newContent);
-    });
-    if (applied) {
-        await doc.save();
-    }
-    return applied;
+    edit.replace(doc.uri, fullRange, newContent);
+    return vscode.workspace.applyEdit(edit);
 }
 
 suite('LSP Lifecycle Tests', () => {

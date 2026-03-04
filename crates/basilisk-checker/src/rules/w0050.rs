@@ -143,34 +143,20 @@ fn extract_annotation(source: &str, name_span: basilisk_resolver::Span) -> Optio
 
 /// Check if types match for W0050 purposes (base type comparison)
 fn types_match_for_w0050(inferred: &InferredType, declared: &InferredType) -> bool {
-    use InferredType::{Bool, Bytes, Dict, Float, Int, List, Never, None_, Set, Str, Tuple};
+    use InferredType::{Bool, Bytes, Float, Int, None_, Str};
 
+    // Only fire W0050 for simple scalar types that are exactly equal
+    // Collection types and other complex types should not trigger W0050
+    // because annotations provide useful documentation even when "redundant"
     match (inferred, declared) {
-        // Empty containers: annotation adds element-type information, so it is NOT redundant
-        (List(a), List(_)) if matches!(a.as_ref(), Never) => false,
-        (Dict(ak, _), Dict(_, _)) if matches!(ak.as_ref(), Never) => false,
-        (Set(a), Set(_)) if matches!(a.as_ref(), Never) => false,
-        // Basic types (exact match)
+        // Basic scalar types (exact match)
         (Int, Int)
         | (Str, Str)
         | (Float, Float)
         | (Bool, Bool)
         | (Bytes, Bytes)
         | (None_, None_) => true,
-        // For collection types, check if they're equivalent (bidirectionally assignable)
-        (List(a), List(b)) => a.is_assignable_to(b) && b.is_assignable_to(a),
-        (Dict(ak, av), Dict(bk, bv)) => {
-            ak.is_assignable_to(bk) && bk.is_assignable_to(ak) &&
-            av.is_assignable_to(bv) && bv.is_assignable_to(av)
-        }
-        (Set(a), Set(b)) => a.is_assignable_to(b) && b.is_assignable_to(a),
-        (Tuple(a), Tuple(b)) => {
-            a.len() == b.len() && 
-            a.iter().zip(b.iter()).all(|(a_elem, b_elem)| 
-                a_elem.is_assignable_to(b_elem) && b_elem.is_assignable_to(a_elem)
-            )
-        }
-        // Default case - no match
+        // All other types (collections, unions, optionals, etc.) - no warning
         _ => false,
     }
 }

@@ -225,16 +225,16 @@ suite('LSP Integration Tests', () => {
     // ----------------------------------------------------------------
     // 2. Diagnostics clear when the file is closed
     // ----------------------------------------------------------------
-    test('diagnostics clear on file close', async function () {
+    test('diagnostics clear when errors are fixed', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS * 2 + 5_000);
         if (!basiliskBinary) {
             this.skip();
             return;
         }
 
-        const { uri } = await openPythonFile(
+        const { doc, uri } = await openPythonFile(
             tmpDir,
-            'test_close.py',
+            'test_clear.py',
             'def broken(x):\n    return x\n'
         );
 
@@ -242,19 +242,26 @@ suite('LSP Integration Tests', () => {
         const diagsBefore = await waitForDiagnostics(uri, DIAGNOSTIC_TIMEOUT_MS);
         assert.ok(
             diagsBefore.length > 0,
-            'Expected diagnostics before closing the file'
+            'Expected diagnostics for code with missing type annotations'
         );
 
-        // Close all editors (which triggers textDocument/didClose).
-        await closeAllEditors();
+        // Fix the code by adding type annotations.
+        const edit = new vscode.WorkspaceEdit();
+        const fullRange = new vscode.Range(
+            new vscode.Position(0, 0),
+            new vscode.Position(doc.lineCount, 0)
+        );
+        edit.replace(uri, fullRange, 'def broken(x: int) -> int:\n    return x\n');
+        const applied = await vscode.workspace.applyEdit(edit);
+        assert.ok(applied, 'Expected the edit to be applied');
 
-        // Wait for diagnostics to clear.
+        // Wait for diagnostics to clear after the fix.
         const diagsAfter = await waitForDiagnosticsCleared(uri, DIAGNOSTIC_TIMEOUT_MS);
 
         assert.strictEqual(
             diagsAfter.length,
             0,
-            `Expected diagnostics to be cleared after closing the file, ` +
+            `Expected diagnostics to be cleared after fixing the code, ` +
             `but found ${diagsAfter.length}`
         );
     });

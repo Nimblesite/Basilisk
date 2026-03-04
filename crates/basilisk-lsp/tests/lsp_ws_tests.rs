@@ -3614,6 +3614,257 @@ y = greet(\"world\")
 }
 
 #[tokio::test]
+async fn test_ws_code_lens_class_references() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+class Animal:
+    name: str
+
+class Dog(Animal):
+    breed: str
+
+def make_animal() -> Animal:
+    return Animal()
+
+x: Animal = make_animal()
+";
+    fixture
+        .did_open("file:///ws_code_lens_class_refs.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            401,
+            "textDocument/codeLens",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_code_lens_class_refs.py" }
+            }),
+        )
+        .await?
+        .ok_or("no codeLens response")?;
+
+    // `Animal` appears in: definition, Dog(Animal), -> Animal, Animal(), x: Animal = 5 total => 4 references.
+    assert!(
+        resp.contains("4 references"),
+        "codeLens should show '4 references' for Animal: {resp}"
+    );
+    // `Dog` is defined but never used elsewhere => 0 references.
+    assert!(
+        resp.contains("0 references"),
+        "codeLens should show '0 references' for Dog: {resp}"
+    );
+    // `make_animal` is called once => 1 reference.
+    assert!(
+        resp.contains("1 reference"),
+        "codeLens should show '1 reference' for make_animal: {resp}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_code_lens_single_reference() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+def helper(x: int) -> int:
+    return x
+
+result: int = helper(42)
+";
+    fixture
+        .did_open("file:///ws_code_lens_single_ref.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            402,
+            "textDocument/codeLens",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_code_lens_single_ref.py" }
+            }),
+        )
+        .await?
+        .ok_or("no codeLens response")?;
+
+    // `helper` is called once (line 4), so singular "1 reference".
+    assert!(
+        resp.contains("1 reference"),
+        "codeLens should show singular '1 reference' for helper: {resp}"
+    );
+    // Must NOT show "1 references" (plural).
+    assert!(
+        !resp.contains("1 references"),
+        "codeLens must use singular form '1 reference', not '1 references': {resp}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_code_lens_no_references() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+def unused_func(x: int) -> int:
+    return x
+";
+    fixture
+        .did_open("file:///ws_code_lens_no_refs.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            403,
+            "textDocument/codeLens",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_code_lens_no_refs.py" }
+            }),
+        )
+        .await?
+        .ok_or("no codeLens response")?;
+
+    // `unused_func` is never called, so 0 references.
+    assert!(
+        resp.contains("0 references"),
+        "codeLens should show '0 references' for unused function: {resp}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_code_lens_methods_excluded() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+class MyClass:
+    def method_one(self) -> None:
+        pass
+
+    def method_two(self) -> None:
+        self.method_one()
+";
+    fixture
+        .did_open("file:///ws_code_lens_methods.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            404,
+            "textDocument/codeLens",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_code_lens_methods.py" }
+            }),
+        )
+        .await?
+        .ok_or("no codeLens response")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let lenses = parsed["result"]
+        .as_array()
+        .ok_or("codeLens result should be an array")?;
+
+    // Only `MyClass` should get a lens; methods should be excluded.
+    // method_one and method_two are inside a class, so they must not appear.
+    assert_eq!(
+        lenses.len(),
+        1,
+        "only the class should get a code lens, not methods: {resp}"
+    );
+
+    // The single lens should be for MyClass.
+    let title = lenses[0]["command"]["title"]
+        .as_str()
+        .ok_or("lens should have a title")?;
+    assert!(
+        title.contains("references"),
+        "the single lens should be a reference count for MyClass: {title}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_code_lens_multiple_functions() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+def alpha(x: int) -> int:
+    return x
+
+def beta(y: int) -> int:
+    return alpha(y)
+
+def gamma(z: int) -> int:
+    return beta(alpha(z))
+";
+    fixture
+        .did_open("file:///ws_code_lens_multi.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            405,
+            "textDocument/codeLens",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_code_lens_multi.py" }
+            }),
+        )
+        .await?
+        .ok_or("no codeLens response")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let lenses = parsed["result"]
+        .as_array()
+        .ok_or("codeLens result should be an array")?;
+
+    // Three top-level functions => three lenses.
+    assert_eq!(
+        lenses.len(),
+        3,
+        "each top-level function should get its own code lens: {resp}"
+    );
+
+    // Collect titles in order (alpha, beta, gamma).
+    let titles: Vec<&str> = lenses
+        .iter()
+        .filter_map(|lens| lens["command"]["title"].as_str())
+        .collect();
+
+    assert_eq!(titles.len(), 3, "all three lenses should have titles");
+
+    // alpha is called in beta (line 5) and gamma (line 8) => 2 references.
+    assert_eq!(
+        titles[0], "2 references",
+        "alpha should have 2 references: {resp}"
+    );
+    // beta is called in gamma (line 8) => 1 reference.
+    assert_eq!(
+        titles[1], "1 reference",
+        "beta should have 1 reference: {resp}"
+    );
+    // gamma is never called => 0 references.
+    assert_eq!(
+        titles[2], "0 references",
+        "gamma should have 0 references: {resp}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_ws_semantic_tokens_decorator() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
     fixture.initialize().await?;
@@ -4909,6 +5160,363 @@ def greet(name: str) -> str:
     Ok(())
 }
 
+// ── Phase 5: Comprehensive Semantic Token Type & Modifier Tests ─────────────
+
+/// Verify tokenType=7 (decorator) appears for @decorator usage.
+#[tokio::test]
+async fn test_ws_semantic_tokens_decorator_token() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+def my_decorator(func):
+    return func
+
+@my_decorator
+def hello() -> None:
+    pass
+";
+    fixture
+        .did_open("file:///ws_semtok_decorator.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            1207,
+            "textDocument/semanticTokens/full",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_semtok_decorator.py" }
+            }),
+        )
+        .await?
+        .ok_or("no semantic tokens response")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let data = parsed["result"]["data"]
+        .as_array()
+        .ok_or("data should be an array")?;
+
+    assert_eq!(data.len() % 5, 0, "token data length should be multiple of 5");
+
+    // Token type 7 = decorator. The @my_decorator usage should emit a decorator token.
+    let tokens: Vec<Vec<u64>> = data
+        .chunks(5)
+        .map(|chunk| chunk.iter().map(|v| v.as_u64().unwrap_or(0)).collect())
+        .collect();
+
+    let has_decorator_token = tokens.iter().any(|t| t[3] == 7);
+    assert!(
+        has_decorator_token,
+        "should have a token with type 7 (decorator) for '@my_decorator': {resp}"
+    );
+    Ok(())
+}
+
+/// Verify tokenType=8 (type) appears for type annotations.
+#[tokio::test]
+async fn test_ws_semantic_tokens_type_annotation() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+def process(data: str) -> int:
+    return 42
+";
+    fixture
+        .did_open("file:///ws_semtok_type_ann.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            1208,
+            "textDocument/semanticTokens/full",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_semtok_type_ann.py" }
+            }),
+        )
+        .await?
+        .ok_or("no semantic tokens response")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let data = parsed["result"]["data"]
+        .as_array()
+        .ok_or("data should be an array")?;
+
+    assert_eq!(data.len() % 5, 0, "token data length should be multiple of 5");
+
+    // Token type 8 = type. Both "str" (param annotation) and "int" (return annotation)
+    // should produce type tokens.
+    let tokens: Vec<Vec<u64>> = data
+        .chunks(5)
+        .map(|chunk| chunk.iter().map(|v| v.as_u64().unwrap_or(0)).collect())
+        .collect();
+
+    let type_token_count = tokens.iter().filter(|t| t[3] == 8).count();
+    assert!(
+        type_token_count >= 2,
+        "should have at least 2 tokens with type 8 (type) for 'str' and 'int' annotations: {resp}"
+    );
+    Ok(())
+}
+
+/// Verify tokenType=9 (typeParameter) appears for generic type parameters.
+#[tokio::test]
+async fn test_ws_semantic_tokens_type_parameter() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+from typing import Generic, TypeVar
+
+T = TypeVar('T')
+
+class Box(Generic[T]):
+    value: T
+";
+    fixture
+        .did_open("file:///ws_semtok_typeparam.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            1209,
+            "textDocument/semanticTokens/full",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_semtok_typeparam.py" }
+            }),
+        )
+        .await?
+        .ok_or("no semantic tokens response")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let data = parsed["result"]["data"]
+        .as_array()
+        .ok_or("data should be an array")?;
+
+    assert_eq!(data.len() % 5, 0, "token data length should be multiple of 5");
+
+    // Token type 9 = typeParameter. Generic params in class Box should emit this.
+    let tokens: Vec<Vec<u64>> = data
+        .chunks(5)
+        .map(|chunk| chunk.iter().map(|v| v.as_u64().unwrap_or(0)).collect())
+        .collect();
+
+    let has_type_param = tokens.iter().any(|t| t[3] == 9);
+    assert!(
+        has_type_param,
+        "should have a token with type 9 (typeParameter) for generic param T: {resp}"
+    );
+    Ok(())
+}
+
+/// Verify MOD_STATIC (bit 3, value 8) is set for @staticmethod function tokens.
+#[tokio::test]
+async fn test_ws_semantic_tokens_static_modifier() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+class MathUtils:
+    @staticmethod
+    def add(a: int, b: int) -> int:
+        return a + b
+";
+    fixture
+        .did_open("file:///ws_semtok_static.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            1210,
+            "textDocument/semanticTokens/full",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_semtok_static.py" }
+            }),
+        )
+        .await?
+        .ok_or("no semantic tokens response")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let data = parsed["result"]["data"]
+        .as_array()
+        .ok_or("data should be an array")?;
+
+    assert_eq!(data.len() % 5, 0, "token data length should be multiple of 5");
+
+    // Token type 1 = method. MOD_STATIC = bit 3 = value 8.
+    // The "add" method token should have the static modifier set (bit 3).
+    let tokens: Vec<Vec<u64>> = data
+        .chunks(5)
+        .map(|chunk| chunk.iter().map(|v| v.as_u64().unwrap_or(0)).collect())
+        .collect();
+
+    // Find method tokens (type 1) and check at least one has static modifier (bit 3 = 8).
+    let has_static_method = tokens.iter().any(|t| t[3] == 1 && (t[4] & 8) != 0);
+    assert!(
+        has_static_method,
+        "should have a method token with MOD_STATIC (bit 3) for @staticmethod 'add': {resp}"
+    );
+    Ok(())
+}
+
+/// Verify MOD_DECLARATION (bit 2, value 4) is set on function/class definition tokens.
+#[tokio::test]
+async fn test_ws_semantic_tokens_declaration_modifier() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+class Animal:
+    pass
+
+def greet(name: str) -> str:
+    return name
+";
+    fixture
+        .did_open("file:///ws_semtok_decl.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            1211,
+            "textDocument/semanticTokens/full",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_semtok_decl.py" }
+            }),
+        )
+        .await?
+        .ok_or("no semantic tokens response")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let data = parsed["result"]["data"]
+        .as_array()
+        .ok_or("data should be an array")?;
+
+    assert_eq!(data.len() % 5, 0, "token data length should be multiple of 5");
+
+    // MOD_DECLARATION = bit 2 = value 4.
+    // Both class (type 2) and function (type 0) definition tokens should have this.
+    let tokens: Vec<Vec<u64>> = data
+        .chunks(5)
+        .map(|chunk| chunk.iter().map(|v| v.as_u64().unwrap_or(0)).collect())
+        .collect();
+
+    // Class token (type 2) should have declaration modifier.
+    let class_has_decl = tokens.iter().any(|t| t[3] == 2 && (t[4] & 4) != 0);
+    assert!(
+        class_has_decl,
+        "class 'Animal' token should have MOD_DECLARATION (bit 2): {resp}"
+    );
+
+    // Function token (type 0) should have declaration modifier.
+    let func_has_decl = tokens.iter().any(|t| t[3] == 0 && (t[4] & 4) != 0);
+    assert!(
+        func_has_decl,
+        "function 'greet' token should have MOD_DECLARATION (bit 2): {resp}"
+    );
+    Ok(())
+}
+
+/// Verify tokenType=5 (property) appears for class attributes.
+#[tokio::test]
+async fn test_ws_semantic_tokens_property_token() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+class Person:
+    name: str
+    age: int
+";
+    fixture
+        .did_open("file:///ws_semtok_property.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            1212,
+            "textDocument/semanticTokens/full",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_semtok_property.py" }
+            }),
+        )
+        .await?
+        .ok_or("no semantic tokens response")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let data = parsed["result"]["data"]
+        .as_array()
+        .ok_or("data should be an array")?;
+
+    assert_eq!(data.len() % 5, 0, "token data length should be multiple of 5");
+
+    // Token type 5 = property. Class attributes "name" and "age" should be properties.
+    let tokens: Vec<Vec<u64>> = data
+        .chunks(5)
+        .map(|chunk| chunk.iter().map(|v| v.as_u64().unwrap_or(0)).collect())
+        .collect();
+
+    let property_count = tokens.iter().filter(|t| t[3] == 5).count();
+    assert!(
+        property_count >= 2,
+        "should have at least 2 tokens with type 5 (property) for 'name' and 'age': {resp}"
+    );
+    Ok(())
+}
+
+/// Verify tokenType=6 (namespace) appears for import statements.
+#[tokio::test]
+async fn test_ws_semantic_tokens_namespace_token() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+import os
+import sys
+";
+    fixture
+        .did_open("file:///ws_semtok_namespace.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            1213,
+            "textDocument/semanticTokens/full",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_semtok_namespace.py" }
+            }),
+        )
+        .await?
+        .ok_or("no semantic tokens response")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let data = parsed["result"]["data"]
+        .as_array()
+        .ok_or("data should be an array")?;
+
+    assert_eq!(data.len() % 5, 0, "token data length should be multiple of 5");
+
+    // Token type 6 = namespace. Import statements should produce namespace tokens.
+    let tokens: Vec<Vec<u64>> = data
+        .chunks(5)
+        .map(|chunk| chunk.iter().map(|v| v.as_u64().unwrap_or(0)).collect())
+        .collect();
+
+    let namespace_count = tokens.iter().filter(|t| t[3] == 6).count();
+    assert!(
+        namespace_count >= 2,
+        "should have at least 2 tokens with type 6 (namespace) for 'os' and 'sys' imports: {resp}"
+    );
+    Ok(())
+}
+
 // ── Error Recovery ──────────────────────────────────────────────────────────
 
 /// After shutdown + exit, a fresh connection can re-initialize.
@@ -5150,6 +5758,34 @@ async fn test_ws_multiple_initialize_requests() -> TestResult<()> {
     assert!(
         has_error || has_result,
         "second initialize must return error or result, got: {second_resp}"
+    );
+
+    Ok(())
+}
+
+// ── Phase 5: Type hierarchy capability ─────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_initialize_advertises_type_hierarchy_provider() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let response = fixture.initialize().await?;
+
+    assert!(
+        response.contains("\"typeHierarchyProvider\""),
+        "initialize response should advertise typeHierarchyProvider: {response}"
+    );
+
+    // Parse the full response and verify the capability value is `true`.
+    let parsed: serde_json::Value = serde_json::from_str(&response)?;
+    let caps = parsed
+        .get("result")
+        .and_then(|r| r.get("capabilities"))
+        .ok_or("missing capabilities in initialize response")?;
+
+    assert_eq!(
+        caps.get("typeHierarchyProvider"),
+        Some(&serde_json::Value::Bool(true)),
+        "typeHierarchyProvider should be true: {response}"
     );
 
     Ok(())

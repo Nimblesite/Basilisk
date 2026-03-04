@@ -155,7 +155,10 @@ impl InferredType {
         // If only one type remains, return it directly (not wrapped in Union)
         match deduplicated.len() {
             0 => InferredType::Never, // Should not happen due to Never handling above
-            1 => deduplicated.into_iter().next().unwrap(),
+            1 => match deduplicated.into_iter().next() {
+                Some(ty) => ty,
+                None => InferredType::Never, // len()==1 guarantees Some
+            },
             _ => InferredType::Union(deduplicated),
         }
     }

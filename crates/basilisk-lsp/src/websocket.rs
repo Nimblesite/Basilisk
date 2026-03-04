@@ -24,6 +24,33 @@ use crate::server::LspServer;
 /// Buffer size for the in-memory `DuplexStream` pipe (64 KiB).
 const DUPLEX_BUFFER_SIZE: usize = 64 * 1024;
 
+/// Inject capabilities that `lsp-types 0.94` does not expose in
+/// `ServerCapabilities` but that the server does handle.
+///
+/// Currently adds `typeHierarchyProvider: true`.
+///
+/// This is a no-op for messages that are not `initialize` responses.
+fn inject_missing_capabilities(body: &str) -> String {
+    let Ok(mut msg) = serde_json::from_str::<serde_json::Value>(body) else {
+        return body.to_owned();
+    };
+
+    // Only patch initialize responses that carry `result.capabilities`.
+    let Some(caps) = msg
+        .get_mut("result")
+        .and_then(|r| r.get_mut("capabilities"))
+        .and_then(serde_json::Value::as_object_mut)
+    else {
+        return body.to_owned();
+    };
+
+    caps.entry("typeHierarchyProvider")
+        .or_insert(serde_json::Value::Bool(true));
+
+    // Serialization of a valid `Value` never fails.
+    serde_json::to_string(&msg).unwrap_or_else(|_| body.to_owned())
+}
+
 /// JSON-RPC parse-error response body (null id, code -32700).
 const PARSE_ERROR_BODY: &str =
     r#"{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"Parse error"}}"#;
@@ -121,8 +148,9 @@ async fn lsp_to_ws(
     let mut merged = Box::pin(stream::select(lsp_stream, inject_stream));
 
     while let Some(text) = merged.next().await {
+        let patched = inject_missing_capabilities(&text);
         ws_write
-            .send(Message::Text(text))
+            .send(Message::Text(patched))
             .await
             .map_err(|err| ws_err(format!("ws write: {err}")))?;
     }

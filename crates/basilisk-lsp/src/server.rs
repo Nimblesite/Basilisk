@@ -25,8 +25,9 @@ use tower_lsp::lsp_types::{
     SemanticTokensParams, SemanticTokensResult, SemanticTokensServerCapabilities,
     ServerCapabilities, ServerInfo, SignatureHelpOptions, SignatureHelpParams, SymbolInformation,
     TextDocumentPositionParams, TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit,
-    TypeHierarchyItem, TypeHierarchyPrepareParams, TypeHierarchySubtypesParams,
-    TypeHierarchySupertypesParams, Url, WorkDoneProgressOptions, WorkspaceEdit,
+    TypeHierarchyItem, TypeHierarchyPrepareParams,
+    TypeHierarchySubtypesParams, TypeHierarchySupertypesParams, Url, WorkDoneProgressOptions,
+    WorkspaceEdit,
     WorkspaceSymbolParams,
 };
 use tower_lsp::{Client, LspService, Server};
@@ -201,6 +202,8 @@ impl tower_lsp::LanguageServer for LspServer {
                 )),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 call_hierarchy_provider: Some(CallHierarchyServerCapability::Simple(true)),
+                // type_hierarchy_provider is not in lsp-types 0.94's ServerCapabilities;
+                // it is injected at the JSON level by websocket::inject_missing_capabilities.
                 code_lens_provider: Some(CodeLensOptions { resolve_provider: Some(false) }),
                 code_action_provider: Some(CodeActionProviderCapability::Options(
                     CodeActionOptions {

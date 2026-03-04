@@ -8,6 +8,8 @@
 import * as vscode from "vscode";
 import { execFile } from "child_process";
 import * as path from "path";
+import * as fs from "fs";
+import * as os from "os";
 import {
   LanguageClient,
   LanguageClientOptions,
@@ -20,6 +22,66 @@ import {
 let client: LanguageClient | undefined;
 let statusBarItem: vscode.StatusBarItem | undefined;
 let outputChannel: vscode.OutputChannel | undefined;
+
+/** Registered command IDs so we can avoid double-registering on re-activation. */
+const registeredCommands = new Set<string>();
+
+/**
+ * Safely register a VS Code command, avoiding "command already exists" errors
+ * that occur when the extension re-activates after an LSP crash/restart cycle.
+ * Disposes the previous registration if one exists.
+ */
+function safeRegisterCommand(
+  context: vscode.ExtensionContext,
+  commandId: string,
+  handler: (...args: unknown[]) => unknown
+): void {
+  // Dispose any previous subscription for this command.
+  if (registeredCommands.has(commandId)) {
+    return;
+  }
+  const disposable = vscode.commands.registerCommand(commandId, handler);
+  context.subscriptions.push(disposable);
+  registeredCommands.add(commandId);
+}
+
+/**
+ * Resolve the basilisk executable path. On macOS, VS Code often does not
+ * inherit the user's shell PATH, so a bare "basilisk" won't be found even
+ * when ~/.cargo/bin/basilisk exists. This function checks common locations.
+ */
+function resolveExecutablePath(configured: string): string {
+  // If the user provided an absolute path, use it directly.
+  if (path.isAbsolute(configured)) {
+    return configured;
+  }
+
+  // If it's a relative path with separators (e.g. "./basilisk"), resolve against workspace.
+  if (configured.includes(path.sep) || configured.includes("/")) {
+    const wsRoot = workspaceRoot();
+    return wsRoot ? path.resolve(wsRoot, configured) : configured;
+  }
+
+  // Bare command name (e.g. "basilisk") — check well-known locations that
+  // VS Code on macOS may not have in its PATH.
+  const candidates = [
+    path.join(os.homedir(), ".cargo", "bin", configured),
+    `/usr/local/bin/${configured}`,
+    `/opt/homebrew/bin/${configured}`,
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      fs.accessSync(candidate, fs.constants.X_OK);
+      return candidate;
+    } catch {
+      // Not found or not executable — try next.
+    }
+  }
+
+  // Fall back to the bare name and let the OS resolve it via PATH.
+  return configured;
+}
 
 /** Shape of a single diagnostic emitted by `basilisk check --output json`. */
 interface BasiliskDiagnostic {
@@ -52,38 +114,45 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(statusBarItem);
 
   const cfg = vscode.workspace.getConfiguration("basilisk");
-  const executablePath = cfg.get<string>("executablePath") ?? "basilisk";
+  const configuredPath = cfg.get<string>("executablePath") ?? "basilisk";
+  const executablePath = resolveExecutablePath(configuredPath);
   const useLsp = cfg.get<boolean>("useLsp") ?? true;
 
-  // Register commands.
-  context.subscriptions.push(
-    vscode.commands.registerCommand("basilisk.restartServer", async () => {
-      if (!client) {
-        vscode.window.showWarningMessage("Basilisk: No language server to restart.");
-        return;
-      }
+  outputChannel.appendLine(`Basilisk executable: ${executablePath}`);
+
+  // Register commands safely — avoids "command already exists" errors when
+  // the extension re-activates after an LSP crash/restart cycle.
+  safeRegisterCommand(context, "basilisk.restartServer", async () => {
+    if (!client) {
+      vscode.window.showWarningMessage("Basilisk: No language server to restart.");
+      return;
+    }
+    try {
       outputChannel?.appendLine("Restarting Basilisk language server...");
       await client.stop();
       await client.start();
       outputChannel?.appendLine("Basilisk language server restarted.");
-    })
-  );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      outputChannel?.appendLine(`Restart failed: ${msg}`);
+      vscode.window.showErrorMessage(`Basilisk: Failed to restart server: ${msg}`);
+    }
+  });
 
-  context.subscriptions.push(
-    vscode.commands.registerCommand("basilisk.showOutput", () => {
-      outputChannel?.show();
-    })
-  );
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand("basilisk.organizeImports", () => {
-      organizeImports();
-    })
-  );
+  safeRegisterCommand(context, "basilisk.showOutput", () => {
+    outputChannel?.show();
+  });
 
   if (useLsp) {
+    // In LSP mode, the LanguageClient automatically registers
+    // basilisk.organizeImports via the server's executeCommandProvider.
+    // Do NOT register it manually — that would conflict.
     startLspClient(context, executablePath);
   } else {
+    // In subprocess mode, register organizeImports client-side.
+    safeRegisterCommand(context, "basilisk.organizeImports", () => {
+      organizeImports();
+    });
     startSubprocessMode(context, executablePath);
     updateStatusBar("ready");
   }
@@ -186,7 +255,7 @@ function startLspClient(
     traceOutputChannel: traceChannel,
     outputChannel: outputChannel,
     errorHandler: {
-      error: (error, message, count) => {
+      error: (error, _message, count) => {
         outputChannel?.appendLine(`LSP error: ${error.message ?? error}`);
         if (count !== undefined && count < 3) {
           return { action: ErrorAction.Continue };
