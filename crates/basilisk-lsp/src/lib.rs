@@ -14,15 +14,22 @@
 //! - Completion (symbol + dot + builtins)
 //! - Code Actions (quick fixes)
 //! - Document Formatting (via Ruff)
+//! - Document Highlight (symbol occurrences)
+//! - Call Hierarchy (incoming + outgoing calls)
+//! - Code Lens (reference counts)
+//! - Type Hierarchy (supertypes + subtypes)
 //! - Folding Ranges (functions, classes, imports)
 //! - Selection Ranges (Smart Select)
 //! - Semantic Tokens (syntax-aware highlighting)
 
+pub mod call_hierarchy;
 pub mod code_actions;
+pub mod code_lens;
 pub mod completion;
 pub mod definition;
 pub mod folding;
 pub mod formatting;
+pub mod highlight;
 pub mod hover;
 pub mod inlay_hints;
 pub mod references;
@@ -31,6 +38,7 @@ pub mod semantic_tokens;
 pub mod server;
 pub mod signature;
 pub mod symbols;
+pub mod type_hierarchy;
 pub mod util;
 pub mod websocket;
 

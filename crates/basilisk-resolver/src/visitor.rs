@@ -730,6 +730,12 @@ fn class_info_from(
         .filter_map(decorator_name)
         .collect();
 
+    let class_decorator_spans: Vec<(String, Span)> = class
+        .decorator_list
+        .iter()
+        .filter_map(decorator_name_and_span)
+        .collect();
+
     let is_dataclass = class_decorators
         .iter()
         .any(|d| d == "dataclass" || d.ends_with(".dataclass"));
@@ -779,6 +785,7 @@ fn class_info_from(
         attributes,
         method_names,
         method_decorators,
+        decorator_spans: class_decorator_spans,
         generic_params,
         is_typed_dict,
         is_typeddict_total,
@@ -1214,6 +1221,12 @@ fn function_info_from(func: &StmtFunctionDef, class_name: Option<String>) -> Fun
         .filter_map(decorator_name)
         .collect();
 
+    let decorator_spans = func
+        .decorator_list
+        .iter()
+        .filter_map(decorator_name_and_span)
+        .collect();
+
     let return_stmts = collect_return_stmts(&func.body);
     let all_local_assigns = collect_all_assigns(&func.body);
     let unconditional_assigns = collect_unconditional_assigns(&func.body);
@@ -1236,6 +1249,7 @@ fn function_info_from(func: &StmtFunctionDef, class_name: Option<String>) -> Fun
         kwarg,
         return_annotation,
         decorators,
+        decorator_spans,
         return_stmts,
         def_span: text_range_to_span(func.range),
         name_span: text_range_to_span(func.name.range),
@@ -2451,6 +2465,22 @@ fn decorator_name(dec: &Decorator) -> Option<String> {
         Expr::Call(call) => match call.func.as_ref() {
             Expr::Name(name) => Some(name.id.to_string()),
             Expr::Attribute(attr) => Some(attr.attr.to_string()),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Extract the decorator name together with the span of the name identifier.
+fn decorator_name_and_span(dec: &Decorator) -> Option<(String, Span)> {
+    match &dec.expression {
+        Expr::Name(name) => Some((name.id.to_string(), text_range_to_span(name.range()))),
+        Expr::Attribute(attr) => Some((attr.attr.to_string(), text_range_to_span(attr.range()))),
+        Expr::Call(call) => match call.func.as_ref() {
+            Expr::Name(name) => Some((name.id.to_string(), text_range_to_span(name.range()))),
+            Expr::Attribute(attr) => {
+                Some((attr.attr.to_string(), text_range_to_span(attr.range())))
+            }
             _ => None,
         },
         _ => None,

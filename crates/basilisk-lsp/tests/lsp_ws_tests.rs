@@ -2466,3 +2466,446 @@ class Greeter:
 
     Ok(())
 }
+
+// ── Document Highlight ───────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_document_highlight() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+def greet(name: str) -> str:
+    return name
+greet(\"hi\")
+";
+    fixture.did_open("file:///ws_highlight.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Request documentHighlight at the position of `greet` on line 0 (character 4).
+    let resp = fixture
+        .request(
+            630,
+            "textDocument/documentHighlight",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_highlight.py" },
+                "position": { "line": 0, "character": 4 }
+            }),
+        )
+        .await?
+        .ok_or("no documentHighlight response")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let highlights = parsed["result"]
+        .as_array()
+        .ok_or("documentHighlight result should be an array")?;
+
+    // Should find at least 2 highlights: definition of greet + call of greet.
+    assert!(
+        highlights.len() >= 2,
+        "should find at least 2 highlights for 'greet' (found {}): {resp}",
+        highlights.len()
+    );
+
+    // Each highlight should have a range and a kind.
+    for hl in highlights {
+        assert!(
+            hl.get("range").is_some(),
+            "highlight should have a range: {hl}"
+        );
+        assert!(
+            hl.get("kind").is_some(),
+            "highlight should have a kind: {hl}"
+        );
+    }
+
+    Ok(())
+}
+
+// ── Phase 0: Shutdown ───────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_shutdown_gracefully() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    // Send shutdown request — server must respond with result: null.
+    // tower-lsp requires an empty object (not null) for shutdown params.
+    fixture
+        .send_json(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 900,
+            "method": "shutdown"
+        }))
+        .await?;
+
+    let id_str = "\"id\":900";
+    let mut resp = None;
+    for _ in 0..10 {
+        let Some(msg) = fixture.recv().await else { break };
+        if msg.contains(id_str) {
+            resp = Some(msg);
+            break;
+        }
+    }
+    let resp = resp.ok_or("no response to shutdown request")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert!(
+        parsed.get("result").is_some(),
+        "shutdown should return a result: {resp}"
+    );
+    assert!(
+        parsed.get("error").is_none(),
+        "shutdown should not return an error: {resp}"
+    );
+
+    // Send exit notification — server should close the connection.
+    fixture
+        .send_json(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+            "params": null
+        }))
+        .await?;
+
+    // After exit, the connection should be closed. Reading should yield None.
+    let msg = fixture.recv().await;
+    // Either None (closed) or we receive nothing — both are acceptable.
+    // The key assertion is that shutdown itself returned cleanly.
+    let _ = msg;
+
+    Ok(())
+}
+
+// ── Phase 1: Hover on class name ────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_hover_class_name_shows_class_info() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "class Animal:\n    name: str\n    age: int\n";
+    fixture.did_open("file:///ws_hover_class.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Hover on "Animal" — line 0, character 6 (inside "Animal").
+    let resp = fixture
+        .request(
+            901,
+            "textDocument/hover",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_hover_class.py" },
+                "position": { "line": 0, "character": 6 }
+            }),
+        )
+        .await?
+        .ok_or("no hover response for class name")?;
+
+    assert!(
+        resp.contains("(class)"),
+        "hover on class name should show '(class)' prefix: {resp}"
+    );
+    assert!(
+        resp.contains("Animal"),
+        "hover on class name should show class name 'Animal': {resp}"
+    );
+    Ok(())
+}
+
+// ── Phase 1: Hover on variable shows type ───────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_hover_variable_shows_type() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "x: int = 42\ny: str = \"hello\"\n";
+    fixture
+        .did_open("file:///ws_hover_var.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Hover on "x" — line 0, character 0.
+    let resp = fixture
+        .request(
+            902,
+            "textDocument/hover",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_hover_var.py" },
+                "position": { "line": 0, "character": 0 }
+            }),
+        )
+        .await?
+        .ok_or("no hover response for variable")?;
+
+    assert!(
+        resp.contains("(variable)"),
+        "hover on variable should show '(variable)' prefix: {resp}"
+    );
+    assert!(
+        resp.contains("int"),
+        "hover on variable should show type 'int': {resp}"
+    );
+    Ok(())
+}
+
+// ── Phase 1: Go to Definition from class usage ─────────────────────────────
+
+#[tokio::test]
+async fn test_ws_goto_definition_class_usage() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    // "Animal" is defined on line 0, used as a type annotation on line 3.
+    let code = "\
+class Animal:
+    name: str
+
+def greet(pet: Animal) -> str:
+    return pet.name
+";
+    fixture
+        .did_open("file:///ws_goto_class_usage.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Goto definition on "Animal" in the type annotation on line 3.
+    // "def greet(pet: Animal)" — 'A' of "Animal" is at character 15.
+    let resp = fixture
+        .request(
+            903,
+            "textDocument/definition",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_goto_class_usage.py" },
+                "position": { "line": 3, "character": 15 }
+            }),
+        )
+        .await?
+        .ok_or("no definition response for class usage")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert!(
+        parsed["result"] != serde_json::Value::Null,
+        "goto-def on class usage must resolve: {resp}"
+    );
+
+    // Should jump to line 0 where "class Animal:" is defined.
+    // "class " is 6 chars, so 'Animal' starts at character 6.
+    let start = &parsed["result"]["range"]["start"];
+    assert_eq!(
+        start["line"], 0,
+        "goto-def from class usage should jump to line 0: {resp}"
+    );
+    assert_eq!(
+        start["character"], 6,
+        "goto-def from class usage should land at char 6 where 'Animal' is defined: {resp}"
+    );
+    Ok(())
+}
+
+// ── Phase 3: Inlay Hints — parameter names at call sites ────────────────────
+
+#[tokio::test]
+async fn test_ws_inlay_hint_parameter_names_at_call_site() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+def greet(name: str, greeting: str) -> str:
+    return f\"{greeting}, {name}!\"
+
+result: str = greet(\"world\", \"Hi\")
+";
+    fixture
+        .did_open("file:///ws_inlay_param.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            904,
+            "textDocument/inlayHint",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_inlay_param.py" },
+                "range": {
+                    "start": { "line": 0, "character": 0 },
+                    "end": { "line": 4, "character": 0 }
+                }
+            }),
+        )
+        .await?
+        .ok_or("no inlay hint response")?;
+
+    assert!(
+        resp.contains("name="),
+        "inlay hints should show parameter name 'name=' at call site: {resp}"
+    );
+    assert!(
+        resp.contains("greeting="),
+        "inlay hints should show parameter name 'greeting=' at call site: {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_call_hierarchy() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let source = "def foo():\n    pass\n\ndef bar():\n    foo()\n    foo()\n";
+    fixture
+        .did_open("file:///ws_call_hierarchy.py", source)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // prepareCallHierarchy at the position of `foo` (line 0, character 4)
+    let prepare_resp = fixture
+        .request(
+            200,
+            "textDocument/prepareCallHierarchy",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_call_hierarchy.py" },
+                "position": { "line": 0, "character": 4 }
+            }),
+        )
+        .await?
+        .ok_or("no prepareCallHierarchy response")?;
+
+    assert!(
+        prepare_resp.contains("\"name\":\"foo\""),
+        "prepareCallHierarchy should return item named 'foo': {prepare_resp}"
+    );
+
+    // callHierarchy/incomingCalls for foo
+    let incoming_resp = fixture
+        .request(
+            201,
+            "callHierarchy/incomingCalls",
+            serde_json::json!({
+                "item": {
+                    "name": "foo",
+                    "kind": 12,
+                    "uri": "file:///ws_call_hierarchy.py",
+                    "range": {
+                        "start": { "line": 0, "character": 0 },
+                        "end": { "line": 0, "character": 3 }
+                    },
+                    "selectionRange": {
+                        "start": { "line": 0, "character": 4 },
+                        "end": { "line": 0, "character": 7 }
+                    }
+                }
+            }),
+        )
+        .await?
+        .ok_or("no incomingCalls response")?;
+
+    assert!(
+        incoming_resp.contains("\"name\":\"bar\""),
+        "incomingCalls should show 'bar' as a caller of 'foo': {incoming_resp}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_type_hierarchy() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let source = "\
+class Animal:
+    name: str
+
+class Dog(Animal):
+    breed: str
+
+class Puppy(Dog):
+    age: int
+";
+    fixture
+        .did_open("file:///ws_type_hierarchy.py", source)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // prepareTypeHierarchy on `Dog` (line 3, character 6 — inside the class name)
+    let prepare_resp = fixture
+        .request(
+            300,
+            "textDocument/prepareTypeHierarchy",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_type_hierarchy.py" },
+                "position": { "line": 3, "character": 6 }
+            }),
+        )
+        .await?
+        .ok_or("no prepareTypeHierarchy response")?;
+
+    assert!(
+        prepare_resp.contains("\"name\":\"Dog\""),
+        "prepareTypeHierarchy should return item named 'Dog': {prepare_resp}"
+    );
+
+    // typeHierarchy/supertypes for Dog -> should include Animal
+    let supertypes_resp = fixture
+        .request(
+            301,
+            "typeHierarchy/supertypes",
+            serde_json::json!({
+                "item": {
+                    "name": "Dog",
+                    "kind": 5,
+                    "uri": "file:///ws_type_hierarchy.py",
+                    "range": {
+                        "start": { "line": 3, "character": 0 },
+                        "end": { "line": 3, "character": 5 }
+                    },
+                    "selectionRange": {
+                        "start": { "line": 3, "character": 6 },
+                        "end": { "line": 3, "character": 9 }
+                    },
+                    "data": "Dog"
+                }
+            }),
+        )
+        .await?
+        .ok_or("no supertypes response")?;
+
+    assert!(
+        supertypes_resp.contains("\"name\":\"Animal\""),
+        "supertypes of Dog should include Animal: {supertypes_resp}"
+    );
+
+    // typeHierarchy/subtypes for Dog -> should include Puppy
+    let subtypes_resp = fixture
+        .request(
+            302,
+            "typeHierarchy/subtypes",
+            serde_json::json!({
+                "item": {
+                    "name": "Dog",
+                    "kind": 5,
+                    "uri": "file:///ws_type_hierarchy.py",
+                    "range": {
+                        "start": { "line": 3, "character": 0 },
+                        "end": { "line": 3, "character": 5 }
+                    },
+                    "selectionRange": {
+                        "start": { "line": 3, "character": 6 },
+                        "end": { "line": 3, "character": 9 }
+                    },
+                    "data": "Dog"
+                }
+            }),
+        )
+        .await?
+        .ok_or("no subtypes response")?;
+
+    assert!(
+        subtypes_resp.contains("\"name\":\"Puppy\""),
+        "subtypes of Dog should include Puppy: {subtypes_resp}"
+    );
+
+    Ok(())
+}

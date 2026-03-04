@@ -143,13 +143,17 @@ fn extract_annotation(source: &str, name_span: basilisk_resolver::Span) -> Optio
 
 /// Check if types match for W0050 purposes (base type comparison)
 fn types_match_for_w0050(inferred: &InferredType, declared: &InferredType) -> bool {
-    use InferredType::{Bool, Bytes, Dict, Float, Int, List, None_, Set, Str, Tuple};
-    
+    use InferredType::{Bool, Bytes, Dict, Float, Int, List, Never, None_, Set, Str, Tuple};
+
     match (inferred, declared) {
-        // Basic types and collection types - exact match
-        (Int, Int) | (Str, Str) | (Float, Float) | (Bool, Bool) | (Bytes, Bytes) | (None_, None_) |
+        // Basic types - exact match
+        (Int, Int) | (Str, Str) | (Float, Float) | (Bool, Bool) | (Bytes, Bytes) | (None_, None_) => true,
+        // Empty containers: annotation adds element-type information, so it is NOT redundant
+        (List(a), List(_)) if matches!(a.as_ref(), Never) => false,
+        (Dict(ak, _), Dict(_, _)) if matches!(ak.as_ref(), Never) => false,
+        (Set(a), Set(_)) if matches!(a.as_ref(), Never) => false,
+        // Non-empty collection types - outer type match is sufficient for W0050
         (List(_), List(_)) | (Dict(..), Dict(..)) | (Set(_), Set(_)) | (Tuple(_), Tuple(_)) => true,
-        
         // Default case - no match
         _ => false,
     }

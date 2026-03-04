@@ -35,7 +35,7 @@ impl Rule for AssignmentTypeMismatch {
         module
             .module_vars
             .iter()
-            .filter(|var| var.has_annotation)
+            .filter(|var| var.has_annotation && var.rhs_span.is_some())
             .filter_map(|var| {
                 let annotation_text = extract_annotation(&module.source, var.name_span)?;
                 

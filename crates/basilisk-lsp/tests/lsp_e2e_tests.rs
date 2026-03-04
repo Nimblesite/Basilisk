@@ -188,7 +188,7 @@ fn test_lsp_initialize() -> TestResult<()> {
     assert!(response.contains("\"basilisk\""));
     assert!(response.contains("\"textDocumentSync\":1"));
     assert!(response.contains("\"hoverProvider\":true"));
-    assert!(response.contains("\"codeActionProvider\":true"));
+    assert!(response.contains("\"codeActionProvider\""), "should advertise code actions: {response}");
     Ok(())
 }
 

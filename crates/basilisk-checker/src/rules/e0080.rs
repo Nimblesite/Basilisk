@@ -108,7 +108,7 @@ fn check_call_sites(
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for call in &module.calls {
-        
+
         // Find all functions with this name (could be multiple due to methods)
         let matching_functions: Vec<&basilisk_resolver::FunctionInfo> = module
             .functions
@@ -122,7 +122,7 @@ fn check_call_sites(
 
         // For each matching function, check its parameter bounds
         for func in matching_functions {
-            check_function_call(func, call, source, typevar_bounds, &module.path, diagnostics);
+            check_function_call(func, call, source, typevar_bounds, &module.classes, &module.path, diagnostics);
         }
     }
 }
@@ -133,6 +133,7 @@ fn check_function_call(
     call: &basilisk_resolver::CallSite,
     source: &str,
     typevar_bounds: &HashMap<&str, String>,
+    classes: &[basilisk_resolver::ClassInfo],
     module_path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
@@ -161,7 +162,7 @@ fn check_function_call(
             continue;
         };
 
-        if !type_satisfies_bound(lit_type, &bound_text) {
+        if !type_satisfies_bound(lit_type, &bound_text, classes) {
             let func_name = if let Some(class_name) = &func.class_name {
                 format!("{}.{}", class_name, func.name)
             } else {
@@ -246,8 +247,8 @@ fn literal_type_name(rhs: &basilisk_resolver::RhsKind) -> Option<&'static str> {
 
 /// Check whether a concrete type satisfies an upper bound.
 ///
-/// Conservative check for well-known bounds only.
-fn type_satisfies_bound(concrete_type: &str, bound: &str) -> bool {
+/// Conservative check for well-known bounds and Protocol classes defined in the module.
+fn type_satisfies_bound(concrete_type: &str, bound: &str, classes: &[basilisk_resolver::ClassInfo]) -> bool {
     match bound {
         // `Sized` requires `__len__` -- only collection types satisfy it.
         "Sized" => matches!(
@@ -260,7 +261,19 @@ fn type_satisfies_bound(concrete_type: &str, bound: &str) -> bool {
         "float" => concrete_type == "float" || concrete_type == "int", // int→float widening
         "bool" => concrete_type == "bool",
         "bytes" => concrete_type == "bytes",
-        // For other bounds, be conservative and assume satisfied.
-        _ => true,
+        // For unknown bounds, check if it's a user-defined Protocol class.
+        // Primitive types don't satisfy custom Protocol bounds.
+        _ => {
+            let is_protocol_bound = classes.iter().any(|c| {
+                c.name == bound && c.bases.iter().any(|b| b.contains("Protocol"))
+            });
+            if is_protocol_bound {
+                // Primitives never implement user-defined protocols
+                !matches!(concrete_type, "int" | "str" | "float" | "bool" | "bytes" | "None")
+            } else {
+                // Conservative: assume satisfied for non-Protocol unknown bounds
+                true
+            }
+        }
     }
 }

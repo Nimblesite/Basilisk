@@ -67,6 +67,8 @@ pub struct FunctionInfo {
     pub return_annotation: ReturnAnnotationKind,
     /// Decorator names applied to this function (e.g. `"overload"`, `"override"`).
     pub decorators: Vec<String>,
+    /// Decorator name spans paired with their names (for semantic token highlighting).
+    pub decorator_spans: Vec<(String, Span)>,
     /// Return statements found in this function body.
     pub return_stmts: Vec<ReturnStmtInfo>,
     /// The span of the `def` keyword (start of the function definition).
@@ -352,6 +354,8 @@ pub struct ClassInfo {
     pub method_names: Vec<String>,
     /// Decorators for each method: `(method_name, [decorator_names])`.
     pub method_decorators: Vec<(String, Vec<String>)>,
+    /// Class-level decorator name spans (for semantic token highlighting).
+    pub decorator_spans: Vec<(String, Span)>,
     /// Type parameter names extracted from a `Generic[...]` base, if present.
     pub generic_params: Vec<GenericParamInfo>,
     /// `true` when the class inherits from `TypedDict`.

@@ -162,11 +162,10 @@ impl InferredType {
             // Container types require element type assignability.
             // List and Set cannot use or-patterns — that would incorrectly allow cross-matching.
             #[allow(clippy::match_same_arms)]
-            (InferredType::List(a), InferredType::List(b)) => a.is_assignable_to(b),
+            (InferredType::List(a), InferredType::List(b)) | (InferredType::Set(a), InferredType::Set(b)) => a.is_assignable_to(b),
             (InferredType::Dict(a_key, a_val), InferredType::Dict(b_key, b_val)) => {
                 a_key.is_assignable_to(b_key) && a_val.is_assignable_to(b_val)
             }
-            (InferredType::Set(a), InferredType::Set(b)) => a.is_assignable_to(b),
             (InferredType::Tuple(a), InferredType::Tuple(b)) => {
                 a.len() == b.len() && a.iter().zip(b.iter()).all(|(a_elem, b_elem)| a_elem.is_assignable_to(b_elem))
             }
