@@ -1,0 +1,139 @@
+//! Inlay Hints handler: inferred types and parameter names.
+
+use basilisk_resolver::{ResolvedModule, RhsKind};
+use tower_lsp::lsp_types::{InlayHint, InlayHintKind, InlayHintLabel};
+
+use crate::util::byte_offset_to_position;
+
+/// Compute inlay hints for a resolved module.
+#[must_use] pub fn inlay_hints(resolved: &ResolvedModule, source: &str) -> Vec<InlayHint> {
+    let mut hints = Vec::new();
+
+    // Variable type hints — unannotated variables with inferable types.
+    variable_type_hints(resolved, source, &mut hints);
+
+    // Parameter name hints at call sites.
+    parameter_name_hints(resolved, source, &mut hints);
+
+    hints
+}
+
+/// Add type hints for unannotated module-level variables.
+fn variable_type_hints(
+    resolved: &ResolvedModule,
+    source: &str,
+    hints: &mut Vec<InlayHint>,
+) {
+    for var in &resolved.module_vars {
+        if var.has_annotation {
+            continue;
+        }
+        let type_name = rhs_type_display(&var.rhs_kind);
+        if type_name.is_empty() {
+            continue;
+        }
+        hints.push(InlayHint {
+            position: byte_offset_to_position(source, var.name_span.end as usize),
+            label: InlayHintLabel::String(format!(": {type_name}")),
+            kind: Some(InlayHintKind::TYPE),
+            text_edits: None,
+            tooltip: None,
+            padding_left: None,
+            padding_right: Some(true),
+            data: None,
+        });
+    }
+
+    // Local variables within functions.
+    for func in &resolved.functions {
+        for var in &func.local_vars {
+            if var.has_annotation {
+                continue;
+            }
+            let type_name = rhs_type_display(&var.rhs_kind);
+            if type_name.is_empty() {
+                continue;
+            }
+            hints.push(InlayHint {
+                position: byte_offset_to_position(source, var.name_span.end as usize),
+                label: InlayHintLabel::String(format!(": {type_name}")),
+                kind: Some(InlayHintKind::TYPE),
+                text_edits: None,
+                tooltip: None,
+                padding_left: None,
+                padding_right: Some(true),
+                data: None,
+            });
+        }
+    }
+}
+
+/// Add parameter name hints at call sites.
+fn parameter_name_hints(
+    resolved: &ResolvedModule,
+    source: &str,
+    hints: &mut Vec<InlayHint>,
+) {
+    for call in &resolved.calls {
+        // Find the function definition for this call.
+        let func = resolved
+            .functions
+            .iter()
+            .find(|f| f.name == call.callee);
+        let Some(func) = func else {
+            continue;
+        };
+
+        // Skip self/cls for method calls.
+        let params = if func.class_name.is_some()
+            && func
+                .parameters
+                .first()
+                .is_some_and(|p| p.name == "self" || p.name == "cls")
+        {
+            &func.parameters[1..]
+        } else {
+            &func.parameters
+        };
+
+        for (idx, (_, arg_span)) in call.args.iter().enumerate() {
+            let Some(param) = params.get(idx) else {
+                break;
+            };
+            // Don't add hints for args that already have keyword= syntax.
+            let arg_text = source.get(arg_span.start as usize..arg_span.end as usize);
+            if let Some(text) = arg_text {
+                if text.contains('=') {
+                    continue;
+                }
+            }
+            hints.push(InlayHint {
+                position: byte_offset_to_position(source, arg_span.start as usize),
+                label: InlayHintLabel::String(format!("{}=", param.name)),
+                kind: Some(InlayHintKind::PARAMETER),
+                text_edits: None,
+                tooltip: None,
+                padding_left: None,
+                padding_right: Some(true),
+                data: None,
+            });
+        }
+    }
+}
+
+/// Simple type name from `RhsKind`.
+fn rhs_type_display(rhs: &RhsKind) -> &'static str {
+    match rhs {
+        RhsKind::IntLiteral => "int",
+        RhsKind::FloatLiteral => "float",
+        RhsKind::StrLiteral => "str",
+        RhsKind::BoolLiteral => "bool",
+        RhsKind::BytesLiteral => "bytes",
+        RhsKind::NoneValue => "None",
+        RhsKind::EmptyList | RhsKind::List(_) => "list",
+        RhsKind::EmptyDict | RhsKind::Dict(_) => "dict",
+        RhsKind::Set(_) => "set",
+        RhsKind::Tuple(_) => "tuple",
+        _ => "",
+    }
+}

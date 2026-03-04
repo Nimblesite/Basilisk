@@ -1,9 +1,32 @@
 //! Language Server Protocol support for Basilisk.
 //!
 //! This crate provides both a simple `check_source` function for subprocess
-//! usage and a full LSP server implementation.
+//! usage and a full LSP server implementation with IDE features:
+//!
+//! - Diagnostics (real-time type checking)
+//! - Hover (type signatures + diagnostic info)
+//! - Go to Definition
+//! - Document Symbols (Outline)
+//! - Signature Help
+//! - Find All References
+//! - Rename Symbol
+//! - Inlay Hints (inferred types + parameter names)
+//! - Completion (symbol + dot + builtins)
+//! - Code Actions (quick fixes)
+//! - Semantic Tokens (syntax-aware highlighting)
 
+pub mod code_actions;
+pub mod completion;
+pub mod definition;
+pub mod hover;
+pub mod inlay_hints;
+pub mod references;
+pub mod semantic_tokens;
 pub mod server;
+pub mod signature;
+pub mod symbols;
+pub mod util;
+pub mod websocket;
 
 /// Run the Basilisk checker on a Python source string.
 ///
@@ -53,3 +76,4 @@ fn byte_offset_to_line_col(source: &str, offset: usize) -> (usize, usize) {
 /// This function starts a JSON-RPC server on stdio that implements the
 /// Language Server Protocol. It's intended to be called from the CLI.
 pub use server::run_server;
+pub use websocket::run_server_ws_blocking;

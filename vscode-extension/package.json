@@ -27,6 +27,23 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "commands": [
+      {
+        "command": "basilisk.restartServer",
+        "title": "Basilisk: Restart Language Server",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.showOutput",
+        "title": "Basilisk: Show Output",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.organizeImports",
+        "title": "Basilisk: Organize Imports",
+        "category": "Basilisk"
+      }
+    ],
     "configuration": {
       "title": "Basilisk",
       "properties": {
@@ -50,6 +67,26 @@
           "enum": ["off", "messages", "verbose"],
           "default": "off",
           "description": "Trace LSP communication for debugging."
+        },
+        "basilisk.inlayHints.parameterNames": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show parameter name hints at call sites."
+        },
+        "basilisk.inlayHints.variableTypes": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show inferred type hints for unannotated variables."
+        },
+        "basilisk.ruff.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Ruff integration for formatting and import organization."
+        },
+        "basilisk.ruff.executablePath": {
+          "type": "string",
+          "default": "ruff",
+          "description": "Path to the ruff binary."
         }
       }
     }

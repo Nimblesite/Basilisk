@@ -24,6 +24,15 @@ struct Cli {
     command: Command,
 }
 
+/// Transport protocol for the LSP server.
+#[derive(Clone, Debug, clap::ValueEnum)]
+enum Transport {
+    /// JSON-RPC over standard input/output (default).
+    Stdio,
+    /// JSON-RPC over WebSocket.
+    Ws,
+}
+
 #[derive(Subcommand)]
 enum Command {
     /// Type check one or more files or directories.
@@ -35,8 +44,15 @@ enum Command {
         #[arg(long, default_value = "text")]
         output: OutputFormat,
     },
-    /// Start the Basilisk Language Server (JSON-RPC over stdio).
-    Lsp,
+    /// Start the Basilisk Language Server.
+    Lsp {
+        /// Transport protocol: stdio (default) or ws (WebSocket).
+        #[arg(long, default_value = "stdio")]
+        transport: Transport,
+        /// Port for WebSocket transport (ignored for stdio).
+        #[arg(long, default_value_t = 8765)]
+        port: u16,
+    },
 }
 
 fn main() {
@@ -44,12 +60,21 @@ fn main() {
 
     let exit_code = match cli.command {
         Command::Check { paths, output } => run_check(&paths, output),
-        Command::Lsp => match basilisk_lsp::run_server() {
-            Ok(()) => 0,
-            Err(e) => {
-                eprintln!("error: failed to start LSP server: {e}");
-                1
-            }
+        Command::Lsp { transport, port } => match transport {
+            Transport::Stdio => match basilisk_lsp::run_server() {
+                Ok(()) => 0,
+                Err(err) => {
+                    eprintln!("error: failed to start LSP server (stdio): {err}");
+                    1
+                }
+            },
+            Transport::Ws => match basilisk_lsp::run_server_ws_blocking(port) {
+                Ok(()) => 0,
+                Err(err) => {
+                    eprintln!("error: failed to start LSP server (ws): {err}");
+                    1
+                }
+            },
         },
     };
 

@@ -1,674 +1,650 @@
-# Basilisk LSP — Implementation Specification
+# Basilisk LSP & VSIX — Full IDE Feature Specification
 
-> **Authoritative reference** for all LSP implementation work.
-> See `docs/lsp-plan.md` for agent assignments and sequencing.
-
----
-
-## Current Architecture (Pre-LSP)
-
-```
-VS Code Extension (extension.ts)
-  │
-  │  execFile("basilisk check --output json <file>")
-  ▼
-basilisk CLI (basilisk-cli)
-  │  check subcommand
-  ▼
-basilisk-lsp::check_source(&str) → Vec<String>
-  │
-  ├── basilisk-parser::parse_source
-  ├── basilisk-resolver::resolve
-  └── basilisk-checker::check → Vec<Diagnostic>
-```
-
-**Limitations of subprocess approach**:
-- Check only fires on save or open — not as the user types
-- Subprocess startup cost (~50–100ms) on every save
-- No hover, no go-to-definition, no code actions
-- Cannot share parse/resolve state between checks
-- Unsaved buffers cannot be checked (file must be on disk)
+> **Goal**: Compete with Pylance. Every feature that makes a Python IDE useful.
 
 ---
 
-## Target Architecture
+## Current State
 
-```
-VS Code Extension (extension.ts)
-  │
-  │  vscode-languageclient  (JSON-RPC over stdio)
-  ▼
-basilisk lsp  (basilisk-cli subcommand)
-  │
-  │  tower-lsp LanguageServer trait
-  ▼
-LspServer struct
-  │  owns a document store (uri → DocumentState)
-  │
-  ├── on didOpen / didChange → re-check in-memory text → publishDiagnostics
-  ├── on didSave → full re-check of saved file
-  ├── on hover → query InferredType at position → Hover response
-  └── on codeAction → suggest quick-fixes for diagnostics at cursor
-  │
-  ▼
-basilisk-lsp::check_source_with_types(&str) → CheckResult
-  │
-  ├── basilisk-parser::parse_source
-  ├── basilisk-resolver::resolve
-  ├── basilisk-checker::check → Vec<Diagnostic>
-  └── (future) type_map: HashMap<Span, InferredType>
-```
+### What Works
+- Diagnostics publishing (97 error codes, full parse→resolve→check pipeline)
+- Hover on diagnostics (error code + message + help text)
+- Code actions: quick fixes for BSK-E0001 (`: Any`) and BSK-E0002 (`-> None`)
+- Completion: symbol + dot + imports + 78 builtins
+- Full document sync, DashMap document store, UTF-16 position handling
+
+### What's Broken
+- **Server startup crash**: `println!("DEBUG: ...")` calls in `crates/basilisk-checker/src/rules/e0080.rs` write to stdout during type checking, corrupting the JSON-RPC stream. VS Code sees non-LSP bytes and reports `"Header must provide a Content-Length property"`.
+
+### What's Missing (Everything That Matters)
+- Go to Definition
+- Signature Help (parameter hints)
+- Find All References
+- Rename Symbol
+- Document Symbols (Outline panel)
+- Workspace Symbols (Ctrl+T search)
+- Inlay Hints (inferred types, parameter names)
+- Semantic Tokens (enhanced syntax highlighting)
+- Type-aware Hover (show signatures, not just errors)
+- Call/Type Hierarchy
+- Folding Ranges
+- Selection Ranges
+- Format Document (Ruff delegation)
+- Status bar, restart command, error recovery in extension
 
 ---
 
-## WI-L1 — tower-lsp Scaffolding + `basilisk lsp` Subcommand
+## Architecture
 
-### Cargo.toml changes
+### Three-Phase Pipeline
 
-**`crates/basilisk-lsp/Cargo.toml`** — add dependencies:
-```toml
-[dependencies]
-basilisk-parser.workspace   = true
-basilisk-resolver.workspace = true
-basilisk-checker.workspace  = true
-
-tower-lsp  = "0.20"
-tokio      = { version = "1", features = ["rt-multi-thread", "macros", "io-std"] }
-serde      = { version = "1", features = ["derive"] }
-serde_json = "1"
-dashmap    = "6"
+```
+Source Text
+    │
+    ▼
+basilisk-parser::parse_source() → ParsedModule (Ruff AST)
+    │
+    ▼
+basilisk-resolver::resolve() → ResolvedModule (symbol table)
+    │
+    ▼
+basilisk-checker::check() → Vec<Diagnostic>
 ```
 
-**`crates/basilisk-cli/Cargo.toml`**:
-```toml
-basilisk-lsp.workspace = true
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+### ResolvedModule — The Data That Powers Everything
+
+`ResolvedModule` (defined in `crates/basilisk-resolver/src/scope.rs`) contains:
+
+| Field | Type | Powers |
+|-------|------|--------|
+| `functions` | `Vec<FunctionInfo>` | Hover, completion, signature help, go-to-def, outline |
+| `classes` | `Vec<ClassInfo>` | Hover, completion, go-to-def, outline, type hierarchy |
+| `module_vars` | `Vec<VariableInfo>` | Hover, completion, go-to-def, inlay hints |
+| `imports` | `Vec<ImportInfo>` | Completion, go-to-def, outline |
+| `calls` | `Vec<CallSite>` | Inlay hints (param names), call hierarchy |
+| `module_attr_accesses` | `Vec<ModuleAttrAccessInfo>` | Find references |
+| `typevar_calls` | `Vec<TypeVarCallInfo>` | Semantic tokens |
+| `source` | `String` | Extracting annotation text from spans |
+
+**FunctionInfo** carries: `name`, `name_span`, `def_span`, `parameters` (with `name_span`, `annotation_span`), `return_annotation`, `decorators`, `class_name`, `return_stmts`, `local_vars`.
+
+**ClassInfo** carries: `name`, `name_span`, `def_span`, `bases`, `attributes` (with `name_span`, `annotation_span`), `method_names`, `is_dataclass`, `is_typed_dict`, etc.
+
+Every symbol has a `Span` (byte start/end) for precise positioning.
+
+### Server Module Structure (Target)
+
+```
+crates/basilisk-lsp/src/
+  server.rs          — LspServer struct + tower-lsp trait impl (dispatch only)
+  lib.rs             — re-exports run_server, check_source
+  util.rs            — find_symbol_at_offset, position conversion, format_type_signature
+  hover.rs           — type-aware hover + diagnostic hover
+  definition.rs      — go-to-definition
+  references.rs      — find all references + rename
+  symbols.rs         — document symbols + workspace symbols
+  completion.rs      — symbol + dot + import completions (extract from server.rs)
+  signature.rs       — signature help
+  inlay_hints.rs     — inferred types + parameter names
+  semantic_tokens.rs — token classification
+  code_actions.rs    — quick fixes (extract + expand from server.rs)
+  formatting.rs      — Ruff delegation
 ```
 
-### New CLI subcommand
+Each module exports pure functions: `(resolved: &ResolvedModule, source: &str, ...) → LSP response type`.
 
-**`crates/basilisk-cli/src/main.rs`** — add `Lsp` variant:
+### Performance: Cache ResolvedModule
+
+Currently every hover/completion/code-action re-parses the entire document. Fix:
 
 ```rust
-#[derive(Subcommand)]
-enum Command {
-    /// Type check one or more files or directories.
-    Check { /* existing */ },
-
-    /// Start the Basilisk Language Server (JSON-RPC over stdio).
-    Lsp,
-}
-```
-
-In `main()`:
-```rust
-Command::Lsp => {
-    basilisk_lsp::run_server();
-    0
-}
-```
-
-### `run_server` in basilisk-lsp
-
-**`crates/basilisk-lsp/src/server.rs`** (new file):
-
-```rust
-use tower_lsp::{LspService, Server};
-
-pub fn run_server() {
-    // expect() is acceptable here: this is the process entry point.
-    let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(async {
-        let stdin  = tokio::io::stdin();
-        let stdout = tokio::io::stdout();
-        let (service, socket) = LspService::new(|client| LspServer::new(client));
-        Server::new(stdin, stdout, socket).serve(service).await;
-    });
-}
-```
-
-### `LspServer` struct
-
-```rust
-use dashmap::DashMap;
-use tower_lsp::lsp_types::*;
-use tower_lsp::Client;
-
-pub struct LspServer {
-    client: Client,
-    documents: DashMap<Url, DocumentState>,
-}
-
 struct DocumentState {
-    text:    String,
-    version: i32,
-}
-
-impl LspServer {
-    pub fn new(client: Client) -> Self {
-        Self { client, documents: DashMap::new() }
-    }
+    text: String,
+    resolved: Option<Arc<ResolvedModule>>,  // cached from last did_change/did_open
 }
 ```
 
-### `initialize` handler
-
-```rust
-#[tower_lsp::async_trait]
-impl LanguageServer for LspServer {
-    async fn initialize(&self, _params: InitializeParams) -> LspResult<InitializeResult> {
-        Ok(InitializeResult {
-            server_info: Some(ServerInfo {
-                name:    "basilisk".to_owned(),
-                version: Some(env!("CARGO_PKG_VERSION").to_owned()),
-            }),
-            capabilities: ServerCapabilities {
-                text_document_sync: Some(TextDocumentSyncCapability::Kind(
-                    TextDocumentSyncKind::FULL,
-                )),
-                hover_provider:       Some(HoverProviderCapability::Simple(true)),
-                code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
-                ..Default::default()
-            },
-            ..Default::default()
-        })
-    }
-
-    async fn initialized(&self, _: InitializedParams) {
-        self.client.log_message(MessageType::INFO, "Basilisk LSP initialized").await;
-    }
-
-    async fn shutdown(&self) -> LspResult<()> { Ok(()) }
-}
-```
-
-### Deliverables
-- `crates/basilisk-lsp/src/server.rs` — struct + initialize/initialized/shutdown
-- `crates/basilisk-lsp/src/lib.rs` — re-export `run_server`
-- `crates/basilisk-cli/src/main.rs` — `Lsp` subcommand wired in
-- `cargo build` and `cargo clippy` pass
+Update `resolved` on `did_change`/`did_open`. Reuse cached result for all feature handlers.
 
 ---
 
-## WI-L2 — Document Store + textDocument Lifecycle
+## Phase 0: Fix Server Crash + Extension Robustness
 
-### didOpen
+### 0.1 Remove stdout pollution
 
-```rust
-async fn did_open(&self, params: DidOpenTextDocumentParams) {
-    let uri     = params.text_document.uri;
-    let text    = params.text_document.text;
-    let version = params.text_document.version;
-    self.documents.insert(uri.clone(), DocumentState { text: text.clone(), version });
-    self.check_and_publish(uri, &text).await;
-}
-```
+**Root cause**: 10 `println!("DEBUG: ...")` calls in `crates/basilisk-checker/src/rules/e0080.rs` (lines 69, 92, 101, 113, 115, 119, 128, 158, 163, 178, 187). When the LSP server runs the checker, these write raw text to stdout, corrupting the JSON-RPC Content-Length framing.
 
-### didChange (full sync — Phase 1)
+**Fix**: Delete all `println!` calls from `e0080.rs`. Audit all other production crates for stray `println!`/`print!` calls. Add a CI check: `grep -rn 'println!' crates/*/src/ | grep -v '#\[cfg(test)\]'` must return empty.
+
+### 0.2 E2E startup test
+
+Add to `crates/basilisk-lsp/tests/lsp_e2e_tests.rs`:
 
 ```rust
-async fn did_change(&self, params: DidChangeTextDocumentParams) {
-    let uri     = params.text_document.uri;
-    let version = params.text_document.version;
-    let Some(change) = params.content_changes.into_iter().next() else { return; };
-    let text = change.text;
-    self.documents.insert(uri.clone(), DocumentState { text: text.clone(), version });
-    self.check_and_publish(uri, &text).await;
+#[test]
+fn test_lsp_first_output_is_content_length() {
+    // Spawn `basilisk lsp`, send initialize request,
+    // assert first bytes of response start with "Content-Length:"
 }
 ```
 
-### didSave
+### 0.3 Extension error recovery
 
-```rust
-async fn did_save(&self, params: DidSaveTextDocumentParams) {
-    let uri = params.text_document.uri;
-    if let Some(entry) = self.documents.get(&uri) {
-        self.check_and_publish(uri, &entry.text).await;
-    }
-}
-```
-
-### didClose
-
-```rust
-async fn did_close(&self, params: DidCloseTextDocumentParams) {
-    let uri = params.text_document.uri;
-    self.documents.remove(&uri);
-    self.client.publish_diagnostics(uri, vec![], None).await;
-}
-```
-
-### Deliverables
-- All four handlers implemented on `LspServer`
-- `documents` populated and cleared correctly
-
----
-
-## WI-L3 — Diagnostics Push (publishDiagnostics)
-
-### `check_and_publish`
-
-```rust
-impl LspServer {
-    async fn check_and_publish(&self, uri: Url, text: &str) {
-        let diagnostics = self.run_checker(uri.clone(), text);
-        self.client.publish_diagnostics(uri, diagnostics, None).await;
-    }
-
-    fn run_checker(&self, uri: Url, text: &str) -> Vec<lsp_types::Diagnostic> {
-        let file_path = uri.to_file_path().unwrap_or_default();
-        let path_str  = file_path.to_string_lossy().into_owned();
-
-        let parsed = match basilisk_parser::parse_source(text.to_owned(), path_str.clone()) {
-            Ok(p)  => p,
-            Err(e) => return vec![parse_error_diagnostic(&e.to_string())],
-        };
-        let resolved = match basilisk_resolver::resolve(&parsed) {
-            Ok(r)  => r,
-            Err(_) => return vec![],
-        };
-        basilisk_checker::check(&resolved)
-            .into_iter()
-            .map(|d| bsk_to_lsp(d, text))
-            .collect()
-    }
-}
-```
-
-### Span → LSP Position (UTF-16)
-
-LSP character offsets are **UTF-16 code units** — surrogate pairs count as 2.
-
-```rust
-fn byte_offset_to_position(text: &str, byte_offset: usize) -> Position {
-    let clamped  = byte_offset.min(text.len());
-    let before   = &text[..clamped];
-    let line     = before.chars().filter(|&c| c == '\n').count() as u32;
-    let last_nl  = before.rfind('\n').map_or(0, |p| p + 1);
-    let character = before[last_nl..]
-        .chars()
-        .map(|c| if c as u32 > 0xFFFF { 2u32 } else { 1u32 })
-        .sum::<u32>();
-    Position { line, character }
-}
-```
-
-### Diagnostic mapper
-
-```rust
-fn bsk_to_lsp(d: basilisk_checker::Diagnostic, text: &str) -> lsp_types::Diagnostic {
-    let start = byte_offset_to_position(text, d.span.start as usize);
-    let end   = byte_offset_to_position(text, d.span.end   as usize);
-    let severity = match d.severity {
-        basilisk_checker::Severity::Error           => DiagnosticSeverity::ERROR,
-        basilisk_checker::Severity::Warning         => DiagnosticSeverity::WARNING,
-        basilisk_checker::Severity::SafetyViolation => DiagnosticSeverity::ERROR,
-    };
-    lsp_types::Diagnostic {
-        range:    Range { start, end },
-        severity: Some(severity),
-        code:     Some(NumberOrString::String(d.code.code.to_owned())),
-        code_description: Some(CodeDescription {
-            href: Url::parse(d.code.docs_url).unwrap_or_else(|_| {
-                Url::parse("https://basilisk-lang.org").expect("fallback URL is valid")
-            }),
-        }),
-        source:  Some("basilisk".to_owned()),
-        message: d.message,
-        ..Default::default()
-    }
-}
-
-fn parse_error_diagnostic(message: &str) -> lsp_types::Diagnostic {
-    lsp_types::Diagnostic {
-        range:    Range { start: Position::new(0, 0), end: Position::new(0, 0) },
-        severity: Some(DiagnosticSeverity::ERROR),
-        code:     Some(NumberOrString::String("BSK-PARSE".to_owned())),
-        source:   Some("basilisk".to_owned()),
-        message:  format!("Parse error: {message}"),
-        ..Default::default()
-    }
-}
-```
-
-### Deliverables
-- `check_and_publish`, `run_checker`, `bsk_to_lsp`, `byte_offset_to_position` implemented
-- Diagnostics appear in VS Code Problems panel
-
----
-
-## WI-L4 — Hover (textDocument/hover)
-
-### Position → Byte Offset (inverse of WI-L3)
-
-```rust
-fn position_to_byte_offset(text: &str, pos: Position) -> usize {
-    let mut line      = 0u32;
-    let mut char_cu   = 0u32;   // UTF-16 code units on current line
-    let mut byte_pos  = 0usize;
-
-    for (byte_idx, ch) in text.char_indices() {
-        if line == pos.line && char_cu == pos.character {
-            return byte_idx;
-        }
-        if ch == '\n' {
-            line += 1;
-            char_cu = 0;
-            if line > pos.line {
-                return byte_idx;
-            }
-        } else {
-            char_cu += if ch as u32 > 0xFFFF { 2 } else { 1 };
-        }
-        byte_pos = byte_idx + ch.len_utf8();
-    }
-    byte_pos
-}
-```
-
-### Hover handler
-
-Phase 1: hover shows the diagnostic message covering the cursor position.
-Phase 2 (post type-inference): hover shows `Type: \`int | str\`` from the type map.
-
-```rust
-async fn hover(&self, params: HoverParams) -> LspResult<Option<Hover>> {
-    let uri  = params.text_document_position_params.text_document.uri;
-    let pos  = params.text_document_position_params.position;
-    let Some(entry) = self.documents.get(&uri) else { return Ok(None); };
-    let text        = entry.text.clone();
-    drop(entry);  // release DashMap lock before await
-
-    let byte_offset = position_to_byte_offset(&text, pos);
-    let file_path   = uri.to_file_path().unwrap_or_default();
-    let path_str    = file_path.to_string_lossy().into_owned();
-
-    let parsed   = match basilisk_parser::parse_source(text.clone(), path_str) {
-        Ok(p)  => p,
-        Err(_) => return Ok(None),
-    };
-    let resolved = match basilisk_resolver::resolve(&parsed) {
-        Ok(r)  => r,
-        Err(_) => return Ok(None),
-    };
-    let diags = basilisk_checker::check(&resolved);
-
-    let hit = diags.into_iter().find(|d| {
-        (d.span.start as usize) <= byte_offset && byte_offset < (d.span.end as usize)
-    });
-
-    let Some(d) = hit else { return Ok(None); };
-    let mut md = format!("**{}** — {}", d.code.code, d.message);
-    if let Some(help) = d.help { md.push_str(&format!("\n\n_{help}_")); }
-
-    Ok(Some(Hover {
-        contents: HoverContents::Markup(MarkupContent {
-            kind: MarkupKind::Markdown, value: md,
-        }),
-        range: None,
-    }))
-}
-```
-
-### Deliverables
-- `hover` handler implemented
-- `position_to_byte_offset` utility
-- Hovering over a squiggle shows the error message in VS Code
-
----
-
-## WI-L5 — Code Actions (textDocument/codeAction)
-
-### Quick-fix table
-
-| Diagnostic | Action title | Transformation |
-|---|---|---|
-| BSK-E0001 | "Add `: Any` annotation" | Insert `: Any` after param name span end |
-| BSK-E0002 | "Add `-> None` return type" | Insert `-> None` before colon at end of def line |
-
-### Handler
-
-```rust
-async fn code_action(&self, params: CodeActionParams) -> LspResult<Option<CodeActionResponse>> {
-    let uri   = params.text_document.uri;
-    let diags = params.context.diagnostics;
-    let Some(entry) = self.documents.get(&uri) else { return Ok(None); };
-    let text = entry.text.clone();
-    drop(entry);
-
-    let mut actions: Vec<CodeActionOrCommand> = vec![];
-    for diag in &diags {
-        let Some(NumberOrString::String(code)) = &diag.code else { continue; };
-        let action = match code.as_str() {
-            "BSK-E0001" => fix_missing_param_annotation(&uri, &text, diag),
-            "BSK-E0002" => fix_missing_return_annotation(&uri, &text, diag),
-            _           => None,
-        };
-        if let Some(a) = action { actions.push(CodeActionOrCommand::CodeAction(a)); }
-    }
-    Ok(if actions.is_empty() { None } else { Some(actions) })
-}
-```
-
-### Fix helpers
-
-```rust
-fn fix_missing_param_annotation(
-    uri:  &Url,
-    _text: &str,
-    diag: &lsp_types::Diagnostic,
-) -> Option<CodeAction> {
-    let insert_pos = diag.range.end;
-    let mut changes = std::collections::HashMap::new();
-    changes.insert(uri.clone(), vec![TextEdit {
-        range:    Range { start: insert_pos, end: insert_pos },
-        new_text: ": Any".to_owned(),
-    }]);
-    Some(CodeAction {
-        title:        "Add `: Any` annotation (basilisk)".to_owned(),
-        kind:         Some(CodeActionKind::QUICKFIX),
-        diagnostics:  Some(vec![diag.clone()]),
-        edit:         Some(WorkspaceEdit { changes: Some(changes), ..Default::default() }),
-        is_preferred: Some(true),
-        ..Default::default()
-    })
-}
-
-fn fix_missing_return_annotation(
-    uri:  &Url,
-    _text: &str,
-    diag: &lsp_types::Diagnostic,
-) -> Option<CodeAction> {
-    // Insert `-> None` at the start of the diagnostic range (before the colon on the def line).
-    let insert_pos = diag.range.start;
-    let mut changes = std::collections::HashMap::new();
-    changes.insert(uri.clone(), vec![TextEdit {
-        range:    Range { start: insert_pos, end: insert_pos },
-        new_text: "-> None ".to_owned(),
-    }]);
-    Some(CodeAction {
-        title:        "Add `-> None` return type (basilisk)".to_owned(),
-        kind:         Some(CodeActionKind::QUICKFIX),
-        diagnostics:  Some(vec![diag.clone()]),
-        edit:         Some(WorkspaceEdit { changes: Some(changes), ..Default::default() }),
-        is_preferred: Some(true),
-        ..Default::default()
-    })
-}
-```
-
-### Deliverables
-- `code_action` handler + two fix helpers
-- Lightbulb appears in VS Code over E0001 and E0002 squiggles
-
----
-
-## WI-L6 — Extension: Replace Subprocess with vscode-languageclient
-
-### package.json changes
-
-Add dependency and new config option:
-```json
-{
-  "dependencies": {
-    "vscode-languageclient": "^9.0.1"
-  },
-  "contributes": {
-    "configuration": {
-      "properties": {
-        "basilisk.executablePath": { "type": "string", "default": "basilisk" },
-        "basilisk.enabled":        { "type": "boolean", "default": true },
-        "basilisk.useLsp": {
-          "type":        "boolean",
-          "default":     false,
-          "description": "Use the LSP server instead of the subprocess approach. Enable once basilisk lsp is stable."
-        },
-        "basilisk.trace.server": {
-          "type":    "string",
-          "enum":    ["off", "messages", "verbose"],
-          "default": "off",
-          "description": "Trace LSP communication for debugging."
-        }
-      }
-    }
-  }
-}
-```
-
-### extension.ts LSP path
+In `vscode-extension/src/extension.ts`:
 
 ```typescript
-import * as vscode from "vscode";
-import * as path from "path";
-import {
-  LanguageClient,
-  LanguageClientOptions,
-  ServerOptions,
-  TransportKind,
-} from "vscode-languageclient/node";
+// Error handling on client start
+client.start().catch((error) => {
+    vscode.window.showErrorMessage(
+        `Basilisk: Failed to start language server. Is '${executablePath}' installed? ${error.message}`
+    );
+});
 
-let client: LanguageClient | undefined;
-
-export function activate(context: vscode.ExtensionContext): void {
-  const cfg            = vscode.workspace.getConfiguration("basilisk");
-  const executablePath = cfg.get<string>("executablePath") ?? "basilisk";
-  const useLsp         = cfg.get<boolean>("useLsp") ?? false;
-
-  if (useLsp) {
-    startLspClient(context, executablePath);
-  } else {
-    startSubprocessMode(context, executablePath);  // existing code, unchanged
-  }
-}
-
-function startLspClient(context: vscode.ExtensionContext, executablePath: string): void {
-  const serverOptions: ServerOptions = {
-    command:   executablePath,
-    args:      ["lsp"],
-    transport: TransportKind.stdio,
-  };
-  const clientOptions: LanguageClientOptions = {
-    documentSelector: [{ scheme: "file", language: "python" }],
-    synchronize:      { configurationSection: "basilisk" },
-    traceOutputChannel: vscode.window.createOutputChannel("Basilisk LSP Trace"),
-  };
-  client = new LanguageClient("basilisk", "Basilisk Type Checker", serverOptions, clientOptions);
-  client.start();
-  context.subscriptions.push(client);
-}
-
-export function deactivate(): Promise<void> | undefined {
-  return client?.stop();
-}
+// Auto-restart on crash (up to 3 times)
+const clientOptions: LanguageClientOptions = {
+    // ...existing...
+    errorHandler: {
+        error: (_error, _message, count) => {
+            if (count && count < 3) return { action: ErrorAction.Continue };
+            return { action: ErrorAction.Shutdown };
+        },
+        closed: () => ({ action: CloseAction.Restart }),
+    },
+};
 ```
 
-### Deliverables
-- `basilisk.useLsp` flag gates the two paths
-- LSP path uses `vscode-languageclient`, subprocess path unchanged
-- `npm run compile` passes
-- When `useLsp: true`, diagnostics appear without save
+### 0.4 Status bar
+
+Persistent status bar item:
+- `$(check) Basilisk` — green, server running, no errors in current file
+- `$(warning) Basilisk (3)` — errors in current file
+- `$(error) Basilisk` — server failed/not running
+- `$(sync~spin) Basilisk` — analyzing
+
+Update on `onDidChangeActiveTextEditor` and diagnostic count changes.
+
+### 0.5 New commands
+
+Register in `package.json`:
+
+```json
+"commands": [
+    { "command": "basilisk.restartServer", "title": "Basilisk: Restart Language Server" },
+    { "command": "basilisk.showOutput", "title": "Basilisk: Show Output" }
+]
+```
+
+### Files to modify
+- `crates/basilisk-checker/src/rules/e0080.rs` — delete all `println!`
+- `crates/basilisk-lsp/tests/lsp_e2e_tests.rs` — startup byte test
+- `vscode-extension/src/extension.ts` — error recovery, status bar, commands
+- `vscode-extension/package.json` — commands
 
 ---
 
-## WI-L7 — LSP Integration Tests
+## Phase 1: Core Navigation
 
-### Test location
-`crates/basilisk-lsp/tests/lsp_integration.rs`
+### Shared Infrastructure: `find_symbol_at_offset`
 
-### Required tests (all must pass)
-
-| Test | Asserts |
-|---|---|
-| `initialize_returns_full_sync` | Capabilities include FULL sync, hover, code-action |
-| `did_open_stores_document` | `server.documents` contains entry after didOpen |
-| `did_close_clears_document` | `server.documents` is empty after didClose |
-| `run_checker_e0001_missing_param` | `"BSK-E0001"` in diagnostics for `def f(x): pass` |
-| `run_checker_e0002_missing_return` | `"BSK-E0002"` in diagnostics for unannotated public fn |
-| `run_checker_clean_file` | Empty diagnostics for fully annotated code |
-| `run_checker_parse_error` | `"BSK-PARSE"` returned for syntactically invalid Python |
-| `byte_offset_ascii` | `byte_offset_to_position` correct on ASCII text |
-| `byte_offset_utf16_surrogate` | Correct character count for emoji (non-BMP) characters |
-| `position_roundtrip` | `position_to_byte_offset(byte_offset_to_position(text, off)) == off` |
-| `hover_over_error_span` | Returns `Some(Hover)` with error message |
-| `hover_outside_span` | Returns `None` |
-| `code_action_e0001_inserts_any` | Action for E0001 inserts `: Any` at correct position |
-
-### Test skeleton
+Central symbol lookup function reused by hover, go-to-def, references, rename:
 
 ```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tower_lsp::lsp_types::*;
+// crates/basilisk-lsp/src/util.rs
 
-    fn make_server() -> LspServer {
-        // Use tower_lsp test harness to get a client stub.
-        let (service, _socket) = tower_lsp::LspService::new(|client| LspServer::new(client));
-        // Extract inner server for direct method calls.
-        // (Actual extraction depends on tower-lsp API — see tower_lsp::LspService::inner)
-        todo!("wire up test client")
-    }
+pub enum SymbolHit<'a> {
+    Function(&'a FunctionInfo),
+    Class(&'a ClassInfo),
+    Variable(&'a VariableInfo),
+    Parameter { func: &'a FunctionInfo, param: &'a ParameterInfo },
+    Attribute { class: &'a ClassInfo, attr: &'a AttributeInfo },
+    Import(&'a ImportInfo),
+}
 
-    #[test]
-    fn run_checker_e0001_missing_param() {
-        let server = make_server();
-        let uri    = Url::parse("file:///test.py").unwrap();
-        let diags  = server.run_checker(uri, "def f(x): pass\n");
-        assert!(diags.iter().any(|d| d.code == Some(NumberOrString::String("BSK-E0001".to_owned()))));
+/// Find the symbol at a byte offset by checking all name_spans in the ResolvedModule.
+pub fn find_symbol_at_offset(resolved: &ResolvedModule, offset: usize) -> Option<SymbolHit<'_>>
+```
+
+Logic: iterate `resolved.functions` (check `name_span`, then each `param.name_span`), `resolved.classes` (check `name_span`, then each `attr.name_span`), `resolved.module_vars`, `resolved.imports`. Return first where `span.start <= offset < span.end`.
+
+Also: `pub fn format_type_signature(hit: &SymbolHit, source: &str) -> String` — builds hover markdown for any symbol kind.
+
+### 1a. Hover with Type Information
+
+**LSP method**: `textDocument/hover` (capability already advertised)
+
+**Current behavior**: Only shows diagnostic message when cursor is on an error span. Returns `None` for clean code.
+
+**New behavior**: Show type signatures for any symbol, with diagnostics as secondary:
+
+```
+(function) def greet(name: str) -> str
+
+---
+**BSK-E0003** — Variable assignment missing type annotation
+```
+
+| Symbol Kind | Display Format |
+|------------|---------------|
+| Function | `(function) def name(param: Type, ...) -> ReturnType` |
+| Method | `(method) def ClassName.name(self, param: Type, ...) -> ReturnType` |
+| Class | `(class) ClassName(Base1, Base2)` |
+| Variable | `(variable) name: Type` or `(variable) name = <inferred type>` |
+| Parameter | `(parameter) name: Type` |
+| Attribute | `(property) ClassName.name: Type` |
+
+**Data sources**:
+- Function signature: `FunctionInfo.parameters` + `return_annotation` + source text via `annotation_span`
+- Class bases: `ClassInfo.bases`
+- Variable type: `VariableInfo.annotation_span` (annotated) or `infer_rhs(&var.rhs_kind)` (unannotated)
+- Parameter type: `ParameterInfo.annotation_span` + source text
+
+### 1b. Go to Definition
+
+**LSP method**: `textDocument/definition`
+
+**Capability**: Add `definitionProvider: true` to `ServerCapabilities`
+
+**Behavior**: Ctrl+Click / F12 on a symbol jumps to its definition.
+
+| Cursor on | Jumps to |
+|-----------|----------|
+| Function call `greet(...)` | `FunctionInfo.name_span` of `greet` |
+| Class instantiation `Dog(...)` | `ClassInfo.name_span` of `Dog` |
+| Variable reference `x` | `VariableInfo.name_span` of `x` |
+| `self.attr` | `AttributeInfo.name_span` in enclosing class |
+| `ClassName.attr` | `AttributeInfo.name_span` in named class |
+| Parameter reference | `ParameterInfo.name_span` in function |
+
+**Implementation**:
+1. Get byte offset from cursor position
+2. Extract identifier at offset from source text
+3. Search `ResolvedModule` for a definition with that name
+4. Return `Location` with URI (same file) and `name_span` converted to LSP range
+
+**Scope**: Single-file only in Phase 1. Cross-module requires workspace module resolver (Phase 5).
+
+### 1c. Document Symbols (Outline)
+
+**LSP method**: `textDocument/documentSymbol`
+
+**Capability**: Add `documentSymbolProvider: true`
+
+**Behavior**: Outline panel shows hierarchical tree of all definitions:
+
+```
+▼ MyClass                          (class)
+    name: str                      (field)
+    age: int                       (field)
+    ▶ __init__(self, name, age)    (method)
+    ▶ greet(self) -> str           (method)
+▶ helper(x: int) -> int           (function)
+  MAX_SIZE: int                    (variable)
+```
+
+**Implementation**:
+1. Build top-level symbols from `functions` (where `class_name.is_none()`), `classes`, `module_vars`, `imports`
+2. Nest under classes: functions where `class_name == Some(class_name)`, class `attributes`
+3. Map to `DocumentSymbol` with:
+   - `name`: symbol name
+   - `kind`: `SymbolKind::Class`, `Function`, `Method`, `Variable`, `Field`
+   - `range`: `def_span` converted to LSP range
+   - `selectionRange`: `name_span` converted to LSP range
+   - `detail`: type annotation string (optional)
+   - `children`: nested symbols for classes
+
+### Files
+- New: `crates/basilisk-lsp/src/util.rs`
+- New: `crates/basilisk-lsp/src/hover.rs`
+- New: `crates/basilisk-lsp/src/definition.rs`
+- New: `crates/basilisk-lsp/src/symbols.rs`
+- Modify: `crates/basilisk-lsp/src/server.rs` — add capabilities, delegate to new modules
+- Modify: `crates/basilisk-lsp/src/lib.rs` — declare modules
+- Add E2E tests to `crates/basilisk-lsp/tests/lsp_e2e_tests.rs`
+
+---
+
+## Phase 2: Productivity Features
+
+### 2a. Signature Help
+
+**LSP method**: `textDocument/signatureHelp`
+
+**Capability**: `signatureHelpProvider: { triggerCharacters: ["(", ","] }`
+
+**Behavior**: When typing `greet(` or pressing `,` inside a call:
+
+```
+greet(name: str, greeting: str) -> str
+      ^^^^^^^^^^
+      parameter 1 of 2
+```
+
+**Implementation**:
+1. Scan backwards from cursor for unmatched `(`
+2. Extract callee name (text before the `(`)
+3. Look up `FunctionInfo` by name in `ResolvedModule`
+4. Count commas before cursor position to determine `activeParameter`
+5. Build `SignatureInformation` with `ParameterInformation` for each param
+6. For methods: skip `self`/`cls` in display, adjust `activeParameter` index
+
+**Data**: `FunctionInfo.parameters` (name, annotation_span), `return_annotation`
+
+### 2b. Find All References
+
+**LSP method**: `textDocument/references`
+
+**Capability**: `referencesProvider: true`
+
+**Behavior**: Right-click → Find All References shows every use of a symbol in the file.
+
+**Implementation**:
+1. Use `find_symbol_at_offset` to identify the target symbol name
+2. Collect all locations where that name appears:
+   - Definition sites: `name_span` from the symbol's info struct
+   - Call sites: `calls[].callee == name` → use `call.span`
+   - Attribute accesses: `module_attr_accesses` where attr matches
+   - Text scan: find all word-boundary matches of the identifier in source, filter out strings/comments
+3. If `params.context.include_declaration`, include the definition site
+4. Return `Vec<Location>`
+
+### 2c. Rename Symbol
+
+**LSP methods**: `textDocument/prepareRename`, `textDocument/rename`
+
+**Capability**: `renameProvider: { prepareProvider: true }`
+
+**Behavior**: F2 renames a symbol everywhere in the current file.
+
+**Implementation**:
+1. `prepareRename`: verify cursor is on a renameable symbol (function, class, variable, parameter, attribute). Return `Range` + placeholder text.
+2. `rename`: use same reference-finding as 2b, return `WorkspaceEdit` with `TextEdit` for each occurrence.
+3. Single-file scope for now.
+
+### 2d. Expanded Code Actions
+
+Extend beyond BSK-E0001/E0002:
+
+| Diagnostic | Action | Transformation |
+|-----------|--------|----------------|
+| BSK-E0001 | Smart type annotation | Infer type from usage/default value instead of always `: Any` |
+| BSK-E0002 | Smart return type | Infer from `return_stmts[].rhs_kind` instead of always `-> None` |
+| BSK-E0003 | Add variable annotation | Insert `: <inferred_type>` |
+| (any) | Suppress with `# type: ignore` | Append comment to line |
+| (source) | Organize imports | Delegate to `ruff check --select I --fix` |
+
+Register `codeActionKinds`: `[QUICKFIX, SOURCE_ORGANIZE_IMPORTS, REFACTOR]`
+
+### Files
+- New: `crates/basilisk-lsp/src/signature.rs`
+- New: `crates/basilisk-lsp/src/references.rs`
+- Modify: `crates/basilisk-lsp/src/code_actions.rs` (extracted from server.rs + expanded)
+- Add E2E tests
+
+---
+
+## Phase 3: Inlay Hints + Semantic Tokens
+
+### 3a. Inlay Hints
+
+**LSP method**: `textDocument/inlayHint`
+
+**Capability**: `inlayHintProvider: true`
+
+**What the user sees**:
+
+```python
+x = 42                    # ghost text:  x: int = 42
+name = "hello"            # ghost text:  name: str = "hello"
+greet("Alice", "Hi")      # ghost text:  greet(name= "Alice", greeting= "Hi")
+```
+
+**Two hint categories**:
+
+1. **Variable type hints** — for unannotated variables, show inferred type after name
+   - Data: `module_vars` + `functions[].local_vars` where `has_annotation == false`
+   - Type: `infer_rhs(&var.rhs_kind).to_string()` from `basilisk_checker::inference`
+   - Position: `InlayHintKind::TYPE` at `name_span.end`
+
+2. **Parameter name hints** — at call sites, show parameter names before arguments
+   - Data: `calls[].args` cross-referenced with `functions[].parameters`
+   - Position: `InlayHintKind::PARAMETER` at each arg span start
+   - Label: `"param_name ="` or `"param_name:"`
+
+**Extension settings** (new):
+```json
+"basilisk.inlayHints.parameterNames": { "type": "boolean", "default": true },
+"basilisk.inlayHints.variableTypes": { "type": "boolean", "default": true }
+```
+
+### 3b. Semantic Tokens
+
+**LSP method**: `textDocument/semanticTokens/full`
+
+**Capability**: `semanticTokensProvider` with legend
+
+**Token type legend**:
+
+| Token Type | Applied To |
+|-----------|-----------|
+| `function` | Function names at definition and call sites |
+| `method` | Method names (functions with `class_name.is_some()`) |
+| `class` | Class names at definition and reference sites |
+| `parameter` | Parameter names in function signatures |
+| `variable` | Module-level and local variable names |
+| `property` | Class attribute names |
+| `decorator` | Decorator names (`@staticmethod`, `@override`, etc.) |
+| `type` | Type annotation identifiers |
+| `typeParameter` | TypeVar names, PEP 695 type params |
+
+**Token modifier legend**: `declaration`, `definition`, `readonly`, `static`, `deprecated`
+
+**Data**: All `name_span`s from `ResolvedModule` — each symbol's span is classified by its semantic role.
+
+### Files
+- New: `crates/basilisk-lsp/src/inlay_hints.rs`
+- New: `crates/basilisk-lsp/src/semantic_tokens.rs`
+- Modify: `vscode-extension/package.json` — inlay hint settings
+- Modify: `vscode-extension/src/extension.ts` — pass settings to server via middleware
+- Add E2E tests
+
+---
+
+## Phase 4: Workspace Features + Formatting
+
+### 4a. Workspace Symbols
+
+**LSP method**: `workspace/symbol`
+
+**Capability**: `workspaceSymbolProvider: true`
+
+**Behavior**: Ctrl+T opens symbol search across all open documents. Aggregate `DocumentSymbol` data from all entries in `DashMap`, filter by query string. Return `Vec<SymbolInformation>`.
+
+### 4b. Format Document (Ruff Delegation)
+
+**LSP method**: `textDocument/formatting`
+
+**Capability**: `documentFormattingProvider: true`
+
+**Implementation**: Spawn `ruff format --stdin-filename <path> -` with document text on stdin. Capture stdout. Return single `TextEdit` replacing entire document content.
+
+**Extension settings** (new):
+```json
+"basilisk.ruff.enabled": { "type": "boolean", "default": true },
+"basilisk.ruff.executablePath": { "type": "string", "default": "ruff" }
+```
+
+### 4c. Folding Ranges
+
+**LSP method**: `textDocument/foldingRange`
+
+**Capability**: `foldingRangeProvider: true`
+
+**Implementation**: Emit `FoldingRange` for each:
+- Function definition (`def_span` start line to end line)
+- Class definition (`def_span` start line to end line)
+- Import block (consecutive import statement lines grouped)
+- Multiline strings/comments
+
+### 4d. Selection Ranges
+
+**LSP method**: `textDocument/selectionRange`
+
+**Capability**: `selectionRangeProvider: true`
+
+**Behavior**: Smart Select (Shift+Alt+Right) expands: identifier → parameter → parameter list → function body → function → class → module.
+
+**Implementation**: Build nested range tree from `ResolvedModule` spans. For each cursor position, return the chain from innermost containing span to outermost.
+
+### Files
+- New: `crates/basilisk-lsp/src/formatting.rs`
+- Modify: `crates/basilisk-lsp/src/symbols.rs` — add workspace symbols
+- Modify: `crates/basilisk-lsp/src/server.rs` — add capabilities + handlers
+- Modify: `vscode-extension/package.json` — Ruff settings
+- Add E2E tests
+
+---
+
+## Phase 5: Advanced (Future)
+
+### 5a. Call Hierarchy
+- `textDocument/prepareCallHierarchy`, `callHierarchy/incomingCalls`, `callHierarchy/outgoingCalls`
+- Data: `calls[].callee` for outgoing. For incoming: search all functions' call sites for target name.
+
+### 5b. Type Hierarchy
+- `textDocument/prepareTypeHierarchy`, `typeHierarchy/supertypes`, `typeHierarchy/subtypes`
+- Data: `classes[].bases` for supertypes. For subtypes: search all classes whose `bases` contains target.
+
+### 5c. Cross-Module Go to Definition
+- Requires workspace-level module resolver: map `import foo` to file path, parse that file, resolve symbols.
+- New infrastructure: `WorkspaceIndex` that maps module names to file paths and caches `ResolvedModule` per file.
+
+### 5d. Auto-Import Suggestions
+- When a name is unresolved, suggest imports from the workspace index.
+- Requires cross-module symbol index from 5c.
+
+### 5e. Incremental Text Sync
+- Switch from `TextDocumentSyncKind::FULL` to `INCREMENTAL`
+- Apply `TextDocumentContentChangeEvent` patches to stored text
+- Reduces data transferred on each keystroke
+
+### 5f. Salsa Integration
+- Wire `basilisk-db` crate with Salsa framework for memoized incremental computation
+- Target: <10ms incremental checks, <5s cold start on 100K LOC
+
+---
+
+## VS Code Extension Enhancements
+
+### New Commands
+
+```json
+{
+    "commands": [
+        { "command": "basilisk.restartServer", "title": "Basilisk: Restart Language Server" },
+        { "command": "basilisk.showOutput", "title": "Basilisk: Show Output" },
+        { "command": "basilisk.organizeImports", "title": "Basilisk: Organize Imports" }
+    ]
+}
+```
+
+### New Configuration Settings
+
+```json
+{
+    "basilisk.inlayHints.parameterNames": {
+        "type": "boolean", "default": true,
+        "description": "Show parameter name hints at call sites."
+    },
+    "basilisk.inlayHints.variableTypes": {
+        "type": "boolean", "default": true,
+        "description": "Show inferred type hints for unannotated variables."
+    },
+    "basilisk.ruff.enabled": {
+        "type": "boolean", "default": true,
+        "description": "Enable Ruff integration for formatting and import organization."
+    },
+    "basilisk.ruff.executablePath": {
+        "type": "string", "default": "ruff",
+        "description": "Path to the ruff binary."
     }
 }
 ```
 
-### Deliverables
-- All 13 tests implemented and `cargo test -p basilisk-lsp` passes
-- `cargo clippy -p basilisk-lsp` is clean
+### Status Bar Item
+
+Persistent item showing server state and diagnostic count. Updates on:
+- `LanguageClient.onDidChangeState` — server started/stopped/crashed
+- `vscode.languages.onDidChangeDiagnostics` — error count changed
+- `vscode.window.onDidChangeActiveTextEditor` — switched files
+
+### Error Recovery
+
+- `errorHandler` on `LanguageClient` for auto-restart (max 3 attempts)
+- User-visible error message when server fails to start (show stderr)
+- `basilisk.restartServer` command for manual recovery
 
 ---
 
-## Future Phases
+## Pylance Feature Parity Checklist
 
-### Phase 2 — Incremental Sync
-- Change `TextDocumentSyncKind::FULL` → `INCREMENTAL`
-- Apply `TextDocumentContentChangeEvent` patches to stored text
-- Requires incremental parser API
+| Feature | Status | Phase |
+|---------|--------|-------|
+| Diagnostics (97 rules) | DONE | — |
+| Completion (symbol + dot + builtins) | DONE | — |
+| Hover (diagnostic info) | DONE | — |
+| **Hover (type signatures)** | TODO | **1** |
+| **Go to Definition** | TODO | **1** |
+| **Document Symbols / Outline** | TODO | **1** |
+| **Signature Help** | TODO | **2** |
+| **Find All References** | TODO | **2** |
+| **Rename Symbol** | TODO | **2** |
+| **Expanded Code Actions** | TODO | **2** |
+| **Inlay Hints** | TODO | **3** |
+| **Semantic Tokens** | TODO | **3** |
+| **Workspace Symbols** | TODO | **4** |
+| **Format Document (Ruff)** | TODO | **4** |
+| **Folding Ranges** | TODO | **4** |
+| **Selection Ranges** | TODO | **4** |
+| Call Hierarchy | TODO | 5 |
+| Type Hierarchy | TODO | 5 |
+| Cross-module navigation | TODO | 5 |
+| Auto-import | TODO | 5 |
+| **Status bar + restart + error recovery** | TODO | **0** |
 
-### Phase 3 — Type Hover
-Once Sprint TI-1 delivers `InferredType`:
-- `check_with_types(resolved) -> (Vec<Diagnostic>, TypeMap)` where `TypeMap = HashMap<Span, InferredType>`
-- Store TypeMap alongside diagnostics in `DocumentState`
-- Hover returns `Type: \`int | str\`` from TypeMap
+---
+
+## Testing Strategy
+
+Every LSP feature gets E2E tests in `crates/basilisk-lsp/tests/lsp_e2e_tests.rs`. Tests spawn `basilisk lsp` as a real subprocess and communicate via JSON-RPC. No mocking — test the actual protocol.
+
+| Feature | Test Cases |
+|---------|-----------|
+| Hover (type) | Hover on function name shows signature; hover on class shows bases; hover on variable shows type; hover on clean code returns info (not None) |
+| Go to Definition | F12 on call site returns def_span; F12 on self.attr returns attribute span; F12 on class ref returns class span |
+| Document Symbols | File with class+functions returns hierarchical tree; methods nested under classes; empty file returns empty list |
+| Signature Help | Inside `greet(` returns signature; after comma selects next param; outside call returns None |
+| Find References | All call sites found; definition included when requested; attribute references found |
+| Rename | Function rename updates all call sites; class rename updates all references; returns error for non-renameable positions |
+| Inlay Hints | Unannotated var gets type hint; call site gets param name hints; annotated var gets no hint |
+| Semantic Tokens | Function def classified as function; class def as class; parameter as parameter |
+
+All existing tests must continue to pass. `cargo clippy` must be clean.
 
 ---
 
 ## Acceptance Criteria
 
-- [ ] `basilisk lsp` starts a JSON-RPC server on stdio
-- [ ] VS Code extension connects via `vscode-languageclient`
-- [ ] Diagnostics appear in Problems panel on open (no save required)
-- [ ] Diagnostics update as user types (didChange triggers re-check)
-- [ ] Hovering over a squiggle shows the diagnostic message
-- [ ] E0001 lightbulb inserts `: Any`
-- [ ] E0002 lightbulb inserts `-> None`
-- [ ] All 13 integration tests pass
-- [ ] `cargo clippy` clean
-- [ ] No `.unwrap()` in server code (entry-point `expect` documented as exception)
+- [ ] `basilisk lsp` starts without Content-Length errors
+- [ ] Hovering any symbol shows its type signature
+- [ ] Ctrl+Click jumps to definition (same file)
+- [ ] Outline panel shows class/function/variable hierarchy
+- [ ] Signature help appears when typing function calls
+- [ ] Find All References finds all usages in current file
+- [ ] F2 rename works across current file
+- [ ] Inlay hints show inferred types and parameter names
+- [ ] Semantic tokens enhance syntax highlighting
+- [ ] Status bar shows server state and error count
+- [ ] Restart command recovers from server crashes
+- [ ] Format Document delegates to Ruff
+- [ ] All E2E tests pass: `cargo test -p basilisk-lsp`
+- [ ] `cargo clippy` clean, no `unwrap()` in production code

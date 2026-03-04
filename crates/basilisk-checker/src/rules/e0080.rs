@@ -66,7 +66,6 @@ fn build_typevar_bounds<'a>(module: &'a ResolvedModule, source: &'a str) -> Hash
             typevar_bounds.insert(tv.name.as_str(), bound_text);
         }
     }
-    println!("DEBUG: typevar_bounds: {typevar_bounds:?}");
     typevar_bounds
 }
 
@@ -89,7 +88,6 @@ fn build_func_param_bounds<'a>(
                 continue;
             };
             let ann_text = ann_text.trim();
-            println!("DEBUG: Function {} param {} annotation: '{ann_text}'", func.name, idx);
             if let Some(bound) = typevar_bounds.get(ann_text) {
                 param_bounds.push((idx, bound.clone()));
             }
@@ -98,7 +96,6 @@ fn build_func_param_bounds<'a>(
             func_param_bounds.insert(func.name.as_str(), param_bounds);
         }
     }
-    println!("DEBUG: func_param_bounds: {func_param_bounds:?}");
     func_param_bounds
 }
 
@@ -110,13 +107,7 @@ fn check_call_sites(
     _func_param_bounds: &HashMap<&str, Vec<(usize, String)>>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    println!("DEBUG: All calls in module:");
     for call in &module.calls {
-        println!("  Call to '{}' at span {:?}", call.callee, call.span);
-    }
-    
-    for call in &module.calls {
-        println!("DEBUG: Checking call to '{}'", call.callee);
         
         // Find all functions with this name (could be multiple due to methods)
         let matching_functions: Vec<&basilisk_resolver::FunctionInfo> = module
@@ -124,8 +115,6 @@ fn check_call_sites(
             .iter()
             .filter(|f| f.name == call.callee)
             .collect();
-
-        println!("DEBUG: Matching functions: {}", matching_functions.len());
 
         if matching_functions.is_empty() {
             continue;
@@ -155,12 +144,9 @@ fn check_function_call(
             let ann_span = param.annotation_span?;
             let ann_text = source.get(ann_span.start as usize..ann_span.end as usize)?;
             let ann_text = ann_text.trim();
-            println!("DEBUG: Function {} param {} annotation: '{ann_text}'", func.name, idx);
             typevar_bounds.get(ann_text).map(|bound| (idx, bound.clone()))
         })
         .collect();
-
-    println!("DEBUG: param_bounds for {}: {param_bounds:?}", func.name);
 
     if param_bounds.is_empty() {
         return;
@@ -175,8 +161,6 @@ fn check_function_call(
             continue;
         };
 
-        println!("DEBUG: Checking param {param_idx}: lit_type={lit_type}, bound_text={bound_text}");
-
         if !type_satisfies_bound(lit_type, &bound_text) {
             let func_name = if let Some(class_name) = &func.class_name {
                 format!("{}.{}", class_name, func.name)
@@ -184,8 +168,6 @@ fn check_function_call(
                 func.name.clone()
             };
 
-            println!("DEBUG: Adding diagnostic for {func_name} with type {lit_type} violating bound {bound_text}");
-            
             diagnostics.push(Diagnostic {
                 code: CODE.clone(),
                 severity: Severity::Error,

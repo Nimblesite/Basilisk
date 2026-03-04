@@ -67,6 +67,7 @@ Subs (everyone except Coordinator): You MUST continue autonomously and follow th
 - Low cognitive complexity (clippy::cognitive_complexity enabled)
 - Descriptive variable names - no single letters except in closures
 - Group related functionality into modules
+- Keep files under 500 LOC
 - Public APIs must have documentation (`missing_docs = "warn"`)
 
 # Website and CSS
