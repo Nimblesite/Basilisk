@@ -118,20 +118,45 @@ impl InferredType {
     /// Creates a union of two types, flattening nested unions.
     #[must_use]
     pub fn union(a: InferredType, b: InferredType) -> InferredType {
-        match (a, b) {
-            (InferredType::Union(mut types_a), InferredType::Union(types_b)) => {
-                types_a.extend(types_b);
-                InferredType::Union(types_a)
+        // Handle Never specially: Never ∪ T = T
+        if matches!(a, InferredType::Never) {
+            return b;
+        }
+        if matches!(b, InferredType::Never) {
+            return a;
+        }
+        
+        // Flatten both sides into vectors of types
+        let mut types = Vec::new();
+        
+        // Helper to flatten a type into the vector
+        fn flatten_into(ty: InferredType, vec: &mut Vec<InferredType>) {
+            match ty {
+                InferredType::Union(mut inner_types) => {
+                    for inner_ty in inner_types.drain(..) {
+                        flatten_into(inner_ty, vec);
+                    }
+                }
+                other => vec.push(other),
             }
-            (InferredType::Union(mut types), other) => {
-                types.push(other);
-                InferredType::Union(types)
+        }
+        
+        flatten_into(a, &mut types);
+        flatten_into(b, &mut types);
+        
+        // Deduplicate types
+        let mut deduplicated = Vec::new();
+        for ty in types {
+            if !deduplicated.contains(&ty) {
+                deduplicated.push(ty);
             }
-            (a, InferredType::Union(mut types)) => {
-                types.insert(0, a);
-                InferredType::Union(types)
-            }
-            (a, b) => InferredType::Union(vec![a, b]),
+        }
+        
+        // If only one type remains, return it directly (not wrapped in Union)
+        match deduplicated.len() {
+            0 => InferredType::Never, // Should not happen due to Never handling above
+            1 => deduplicated.into_iter().next().unwrap(),
+            _ => InferredType::Union(deduplicated),
         }
     }
 

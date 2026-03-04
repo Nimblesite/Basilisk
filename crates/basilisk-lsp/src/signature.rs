@@ -86,8 +86,26 @@ fn extract_callee(text: &str) -> Option<String> {
 }
 
 /// Find a function by name in the resolved module.
+///
+/// When the callee name matches a class name rather than a function name,
+/// this looks up the `__init__` method of that class instead, so that
+/// constructor calls like `MyClass(x, y)` show the correct signature.
 fn find_function<'a>(resolved: &'a ResolvedModule, name: &str) -> Option<&'a FunctionInfo> {
-    resolved.functions.iter().find(|f| f.name == name)
+    // Direct function name match.
+    if let Some(func) = resolved.functions.iter().find(|f| f.name == name) {
+        return Some(func);
+    }
+
+    // If the callee name matches a class, look for its __init__ method.
+    let is_class = resolved.classes.iter().any(|c| c.name == name);
+    if is_class {
+        return resolved
+            .functions
+            .iter()
+            .find(|f| f.name == "__init__" && f.class_name.as_deref() == Some(name));
+    }
+
+    None
 }
 
 /// Adjust active parameter index to skip `self`/`cls`.
