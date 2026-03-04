@@ -2909,3 +2909,320 @@ class Puppy(Dog):
 
     Ok(())
 }
+
+// ── Bonnet: Additional coverage tests ───────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_hover_class_with_bases() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+class Animal:
+    name: str
+
+class Dog(Animal):
+    breed: str
+";
+    fixture
+        .did_open("file:///ws_hover_bases.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Hover on "Dog" — line 3, character 6 (inside "Dog").
+    let resp = fixture
+        .request(
+            950,
+            "textDocument/hover",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_hover_bases.py" },
+                "position": { "line": 3, "character": 6 }
+            }),
+        )
+        .await?
+        .ok_or("no hover response for class with bases")?;
+
+    assert!(
+        resp.contains("(class)"),
+        "hover on class with bases should show '(class)' prefix: {resp}"
+    );
+    assert!(
+        resp.contains("Dog"),
+        "hover should show class name 'Dog': {resp}"
+    );
+    assert!(
+        resp.contains("Animal"),
+        "hover on class with bases should show base class 'Animal': {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_rename_multiple_occurrences() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+def helper(x: int) -> int:
+    return x
+
+a: int = helper(1)
+b: int = helper(2)
+c: int = helper(3)
+";
+    fixture
+        .did_open("file:///ws_ren_multi.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Rename "helper" to "assist" (line 0, character 4).
+    let resp = fixture
+        .request(
+            951,
+            "textDocument/rename",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_ren_multi.py" },
+                "position": { "line": 0, "character": 4 },
+                "newName": "assist"
+            }),
+        )
+        .await?
+        .ok_or("no rename response")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let changes = &parsed["result"]["changes"]["file:///ws_ren_multi.py"];
+    let edits = changes
+        .as_array()
+        .ok_or("rename should produce an array of edits")?;
+
+    // "helper" appears 4 times: definition + 3 call sites.
+    assert!(
+        edits.len() >= 4,
+        "rename should produce at least 4 edits (def + 3 calls), got {}: {resp}",
+        edits.len()
+    );
+    // Every edit should replace with "assist".
+    for edit in edits {
+        assert_eq!(
+            edit["newText"].as_str(),
+            Some("assist"),
+            "each edit should replace with 'assist': {edit}"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_goto_definition_variable() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "x: int = 42\n";
+    fixture
+        .did_open("file:///ws_goto_var.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Goto definition on "x" — line 0, character 0.
+    let resp = fixture
+        .request(
+            952,
+            "textDocument/definition",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_goto_var.py" },
+                "position": { "line": 0, "character": 0 }
+            }),
+        )
+        .await?
+        .ok_or("no definition response for variable")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert!(
+        parsed["result"] != serde_json::Value::Null,
+        "goto-def on variable must resolve: {resp}"
+    );
+    let start = &parsed["result"]["range"]["start"];
+    assert_eq!(start["line"], 0, "variable definition should be on line 0: {resp}");
+    assert_eq!(start["character"], 0, "variable definition should start at char 0: {resp}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_hover_import_shows_module() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "import os\n\nx: int = 42\n";
+    fixture
+        .did_open("file:///ws_hover_import.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Hover on "os" — line 0, character 7 (inside "os").
+    let resp = fixture
+        .request(
+            953,
+            "textDocument/hover",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_hover_import.py" },
+                "position": { "line": 0, "character": 7 }
+            }),
+        )
+        .await?
+        .ok_or("no hover response for import")?;
+
+    assert!(
+        resp.contains("os"),
+        "hover on import should show module name 'os': {resp}"
+    );
+    assert!(
+        resp.contains("import") || resp.contains("module"),
+        "hover on import should show import/module info: {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_find_references_class() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+class Dog:
+    name: str
+
+def adopt(pet: Dog) -> Dog:
+    return pet
+";
+    fixture
+        .did_open("file:///ws_refs_class.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Find references for "Dog" (line 0, character 6).
+    let resp = fixture
+        .request(
+            954,
+            "textDocument/references",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_refs_class.py" },
+                "position": { "line": 0, "character": 6 },
+                "context": { "includeDeclaration": true }
+            }),
+        )
+        .await?
+        .ok_or("no references response for class")?;
+
+    // "Dog" appears 3 times: class def + param annotation + return annotation.
+    let count = resp.matches("ws_refs_class.py").count();
+    assert!(
+        count >= 3,
+        "should find at least 3 references for 'Dog' (found {count}): {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_completion_kind_values() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+class Widget:
+    size: int
+
+def render(w: Widget) -> str:
+    return \"ok\"
+
+count: int = 0
+";
+    fixture
+        .did_open("file:///ws_comp_kinds.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            955,
+            "textDocument/completion",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_comp_kinds.py" },
+                "position": { "line": 7, "character": 0 }
+            }),
+        )
+        .await?
+        .ok_or("no completion response")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let items = parsed["result"]
+        .as_array()
+        .or_else(|| parsed["result"]["items"].as_array())
+        .ok_or("completion result should have items")?;
+
+    // Find the Widget class completion — kind 7 (Class).
+    let widget = items.iter().find(|i| i["label"].as_str() == Some("Widget"));
+    assert!(widget.is_some(), "should have Widget in completions: {resp}");
+    assert_eq!(
+        widget.map(|w| w["kind"].as_u64()),
+        Some(Some(7)),
+        "Widget should have kind CLASS (7): {resp}"
+    );
+
+    // Find the render function completion — kind 3 (Function).
+    let render = items.iter().find(|i| i["label"].as_str() == Some("render"));
+    assert!(render.is_some(), "should have render in completions: {resp}");
+    assert_eq!(
+        render.map(|r| r["kind"].as_u64()),
+        Some(Some(3)),
+        "render should have kind FUNCTION (3): {resp}"
+    );
+
+    // Find the count variable completion — kind 6 (Variable).
+    let count = items.iter().find(|i| i["label"].as_str() == Some("count"));
+    assert!(count.is_some(), "should have count in completions: {resp}");
+    assert_eq!(
+        count.map(|c| c["kind"].as_u64()),
+        Some(Some(6)),
+        "count should have kind VARIABLE (6): {resp}"
+    );
+    Ok(())
+}
+
+// ── Code Lens tests via WebSocket ───────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_code_lens() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+def greet(name: str) -> str:
+    return name
+
+x = greet(\"hello\")
+y = greet(\"world\")
+";
+    fixture
+        .did_open("file:///ws_code_lens.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            400,
+            "textDocument/codeLens",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_code_lens.py" }
+            }),
+        )
+        .await?
+        .ok_or("no codeLens response")?;
+
+    // The function `greet` is called twice (line 4 + line 5), so 2 references.
+    assert!(
+        resp.contains("2 references"),
+        "codeLens should show '2 references' for greet: {resp}"
+    );
+
+    Ok(())
+}

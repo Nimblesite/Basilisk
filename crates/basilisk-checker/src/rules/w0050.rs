@@ -146,14 +146,21 @@ fn types_match_for_w0050(inferred: &InferredType, declared: &InferredType) -> bo
     use InferredType::{Bool, Bytes, Dict, Float, Int, List, Never, None_, Set, Str, Tuple};
 
     match (inferred, declared) {
-        // Basic types - exact match
-        (Int, Int) | (Str, Str) | (Float, Float) | (Bool, Bool) | (Bytes, Bytes) | (None_, None_) => true,
         // Empty containers: annotation adds element-type information, so it is NOT redundant
         (List(a), List(_)) if matches!(a.as_ref(), Never) => false,
         (Dict(ak, _), Dict(_, _)) if matches!(ak.as_ref(), Never) => false,
         (Set(a), Set(_)) if matches!(a.as_ref(), Never) => false,
-        // Non-empty collection types - outer type match is sufficient for W0050
-        (List(_), List(_)) | (Dict(..), Dict(..)) | (Set(_), Set(_)) | (Tuple(_), Tuple(_)) => true,
+        // Basic types (exact) and non-empty collection types (outer type sufficient)
+        (Int, Int)
+        | (Str, Str)
+        | (Float, Float)
+        | (Bool, Bool)
+        | (Bytes, Bytes)
+        | (None_, None_)
+        | (List(_), List(_))
+        | (Dict(..), Dict(..))
+        | (Set(_), Set(_))
+        | (Tuple(_), Tuple(_)) => true,
         // Default case - no match
         _ => false,
     }

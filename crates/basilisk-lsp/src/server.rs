@@ -9,8 +9,9 @@ use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::{
     CallHierarchyIncomingCall, CallHierarchyIncomingCallsParams, CallHierarchyItem,
     CallHierarchyOutgoingCall, CallHierarchyOutgoingCallsParams, CallHierarchyPrepareParams,
-    CallHierarchyServerCapability, CodeActionParams, CodeActionProviderCapability,
-    CodeActionResponse, CodeDescription, CompletionOptions, CompletionParams, CompletionResponse,
+    CallHierarchyServerCapability, CodeActionKind, CodeActionOptions, CodeActionParams,
+    CodeActionProviderCapability, CodeActionResponse, CodeDescription, CompletionOptions,
+    CompletionParams, CompletionResponse,
     Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
     DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentHighlight,
     DocumentHighlightParams, DocumentFormattingParams, DocumentSymbolParams,
@@ -198,7 +199,16 @@ impl tower_lsp::LanguageServer for LspServer {
                 )),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 call_hierarchy_provider: Some(CallHierarchyServerCapability::Simple(true)),
-                code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
+                code_action_provider: Some(CodeActionProviderCapability::Options(
+                    CodeActionOptions {
+                        code_action_kinds: Some(vec![
+                            CodeActionKind::QUICKFIX,
+                            CodeActionKind::SOURCE_ORGANIZE_IMPORTS,
+                            CodeActionKind::REFACTOR,
+                        ]),
+                        ..Default::default()
+                    },
+                )),
                 completion_provider: Some(CompletionOptions {
                     trigger_characters: Some(vec![".".to_owned()]),
                     ..Default::default()
