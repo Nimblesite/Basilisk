@@ -1069,3 +1069,521 @@ async fn test_ws_code_action_organize_imports_fixes_order() -> TestResult<()> {
     }
     Ok(())
 }
+
+// ── Phase 2: Hover (enhanced) ──────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_hover_function_exact_signature() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"";
+    fixture.did_open("file:///ws_hover_exact.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            300,
+            "textDocument/hover",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_hover_exact.py" },
+                "position": { "line": 0, "character": 4 }
+            }),
+        )
+        .await?
+        .ok_or("no hover response")?;
+
+    assert!(resp.contains("(function)"), "hover should show '(function)' prefix: {resp}");
+    assert!(resp.contains("def greet"), "hover should show 'def greet': {resp}");
+    assert!(resp.contains("name: str"), "hover should show typed parameter 'name: str': {resp}");
+    assert!(resp.contains("-> str"), "hover should show return type '-> str': {resp}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_hover_from_call_site() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n\nresult: str = greet(\"world\")\n";
+    fixture.did_open("file:///ws_hover_call.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // "result: str = greet(\"world\")" is line 3.
+    // "result: str = " is 14 chars, so 'g' of "greet" is at character 14.
+    let resp = fixture
+        .request(
+            301,
+            "textDocument/hover",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_hover_call.py" },
+                "position": { "line": 3, "character": 14 }
+            }),
+        )
+        .await?
+        .ok_or("no hover response at call site")?;
+
+    assert!(resp.contains("(function)"), "call-site hover should resolve to function: {resp}");
+    assert!(resp.contains("greet"), "call-site hover should show function name: {resp}");
+    assert!(resp.contains("name: str"), "call-site hover should show parameter type: {resp}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_hover_parameter_shows_type() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"";
+    fixture.did_open("file:///ws_hover_param.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // "def greet(" is 10 chars, so 'n' of "name" is at character 10.
+    let resp = fixture
+        .request(
+            302,
+            "textDocument/hover",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_hover_param.py" },
+                "position": { "line": 0, "character": 10 }
+            }),
+        )
+        .await?
+        .ok_or("no hover response for parameter")?;
+
+    assert!(resp.contains("(parameter)"), "hover on parameter should show '(parameter)': {resp}");
+    assert!(resp.contains("name"), "hover should show parameter name: {resp}");
+    assert!(resp.contains("str"), "hover should show parameter type 'str': {resp}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_hover_class_attribute() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "class Animal:\n    name: str\n    age: int\n";
+    fixture.did_open("file:///ws_hover_attr.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Line 1: "    name: str" — "name" starts at character 4.
+    let resp = fixture
+        .request(
+            303,
+            "textDocument/hover",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_hover_attr.py" },
+                "position": { "line": 1, "character": 4 }
+            }),
+        )
+        .await?
+        .ok_or("no hover response for class attribute")?;
+
+    assert!(resp.contains("(property)"), "hover on class attribute should show '(property)': {resp}");
+    assert!(resp.contains("Animal.name"), "hover should show 'Animal.name': {resp}");
+    assert!(resp.contains("str"), "hover should show attribute type 'str': {resp}");
+    Ok(())
+}
+
+// ── Phase 2: Go to Definition ──────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_goto_definition_function() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n";
+    fixture.did_open("file:///ws_gotodef.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            310,
+            "textDocument/definition",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_gotodef.py" },
+                "position": { "line": 0, "character": 4 }
+            }),
+        )
+        .await?
+        .ok_or("no definition response")?;
+
+    assert!(resp.contains("ws_gotodef.py"), "definition should point to same file: {resp}");
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert!(
+        parsed["result"] != serde_json::Value::Null,
+        "definition result must not be null: {resp}"
+    );
+    let start = &parsed["result"]["range"]["start"];
+    assert_eq!(start["line"], 0, "definition must be on line 0: {resp}");
+    assert_eq!(
+        start["character"], 4,
+        "definition must start at char 4, where 'greet' begins: {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_goto_definition_class() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "class Dog:\n    name: str\n    def bark(self) -> str:\n        return \"woof\"\n";
+    fixture.did_open("file:///ws_gotoclass.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            311,
+            "textDocument/definition",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_gotoclass.py" },
+                "position": { "line": 0, "character": 6 }
+            }),
+        )
+        .await?
+        .ok_or("no definition response")?;
+
+    assert!(resp.contains("ws_gotoclass.py"), "definition should point to same file: {resp}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_goto_definition_from_call_site() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n\nresult: str = greet(\"world\")\n";
+    fixture.did_open("file:///ws_goto_call.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Line 3: "result: str = greet(\"world\")" — 'g' of call "greet" at character 14.
+    let resp = fixture
+        .request(
+            312,
+            "textDocument/definition",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_goto_call.py" },
+                "position": { "line": 3, "character": 14 }
+            }),
+        )
+        .await?
+        .ok_or("no definition response from call site")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert!(
+        parsed["result"] != serde_json::Value::Null,
+        "goto-def from call site must resolve: {resp}"
+    );
+    let start = &parsed["result"]["range"]["start"];
+    assert_eq!(start["line"], 0, "goto-def from call should jump to line 0: {resp}");
+    assert_eq!(
+        start["character"], 4,
+        "goto-def from call should land at char 4 where 'greet' is defined: {resp}"
+    );
+    Ok(())
+}
+
+// ── Phase 2: Document Symbols ──────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_document_symbols() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+class Animal:
+    name: str
+    def speak(self) -> str:
+        return self.name
+
+def greet(animal: Animal) -> str:
+    return animal.name
+
+x: int = 42
+";
+    fixture.did_open("file:///ws_symbols.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            320,
+            "textDocument/documentSymbol",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_symbols.py" }
+            }),
+        )
+        .await?
+        .ok_or("no document symbols response")?;
+
+    assert!(resp.contains("Animal"), "symbols should include class 'Animal': {resp}");
+    assert!(resp.contains("greet"), "symbols should include function 'greet': {resp}");
+    assert!(resp.contains("\"x\""), "symbols should include variable 'x': {resp}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_document_symbols_nested_methods() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+class Calculator:
+    value: int
+    def add(self, x: int) -> int:
+        return self.value + x
+    def multiply(self, x: int) -> int:
+        return self.value * x
+";
+    fixture.did_open("file:///ws_nested.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            321,
+            "textDocument/documentSymbol",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_nested.py" }
+            }),
+        )
+        .await?
+        .ok_or("no document symbols response")?;
+
+    assert!(resp.contains("Calculator"), "should contain class: {resp}");
+    assert!(resp.contains("add"), "should contain method 'add': {resp}");
+    assert!(resp.contains("multiply"), "should contain method 'multiply': {resp}");
+    assert!(resp.contains("value"), "should contain attribute 'value': {resp}");
+    Ok(())
+}
+
+// ── Phase 2: Signature Help ────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_signature_help() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+def greet(name: str, greeting: str) -> str:
+    return f\"{greeting}, {name}!\"
+
+result: str = greet(\"world\", \"Hi\")
+";
+    fixture.did_open("file:///ws_sighelp.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Cursor inside the greet() call — after the opening paren
+    // "result: str = greet(" is line 3, character 20
+    let resp = fixture
+        .request(
+            330,
+            "textDocument/signatureHelp",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_sighelp.py" },
+                "position": { "line": 3, "character": 21 }
+            }),
+        )
+        .await?
+        .ok_or("no signature help response")?;
+
+    assert!(resp.contains("greet"), "signature should show function name: {resp}");
+    assert!(resp.contains("name"), "signature should show parameter 'name': {resp}");
+    assert!(resp.contains("greeting"), "signature should show parameter 'greeting': {resp}");
+    Ok(())
+}
+
+// ── Phase 2: Find References ───────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_find_references() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+def greet(name: str) -> str:
+    return f\"Hello, {name}!\"
+
+result: str = greet(\"world\")
+";
+    fixture.did_open("file:///ws_refs.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Find references for "greet" (line 0, character 4)
+    let resp = fixture
+        .request(
+            340,
+            "textDocument/references",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_refs.py" },
+                "position": { "line": 0, "character": 4 },
+                "context": { "includeDeclaration": true }
+            }),
+        )
+        .await?
+        .ok_or("no references response")?;
+
+    // Should find at least 2 references (definition + usage)
+    let count = resp.matches("ws_refs.py").count();
+    assert!(count >= 2, "should find at least 2 references for 'greet' (found {count}): {resp}");
+    Ok(())
+}
+
+// ── Phase 2: Rename ────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_prepare_rename() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n";
+    fixture.did_open("file:///ws_rename.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Prepare rename on "greet" (line 0, character 4)
+    let resp = fixture
+        .request(
+            350,
+            "textDocument/prepareRename",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_rename.py" },
+                "position": { "line": 0, "character": 4 }
+            }),
+        )
+        .await?
+        .ok_or("no prepare rename response")?;
+
+    assert!(resp.contains("result"), "prepare rename should return a result: {resp}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_rename_symbol() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+def greet(name: str) -> str:
+    return f\"Hello, {name}!\"
+
+result: str = greet(\"world\")
+";
+    fixture.did_open("file:///ws_ren.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Rename "greet" to "say_hello" (line 0, character 4)
+    let resp = fixture
+        .request(
+            351,
+            "textDocument/rename",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_ren.py" },
+                "position": { "line": 0, "character": 4 },
+                "newName": "say_hello"
+            }),
+        )
+        .await?
+        .ok_or("no rename response")?;
+
+    assert!(resp.contains("say_hello"), "rename should include new name: {resp}");
+    assert!(resp.contains("changes"), "rename should include workspace changes: {resp}");
+    Ok(())
+}
+
+// ── Phase 2: Inlay Hints ──────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_inlay_hints_variable_types() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "x = 42\ny = \"hello\"\nz = True\n";
+    fixture.did_open("file:///ws_inlay.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            360,
+            "textDocument/inlayHint",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_inlay.py" },
+                "range": {
+                    "start": { "line": 0, "character": 0 },
+                    "end": { "line": 3, "character": 0 }
+                }
+            }),
+        )
+        .await?
+        .ok_or("no inlay hint response")?;
+
+    assert!(resp.contains("int"), "inlay hints should show 'int' for x=42: {resp}");
+    assert!(resp.contains("str"), "inlay hints should show 'str' for y=\"hello\": {resp}");
+    assert!(resp.contains("bool"), "inlay hints should show 'bool' for z=True: {resp}");
+    Ok(())
+}
+
+// ── Phase 2: Semantic Tokens ───────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_semantic_tokens_full() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+class Animal:
+    name: str
+    def speak(self) -> str:
+        return self.name
+
+def greet(animal: Animal) -> str:
+    return animal.name
+
+x: int = 42
+";
+    fixture.did_open("file:///ws_semtok.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            370,
+            "textDocument/semanticTokens/full",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_semtok.py" }
+            }),
+        )
+        .await?
+        .ok_or("no semantic tokens response")?;
+
+    // Should return a data array with encoded tokens
+    assert!(resp.contains("\"data\""), "semantic tokens should contain 'data' array: {resp}");
+    assert!(resp.contains("result"), "semantic tokens should have result: {resp}");
+
+    // Parse the response and verify we get tokens
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let data = parsed["result"]["data"]
+        .as_array()
+        .ok_or("data should be an array")?;
+
+    // Each token is 5 integers, so data length should be a multiple of 5
+    assert_eq!(data.len() % 5, 0, "token data length should be multiple of 5");
+    // We should have tokens for Animal, name, speak, self, greet, animal, x at minimum
+    assert!(data.len() >= 5, "should have at least 1 token: {resp}");
+    Ok(())
+}
+
+// ── Phase 2: Initialize capabilities ───────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_initialize_advertises_all_phase2_capabilities() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let response = fixture.initialize().await?;
+
+    assert!(response.contains("\"definitionProvider\""), "should advertise definition: {response}");
+    assert!(response.contains("\"documentSymbolProvider\""), "should advertise document symbols: {response}");
+    assert!(response.contains("\"signatureHelpProvider\""), "should advertise signature help: {response}");
+    assert!(response.contains("\"referencesProvider\""), "should advertise references: {response}");
+    assert!(response.contains("\"renameProvider\""), "should advertise rename: {response}");
+    assert!(response.contains("\"inlayHintProvider\""), "should advertise inlay hints: {response}");
+    assert!(response.contains("\"semanticTokensProvider\""), "should advertise semantic tokens: {response}");
+    Ok(())
+}

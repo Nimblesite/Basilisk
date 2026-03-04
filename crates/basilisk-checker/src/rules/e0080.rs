@@ -89,7 +89,7 @@ fn build_func_param_bounds<'a>(
             };
             let ann_text = ann_text.trim();
             if let Some(bound) = typevar_bounds.get(ann_text) {
-                param_bounds.push((idx, bound.clone()));
+                param_bounds.push((idx, bound.clone()))
             }
         }
         if !param_bounds.is_empty() {

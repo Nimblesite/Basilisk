@@ -57,7 +57,9 @@ impl LspTestFixture {
                 // Read headers until the blank line separator.
                 loop {
                     line.clear();
-                    if reader.read_line(&mut line).unwrap_or(0) == 0 {
+                    let bytes_read = reader.read_line(&mut line).unwrap_or(0);
+                    if bytes_read == 0 {
+                        eprintln!("[reader] EOF on header read");
                         return; // EOF — server exited
                     }
                     let trimmed = line.trim();
@@ -70,14 +72,18 @@ impl LspTestFixture {
                 }
 
                 let Some(length) = content_length else {
+                    eprintln!("[reader] no Content-Length found, exiting");
                     return;
                 };
                 let mut buf = vec![0u8; length];
                 if reader.read_exact(&mut buf).is_err() {
+                    eprintln!("[reader] read_exact failed for {length} bytes");
                     return;
                 }
                 if let Ok(body) = String::from_utf8(buf) {
+                    eprintln!("[reader] got message: {}...", &body[..body.len().min(80)]);
                     if tx.send(body).is_err() {
+                        eprintln!("[reader] send failed (receiver dropped)");
                         return; // receiver dropped
                     }
                 }
@@ -698,9 +704,18 @@ fn send_request(
         "params": params
     }))?;
 
+    // Check if the child process is still alive before waiting for response.
+    match fixture.child.try_wait() {
+        Ok(Some(status)) => eprintln!("[send_request id={id}] child already exited: {status}"),
+        Ok(None) => eprintln!("[send_request id={id}] child still running"),
+        Err(e) => eprintln!("[send_request id={id}] try_wait error: {e}"),
+    }
+
     let id_str = format!("\"id\":{id}");
-    for _ in 0..10 {
-        let Some(msg) = fixture.recv() else { break };
+    for iteration in 0..10 {
+        let msg = fixture.recv();
+        eprintln!("[send_request id={id}] iteration={iteration} got={}", msg.as_deref().unwrap_or("NONE"));
+        let Some(msg) = msg else { break };
         if msg.contains(&id_str) {
             return Ok(Some(msg));
         }
