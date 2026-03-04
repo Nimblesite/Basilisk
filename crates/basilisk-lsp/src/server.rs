@@ -12,11 +12,14 @@ use tower_lsp::lsp_types::{
     DiagnosticSeverity, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
     DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentFormattingParams,
     DocumentSymbolParams, DocumentSymbolResponse, ExecuteCommandOptions, ExecuteCommandParams,
-    GotoDefinitionParams, GotoDefinitionResponse, Hover, HoverParams, HoverProviderCapability,
-    InitializeParams, InitializeResult, InitializedParams, InlayHint, InlayHintParams, Location,
+    FoldingRange, FoldingRangeParams, FoldingRangeProviderCapability,
+    GotoDefinitionParams,
+    GotoDefinitionResponse, Hover, HoverParams, HoverProviderCapability, InitializeParams,
+    InitializeResult, InitializedParams, InlayHint, InlayHintParams, Location,
     MessageType, NumberOrString, OneOf, Position, PrepareRenameResponse, Range, ReferenceParams,
-    RenameOptions, RenameParams, SemanticTokens, SemanticTokensFullOptions, SemanticTokensLegend,
-    SemanticTokensOptions, SemanticTokensParams, SemanticTokensResult,
+    RenameOptions, RenameParams, SelectionRange, SelectionRangeParams,
+    SelectionRangeProviderCapability, SemanticTokens, SemanticTokensFullOptions,
+    SemanticTokensLegend, SemanticTokensOptions, SemanticTokensParams, SemanticTokensResult,
     SemanticTokensServerCapabilities, ServerCapabilities, ServerInfo, SignatureHelpOptions,
     SignatureHelpParams, SymbolInformation, TextDocumentPositionParams, TextDocumentSyncCapability,
     TextDocumentSyncKind, TextEdit, Url, WorkDoneProgressOptions, WorkspaceEdit,
@@ -25,7 +28,7 @@ use tower_lsp::lsp_types::{
 use tower_lsp::{Client, LspService, Server};
 
 use crate::util::{byte_offset_to_position, position_to_byte_offset};
-use crate::{code_actions, completion, definition, formatting, hover, inlay_hints, references, signature, symbols};
+use crate::{code_actions, completion, definition, folding, formatting, hover, inlay_hints, references, selection, signature, symbols};
 
 /// Fallback docs URL used when a diagnostic code URL fails to parse.
 const FALLBACK_DOCS_URL: &str = "https://basilisk-lang.org";
@@ -201,6 +204,8 @@ impl tower_lsp::LanguageServer for LspServer {
                 definition_provider: Some(OneOf::Left(true)),
                 document_formatting_provider: Some(OneOf::Left(true)),
                 document_symbol_provider: Some(OneOf::Left(true)),
+                folding_range_provider: Some(FoldingRangeProviderCapability::Simple(true)),
+                selection_range_provider: Some(SelectionRangeProviderCapability::Simple(true)),
                 workspace_symbol_provider: Some(OneOf::Left(true)),
                 signature_help_provider: Some(SignatureHelpOptions {
                     trigger_characters: Some(vec!["(".to_owned(), ",".to_owned()]),
@@ -564,6 +569,42 @@ impl tower_lsp::LanguageServer for LspServer {
         let file_path = uri.to_file_path().unwrap_or_default();
         let path_str = file_path.to_string_lossy().into_owned();
         Ok(formatting::format_document(&text, &path_str))
+    }
+
+    // ── Folding Ranges ────────────────────────────────────────────────────
+
+    async fn folding_range(
+        &self,
+        params: FoldingRangeParams,
+    ) -> LspResult<Option<Vec<FoldingRange>>> {
+        let uri = params.text_document.uri;
+        let Some((text, resolved, _)) = self.get_document_data(&uri) else {
+            return Ok(None);
+        };
+        let ranges = folding::folding_ranges(&resolved, &text);
+        if ranges.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(ranges))
+        }
+    }
+
+    // ── Selection Ranges ─────────────────────────────────────────────────
+
+    async fn selection_range(
+        &self,
+        params: SelectionRangeParams,
+    ) -> LspResult<Option<Vec<SelectionRange>>> {
+        let uri = params.text_document.uri;
+        let Some((text, resolved, _)) = self.get_document_data(&uri) else {
+            return Ok(None);
+        };
+        let ranges = selection::selection_ranges(&resolved, &text, &params.positions);
+        if ranges.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(ranges))
+        }
     }
 }
 

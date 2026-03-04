@@ -1,48 +1,52 @@
-# COORDINATOR ORDERS — Phase 4
+# COORDINATOR ORDERS — Phase 5
 
-## STATUS: Phases 0-3 COMPLETE. 106/106 tests. Clippy clean.
+## STATUS: Phases 0-4 COMPLETE. 110/110 tests. Clippy clean.
 
-## Phase 4 Tasks — Workspace Features + Formatting
+## Phase 5 Tasks — Advanced LSP Features
 
-### TASK G: Workspace Symbols (symbols.rs + server.rs)
+### TASK K: Document Highlight (NEW highlight.rs + references.rs + server.rs)
 **Assigned to: Tiger Woods / Cline**
 
-Add `workspace/symbol` handler:
-1. In `crates/basilisk-lsp/src/symbols.rs`: add `pub fn workspace_symbols(documents: &[(Url, ResolvedModule, String)], query: &str) -> Vec<SymbolInformation>` — aggregate document symbols from all open docs, filter by query string
-2. In `crates/basilisk-lsp/src/server.rs`: add `workspaceSymbolProvider: true` to capabilities, implement `symbol()` method that iterates `self.documents` DashMap and calls the new function
-3. Import `SymbolInformation` and `WorkspaceSymbolParams` from tower_lsp
-4. Add WS test: `test_ws_workspace_symbols` — open 2 docs, query symbols, verify results from both
-5. Lock files: `symbols.rs`, `server.rs`, `lsp_ws_tests.rs`
+Add `textDocument/documentHighlight`:
+1. In `references.rs`: make `find_identifier_occurrences` and `is_in_string_or_comment` `pub(crate)` instead of private
+2. Create `crates/basilisk-lsp/src/highlight.rs`: `pub fn document_highlights(resolved: &ResolvedModule, source: &str, byte_offset: usize) -> Vec<DocumentHighlight>` — reuse `references::find_identifier_occurrences` to find all occurrences, classify definition as WRITE, others as READ
+3. In `server.rs`: add `document_highlight_provider: Some(OneOf::Left(true))`, implement `document_highlight()` method
+4. In `lib.rs`: add `pub mod highlight;`
+5. Add WS test: `test_ws_document_highlight`
+6. Lock files: `highlight.rs` (new), `references.rs`, `server.rs`, `lib.rs`, `lsp_ws_tests.rs`
 
-### TASK H: Format Document (NEW formatting.rs + server.rs)
+### TASK L: Call Hierarchy (NEW call_hierarchy.rs + server.rs)
 **Assigned to: Sub-agent**
 
-Add `textDocument/formatting` via Ruff delegation:
-1. Create `crates/basilisk-lsp/src/formatting.rs`: `pub fn format_document(source: &str, file_path: &str) -> Option<Vec<TextEdit>>` — spawn `ruff format --stdin-filename <path> -` with source on stdin, capture stdout, return single TextEdit replacing entire document if different
-2. In `server.rs`: add `documentFormattingProvider: true`, implement `formatting()` method
-3. In `lib.rs`: add `pub mod formatting;`
-4. Add WS test: `test_ws_format_document`
-5. Lock files: `formatting.rs` (new), `server.rs`, `lib.rs`, `lsp_ws_tests.rs`
+Add call hierarchy (prepare + incoming + outgoing):
+1. Create `crates/basilisk-lsp/src/call_hierarchy.rs` with three pub functions using CallSite data from ResolvedModule
+2. In `server.rs`: add `call_hierarchy_provider`, implement 3 methods
+3. In `lib.rs`: add `pub mod call_hierarchy;`
+4. Add WS test: `test_ws_call_hierarchy`
+5. Lock files: `call_hierarchy.rs` (new), `server.rs`, `lib.rs`, `lsp_ws_tests.rs`
 
-### TASK I: Folding Ranges (server.rs)
+### TASK M: Type Hierarchy (NEW type_hierarchy.rs + server.rs)
 **Assigned to: Sub-agent**
 
-Add `textDocument/foldingRange`:
-1. Create `crates/basilisk-lsp/src/folding.rs`: `pub fn folding_ranges(resolved: &ResolvedModule, source: &str) -> Vec<FoldingRange>` — emit FoldingRange for each function def_span, class def_span, and consecutive import block
-2. In `server.rs`: add `foldingRangeProvider: true`, implement `folding_range()` method
-3. In `lib.rs`: add `pub mod folding;`
-4. Add WS test: `test_ws_folding_ranges`
-5. Lock files: `folding.rs` (new), `server.rs`, `lib.rs`, `lsp_ws_tests.rs`
+Add type hierarchy (prepare + supertypes + subtypes):
+1. Create `crates/basilisk-lsp/src/type_hierarchy.rs` using ClassInfo.bases from ResolvedModule
+2. In `server.rs`: add `type_hierarchy_provider`, implement 3 methods
+3. In `lib.rs`: add `pub mod type_hierarchy;`
+4. Add WS test: `test_ws_type_hierarchy`
+5. Lock files: `type_hierarchy.rs` (new), `server.rs`, `lib.rs`, `lsp_ws_tests.rs`
 
-### TASK J: Selection Ranges (server.rs)
+### TASK N: Code Lens (NEW code_lens.rs + server.rs)
 **Assigned to: Sub-agent**
 
-Add `textDocument/selectionRange`:
-1. Create `crates/basilisk-lsp/src/selection.rs`: `pub fn selection_ranges(resolved: &ResolvedModule, source: &str, positions: &[Position]) -> Vec<SelectionRange>` — build nested range tree from spans (identifier → param list → function → class → module)
-2. In `server.rs`: add `selectionRangeProvider: true`, implement `selection_range()` method
-3. In `lib.rs`: add `pub mod selection;`
-4. Add WS test: `test_ws_selection_ranges`
-5. Lock files: `selection.rs` (new), `server.rs`, `lib.rs`, `lsp_ws_tests.rs`
+Add `textDocument/codeLens` showing reference counts:
+1. Create `crates/basilisk-lsp/src/code_lens.rs` — count references for each function/class, return CodeLens with "N references"
+2. In `server.rs`: add `code_lens_provider`, implement `code_lens()` method
+3. In `lib.rs`: add `pub mod code_lens;`
+4. Add WS test: `test_ws_code_lens`
+5. Lock files: `code_lens.rs` (new), `server.rs`, `lib.rs`, `lsp_ws_tests.rs`
+
+## EXECUTION ORDER
+Tiger does K first (makes references fns pub(crate)), then Sub-L, then Sub-M, then Sub-N.
 
 ## RULES
 - Lock files BEFORE editing via TMC

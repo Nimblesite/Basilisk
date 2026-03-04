@@ -1675,7 +1675,7 @@ async fn test_ws_document_symbols_empty_file_returns_empty() -> TestResult<()> {
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
     let result = &parsed["result"];
     assert!(
-        result.is_null() || result.as_array().is_some_and(|a| a.is_empty()),
+        result.is_null() || result.as_array().is_some_and(Vec::is_empty),
         "document symbols on empty file should be null or empty array: {resp}"
     );
     Ok(())
@@ -1741,7 +1741,7 @@ async fn test_ws_find_references_unknown_symbol_returns_null() -> TestResult<()>
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
     let result = &parsed["result"];
     assert!(
-        result.is_null() || result.as_array().is_some_and(|a| a.is_empty()),
+        result.is_null() || result.as_array().is_some_and(Vec::is_empty),
         "find references on unknown symbol should return null or empty: {resp}"
     );
     Ok(())
@@ -1810,7 +1810,7 @@ async fn test_ws_inlay_hints_fully_annotated_returns_empty() -> TestResult<()> {
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
     let result = &parsed["result"];
     assert!(
-        result.is_null() || result.as_array().is_some_and(|a| a.is_empty()),
+        result.is_null() || result.as_array().is_some_and(Vec::is_empty),
         "inlay hints on fully-annotated code should be empty: {resp}"
     );
     Ok(())
@@ -2239,6 +2239,230 @@ async fn test_ws_format_document() -> TestResult<()> {
             "formatted text should differ from original"
         );
     }
+
+    Ok(())
+}
+
+// ── Workspace Symbols ─────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_workspace_symbols() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    // Open two documents with distinct symbols.
+    let doc1 = "class Greeter:\n    name: str\n\ndef greet(name: str) -> str:\n    return f\"Hello, {name}!\"";
+    let doc2 = "class Calculator:\n    value: int\n\ndef compute(x: int, y: int) -> int:\n    return x + y";
+
+    fixture.did_open("file:///ws_sym_a.py", doc1).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    fixture.did_open("file:///ws_sym_b.py", doc2).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Query all symbols — empty string returns everything.
+    let resp_all = fixture
+        .request(
+            500,
+            "workspace/symbol",
+            serde_json::json!({ "query": "" }),
+        )
+        .await?
+        .ok_or("no workspace/symbol response for empty query")?;
+
+    assert!(
+        resp_all.contains("\"result\""),
+        "expected result in response: {resp_all}"
+    );
+    // Both documents' classes should appear.
+    assert!(
+        resp_all.contains("\"Greeter\""),
+        "expected Greeter in workspace symbols: {resp_all}"
+    );
+    assert!(
+        resp_all.contains("\"Calculator\""),
+        "expected Calculator in workspace symbols: {resp_all}"
+    );
+    // Functions from both documents should appear.
+    assert!(
+        resp_all.contains("\"greet\""),
+        "expected greet in workspace symbols: {resp_all}"
+    );
+    assert!(
+        resp_all.contains("\"compute\""),
+        "expected compute in workspace symbols: {resp_all}"
+    );
+
+    // Query filtered — only symbols matching "calc" (case-insensitive).
+    let resp_filtered = fixture
+        .request(
+            501,
+            "workspace/symbol",
+            serde_json::json!({ "query": "calc" }),
+        )
+        .await?
+        .ok_or("no workspace/symbol response for filtered query")?;
+
+    assert!(
+        resp_filtered.contains("\"Calculator\""),
+        "expected Calculator with query 'calc': {resp_filtered}"
+    );
+    assert!(
+        !resp_filtered.contains("\"Greeter\""),
+        "Greeter should be filtered out with query 'calc': {resp_filtered}"
+    );
+    assert!(
+        !resp_filtered.contains("\"greet\""),
+        "greet should be filtered out with query 'calc': {resp_filtered}"
+    );
+
+    Ok(())
+}
+
+// ── Phase 4: Folding Ranges ──────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_folding_ranges() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    // Document with a multi-line class containing a multi-line function.
+    let code = "\
+import os
+import sys
+
+class Animal:
+    name: str
+    def speak(self) -> str:
+        return self.name
+
+def greet(name: str) -> str:
+    return f\"Hello, {name}!\"
+";
+    fixture
+        .did_open("file:///ws_folding.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            610,
+            "textDocument/foldingRange",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_folding.py" }
+            }),
+        )
+        .await?
+        .ok_or("no folding range response")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let result = &parsed["result"];
+
+    let ranges = result
+        .as_array()
+        .ok_or("folding ranges result should be an array")?;
+
+    // Should have ranges for: speak method, Animal class, greet function,
+    // and possibly the import block.
+    assert!(
+        ranges.len() >= 3,
+        "should have at least 3 folding ranges (class, 2 functions), got {}: {resp}",
+        ranges.len()
+    );
+
+    // Verify each range has startLine and endLine.
+    for range in ranges {
+        assert!(
+            range.get("startLine").is_some(),
+            "folding range should have startLine: {resp}"
+        );
+        assert!(
+            range.get("endLine").is_some(),
+            "folding range should have endLine: {resp}"
+        );
+    }
+
+    // Verify we have a region kind for the class/function ranges.
+    let region_count = ranges
+        .iter()
+        .filter(|r| r["kind"].as_str() == Some("region"))
+        .count();
+    assert!(
+        region_count >= 3,
+        "should have at least 3 region-kind folding ranges, got {region_count}: {resp}"
+    );
+
+    Ok(())
+}
+
+// ── Phase 4: Selection Ranges ───────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_selection_ranges() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    // Class with a method that has a typed parameter — cursor on the parameter name
+    // should yield nested ranges: param name → function def → class def → whole doc.
+    let code = "\
+class Greeter:
+    def greet(self, name: str) -> str:
+        return f\"Hello, {name}!\"
+";
+    fixture
+        .did_open("file:///ws_selection.py", code)
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Cursor on the 'n' of `name` parameter (line 1, character 20).
+    let resp = fixture
+        .request(
+            620,
+            "textDocument/selectionRange",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ws_selection.py" },
+                "positions": [{ "line": 1, "character": 20 }]
+            }),
+        )
+        .await?
+        .ok_or("no selection range response")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let result = &parsed["result"];
+
+    let ranges = result
+        .as_array()
+        .ok_or("selection range result should be an array")?;
+
+    // One position → one SelectionRange.
+    assert_eq!(
+        ranges.len(),
+        1,
+        "should have exactly 1 selection range for 1 position: {resp}"
+    );
+
+    let sel = &ranges[0];
+    // The innermost range should exist.
+    assert!(
+        sel.get("range").is_some(),
+        "selection range should have a range: {resp}"
+    );
+
+    // Walk the parent chain — there should be at least 2 levels
+    // (innermost + at least one parent containing the whole document).
+    let mut depth = 1;
+    let mut current = sel.clone();
+    while let Some(parent) = current.get("parent") {
+        if parent.is_null() {
+            break;
+        }
+        depth += 1;
+        current = parent.clone();
+    }
+    assert!(
+        depth >= 2,
+        "selection range should have nested parents (depth >= 2), got {depth}: {resp}"
+    );
 
     Ok(())
 }

@@ -602,7 +602,7 @@ This table maps every publicly documented Pylance/Pyright feature to its Basilis
 | `textDocument/declaration` — Go to Declaration | ✅ | ☐ TODO | 5 |
 | `textDocument/typeDefinition` — Go to Type Definition | ✅ | ☐ TODO | 5 |
 | `textDocument/documentSymbol` — Outline panel (class/function tree) | ✅ | ✅ DONE | **1** |
-| `workspace/symbol` — Ctrl+T cross-file symbol search | ✅ | ☐ TODO | **4** |
+| `workspace/symbol` — Ctrl+T cross-file symbol search | ✅ | ✅ DONE | **4** |
 | `textDocument/signatureHelp` — parameter hints on `(` and `,` | ✅ | ✅ DONE | **2** |
 | `textDocument/references` — Find All References | ✅ | ✅ DONE | **2** |
 | `textDocument/prepareRename` + `textDocument/rename` — F2 rename | ✅ | ✅ DONE | **2** |
@@ -610,9 +610,9 @@ This table maps every publicly documented Pylance/Pyright feature to its Basilis
 | `textDocument/codeAction` — expanded quick fixes (E0003, suppress, organize imports) | ✅ | ✅ DONE | **2** |
 | `textDocument/inlayHint` — inferred variable types + parameter names | ✅ | ✅ DONE | **3** |
 | `textDocument/semanticTokens/full` — semantic syntax highlighting | ✅ | ✅ DONE | **3** |
-| `textDocument/formatting` — Format Document (Ruff delegation) | ✅ | ☐ TODO | **4** |
-| `textDocument/foldingRange` — collapse functions, classes, imports | ✅ | ☐ TODO | **4** |
-| `textDocument/selectionRange` — Smart Select (Shift+Alt+→) | ✅ | ☐ TODO | **4** |
+| `textDocument/formatting` — Format Document (Ruff delegation) | ✅ | ✅ DONE | **4** |
+| `textDocument/foldingRange` — collapse functions, classes, imports | ✅ | ✅ DONE | **4** |
+| `textDocument/selectionRange` — Smart Select (Shift+Alt+→) | ✅ | ✅ DONE | **4** |
 | `textDocument/documentHighlight` — highlight all occurrences of symbol under cursor | ✅ | ☐ TODO | 5 |
 | `textDocument/codeLens` — run/debug inline lens | ✅ | ☐ TODO | 5 |
 | `textDocument/prepareCallHierarchy` + incoming/outgoing calls | ✅ | ☐ TODO | 5 |
@@ -630,7 +630,7 @@ This table maps every publicly documented Pylance/Pyright feature to its Basilis
 | Auto-import suggestions (unresolved name → add import) | ✅ | ☐ TODO | 5 |
 | Completion documentation (docstrings in popup) | ✅ | ☐ TODO | **2** |
 | Completion item resolve (lazy-load details) | ✅ | ☐ TODO | **2** |
-| Keyword argument completions | ✅ | ☐ TODO | **2** |
+| Keyword argument completions | ✅ | ✅ DONE | **2** |
 | Override stub completions (abstract method bodies) | ✅ | ☐ TODO | 5 |
 
 ### Code Actions & Refactoring
@@ -656,7 +656,7 @@ This table maps every publicly documented Pylance/Pyright feature to its Basilis
 | Hint Kind | Pylance | Basilisk | Phase |
 |-----------|---------|---------|-------|
 | Variable inferred types (`x: int`) | ✅ | ✅ DONE | **3** |
-| Function return types | ✅ | ☐ TODO | **3** |
+| Function return types | ✅ | ✅ DONE | **3** |
 | Parameter name labels at call sites (`greet(name= "Alice")`) | ✅ | ✅ DONE | **3** |
 | Pytest fixture parameter hints | ✅ | ✗ out of scope | — |
 | Generic type parameter hints | ✅ | ☐ TODO | 5 |

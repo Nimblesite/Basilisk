@@ -132,7 +132,7 @@ fn definition_range(hit: &SymbolHit<'_>, source: &str) -> Range {
 }
 
 /// Find all whole-word occurrences of `name` in `source`, returning LSP ranges.
-fn find_identifier_occurrences(source: &str, name: &str) -> Vec<Range> {
+pub(crate) fn find_identifier_occurrences(source: &str, name: &str) -> Vec<Range> {
     let bytes = source.as_bytes();
     let name_bytes = name.as_bytes();
     let mut results = Vec::new();
@@ -190,7 +190,7 @@ fn is_ident_byte(b: u8) -> bool {
 }
 
 /// Simple heuristic: check if position is inside a `#` comment or string literal.
-fn is_in_string_or_comment(source: &str, offset: usize) -> bool {
+pub(crate) fn is_in_string_or_comment(source: &str, offset: usize) -> bool {
     // Find the start of the line containing offset.
     let line_start = source[..offset].rfind('\n').map_or(0, |p| p + 1);
     let line_before = &source[line_start..offset];
