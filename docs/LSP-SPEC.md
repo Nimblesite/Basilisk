@@ -8,29 +8,28 @@
 
 ### What Works
 - Diagnostics publishing (97 error codes, full parse→resolve→check pipeline)
-- Hover on diagnostics (error code + message + help text)
+- Hover: type signatures for functions, classes, variables, parameters, attributes + diagnostic info
+- Go to Definition (F12) — definition site and call-site/reference lookup
+- Document Symbols (Outline panel) — hierarchical class/function/variable tree
+- Signature Help — parameter hints on `(` and `,`
+- Find All References — all usages in current file
+- Rename Symbol (F2) — prepareRename + rename across current file
+- Inlay Hints — inferred variable types
+- Semantic Tokens — function, class, parameter, variable, property, decorator classification
 - Code actions: quick fixes for BSK-E0001 (`: Any`) and BSK-E0002 (`-> None`)
 - Completion: symbol + dot + imports + 78 builtins
 - Full document sync, DashMap document store, UTF-16 position handling
+- VS Code extension: status bar, restart command, show output, auto-restart, error recovery, organize imports (Ruff)
 
-### What's Broken
-- **Server startup crash**: `println!("DEBUG: ...")` calls in `crates/basilisk-checker/src/rules/e0080.rs` write to stdout during type checking, corrupting the JSON-RPC stream. VS Code sees non-LSP bytes and reports `"Header must provide a Content-Length property"`.
-
-### What's Missing (Everything That Matters)
-- Go to Definition
-- Signature Help (parameter hints)
-- Find All References
-- Rename Symbol
-- Document Symbols (Outline panel)
+### What's Missing (Future Work)
 - Workspace Symbols (Ctrl+T search)
-- Inlay Hints (inferred types, parameter names)
-- Semantic Tokens (enhanced syntax highlighting)
-- Type-aware Hover (show signatures, not just errors)
 - Call/Type Hierarchy
 - Folding Ranges
 - Selection Ranges
 - Format Document (Ruff delegation)
-- Status bar, restart command, error recovery in extension
+- Cross-module Go to Definition / References / Rename
+- Auto-import suggestions
+- Inlay hints: parameter name labels at call sites, function return types
 
 ---
 
@@ -585,31 +584,124 @@ Persistent item showing server state and diagnostic count. Updates on:
 
 ---
 
-## Pylance Feature Parity Checklist
+## Pylance Feature Parity
 
-| Feature | Status | Phase |
-|---------|--------|-------|
-| Diagnostics (97 rules) | DONE | — |
-| Completion (symbol + dot + builtins) | DONE | — |
-| Hover (diagnostic info) | DONE | — |
-| **Hover (type signatures)** | TODO | **1** |
-| **Go to Definition** | TODO | **1** |
-| **Document Symbols / Outline** | TODO | **1** |
-| **Signature Help** | TODO | **2** |
-| **Find All References** | TODO | **2** |
-| **Rename Symbol** | TODO | **2** |
-| **Expanded Code Actions** | TODO | **2** |
-| **Inlay Hints** | TODO | **3** |
-| **Semantic Tokens** | TODO | **3** |
-| **Workspace Symbols** | TODO | **4** |
-| **Format Document (Ruff)** | TODO | **4** |
-| **Folding Ranges** | TODO | **4** |
-| **Selection Ranges** | TODO | **4** |
-| Call Hierarchy | TODO | 5 |
-| Type Hierarchy | TODO | 5 |
-| Cross-module navigation | TODO | 5 |
-| Auto-import | TODO | 5 |
-| **Status bar + restart + error recovery** | TODO | **0** |
+> **Reference**: [Pylance README](https://github.com/microsoft/pylance-release/blob/main/README.md) · [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance) · [Pyright docs](https://microsoft.github.io/pyright/#/) · [basedpyright language server settings](https://docs.basedpyright.com/v1.23.1/configuration/language-server-settings/)
+
+This table maps every publicly documented Pylance/Pyright feature to its Basilisk implementation status and target phase.
+
+### LSP Protocol Methods
+
+| LSP Method | Pylance | Basilisk | Phase |
+|------------|---------|---------|-------|
+| `textDocument/publishDiagnostics` — as-you-type errors/warnings | ✅ | ✅ DONE | — |
+| `textDocument/completion` — symbol, attribute, keyword completions | ✅ | ✅ DONE | — |
+| `textDocument/hover` — diagnostic info on error spans | ✅ | ✅ DONE | — |
+| `textDocument/hover` — type signatures, docstrings for any symbol | ✅ | ✅ DONE | **1** |
+| `textDocument/definition` — Go to Definition (F12) | ✅ | ✅ DONE | **1** |
+| `textDocument/declaration` — Go to Declaration | ✅ | ☐ TODO | 5 |
+| `textDocument/typeDefinition` — Go to Type Definition | ✅ | ☐ TODO | 5 |
+| `textDocument/documentSymbol` — Outline panel (class/function tree) | ✅ | ✅ DONE | **1** |
+| `workspace/symbol` — Ctrl+T cross-file symbol search | ✅ | ☐ TODO | **4** |
+| `textDocument/signatureHelp` — parameter hints on `(` and `,` | ✅ | ✅ DONE | **2** |
+| `textDocument/references` — Find All References | ✅ | ✅ DONE | **2** |
+| `textDocument/prepareRename` + `textDocument/rename` — F2 rename | ✅ | ✅ DONE | **2** |
+| `textDocument/codeAction` — quick fixes (BSK-E0001, BSK-E0002) | ✅ | ✅ DONE | — |
+| `textDocument/codeAction` — expanded quick fixes (E0003, suppress, organize imports) | ✅ | ☐ TODO | **2** |
+| `textDocument/inlayHint` — inferred variable types + parameter names | ✅ | ✅ DONE | **3** |
+| `textDocument/semanticTokens/full` — semantic syntax highlighting | ✅ | ✅ DONE | **3** |
+| `textDocument/formatting` — Format Document (Ruff delegation) | ✅ | ☐ TODO | **4** |
+| `textDocument/foldingRange` — collapse functions, classes, imports | ✅ | ☐ TODO | **4** |
+| `textDocument/selectionRange` — Smart Select (Shift+Alt+→) | ✅ | ☐ TODO | **4** |
+| `textDocument/documentHighlight` — highlight all occurrences of symbol under cursor | ✅ | ☐ TODO | 5 |
+| `textDocument/codeLens` — run/debug inline lens | ✅ | ☐ TODO | 5 |
+| `textDocument/prepareCallHierarchy` + incoming/outgoing calls | ✅ | ☐ TODO | 5 |
+| `textDocument/prepareTypeHierarchy` + supertypes/subtypes | ✅ | ☐ TODO | 5 |
+| `workspace/executeCommand` — `basilisk.organizeImports` | ✅ | ☐ TODO | **2** |
+
+### Completion Quality
+
+| Sub-feature | Pylance | Basilisk | Phase |
+|-------------|---------|---------|-------|
+| Symbol completions (local scope) | ✅ | ✅ DONE | — |
+| Dot-access (attribute) completions | ✅ | ✅ DONE | — |
+| Import path completions | ✅ | ✅ DONE | — |
+| Built-in completions (78 builtins) | ✅ | ✅ DONE | — |
+| Auto-import suggestions (unresolved name → add import) | ✅ | ☐ TODO | 5 |
+| Completion documentation (docstrings in popup) | ✅ | ☐ TODO | **2** |
+| Completion item resolve (lazy-load details) | ✅ | ☐ TODO | **2** |
+| Keyword argument completions | ✅ | ☐ TODO | **2** |
+| Override stub completions (abstract method bodies) | ✅ | ☐ TODO | 5 |
+
+### Code Actions & Refactoring
+
+| Action | Pylance | Basilisk | Phase |
+|--------|---------|---------|-------|
+| Add missing parameter annotation (BSK-E0001) | ✅ | ✅ DONE | — |
+| Add missing return annotation (BSK-E0002) | ✅ | ✅ DONE | — |
+| Add variable annotation (BSK-E0003) | ✅ | ☐ TODO | **2** |
+| Suppress with `# type: ignore` | ✅ | ☐ TODO | **2** |
+| Organize imports (`ruff check --select I --fix`) | ✅ | ☐ TODO | **2** |
+| Expand wildcard import (`from foo import *` → explicit names) | ✅ | ☐ TODO | 5 |
+| Extract variable | ✅ | ☐ TODO | 5 |
+| Extract method | ✅ | ☐ TODO | 5 |
+| Convert import style (relative ↔ absolute) | ✅ | ☐ TODO | 5 |
+| Implement abstract methods (generate stubs) | ✅ | ☐ TODO | 5 |
+| Add `__all__` declaration | ✅ | ☐ TODO | 5 |
+| Move symbol to another file | ✅ | ☐ TODO | 5 |
+| Generate docstring (Copilot-assisted) | ✅ | ✗ out of scope | — |
+
+### Inlay Hints (per [Pylance inlay hints docs](https://github.com/microsoft/pylance-release/blob/main/README.md))
+
+| Hint Kind | Pylance | Basilisk | Phase |
+|-----------|---------|---------|-------|
+| Variable inferred types (`x: int`) | ✅ | ✅ DONE | **3** |
+| Function return types | ✅ | ☐ TODO | **3** |
+| Parameter name labels at call sites (`greet(name= "Alice")`) | ✅ | ☐ TODO | **3** |
+| Pytest fixture parameter hints | ✅ | ✗ out of scope | — |
+| Generic type parameter hints | ✅ | ☐ TODO | 5 |
+
+### Type Checking & Diagnostics
+
+| Capability | Pylance | Basilisk | Phase |
+|------------|---------|---------|-------|
+| Missing parameter annotation | ✅ | ✅ DONE | — |
+| Missing return annotation | ✅ | ✅ DONE | — |
+| Type mismatch / incompatible assignment | ✅ | ✅ partial | — |
+| Unknown / unresolved imports | ✅ | ✅ DONE | — |
+| Undefined variables | ✅ | ✅ partial | — |
+| Full type inference (generics, unions, narrowing) | ✅ | ☐ TODO | 5 |
+| `pyrightconfig.json` / `pyproject.toml` config | ✅ | ☐ TODO | 5 |
+| Type checking mode (off / basic / strict) | ✅ | strict-only by design | — |
+| Stub file (`.pyi`) support | ✅ | ☐ TODO | 5 |
+| Third-party type stubs (typeshed, `py.typed`) | ✅ | ☐ TODO | 5 |
+
+### Cross-File & Workspace
+
+| Capability | Pylance | Basilisk | Phase |
+|------------|---------|---------|-------|
+| Single-file analysis | ✅ | ✅ DONE | — |
+| Cross-file Go to Definition | ✅ | ☐ TODO | 5 |
+| Cross-file Find All References | ✅ | ☐ TODO | 5 |
+| Cross-file Rename | ✅ | ☐ TODO | 5 |
+| Module-level auto-import index | ✅ | ☐ TODO | 5 |
+| Multi-root workspace support | ✅ | ☐ TODO | 5 |
+| Editable install (`pip install -e`) path resolution | ✅ | ☐ TODO | 5 |
+| Jupyter Notebook (`.ipynb`) support | ✅ | ✗ out of scope | — |
+
+### Extension / UX
+
+| Capability | Pylance | Basilisk | Phase |
+|------------|---------|---------|-------|
+| Status bar (server state + error count) | ✅ | ✅ DONE | **0** |
+| Restart Language Server command | ✅ | ✅ DONE | **0** |
+| Show Output command | ✅ | ✅ DONE | **0** |
+| Auto-restart on crash (max 3 attempts) | ✅ | ✅ DONE | **0** |
+| Error message when server fails to start | ✅ | ✅ DONE | **0** |
+| Color picker for hex color strings | ✅ | ☐ TODO | 5 |
+| AI hover summaries (Copilot integration) | ✅ | ✗ out of scope | — |
+| MCP tool exposure (run snippets, import analysis) | ✅ | ✗ out of scope | — |
+| REPL terminal completions | ✅ | ✗ out of scope | — |
 
 ---
 

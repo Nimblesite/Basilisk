@@ -10,15 +10,13 @@ python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r conformance/requirements.txt
 ```
-# Coordination System
+# Too Many Cooks - MANDATORY
 
-Read carefully: coordination/CoordinationSystem.md
+COORDINATOR: dictate the orders to others through your plans and messages
 
-Subs take orders from Coordinator. Coordinator DICTATES to others. Subs FOLLOW orders.
+OTHERS: do exactly as the coordinator says
 
-Coordinator: Keep messages to roughly 100-200 characters (one line). If you need to specify more detail, put the documentation in a separate markdown file, tell the others about it and then delete the file when the job is complete. You are NOT ALLOWED to write code. Make sure the build is clean and tests are passing at all times
-
-Subs (everyone except Coordinator): You MUST continue autonomously and follow the instructions from Coordinator. Do not stop. Your first job is to write your file to the coordination folder based on your name. Then continue on your task indefinitely. STOPPING = 🤬 ILLEGAL
+Lock files before editing. Don't edit locked files. Check messages ROUTINELY
 
 # Critical Docs
 

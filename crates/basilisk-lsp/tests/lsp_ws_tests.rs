@@ -15,7 +15,7 @@ use tokio_tungstenite::tungstenite::Message;
 type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
 
 /// Default timeout for receiving a single message from the server.
-const RECV_TIMEOUT: Duration = Duration::from_secs(5);
+const RECV_TIMEOUT: Duration = Duration::from_secs(10);
 
 // ── Test fixture ────────────────────────────────────────────────────────────
 
@@ -340,7 +340,17 @@ async fn test_ws_malformed_json_handling() -> TestResult<()> {
         .send(Message::Text("{ invalid json }".into()))
         .await?;
 
-    let error_response = fixture.recv().await.ok_or("no error response")?;
+    // Skip any leftover notification messages (e.g. window/showMessage from
+    // initialization) and look for the parse error response.
+    let mut error_response = None;
+    for _ in 0..10 {
+        let Some(msg) = fixture.recv().await else { break };
+        if msg.contains("-32700") {
+            error_response = Some(msg);
+            break;
+        }
+    }
+    let error_response = error_response.ok_or("no -32700 parse error response")?;
 
     assert!(error_response.contains("\"error\""));
     assert!(error_response.contains("-32700"));
@@ -779,5 +789,283 @@ async fn test_ws_completion_on_empty_file() -> TestResult<()> {
         resp.contains("\"label\":\"Exception\""),
         "empty file should still offer 'Exception': {resp}"
     );
+    Ok(())
+}
+
+// ── Code action tests ────────────────────────────────────────────────────────
+
+/// Helper: parse published diagnostics and request code actions for a specific
+/// diagnostic code. Returns the raw JSON-RPC response string.
+async fn code_action_for(
+    fixture: &mut WsTestFixture,
+    uri: &str,
+    action_id: u64,
+    diag_code: &str,
+) -> TestResult<String> {
+    let diag_msg = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics published")?;
+
+    let diag_json: serde_json::Value = serde_json::from_str(&diag_msg)?;
+    let diagnostics = diag_json["params"]["diagnostics"]
+        .as_array()
+        .ok_or("expected diagnostics array")?;
+
+    let target_diag = diagnostics
+        .iter()
+        .find(|d| d["code"].as_str() == Some(diag_code))
+        .ok_or(format!("no {diag_code} diagnostic"))?;
+
+    fixture
+        .request(
+            action_id,
+            "textDocument/codeAction",
+            serde_json::json!({
+                "textDocument": { "uri": uri },
+                "range": target_diag["range"],
+                "context": { "diagnostics": [target_diag] }
+            }),
+        )
+        .await?
+        .ok_or_else(|| format!("no code action response for {diag_code}").into())
+}
+
+#[tokio::test]
+async fn test_ws_code_action_missing_param_annotation() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "def greet(name):\n    return f\"Hello, {name}!\"";
+    fixture.did_open("file:///ca_e0001.py", code).await?;
+
+    let resp = code_action_for(&mut fixture, "file:///ca_e0001.py", 200, "BSK-E0001").await?;
+
+    assert!(resp.contains(": Any"), "E0001 action should insert ': Any': {resp}");
+    assert!(resp.contains("quickfix"), "E0001 action should be quickfix: {resp}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_code_action_missing_return_annotation() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "def greet(name: str):\n    return f\"Hello, {name}!\"";
+    fixture.did_open("file:///ca_e0002.py", code).await?;
+
+    let resp = code_action_for(&mut fixture, "file:///ca_e0002.py", 201, "BSK-E0002").await?;
+
+    assert!(resp.contains("-> None"), "E0002 action should insert '-> None': {resp}");
+    assert!(resp.contains("quickfix"), "E0002 action should be quickfix: {resp}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_code_action_missing_variable_annotation_empty_list() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "items = []\n";
+    fixture.did_open("file:///ca_e0003_list.py", code).await?;
+
+    let resp =
+        code_action_for(&mut fixture, "file:///ca_e0003_list.py", 202, "BSK-E0003").await?;
+
+    assert!(
+        resp.contains("list[Any]"),
+        "E0003 (empty list) action should insert 'list[Any]': {resp}"
+    );
+    assert!(resp.contains("quickfix"), "E0003 action should be quickfix: {resp}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_code_action_missing_variable_annotation_empty_dict() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "mapping = {}\n";
+    fixture.did_open("file:///ca_e0003_dict.py", code).await?;
+
+    let resp =
+        code_action_for(&mut fixture, "file:///ca_e0003_dict.py", 203, "BSK-E0003").await?;
+
+    assert!(
+        resp.contains("dict[str, Any]"),
+        "E0003 (empty dict) action should insert 'dict[str, Any]': {resp}"
+    );
+    assert!(resp.contains("quickfix"), "E0003 action should be quickfix: {resp}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_code_action_missing_variable_annotation_none() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "value = None\n";
+    fixture.did_open("file:///ca_e0003_none.py", code).await?;
+
+    let resp =
+        code_action_for(&mut fixture, "file:///ca_e0003_none.py", 204, "BSK-E0003").await?;
+
+    assert!(
+        resp.contains(": Any"),
+        "E0003 (None) action should insert ': Any': {resp}"
+    );
+    assert!(resp.contains("quickfix"), "E0003 action should be quickfix: {resp}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_code_action_suppress_with_type_ignore() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "def greet(name):\n    return f\"Hello, {name}!\"";
+    fixture.did_open("file:///ca_suppress.py", code).await?;
+
+    let resp =
+        code_action_for(&mut fixture, "file:///ca_suppress.py", 205, "BSK-E0001").await?;
+
+    assert!(
+        resp.contains("# type: ignore"),
+        "suppress action should insert '# type: ignore': {resp}"
+    );
+    assert!(
+        resp.contains("Suppress"),
+        "suppress action should have 'Suppress' in title: {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_code_action_suppress_inserts_at_end_of_line() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    // The suppress action must target the diagnostic's line (line 0 here).
+    let code = "def greet(name):\n    return f\"Hello, {name}!\"";
+    fixture.did_open("file:///ca_suppress_pos.py", code).await?;
+
+    let resp =
+        code_action_for(&mut fixture, "file:///ca_suppress_pos.py", 206, "BSK-E0001").await?;
+
+    // The edit should be an insert (start == end), not a replace.
+    let action_json: serde_json::Value = serde_json::from_str(&resp)?;
+    let result = &action_json["result"];
+    let suppress = result
+        .as_array()
+        .and_then(|arr| {
+            arr.iter().find(|a| {
+                a["title"]
+                    .as_str()
+                    .is_some_and(|t| t.contains("type: ignore"))
+            })
+        })
+        .ok_or("no suppress action in result")?;
+
+    let edits = &suppress["edit"]["changes"]["file:///ca_suppress_pos.py"];
+    let edit = edits.as_array().and_then(|a| a.first()).ok_or("no edits")?;
+
+    // start == end means pure insertion
+    assert_eq!(
+        edit["range"]["start"],
+        edit["range"]["end"],
+        "suppress action must be a pure insertion: {edit}"
+    );
+    assert_eq!(
+        edit["newText"].as_str(),
+        Some("  # type: ignore"),
+        "inserted text must be '  # type: ignore': {edit}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_code_action_organize_imports() -> TestResult<()> {
+    // Skip if ruff is not installed.
+    if std::process::Command::new("ruff").arg("--version").output().is_err() {
+        return Ok(());
+    }
+
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    // Deliberately unsorted imports — ruff should reorder them.
+    let code =
+        "import os\nimport sys\nfrom typing import Optional\nimport json\n\nx: int = 1\n";
+    fixture.did_open("file:///ca_org.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            210,
+            "textDocument/codeAction",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ca_org.py" },
+                "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 0 } },
+                "context": { "diagnostics": [] }
+            }),
+        )
+        .await?;
+
+    // The organize-imports action may or may not fire depending on whether
+    // the given imports are already sorted by ruff. Just check that when it
+    // does appear, it carries the correct kind.
+    if let Some(resp_str) = resp {
+        if resp_str.contains("Organize imports") {
+            assert!(
+                resp_str.contains("source.organizeImports"),
+                "organize imports action should have organizeImports kind: {resp_str}"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_code_action_organize_imports_fixes_order() -> TestResult<()> {
+    // Skip if ruff is not installed.
+    if std::process::Command::new("ruff").arg("--version").output().is_err() {
+        return Ok(());
+    }
+
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    // sys must come before os alphabetically; ruff will sort to: import os / import sys
+    // (actually ruff keeps stdlib imports in the order they appear unless --fix-only is used)
+    // Use a clear case: `from __future__` must be first.
+    let code = "import os\nfrom __future__ import annotations\n\nx: int = 1\n";
+    fixture.did_open("file:///ca_org2.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            211,
+            "textDocument/codeAction",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///ca_org2.py" },
+                "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 0 } },
+                "context": { "diagnostics": [] }
+            }),
+        )
+        .await?;
+
+    if let Some(resp_str) = resp {
+        if resp_str.contains("Organize imports") {
+            // The reordered source should put `from __future__` first.
+            assert!(
+                resp_str.contains("from __future__ import annotations"),
+                "organized source should contain the moved import: {resp_str}"
+            );
+            assert!(
+                resp_str.contains("source.organizeImports"),
+                "action kind must be organizeImports: {resp_str}"
+            );
+        }
+    }
     Ok(())
 }

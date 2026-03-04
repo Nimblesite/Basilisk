@@ -423,7 +423,13 @@ impl tower_lsp::LanguageServer for LspServer {
         params: CodeActionParams,
     ) -> LspResult<Option<CodeActionResponse>> {
         let uri = params.text_document.uri;
-        let actions = code_actions::code_actions(&uri, &params.context.diagnostics);
+        let source = self
+            .documents
+            .get(&uri)
+            .map(|d| d.text.clone())
+            .unwrap_or_default();
+        let actions =
+            code_actions::code_actions(&uri, &params.context.diagnostics, &source);
         if actions.is_empty() {
             Ok(None)
         } else {

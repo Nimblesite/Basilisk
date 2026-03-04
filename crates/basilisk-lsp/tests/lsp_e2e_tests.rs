@@ -1226,6 +1226,243 @@ fn test_lsp_code_action_missing_return_annotation() -> TestResult<()> {
 }
 
 // ────────────────────────────────────────────────────────────────────
+// Hover — enhanced (exact format + call-site + parameter + attribute)
+// ────────────────────────────────────────────────────────────────────
+
+#[test]
+fn test_lsp_hover_function_exact_signature() -> TestResult<()> {
+    // Proves hover shows the COMPLETE formatted signature, not just fragments.
+    // format_type_signature produces: "(function) def greet(name: str) -> str"
+    let mut fixture = LspTestFixture::new()?;
+    fixture.initialize()?;
+
+    let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"";
+    fixture.did_open("file:///hover_exact.py", code)?;
+    let _ = fixture.wait_for_diagnostics();
+
+    // Hover on the 'g' in "greet" — line 0, character 4.
+    let resp = send_request(
+        &mut fixture,
+        200,
+        "textDocument/hover",
+        serde_json::json!({
+            "textDocument": { "uri": "file:///hover_exact.py" },
+            "position": { "line": 0, "character": 4 }
+        }),
+    )?
+    .ok_or("no hover response")?;
+
+    assert!(resp.contains("(function)"), "hover should show '(function)' prefix: {resp}");
+    assert!(resp.contains("def greet"), "hover should show 'def greet': {resp}");
+    assert!(resp.contains("name: str"), "hover should show typed parameter 'name: str': {resp}");
+    assert!(resp.contains("-> str"), "hover should show return type '-> str': {resp}");
+    Ok(())
+}
+
+#[test]
+fn test_lsp_hover_from_call_site() -> TestResult<()> {
+    // THE KEY TEST: hovering on a CALL SITE resolves to the function definition.
+    // This exercises the reference-lookup path in hover_at / find_definition_by_name.
+    let mut fixture = LspTestFixture::new()?;
+    fixture.initialize()?;
+
+    let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n\nresult: str = greet(\"world\")\n";
+    fixture.did_open("file:///hover_call.py", code)?;
+    let _ = fixture.wait_for_diagnostics();
+
+    // "result: str = greet(\"world\")" is line 3.
+    // "result: str = " is 14 chars, so 'g' of "greet" is at character 14.
+    let resp = send_request(
+        &mut fixture,
+        201,
+        "textDocument/hover",
+        serde_json::json!({
+            "textDocument": { "uri": "file:///hover_call.py" },
+            "position": { "line": 3, "character": 14 }
+        }),
+    )?
+    .ok_or("no hover response at call site")?;
+
+    assert!(resp.contains("(function)"), "call-site hover should resolve to function: {resp}");
+    assert!(resp.contains("greet"), "call-site hover should show function name: {resp}");
+    assert!(resp.contains("name: str"), "call-site hover should show parameter type: {resp}");
+    Ok(())
+}
+
+#[test]
+fn test_lsp_hover_parameter_shows_type() -> TestResult<()> {
+    // Hover on a parameter at its definition site shows "(parameter) name: type".
+    let mut fixture = LspTestFixture::new()?;
+    fixture.initialize()?;
+
+    let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"";
+    fixture.did_open("file:///hover_param.py", code)?;
+    let _ = fixture.wait_for_diagnostics();
+
+    // "def greet(" is 10 chars, so 'n' of "name" is at character 10.
+    let resp = send_request(
+        &mut fixture,
+        202,
+        "textDocument/hover",
+        serde_json::json!({
+            "textDocument": { "uri": "file:///hover_param.py" },
+            "position": { "line": 0, "character": 10 }
+        }),
+    )?
+    .ok_or("no hover response for parameter")?;
+
+    assert!(resp.contains("(parameter)"), "hover on parameter should show '(parameter)': {resp}");
+    assert!(resp.contains("name"), "hover should show parameter name: {resp}");
+    assert!(resp.contains("str"), "hover should show parameter type 'str': {resp}");
+    Ok(())
+}
+
+#[test]
+fn test_lsp_hover_class_attribute() -> TestResult<()> {
+    // Hover on a class attribute shows "(property) ClassName.attr: type".
+    let mut fixture = LspTestFixture::new()?;
+    fixture.initialize()?;
+
+    let code = "class Animal:\n    name: str\n    age: int\n";
+    fixture.did_open("file:///hover_attr.py", code)?;
+    let _ = fixture.wait_for_diagnostics();
+
+    // Line 1: "    name: str" — "name" starts at character 4.
+    let resp = send_request(
+        &mut fixture,
+        203,
+        "textDocument/hover",
+        serde_json::json!({
+            "textDocument": { "uri": "file:///hover_attr.py" },
+            "position": { "line": 1, "character": 4 }
+        }),
+    )?
+    .ok_or("no hover response for class attribute")?;
+
+    assert!(resp.contains("(property)"), "hover on class attribute should show '(property)': {resp}");
+    assert!(resp.contains("Animal.name"), "hover should show 'Animal.name': {resp}");
+    assert!(resp.contains("str"), "hover should show attribute type 'str': {resp}");
+    Ok(())
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Go to Definition — exact position + call-site + type annotation
+// ────────────────────────────────────────────────────────────────────
+
+#[test]
+fn test_lsp_goto_definition_returns_exact_position() -> TestResult<()> {
+    // Proves that goto-def returns the EXACT line/character of the definition,
+    // not just the file name.
+    let mut fixture = LspTestFixture::new()?;
+    fixture.initialize()?;
+
+    let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n";
+    fixture.did_open("file:///gotoexact.py", code)?;
+    let _ = fixture.wait_for_diagnostics();
+
+    // Hover on 'g' in "greet" — line 0, character 4.
+    let resp = send_request(
+        &mut fixture,
+        300,
+        "textDocument/definition",
+        serde_json::json!({
+            "textDocument": { "uri": "file:///gotoexact.py" },
+            "position": { "line": 0, "character": 4 }
+        }),
+    )?
+    .ok_or("no definition response")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert!(
+        parsed["result"] != serde_json::Value::Null,
+        "definition result must not be null: {resp}"
+    );
+    let start = &parsed["result"]["range"]["start"];
+    assert_eq!(start["line"], 0, "definition must be on line 0: {resp}");
+    assert_eq!(
+        start["character"], 4,
+        "definition must start at char 4, where 'greet' begins: {resp}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_lsp_goto_definition_from_call_site() -> TestResult<()> {
+    // THE KEY TEST: goto-def triggered FROM a call site jumps to the function
+    // definition — the primary end-to-end user workflow for F12.
+    let mut fixture = LspTestFixture::new()?;
+    fixture.initialize()?;
+
+    let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n\nresult: str = greet(\"world\")\n";
+    fixture.did_open("file:///goto_call.py", code)?;
+    let _ = fixture.wait_for_diagnostics();
+
+    // Line 3: "result: str = greet(\"world\")" — 'g' of call "greet" at character 14.
+    let resp = send_request(
+        &mut fixture,
+        301,
+        "textDocument/definition",
+        serde_json::json!({
+            "textDocument": { "uri": "file:///goto_call.py" },
+            "position": { "line": 3, "character": 14 }
+        }),
+    )?
+    .ok_or("no definition response from call site")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert!(
+        parsed["result"] != serde_json::Value::Null,
+        "goto-def from call site must resolve: {resp}"
+    );
+    let start = &parsed["result"]["range"]["start"];
+    // Should jump to line 0, char 4 — where "def greet" begins.
+    assert_eq!(start["line"], 0, "goto-def from call should jump to line 0: {resp}");
+    assert_eq!(
+        start["character"], 4,
+        "goto-def from call should land at char 4 where 'greet' is defined: {resp}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_lsp_goto_definition_class_from_type_annotation() -> TestResult<()> {
+    // goto-def on a class name used in a type annotation resolves to the class definition.
+    let mut fixture = LspTestFixture::new()?;
+    fixture.initialize()?;
+
+    let code = "class Dog:\n    name: str\n\ndef pet(dog: Dog) -> None:\n    pass\n";
+    fixture.did_open("file:///goto_type.py", code)?;
+    let _ = fixture.wait_for_diagnostics();
+
+    // Line 3: "def pet(dog: Dog) -> None:"
+    // "def pet(dog: " is 13 chars, so 'D' of "Dog" is at character 13.
+    let resp = send_request(
+        &mut fixture,
+        302,
+        "textDocument/definition",
+        serde_json::json!({
+            "textDocument": { "uri": "file:///goto_type.py" },
+            "position": { "line": 3, "character": 13 }
+        }),
+    )?
+    .ok_or("no definition for class used in type annotation")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert!(
+        parsed["result"] != serde_json::Value::Null,
+        "goto-def on type annotation must resolve: {resp}"
+    );
+    let start = &parsed["result"]["range"]["start"];
+    // "class Dog:" — 'D' of "Dog" is at char 6 on line 0.
+    assert_eq!(start["line"], 0, "goto-def should jump to class definition at line 0: {resp}");
+    assert_eq!(
+        start["character"], 6,
+        "goto-def should land at char 6 where 'Dog' is defined: {resp}"
+    );
+    Ok(())
+}
+
+// ────────────────────────────────────────────────────────────────────
 // Capability advertisement
 // ────────────────────────────────────────────────────────────────────
 
