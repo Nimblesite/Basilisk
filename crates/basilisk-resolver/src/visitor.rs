@@ -12,7 +12,7 @@ use ruff_text_size::{Ranged, TextRange};
 use basilisk_parser::ParsedModule;
 
 use crate::scope::{
-    AssertTypeCallInfo, AttributeInfo, BaseSubscriptEntry, BoundedTypeVarAttrViolation, CallSite,
+    AssertTypeCallInfo, AttributeInfo, BaseSubscriptEntry, CallSite,
     ClassInfo, FloatParamIntAttrAccess, FunctionInfo, GenericParamInfo, GenericSubscriptSite,
     HistoricalPositionalViolation, HistoricalPositionalViolationKind, ImportInfo, ImportKind,
     LiteralStringEnumMismatch, MatchStmtInfo, NamedTupleDefInfo, NewTypeCallInfo, ParameterInfo,
@@ -26,6 +26,7 @@ use crate::scope::{
 };
 
 /// Collect all function definitions and module-level data from the parsed module.
+#[allow(clippy::too_many_lines)]
 pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
     let mut functions = Vec::new();
     let mut classes = Vec::new();
@@ -85,6 +86,9 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         collect_unhashable_hash_calls(&module.ast.body, &classes);
     let protocol_runtime_checkable_violations =
         collect_protocol_rtc_violations(&module.ast.body, &classes);
+
+    let generator_violations = collect_generator_violations(&functions, &module.source);
+    let unbound_typevar_usages = Vec::new();
     ResolvedModule {
         functions,
         classes,
@@ -125,11 +129,12 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         generic_subscript_sites,
         literal_augmented_assign_violations: Vec::new(),
         tuple_index_violations: Vec::new(),
-        bounded_typevar_attr_violations: collect_bounded_typevar_attr_violations(&module.ast.body, &module.source),
+        bounded_typevar_attr_violations: crate::bounded_typevar::collect(&module.ast.body),
         protocol_class_object_violations: Vec::new(),
         unhashable_hash_call_violations,
         protocol_runtime_checkable_violations,
-        generator_violations: collect_generator_violations(&functions, &module.source),
+        generator_violations,
+        unbound_typevar_usages,
         path: module.path.clone(),
         source: module.source.clone(),
     }
@@ -1261,6 +1266,7 @@ fn function_info_from(func: &StmtFunctionDef, class_name: Option<String>) -> Fun
         .map(|tp| tp.type_params.iter().map(type_param_name).collect())
         .unwrap_or_default();
     let local_vars = collect_local_annotated_vars(&func.body);
+    let yield_exprs = collect_yield_exprs(&func.body);
 
     FunctionInfo {
         name: func.name.to_string(),
@@ -1281,6 +1287,7 @@ fn function_info_from(func: &StmtFunctionDef, class_name: Option<String>) -> Fun
         top_level_return_name_refs,
         unhashable_keys,
         is_stub_body,
+        body_ends_with_return: func.body.last().is_some_and(|s| matches!(s, Stmt::Return(_))),
         body_last_stmt_terminates: func.body.last().is_some_and(|s| match s {
             Stmt::Raise(_) => true,
             Stmt::Expr(e) => matches!(e.value.as_ref(), Expr::Call(_)),
@@ -1289,8 +1296,9 @@ fn function_info_from(func: &StmtFunctionDef, class_name: Option<String>) -> Fun
         has_pep695_type_params,
         pep695_type_param_names,
         local_vars,
-        is_generator: func.body.iter().any(|s| stmt_contains_yield(s)),
+        is_generator: func.body.iter().any(stmt_contains_yield),
         is_async: func.is_async,
+        yield_exprs,
     }
 }
 
@@ -1300,21 +1308,126 @@ fn stmt_contains_yield(stmt: &Stmt) -> bool {
         Stmt::Expr(node) => matches!(node.value.as_ref(), Expr::Yield(_) | Expr::YieldFrom(_)),
         Stmt::Assign(node) => matches!(node.value.as_ref(), Expr::Yield(_) | Expr::YieldFrom(_)),
         Stmt::If(node) => {
-            node.body.iter().any(|s| stmt_contains_yield(s))
+            node.body.iter().any(stmt_contains_yield)
                 || node
                     .elif_else_clauses
                     .iter()
-                    .any(|c| c.body.iter().any(|s| stmt_contains_yield(s)))
+                    .any(|c| c.body.iter().any(stmt_contains_yield))
         }
-        Stmt::While(node) => node.body.iter().any(|s| stmt_contains_yield(s)),
-        Stmt::For(node) => node.body.iter().any(|s| stmt_contains_yield(s)),
-        Stmt::With(node) => node.body.iter().any(|s| stmt_contains_yield(s)),
+        Stmt::While(node) => node.body.iter().any(stmt_contains_yield),
+        Stmt::For(node) => node.body.iter().any(stmt_contains_yield),
+        Stmt::With(node) => node.body.iter().any(stmt_contains_yield),
         Stmt::Try(node) => {
-            node.body.iter().any(|s| stmt_contains_yield(s))
-                || node.finalbody.iter().any(|s| stmt_contains_yield(s))
-                || node.orelse.iter().any(|s| stmt_contains_yield(s))
+            node.body.iter().any(stmt_contains_yield)
+                || node.finalbody.iter().any(stmt_contains_yield)
+                || node.orelse.iter().any(stmt_contains_yield)
         }
         _ => false,
+    }
+}
+
+/// Collect all yield/yield-from expressions from a function body (recursively).
+fn collect_yield_exprs(stmts: &[Stmt]) -> Vec<crate::scope::YieldExprInfo> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        collect_yield_exprs_from_stmt(stmt, &mut out);
+    }
+    out
+}
+
+/// Recursively collect yield expressions from a single statement.
+fn collect_yield_exprs_from_stmt(stmt: &Stmt, out: &mut Vec<crate::scope::YieldExprInfo>) {
+    match stmt {
+        Stmt::Expr(node) => collect_yield_from_expr(&node.value, out),
+        Stmt::Assign(node) => collect_yield_from_expr(&node.value, out),
+        Stmt::AnnAssign(node) => {
+            if let Some(value) = &node.value {
+                collect_yield_from_expr(value, out);
+            }
+        }
+        Stmt::If(node) => {
+            for s in &node.body {
+                collect_yield_exprs_from_stmt(s, out);
+            }
+            for clause in &node.elif_else_clauses {
+                for s in &clause.body {
+                    collect_yield_exprs_from_stmt(s, out);
+                }
+            }
+        }
+        Stmt::While(node) => {
+            for s in &node.body {
+                collect_yield_exprs_from_stmt(s, out);
+            }
+        }
+        Stmt::For(node) => {
+            for s in &node.body {
+                collect_yield_exprs_from_stmt(s, out);
+            }
+        }
+        Stmt::With(node) => {
+            for s in &node.body {
+                collect_yield_exprs_from_stmt(s, out);
+            }
+        }
+        Stmt::Try(node) => {
+            for s in &node.body {
+                collect_yield_exprs_from_stmt(s, out);
+            }
+            for s in &node.finalbody {
+                collect_yield_exprs_from_stmt(s, out);
+            }
+            for s in &node.orelse {
+                collect_yield_exprs_from_stmt(s, out);
+            }
+        }
+        // Do NOT recurse into nested function defs
+        _ => {}
+    }
+}
+
+/// Extract yield info from an expression node.
+fn collect_yield_from_expr(expr: &Expr, out: &mut Vec<crate::scope::YieldExprInfo>) {
+    match expr {
+        Expr::Yield(y) => {
+            let (rhs_kind, call_name) = y
+                .value
+                .as_ref()
+                .map_or((RhsKind::NoneValue, None), |v| {
+                    (classify_rhs(v), extract_call_name(v))
+                });
+            out.push(crate::scope::YieldExprInfo {
+                span: text_range_to_span(y.range),
+                rhs_kind,
+                is_yield_from: false,
+                call_name,
+            });
+        }
+        Expr::YieldFrom(yf) => {
+            let rhs_kind = classify_rhs(&yf.value);
+            let call_name = extract_call_name(&yf.value);
+            out.push(crate::scope::YieldExprInfo {
+                span: text_range_to_span(yf.range),
+                rhs_kind,
+                is_yield_from: true,
+                call_name,
+            });
+        }
+        _ => {}
+    }
+}
+
+/// Extract the simple name of a called function/constructor from an expression.
+/// For `SomeClass()`, returns `Some("SomeClass")`. For non-call exprs, returns `None`.
+fn extract_call_name(expr: &Expr) -> Option<String> {
+    if let Expr::Call(call) = expr {
+        match call.func.as_ref() {
+            Expr::Name(n) => Some(n.id.to_string()),
+            Expr::Attribute(a) => Some(a.attr.to_string()),
+            _ => None,
+        }
+    } else {
+        None
     }
 }
 
@@ -4628,6 +4741,7 @@ fn collect_module_attr_assignments(stmts: &[Stmt]) -> Vec<crate::scope::ModuleAt
                         object_name,
                         attr_name: attr.attr.to_string(),
                         target_span: text_range_to_span(target.range()),
+                        rhs_span: Some(text_range_to_span(node.value.range())),
                     });
                 }
             }
@@ -6427,9 +6541,7 @@ fn collect_type_alias_defs(stmts: &[Stmt]) -> Vec<TypeAliasDefInfo> {
             }
             let Some(name) = expr_simple_name(ann.target.as_ref()) else { continue };
             let Some(rhs) = ann.value.as_ref() else { continue };
-            if let Some(info) = build_type_alias_info(name, rhs, stmt) {
-                out.push(info);
-            }
+            out.push(build_type_alias_info(name, rhs, stmt));
             continue;
         }
 
@@ -6441,9 +6553,7 @@ fn collect_type_alias_defs(stmts: &[Stmt]) -> Vec<TypeAliasDefInfo> {
             let Some(name) = expr_simple_name(&assign.targets[0]) else { continue };
             // Only treat subscript RHS as implicit alias (Name = Something[...])
             if matches!(assign.value.as_ref(), Expr::Subscript(_)) {
-                if let Some(info) = build_type_alias_info(name, &assign.value, stmt) {
-                    out.push(info);
-                }
+                out.push(build_type_alias_info(name, &assign.value, stmt));
             }
         }
     }
@@ -6451,7 +6561,7 @@ fn collect_type_alias_defs(stmts: &[Stmt]) -> Vec<TypeAliasDefInfo> {
 }
 
 /// Helper to build a `TypeAliasDefInfo` from an alias name and RHS expression.
-fn build_type_alias_info(name: String, rhs: &Expr, stmt: &Stmt) -> Option<TypeAliasDefInfo> {
+fn build_type_alias_info(name: String, rhs: &Expr, stmt: &Stmt) -> TypeAliasDefInfo {
     let mut rhs_names = Vec::new();
     collect_name_refs_from_expr(rhs, &mut rhs_names);
 
@@ -6479,14 +6589,14 @@ fn build_type_alias_info(name: String, rhs: &Expr, stmt: &Stmt) -> Option<TypeAl
         end: stmt.range().end().to_u32(),
     };
 
-    Some(TypeAliasDefInfo {
+    TypeAliasDefInfo {
         name,
         rhs_names,
         rhs_base_name,
         rhs_type_arg_names,
         rhs_string_refs,
         span,
-    })
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -6711,7 +6821,7 @@ fn is_function_body_stub(body: &[Stmt]) -> bool {
     }
 }
 
-/// Collect required ClassVar attributes for each Protocol class.
+/// Collect required `ClassVar` attributes for each Protocol class.
 fn collect_protocol_required_attrs(
     stmts: &[Stmt],
     protocol_names: &std::collections::HashSet<&str>,
@@ -6875,7 +6985,7 @@ struct ProtocolInfo<'a> {
 }
 
 /// Build a map of protocol class names to their `ProtocolInfo`.
-fn build_protocol_map<'a>(classes: &'a [ClassInfo]) -> std::collections::HashMap<&'a str, ProtocolInfo<'a>> {
+fn build_protocol_map(classes: &[ClassInfo]) -> std::collections::HashMap<&str, ProtocolInfo<'_>> {
     let mut map = std::collections::HashMap::new();
     for cls in classes {
         let is_protocol = cls.bases.iter().any(|b| b == "Protocol");
@@ -7038,3 +7148,69 @@ fn collect_protocol_rtc_in_expr(
     }
 }
 
+
+
+// ---------------------------------------------------------------------------
+// Generator violation collection
+// ---------------------------------------------------------------------------
+
+/// Valid return type names for synchronous generator functions.
+const SYNC_GENERATOR_TYPES: &[&str] = &["Generator", "Iterator", "Iterable"];
+
+/// Valid return type names for asynchronous generator functions.
+const ASYNC_GENERATOR_TYPES: &[&str] = &["AsyncGenerator", "AsyncIterator", "AsyncIterable"];
+
+/// Extract the base type name from an annotation string.
+fn base_type_name(annotation: &str) -> &str {
+    annotation
+        .find('[')
+        .map_or(annotation, |idx| &annotation[..idx])
+        .trim()
+}
+
+/// Collect generator-related violations from resolved function info.
+fn collect_generator_violations(
+    functions: &[FunctionInfo],
+    source: &str,
+) -> Vec<crate::scope::GeneratorViolation> {
+    let mut out = Vec::new();
+    for func in functions {
+        if !func.is_generator {
+            continue;
+        }
+        let Some(ann_span) = func.return_annotation_span else {
+            continue;
+        };
+        let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+            continue;
+        };
+        let base = base_type_name(ann_text);
+
+        let valid_types = if func.is_async {
+            ASYNC_GENERATOR_TYPES
+        } else {
+            SYNC_GENERATOR_TYPES
+        };
+
+        // Skip if the return type is a known generator-compatible type.
+        if valid_types.iter().any(|t| base.eq_ignore_ascii_case(t)) {
+            continue;
+        }
+
+        // Skip user-defined types (may be Protocols with __next__/__anext__).
+        // Only flag types that are clearly non-generator built-in types.
+        let first_char = base.chars().next();
+        if first_char.is_some_and(char::is_uppercase) {
+            continue;
+        }
+
+        out.push(crate::scope::GeneratorViolation {
+            span: ann_span,
+            kind: crate::scope::GeneratorViolationKind::InvalidReturnType {
+                func_name: func.name.clone(),
+                return_type: ann_text.to_owned(),
+            },
+        });
+    }
+    out
+}

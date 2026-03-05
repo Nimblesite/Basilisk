@@ -54,6 +54,7 @@ impl ReturnAnnotationKind {
 
 /// Information about a single function definition.
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct FunctionInfo {
     /// The function name.
     pub name: String,
@@ -121,6 +122,14 @@ pub struct FunctionInfo {
     pub is_generator: bool,
     /// `true` when the function is declared with `async def`.
     pub is_async: bool,
+    /// Yield expressions found in this function body.
+    pub yield_exprs: Vec<YieldExprInfo>,
+    /// `true` when the last top-level statement in the function body is a `return`
+    /// statement (with or without a value).
+    ///
+    /// Used by E0120 to detect generators with `Generator[Y, S, R]` where R is not
+    /// `None` but the function can fall through without returning.
+    pub body_ends_with_return: bool,
 }
 
 /// A `return` statement found inside a function body.
@@ -140,6 +149,20 @@ pub struct ReturnStmtInfo {
     ///
     /// Used for return type inference in E0002.
     pub rhs_kind: RhsKind,
+}
+
+/// A `yield` or `yield from` expression found inside a generator function body.
+#[derive(Debug, Clone)]
+pub struct YieldExprInfo {
+    /// The span of the `yield` keyword.
+    pub span: Span,
+    /// What kind of expression is yielded, if any.
+    pub rhs_kind: RhsKind,
+    /// `true` when this is a `yield from` expression.
+    pub is_yield_from: bool,
+    /// The name of the called function/constructor, if the yield value is a call expression.
+    /// For `yield SomeClass()`, this is `Some("SomeClass")`.
+    pub call_name: Option<String>,
 }
 
 /// A reference to an unhashable expression used as a dict key.
@@ -716,6 +739,8 @@ pub struct ModuleAttrAssignment {
     pub attr_name: String,
     /// Span of the entire `Class.attr` target expression.
     pub target_span: Span,
+    /// Span of the right-hand-side value expression, if present.
+    pub rhs_span: Option<Span>,
 }
 
 /// A module-level attribute access expression (`Name.attr` as a standalone statement).
@@ -983,7 +1008,7 @@ pub struct InvalidStringAnnotation {
 ///
 /// The typing spec forbids instantiating Protocol classes directly, and
 /// concrete subclasses that do not implement all abstract/stub methods or
-/// required ClassVar attributes are effectively abstract and cannot be
+/// required `ClassVar` attributes are effectively abstract and cannot be
 /// instantiated.
 #[derive(Debug, Clone)]
 pub struct ProtocolInstantiationViolation {
@@ -1267,6 +1292,13 @@ pub struct ResolvedModule {
     ///
     /// Used by `BSK-E0115`.
     pub generator_violations: Vec<GeneratorViolation>,
+    /// Unbound type variable usages detected during AST resolution.
+    ///
+    /// Covers inner class `TypeVar` reuse and function-nested Generic classes
+    /// that cannot be detected from the flattened `ResolvedModule` data alone.
+    ///
+    /// Used by `BSK-E0117`.
+    pub unbound_typevar_usages: Vec<UnboundTypeVarUsage>,
     /// The source file path.
     pub path: String,
     /// The original source text (forwarded from parser for span restoration).
@@ -1410,4 +1442,20 @@ pub struct RhsStringRef {
     pub name: String,
     /// The source span of the string reference.
     pub span: Span,
+}
+
+/// An unbound type variable usage detected during AST resolution.
+///
+/// Captures cases where a `TypeVar` is used outside its binding scope, such as:
+/// - Inner class reusing an outer class's `TypeVar` in `Generic[T]`
+/// - Inner class body annotations using outer class `TypeVars`
+/// - Function-nested class using function-scoped `TypeVars` in `Generic[T]`
+#[derive(Debug, Clone)]
+pub struct UnboundTypeVarUsage {
+    /// The source span of the unbound usage.
+    pub span: Span,
+    /// The name of the type variable that is unbound.
+    pub typevar_name: String,
+    /// Human-readable context description (e.g. "inner class `Bad`").
+    pub context: String,
 }

@@ -5,6 +5,7 @@
 //! class, import, and module-level variable.  The checker operates on
 //! [`ResolvedModule`] without touching the raw AST.
 
+mod bounded_typevar;
 pub mod scope;
 mod visitor;
 
@@ -25,7 +26,8 @@ pub use scope::{
     TupleIndexViolation, TypeAliasDefInfo,
     TypeAliasTypeCallInfo, TypeArg, TypeStatementInfo, TypeVarCallInfo, TypedDictCallInfo,
     TypedDictKeyViolation, TypedDictKeyViolationKind, TypedDictSecondArgKind,
-    UnhashableHashCallViolation, UnhashableKeyRef, VariableInfo,
+    UnboundTypeVarUsage, UnhashableHashCallViolation, UnhashableKeyRef, VariableInfo,
+    YieldExprInfo,
 };
 
 use basilisk_parser::ParsedModule;

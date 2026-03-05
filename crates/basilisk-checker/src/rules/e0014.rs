@@ -13,9 +13,9 @@
 //! The check is performed by extracting the annotation text from the source
 //! around the variable's name span and comparing it against the RHS kind.
 
-use basilisk_resolver::{ResolvedModule, Span, VariableInfo};
+use basilisk_resolver::{ResolvedModule, RhsKind, Span, VariableInfo};
 use crate::inference::infer_rhs;
-use crate::types::InferredType;
+use crate::types::{InferredType, LiteralValue};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
@@ -32,26 +32,48 @@ pub(crate) struct AssignmentTypeMismatch;
 
 impl Rule for AssignmentTypeMismatch {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        check_vars(&module.module_vars, &module.source, &module.path, diagnostics);
+        let empty_params = std::collections::HashMap::new();
+        check_vars(&module.module_vars, &module.source, &module.path, diagnostics, &empty_params);
         check_local_vars(module, diagnostics);
         check_tuple_reassignments(module, diagnostics);
     }
 }
 
 /// Check a slice of annotated variables for type mismatches.
+///
+/// `param_types` maps parameter names to their declared annotation types.
+/// When the RHS of an annotated local variable is a simple name reference
+/// that matches a parameter, the parameter's type is used for assignability
+/// checking instead of the generic `Unknown` fallback.
 fn check_vars(
     vars: &[VariableInfo],
     source: &str,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
+    param_types: &std::collections::HashMap<String, InferredType>,
 ) {
     vars.iter()
         .filter(|var| var.has_annotation && var.rhs_span.is_some())
         .filter_map(|var| {
             let annotation_text = extract_annotation(source, var.name_span)?;
-
-            let inferred_type = infer_rhs(&var.rhs_kind);
             let declared_type = InferredType::from_annotation(annotation_text);
+
+            // When the declared type is a Literal, try to infer the RHS as a
+            // literal value so we can compare values, not just kinds.
+            let mut inferred_type = infer_with_literal_value(var, source, &declared_type);
+
+            // When the inferred type is Unknown and the RHS text is a parameter
+            // name, use the parameter's declared type instead.
+            if matches!(inferred_type, InferredType::Unknown) {
+                if let Some(rhs_span) = var.rhs_span {
+                    if let Some(rhs_text) = source.get(rhs_span.start as usize..rhs_span.end as usize) {
+                        let rhs_name = rhs_text.trim();
+                        if let Some(param_type) = param_types.get(rhs_name) {
+                            inferred_type = param_type.clone();
+                        }
+                    }
+                }
+            }
 
             if inferred_type.is_assignable_to(&declared_type) {
                 None
@@ -64,11 +86,143 @@ fn check_vars(
         });
 }
 
-/// Check local variables in function bodies for type mismatches.
-fn check_local_vars(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-    for func in &module.functions {
-        check_vars(&func.local_vars, &module.source, &module.path, diagnostics);
+/// Infer the RHS type, upgrading to a `Literal[value]` when the declared type
+/// is itself a `Literal` and we can extract the actual value from source text.
+fn infer_with_literal_value(
+    var: &VariableInfo,
+    source: &str,
+    declared: &InferredType,
+) -> InferredType {
+    let base = infer_rhs(&var.rhs_kind);
+
+    // Only attempt value-level inference when the target is a Literal type
+    let is_literal_target = matches!(
+        declared,
+        InferredType::Literal(_) | InferredType::Union(_)
+    );
+    if !is_literal_target {
+        return base;
     }
+
+    // Extract the RHS source text
+    let Some(rhs_span) = var.rhs_span else {
+        return base;
+    };
+    let rhs_text = match source.get(rhs_span.start as usize..rhs_span.end as usize) {
+        Some(text) => text.trim(),
+        None => return base,
+    };
+
+    // Try to parse a literal value from the source text
+    match var.rhs_kind {
+        RhsKind::IntLiteral => parse_int_literal(rhs_text).unwrap_or(base),
+        RhsKind::StrLiteral => parse_str_literal(rhs_text).unwrap_or(base),
+        RhsKind::BoolLiteral => parse_bool_literal(rhs_text).unwrap_or(base),
+        RhsKind::FloatLiteral => parse_float_literal(rhs_text).unwrap_or(base),
+        RhsKind::BytesLiteral => parse_bytes_literal(rhs_text).unwrap_or(base),
+        _ => base,
+    }
+}
+
+/// Parse an integer literal from source text into `Literal[value]`.
+fn parse_int_literal(text: &str) -> Option<InferredType> {
+    let text = text.trim().replace('_', "");
+    // Handle hex, octal, binary
+    if let Some(hex) = text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
+        let val = i64::from_str_radix(hex, 16).ok()?;
+        return Some(InferredType::Literal(LiteralValue::Int(val)));
+    }
+    if let Some(oct) = text.strip_prefix("0o").or_else(|| text.strip_prefix("0O")) {
+        let val = i64::from_str_radix(oct, 8).ok()?;
+        return Some(InferredType::Literal(LiteralValue::Int(val)));
+    }
+    if let Some(bin) = text.strip_prefix("0b").or_else(|| text.strip_prefix("0B")) {
+        let val = i64::from_str_radix(bin, 2).ok()?;
+        return Some(InferredType::Literal(LiteralValue::Int(val)));
+    }
+    // Handle negative
+    if let Some(neg) = text.strip_prefix('-') {
+        let val = neg.trim().parse::<i64>().ok()?;
+        return Some(InferredType::Literal(LiteralValue::Int(-val)));
+    }
+    let val = text.parse::<i64>().ok()?;
+    Some(InferredType::Literal(LiteralValue::Int(val)))
+}
+
+/// Parse a string literal from source text into `Literal[value]`.
+fn parse_str_literal(text: &str) -> Option<InferredType> {
+    let text = text.trim();
+    if (text.starts_with('"') && text.ends_with('"'))
+        || (text.starts_with('\'') && text.ends_with('\''))
+    {
+        let content = &text[1..text.len() - 1];
+        return Some(InferredType::Literal(LiteralValue::Str(content.to_owned())));
+    }
+    None
+}
+
+/// Parse a boolean literal from source text into `Literal[value]`.
+fn parse_bool_literal(text: &str) -> Option<InferredType> {
+    match text.trim() {
+        "True" => Some(InferredType::Literal(LiteralValue::Bool(true))),
+        "False" => Some(InferredType::Literal(LiteralValue::Bool(false))),
+        _ => None,
+    }
+}
+
+/// Parse a float literal from source text into `Literal[value]`.
+fn parse_float_literal(text: &str) -> Option<InferredType> {
+    let text = text.trim().replace('_', "");
+    let val = text.parse::<f64>().ok()?;
+    Some(InferredType::Literal(LiteralValue::Float(val)))
+}
+
+/// Parse a bytes literal from source text into `Literal[value]`.
+fn parse_bytes_literal(text: &str) -> Option<InferredType> {
+    let text = text.trim();
+    if (text.starts_with("b\"") || text.starts_with("b'"))
+        && (text.ends_with('"') || text.ends_with('\''))
+    {
+        let content = &text[2..text.len() - 1];
+        return Some(InferredType::Literal(LiteralValue::Bytes(
+            content.as_bytes().to_vec(),
+        )));
+    }
+    None
+}
+
+/// Check local variables in function bodies for type mismatches.
+///
+/// Builds a map of parameter name to declared type for each function so that
+/// assignments like `x: Literal[False] = a` (where `a: Literal[0]`) can be
+/// checked for Literal-level incompatibility.
+fn check_local_vars(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    let source = &module.source;
+    for func in &module.functions {
+        let param_types = build_param_type_map(&func.parameters, source);
+        check_vars(&func.local_vars, source, &module.path, diagnostics, &param_types);
+    }
+}
+
+/// Build a map from parameter name to its declared `InferredType` by reading
+/// the annotation text from source spans.
+fn build_param_type_map(
+    params: &[basilisk_resolver::ParameterInfo],
+    source: &str,
+) -> std::collections::HashMap<String, InferredType> {
+    let mut map = std::collections::HashMap::new();
+    for param in params {
+        if !param.has_annotation {
+            continue;
+        }
+        let Some(ann_span) = param.annotation_span else { continue };
+        let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+            continue;
+        };
+        let inferred = InferredType::from_annotation(ann_text.trim());
+        map.insert(param.name.clone(), inferred);
+    }
+    map
 }
 
 /// Create diagnostic for inference-based type mismatch

@@ -59,3 +59,11 @@ pub(crate) fn is_enum_class(class: &ClassInfo) -> bool {
 pub(crate) fn is_protocol_class(class: &ClassInfo) -> bool {
     class.bases.iter().any(|b| b == "Protocol")
 }
+
+/// Returns `true` when a class directly inherits from `NamedTuple`.
+///
+/// `NamedTuple` classes use un-annotated attributes as class variables (not
+/// fields), so they should not require type annotations on those attributes.
+pub(crate) fn is_namedtuple_class(class: &ClassInfo) -> bool {
+    class.bases.iter().any(|b| b == "NamedTuple")
+}

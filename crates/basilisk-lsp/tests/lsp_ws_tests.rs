@@ -4574,7 +4574,7 @@ result: str = g.greet(\"world\", True)
             .filter_map(|p| p["label"].as_str())
             .collect();
         assert!(
-            !param_labels.iter().any(|l| *l == "self"),
+            !param_labels.contains(&"self"),
             "signature help should NOT include 'self' as a parameter: {param_labels:?}"
         );
     }
@@ -4629,7 +4629,7 @@ p: Point = Point(1, 2)
         if let Some(sig) = signatures.first() {
             let label = sig["label"].as_str().unwrap_or("");
             assert!(
-                label.contains("x") && label.contains("y"),
+                label.contains('x') && label.contains('y'),
                 "constructor signature should show parameters x and y: {label}"
             );
             // self should not appear in the label.
@@ -4641,7 +4641,7 @@ p: Point = Point(1, 2)
                     .filter_map(|p| p["label"].as_str())
                     .collect();
                 assert!(
-                    !param_labels.iter().any(|l| *l == "self"),
+                    !param_labels.contains(&"self"),
                     "constructor signature should NOT include 'self': {param_labels:?}"
                 );
             }

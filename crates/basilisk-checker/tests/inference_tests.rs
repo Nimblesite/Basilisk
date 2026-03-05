@@ -171,12 +171,12 @@ def f(cond: bool) -> None:
 
 #[test]
 fn test_flow_union_no_else_none() -> Result<(), Box<dyn std::error::Error>> {
-    let src = r#"
+    let src = r"
 def process(flag: bool) -> None:
     if flag:
         x = 42
     reveal_type(x)  # should be int | None
-"#;
+";
     let diags = run_e2e(src)?;
     
     // Debug: print all diagnostics to see what's happening
@@ -209,11 +209,11 @@ def process(flag: bool) -> None:
 
 #[test]
 fn test_walrus_operator_inference() -> Result<(), Box<dyn std::error::Error>> {
-    let src = r#"
+    let src = r"
 def f(a: list) -> None:
     if (n := len(a)) > 10:
         reveal_type(n)  # should be int
-"#;
+";
     let diags = run_e2e(src)?;
     // Walrus operator should infer type correctly
     assert!(diags.is_empty(), "walrus operator inference should be clean");
@@ -222,12 +222,12 @@ def f(a: list) -> None:
 
 #[test]
 fn test_augmented_assign_int() -> Result<(), Box<dyn std::error::Error>> {
-    let src = r#"
+    let src = r"
 def f() -> None:
     x = 1
     x += 2
     reveal_type(x)  # should still be int
-"#;
+";
     let diags = run_e2e(src)?;
     assert!(diags.is_empty(), "augmented assignment should preserve type");
     Ok(())
@@ -297,11 +297,11 @@ w: bytes = b"data"
 
 #[test]
 fn test_w0050_no_warning_for_widening() -> Result<(), Box<dyn std::error::Error>> {
-    let src = r#"
+    let src = r"
 x: float = 42
 y: list[int | str] = [1]
 z: tuple[float, float] = (0, 0)
-"#;
+";
     let diags = run_e2e(src)?;
     let w0050: Vec<_> = diags
         .iter()
@@ -329,11 +329,11 @@ z: int = 3.14
 
 #[test]
 fn test_e0014_no_error_for_compatible_types() -> Result<(), Box<dyn std::error::Error>> {
-    let src = r#"
+    let src = r"
 x: float = 42
 y: bool = True
 z: float = 3.14
-"#;
+";
     let diags = run_e2e(src)?;
     
     let e0014: Vec<_> = diags
@@ -383,10 +383,10 @@ z: set[int | bool] = {1, True}
 
 #[test]
 fn test_function_parameter_exemption() -> Result<(), Box<dyn std::error::Error>> {
-    let src = r#"
+    let src = r"
 def f(x: int) -> None:
     pass
-"#;
+";
     let diags = run_e2e(src)?;
     let w0050: Vec<_> = diags
         .iter()
@@ -398,10 +398,10 @@ def f(x: int) -> None:
 
 #[test]
 fn test_return_type_exemption() -> Result<(), Box<dyn std::error::Error>> {
-    let src = r#"
+    let src = r"
 def f() -> int:
     return 42
-"#;
+";
     let diags = run_e2e(src)?;
     let w0050: Vec<_> = diags
         .iter()

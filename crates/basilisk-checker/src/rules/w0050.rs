@@ -63,10 +63,10 @@ impl Rule for RedundantAnnotationWarning {
             .classes
             .iter()
             .filter(|class| {
-                // Skip TypedDict, Protocol, and NamedTuple classes
+                // Skip TypedDict, Protocol, and NamedTuple classes (including subclasses).
                 !class.bases.iter().any(|base| {
                     base.contains("TypedDict") || base.contains("Protocol") || base.contains("NamedTuple")
-                })
+                }) && !is_namedtuple_subclass(class, &module.classes)
             })
             .flat_map(|class| &class.attributes)
             .filter(|attr| attr.has_annotation && attr.has_value)
@@ -221,4 +221,28 @@ fn make_diagnostic_for_var(
             "Basilisk warns about redundant annotations to encourage cleaner code".to_owned(),
         ),
     }
+}
+
+/// Check if a class transitively inherits from a `NamedTuple` class.
+///
+/// This catches subclasses like `class PointWithName(Point)` where `Point` itself
+/// inherits from `NamedTuple`.
+fn is_namedtuple_subclass(
+    class: &basilisk_resolver::ClassInfo,
+    all_classes: &[basilisk_resolver::ClassInfo],
+) -> bool {
+    for base in &class.bases {
+        let stripped = base.split('[').next().unwrap_or(base.as_str());
+        for other in all_classes {
+            if other.name == stripped {
+                if other.bases.iter().any(|b| b == "NamedTuple") {
+                    return true;
+                }
+                if is_namedtuple_subclass(other, all_classes) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
 }

@@ -31,6 +31,13 @@ impl Rule for ReturnTypeMismatch {
 }
 
 fn check_function(func: &FunctionInfo, module: &ResolvedModule, out: &mut Vec<Diagnostic>) {
+    // Generator functions have their own return type validation (E0120).
+    // Return values in generators go through Generator[Y, S, R]'s ReturnType,
+    // not the top-level annotation.
+    if func.is_generator {
+        return;
+    }
+
     let Some(ann_span) = func.return_annotation_span else {
         return;
     };

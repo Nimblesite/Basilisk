@@ -138,6 +138,13 @@ fn check_return_type_mismatch(
         return;
     }
 
+    // Generator functions have their own return type validation (E0120).
+    // The return annotation (e.g. Generator[Y, S, R]) is not meant to be
+    // checked directly against return statement values.
+    if func.is_generator {
+        return;
+    }
+
     for return_stmt in &func.return_stmts {
         if !return_stmt.has_value {
             continue;

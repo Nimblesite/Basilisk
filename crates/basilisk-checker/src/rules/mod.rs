@@ -112,6 +112,27 @@ pub(crate) mod e0111;
 pub(crate) mod e0112;
 pub(crate) mod e0113;
 pub(crate) mod e0114;
+pub(crate) mod e0115;
+pub(crate) mod e0116;
+pub(crate) mod e0117;
+pub(crate) mod e0118;
+pub(crate) mod e0119;
+pub(crate) mod e0120;
+pub(crate) mod e0121;
+pub(crate) mod e0122;
+pub(crate) mod e0123;
+pub(crate) mod e0124;
+pub(crate) mod e0125;
+pub(crate) mod e0126;
+pub(crate) mod e0127;
+pub(crate) mod e0128;
+pub(crate) mod e0129;
+pub(crate) mod e0130;
+pub(crate) mod e0131;
+pub(crate) mod e0132;
+pub(crate) mod e0133;
+pub(crate) mod e0140;
+pub(crate) mod e0141;
 pub(crate) mod guards;
 pub(crate) mod w0040;
 pub(crate) mod w0050;
@@ -238,6 +259,27 @@ pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
         &e0112::TypeGuardCallableReturnMismatch,
         &e0113::TypeIsInconsistentNarrowing,
         &e0114::ProtocolRuntimeCheckableViolation,
+        &e0115::DeprecatedUsage,
+        &e0116::NamedTupleDefError,
+        &e0117::UnboundTypeVarScope,
+        &e0118::SuperAbstractCall,
+        &e0119::ProtocolUnsafeOverlap,
+        &e0120::GeneratorReturnTypeViolation,
+        &e0121::ProtocolAssignmentConformance,
+        &e0122::CallableCallSiteViolation,
+        &e0123::SuperCallOnAbstractProtocolMethod,
+        &e0124::ProtocolTupleElementMismatch,
+        &e0125::InstanceAttrOnClass,
+        &e0126::LiteralStringAssignment,
+        &e0127::TupleIndexOutOfRange,
+        &e0128::TypeVarDefaultReferential,
+        &e0129::LiteralValueIncompatible,
+        &e0130::TypeVarScopeViolation,
+        &e0131::GeneratorTypeMismatch,
+        &e0132::InconsistentTypeVarOrder,
+        &e0133::ProtocolVarianceMismatch,
+        &e0140::CallableAssignmentViolation,
+        &e0141::UnpackKwargsViolation,
         &w0040::LambdaMissingAnnotations,
         &w0050::RedundantAnnotationWarning,
     ];

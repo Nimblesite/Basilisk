@@ -157,12 +157,21 @@ fn is_numeric_literal(arg: &str) -> bool {
         && trimmed.chars().any(|ch| ch.is_ascii_digit())
 }
 
+/// Known built-in type names that are valid as `ClassVar` arguments even though
+/// they start with lowercase (e.g. `int`, `str`, `float`, `bool`, `bytes`, `list`,
+/// `dict`, `set`, `tuple`, `type`, `object`, `complex`, `range`, `slice`,
+/// `frozenset`, `bytearray`, `memoryview`).
+const LOWERCASE_TYPE_NAMES: &[&str] = &[
+    "int", "str", "float", "bool", "bytes", "list", "dict", "set", "tuple",
+    "type", "object", "complex", "range", "slice", "frozenset", "bytearray",
+    "memoryview", "property", "staticmethod", "classmethod", "super",
+];
+
 /// Returns `true` when the argument text looks like a runtime variable reference
 /// (a simple identifier that is not a known type name).
 ///
-/// We check against known type/typing names. If it's a simple identifier not in
-/// the known set and not starting with an uppercase letter that looks like a class,
-/// it's probably a runtime variable.
+/// A bare identifier that starts with a lowercase letter and is NOT one of the
+/// known built-in types is considered a runtime variable.
 fn is_runtime_variable(arg: &str, module_var_names: &[String]) -> bool {
     let trimmed = arg.trim();
     if trimmed.is_empty() {
@@ -175,12 +184,20 @@ fn is_runtime_variable(arg: &str, module_var_names: &[String]) -> bool {
     {
         return false;
     }
-    // Check if it's a module-level variable (runtime value)
-    module_var_names.iter().any(|name| name == trimmed)
+    // Check if it's a known module-level variable (runtime value)
+    if module_var_names.iter().any(|name| name == trimmed) {
+        return true;
+    }
+    // A bare lowercase identifier that is not a known type is likely a runtime variable
+    let first_char = trimmed.chars().next();
+    if first_char.is_some_and(|ch| ch.is_ascii_lowercase()) {
+        return !LOWERCASE_TYPE_NAMES.contains(&trimmed);
+    }
+    false
 }
 
 /// Check if an annotation's `ClassVar` argument contains any of the given type
-/// parameter names (TypeVar, ParamSpec, TypeVarTuple names).
+/// parameter names (`TypeVar`, `ParamSpec`, `TypeVarTuple` names).
 fn contains_type_param(ann_inner: &str, type_param_names: &[(String, TypeParamKind)]) -> Option<TypeParamKind> {
     for (name, kind) in type_param_names {
         // Check for the name appearing as a standalone word or as part of a subscript
@@ -265,12 +282,9 @@ fn find_self_classvar_annotations(source: &str) -> Vec<(String, Span)> {
             continue;
         }
 
-        let attr_name = match std::str::from_utf8(&bytes[attr_start..attr_end]) {
-            Ok(name) => name.to_owned(),
-            Err(_) => {
-                idx += 1;
-                continue;
-            }
+        let attr_name = if let Ok(name) = std::str::from_utf8(&bytes[attr_start..attr_end]) { name.to_owned() } else {
+            idx += 1;
+            continue;
         };
 
         // Skip whitespace after the attribute name
@@ -296,17 +310,12 @@ fn find_self_classvar_annotations(source: &str) -> Vec<(String, Span)> {
             && &bytes[ann_start..ann_start + 8] == b"ClassVar"
         {
             true
-        } else if ann_start + 2 <= source_len
-            && &bytes[ann_start..ann_start + 2] == b"CV"
-            && (ann_start + 2 >= source_len || bytes[ann_start + 2] == b'[' || bytes[ann_start + 2] == b' ')
-        {
-            true
-        } else {
-            false
-        };
+        } else { ann_start + 2 <= source_len
+            && &bytes[ann_start..ann_start + 2] == b"CV" && (ann_start + 2 >= source_len || bytes[ann_start + 2] == b'[' || bytes[ann_start + 2] == b' ') };
 
         if has_cv {
             let target_start = idx;
+            #[allow(clippy::cast_possible_truncation)]
             let span = Span {
                 start: target_start as u32,
                 end: attr_end as u32,
@@ -396,7 +405,7 @@ impl Rule for ClassVarInvalidContext {
                     ));
                 }
 
-                // Validate ClassVar arguments
+                // Validate ClassVar arguments and type mismatch
                 if let Some(inner) = extract_classvar_inner(ann) {
                     check_classvar_args(
                         inner,
@@ -407,6 +416,18 @@ impl Rule for ClassVarInvalidContext {
                         &module_var_names,
                         diagnostics,
                     );
+
+                    // Check for type mismatch between ClassVar type and RHS value
+                    if let Some(rhs_text) = span_text(source, attr.rhs_span) {
+                        check_classvar_type_mismatch(
+                            inner,
+                            rhs_text,
+                            &attr.name,
+                            attr.name_span,
+                            path,
+                            diagnostics,
+                        );
+                    }
                 }
             }
         }
@@ -526,6 +547,10 @@ impl Rule for ClassVarInvalidContext {
         // --- Instance-level assignment to ClassVar attributes ---
         // e.g. `enterprise_d.stats = {}` where `stats` is ClassVar in the class
         check_instance_classvar_assignments(module, diagnostics);
+
+        // --- Protocol ClassVar conformance ---
+        // e.g. `a: ProtoA = ProtoAImpl()` where ProtoA requires ClassVar attrs
+        check_protocol_classvar_conformance(module, diagnostics);
     }
 }
 
@@ -589,6 +614,63 @@ fn check_classvar_args(
         diagnostics.push(make_diagnostic(
             format!(
                 "`ClassVar` parameter for `{attr_name}` cannot contain {kind_name}",
+            ),
+            name_span,
+            path,
+        ));
+    }
+}
+
+/// Check for type mismatch between a `ClassVar` annotation's inner type and the
+/// RHS value.  For example, `ClassVar[list[str]] = {}` is a mismatch because `{}`
+/// is a dict literal but the annotation expects a list.
+fn check_classvar_type_mismatch(
+    inner: &str,
+    rhs_text: &str,
+    attr_name: &str,
+    name_span: Span,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let trimmed_inner = inner.trim();
+    let trimmed_rhs = rhs_text.trim();
+
+    if trimmed_rhs.is_empty() || trimmed_inner.is_empty() {
+        return;
+    }
+
+    // Detect dict literal `{}` or `{...}` assigned to a list/set/tuple type
+    let rhs_is_dict = trimmed_rhs.starts_with('{');
+    let rhs_is_list = trimmed_rhs.starts_with('[');
+
+    let inner_is_list = trimmed_inner.starts_with("list")
+        || trimmed_inner.starts_with("List");
+    let inner_is_dict = trimmed_inner.starts_with("dict")
+        || trimmed_inner.starts_with("Dict");
+    let inner_is_set = trimmed_inner.starts_with("set")
+        || trimmed_inner.starts_with("Set")
+        || trimmed_inner.starts_with("frozenset")
+        || trimmed_inner.starts_with("FrozenSet");
+
+    // Dict literal assigned to list/set/tuple type
+    if rhs_is_dict && (inner_is_list || inner_is_set) {
+        diagnostics.push(make_diagnostic(
+            format!(
+                "Type mismatch in `ClassVar` attribute `{attr_name}`: \
+                 annotated as `{trimmed_inner}` but initialized with a dict literal",
+            ),
+            name_span,
+            path,
+        ));
+        return;
+    }
+
+    // List literal assigned to dict type
+    if rhs_is_list && inner_is_dict {
+        diagnostics.push(make_diagnostic(
+            format!(
+                "Type mismatch in `ClassVar` attribute `{attr_name}`: \
+                 annotated as `{trimmed_inner}` but initialized with a list literal",
             ),
             name_span,
             path,
@@ -693,3 +775,135 @@ fn check_instance_classvar_assignments(
         }
     }
 }
+
+/// Check module-level annotated assignments for protocol ClassVar conformance.
+///
+/// When a variable is typed as a `Protocol` with `ClassVar` attributes, the RHS
+/// implementation class must have those attributes defined at the **class level**
+/// (not merely as `self.x = ...` in `__init__`).
+///
+/// e.g. `a: ProtoA = ProtoAImpl()` where `ProtoA` requires `y: ClassVar[str]`
+/// but `ProtoAImpl` only sets `self.y = ""` in `__init__` (instance variable).
+fn check_protocol_classvar_conformance(
+    module: &ResolvedModule,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let source = &module.source;
+    let path = &module.path;
+
+    // Step 1: Build a map of protocol classes -> their ClassVar attribute names.
+    let mut protocol_classvar_attrs: Vec<(&str, Vec<&str>)> = Vec::new();
+    for cls in &module.classes {
+        if !cls.bases.iter().any(|b| b == "Protocol") {
+            continue;
+        }
+        let cv_names: Vec<&str> = cls
+            .attributes
+            .iter()
+            .filter(|attr| {
+                span_text(source, attr.annotation_span).is_some_and(|ann| {
+                    ann.starts_with("ClassVar[")
+                        || ann.starts_with("ClassVar ")
+                        || ann == "ClassVar"
+                        || ann.starts_with("CV[")
+                        || ann == "CV"
+                })
+            })
+            .map(|attr| attr.name.as_str())
+            .collect();
+        if !cv_names.is_empty() {
+            protocol_classvar_attrs.push((&cls.name, cv_names));
+        }
+    }
+
+    if protocol_classvar_attrs.is_empty() {
+        return;
+    }
+
+    // Step 2: Build a map of non-protocol class names -> their class-level attribute names.
+    let class_level_attrs: Vec<(&str, Vec<&str>)> = module
+        .classes
+        .iter()
+        .filter(|cls| !cls.bases.iter().any(|b| b == "Protocol"))
+        .map(|cls| {
+            let attr_names: Vec<&str> = cls.attributes.iter().map(|a| a.name.as_str()).collect();
+            (cls.name.as_str(), attr_names)
+        })
+        .collect();
+
+    // Step 3: Check module-level annotated assignments like `a: ProtoName = ClassName(...)`.
+    for var in &module.module_vars {
+        // Get the annotation text (e.g. "ProtoA").
+        let Some(ann_text) = span_text(source, var.annotation_span) else {
+            continue;
+        };
+        let ann_trimmed = ann_text.trim();
+
+        // Check if the annotation names a protocol with ClassVar attrs.
+        let Some((_proto_name, required_cv_attrs)) = protocol_classvar_attrs
+            .iter()
+            .find(|(name, _)| *name == ann_trimmed)
+        else {
+            continue;
+        };
+
+        // Get the RHS text and check if it's a constructor call.
+        let Some(rhs_text) = span_text(source, var.rhs_span) else {
+            continue;
+        };
+        let rhs_trimmed = rhs_text.trim();
+
+        // Extract class name from constructor call: ClassName(...)
+        let Some(paren_idx) = rhs_trimmed.find('(') else {
+            continue;
+        };
+        let impl_class_name = rhs_trimmed[..paren_idx].trim();
+        if impl_class_name.is_empty()
+            || !impl_class_name
+                .chars()
+                .next()
+                .is_some_and(|ch| ch.is_ascii_uppercase())
+            || !impl_class_name
+                .chars()
+                .all(|ch| ch.is_alphanumeric() || ch == '_')
+        {
+            continue;
+        }
+
+        // Find the implementation class's class-level attributes.
+        let Some((_cls_name, cls_attrs)) = class_level_attrs
+            .iter()
+            .find(|(name, _)| *name == impl_class_name)
+        else {
+            continue;
+        };
+
+        // Check each required ClassVar attribute.
+        for cv_attr in required_cv_attrs {
+            if !cls_attrs.contains(cv_attr) {
+                diagnostics.push(Diagnostic {
+                    code: CODE.clone(),
+                    severity: Severity::Error,
+                    message: format!(
+                        "Class `{impl_class_name}` is not compatible with protocol \
+                         `{ann_trimmed}`: attribute `{cv_attr}` is required to be a \
+                         class variable (`ClassVar`) but is not defined at class level",
+                    ),
+                    span: var.name_span,
+                    path: path.to_owned(),
+                    help: Some(format!(
+                        "Define `{cv_attr}` as a class-level attribute in \
+                         `{impl_class_name}` instead of assigning via `self.{cv_attr}` \
+                         in `__init__`",
+                    )),
+                    note: Some(
+                        "Protocol `ClassVar` attributes must be class-level variables \
+                         in the implementation, not instance variables"
+                            .to_owned(),
+                    ),
+                });
+            }
+        }
+    }
+}
+
