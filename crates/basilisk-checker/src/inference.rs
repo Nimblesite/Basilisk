@@ -22,7 +22,15 @@ pub fn infer_rhs(rhs: &RhsKind) -> InferredType {
         RhsKind::Set(elements) => crate::collection_inference::infer_set_type(elements),
         RhsKind::Dict(pairs) => crate::collection_inference::infer_dict_type(pairs),
         RhsKind::Tuple(elements) => crate::collection_inference::infer_tuple_type(elements),
-        RhsKind::CallExpr | RhsKind::TypeCall | RhsKind::Other | RhsKind::Lambda => InferredType::Unknown,
+        RhsKind::CallExpr | RhsKind::TypeCall | RhsKind::Other => InferredType::Unknown,
+        RhsKind::Lambda => {
+            // Lambda expressions have type Callable[..., Unknown] since we don't know
+            // parameter types or return type without analyzing the lambda body
+            InferredType::Callable(crate::types::CallableInfo {
+                param_types: Vec::new(), // Empty means we don't know parameter types
+                return_type: Box::new(InferredType::Unknown),
+            })
+        }
     }
 }
 

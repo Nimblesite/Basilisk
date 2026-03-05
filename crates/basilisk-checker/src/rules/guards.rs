@@ -4,7 +4,9 @@
 //! enforcement should be suspended because the construct has well-defined PEP
 //! semantics that legitimately omit annotations.
 
-use basilisk_resolver::{ClassInfo, FunctionInfo};
+use std::collections::HashMap;
+
+use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule};
 
 /// Returns `true` when a function is in a "stub context" — a context where
 /// annotation enforcement (E0001, E0002, E0004) should be skipped.
@@ -66,4 +68,170 @@ pub(crate) fn is_protocol_class(class: &ClassInfo) -> bool {
 /// fields), so they should not require type annotations on those attributes.
 pub(crate) fn is_namedtuple_class(class: &ClassInfo) -> bool {
     class.bases.iter().any(|b| b == "NamedTuple")
+}
+
+// ---------------------------------------------------------------------------
+// dataclass_transform detection
+// ---------------------------------------------------------------------------
+
+/// Default settings extracted from a `@dataclass_transform(...)` decorator.
+#[derive(Debug, Clone)]
+pub(crate) struct TransformDefaults {
+    /// Default value of `frozen` for classes using this transform function.
+    pub frozen: bool,
+    /// Default value of `order` for classes using this transform function.
+    pub order: bool,
+}
+
+/// Effective dataclass-transform settings for a class.
+#[derive(Debug, Clone)]
+pub(crate) struct TransformClassInfo {
+    /// Whether the class is effectively frozen.
+    pub frozen: bool,
+    /// Whether the class has ordering comparisons enabled.
+    pub order: bool,
+}
+
+/// Extracts a boolean kwarg value from a parenthesised argument string.
+///
+/// Given `"frozen_default=True, order_default=True"` and key `"frozen_default"`,
+/// returns `Some(true)`.
+fn extract_bool_kwarg(args_text: &str, key: &str) -> Option<bool> {
+    let pattern = format!("{key}=");
+    let idx = args_text.find(&pattern)?;
+    let after = args_text[idx + pattern.len()..].trim_start();
+    if after.starts_with("True") {
+        Some(true)
+    } else if after.starts_with("False") {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+/// Extracts the parenthesised argument text from a decorator call.
+///
+/// Given source text and a position where the decorator name starts,
+/// finds the matching `(...)` and returns the inner text.
+fn extract_decorator_args(source: &str, decorator_name_end: usize) -> Option<&str> {
+    let rest = source.get(decorator_name_end..)?;
+    let open = rest.find('(')?;
+    let after_open = decorator_name_end + open + 1;
+    // Find matching close paren (simple: no nested parens in kwargs)
+    let close = source.get(after_open..)?.find(')')?;
+    source.get(after_open..after_open + close)
+}
+
+/// Scans functions for `@dataclass_transform(...)` decorators and returns
+/// a map from function name to its default settings.
+pub(crate) fn collect_transform_functions(module: &ResolvedModule) -> HashMap<String, TransformDefaults> {
+    let mut result = HashMap::new();
+
+    for func in &module.functions {
+        if !func.decorators.iter().any(|d| d == "dataclass_transform") {
+            continue;
+        }
+
+        // Extract the source region covering decorators + def line
+        let func_source_start = func.def_span.start as usize;
+        // Look at source from the function start to find @dataclass_transform(...)
+        let Some(search_region) = module.source.get(func_source_start..) else {
+            continue;
+        };
+
+        let marker = "@dataclass_transform";
+        let Some(marker_pos) = search_region.find(marker) else {
+            continue;
+        };
+
+        let name_end = func_source_start + marker_pos + marker.len();
+        let mut defaults = TransformDefaults {
+            frozen: false,
+            order: false,
+        };
+
+        if let Some(args_text) = extract_decorator_args(&module.source, name_end) {
+            if let Some(val) = extract_bool_kwarg(args_text, "frozen_default") {
+                defaults.frozen = val;
+            }
+            if let Some(val) = extract_bool_kwarg(args_text, "order_default") {
+                defaults.order = val;
+            }
+        }
+
+        result.insert(func.name.clone(), defaults);
+    }
+
+    result
+}
+
+/// For each class, checks if it is decorated by a `dataclass_transform` function
+/// and returns its effective settings (defaults overridden by class-level kwargs).
+pub(crate) fn collect_transform_classes(module: &ResolvedModule) -> HashMap<String, TransformClassInfo> {
+    let transform_funcs = collect_transform_functions(module);
+    if transform_funcs.is_empty() {
+        return HashMap::new();
+    }
+
+    let mut result = HashMap::new();
+
+    for cls in &module.classes {
+        // Already recognized as a standard dataclass — skip
+        if cls.is_dataclass {
+            continue;
+        }
+
+        // Look at source before the class definition to find decorators.
+        // cls.def_span covers the entire class including decorators.
+        let cls_start = cls.def_span.start as usize;
+        // Find the `class` keyword to delimit the decorator region
+        let Some(class_kw_offset) = module
+            .source
+            .get(cls_start..)
+            .and_then(|s| s.find("class "))
+        else {
+            continue;
+        };
+
+        let Some(decorator_region) =
+            module.source.get(cls_start..cls_start + class_kw_offset)
+        else {
+            continue;
+        };
+
+        // Check each transform function name against the decorator region
+        for (func_name, defaults) in &transform_funcs {
+            let at_name = format!("@{func_name}");
+            let Some(at_pos) = decorator_region.find(&at_name) else {
+                continue;
+            };
+
+            // Check character after decorator name to distinguish @create_model from @create_model_frozen
+            let after_at_name = cls_start + at_pos + at_name.len();
+            let next_char = module.source.as_bytes().get(after_at_name).copied().unwrap_or(b'\n');
+            if next_char.is_ascii_alphanumeric() || next_char == b'_' {
+                continue;
+            }
+
+            let mut info = TransformClassInfo {
+                frozen: defaults.frozen,
+                order: defaults.order,
+            };
+
+            // Check for overriding kwargs in the class decorator call
+            if let Some(args_text) = extract_decorator_args(&module.source, after_at_name) {
+                if let Some(val) = extract_bool_kwarg(args_text, "frozen") {
+                    info.frozen = val;
+                }
+                if let Some(val) = extract_bool_kwarg(args_text, "order") {
+                    info.order = val;
+                }
+            }
+
+            result.insert(cls.name.clone(), info);
+            break;
+        }
+    }
+
+    result
 }

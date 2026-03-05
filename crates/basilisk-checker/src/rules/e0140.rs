@@ -170,12 +170,26 @@ fn mk_param(param: &ast::ParameterWithDefault, is_pos_only: bool) -> ParamInfo {
 }
 
 fn check_stmts(stmts: &[Stmt], ctx: &ModuleContext, path: &str, diag: &mut Vec<Diagnostic>) {
+    let mut annotations: Vec<(String, Expr)> = Vec::new();
     for stmt in stmts {
         match stmt {
             Stmt::AnnAssign(ann) => {
+                if let Some(name) = expr_name(&ann.target) {
+                    annotations.push((name.to_owned(), (*ann.annotation).clone()));
+                }
                 if let Some(value) = &ann.value {
                     let span = Span { start: ann.range().start().to_u32(), end: ann.range().end().to_u32() };
                     check_assignment(&ann.annotation, value, ctx, path, diag, span);
+                }
+            }
+            Stmt::Assign(assign) => {
+                if assign.targets.len() == 1 {
+                    if let Some(target_name) = expr_name(&assign.targets[0]) {
+                        if let Some((_, prev_ann)) = annotations.iter().rev().find(|(n, _)| n == target_name) {
+                            let span = Span { start: assign.range().start().to_u32(), end: assign.range().end().to_u32() };
+                            check_assignment(prev_ann, &assign.value, ctx, path, diag, span);
+                        }
+                    }
                 }
             }
             Stmt::FunctionDef(func) => check_stmts_in_func(&func.body, ctx, path, diag),

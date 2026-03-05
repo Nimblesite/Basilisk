@@ -38,10 +38,20 @@ pub(crate) struct FrozenDataclassAssignment;
 
 impl Rule for FrozenDataclassAssignment {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+        let transform_classes = super::guards::collect_transform_classes(module);
+
         let class_frozen: HashMap<&str, (bool, bool)> = module
             .classes
             .iter()
-            .map(|c| (c.name.as_str(), (c.is_dataclass, c.is_dataclass_frozen)))
+            .map(|c| {
+                let is_dc = c.is_dataclass
+                    || transform_classes.contains_key(c.name.as_str());
+                let is_frozen = c.is_dataclass_frozen
+                    || transform_classes
+                        .get(c.name.as_str())
+                        .is_some_and(|info| info.frozen);
+                (c.name.as_str(), (is_dc, is_frozen))
+            })
             .collect();
 
         check_inheritance(&class_frozen, module, diagnostics);
@@ -113,12 +123,21 @@ fn check_frozen_instance_assigns(module: &ResolvedModule, diagnostics: &mut Vec<
     let source = &module.source;
     let path = &module.path;
 
-    let frozen_classes: HashSet<&str> = module
+    let transform_classes = super::guards::collect_transform_classes(module);
+
+    let mut frozen_classes: HashSet<&str> = module
         .classes
         .iter()
         .filter(|c| c.is_dataclass_frozen)
         .map(|c| c.name.as_str())
         .collect();
+
+    // Also include dataclass_transform classes that are frozen
+    for (name, info) in &transform_classes {
+        if info.frozen {
+            frozen_classes.insert(name.as_str());
+        }
+    }
 
     if frozen_classes.is_empty() {
         return;

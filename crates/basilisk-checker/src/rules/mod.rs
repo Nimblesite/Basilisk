@@ -131,8 +131,21 @@ pub(crate) mod e0130;
 pub(crate) mod e0131;
 pub(crate) mod e0132;
 pub(crate) mod e0133;
+pub(crate) mod e0134;
+pub(crate) mod e0136;
+pub(crate) mod e0137;
+pub(crate) mod e0138;
+pub(crate) mod e0139;
 pub(crate) mod e0140;
 pub(crate) mod e0141;
+pub(crate) mod e0142;
+pub(crate) mod e0143;
+pub(crate) mod e0144;
+pub(crate) mod e0145;
+pub(crate) mod e0146;
+pub(crate) mod e0147;
+pub(crate) mod e0148;
+pub(crate) mod e0149;
 pub(crate) mod guards;
 pub(crate) mod w0040;
 pub(crate) mod w0050;
@@ -278,8 +291,21 @@ pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
         &e0131::GeneratorTypeMismatch,
         &e0132::InconsistentTypeVarOrder,
         &e0133::ProtocolVarianceMismatch,
+        &e0134::InvariantGenericArgMismatch,
+        &e0136::CallableSubtypingViolation,
+        &e0137::GenericProtocolViolation,
+        &e0138::DataclassTransformMetaViolation,
+        &e0139::TypeVarTupleSpecializationViolation,
         &e0140::CallableAssignmentViolation,
         &e0141::UnpackKwargsViolation,
+        &e0142::DataclassTransformClassViolation,
+        &e0143::NamedTupleUsageViolation,
+        &e0144::TypeCallConstructorViolation,
+        &e0145::TypeBracketViolation,
+        &e0146::ProtocolClassObjectViolation,
+        &e0147::TupleStarredUnpackCompatibility,
+        &e0148::GenericTypeArgViolation,
+        &e0149::Pep695TypeParamScopingViolation,
         &w0040::LambdaMissingAnnotations,
         &w0050::RedundantAnnotationWarning,
     ];

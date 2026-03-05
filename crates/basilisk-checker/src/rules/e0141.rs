@@ -43,7 +43,7 @@ struct KwargsContext {
 
 impl KwargsContext {
     fn from_ast(stmts: &[Stmt]) -> Self {
-        let mut typeddict_keys = Vec::new();
+        let mut typeddict_keys: Vec<(String, Vec<String>)> = Vec::new();
         let mut typevar_names = Vec::new();
         for stmt in stmts {
             match stmt {

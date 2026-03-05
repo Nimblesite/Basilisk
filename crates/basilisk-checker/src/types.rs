@@ -225,6 +225,50 @@ impl InferredType {
             (InferredType::Tuple(a), InferredType::Tuple(b)) => {
                 a.len() == b.len() && a.iter().zip(b.iter()).all(|(a_elem, b_elem)| a_elem.is_assignable_to(b_elem))
             }
+            // Callable type assignability
+            (InferredType::Callable(a), InferredType::Callable(b)) => {
+                // Check return type compatibility (covariant - source return must be assignable to target return)
+                // Special case: if source return type is Unknown, we can't verify compatibility
+                // This happens with lambda expressions where we can't infer the return type
+                // We should be conservative and return false unless target return type is Any or Unknown
+                match (&*a.return_type, &*b.return_type) {
+                    (InferredType::Unknown, _) if !matches!(&*b.return_type, InferredType::Any | InferredType::Unknown) => {
+                        // Source has unknown return type, target has known return type
+                        // This is unsafe - we don't know if they're compatible
+                        return false;
+                    }
+                    _ => {
+                        if !a.return_type.is_assignable_to(&b.return_type) {
+                            return false;
+                        }
+                    }
+                }
+                
+                // Handle ellipsis/arbitrary parameters (empty param_types means `...`)
+                if a.param_types.is_empty() || b.param_types.is_empty() {
+                    // If target accepts arbitrary parameters (`...`), any callable is assignable
+                    // If source has arbitrary parameters, it can only be assigned to target with arbitrary parameters
+                    // or if target has specific parameter types that match the source's capabilities
+                    // For now, we allow if either has empty param_types (simplified)
+                    return true;
+                }
+                
+                // Check parameter count
+                if a.param_types.len() != b.param_types.len() {
+                    return false;
+                }
+                
+                // Check parameter type compatibility (contravariant - target param must be assignable to source param)
+                for (source_param, target_param) in a.param_types.iter().zip(b.param_types.iter()) {
+                    if !target_param.is_assignable_to(source_param) {
+                        return false;
+                    }
+                }
+                
+                true
+            }
+            // Any can be assigned to Callable (unsafe but allowed by typing)
+            (_, InferredType::Callable(_)) if matches!(self, InferredType::Any) => true,
             _ => false,
         }
     }

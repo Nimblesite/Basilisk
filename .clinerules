@@ -1,5 +1,10 @@
 # CLAUDE.md
 
+DO NOT USE GIT! STOP USIUNG GIT IMMEDIATELY!
+DO NOT USE WORKSTREES!! WORK IN THE CURRENT BRANCH!
+
+PULL ALL CHANGES INTO THE aider BRANCH NOW!!!
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 We are shooting for 100% PEP conformance. The conformance test suite requires **Python 3.12** — this is the canonical target version for the entire project. Read the PEP conformance readme carefully.

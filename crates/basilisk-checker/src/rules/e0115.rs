@@ -15,7 +15,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use ruff_python_ast::{Expr, Stmt};
+use ruff_python_ast::{Expr, Operator, Stmt};
 use ruff_text_size::Ranged;
 
 use basilisk_resolver::{ResolvedModule, Span};
@@ -48,12 +48,29 @@ impl Rule for DeprecatedUsage {
         let mut imported_deprecated: HashMap<String, DeprecatedInfo> = HashMap::new();
         // Also track module aliases: `import X as alias` -> alias maps to module X
         let mut module_aliases: HashMap<String, String> = HashMap::new();
+        // Track deprecated from-imports with their spans (for import-site diagnostics).
+        let mut from_import_deprecated: Vec<(String, Span)> = Vec::new();
         collect_imported_deprecated(
             &parsed.ast.body,
             &module.path,
             &mut imported_deprecated,
             &mut module_aliases,
+            &mut from_import_deprecated,
         );
+
+        // Emit diagnostics for deprecated from-imports (e.g. `from X import Ham`).
+        // PEP 702 requires a diagnostic at the import site when a deprecated name is imported.
+        for (local_name, span) in &from_import_deprecated {
+            if let Some(info) = imported_deprecated.get(local_name.as_str()) {
+                diagnostics.push(make_diagnostic(
+                    *span,
+                    &info.kind,
+                    local_name,
+                    info.message.as_deref(),
+                    &module.path,
+                ));
+            }
+        }
 
         // Merge all deprecated names.
         let mut all_deprecated = local_deprecated;
@@ -71,15 +88,26 @@ impl Rule for DeprecatedUsage {
             &module.path,
         );
 
+        // Build a variable-to-type map from simple assignments, e.g.:
+        //   spam = library.Spam()   -> spam -> VarType { module_alias: "library", class_name: "Spam" }
+        //   invocable = Invocable() -> invocable -> VarType { module_alias: "", class_name: "Invocable" }
+        let var_types = collect_var_types(&parsed.ast.body);
+
         // Walk the AST to find usages of deprecated names.
-        collect_usage_violations(
-            &parsed.ast.body,
-            &all_deprecated,
-            &module_aliases,
-            &deprecated_members,
-            &module.path,
-            diagnostics,
-        );
+        let def_spans: HashSet<u32> =
+            all_deprecated.values().map(|info| info.def_span.start).collect();
+        for stmt in &parsed.ast.body {
+            visit_stmt_for_usage(
+                stmt,
+                &all_deprecated,
+                &module_aliases,
+                &deprecated_members,
+                &var_types,
+                &module.path,
+                diagnostics,
+                &def_spans,
+            );
+        }
     }
 }
 
@@ -94,15 +122,13 @@ struct DeprecatedInfo {
     def_span: Span,
 }
 
-/// Info about deprecated members of imported classes.
+/// Inferred type of a variable assigned to a class constructor call.
 #[derive(Debug, Clone)]
-struct DeprecatedMemberInfo {
-    /// The class the member belongs to.
+struct VarType {
+    /// Module alias used to access the class (e.g. "library"), or "" for a local class.
+    module_alias: String,
+    /// The class name (e.g. "Spam" or "Invocable").
     class_name: String,
-    /// The member name.
-    member_name: String,
-    /// The kind: "method", "property", "property setter".
-    kind: String,
 }
 
 fn text_range_to_span(range: ruff_text_size::TextRange) -> Span {
@@ -166,8 +192,7 @@ fn collect_deprecated_definitions(
                     if let Some(message) = is_deprecated_decorator(&dec.expression) {
                         let kind = if has_overload {
                             "overload".to_owned()
-                        } else if let Some(cls) = class_name {
-                            // Check if this is a property
+                        } else if class_name.is_some() {
                             let has_property = func.decorator_list.iter().any(|d| {
                                 matches!(&d.expression, Expr::Name(n) if n.id.as_str() == "property")
                             });
@@ -231,11 +256,15 @@ fn collect_deprecated_definitions(
 }
 
 /// Collect deprecated names imported from sibling modules.
+///
+/// Also populates `from_import_deprecated` with `(local_name, import_span)` pairs so
+/// that a diagnostic can be emitted at the import site itself (PEP 702 requirement).
 fn collect_imported_deprecated(
     stmts: &[Stmt],
     module_path: &str,
     out: &mut HashMap<String, DeprecatedInfo>,
     module_aliases: &mut HashMap<String, String>,
+    from_import_deprecated: &mut Vec<(String, Span)>,
 ) {
     let Some(module_dir) = std::path::Path::new(module_path).parent() else {
         return;
@@ -273,7 +302,10 @@ fn collect_imported_deprecated(
                         let local_name = alias
                             .asname
                             .as_ref()
-                            .map_or_else(|| name.to_owned(), |a| a.to_string());
+                            .map_or_else(|| name.to_owned(), std::string::ToString::to_string);
+                        // Record the import site span so we can emit a diagnostic there.
+                        let import_span = text_range_to_span(import_from.range());
+                        from_import_deprecated.push((local_name.clone(), import_span));
                         out.insert(local_name, info.clone());
                     }
                 }
@@ -282,11 +314,9 @@ fn collect_imported_deprecated(
                 for alias in &import_stmt.names {
                     let module_str = alias.name.to_string();
                     if let Some(asname) = alias.asname.as_ref() {
-                        module_aliases
-                            .insert(asname.to_string(), module_str);
+                        module_aliases.insert(asname.to_string(), module_str);
                     } else {
-                        module_aliases
-                            .insert(module_str.clone(), module_str);
+                        module_aliases.insert(module_str.clone(), module_str);
                     }
                 }
             }
@@ -297,9 +327,8 @@ fn collect_imported_deprecated(
 
 /// Collect deprecated members from imported module classes.
 ///
-/// Returns a map from (module_alias, member_path) -> `DeprecatedMemberInfo`.
-/// For `library.norwegian_blue(1)`, this maps ("library", "norwegian_blue") -> info.
-/// For `library.Spam().__add__`, this maps ("library", "Spam.__add__") -> info.
+/// Returns a map: module_alias -> member_key -> `DeprecatedInfo`.
+/// Member keys look like "norwegian_blue" (top-level) or "Spam.__add__" (class member).
 fn collect_imported_deprecated_members(
     stmts: &[Stmt],
     module_path: &str,
@@ -310,74 +339,207 @@ fn collect_imported_deprecated_members(
     };
 
     for stmt in stmts {
-        // Handle `import X as alias`
-        let module_str = match stmt {
-            Stmt::Import(import_stmt) => {
-                for alias in &import_stmt.names {
-                    let module_str = alias.name.to_string();
-                    if module_str.contains('.') {
-                        continue;
-                    }
-                    let alias_name = alias
-                        .asname
-                        .as_ref()
-                        .map_or_else(|| module_str.clone(), |a| a.to_string());
-                    let sibling_path = module_dir.join(format!("{module_str}.py"));
-                    let Some(sibling_path_str) = sibling_path.to_str() else {
-                        continue;
-                    };
-                    let Ok(sibling) = basilisk_parser::parse_file(sibling_path_str) else {
-                        continue;
-                    };
-                    let mut sibling_deprecated: HashMap<String, DeprecatedInfo> = HashMap::new();
-                    collect_deprecated_definitions(
-                        &sibling.ast.body,
-                        &mut sibling_deprecated,
-                        None,
-                    );
-                    if !sibling_deprecated.is_empty() {
-                        result.insert(alias_name, sibling_deprecated);
-                    }
+        if let Stmt::Import(import_stmt) = stmt {
+            for alias in &import_stmt.names {
+                let module_str = alias.name.to_string();
+                if module_str.contains('.') {
+                    continue;
                 }
-                continue;
+                let alias_name = alias
+                    .asname
+                    .as_ref()
+                    .map_or_else(|| module_str.clone(), std::string::ToString::to_string);
+                let sibling_path = module_dir.join(format!("{module_str}.py"));
+                let Some(sibling_path_str) = sibling_path.to_str() else {
+                    continue;
+                };
+                let Ok(sibling) = basilisk_parser::parse_file(sibling_path_str) else {
+                    continue;
+                };
+                let mut sibling_deprecated: HashMap<String, DeprecatedInfo> = HashMap::new();
+                collect_deprecated_definitions(
+                    &sibling.ast.body,
+                    &mut sibling_deprecated,
+                    None,
+                );
+                if !sibling_deprecated.is_empty() {
+                    result.insert(alias_name, sibling_deprecated);
+                }
             }
-            _ => continue,
-        };
+        }
     }
     result
 }
 
-/// Walk the AST to find usages of deprecated names and emit diagnostics.
-#[allow(clippy::too_many_lines)]
-fn collect_usage_violations(
-    stmts: &[Stmt],
-    deprecated: &HashMap<String, DeprecatedInfo>,
-    module_aliases: &HashMap<String, String>,
-    deprecated_members: &HashMap<String, HashMap<String, DeprecatedInfo>>,
-    path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    // Collect all deprecated definition spans so we skip diagnostics inside them.
-    let def_spans: HashSet<u32> = deprecated.values().map(|info| info.def_span.start).collect();
+/// Build a map from variable name to inferred class type by scanning simple assignments.
+///
+/// Handles:
+/// - `spam = library.Spam()` -> spam: VarType { module_alias: "library", class_name: "Spam" }
+/// - `invocable = Invocable()` -> invocable: VarType { module_alias: "", class_name: "Invocable" }
+fn collect_var_types(stmts: &[Stmt]) -> HashMap<String, VarType> {
+    let mut var_types: HashMap<String, VarType> = HashMap::new();
+    collect_var_types_from_stmts(stmts, &mut var_types);
+    var_types
+}
 
+fn collect_var_types_from_stmts(stmts: &[Stmt], var_types: &mut HashMap<String, VarType>) {
     for stmt in stmts {
-        visit_stmt_for_usage(stmt, deprecated, module_aliases, deprecated_members, path, diagnostics, &def_spans);
+        match stmt {
+            Stmt::Assign(assign) => {
+                if let Some(var_type) = infer_call_type(&assign.value) {
+                    for target in &assign.targets {
+                        if let Expr::Name(name) = target {
+                            var_types.insert(name.id.to_string(), var_type.clone());
+                        }
+                    }
+                }
+            }
+            Stmt::FunctionDef(func) => {
+                collect_var_types_from_stmts(&func.body, var_types);
+            }
+            Stmt::ClassDef(cls) => {
+                collect_var_types_from_stmts(&cls.body, var_types);
+            }
+            _ => {}
+        }
     }
 }
 
-/// Check if a span is inside a deprecated definition (to avoid self-reports).
-fn is_inside_def(span_start: u32, def_spans: &HashSet<u32>, stmt: &Stmt) -> bool {
-    // We rely on the fact that usage within the definition body should not be flagged
-    // (the definition itself is not a "usage"). We handle this by checking statement context.
-    false
+/// Infer the class type from a constructor call expression.
+fn infer_call_type(expr: &Expr) -> Option<VarType> {
+    if let Expr::Call(call) = expr {
+        match call.func.as_ref() {
+            Expr::Name(name) => {
+                return Some(VarType {
+                    module_alias: String::new(),
+                    class_name: name.id.to_string(),
+                });
+            }
+            Expr::Attribute(attr) => {
+                if let Expr::Name(obj) = attr.value.as_ref() {
+                    return Some(VarType {
+                        module_alias: obj.id.to_string(),
+                        class_name: attr.attr.to_string(),
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Map a binary/augmented operator to its dunder method name.
+fn op_to_dunder(op: Operator) -> &'static str {
+    match op {
+        Operator::Add => "__add__",
+        Operator::Sub => "__sub__",
+        Operator::Mult => "__mul__",
+        Operator::Div => "__truediv__",
+        Operator::Mod => "__mod__",
+        Operator::Pow => "__pow__",
+        Operator::LShift => "__lshift__",
+        Operator::RShift => "__rshift__",
+        Operator::BitOr => "__or__",
+        Operator::BitXor => "__xor__",
+        Operator::BitAnd => "__and__",
+        Operator::FloorDiv => "__floordiv__",
+        Operator::MatMult => "__matmul__",
+    }
+}
+
+/// Check if a dunder method on a given inferred type is deprecated; emit a diagnostic if so.
+fn check_dunder_deprecated_on_type(
+    var_type: &VarType,
+    dunder: &str,
+    deprecated: &HashMap<String, DeprecatedInfo>,
+    deprecated_members: &HashMap<String, HashMap<String, DeprecatedInfo>>,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+    span: Span,
+) {
+    let class_member_key = format!("{}.{}", var_type.class_name, dunder);
+
+    // Check deprecated members from an imported module.
+    if !var_type.module_alias.is_empty() {
+        if let Some(members) = deprecated_members.get(&var_type.module_alias) {
+            if let Some(info) = members.get(&class_member_key) {
+                diagnostics.push(make_diagnostic(
+                    span,
+                    &info.kind,
+                    &class_member_key,
+                    info.message.as_deref(),
+                    path,
+                ));
+                return;
+            }
+        }
+    }
+
+    // Check locally-defined deprecated members.
+    if let Some(info) = deprecated.get(&class_member_key) {
+        diagnostics.push(make_diagnostic(
+            span,
+            &info.kind,
+            &class_member_key,
+            info.message.as_deref(),
+            path,
+        ));
+    }
+}
+
+/// Check if a property setter on a given inferred type is deprecated; emit a diagnostic if so.
+fn check_setter_deprecated_on_type(
+    var_type: &VarType,
+    member_name: &str,
+    deprecated: &HashMap<String, DeprecatedInfo>,
+    deprecated_members: &HashMap<String, HashMap<String, DeprecatedInfo>>,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+    span: Span,
+) {
+    let class_member_key = format!("{}.{}", var_type.class_name, member_name);
+
+    // Check deprecated members from an imported module.
+    if !var_type.module_alias.is_empty() {
+        if let Some(members) = deprecated_members.get(&var_type.module_alias) {
+            if let Some(info) = members.get(&class_member_key) {
+                if info.kind == "property setter" {
+                    diagnostics.push(make_diagnostic(
+                        span,
+                        &info.kind,
+                        &class_member_key,
+                        info.message.as_deref(),
+                        path,
+                    ));
+                    return;
+                }
+            }
+        }
+    }
+
+    // Check locally-defined deprecated members.
+    if let Some(info) = deprecated.get(&class_member_key) {
+        if info.kind == "property setter" {
+            diagnostics.push(make_diagnostic(
+                span,
+                &info.kind,
+                &class_member_key,
+                info.message.as_deref(),
+                path,
+            ));
+        }
+    }
 }
 
 /// Visit a statement looking for deprecated name usages.
+#[allow(clippy::too_many_lines)]
 fn visit_stmt_for_usage(
     stmt: &Stmt,
     deprecated: &HashMap<String, DeprecatedInfo>,
     module_aliases: &HashMap<String, String>,
     deprecated_members: &HashMap<String, HashMap<String, DeprecatedInfo>>,
+    var_types: &HashMap<String, VarType>,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
     def_spans: &HashSet<u32>,
@@ -389,6 +551,7 @@ fn visit_stmt_for_usage(
                 deprecated,
                 module_aliases,
                 deprecated_members,
+                var_types,
                 path,
                 diagnostics,
             );
@@ -399,36 +562,42 @@ fn visit_stmt_for_usage(
                 deprecated,
                 module_aliases,
                 deprecated_members,
+                var_types,
                 path,
                 diagnostics,
             );
             for target in &assign.targets {
-                visit_expr_for_usage(
+                // Check for deprecated property setter via assignment target (e.g. `spam.shape = ...`).
+                check_assignment_target_deprecated(
                     target,
                     deprecated,
-                    module_aliases,
                     deprecated_members,
+                    var_types,
                     path,
                     diagnostics,
                 );
             }
         }
         Stmt::AugAssign(aug) => {
+            // `spam += 1` triggers __add__; `spam.shape += "cube"` triggers property setter.
             visit_expr_for_usage(
                 &aug.value,
                 deprecated,
                 module_aliases,
                 deprecated_members,
+                var_types,
                 path,
                 diagnostics,
             );
-            visit_expr_for_usage(
+            check_aug_assign_deprecated(
                 &aug.target,
+                aug.op,
                 deprecated,
-                module_aliases,
                 deprecated_members,
+                var_types,
                 path,
                 diagnostics,
+                text_range_to_span(aug.range()),
             );
         }
         Stmt::AnnAssign(ann) => {
@@ -438,6 +607,7 @@ fn visit_stmt_for_usage(
                     deprecated,
                     module_aliases,
                     deprecated_members,
+                    var_types,
                     path,
                     diagnostics,
                 );
@@ -450,20 +620,20 @@ fn visit_stmt_for_usage(
                     deprecated,
                     module_aliases,
                     deprecated_members,
+                    var_types,
                     path,
                     diagnostics,
                 );
             }
         }
         Stmt::FunctionDef(func) => {
-            // Don't flag usages inside the function's own decorators — those define the deprecation.
-            // But DO recurse into the body.
             for body_stmt in &func.body {
                 visit_stmt_for_usage(
                     body_stmt,
                     deprecated,
                     module_aliases,
                     deprecated_members,
+                    var_types,
                     path,
                     diagnostics,
                     def_spans,
@@ -477,6 +647,7 @@ fn visit_stmt_for_usage(
                     deprecated,
                     module_aliases,
                     deprecated_members,
+                    var_types,
                     path,
                     diagnostics,
                     def_spans,
@@ -489,6 +660,7 @@ fn visit_stmt_for_usage(
                 deprecated,
                 module_aliases,
                 deprecated_members,
+                var_types,
                 path,
                 diagnostics,
             );
@@ -498,6 +670,7 @@ fn visit_stmt_for_usage(
                     deprecated,
                     module_aliases,
                     deprecated_members,
+                    var_types,
                     path,
                     diagnostics,
                     def_spans,
@@ -510,6 +683,7 @@ fn visit_stmt_for_usage(
                         deprecated,
                         module_aliases,
                         deprecated_members,
+                        var_types,
                         path,
                         diagnostics,
                         def_spans,
@@ -523,6 +697,7 @@ fn visit_stmt_for_usage(
                 deprecated,
                 module_aliases,
                 deprecated_members,
+                var_types,
                 path,
                 diagnostics,
             );
@@ -532,6 +707,7 @@ fn visit_stmt_for_usage(
                     deprecated,
                     module_aliases,
                     deprecated_members,
+                    var_types,
                     path,
                     diagnostics,
                     def_spans,
@@ -544,6 +720,7 @@ fn visit_stmt_for_usage(
                 deprecated,
                 module_aliases,
                 deprecated_members,
+                var_types,
                 path,
                 diagnostics,
             );
@@ -553,6 +730,7 @@ fn visit_stmt_for_usage(
                     deprecated,
                     module_aliases,
                     deprecated_members,
+                    var_types,
                     path,
                     diagnostics,
                     def_spans,
@@ -563,17 +741,102 @@ fn visit_stmt_for_usage(
     }
 }
 
+/// Check if an assignment target accesses a deprecated property setter.
+///
+/// Handles `spam.shape = "cube"` where `spam` has been inferred as type `Spam`.
+fn check_assignment_target_deprecated(
+    target: &Expr,
+    deprecated: &HashMap<String, DeprecatedInfo>,
+    deprecated_members: &HashMap<String, HashMap<String, DeprecatedInfo>>,
+    var_types: &HashMap<String, VarType>,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    if let Expr::Attribute(attr) = target {
+        let member_name = attr.attr.as_str();
+        if let Expr::Name(obj_name) = attr.value.as_ref() {
+            let var_name = obj_name.id.as_str();
+            if let Some(var_type) = var_types.get(var_name) {
+                let span = text_range_to_span(target.range());
+                check_setter_deprecated_on_type(
+                    var_type,
+                    member_name,
+                    deprecated,
+                    deprecated_members,
+                    path,
+                    diagnostics,
+                    span,
+                );
+            }
+        }
+    }
+}
+
+/// Check augmented assignment for deprecated usage.
+///
+/// - `spam += 1` triggers the deprecated `__add__` method on `spam`'s type.
+/// - `spam.shape += "cube"` triggers the deprecated property setter.
+#[allow(clippy::too_many_arguments)]
+fn check_aug_assign_deprecated(
+    target: &Expr,
+    op: Operator,
+    deprecated: &HashMap<String, DeprecatedInfo>,
+    deprecated_members: &HashMap<String, HashMap<String, DeprecatedInfo>>,
+    var_types: &HashMap<String, VarType>,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+    span: Span,
+) {
+    match target {
+        Expr::Name(name) => {
+            let var_name = name.id.as_str();
+            if let Some(var_type) = var_types.get(var_name) {
+                let dunder = op_to_dunder(op);
+                check_dunder_deprecated_on_type(
+                    var_type,
+                    dunder,
+                    deprecated,
+                    deprecated_members,
+                    path,
+                    diagnostics,
+                    span,
+                );
+            }
+        }
+        Expr::Attribute(attr) => {
+            let member_name = attr.attr.as_str();
+            if let Expr::Name(obj_name) = attr.value.as_ref() {
+                let var_name = obj_name.id.as_str();
+                if let Some(var_type) = var_types.get(var_name) {
+                    check_setter_deprecated_on_type(
+                        var_type,
+                        member_name,
+                        deprecated,
+                        deprecated_members,
+                        path,
+                        diagnostics,
+                        span,
+                    );
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
 /// Visit an expression to find deprecated name usages.
+#[allow(clippy::too_many_lines)]
 fn visit_expr_for_usage(
     expr: &Expr,
     deprecated: &HashMap<String, DeprecatedInfo>,
     module_aliases: &HashMap<String, String>,
     deprecated_members: &HashMap<String, HashMap<String, DeprecatedInfo>>,
+    var_types: &HashMap<String, VarType>,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     match expr {
-        // Direct name reference: `lorem()` or just `lorem`
+        // Direct name reference: `lorem` or as the callee of `lorem()`
         Expr::Name(name) => {
             if let Some(info) = deprecated.get(name.id.as_str()) {
                 diagnostics.push(make_diagnostic(
@@ -585,12 +848,12 @@ fn visit_expr_for_usage(
                 ));
             }
         }
-        // Function/method call: `lorem()`, `library.norwegian_blue(1)`, `invocable()`
+        // Function/method call
         Expr::Call(call) => {
-            // Check if the callee itself is deprecated (but avoid double-reporting for Name).
             match call.func.as_ref() {
                 Expr::Name(name) => {
                     if let Some(info) = deprecated.get(name.id.as_str()) {
+                        // Deprecated function/class called directly.
                         diagnostics.push(make_diagnostic(
                             text_range_to_span(call.range()),
                             &info.kind,
@@ -598,19 +861,71 @@ fn visit_expr_for_usage(
                             info.message.as_deref(),
                             path,
                         ));
+                    } else {
+                        // Check if calling an instance whose class has a deprecated __call__.
+                        let var_name = name.id.as_str();
+                        if let Some(var_type) = var_types.get(var_name) {
+                            check_dunder_deprecated_on_type(
+                                var_type,
+                                "__call__",
+                                deprecated,
+                                deprecated_members,
+                                path,
+                                diagnostics,
+                                text_range_to_span(call.range()),
+                            );
+                        }
                     }
                 }
                 Expr::Attribute(attr) => {
-                    // `library.norwegian_blue(1)` or `f.foo()`
-                    check_attribute_deprecated(
-                        attr,
-                        deprecated,
-                        module_aliases,
-                        deprecated_members,
-                        path,
-                        diagnostics,
-                        Some(text_range_to_span(call.range())),
-                    );
+                    // Attribute-style call: `library.func()`, `spam.method()`, `f.foo()`
+                    let mut handled = false;
+                    if let Expr::Name(obj_name) = attr.value.as_ref() {
+                        let var_name = obj_name.id.as_str();
+                        let member_name = attr.attr.as_str();
+                        if let Some(var_type) = var_types.get(var_name) {
+                            // Instance method call: look up ClassName.method.
+                            let key = format!("{}.{}", var_type.class_name, member_name);
+                            if !var_type.module_alias.is_empty() {
+                                if let Some(members) = deprecated_members.get(&var_type.module_alias) {
+                                    if let Some(info) = members.get(&key) {
+                                        diagnostics.push(make_diagnostic(
+                                            text_range_to_span(call.range()),
+                                            &info.kind,
+                                            member_name,
+                                            info.message.as_deref(),
+                                            path,
+                                        ));
+                                        handled = true;
+                                    }
+                                }
+                            }
+                            if !handled {
+                                if let Some(info) = deprecated.get(&key) {
+                                    diagnostics.push(make_diagnostic(
+                                        text_range_to_span(call.range()),
+                                        &info.kind,
+                                        member_name,
+                                        info.message.as_deref(),
+                                        path,
+                                    ));
+                                    handled = true;
+                                }
+                            }
+                        }
+                    }
+                    if !handled {
+                        check_attribute_deprecated(
+                            attr,
+                            deprecated,
+                            module_aliases,
+                            deprecated_members,
+                            var_types,
+                            path,
+                            diagnostics,
+                            Some(text_range_to_span(call.range())),
+                        );
+                    }
                 }
                 _ => {
                     visit_expr_for_usage(
@@ -618,18 +933,20 @@ fn visit_expr_for_usage(
                         deprecated,
                         module_aliases,
                         deprecated_members,
+                        var_types,
                         path,
                         diagnostics,
                     );
                 }
             }
-            // Visit arguments.
+            // Visit call arguments.
             for arg in &call.arguments.args {
                 visit_expr_for_usage(
                     arg,
                     deprecated,
                     module_aliases,
                     deprecated_members,
+                    var_types,
                     path,
                     diagnostics,
                 );
@@ -637,23 +954,67 @@ fn visit_expr_for_usage(
         }
         // Attribute access: `spam.greasy`, `library.norwegian_blue`
         Expr::Attribute(attr) => {
-            check_attribute_deprecated(
-                attr,
-                deprecated,
-                module_aliases,
-                deprecated_members,
-                path,
-                diagnostics,
-                None,
-            );
+            // Check for deprecated property/method access on an inferred-type variable.
+            let mut handled = false;
+            if let Expr::Name(obj_name) = attr.value.as_ref() {
+                let var_name = obj_name.id.as_str();
+                let member_name = attr.attr.as_str();
+                if let Some(var_type) = var_types.get(var_name) {
+                    let key = format!("{}.{}", var_type.class_name, member_name);
+                    // Only flag property getters or methods here; setters are handled on assignment.
+                    if !var_type.module_alias.is_empty() {
+                        if let Some(members) = deprecated_members.get(&var_type.module_alias) {
+                            if let Some(info) = members.get(&key) {
+                                if info.kind == "property" || info.kind == "method" {
+                                    diagnostics.push(make_diagnostic(
+                                        text_range_to_span(attr.range()),
+                                        &info.kind,
+                                        &key,
+                                        info.message.as_deref(),
+                                        path,
+                                    ));
+                                    handled = true;
+                                }
+                            }
+                        }
+                    }
+                    if !handled {
+                        if let Some(info) = deprecated.get(&key) {
+                            if info.kind == "property" || info.kind == "method" {
+                                diagnostics.push(make_diagnostic(
+                                    text_range_to_span(attr.range()),
+                                    &info.kind,
+                                    &key,
+                                    info.message.as_deref(),
+                                    path,
+                                ));
+                                handled = true;
+                            }
+                        }
+                    }
+                }
+            }
+            if !handled {
+                check_attribute_deprecated(
+                    attr,
+                    deprecated,
+                    module_aliases,
+                    deprecated_members,
+                    var_types,
+                    path,
+                    diagnostics,
+                    None,
+                );
+            }
         }
         // Binary operations: `spam + 1` triggers `__add__`
         Expr::BinOp(binop) => {
-            // Check if the left operand is an instance of a class with a deprecated dunder.
             check_binop_deprecated(
                 &binop.left,
-                &binop.op,
+                binop.op,
                 deprecated,
+                deprecated_members,
+                var_types,
                 path,
                 diagnostics,
                 text_range_to_span(binop.range()),
@@ -663,6 +1024,7 @@ fn visit_expr_for_usage(
                 deprecated,
                 module_aliases,
                 deprecated_members,
+                var_types,
                 path,
                 diagnostics,
             );
@@ -671,31 +1033,49 @@ fn visit_expr_for_usage(
                 deprecated,
                 module_aliases,
                 deprecated_members,
+                var_types,
                 path,
                 diagnostics,
             );
         }
-        // Tuple, list, set, etc.
         Expr::Tuple(t) => {
             for elt in &t.elts {
-                visit_expr_for_usage(elt, deprecated, module_aliases, deprecated_members, path, diagnostics);
+                visit_expr_for_usage(
+                    elt,
+                    deprecated,
+                    module_aliases,
+                    deprecated_members,
+                    var_types,
+                    path,
+                    diagnostics,
+                );
             }
         }
         Expr::List(l) => {
             for elt in &l.elts {
-                visit_expr_for_usage(elt, deprecated, module_aliases, deprecated_members, path, diagnostics);
+                visit_expr_for_usage(
+                    elt,
+                    deprecated,
+                    module_aliases,
+                    deprecated_members,
+                    var_types,
+                    path,
+                    diagnostics,
+                );
             }
         }
         _ => {}
     }
 }
 
-/// Check if an attribute access refers to a deprecated member.
+/// Check if an attribute access refers to a deprecated member (module-level or qualified).
+#[allow(clippy::too_many_arguments)]
 fn check_attribute_deprecated(
     attr: &ruff_python_ast::ExprAttribute,
     deprecated: &HashMap<String, DeprecatedInfo>,
     module_aliases: &HashMap<String, String>,
     deprecated_members: &HashMap<String, HashMap<String, DeprecatedInfo>>,
+    var_types: &HashMap<String, VarType>,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
     call_span: Option<Span>,
@@ -703,13 +1083,11 @@ fn check_attribute_deprecated(
     let member_name = attr.attr.as_str();
     let span = call_span.unwrap_or_else(|| text_range_to_span(attr.range()));
 
-    // Case 1: `library.func_name` where `library` is a module alias
     if let Expr::Name(value_name) = attr.value.as_ref() {
         let alias = value_name.id.as_str();
 
-        // Check if this is a module alias with deprecated members
+        // Case 1: `library.func_name` where `library` is a module alias with deprecated members.
         if let Some(members) = deprecated_members.get(alias) {
-            // Direct function/class: `library.norwegian_blue`
             if let Some(info) = members.get(member_name) {
                 diagnostics.push(make_diagnostic(
                     span,
@@ -722,10 +1100,7 @@ fn check_attribute_deprecated(
             }
         }
 
-        // Check local deprecated qualified names: `ClassName.method`
-        // e.g. for `f.foo()` where `foo` is deprecated on the protocol
-        // We need to check if the type of `f` has a deprecated `foo`.
-        // This requires type info we may not have. For now, check direct class-qualified names.
+        // Case 2: local qualified name like `ClassName.method` matches a deprecated key directly.
         let qualified = format!("{alias}.{member_name}");
         if let Some(info) = deprecated.get(&qualified) {
             diagnostics.push(make_diagnostic(
@@ -737,51 +1112,74 @@ fn check_attribute_deprecated(
             ));
             return;
         }
-    }
 
-    // Recurse into the value expression.
-    visit_expr_for_usage(
-        attr.value.as_ref(),
-        deprecated,
-        module_aliases,
-        deprecated_members,
-        path,
-        diagnostics,
-    );
-}
-
-/// Check if a binary operation triggers a deprecated dunder method.
-fn check_binop_deprecated(
-    left: &Expr,
-    _op: &ruff_python_ast::Operator,
-    deprecated: &HashMap<String, DeprecatedInfo>,
-    path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
-    span: Span,
-) {
-    // For `spam + 1`, if `spam` is of type `Spam` and `Spam.__add__` is deprecated,
-    // we need to detect this. We approximate by checking if the left-hand side
-    // is a Name whose type has a deprecated `__add__`.
-    // We check all `ClassName.__add__` entries in deprecated.
-    if let Expr::Name(name) = left {
-        let var_name = name.id.as_str();
-        // Look for any `X.__add__` where X might be the type of var_name.
-        // This is an approximation — we check all deprecated class members.
-        for (key, info) in deprecated {
-            if key.ends_with(".__add__") && info.kind == "method" {
-                let class_name = key.strip_suffix(".__add__").unwrap_or_default();
-                // We can't easily do type inference here, so we emit if we have
-                // evidence the variable is of that class type (e.g., assignment).
-                // For now, flag it for any deprecated __add__.
+        // Case 3: `alias` is a typed variable; look up its class's deprecated members.
+        if let Some(var_type) = var_types.get(alias) {
+            let key = format!("{}.{}", var_type.class_name, member_name);
+            if !var_type.module_alias.is_empty() {
+                if let Some(members) = deprecated_members.get(&var_type.module_alias) {
+                    if let Some(info) = members.get(&key) {
+                        diagnostics.push(make_diagnostic(
+                            span,
+                            &info.kind,
+                            member_name,
+                            info.message.as_deref(),
+                            path,
+                        ));
+                        return;
+                    }
+                }
+            }
+            if let Some(info) = deprecated.get(&key) {
                 diagnostics.push(make_diagnostic(
                     span,
                     &info.kind,
-                    &format!("{class_name}.__add__"),
+                    member_name,
                     info.message.as_deref(),
                     path,
                 ));
                 return;
             }
+        }
+    }
+
+    // Recurse into the value expression for chained access.
+    visit_expr_for_usage(
+        attr.value.as_ref(),
+        deprecated,
+        module_aliases,
+        deprecated_members,
+        var_types,
+        path,
+        diagnostics,
+    );
+}
+
+/// Check if a binary operation triggers a deprecated dunder method on the left operand.
+#[allow(clippy::too_many_arguments)]
+fn check_binop_deprecated(
+    left: &Expr,
+    op: Operator,
+    deprecated: &HashMap<String, DeprecatedInfo>,
+    deprecated_members: &HashMap<String, HashMap<String, DeprecatedInfo>>,
+    var_types: &HashMap<String, VarType>,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+    span: Span,
+) {
+    let dunder = op_to_dunder(op);
+    if let Expr::Name(name) = left {
+        let var_name = name.id.as_str();
+        if let Some(var_type) = var_types.get(var_name) {
+            check_dunder_deprecated_on_type(
+                var_type,
+                dunder,
+                deprecated,
+                deprecated_members,
+                path,
+                diagnostics,
+                span,
+            );
         }
     }
 }
