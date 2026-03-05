@@ -94,6 +94,24 @@ pub(crate) mod e0093;
 pub(crate) mod e0094;
 pub(crate) mod e0095;
 pub(crate) mod e0096;
+pub(crate) mod e0097;
+pub(crate) mod e0098;
+pub(crate) mod e0099;
+pub(crate) mod e0100;
+pub(crate) mod e0101;
+pub(crate) mod e0102;
+pub(crate) mod e0103;
+pub(crate) mod e0104;
+pub(crate) mod e0105;
+pub(crate) mod e0106;
+pub(crate) mod e0107;
+pub(crate) mod e0108;
+pub(crate) mod e0109;
+pub(crate) mod e0110;
+pub(crate) mod e0111;
+pub(crate) mod e0112;
+pub(crate) mod e0113;
+pub(crate) mod e0114;
 pub(crate) mod guards;
 pub(crate) mod w0040;
 pub(crate) mod w0050;
@@ -202,6 +220,24 @@ pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
         &e0094::SelfInvalidLocation,
         &e0095::InitVarViolation,
         &e0096::DataclassFieldDefaultFactoryMismatch,
+        &e0097::ProtocolNewSelfAttrViolation,
+        &e0098::NonProtocolBaseInProtocol,
+        &e0099::ProtocolInstantiation,
+        &e0100::LiteralAugmentedAssign,
+        &e0101::TypeGuardNoNarrowingParam,
+        &e0102::TypeVarDefaultReferential,
+        &e0103::TupleIndexOutOfBounds,
+        &e0104::CyclicalTypeAliasReference,
+        &e0105::BoundedTypeVarAttrAccess,
+        &e0106::ProtocolClassObject,
+        &e0107::VarianceIncompatibleBase,
+        &e0108::DataclassSlotsViolation,
+        &e0109::TypeVarBoundCallViolation,
+        &e0110::ProtocolVarianceViolation,
+        &e0111::ConstructorCallError,
+        &e0112::TypeGuardCallableReturnMismatch,
+        &e0113::TypeIsInconsistentNarrowing,
+        &e0114::ProtocolRuntimeCheckableViolation,
         &w0040::LambdaMissingAnnotations,
         &w0050::RedundantAnnotationWarning,
     ];

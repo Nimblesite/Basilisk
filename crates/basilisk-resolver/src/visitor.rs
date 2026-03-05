@@ -12,14 +12,17 @@ use ruff_text_size::{Ranged, TextRange};
 use basilisk_parser::ParsedModule;
 
 use crate::scope::{
-    AssertTypeCallInfo, AttributeInfo, CallSite, ClassInfo, FloatParamIntAttrAccess, FunctionInfo,
-    GenericParamInfo, GenericSubscriptSite, HistoricalPositionalViolation,
-    HistoricalPositionalViolationKind, ImportInfo, ImportKind, LiteralStringEnumMismatch,
-    MatchStmtInfo, NamedTupleDefInfo, NewTypeCallInfo, ParameterInfo, Pep695BoundViolation,
-    Pep695BoundViolationKind, ProtocolSelfViolation, ReadOnlyViolationInfo, ReadOnlyViolationKind,
-    ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo, RevealTypeCallInfo, RhsKind, Span,
-    TypeAliasDefInfo, TypeVarCallInfo, TypedDictCallInfo, TypedDictKeyViolation,
-    TypedDictKeyViolationKind, TypedDictSecondArgKind, UnhashableKeyRef, VariableInfo,
+    AssertTypeCallInfo, AttributeInfo, BaseSubscriptEntry, BoundedTypeVarAttrViolation, CallSite,
+    ClassInfo, FloatParamIntAttrAccess, FunctionInfo, GenericParamInfo, GenericSubscriptSite,
+    HistoricalPositionalViolation, HistoricalPositionalViolationKind, ImportInfo, ImportKind,
+    LiteralStringEnumMismatch, MatchStmtInfo, NamedTupleDefInfo, NewTypeCallInfo, ParameterInfo,
+    Pep695BoundViolation, Pep695BoundViolationKind, ProtocolInstantiationViolation,
+    ProtocolRtcViolation, ProtocolRtcViolationKind,
+    ProtocolSelfViolation, ReadOnlyViolationInfo, ReadOnlyViolationKind,
+    ResolvedModule,
+    ReturnAnnotationKind, ReturnStmtInfo, RevealTypeCallInfo, RhsKind, Span, TypeAliasDefInfo,
+    TypeArg, TypeVarCallInfo, TypedDictCallInfo, TypedDictKeyViolation, TypedDictKeyViolationKind,
+    TypedDictSecondArgKind, UnhashableKeyRef, VariableInfo,
 };
 
 /// Collect all function definitions and module-level data from the parsed module.
@@ -63,6 +66,8 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
     let readonly_violations = collect_readonly_violations(&module.ast.body, &classes);
     let protocol_self_violations =
         collect_protocol_self_violations(&module.ast.body, &classes, &functions, &module.source);
+    let protocol_instantiation_violations =
+        collect_protocol_instantiation_violations(&module.ast.body, &classes);
     let typeddict_class_names: std::collections::HashSet<&str> = classes
         .iter()
         .filter(|c| c.is_typed_dict)
@@ -76,6 +81,10 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         collect_typeddict_key_violations(&module.ast.body, &classes, &module.source);
     let generic_subscript_sites = collect_generic_subscript_sites(&module.ast.body);
     let type_alias_defs = collect_type_alias_defs(&module.ast.body);
+    let unhashable_hash_call_violations =
+        collect_unhashable_hash_calls(&module.ast.body, &classes);
+    let protocol_runtime_checkable_violations =
+        collect_protocol_rtc_violations(&module.ast.body, &classes);
     ResolvedModule {
         functions,
         classes,
@@ -109,10 +118,18 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         historical_positional_violations: collect_historical_positional_violations(&module.ast.body),
         invalid_string_annotations: Vec::new(),
         protocol_self_violations,
+        protocol_instantiation_violations,
         isinstance_typeddict_violations,
         typeddict_key_violations,
         type_alias_defs,
         generic_subscript_sites,
+        literal_augmented_assign_violations: Vec::new(),
+        tuple_index_violations: Vec::new(),
+        bounded_typevar_attr_violations: collect_bounded_typevar_attr_violations(&module.ast.body, &module.source),
+        protocol_class_object_violations: Vec::new(),
+        unhashable_hash_call_violations,
+        protocol_runtime_checkable_violations,
+        generator_violations: collect_generator_violations(&functions, &module.source),
         path: module.path.clone(),
         source: module.source.clone(),
     }
@@ -806,6 +823,9 @@ fn class_info_from(
         generic_non_typevar_args,
         metaclass_name,
         has_subscript_base,
+        base_subscripts: extract_base_subscripts(class),
+        is_dataclass_slots: is_dataclass && dataclass_flag(class, "slots"),
+        has_manual_slots: class_has_manual_slots(class),
     }
 }
 
@@ -1269,6 +1289,32 @@ fn function_info_from(func: &StmtFunctionDef, class_name: Option<String>) -> Fun
         has_pep695_type_params,
         pep695_type_param_names,
         local_vars,
+        is_generator: func.body.iter().any(|s| stmt_contains_yield(s)),
+        is_async: func.is_async,
+    }
+}
+
+/// Returns `true` when a statement (recursively) contains a `yield` or `yield from`.
+fn stmt_contains_yield(stmt: &Stmt) -> bool {
+    match stmt {
+        Stmt::Expr(node) => matches!(node.value.as_ref(), Expr::Yield(_) | Expr::YieldFrom(_)),
+        Stmt::Assign(node) => matches!(node.value.as_ref(), Expr::Yield(_) | Expr::YieldFrom(_)),
+        Stmt::If(node) => {
+            node.body.iter().any(|s| stmt_contains_yield(s))
+                || node
+                    .elif_else_clauses
+                    .iter()
+                    .any(|c| c.body.iter().any(|s| stmt_contains_yield(s)))
+        }
+        Stmt::While(node) => node.body.iter().any(|s| stmt_contains_yield(s)),
+        Stmt::For(node) => node.body.iter().any(|s| stmt_contains_yield(s)),
+        Stmt::With(node) => node.body.iter().any(|s| stmt_contains_yield(s)),
+        Stmt::Try(node) => {
+            node.body.iter().any(|s| stmt_contains_yield(s))
+                || node.finalbody.iter().any(|s| stmt_contains_yield(s))
+                || node.orelse.iter().any(|s| stmt_contains_yield(s))
+        }
+        _ => false,
     }
 }
 
@@ -2908,6 +2954,127 @@ fn collect_name_refs_from_expr(expr: &Expr, out: &mut Vec<String>) {
         }
         _ => {}
     }
+}
+
+/// Recursively collect string literal references from an expression tree.
+///
+/// Finds string literals used as forward references in type annotations
+/// (e.g. `"SomeClass"` in `Optional["SomeClass"]`).
+fn collect_string_refs_from_expr(expr: &Expr, out: &mut Vec<String>) {
+    match expr {
+        Expr::StringLiteral(s) => {
+            out.push(s.value.to_str().to_owned());
+        }
+        Expr::Subscript(sub) => {
+            collect_string_refs_from_expr(&sub.value, out);
+            collect_string_refs_from_expr(&sub.slice, out);
+        }
+        Expr::Tuple(tup) => {
+            for elt in &tup.elts {
+                collect_string_refs_from_expr(elt, out);
+            }
+        }
+        Expr::BinOp(bin) => {
+            collect_string_refs_from_expr(&bin.left, out);
+            collect_string_refs_from_expr(&bin.right, out);
+        }
+        _ => {}
+    }
+}
+
+/// Convert an expression into a structured [`TypeArg`].
+///
+/// Simple names become `TypeArg::Simple`, subscript expressions become
+/// `TypeArg::Subscript { base, args }`. Other expression forms fall back to
+/// `TypeArg::Simple` using whatever simple name can be extracted (or an empty
+/// string as a last resort).
+fn expr_to_type_arg(expr: &Expr) -> TypeArg {
+    match expr {
+        Expr::Name(name) => TypeArg::Simple(name.id.to_string()),
+        Expr::Subscript(sub) => {
+            let base = expr_simple_name(&sub.value).unwrap_or_default();
+            let args: Vec<TypeArg> = match sub.slice.as_ref() {
+                Expr::Tuple(tup) => tup.elts.iter().map(expr_to_type_arg).collect(),
+                other => vec![expr_to_type_arg(other)],
+            };
+            TypeArg::Subscript { base, args }
+        }
+        _ => TypeArg::Simple(expr_simple_name(expr).unwrap_or_default()),
+    }
+}
+
+/// Extract [`BaseSubscriptEntry`] items from the base class expressions of a
+/// class definition.
+///
+/// For each base class that is a subscript expression (e.g. `Base[T, int]`),
+/// produces an entry with the base name, flat type argument names, rich
+/// structured type args, and the source span.
+fn extract_base_subscripts(class: &StmtClassDef) -> Vec<BaseSubscriptEntry> {
+    let Some(arguments) = class.arguments.as_ref() else {
+        return Vec::new();
+    };
+    let mut entries = Vec::new();
+    for expr in &arguments.args {
+        let Expr::Subscript(sub) = expr else {
+            continue;
+        };
+        let Some(base_name) = expr_simple_name(&sub.value) else {
+            continue;
+        };
+        // Skip Generic[...] and Protocol[...] — they declare type parameters,
+        // not parameterised bases.
+        if base_name == "Generic" || base_name == "Protocol" {
+            continue;
+        }
+        let (type_arg_names, type_args) = match sub.slice.as_ref() {
+            Expr::Tuple(tup) => {
+                let names: Vec<String> =
+                    tup.elts.iter().filter_map(expr_simple_name).collect();
+                let args: Vec<TypeArg> = tup.elts.iter().map(expr_to_type_arg).collect();
+                (names, args)
+            }
+            single => {
+                let names: Vec<String> = expr_simple_name(single).into_iter().collect();
+                let args: Vec<TypeArg> = vec![expr_to_type_arg(single)];
+                (names, args)
+            }
+        };
+        entries.push(BaseSubscriptEntry {
+            base_name,
+            type_arg_names,
+            type_args,
+            span: Span {
+                start: sub.range().start().to_u32(),
+                end: sub.range().end().to_u32(),
+            },
+        });
+    }
+    entries
+}
+
+/// Check whether a class body contains a manual `__slots__` assignment.
+///
+/// Returns `true` if any statement in the class body is an assignment (plain
+/// or annotated) whose target is `__slots__`.
+fn class_has_manual_slots(class: &StmtClassDef) -> bool {
+    for stmt in &class.body {
+        match stmt {
+            Stmt::Assign(assign) => {
+                for target in &assign.targets {
+                    if expr_simple_name(target).as_deref() == Some("__slots__") {
+                        return true;
+                    }
+                }
+            }
+            Stmt::AnnAssign(ann) => {
+                if expr_simple_name(&ann.target).as_deref() == Some("__slots__") {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+    }
+    false
 }
 
 fn text_range_to_span(range: TextRange) -> Span {
@@ -5606,6 +5773,98 @@ fn collect_annotated_calls_from_expr(expr: &Expr, out: &mut Vec<Span>) {
 }
 
 // ---------------------------------------------------------------------------
+// Unhashable dataclass `.__hash__()` call detection
+// ---------------------------------------------------------------------------
+
+/// Collect module-level `ClassName(args).__hash__()` calls where `ClassName` is a
+/// non-hashable dataclass (has `eq=True`, is not frozen, not `unsafe_hash`, and
+/// does not define `__hash__` explicitly).
+///
+/// Used by `BSK-E0063`.
+fn collect_unhashable_hash_calls(
+    stmts: &[Stmt],
+    classes: &[crate::scope::ClassInfo],
+) -> Vec<crate::scope::UnhashableHashCallViolation> {
+    // Build the set of non-hashable dataclass names.
+    let non_hashable: std::collections::HashSet<&str> = classes
+        .iter()
+        .filter(|cls| {
+            cls.is_dataclass
+                && !cls.is_dataclass_eq_false
+                && !cls.is_dataclass_frozen
+                && !cls.is_dataclass_unsafe_hash
+                && !cls.method_names.iter().any(|m| m == "__hash__")
+        })
+        .map(|cls| cls.name.as_str())
+        .collect();
+
+    if non_hashable.is_empty() {
+        return Vec::new();
+    }
+
+    let mut out = Vec::new();
+    for stmt in stmts {
+        collect_unhashable_hash_calls_from_stmt(stmt, &non_hashable, &mut out);
+    }
+    out
+}
+
+fn collect_unhashable_hash_calls_from_stmt(
+    stmt: &Stmt,
+    non_hashable: &std::collections::HashSet<&str>,
+    out: &mut Vec<crate::scope::UnhashableHashCallViolation>,
+) {
+    match stmt {
+        Stmt::Expr(node) => {
+            collect_unhashable_hash_calls_from_expr(&node.value, non_hashable, out);
+        }
+        Stmt::If(node) => {
+            for s in &node.body {
+                collect_unhashable_hash_calls_from_stmt(s, non_hashable, out);
+            }
+            for clause in &node.elif_else_clauses {
+                for s in &clause.body {
+                    collect_unhashable_hash_calls_from_stmt(s, non_hashable, out);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Detect pattern: `ClassName(args).__hash__()` — an outer `Call` whose function
+/// is an `Attribute` with attr `__hash__`, and whose value is an inner `Call`
+/// whose function is a `Name` matching a non-hashable dataclass.
+fn collect_unhashable_hash_calls_from_expr(
+    expr: &Expr,
+    non_hashable: &std::collections::HashSet<&str>,
+    out: &mut Vec<crate::scope::UnhashableHashCallViolation>,
+) {
+    let Expr::Call(outer_call) = expr else {
+        return;
+    };
+    let Expr::Attribute(attr) = outer_call.func.as_ref() else {
+        return;
+    };
+    if attr.attr.as_str() != "__hash__" {
+        return;
+    }
+    // The value of the attribute must be a constructor call: `ClassName(args)`
+    let Expr::Call(inner_call) = attr.value.as_ref() else {
+        return;
+    };
+    let Expr::Name(name) = inner_call.func.as_ref() else {
+        return;
+    };
+    if non_hashable.contains(name.id.as_str()) {
+        out.push(crate::scope::UnhashableHashCallViolation {
+            class_name: name.id.to_string(),
+            span: text_range_to_span(expr.range()),
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Module-level ordering comparison collection
 // ---------------------------------------------------------------------------
 
@@ -6109,6 +6368,41 @@ fn collect_generic_subscript_sites(stmts: &[Stmt]) -> Vec<GenericSubscriptSite> 
                     }
                 }
             }
+            // Function definitions: check parameter annotations for subscripts
+            Stmt::FunctionDef(func_def) => {
+                for param in func_def
+                    .parameters
+                    .args
+                    .iter()
+                    .chain(func_def.parameters.posonlyargs.iter())
+                    .chain(func_def.parameters.kwonlyargs.iter())
+                {
+                    if let Some(ann) = &param.parameter.annotation {
+                        if let Expr::Subscript(sub) = ann.as_ref() {
+                            if let Some(base_name) = expr_simple_name(sub.value.as_ref()) {
+                                let arg_count = match sub.slice.as_ref() {
+                                    Expr::Tuple(t) => t.elts.len(),
+                                    _ => 1,
+                                };
+                                out.push(GenericSubscriptSite {
+                                    base_name,
+                                    arg_count,
+                                    span: Span {
+                                        start: sub.range().start().to_u32(),
+                                        end: sub.range().end().to_u32(),
+                                    },
+                                });
+                            }
+                        }
+                    }
+                }
+                // Also recurse into the function body for nested classes etc.
+                out.extend(collect_generic_subscript_sites(&func_def.body));
+            }
+            // Class definitions: recurse into body
+            Stmt::ClassDef(class_def) => {
+                out.extend(collect_generic_subscript_sites(&class_def.body));
+            }
             _ => {}
         }
     }
@@ -6122,19 +6416,625 @@ fn collect_generic_subscript_sites(stmts: &[Stmt]) -> Vec<GenericSubscriptSite> 
 fn collect_type_alias_defs(stmts: &[Stmt]) -> Vec<TypeAliasDefInfo> {
     let mut out = Vec::new();
     for stmt in stmts {
-        let Stmt::AnnAssign(ann) = stmt else { continue };
-        let is_type_alias = matches!(
-            ann.annotation.as_ref(),
-            Expr::Name(n) if n.id.as_str() == "TypeAlias"
-        );
-        if !is_type_alias {
+        // Handle `Name: TypeAlias = expr` annotated assignments.
+        if let Stmt::AnnAssign(ann) = stmt {
+            let is_type_alias = matches!(
+                ann.annotation.as_ref(),
+                Expr::Name(n) if n.id.as_str() == "TypeAlias"
+            );
+            if !is_type_alias {
+                continue;
+            }
+            let Some(name) = expr_simple_name(ann.target.as_ref()) else { continue };
+            let Some(rhs) = ann.value.as_ref() else { continue };
+            if let Some(info) = build_type_alias_info(name, rhs, stmt) {
+                out.push(info);
+            }
             continue;
         }
-        let Some(name) = expr_simple_name(ann.target.as_ref()) else { continue };
-        let Some(rhs) = ann.value.as_ref() else { continue };
-        let mut rhs_names = Vec::new();
-        collect_name_refs_from_expr(rhs, &mut rhs_names);
-        out.push(TypeAliasDefInfo { name, rhs_names });
+
+        // Handle bare `Name = Expr[...]` assignments (implicit type aliases).
+        if let Stmt::Assign(assign) = stmt {
+            if assign.targets.len() != 1 {
+                continue;
+            }
+            let Some(name) = expr_simple_name(&assign.targets[0]) else { continue };
+            // Only treat subscript RHS as implicit alias (Name = Something[...])
+            if matches!(assign.value.as_ref(), Expr::Subscript(_)) {
+                if let Some(info) = build_type_alias_info(name, &assign.value, stmt) {
+                    out.push(info);
+                }
+            }
+        }
     }
     out
 }
+
+/// Helper to build a `TypeAliasDefInfo` from an alias name and RHS expression.
+fn build_type_alias_info(name: String, rhs: &Expr, stmt: &Stmt) -> Option<TypeAliasDefInfo> {
+    let mut rhs_names = Vec::new();
+    collect_name_refs_from_expr(rhs, &mut rhs_names);
+
+    let (rhs_base_name, rhs_type_arg_names) = match rhs {
+        Expr::Subscript(sub) => {
+            let base = expr_simple_name(&sub.value);
+            let arg_names = match sub.slice.as_ref() {
+                Expr::Tuple(tup) => {
+                    tup.elts.iter().filter_map(expr_simple_name).collect()
+                }
+                single => {
+                    expr_simple_name(single).into_iter().collect()
+                }
+            };
+            (base, arg_names)
+        }
+        _ => (None, Vec::new()),
+    };
+
+    let mut rhs_string_refs = Vec::new();
+    collect_string_refs_from_expr(rhs, &mut rhs_string_refs);
+
+    let span = Span {
+        start: stmt.range().start().to_u32(),
+        end: stmt.range().end().to_u32(),
+    };
+
+    Some(TypeAliasDefInfo {
+        name,
+        rhs_names,
+        rhs_base_name,
+        rhs_type_arg_names,
+        rhs_string_refs,
+        span,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// BSK-E0099: Protocol instantiation violation detection
+// ---------------------------------------------------------------------------
+
+/// Check if a class is a Protocol (has `Protocol` in its bases).
+fn class_is_protocol(cls: &ClassInfo) -> bool {
+    cls.bases.iter().any(|b| b == "Protocol")
+}
+
+/// Detect direct instantiation of Protocol classes (e.g. `Proto()`) and
+/// concrete subclasses that fail to implement all required protocol members.
+fn collect_protocol_instantiation_violations(
+    stmts: &[Stmt],
+    classes: &[ClassInfo],
+) -> Vec<ProtocolInstantiationViolation> {
+    let protocol_names: std::collections::HashSet<&str> = classes
+        .iter()
+        .filter(|cls| class_is_protocol(cls))
+        .map(|cls| cls.name.as_str())
+        .collect();
+
+    let class_map: std::collections::HashMap<&str, &ClassInfo> = classes
+        .iter()
+        .map(|cls| (cls.name.as_str(), cls))
+        .collect();
+
+    let mut abstract_names: std::collections::HashSet<&str> = classes
+        .iter()
+        .filter(|cls| !class_is_protocol(cls) && class_has_abstract_methods(cls))
+        .map(|cls| cls.name.as_str())
+        .collect();
+
+    let protocol_required_methods = collect_protocol_required_methods(stmts, &protocol_names);
+    let protocol_required_attrs = collect_protocol_required_attrs(stmts, &protocol_names);
+
+    for cls in classes {
+        if class_is_protocol(cls) || abstract_names.contains(cls.name.as_str()) {
+            continue;
+        }
+        if class_missing_protocol_members(
+            cls,
+            &protocol_names,
+            &class_map,
+            &protocol_required_methods,
+            &protocol_required_attrs,
+        ) {
+            abstract_names.insert(cls.name.as_str());
+        }
+    }
+
+    if protocol_names.is_empty() && abstract_names.is_empty() {
+        return Vec::new();
+    }
+
+    let mut out = Vec::new();
+    find_protocol_instantiations(stmts, &protocol_names, &abstract_names, &mut out);
+    out
+}
+
+/// Check if a class has any methods decorated with `@abstractmethod`.
+fn class_has_abstract_methods(cls: &ClassInfo) -> bool {
+    cls.method_decorators
+        .iter()
+        .any(|(_method_name, decorators)| decorators.iter().any(|d| d == "abstractmethod"))
+}
+
+/// Check if a non-Protocol class missing required protocol members.
+fn class_missing_protocol_members(
+    cls: &ClassInfo,
+    protocol_names: &std::collections::HashSet<&str>,
+    class_map: &std::collections::HashMap<&str, &ClassInfo>,
+    protocol_required_methods: &std::collections::HashMap<String, std::collections::HashSet<String>>,
+    protocol_required_attrs: &std::collections::HashMap<String, std::collections::HashSet<String>>,
+) -> bool {
+    let mut required_methods: std::collections::HashSet<String> =
+        std::collections::HashSet::new();
+    let mut required_attrs: std::collections::HashSet<String> =
+        std::collections::HashSet::new();
+
+    for base_name in &cls.bases {
+        if !protocol_names.contains(base_name.as_str()) {
+            continue;
+        }
+        if let Some(methods) = protocol_required_methods.get(base_name) {
+            required_methods.extend(methods.iter().cloned());
+        }
+        if let Some(attrs) = protocol_required_attrs.get(base_name) {
+            required_attrs.extend(attrs.iter().cloned());
+        }
+        if let Some(proto) = class_map.get(base_name.as_str()) {
+            collect_transitive_required_members(
+                proto, protocol_names, class_map,
+                protocol_required_methods, protocol_required_attrs,
+                &mut required_methods, &mut required_attrs,
+            );
+        }
+    }
+
+    if required_methods.is_empty() && required_attrs.is_empty() {
+        return false;
+    }
+
+    let mut provided_methods: std::collections::HashSet<&str> =
+        std::collections::HashSet::new();
+    let mut provided_attrs: std::collections::HashSet<&str> =
+        std::collections::HashSet::new();
+
+    collect_provided_members(cls, &mut provided_methods, &mut provided_attrs);
+
+    for base_name in &cls.bases {
+        if protocol_names.contains(base_name.as_str()) {
+            continue;
+        }
+        if let Some(base_cls) = class_map.get(base_name.as_str()) {
+            collect_provided_members(base_cls, &mut provided_methods, &mut provided_attrs);
+        }
+    }
+
+    for method in &required_methods {
+        if !provided_methods.contains(method.as_str()) {
+            return true;
+        }
+    }
+    for attr in &required_attrs {
+        if !provided_attrs.contains(attr.as_str()) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Recursively collect required members from Protocol bases of a Protocol.
+fn collect_transitive_required_members(
+    proto: &ClassInfo,
+    protocol_names: &std::collections::HashSet<&str>,
+    class_map: &std::collections::HashMap<&str, &ClassInfo>,
+    protocol_required_methods: &std::collections::HashMap<String, std::collections::HashSet<String>>,
+    protocol_required_attrs: &std::collections::HashMap<String, std::collections::HashSet<String>>,
+    required_methods: &mut std::collections::HashSet<String>,
+    required_attrs: &mut std::collections::HashSet<String>,
+) {
+    for base_name in &proto.bases {
+        if base_name == "Protocol" {
+            continue;
+        }
+        if !protocol_names.contains(base_name.as_str()) {
+            continue;
+        }
+        if let Some(methods) = protocol_required_methods.get(base_name) {
+            required_methods.extend(methods.iter().cloned());
+        }
+        if let Some(attrs) = protocol_required_attrs.get(base_name) {
+            required_attrs.extend(attrs.iter().cloned());
+        }
+        if let Some(parent_proto) = class_map.get(base_name.as_str()) {
+            collect_transitive_required_members(
+                parent_proto, protocol_names, class_map,
+                protocol_required_methods, protocol_required_attrs,
+                required_methods, required_attrs,
+            );
+        }
+    }
+}
+
+/// Collect methods and attributes provided by a class.
+fn collect_provided_members<'a>(
+    cls: &'a ClassInfo,
+    provided_methods: &mut std::collections::HashSet<&'a str>,
+    provided_attrs: &mut std::collections::HashSet<&'a str>,
+) {
+    for method_name in &cls.method_names {
+        provided_methods.insert(method_name.as_str());
+    }
+    for attr in &cls.attributes {
+        provided_attrs.insert(attr.name.as_str());
+    }
+}
+
+/// Collect required methods for each Protocol class by walking the AST.
+fn collect_protocol_required_methods(
+    stmts: &[Stmt],
+    protocol_names: &std::collections::HashSet<&str>,
+) -> std::collections::HashMap<String, std::collections::HashSet<String>> {
+    let mut result: std::collections::HashMap<String, std::collections::HashSet<String>> =
+        std::collections::HashMap::new();
+    for stmt in stmts {
+        let Stmt::ClassDef(cls) = stmt else { continue };
+        if !protocol_names.contains(cls.name.id.as_str()) {
+            continue;
+        }
+        let mut required = std::collections::HashSet::new();
+        for body_stmt in &cls.body {
+            let Stmt::FunctionDef(func) = body_stmt else { continue };
+            let name = func.name.id.as_str();
+            if name.starts_with("__") && name.ends_with("__") {
+                continue;
+            }
+            let is_abstract = func.decorator_list.iter().any(|d| {
+                matches!(&d.expression, Expr::Name(n) if n.id.as_str() == "abstractmethod")
+            });
+            let is_stub = is_function_body_stub(&func.body);
+            if is_abstract || is_stub {
+                required.insert(name.to_string());
+            }
+        }
+        result.insert(cls.name.id.to_string(), required);
+    }
+    result
+}
+
+/// Check if a function body consists only of `...` (Ellipsis) or `pass`.
+fn is_function_body_stub(body: &[Stmt]) -> bool {
+    if body.len() != 1 {
+        return false;
+    }
+    match &body[0] {
+        Stmt::Pass(_) => true,
+        Stmt::Expr(expr_stmt) => matches!(&*expr_stmt.value, Expr::EllipsisLiteral(_)),
+        _ => false,
+    }
+}
+
+/// Collect required ClassVar attributes for each Protocol class.
+fn collect_protocol_required_attrs(
+    stmts: &[Stmt],
+    protocol_names: &std::collections::HashSet<&str>,
+) -> std::collections::HashMap<String, std::collections::HashSet<String>> {
+    let mut result: std::collections::HashMap<String, std::collections::HashSet<String>> =
+        std::collections::HashMap::new();
+    for stmt in stmts {
+        let Stmt::ClassDef(cls) = stmt else { continue };
+        if !protocol_names.contains(cls.name.id.as_str()) {
+            continue;
+        }
+        let mut required = std::collections::HashSet::new();
+        for body_stmt in &cls.body {
+            let Stmt::AnnAssign(ann) = body_stmt else { continue };
+            if ann.value.is_some() {
+                continue;
+            }
+            if is_classvar_annotation(&ann.annotation) {
+                if let Some(name) = expr_simple_name(&ann.target) {
+                    required.insert(name);
+                }
+            }
+        }
+        result.insert(cls.name.id.to_string(), required);
+    }
+    result
+}
+
+/// Check if an annotation expression is `ClassVar` or `ClassVar[...]`.
+fn is_classvar_annotation(expr: &Expr) -> bool {
+    match expr {
+        Expr::Name(name) => name.id.as_str() == "ClassVar",
+        Expr::Subscript(sub) => {
+            matches!(&*sub.value, Expr::Name(name) if name.id.as_str() == "ClassVar")
+        }
+        _ => false,
+    }
+}
+
+/// Recursively walk statements finding call expressions that instantiate
+/// protocols or abstract classes.
+fn find_protocol_instantiations(
+    stmts: &[Stmt],
+    protocol_names: &std::collections::HashSet<&str>,
+    abstract_names: &std::collections::HashSet<&str>,
+    out: &mut Vec<ProtocolInstantiationViolation>,
+) {
+    for stmt in stmts {
+        match stmt {
+            Stmt::Assign(node) => {
+                check_expr_for_protocol_call(&node.value, protocol_names, abstract_names, out);
+            }
+            Stmt::AnnAssign(node) => {
+                if let Some(value) = &node.value {
+                    check_expr_for_protocol_call(value, protocol_names, abstract_names, out);
+                }
+            }
+            Stmt::Expr(node) => {
+                check_expr_for_protocol_call(&node.value, protocol_names, abstract_names, out);
+            }
+            Stmt::FunctionDef(func) => {
+                find_protocol_instantiations(&func.body, protocol_names, abstract_names, out);
+            }
+            Stmt::ClassDef(cls) => {
+                find_protocol_instantiations(&cls.body, protocol_names, abstract_names, out);
+            }
+            Stmt::If(node) => {
+                find_protocol_instantiations(&node.body, protocol_names, abstract_names, out);
+                for clause in &node.elif_else_clauses {
+                    find_protocol_instantiations(
+                        &clause.body, protocol_names, abstract_names, out,
+                    );
+                }
+            }
+            Stmt::For(node) => {
+                find_protocol_instantiations(&node.body, protocol_names, abstract_names, out);
+            }
+            Stmt::While(node) => {
+                find_protocol_instantiations(&node.body, protocol_names, abstract_names, out);
+            }
+            Stmt::With(node) => {
+                find_protocol_instantiations(&node.body, protocol_names, abstract_names, out);
+            }
+            Stmt::Try(node) => {
+                find_protocol_instantiations(&node.body, protocol_names, abstract_names, out);
+                for handler in &node.handlers {
+                    let ExceptHandler::ExceptHandler(except) = handler;
+                    find_protocol_instantiations(
+                        &except.body, protocol_names, abstract_names, out,
+                    );
+                }
+                find_protocol_instantiations(
+                    &node.finalbody, protocol_names, abstract_names, out,
+                );
+                find_protocol_instantiations(
+                    &node.orelse, protocol_names, abstract_names, out,
+                );
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Check if an expression is a call to a Protocol or abstract class.
+fn check_expr_for_protocol_call(
+    expr: &Expr,
+    protocol_names: &std::collections::HashSet<&str>,
+    abstract_names: &std::collections::HashSet<&str>,
+    out: &mut Vec<ProtocolInstantiationViolation>,
+) {
+    if let Expr::Call(call) = expr {
+        if let Some(name) = expr_simple_name(&call.func) {
+            let name_str = name.as_str();
+            if protocol_names.contains(name_str) {
+                out.push(ProtocolInstantiationViolation {
+                    class_name: name,
+                    span: text_range_to_span(call.range),
+                    is_abstract: false,
+                });
+            } else if abstract_names.contains(name_str) {
+                out.push(ProtocolInstantiationViolation {
+                    class_name: name,
+                    span: text_range_to_span(call.range),
+                    is_abstract: true,
+                });
+            }
+        }
+        if let Expr::Subscript(sub) = call.func.as_ref() {
+            if let Some(name) = expr_simple_name(&sub.value) {
+                let name_str = name.as_str();
+                if protocol_names.contains(name_str) {
+                    out.push(ProtocolInstantiationViolation {
+                        class_name: name,
+                        span: text_range_to_span(call.range),
+                        is_abstract: false,
+                    });
+                } else if abstract_names.contains(name_str) {
+                    out.push(ProtocolInstantiationViolation {
+                        class_name: name,
+                        span: text_range_to_span(call.range),
+                        is_abstract: true,
+                    });
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Protocol runtime_checkable violation detection
+// ---------------------------------------------------------------------------
+
+/// Information about a protocol class relevant to runtime-checkable checks.
+struct ProtocolInfo<'a> {
+    /// Whether the protocol is decorated with `@runtime_checkable`.
+    is_runtime_checkable: bool,
+    /// Whether the protocol has data attributes (non-method members).
+    is_data_protocol: bool,
+    /// The class name.
+    name: &'a str,
+}
+
+/// Build a map of protocol class names to their `ProtocolInfo`.
+fn build_protocol_map<'a>(classes: &'a [ClassInfo]) -> std::collections::HashMap<&'a str, ProtocolInfo<'a>> {
+    let mut map = std::collections::HashMap::new();
+    for cls in classes {
+        let is_protocol = cls.bases.iter().any(|b| b == "Protocol");
+        if !is_protocol {
+            continue;
+        }
+        let is_runtime_checkable = cls
+            .decorator_spans
+            .iter()
+            .any(|(name, _)| name == "runtime_checkable");
+        let is_data_protocol = !cls.attributes.is_empty();
+        map.insert(
+            cls.name.as_str(),
+            ProtocolInfo {
+                is_runtime_checkable,
+                is_data_protocol,
+                name: cls.name.as_str(),
+            },
+        );
+    }
+    map
+}
+
+/// Collect protocol `isinstance`/`issubclass` runtime-checkable violations.
+fn collect_protocol_rtc_violations(
+    stmts: &[Stmt],
+    classes: &[ClassInfo],
+) -> Vec<ProtocolRtcViolation> {
+    let protocol_map = build_protocol_map(classes);
+    if protocol_map.is_empty() {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    collect_protocol_rtc_in_stmts(stmts, &protocol_map, &mut out);
+    out
+}
+
+fn collect_protocol_rtc_in_stmts(
+    stmts: &[Stmt],
+    protocol_map: &std::collections::HashMap<&str, ProtocolInfo<'_>>,
+    out: &mut Vec<ProtocolRtcViolation>,
+) {
+    for stmt in stmts {
+        match stmt {
+            Stmt::If(node) => {
+                collect_protocol_rtc_in_expr(&node.test, protocol_map, out);
+                collect_protocol_rtc_in_stmts(&node.body, protocol_map, out);
+                for clause in &node.elif_else_clauses {
+                    if let Some(test) = &clause.test {
+                        collect_protocol_rtc_in_expr(test, protocol_map, out);
+                    }
+                    collect_protocol_rtc_in_stmts(&clause.body, protocol_map, out);
+                }
+            }
+            Stmt::Expr(node) => {
+                collect_protocol_rtc_in_expr(&node.value, protocol_map, out);
+            }
+            Stmt::Assign(node) => {
+                collect_protocol_rtc_in_expr(&node.value, protocol_map, out);
+            }
+            Stmt::AnnAssign(node) => {
+                if let Some(val) = &node.value {
+                    collect_protocol_rtc_in_expr(val, protocol_map, out);
+                }
+            }
+            Stmt::While(node) => {
+                collect_protocol_rtc_in_expr(&node.test, protocol_map, out);
+                collect_protocol_rtc_in_stmts(&node.body, protocol_map, out);
+            }
+            Stmt::For(node) => {
+                collect_protocol_rtc_in_stmts(&node.body, protocol_map, out);
+            }
+            Stmt::FunctionDef(node) => {
+                collect_protocol_rtc_in_stmts(&node.body, protocol_map, out);
+            }
+            Stmt::ClassDef(node) => {
+                collect_protocol_rtc_in_stmts(&node.body, protocol_map, out);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Check a single `isinstance`/`issubclass` call for protocol violations.
+fn check_protocol_arg(
+    call_name: &str,
+    arg_name: &str,
+    call_span: Span,
+    protocol_map: &std::collections::HashMap<&str, ProtocolInfo<'_>>,
+    out: &mut Vec<ProtocolRtcViolation>,
+) {
+    let Some(info) = protocol_map.get(arg_name) else {
+        return;
+    };
+
+    // Not runtime_checkable: error for both isinstance and issubclass.
+    if !info.is_runtime_checkable {
+        out.push(ProtocolRtcViolation {
+            span: call_span,
+            kind: ProtocolRtcViolationKind::NotRuntimeCheckable {
+                protocol_name: info.name.to_owned(),
+                call_name: call_name.to_owned(),
+            },
+        });
+        return;
+    }
+
+    // issubclass with a data protocol: error.
+    if call_name == "issubclass" && info.is_data_protocol {
+        out.push(ProtocolRtcViolation {
+            span: call_span,
+            kind: ProtocolRtcViolationKind::IssubclassDataProtocol {
+                protocol_name: info.name.to_owned(),
+            },
+        });
+    }
+}
+
+fn collect_protocol_rtc_in_expr(
+    expr: &Expr,
+    protocol_map: &std::collections::HashMap<&str, ProtocolInfo<'_>>,
+    out: &mut Vec<ProtocolRtcViolation>,
+) {
+    use ruff_text_size::Ranged as _;
+    let Expr::Call(call) = expr else { return };
+
+    // Determine if callee is isinstance or issubclass.
+    let call_name = match call.func.as_ref() {
+        Expr::Name(n) if n.id == "isinstance" => "isinstance",
+        Expr::Name(n) if n.id == "issubclass" => "issubclass",
+        _ => return,
+    };
+
+    let Some(second_arg) = call.arguments.args.get(1) else {
+        return;
+    };
+
+    let call_span = text_range_to_span(call.range());
+
+    match second_arg {
+        // Single name: isinstance(x, Proto)
+        Expr::Name(name) => {
+            check_protocol_arg(call_name, name.id.as_str(), call_span, protocol_map, out);
+        }
+        // Tuple: isinstance(x, (Proto1, Proto2))
+        Expr::Tuple(tuple) => {
+            for elt in &tuple.elts {
+                if let Expr::Name(name) = elt {
+                    check_protocol_arg(
+                        call_name,
+                        name.id.as_str(),
+                        call_span,
+                        protocol_map,
+                        out,
+                    );
+                }
+            }
+        }
+        _ => {}
+    }
+}
+

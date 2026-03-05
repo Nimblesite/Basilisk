@@ -32,31 +32,42 @@ pub(crate) struct AssignmentTypeMismatch;
 
 impl Rule for AssignmentTypeMismatch {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        module
-            .module_vars
-            .iter()
-            .filter(|var| var.has_annotation && var.rhs_span.is_some())
-            .filter_map(|var| {
-                let annotation_text = extract_annotation(&module.source, var.name_span)?;
-                
-                // Use inference system instead of pattern matching
-                let inferred_type = infer_rhs(&var.rhs_kind);
-                
-                // Parse annotation text to InferredType using the new function
-                let declared_type = InferredType::from_annotation(annotation_text);
-                
-                // Check assignability using inference system
-                if inferred_type.is_assignable_to(&declared_type) {
-                    None
-                } else {
-                    Some((var, annotation_text.to_owned(), inferred_type, declared_type))
-                }
-            })
-            .for_each(|(var, annotation, inferred, declared)| {
-                diagnostics.push(make_diagnostic(var, &annotation, &inferred, &declared, &module.path));
-            });
-
+        check_vars(&module.module_vars, &module.source, &module.path, diagnostics);
+        check_local_vars(module, diagnostics);
         check_tuple_reassignments(module, diagnostics);
+    }
+}
+
+/// Check a slice of annotated variables for type mismatches.
+fn check_vars(
+    vars: &[VariableInfo],
+    source: &str,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    vars.iter()
+        .filter(|var| var.has_annotation && var.rhs_span.is_some())
+        .filter_map(|var| {
+            let annotation_text = extract_annotation(source, var.name_span)?;
+
+            let inferred_type = infer_rhs(&var.rhs_kind);
+            let declared_type = InferredType::from_annotation(annotation_text);
+
+            if inferred_type.is_assignable_to(&declared_type) {
+                None
+            } else {
+                Some((var, annotation_text.to_owned(), inferred_type, declared_type))
+            }
+        })
+        .for_each(|(var, annotation, inferred, declared)| {
+            diagnostics.push(make_diagnostic(var, &annotation, &inferred, &declared, path));
+        });
+}
+
+/// Check local variables in function bodies for type mismatches.
+fn check_local_vars(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    for func in &module.functions {
+        check_vars(&func.local_vars, &module.source, &module.path, diagnostics);
     }
 }
 

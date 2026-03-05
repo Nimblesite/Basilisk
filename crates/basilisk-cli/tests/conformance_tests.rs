@@ -65,6 +65,21 @@ enum Annotation {
 
 /// Parse a single source line and return the annotation, if any.
 fn parse_annotation(line: &str) -> Option<Annotation> {
+    // Skip full-line comments — a `# E` inside a comment is not a real
+    // annotation because the line contains no executable code for the
+    // checker to flag.
+    if line.trim_start().starts_with('#') {
+        // Allow lines that are ONLY a `# E` marker (pure annotation lines
+        // are used in some conformance files), but skip lines where real
+        // code has been commented out with a trailing `# E`.
+        let trimmed = line.trim();
+        // Pure annotation: `# E`, `# E: explanation`, `# E[tag]`, `# E?`
+        let after_hash = trimmed.strip_prefix('#')?.trim_start();
+        if !after_hash.starts_with('E') {
+            return None;
+        }
+    }
+
     // Find the last `# E` marker on the line.
     let marker = line.rfind("# E")?;
     let rest = line[marker + 2..].trim(); // everything after "#"
@@ -244,6 +259,12 @@ fn run_file(path: &Path) -> FileResult {
         .iter()
         .filter(|l| !all_annotated.contains(l))
         .count();
+
+    let file_name = path.file_name().unwrap_or_default().to_string_lossy();
+    if missed > 0 {
+        let missed_lines: Vec<usize> = required.iter().filter(|l| !diag_lines.contains(l)).copied().collect();
+        println!("  DEBUG {file_name}: missed={missed} lines={missed_lines:?}");
+    }
 
     FileResult {
         caught,

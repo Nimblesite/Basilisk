@@ -68,13 +68,14 @@ impl Rule for NonHashableDataclassAssignment {
             .map(|cls| (cls.name.as_str(), cls.name_span))
             .collect();
 
-        if non_hashable.is_empty() {
+        if non_hashable.is_empty() && module.unhashable_hash_call_violations.is_empty() {
             return;
         }
 
         let source = &module.source;
         let path = &module.path;
 
+        // Check `v: Hashable = DC(args)` assignments.
         for var in &module.module_vars {
             // Only care about annotated assignments with a RHS.
             let Some(ann_span) = var.annotation_span else {
@@ -114,6 +115,15 @@ impl Rule for NonHashableDataclassAssignment {
                 var.name.as_str(),
                 callee,
                 class_span,
+                path,
+            ));
+        }
+
+        // Check `DC(args).__hash__()` calls on non-hashable dataclasses.
+        for violation in &module.unhashable_hash_call_violations {
+            diagnostics.push(make_hash_call_diagnostic(
+                violation.span,
+                &violation.class_name,
                 path,
             ));
         }
@@ -159,6 +169,32 @@ fn make_diagnostic(
              `{class_name}` is not hashable"
         ),
         span: var_span,
+        path: path.to_owned(),
+        help: Some(format!(
+            "Make `{class_name}` hashable by adding `frozen=True`, `unsafe_hash=True`, \
+             or defining a `__hash__` method"
+        )),
+        note: Some(
+            "PEP 557: a `@dataclass` with `eq=True` (the default) sets `__hash__ = None` \
+             unless the class is frozen or uses `unsafe_hash=True`"
+                .to_owned(),
+        ),
+    }
+}
+
+fn make_hash_call_diagnostic(
+    call_span: basilisk_resolver::Span,
+    class_name: &str,
+    path: &str,
+) -> Diagnostic {
+    Diagnostic {
+        code: CODE.clone(),
+        severity: Severity::Error,
+        message: format!(
+            "Cannot call `.__hash__()` on `{class_name}` instance: \
+             `{class_name}.__hash__` is `None`"
+        ),
+        span: call_span,
         path: path.to_owned(),
         help: Some(format!(
             "Make `{class_name}` hashable by adding `frozen=True`, `unsafe_hash=True`, \

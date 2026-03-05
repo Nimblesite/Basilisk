@@ -117,6 +117,10 @@ pub struct FunctionInfo {
     /// with `has_annotation = true`.  Used by E0047 to check for invalid type
     /// annotations in local variable declarations.
     pub local_vars: Vec<VariableInfo>,
+    /// `true` when the function body contains at least one `yield` or `yield from`.
+    pub is_generator: bool,
+    /// `true` when the function is declared with `async def`.
+    pub is_async: bool,
 }
 
 /// A `return` statement found inside a function body.
@@ -145,6 +149,18 @@ pub struct UnhashableKeyRef {
     pub span: Span,
     /// A human-readable description of the key type (`"list"`, `"set"`, `"dict"`).
     pub key_type: &'static str,
+}
+
+/// A `ClassName(args).__hash__()` call on a non-hashable dataclass.
+///
+/// A `@dataclass` with `eq=True` (the default) sets `__hash__` to `None`
+/// unless `frozen=True`, `unsafe_hash=True`, or the class defines `__hash__`.
+#[derive(Debug, Clone)]
+pub struct UnhashableHashCallViolation {
+    /// The class name that is not hashable.
+    pub class_name: String,
+    /// The span of the entire `.__hash__()` call expression.
+    pub span: Span,
 }
 
 /// A call site detected in module-level code.
@@ -426,6 +442,15 @@ pub struct ClassInfo {
     /// Used by `BSK-E0092` to detect classes that have fully specialised their
     /// generic bases and therefore cannot be further subscripted.
     pub has_subscript_base: bool,
+    /// Structured information about subscripted base classes.
+    ///
+    /// For `class Foo(Base[T, int])`, this contains an entry with `base_name = "Base"`.
+    /// Used by `BSK-E0107` for variance checking.
+    pub base_subscripts: Vec<BaseSubscriptEntry>,
+    /// `true` when the dataclass is decorated with `slots=True`.
+    pub is_dataclass_slots: bool,
+    /// `true` when the class has a manual `__slots__` definition in the body.
+    pub has_manual_slots: bool,
 }
 
 /// Type parameters declared in a `Generic[T1, T2, ...]` base expression.
@@ -451,6 +476,14 @@ pub struct TypeAliasDefInfo {
     pub name: String,
     /// All simple names referenced in the RHS expression (includes both `TypeVar`s and non-`TypeVar`s).
     pub rhs_names: Vec<String>,
+    /// The base name of the RHS expression, if it is a subscript (e.g. `"Generic"` from `Generic[T]`).
+    pub rhs_base_name: Option<String>,
+    /// Type argument names from the RHS subscript expression.
+    pub rhs_type_arg_names: Vec<String>,
+    /// Forward-reference strings found in the RHS expression.
+    pub rhs_string_refs: Vec<String>,
+    /// The source span of the type alias definition.
+    pub span: Span,
 }
 
 /// A module-level subscript expression (e.g. `MyGeneric[int]`) used as a statement.
@@ -945,6 +978,103 @@ pub struct InvalidStringAnnotation {
     pub span: Span,
 }
 
+/// A direct instantiation of a Protocol class or a concrete class that fails
+/// to implement all required members of its Protocol base(s).
+///
+/// The typing spec forbids instantiating Protocol classes directly, and
+/// concrete subclasses that do not implement all abstract/stub methods or
+/// required ClassVar attributes are effectively abstract and cannot be
+/// instantiated.
+#[derive(Debug, Clone)]
+pub struct ProtocolInstantiationViolation {
+    /// The name of the class being instantiated.
+    pub class_name: String,
+    /// The span of the call expression.
+    pub span: Span,
+    /// `true` when the class is a concrete subclass missing protocol members
+    /// (treated as abstract), `false` when it is a Protocol class itself.
+    pub is_abstract: bool,
+}
+
+/// A violation related to `isinstance`/`issubclass` calls on Protocol classes
+/// that are not decorated with `@runtime_checkable` or are data protocols used
+/// with `issubclass`.
+///
+/// Used by `BSK-E0114`.
+#[derive(Debug, Clone)]
+pub struct ProtocolRtcViolation {
+    /// The span of the offending call expression.
+    pub span: Span,
+    /// The kind of violation.
+    pub kind: ProtocolRtcViolationKind,
+}
+
+/// The kind of `@runtime_checkable` protocol violation.
+#[derive(Debug, Clone)]
+pub enum ProtocolRtcViolationKind {
+    /// Protocol is not decorated with `@runtime_checkable`.
+    NotRuntimeCheckable {
+        /// The protocol class name.
+        protocol_name: String,
+        /// `isinstance` or `issubclass`.
+        call_name: String,
+    },
+    /// A data protocol used with `issubclass()`.
+    IssubclassDataProtocol {
+        /// The protocol class name.
+        protocol_name: String,
+    },
+}
+
+/// A generator-related type violation detected during resolution.
+///
+/// Covers:
+/// - Generator function with non-generator return type (e.g. `-> int` with `yield`)
+/// - Yield type mismatch (`yield 3` in `Generator[str, ...]`)
+/// - Yield-from type mismatch (`yield from iter_a` in `Iterator[B]` where A != B)
+///
+/// Used by `BSK-E0115`.
+#[derive(Debug, Clone)]
+pub struct GeneratorViolation {
+    /// The span of the offending expression.
+    pub span: Span,
+    /// The kind of violation.
+    pub kind: GeneratorViolationKind,
+}
+
+/// The kind of generator violation.
+#[derive(Debug, Clone)]
+pub enum GeneratorViolationKind {
+    /// A generator function (has yield) with a non-generator return type.
+    InvalidReturnType {
+        /// The function name.
+        func_name: String,
+        /// The declared return type text.
+        return_type: String,
+    },
+    /// Yield expression produces a type incompatible with the declared yield type.
+    YieldTypeMismatch {
+        /// The expected yield type from the annotation.
+        expected: String,
+        /// The actual inferred yield type.
+        actual: String,
+    },
+    /// `yield from` expression produces a type incompatible with the declared yield type.
+    YieldFromTypeMismatch {
+        /// The expected yield type from the annotation.
+        expected: String,
+        /// The actual inferred yield type.
+        actual: String,
+    },
+    /// `yield from` subgenerator has an incompatible send type.
+    YieldFromSendTypeMismatch {
+        /// The expected send type from the outer generator annotation.
+        expected: String,
+        /// The actual send type from the subgenerator.
+        actual: String,
+    },
+}
+
 /// The complete resolved view of a parsed module.
 #[derive(Debug)]
 pub struct ResolvedModule {
@@ -1071,6 +1201,11 @@ pub struct ResolvedModule {
     /// is expected, but the class's corresponding method returns a different type.
     /// Used by `BSK-E0073`.
     pub protocol_self_violations: Vec<ProtocolSelfViolation>,
+    /// Protocol instantiation violations: direct `Proto()` calls or instantiation
+    /// of concrete subclasses that fail to implement all required protocol members.
+    ///
+    /// Used by `BSK-E0099`.
+    pub protocol_instantiation_violations: Vec<ProtocolInstantiationViolation>,
     /// Spans of `isinstance(x, T)` calls where `T` is a `TypedDict` class.
     ///
     /// PEP 589: `TypedDict` type objects cannot be used in `isinstance()` tests.
@@ -1095,6 +1230,43 @@ pub struct ResolvedModule {
     /// subscripted with the correct number of type arguments.
     /// Used by `BSK-E0092`.
     pub generic_subscript_sites: Vec<GenericSubscriptSite>,
+    /// Augmented-assignment violations on `Literal`-typed variables.
+    ///
+    /// Used by `BSK-E0100`.
+    pub literal_augmented_assign_violations: Vec<LiteralAugmentedAssignViolation>,
+    /// Tuple index out-of-bounds violations.
+    ///
+    /// Used by `BSK-E0103`.
+    pub tuple_index_violations: Vec<TupleIndexViolation>,
+    /// Invalid attribute accesses on bounded type variables.
+    ///
+    /// Used by `BSK-E0105`.
+    pub bounded_typevar_attr_violations: Vec<BoundedTypeVarAttrViolation>,
+    /// Protocol class used where `type[Proto]` is expected.
+    ///
+    /// Used by `BSK-E0106`.
+    pub protocol_class_object_violations: Vec<ProtocolClassObjectViolation>,
+    /// `ClassName(args).__hash__()` calls on non-hashable dataclasses.
+    ///
+    /// A `@dataclass` with `eq=True` (the default) sets `__hash__` to `None`
+    /// unless `frozen=True`, `unsafe_hash=True`, or `__hash__` is defined explicitly.
+    /// Calling `.__hash__()` on such an instance is an error.
+    ///
+    /// Used by `BSK-E0063`.
+    pub unhashable_hash_call_violations: Vec<UnhashableHashCallViolation>,
+    /// Protocol `isinstance`/`issubclass` violations.
+    ///
+    /// Covers:
+    /// - `isinstance(x, Proto)` / `issubclass(x, Proto)` where `Proto` is not
+    ///   decorated with `@runtime_checkable`.
+    /// - `issubclass(x, Proto)` where `Proto` is a data protocol (has attributes).
+    ///
+    /// Used by `BSK-E0114`.
+    pub protocol_runtime_checkable_violations: Vec<ProtocolRtcViolation>,
+    /// Generator-related type violations (invalid return type, yield mismatches).
+    ///
+    /// Used by `BSK-E0115`.
+    pub generator_violations: Vec<GeneratorViolation>,
     /// The source file path.
     pub path: String,
     /// The original source text (forwarded from parser for span restoration).
@@ -1148,4 +1320,94 @@ pub enum TypedDictKeyViolationKind {
     },
     /// A `del` statement on a `TypedDict` subscript.
     DeleteSubscript,
+}
+
+/// A type argument in a subscript expression, possibly nested.
+///
+/// Represents both simple names (`T`) and parameterised types (`list[T]`).
+#[derive(Debug, Clone)]
+pub enum TypeArg {
+    /// A simple name reference (e.g. `T`, `int`).
+    Simple(String),
+    /// A subscript expression (e.g. `list[T]`, `Mapping[K, V]`).
+    Subscript {
+        /// The base name of the subscript.
+        base: String,
+        /// The type arguments inside the brackets.
+        args: Vec<TypeArg>,
+    },
+}
+
+/// A base class subscript entry, recording the base name and its type arguments.
+///
+/// For `class Foo(Base[T, int])`, this captures `base_name = "Base"`,
+/// `type_arg_names = ["T", "int"]`, and the structured `type_args`.
+#[derive(Debug, Clone)]
+pub struct BaseSubscriptEntry {
+    /// The base class name being subscripted.
+    pub base_name: String,
+    /// Flat list of type argument names (for simple cases).
+    pub type_arg_names: Vec<String>,
+    /// Rich structured type arguments (for nested generics).
+    pub type_args: Vec<TypeArg>,
+    /// The source span of the subscript expression.
+    pub span: Span,
+}
+
+/// A violation where augmented assignment widens a `Literal`-typed variable.
+#[derive(Debug, Clone)]
+pub struct LiteralAugmentedAssignViolation {
+    /// The source span of the augmented assignment.
+    pub span: Span,
+    /// The name of the variable being augmented.
+    pub var_name: String,
+}
+
+/// A violation where a tuple is indexed out of bounds.
+#[derive(Debug, Clone)]
+pub struct TupleIndexViolation {
+    /// The source span of the index expression.
+    pub span: Span,
+    /// The name of the tuple variable.
+    pub tuple_var_name: String,
+    /// The literal index value used.
+    pub index_value: i64,
+    /// The length of the fixed-size tuple.
+    pub tuple_length: usize,
+}
+
+/// A violation where an attribute is accessed on a bounded type variable
+/// that does not exist on the bound type.
+#[derive(Debug, Clone)]
+pub struct BoundedTypeVarAttrViolation {
+    /// The source span of the attribute access.
+    pub span: Span,
+    /// The name of the type variable.
+    pub typevar_name: String,
+    /// The name of the parameter typed with the type variable.
+    pub param_name: String,
+    /// The bound type of the type variable.
+    pub bound_type: String,
+    /// The attribute name that was accessed.
+    pub attr_name: String,
+}
+
+/// A violation where a Protocol class is used where `type[Proto]` is expected.
+#[derive(Debug, Clone)]
+pub struct ProtocolClassObjectViolation {
+    /// The source span of the violation.
+    pub span: Span,
+    /// The name of the Protocol class.
+    pub protocol_name: String,
+    /// Description of the context (e.g. "argument" or "assignment").
+    pub context: String,
+}
+
+/// A forward-reference string found in a type alias RHS.
+#[derive(Debug, Clone)]
+pub struct RhsStringRef {
+    /// The referenced name.
+    pub name: String,
+    /// The source span of the string reference.
+    pub span: Span,
 }

@@ -9,19 +9,23 @@ pub mod scope;
 mod visitor;
 
 pub use scope::{
-    AnnotatedTooFewArgs, AssertTypeCallInfo, AttributeInfo, CallSite, ClassInfo, CompareOp,
+    AnnotatedTooFewArgs, AssertTypeCallInfo, AttributeInfo, BaseSubscriptEntry,
+    BoundedTypeVarAttrViolation, CallSite, ClassInfo, CompareOp,
     EnumValueTypeViolationInfo, EnumValueTypeViolationKind, FinalViolationInfo, FinalViolationKind,
     FloatParamIntAttrAccess, FunctionInfo, GenericParamInfo, HistoricalPositionalViolation,
     HistoricalPositionalViolationKind, ImportInfo, ImportKind, InvalidStringAnnotation,
-    InvalidStringAnnotationKind, LiteralStringEnumMismatch, LocalClassVarViolation,
-    MatchStmtInfo,
+    InvalidStringAnnotationKind, LiteralAugmentedAssignViolation, LiteralStringEnumMismatch,
+    LocalClassVarViolation, MatchStmtInfo,
     ModuleAttrAccessInfo, ModuleAttrAssignment, ModuleBareAssignment, ModuleOrderComparisonInfo,
-    NamedTupleDefInfo, NewTypeCallInfo, ParameterInfo, Pep695BoundViolation, ProtocolSelfViolation,
+    NamedTupleDefInfo, NewTypeCallInfo, ParameterInfo, Pep695BoundViolation,
+    ProtocolClassObjectViolation, ProtocolInstantiationViolation, ProtocolRtcViolation,
+    ProtocolRtcViolationKind, ProtocolSelfViolation,
     Pep695BoundViolationKind, ReadOnlyViolationInfo, ReadOnlyViolationKind, ResolvedModule,
-    ReturnAnnotationKind, ReturnStmtInfo, RevealTypeCallInfo, RhsKind, Span, TypeAliasDefInfo,
-    TypeAliasTypeCallInfo, TypeStatementInfo, TypeVarCallInfo, TypedDictCallInfo,
+    ReturnAnnotationKind, ReturnStmtInfo, RevealTypeCallInfo, RhsKind, RhsStringRef, Span,
+    TupleIndexViolation, TypeAliasDefInfo,
+    TypeAliasTypeCallInfo, TypeArg, TypeStatementInfo, TypeVarCallInfo, TypedDictCallInfo,
     TypedDictKeyViolation, TypedDictKeyViolationKind, TypedDictSecondArgKind,
-    UnhashableKeyRef, VariableInfo,
+    UnhashableHashCallViolation, UnhashableKeyRef, VariableInfo,
 };
 
 use basilisk_parser::ParsedModule;

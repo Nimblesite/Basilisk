@@ -37,6 +37,8 @@ pub enum InferredType {
     Never,
     /// Unknown type - used when type cannot be determined
     Unknown,
+    /// `LiteralString` — any string literal or value known to be a literal string
+    LiteralString,
     /// Named type (`ClassName`) - fallback for named types not yet resolved
     Named(String),
 }
@@ -94,6 +96,7 @@ impl fmt::Display for InferredType {
             InferredType::Any => write!(f, "Any"),
             InferredType::Never => write!(f, "Never"),
             InferredType::Unknown => write!(f, "Unknown"),
+            InferredType::LiteralString => write!(f, "LiteralString"),
             InferredType::Named(name) => write!(f, "{name}"),
         }
     }
@@ -168,7 +171,9 @@ impl InferredType {
     pub fn is_assignable_to(&self, other: &InferredType) -> bool {
         match (self, other) {
             // Any target or Never source is always assignable
-            (_, InferredType::Any) | (InferredType::Never, _) => true,
+            // Unknown means we cannot determine the type — assume compatible to avoid false positives
+            (_, InferredType::Any) | (InferredType::Never, _)
+            | (InferredType::Unknown, _) | (_, InferredType::Unknown) => true,
             // Same types are assignable
             (a, b) if a == b => true,
             // Int→float widening, or Literal assignable to its base type
@@ -177,6 +182,11 @@ impl InferredType {
                 InferredType::Literal(_),
                 InferredType::Int | InferredType::Str | InferredType::Float | InferredType::Bool,
             ) => true,
+            // String literals and Literal[str] are assignable to LiteralString
+            (InferredType::Str, InferredType::LiteralString)
+            | (InferredType::Literal(LiteralValue::Str(_)), InferredType::LiteralString) => true,
+            // LiteralString is assignable to str
+            (InferredType::LiteralString, InferredType::Str) => true,
             // Optional types are assignable to their non-optional counterparts
             (InferredType::Optional(inner), other) => inner.is_assignable_to(other),
             (inner, InferredType::Optional(other)) => inner.is_assignable_to(other),
@@ -217,7 +227,14 @@ impl InferredType {
             "none" => InferredType::None_,
             "any" | "object" => InferredType::Any,
             "never" => InferredType::Never,
+            "literalstring" => InferredType::LiteralString,
+            "final" => InferredType::Any, // Final without type arg is compatible with any value
             _ => {
+                // Handle Literal[...] annotations
+                if annotation.starts_with("literal[") && annotation.ends_with(']') {
+                    let inner = annotation["literal[".len()..annotation.len()-1].trim();
+                    return parse_literal_annotation(inner);
+                }
                 // Handle simple container types
                 if annotation.starts_with("list[") && annotation.ends_with(']') {
                     let inner = &annotation[5..annotation.len()-1];
@@ -260,5 +277,103 @@ impl InferredType {
             }
         }
     }
+}
+
+/// Parses the inner content of a `Literal[...]` annotation into an `InferredType`.
+///
+/// Handles integer, string, boolean, bytes, and None literals, as well as
+/// multi-valued Literal types (treated as unions).
+fn parse_literal_annotation(inner: &str) -> InferredType {
+    let inner = inner.trim();
+
+    // Multi-valued: Literal[1, 2, "x"] → union
+    if inner.contains(',') {
+        let parts = split_literal_args(inner);
+        if parts.len() > 1 {
+            let types: Vec<InferredType> = parts
+                .iter()
+                .map(|p| parse_single_literal(p.trim()))
+                .collect();
+            return InferredType::Union(types);
+        }
+    }
+
+    parse_single_literal(inner)
+}
+
+/// Parse a single literal value from a Literal annotation argument.
+fn parse_single_literal(val: &str) -> InferredType {
+    let val = val.trim();
+
+    // Boolean literals (must check before int since True/False could be confused)
+    if val == "true" {
+        return InferredType::Literal(LiteralValue::Bool(true));
+    }
+    if val == "false" {
+        return InferredType::Literal(LiteralValue::Bool(false));
+    }
+
+    // None
+    if val == "none" {
+        return InferredType::None_;
+    }
+
+    // Integer literal (possibly negative)
+    if let Some(n) = val.strip_prefix('-') {
+        if let Ok(num) = n.trim().parse::<i64>() {
+            return InferredType::Literal(LiteralValue::Int(-num));
+        }
+    }
+    if let Ok(num) = val.parse::<i64>() {
+        return InferredType::Literal(LiteralValue::Int(num));
+    }
+    // Hex / octal / binary literals
+    if let Some(hex) = val.strip_prefix("0x").or_else(|| val.strip_prefix("0X")) {
+        if let Ok(num) = i64::from_str_radix(hex, 16) {
+            return InferredType::Literal(LiteralValue::Int(num));
+        }
+    }
+
+    // String literal: "..." or '...'
+    if (val.starts_with('"') && val.ends_with('"'))
+        || (val.starts_with('\'') && val.ends_with('\''))
+    {
+        let content = &val[1..val.len() - 1];
+        return InferredType::Literal(LiteralValue::Str(content.to_owned()));
+    }
+
+    // Bytes literal: b"..." or b'...'
+    if (val.starts_with("b\"") || val.starts_with("b'"))
+        && (val.ends_with('"') || val.ends_with('\''))
+    {
+        let content = &val[2..val.len() - 1];
+        return InferredType::Literal(LiteralValue::Bytes(content.as_bytes().to_vec()));
+    }
+
+    // Fallback: treat as a named type within Literal
+    InferredType::Named(val.to_owned())
+}
+
+/// Split `Literal[...]` arguments by top-level commas, respecting nesting.
+fn split_literal_args(inner: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut depth = 0u32;
+    let mut start = 0;
+    for (idx, ch) in inner.char_indices() {
+        match ch {
+            '[' | '(' | '{' => depth = depth.saturating_add(1),
+            ']' | ')' | '}' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                parts.push(&inner[start..idx]);
+                start = idx + 1;
+            }
+            _ => {}
+        }
+    }
+    let remainder = &inner[start..];
+    if !remainder.trim().is_empty() {
+        parts.push(remainder);
+    }
+    parts
 }
 

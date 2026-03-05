@@ -11,13 +11,21 @@
 //!
 //! Note: `Annotated[ClassVar[T], ...]` is a valid exception.
 //!
+//! This rule also validates `ClassVar` argument correctness:
+//! - `ClassVar` accepts at most one argument
+//! - The argument must be a valid type (not a literal or runtime variable)
+//! - The argument must not contain `TypeVar`, `ParamSpec`, or `TypeVarTuple`
+//!
+//! Additionally, `ClassVar` attributes cannot be assigned via instances.
+//!
 //! ```python
 //! class MyClass:
 //!     bad9: Final[ClassVar[int]] = 3     # E0036 — ClassVar cannot be nested
 //!     bad10: list[ClassVar[int]] = []    # E0036 — ClassVar cannot be nested
 //!
 //!     def method1(self, a: ClassVar[int]):   # E0036 — ClassVar not allowed here
-//!         ...
+//!         x: ClassVar[str] = ""              # E0036 — ClassVar not allowed here
+//!         self.xx: ClassVar[str] = ""        # E0036 — ClassVar not allowed here
 //!
 //!     def method2(self) -> ClassVar[int]:    # E0036 — ClassVar not allowed here
 //!         ...
@@ -50,6 +58,12 @@ fn has_classvar(ann: &str) -> bool {
     ann.contains("ClassVar[") || ann.contains("ClassVar ")
 }
 
+/// Returns `true` when `ClassVar` or an alias like `CV` appears as a bare
+/// name or subscript in an annotation string.
+fn has_classvar_or_alias(ann: &str) -> bool {
+    has_classvar(ann) || ann.contains("CV[") || ann == "ClassVar" || ann == "CV"
+}
+
 /// Returns `true` when the annotation text contains `ClassVar` nested inside
 /// another type constructor.  `Annotated[ClassVar[...], ...]` is excluded
 /// because that is a valid usage per the typing spec.
@@ -76,22 +90,301 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
     }
 }
 
+/// Extract the content between the outer `[...]` of a `ClassVar[...]` or `CV[...]`
+/// annotation text.  Returns `None` when there is no subscript.
+fn extract_classvar_inner(ann: &str) -> Option<&str> {
+    // Find the start: "ClassVar[" or "CV["
+    let prefix_len = if ann.starts_with("ClassVar[") {
+        "ClassVar[".len()
+    } else if ann.starts_with("CV[") {
+        "CV[".len()
+    } else if ann.starts_with("Annotated[ClassVar[") {
+        // Skip Annotated wrapper — valid per spec
+        return None;
+    } else {
+        return None;
+    };
+
+    // Find the matching closing bracket by counting nesting
+    let bytes = ann.as_bytes();
+    let mut depth: u32 = 1;
+    let mut end_idx = None;
+    for (idx, &byte) in bytes.iter().enumerate().skip(prefix_len) {
+        match byte {
+            b'[' => depth = depth.saturating_add(1),
+            b']' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    end_idx = Some(idx);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    end_idx.map(|end| &ann[prefix_len..end])
+}
+
+/// Count the number of top-level comma-separated arguments in a bracket body.
+fn count_top_level_args(inner: &str) -> usize {
+    if inner.trim().is_empty() {
+        return 0;
+    }
+    let mut depth: u32 = 0;
+    let mut count: usize = 1;
+    for byte in inner.as_bytes() {
+        match byte {
+            b'[' | b'(' => depth = depth.saturating_add(1),
+            b']' | b')' => depth = depth.saturating_sub(1),
+            b',' if depth == 0 => count = count.saturating_add(1),
+            _ => {}
+        }
+    }
+    count
+}
+
+/// Returns `true` when the argument text looks like a numeric literal (e.g. `3`, `3.14`).
+fn is_numeric_literal(arg: &str) -> bool {
+    let trimmed = arg.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    // A numeric literal: all digits, optionally with a single dot
+    trimmed
+        .chars()
+        .all(|ch| ch.is_ascii_digit() || ch == '.' || ch == '-' || ch == '+')
+        && trimmed.chars().any(|ch| ch.is_ascii_digit())
+}
+
+/// Returns `true` when the argument text looks like a runtime variable reference
+/// (a simple identifier that is not a known type name).
+///
+/// We check against known type/typing names. If it's a simple identifier not in
+/// the known set and not starting with an uppercase letter that looks like a class,
+/// it's probably a runtime variable.
+fn is_runtime_variable(arg: &str, module_var_names: &[String]) -> bool {
+    let trimmed = arg.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    // Must be a simple identifier (no brackets, dots, etc.)
+    if !trimmed
+        .chars()
+        .all(|ch| ch.is_alphanumeric() || ch == '_')
+    {
+        return false;
+    }
+    // Check if it's a module-level variable (runtime value)
+    module_var_names.iter().any(|name| name == trimmed)
+}
+
+/// Check if an annotation's `ClassVar` argument contains any of the given type
+/// parameter names (TypeVar, ParamSpec, TypeVarTuple names).
+fn contains_type_param(ann_inner: &str, type_param_names: &[(String, TypeParamKind)]) -> Option<TypeParamKind> {
+    for (name, kind) in type_param_names {
+        // Check for the name appearing as a standalone word or as part of a subscript
+        // e.g. `T` in `list[T]`, `P` in `Callable[P, Any]`
+        if contains_word(ann_inner, name) {
+            return Some(*kind);
+        }
+    }
+    None
+}
+
+/// Check if `text` contains `word` as a standalone identifier (not part of a larger name).
+fn contains_word(text: &str, word: &str) -> bool {
+    let word_bytes = word.as_bytes();
+    let text_bytes = text.as_bytes();
+    let word_len = word_bytes.len();
+
+    if word_len > text_bytes.len() {
+        return false;
+    }
+
+    for start_idx in 0..=text_bytes.len().saturating_sub(word_len) {
+        if &text_bytes[start_idx..start_idx + word_len] == word_bytes {
+            // Check that the character before (if any) is not alphanumeric or underscore
+            let before_ok = start_idx == 0
+                || !is_ident_char(text_bytes[start_idx.saturating_sub(1)]);
+            // Check that the character after (if any) is not alphanumeric or underscore
+            let after_ok = start_idx + word_len >= text_bytes.len()
+                || !is_ident_char(text_bytes[start_idx + word_len]);
+            if before_ok && after_ok {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Returns `true` if the byte is an ASCII alphanumeric or underscore character.
+fn is_ident_char(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_'
+}
+
+/// Classification of a type parameter for error messaging.
+#[derive(Debug, Clone, Copy)]
+enum TypeParamKind {
+    TypeVar,
+    ParamSpec,
+    TypeVarTuple,
+}
+
+/// Scan source text for `self.<name>: ClassVar` or `self.<name>: CV` patterns
+/// and return the spans and names of violations.
+fn find_self_classvar_annotations(source: &str) -> Vec<(String, Span)> {
+    let mut results = Vec::new();
+    let bytes = source.as_bytes();
+    let source_len = bytes.len();
+    let self_dot = b"self.";
+
+    let mut idx = 0;
+    while idx + self_dot.len() < source_len {
+        // Find "self."
+        if &bytes[idx..idx + self_dot.len()] != self_dot {
+            idx += 1;
+            continue;
+        }
+
+        // Check that "self." is preceded by whitespace/newline/start (not part of a larger name)
+        if idx > 0 && is_ident_char(bytes[idx - 1]) {
+            idx += 1;
+            continue;
+        }
+
+        let attr_start = idx + self_dot.len();
+
+        // Collect the attribute name
+        let mut attr_end = attr_start;
+        while attr_end < source_len && is_ident_char(bytes[attr_end]) {
+            attr_end += 1;
+        }
+        if attr_end == attr_start {
+            idx += 1;
+            continue;
+        }
+
+        let attr_name = match std::str::from_utf8(&bytes[attr_start..attr_end]) {
+            Ok(name) => name.to_owned(),
+            Err(_) => {
+                idx += 1;
+                continue;
+            }
+        };
+
+        // Skip whitespace after the attribute name
+        let mut colon_idx = attr_end;
+        while colon_idx < source_len && bytes[colon_idx] == b' ' {
+            colon_idx += 1;
+        }
+
+        // Check for ":"
+        if colon_idx >= source_len || bytes[colon_idx] != b':' {
+            idx = attr_end;
+            continue;
+        }
+
+        // Skip whitespace after ":"
+        let mut ann_start = colon_idx + 1;
+        while ann_start < source_len && bytes[ann_start] == b' ' {
+            ann_start += 1;
+        }
+
+        // Check if annotation starts with "ClassVar" or "CV"
+        let has_cv = if ann_start + 8 <= source_len
+            && &bytes[ann_start..ann_start + 8] == b"ClassVar"
+        {
+            true
+        } else if ann_start + 2 <= source_len
+            && &bytes[ann_start..ann_start + 2] == b"CV"
+            && (ann_start + 2 >= source_len || bytes[ann_start + 2] == b'[' || bytes[ann_start + 2] == b' ')
+        {
+            true
+        } else {
+            false
+        };
+
+        if has_cv {
+            let target_start = idx;
+            let span = Span {
+                start: target_start as u32,
+                end: attr_end as u32,
+            };
+            results.push((attr_name, span));
+        }
+
+        idx = attr_end;
+    }
+
+    results
+}
+
 /// Emits BSK-E0036 for `ClassVar` used in an invalid context.
 pub(crate) struct ClassVarInvalidContext;
 
 impl Rule for ClassVarInvalidContext {
+    #[allow(clippy::too_many_lines)]
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         let source = &module.source;
         let path = &module.path;
 
-        // --- Class attributes: detect nested ClassVar ---
-        // e.g. `Final[ClassVar[int]]`, `list[ClassVar[int]]`
-        // (Valid top-level usage like `ClassVar[int]` is not flagged here.)
+        // Collect TypeVar/ParamSpec/TypeVarTuple names for ClassVar argument validation
+        let type_param_names: Vec<(String, TypeParamKind)> = module
+            .typevar_calls
+            .iter()
+            .map(|tc| {
+                let kind = if tc.is_paramspec {
+                    TypeParamKind::ParamSpec
+                } else if tc.is_typevartuple {
+                    TypeParamKind::TypeVarTuple
+                } else {
+                    TypeParamKind::TypeVar
+                };
+                (tc.name.clone(), kind)
+            })
+            .collect();
+
+        // Collect module-level variable names for runtime variable detection
+        let module_var_names: Vec<String> = module
+            .module_vars
+            .iter()
+            .filter(|var| {
+                // Exclude TypeVar/ParamSpec/TypeVarTuple assignments
+                !type_param_names.iter().any(|(name, _)| name == &var.name)
+            })
+            .map(|var| var.name.clone())
+            .collect();
+
+        // --- Class attributes: detect nested ClassVar and validate arguments ---
         for cls in &module.classes {
+            // Also collect generic params from the class itself
+            let class_type_params: Vec<(String, TypeParamKind)> = cls
+                .generic_params
+                .iter()
+                .map(|gp| {
+                    let kind = if gp.is_typevartuple {
+                        TypeParamKind::TypeVarTuple
+                    } else {
+                        TypeParamKind::TypeVar
+                    };
+                    (gp.name.clone(), kind)
+                })
+                .collect();
+
+            // Merge module-level and class-level type params
+            let all_type_params: Vec<(String, TypeParamKind)> = type_param_names
+                .iter()
+                .chain(class_type_params.iter())
+                .cloned()
+                .collect();
+
             for attr in &cls.attributes {
                 let Some(ann) = span_text(source, attr.annotation_span) else {
                     continue;
                 };
+
+                // Check for nested ClassVar (e.g. Final[ClassVar[int]])
                 if has_nested_classvar(ann) {
                     diagnostics.push(make_diagnostic(
                         format!(
@@ -101,6 +394,19 @@ impl Rule for ClassVarInvalidContext {
                         attr.name_span,
                         path,
                     ));
+                }
+
+                // Validate ClassVar arguments
+                if let Some(inner) = extract_classvar_inner(ann) {
+                    check_classvar_args(
+                        inner,
+                        &attr.name,
+                        attr.name_span,
+                        path,
+                        &all_type_params,
+                        &module_var_names,
+                        diagnostics,
+                    );
                 }
             }
         }
@@ -129,16 +435,56 @@ impl Rule for ClassVarInvalidContext {
             }
 
             // --- Function return type: ClassVar not allowed ---
-            let Some(ret_ann) = span_text(source, func.return_annotation_span) else {
-                continue;
-            };
-            if has_classvar(ret_ann) {
+            if let Some(ret_ann) = span_text(source, func.return_annotation_span) {
+                if has_classvar(ret_ann) {
+                    diagnostics.push(make_diagnostic(
+                        format!(
+                            "`ClassVar` is not allowed in the return annotation of `{}`",
+                            func.name
+                        ),
+                        func.name_span,
+                        path,
+                    ));
+                }
+            }
+
+            // --- Local variables: ClassVar not allowed ---
+            for var in &func.local_vars {
+                let Some(ann) = span_text(source, var.annotation_span) else {
+                    continue;
+                };
+                if has_classvar_or_alias(ann) {
+                    diagnostics.push(make_diagnostic(
+                        format!(
+                            "`ClassVar` is not allowed in local variable annotation for `{}`",
+                            var.name
+                        ),
+                        var.name_span,
+                        path,
+                    ));
+                }
+            }
+        }
+
+        // --- Self-attribute ClassVar annotations: scan source text ---
+        // e.g. `self.xx: ClassVar[str] = ""`
+        // These are not captured in local_vars because the target is an Attribute node.
+        let self_classvar_violations = find_self_classvar_annotations(source);
+        for (attr_name, span) in &self_classvar_violations {
+            // Only flag self.xxx ClassVar inside methods (verify by checking the span
+            // falls within a function that has a class_name)
+            let in_method = module.functions.iter().any(|func| {
+                func.class_name.is_some()
+                    && func.def_span.start <= span.start
+                    // Use the next function/class boundary or end of source as upper bound
+                    && span.start > func.name_span.start
+            });
+            if in_method {
                 diagnostics.push(make_diagnostic(
                     format!(
-                        "`ClassVar` is not allowed in the return annotation of `{}`",
-                        func.name
+                        "`ClassVar` is not allowed in self-attribute annotation for `{attr_name}`",
                     ),
-                    func.name_span,
+                    *span,
                     path,
                 ));
             }
@@ -175,6 +521,175 @@ impl Rule for ClassVarInvalidContext {
                     ));
                 }
             }
+        }
+
+        // --- Instance-level assignment to ClassVar attributes ---
+        // e.g. `enterprise_d.stats = {}` where `stats` is ClassVar in the class
+        check_instance_classvar_assignments(module, diagnostics);
+    }
+}
+
+/// Validate `ClassVar` arguments for correctness.
+fn check_classvar_args(
+    inner: &str,
+    attr_name: &str,
+    name_span: Span,
+    path: &str,
+    type_param_names: &[(String, TypeParamKind)],
+    module_var_names: &[String],
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let arg_count = count_top_level_args(inner);
+
+    // Too many arguments (ClassVar accepts at most 1)
+    if arg_count > 1 {
+        diagnostics.push(make_diagnostic(
+            format!(
+                "`ClassVar` accepts at most one type argument, but `{attr_name}` has {arg_count}",
+            ),
+            name_span,
+            path,
+        ));
+        return;
+    }
+
+    let trimmed = inner.trim();
+
+    // Check for numeric literal argument (e.g. ClassVar[3])
+    if is_numeric_literal(trimmed) {
+        diagnostics.push(make_diagnostic(
+            format!(
+                "Invalid `ClassVar` argument for `{attr_name}`: `{trimmed}` is not a valid type",
+            ),
+            name_span,
+            path,
+        ));
+        return;
+    }
+
+    // Check for runtime variable argument (e.g. ClassVar[var])
+    if is_runtime_variable(trimmed, module_var_names) {
+        diagnostics.push(make_diagnostic(
+            format!(
+                "Invalid `ClassVar` argument for `{attr_name}`: `{trimmed}` is a runtime variable, not a type",
+            ),
+            name_span,
+            path,
+        ));
+        return;
+    }
+
+    // Check for TypeVar/ParamSpec/TypeVarTuple in ClassVar argument
+    if let Some(kind) = contains_type_param(trimmed, type_param_names) {
+        let kind_name = match kind {
+            TypeParamKind::TypeVar => "TypeVar",
+            TypeParamKind::ParamSpec => "ParamSpec",
+            TypeParamKind::TypeVarTuple => "TypeVarTuple",
+        };
+        diagnostics.push(make_diagnostic(
+            format!(
+                "`ClassVar` parameter for `{attr_name}` cannot contain {kind_name}",
+            ),
+            name_span,
+            path,
+        ));
+    }
+}
+
+/// Check module-level attribute assignments to ClassVar-annotated class attributes.
+///
+/// e.g. `enterprise_d.stats = {}` where `stats: ClassVar[dict[str, int]]` in the class.
+fn check_instance_classvar_assignments(
+    module: &ResolvedModule,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let source = &module.source;
+    let path = &module.path;
+
+    // Build a map of class names to their ClassVar attribute names
+    let mut classvar_attrs: Vec<(&str, Vec<&str>)> = Vec::new();
+    for cls in &module.classes {
+        let cv_names: Vec<&str> = cls
+            .attributes
+            .iter()
+            .filter(|attr| {
+                span_text(source, attr.annotation_span)
+                    .is_some_and(|ann| {
+                        ann.starts_with("ClassVar[")
+                            || ann.starts_with("ClassVar ")
+                            || ann == "ClassVar"
+                            || ann.starts_with("CV[")
+                            || ann == "CV"
+                    })
+            })
+            .map(|attr| attr.name.as_str())
+            .collect();
+        if !cv_names.is_empty() {
+            classvar_attrs.push((&cls.name, cv_names));
+        }
+    }
+
+    if classvar_attrs.is_empty() {
+        return;
+    }
+
+    // Build a map of variable names to their class types (simple heuristic)
+    // Look for module-level assignments like `enterprise_d = Starship(3000)`
+    let mut instance_class_map: Vec<(String, String)> = Vec::new();
+    for var in &module.module_vars {
+        if let Some(rhs) = span_text(source, var.rhs_span) {
+            // Check if RHS is a constructor call: ClassName(...)
+            if let Some(paren_idx) = rhs.find('(') {
+                let class_name = rhs[..paren_idx].trim();
+                if !class_name.is_empty()
+                    && class_name
+                        .chars()
+                        .next()
+                        .is_some_and(|ch| ch.is_ascii_uppercase())
+                    && class_name.chars().all(|ch| ch.is_alphanumeric() || ch == '_')
+                {
+                    instance_class_map.push((var.name.clone(), class_name.to_owned()));
+                }
+            }
+        }
+    }
+
+    // Check each module-level attribute assignment
+    for assignment in &module.module_attr_assignments {
+        // Find if the object is an instance of a class with ClassVar attrs
+        let Some(class_name) = instance_class_map
+            .iter()
+            .find(|(var_name, _)| var_name == &assignment.object_name)
+            .map(|(_, cls)| cls.as_str())
+        else {
+            // Could also be a direct class assignment (Starship.stats = {}) which is OK
+            continue;
+        };
+
+        // Check if the attribute is a ClassVar
+        let is_classvar_attr = classvar_attrs.iter().any(|(cls, attrs)| {
+            *cls == class_name && attrs.contains(&assignment.attr_name.as_str())
+        });
+
+        if is_classvar_attr {
+            diagnostics.push(Diagnostic {
+                code: CODE.clone(),
+                severity: Severity::Error,
+                message: format!(
+                    "Cannot assign to `ClassVar` attribute `{}` through an instance of `{}`",
+                    assignment.attr_name, class_name
+                ),
+                span: assignment.target_span,
+                path: path.to_owned(),
+                help: Some(
+                    "Assign to the class directly instead: `ClassName.attr = value`".to_owned(),
+                ),
+                note: Some(
+                    "PEP 526: ClassVar attributes can only be assigned on the class itself, \
+                     not through instances"
+                        .to_owned(),
+                ),
+            });
         }
     }
 }
