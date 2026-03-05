@@ -11,7 +11,8 @@ use crate::util::span_to_range;
 
 /// Build a hierarchical document symbol tree from a resolved module.
 #[allow(deprecated)] // DocumentSymbol.deprecated field is deprecated but required by the struct
-#[must_use] pub fn document_symbols(resolved: &ResolvedModule, source: &str) -> Vec<DocumentSymbol> {
+#[must_use]
+pub fn document_symbols(resolved: &ResolvedModule, source: &str) -> Vec<DocumentSymbol> {
     let mut top_level: Vec<DocumentSymbol> = Vec::new();
 
     // Classes with nested methods and attributes.
@@ -206,20 +207,14 @@ fn matches_query(name: &str, query_lower: &str) -> bool {
 }
 
 /// Build a detail string for a function's parameters.
-fn function_detail(
-    func: &basilisk_resolver::FunctionInfo,
-    source: &str,
-) -> String {
+fn function_detail(func: &basilisk_resolver::FunctionInfo, source: &str) -> String {
     let params = param_list(func, source);
     let ret = return_annotation(func, source);
     format!("({params}){ret}")
 }
 
 /// Build a detail string for a method's parameters (skip self).
-fn method_detail(
-    func: &basilisk_resolver::FunctionInfo,
-    source: &str,
-) -> String {
+fn method_detail(func: &basilisk_resolver::FunctionInfo, source: &str) -> String {
     let params = param_list_skip_self(func, source);
     let ret = return_annotation(func, source);
     format!("({params}){ret}")
@@ -265,10 +260,7 @@ fn return_annotation(func: &basilisk_resolver::FunctionInfo, source: &str) -> St
     }
 }
 
-fn annotation_detail(
-    span: Option<basilisk_resolver::Span>,
-    source: &str,
-) -> Option<String> {
+fn annotation_detail(span: Option<basilisk_resolver::Span>, source: &str) -> Option<String> {
     let span = span?;
     let text = source.get(span.start as usize..span.end as usize)?;
     Some(text.trim().to_owned())

@@ -13,9 +13,11 @@ use std::io;
 
 use futures_util::stream::{self, StreamExt as _};
 use futures_util::SinkExt as _;
-use tokio::io::{AsyncBufReadExt as _, AsyncReadExt as _, AsyncWriteExt as _, BufReader, DuplexStream};
-use tokio::sync::mpsc;
+use tokio::io::{
+    AsyncBufReadExt as _, AsyncReadExt as _, AsyncWriteExt as _, BufReader, DuplexStream,
+};
 use tokio::net::TcpListener;
+use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
 use tower_lsp::{LspService, Server};
 
@@ -121,9 +123,7 @@ async fn read_lsp_body(reader: &mut BufReader<DuplexStream>) -> Option<String> {
 
 /// Convert a `DuplexStream` of `Content-Length`-framed LSP output into a
 /// `Stream` of message body strings.
-fn lsp_output_stream(
-    lsp_output: DuplexStream,
-) -> impl stream::Stream<Item = String> {
+fn lsp_output_stream(lsp_output: DuplexStream) -> impl stream::Stream<Item = String> {
     stream::unfold(BufReader::new(lsp_output), |mut reader| async move {
         read_lsp_body(&mut reader).await.map(|body| (body, reader))
     })

@@ -68,8 +68,11 @@ fn compute_arities<'a>(module: &'a ResolvedModule) -> HashMap<&'a str, TypeArity
         .map(|tv| (tv.name.as_str(), tv.has_default))
         .collect();
 
-    let all_typevar_names: HashSet<&str> =
-        module.typevar_calls.iter().map(|tv| tv.name.as_str()).collect();
+    let all_typevar_names: HashSet<&str> = module
+        .typevar_calls
+        .iter()
+        .map(|tv| tv.name.as_str())
+        .collect();
 
     let tvt_names: HashSet<&str> = module
         .typevar_calls
@@ -93,10 +96,13 @@ fn compute_arities<'a>(module: &'a ResolvedModule) -> HashMap<&'a str, TypeArity
                 })
                 .count();
             let total = cls.generic_params.len();
-            arities.insert(cls.name.as_str(), TypeArity {
-                min: (required > 0 && required < total).then_some(required),
-                max: (!has_tvt).then_some(total),
-            });
+            arities.insert(
+                cls.name.as_str(),
+                TypeArity {
+                    min: (required > 0 && required < total).then_some(required),
+                    max: (!has_tvt).then_some(total),
+                },
+            );
         } else if !cls.base_expression_names.is_empty() {
             let has_tvt = cls
                 .base_expression_names
@@ -112,7 +118,10 @@ fn compute_arities<'a>(module: &'a ResolvedModule) -> HashMap<&'a str, TypeArity
                 if implicit_arity > 0 {
                     arities.insert(
                         cls.name.as_str(),
-                        TypeArity { min: None, max: Some(implicit_arity) },
+                        TypeArity {
+                            min: None,
+                            max: Some(implicit_arity),
+                        },
                     );
                 } else if cls.has_subscript_base && !cls.has_pep695_type_params {
                     // All TypeVars in this class's bases are fully specialised with
@@ -120,7 +129,13 @@ fn compute_arities<'a>(module: &'a ResolvedModule) -> HashMap<&'a str, TypeArity
                     // and must not be further subscripted.
                     // Exclude PEP 695 classes (`class Foo[T]`) because their type
                     // params don't appear in `base_expression_names`.
-                    arities.insert(cls.name.as_str(), TypeArity { min: None, max: Some(0) });
+                    arities.insert(
+                        cls.name.as_str(),
+                        TypeArity {
+                            min: None,
+                            max: Some(0),
+                        },
+                    );
                 }
             }
         }
@@ -128,7 +143,10 @@ fn compute_arities<'a>(module: &'a ResolvedModule) -> HashMap<&'a str, TypeArity
 
     // TypeAlias arities.
     for alias in &module.type_alias_defs {
-        let has_tvt = alias.rhs_names.iter().any(|n| tvt_names.contains(n.as_str()));
+        let has_tvt = alias
+            .rhs_names
+            .iter()
+            .any(|n| tvt_names.contains(n.as_str()));
         if has_tvt {
             continue;
         }
@@ -143,10 +161,13 @@ fn compute_arities<'a>(module: &'a ResolvedModule) -> HashMap<&'a str, TypeArity
             .iter()
             .filter(|&&n| !tv_defaults.get(n).copied().unwrap_or(false))
             .count();
-        arities.insert(alias.name.as_str(), TypeArity {
-            min: (required > 0 && required < total).then_some(required),
-            max: Some(total),
-        });
+        arities.insert(
+            alias.name.as_str(),
+            TypeArity {
+                min: (required > 0 && required < total).then_some(required),
+                max: Some(total),
+            },
+        );
     }
 
     arities
@@ -174,15 +195,15 @@ impl Rule for TooFewTypeArguments {
                         ),
                         span: site.span,
                         path: module.path.clone(),
-                        help: Some(
-                            "`type` takes exactly one type argument: `type[T]`".to_string()
-                        ),
+                        help: Some("`type` takes exactly one type argument: `type[T]`".to_string()),
                         note: None,
                     });
                 }
             }
 
-            let Some(arity) = arities.get(site.base_name.as_str()) else { continue; };
+            let Some(arity) = arities.get(site.base_name.as_str()) else {
+                continue;
+            };
 
             if let Some(min_args) = arity.min {
                 if site.arg_count < min_args {

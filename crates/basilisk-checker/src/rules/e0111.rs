@@ -133,9 +133,7 @@ fn check_class_scoped_typevars_in_self(
                 continue;
             };
 
-            let Some(ann_text) =
-                source.get(ann_span.start as usize..ann_span.end as usize)
-            else {
+            let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
                 continue;
             };
 
@@ -251,14 +249,16 @@ fn check_stmt(
             }
         }
         Stmt::Try(try_stmt) => {
-            for body in [
-                &try_stmt.body,
-                &try_stmt.orelse,
-                &try_stmt.finalbody,
-            ] {
+            for body in [&try_stmt.body, &try_stmt.orelse, &try_stmt.finalbody] {
                 for s in body {
                     check_stmt(
-                        s, source, path, class_map, method_map, typevar_names, diagnostics,
+                        s,
+                        source,
+                        path,
+                        class_map,
+                        method_map,
+                        typevar_names,
+                        diagnostics,
                     );
                 }
             }
@@ -266,7 +266,13 @@ fn check_stmt(
                 let ruff_python_ast::ExceptHandler::ExceptHandler(h) = handler;
                 for s in &h.body {
                     check_stmt(
-                        s, source, path, class_map, method_map, typevar_names, diagnostics,
+                        s,
+                        source,
+                        path,
+                        class_map,
+                        method_map,
+                        typevar_names,
+                        diagnostics,
                     );
                 }
             }
@@ -292,11 +298,25 @@ fn check_expr_recursive(
         // Recurse into arguments first.
         for arg in &call.arguments.args {
             check_expr_recursive(
-                arg, source, path, class_map, method_map, typevar_names, diagnostics,
+                arg,
+                source,
+                path,
+                class_map,
+                method_map,
+                typevar_names,
+                diagnostics,
             );
         }
 
-        check_constructor_call(call, source, path, class_map, method_map, typevar_names, diagnostics);
+        check_constructor_call(
+            call,
+            source,
+            path,
+            class_map,
+            method_map,
+            typevar_names,
+            diagnostics,
+        );
     }
 }
 
@@ -323,12 +343,25 @@ fn check_constructor_call(
 
             // Check 5: No custom __init__ with arguments.
             check_no_init_with_args(
-                call, class_name, class_info, class_map, method_map, path, diagnostics,
+                call,
+                class_name,
+                class_info,
+                class_map,
+                method_map,
+                path,
+                diagnostics,
             );
 
             // Check 2: Self type incompatibility through inheritance.
             check_self_type_incompatibility(
-                call, class_name, class_info, source, class_map, method_map, path, diagnostics,
+                call,
+                class_name,
+                class_info,
+                source,
+                class_map,
+                method_map,
+                path,
+                diagnostics,
             );
         }
         // Case B: Specialized call like `Class1[int](1.0)` or `Class4[str]()`
@@ -767,9 +800,9 @@ fn check_self_param_init_mismatch(
         .collect();
 
     // If all annotation args are fixed (not type variables), check for mismatch.
-    let all_fixed = ann_type_args.iter().all(|arg| {
-        !generic_param_names.contains(arg) && !typevar_names.contains(arg)
-    });
+    let all_fixed = ann_type_args
+        .iter()
+        .all(|arg| !generic_param_names.contains(arg) && !typevar_names.contains(arg));
 
     if !all_fixed {
         return;

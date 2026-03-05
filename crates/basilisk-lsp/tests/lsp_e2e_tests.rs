@@ -8,7 +8,7 @@
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Child, ChildStdin, Command, Stdio};
-use std::sync::mpsc::{Receiver, channel};
+use std::sync::mpsc::{channel, Receiver};
 use std::thread;
 use std::time::Duration;
 
@@ -19,10 +19,7 @@ const READ_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Path to the pre-built basilisk binary.
 fn basilisk_binary() -> String {
-    format!(
-        "{}/../../target/debug/basilisk",
-        env!("CARGO_MANIFEST_DIR")
-    )
+    format!("{}/../../target/debug/basilisk", env!("CARGO_MANIFEST_DIR"))
 }
 
 /// Test fixture that manages a `basilisk lsp` child process.
@@ -188,7 +185,10 @@ fn test_lsp_initialize() -> TestResult<()> {
     assert!(response.contains("\"basilisk\""));
     assert!(response.contains("\"textDocumentSync\":1"));
     assert!(response.contains("\"hoverProvider\":true"));
-    assert!(response.contains("\"codeActionProvider\""), "should advertise code actions: {response}");
+    assert!(
+        response.contains("\"codeActionProvider\""),
+        "should advertise code actions: {response}"
+    );
     Ok(())
 }
 
@@ -501,13 +501,28 @@ x: int = 42
         .ok_or("no completion response")?;
 
     // Should contain our function, class, and variable
-    assert!(resp.contains("\"label\":\"greet\""), "should complete function 'greet': {resp}");
-    assert!(resp.contains("\"label\":\"Animal\""), "should complete class 'Animal': {resp}");
-    assert!(resp.contains("\"label\":\"x\""), "should complete variable 'x': {resp}");
+    assert!(
+        resp.contains("\"label\":\"greet\""),
+        "should complete function 'greet': {resp}"
+    );
+    assert!(
+        resp.contains("\"label\":\"Animal\""),
+        "should complete class 'Animal': {resp}"
+    );
+    assert!(
+        resp.contains("\"label\":\"x\""),
+        "should complete variable 'x': {resp}"
+    );
 
     // Should also contain builtins
-    assert!(resp.contains("\"label\":\"print\""), "should complete builtin 'print': {resp}");
-    assert!(resp.contains("\"label\":\"len\""), "should complete builtin 'len': {resp}");
+    assert!(
+        resp.contains("\"label\":\"print\""),
+        "should complete builtin 'print': {resp}"
+    );
+    assert!(
+        resp.contains("\"label\":\"len\""),
+        "should complete builtin 'len': {resp}"
+    );
     Ok(())
 }
 
@@ -534,9 +549,18 @@ gr";
     let resp = request_completion(&mut fixture, "file:///prefix.py", 9, 2, 11)?
         .ok_or("no completion response")?;
 
-    assert!(resp.contains("\"label\":\"greet\""), "should match 'greet' for prefix 'gr': {resp}");
-    assert!(!resp.contains("\"label\":\"helper\""), "should NOT match 'helper' for prefix 'gr': {resp}");
-    assert!(!resp.contains("\"label\":\"goodbye\""), "should NOT match 'goodbye' for prefix 'gr': {resp}");
+    assert!(
+        resp.contains("\"label\":\"greet\""),
+        "should match 'greet' for prefix 'gr': {resp}"
+    );
+    assert!(
+        !resp.contains("\"label\":\"helper\""),
+        "should NOT match 'helper' for prefix 'gr': {resp}"
+    );
+    assert!(
+        !resp.contains("\"label\":\"goodbye\""),
+        "should NOT match 'goodbye' for prefix 'gr': {resp}"
+    );
     Ok(())
 }
 
@@ -557,9 +581,18 @@ import os
     let resp = request_completion(&mut fixture, "file:///imports.py", 3, 0, 12)?
         .ok_or("no completion response")?;
 
-    assert!(resp.contains("\"label\":\"Optional\""), "should complete imported 'Optional': {resp}");
-    assert!(resp.contains("\"label\":\"List\""), "should complete imported 'List': {resp}");
-    assert!(resp.contains("\"label\":\"os\""), "should complete imported module 'os': {resp}");
+    assert!(
+        resp.contains("\"label\":\"Optional\""),
+        "should complete imported 'Optional': {resp}"
+    );
+    assert!(
+        resp.contains("\"label\":\"List\""),
+        "should complete imported 'List': {resp}"
+    );
+    assert!(
+        resp.contains("\"label\":\"os\""),
+        "should complete imported module 'os': {resp}"
+    );
     Ok(())
 }
 
@@ -585,10 +618,22 @@ Dog.";
     let resp = request_completion(&mut fixture, "file:///dot.py", 8, 4, 13)?
         .ok_or("no completion response")?;
 
-    assert!(resp.contains("\"label\":\"name\""), "should complete attribute 'name': {resp}");
-    assert!(resp.contains("\"label\":\"breed\""), "should complete attribute 'breed': {resp}");
-    assert!(resp.contains("\"label\":\"bark\""), "should complete method 'bark': {resp}");
-    assert!(resp.contains("\"label\":\"fetch\""), "should complete method 'fetch': {resp}");
+    assert!(
+        resp.contains("\"label\":\"name\""),
+        "should complete attribute 'name': {resp}"
+    );
+    assert!(
+        resp.contains("\"label\":\"breed\""),
+        "should complete attribute 'breed': {resp}"
+    );
+    assert!(
+        resp.contains("\"label\":\"bark\""),
+        "should complete method 'bark': {resp}"
+    );
+    assert!(
+        resp.contains("\"label\":\"fetch\""),
+        "should complete method 'fetch': {resp}"
+    );
     Ok(())
 }
 
@@ -612,10 +657,22 @@ class Cat:
     let resp = request_completion(&mut fixture, "file:///selfdot.py", 6, 20, 14)?
         .ok_or("no completion response")?;
 
-    assert!(resp.contains("\"label\":\"color\""), "should complete self.color: {resp}");
-    assert!(resp.contains("\"label\":\"age\""), "should complete self.age: {resp}");
-    assert!(resp.contains("\"label\":\"meow\""), "should complete self.meow: {resp}");
-    assert!(resp.contains("\"label\":\"describe\""), "should complete self.describe: {resp}");
+    assert!(
+        resp.contains("\"label\":\"color\""),
+        "should complete self.color: {resp}"
+    );
+    assert!(
+        resp.contains("\"label\":\"age\""),
+        "should complete self.age: {resp}"
+    );
+    assert!(
+        resp.contains("\"label\":\"meow\""),
+        "should complete self.meow: {resp}"
+    );
+    assert!(
+        resp.contains("\"label\":\"describe\""),
+        "should complete self.describe: {resp}"
+    );
     Ok(())
 }
 
@@ -632,10 +689,19 @@ fn test_lsp_completion_builtins() -> TestResult<()> {
     let resp = request_completion(&mut fixture, "file:///builtins.py", 0, 3, 15)?
         .ok_or("no completion response")?;
 
-    assert!(resp.contains("\"label\":\"print\""), "should complete builtin 'print' for prefix 'pri': {resp}");
+    assert!(
+        resp.contains("\"label\":\"print\""),
+        "should complete builtin 'print' for prefix 'pri': {resp}"
+    );
     // Should NOT include unrelated builtins
-    assert!(!resp.contains("\"label\":\"len\""), "should NOT include 'len' for prefix 'pri': {resp}");
-    assert!(!resp.contains("\"label\":\"map\""), "should NOT include 'map' for prefix 'pri': {resp}");
+    assert!(
+        !resp.contains("\"label\":\"len\""),
+        "should NOT include 'len' for prefix 'pri': {resp}"
+    );
+    assert!(
+        !resp.contains("\"label\":\"map\""),
+        "should NOT include 'map' for prefix 'pri': {resp}"
+    );
     Ok(())
 }
 
@@ -656,9 +722,15 @@ cal";
     let resp = request_completion(&mut fixture, "file:///detail.py", 3, 3, 16)?
         .ok_or("no completion response")?;
 
-    assert!(resp.contains("\"label\":\"calculate\""), "should complete 'calculate': {resp}");
+    assert!(
+        resp.contains("\"label\":\"calculate\""),
+        "should complete 'calculate': {resp}"
+    );
     // The detail should include the parameter signature
-    assert!(resp.contains("x, y, op"), "should show params in detail: {resp}");
+    assert!(
+        resp.contains("x, y, op"),
+        "should show params in detail: {resp}"
+    );
     Ok(())
 }
 
@@ -675,11 +747,26 @@ fn test_lsp_completion_on_empty_file() -> TestResult<()> {
         .ok_or("no completion response")?;
 
     // Should contain builtins
-    assert!(resp.contains("\"label\":\"print\""), "empty file should still offer builtins: {resp}");
-    assert!(resp.contains("\"label\":\"int\""), "empty file should still offer 'int': {resp}");
-    assert!(resp.contains("\"label\":\"str\""), "empty file should still offer 'str': {resp}");
-    assert!(resp.contains("\"label\":\"True\""), "empty file should still offer 'True': {resp}");
-    assert!(resp.contains("\"label\":\"Exception\""), "empty file should still offer 'Exception': {resp}");
+    assert!(
+        resp.contains("\"label\":\"print\""),
+        "empty file should still offer builtins: {resp}"
+    );
+    assert!(
+        resp.contains("\"label\":\"int\""),
+        "empty file should still offer 'int': {resp}"
+    );
+    assert!(
+        resp.contains("\"label\":\"str\""),
+        "empty file should still offer 'str': {resp}"
+    );
+    assert!(
+        resp.contains("\"label\":\"True\""),
+        "empty file should still offer 'True': {resp}"
+    );
+    assert!(
+        resp.contains("\"label\":\"Exception\""),
+        "empty file should still offer 'Exception': {resp}"
+    );
     Ok(())
 }
 
@@ -737,8 +824,14 @@ fn test_lsp_hover_shows_function_signature() -> TestResult<()> {
     )?
     .ok_or("no hover response")?;
 
-    assert!(resp.contains("def"), "hover should show function def: {resp}");
-    assert!(resp.contains("greet"), "hover should show function name: {resp}");
+    assert!(
+        resp.contains("def"),
+        "hover should show function def: {resp}"
+    );
+    assert!(
+        resp.contains("greet"),
+        "hover should show function name: {resp}"
+    );
     assert!(resp.contains("name"), "hover should show parameter: {resp}");
     Ok(())
 }
@@ -748,7 +841,8 @@ fn test_lsp_hover_shows_class_signature() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
     fixture.initialize()?;
 
-    let code = "class Animal:\n    name: str\n    def speak(self) -> str:\n        return self.name\n";
+    let code =
+        "class Animal:\n    name: str\n    def speak(self) -> str:\n        return self.name\n";
     fixture.did_open("file:///hclass.py", code)?;
     let _ = fixture.wait_for_diagnostics();
 
@@ -765,7 +859,10 @@ fn test_lsp_hover_shows_class_signature() -> TestResult<()> {
     .ok_or("no hover response")?;
 
     assert!(resp.contains("class"), "hover should show 'class': {resp}");
-    assert!(resp.contains("Animal"), "hover should show class name: {resp}");
+    assert!(
+        resp.contains("Animal"),
+        "hover should show class name: {resp}"
+    );
     Ok(())
 }
 
@@ -790,7 +887,10 @@ fn test_lsp_hover_shows_variable_type() -> TestResult<()> {
     )?
     .ok_or("no hover response")?;
 
-    assert!(resp.contains("variable"), "hover should show 'variable': {resp}");
+    assert!(
+        resp.contains("variable"),
+        "hover should show 'variable': {resp}"
+    );
     assert!(resp.contains("int"), "hover should show type 'int': {resp}");
     Ok(())
 }
@@ -821,7 +921,10 @@ fn test_lsp_goto_definition_function() -> TestResult<()> {
     .ok_or("no definition response")?;
 
     // Should return a location pointing to the function definition
-    assert!(resp.contains("gotodef.py"), "definition should point to same file: {resp}");
+    assert!(
+        resp.contains("gotodef.py"),
+        "definition should point to same file: {resp}"
+    );
     Ok(())
 }
 
@@ -846,7 +949,10 @@ fn test_lsp_goto_definition_class() -> TestResult<()> {
     )?
     .ok_or("no definition response")?;
 
-    assert!(resp.contains("gotoclass.py"), "definition should point to same file: {resp}");
+    assert!(
+        resp.contains("gotoclass.py"),
+        "definition should point to same file: {resp}"
+    );
     Ok(())
 }
 
@@ -883,9 +989,18 @@ x: int = 42
     )?
     .ok_or("no document symbols response")?;
 
-    assert!(resp.contains("Animal"), "symbols should include class 'Animal': {resp}");
-    assert!(resp.contains("greet"), "symbols should include function 'greet': {resp}");
-    assert!(resp.contains("\"x\""), "symbols should include variable 'x': {resp}");
+    assert!(
+        resp.contains("Animal"),
+        "symbols should include class 'Animal': {resp}"
+    );
+    assert!(
+        resp.contains("greet"),
+        "symbols should include function 'greet': {resp}"
+    );
+    assert!(
+        resp.contains("\"x\""),
+        "symbols should include variable 'x': {resp}"
+    );
     Ok(())
 }
 
@@ -917,8 +1032,14 @@ class Calculator:
 
     assert!(resp.contains("Calculator"), "should contain class: {resp}");
     assert!(resp.contains("add"), "should contain method 'add': {resp}");
-    assert!(resp.contains("multiply"), "should contain method 'multiply': {resp}");
-    assert!(resp.contains("value"), "should contain attribute 'value': {resp}");
+    assert!(
+        resp.contains("multiply"),
+        "should contain method 'multiply': {resp}"
+    );
+    assert!(
+        resp.contains("value"),
+        "should contain attribute 'value': {resp}"
+    );
     Ok(())
 }
 
@@ -953,9 +1074,18 @@ result: str = greet(\"world\", \"Hi\")
     )?
     .ok_or("no signature help response")?;
 
-    assert!(resp.contains("greet"), "signature should show function name: {resp}");
-    assert!(resp.contains("name"), "signature should show parameter 'name': {resp}");
-    assert!(resp.contains("greeting"), "signature should show parameter 'greeting': {resp}");
+    assert!(
+        resp.contains("greet"),
+        "signature should show function name: {resp}"
+    );
+    assert!(
+        resp.contains("name"),
+        "signature should show parameter 'name': {resp}"
+    );
+    assert!(
+        resp.contains("greeting"),
+        "signature should show parameter 'greeting': {resp}"
+    );
     Ok(())
 }
 
@@ -992,7 +1122,10 @@ result: str = greet(\"world\")
 
     // Should find at least 2 references (definition + usage)
     let count = resp.matches("refs.py").count();
-    assert!(count >= 2, "should find at least 2 references for 'greet' (found {count}): {resp}");
+    assert!(
+        count >= 2,
+        "should find at least 2 references for 'greet' (found {count}): {resp}"
+    );
     Ok(())
 }
 
@@ -1022,7 +1155,10 @@ fn test_lsp_prepare_rename() -> TestResult<()> {
     .ok_or("no prepare rename response")?;
 
     // Should return a range covering "greet"
-    assert!(resp.contains("result"), "prepare rename should return a result: {resp}");
+    assert!(
+        resp.contains("result"),
+        "prepare rename should return a result: {resp}"
+    );
     Ok(())
 }
 
@@ -1053,8 +1189,14 @@ result: str = greet(\"world\")
     )?
     .ok_or("no rename response")?;
 
-    assert!(resp.contains("say_hello"), "rename should include new name: {resp}");
-    assert!(resp.contains("changes"), "rename should include workspace changes: {resp}");
+    assert!(
+        resp.contains("say_hello"),
+        "rename should include new name: {resp}"
+    );
+    assert!(
+        resp.contains("changes"),
+        "rename should include workspace changes: {resp}"
+    );
     Ok(())
 }
 
@@ -1085,9 +1227,18 @@ fn test_lsp_inlay_hints_variable_types() -> TestResult<()> {
     )?
     .ok_or("no inlay hint response")?;
 
-    assert!(resp.contains("int"), "inlay hints should show 'int' for x=42: {resp}");
-    assert!(resp.contains("str"), "inlay hints should show 'str' for y=\"hello\": {resp}");
-    assert!(resp.contains("bool"), "inlay hints should show 'bool' for z=True: {resp}");
+    assert!(
+        resp.contains("int"),
+        "inlay hints should show 'int' for x=42: {resp}"
+    );
+    assert!(
+        resp.contains("str"),
+        "inlay hints should show 'str' for y=\"hello\": {resp}"
+    );
+    assert!(
+        resp.contains("bool"),
+        "inlay hints should show 'bool' for z=True: {resp}"
+    );
     Ok(())
 }
 
@@ -1125,8 +1276,14 @@ x: int = 42
     .ok_or("no semantic tokens response")?;
 
     // Should return a data array with encoded tokens
-    assert!(resp.contains("\"data\""), "semantic tokens should contain 'data' array: {resp}");
-    assert!(resp.contains("result"), "semantic tokens should have result: {resp}");
+    assert!(
+        resp.contains("\"data\""),
+        "semantic tokens should contain 'data' array: {resp}"
+    );
+    assert!(
+        resp.contains("result"),
+        "semantic tokens should have result: {resp}"
+    );
 
     // Parse the response and verify we get tokens
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
@@ -1135,7 +1292,11 @@ x: int = 42
         .ok_or("data should be an array")?;
 
     // Each token is 5 integers, so data length should be a multiple of 5
-    assert_eq!(data.len() % 5, 0, "token data length should be multiple of 5");
+    assert_eq!(
+        data.len() % 5,
+        0,
+        "token data length should be multiple of 5"
+    );
     // We should have tokens for Animal, name, speak, self, greet, animal, x at minimum
     assert!(data.len() >= 5, "should have at least 1 token: {resp}");
     Ok(())
@@ -1183,8 +1344,14 @@ fn test_lsp_code_action_missing_param_annotation() -> TestResult<()> {
     )?
     .ok_or("no code action response")?;
 
-    assert!(resp.contains(": Any"), "code action should insert ': Any': {resp}");
-    assert!(resp.contains("quickfix"), "code action should be a quickfix: {resp}");
+    assert!(
+        resp.contains(": Any"),
+        "code action should insert ': Any': {resp}"
+    );
+    assert!(
+        resp.contains("quickfix"),
+        "code action should be a quickfix: {resp}"
+    );
     Ok(())
 }
 
@@ -1224,8 +1391,14 @@ fn test_lsp_code_action_missing_return_annotation() -> TestResult<()> {
     )?
     .ok_or("no code action response")?;
 
-    assert!(resp.contains("-> None"), "code action should insert '-> None': {resp}");
-    assert!(resp.contains("quickfix"), "code action should be a quickfix: {resp}");
+    assert!(
+        resp.contains("-> None"),
+        "code action should insert '-> None': {resp}"
+    );
+    assert!(
+        resp.contains("quickfix"),
+        "code action should be a quickfix: {resp}"
+    );
     Ok(())
 }
 
@@ -1256,10 +1429,22 @@ fn test_lsp_hover_function_exact_signature() -> TestResult<()> {
     )?
     .ok_or("no hover response")?;
 
-    assert!(resp.contains("(function)"), "hover should show '(function)' prefix: {resp}");
-    assert!(resp.contains("def greet"), "hover should show 'def greet': {resp}");
-    assert!(resp.contains("name: str"), "hover should show typed parameter 'name: str': {resp}");
-    assert!(resp.contains("-> str"), "hover should show return type '-> str': {resp}");
+    assert!(
+        resp.contains("(function)"),
+        "hover should show '(function)' prefix: {resp}"
+    );
+    assert!(
+        resp.contains("def greet"),
+        "hover should show 'def greet': {resp}"
+    );
+    assert!(
+        resp.contains("name: str"),
+        "hover should show typed parameter 'name: str': {resp}"
+    );
+    assert!(
+        resp.contains("-> str"),
+        "hover should show return type '-> str': {resp}"
+    );
     Ok(())
 }
 
@@ -1287,9 +1472,18 @@ fn test_lsp_hover_from_call_site() -> TestResult<()> {
     )?
     .ok_or("no hover response at call site")?;
 
-    assert!(resp.contains("(function)"), "call-site hover should resolve to function: {resp}");
-    assert!(resp.contains("greet"), "call-site hover should show function name: {resp}");
-    assert!(resp.contains("name: str"), "call-site hover should show parameter type: {resp}");
+    assert!(
+        resp.contains("(function)"),
+        "call-site hover should resolve to function: {resp}"
+    );
+    assert!(
+        resp.contains("greet"),
+        "call-site hover should show function name: {resp}"
+    );
+    assert!(
+        resp.contains("name: str"),
+        "call-site hover should show parameter type: {resp}"
+    );
     Ok(())
 }
 
@@ -1315,9 +1509,18 @@ fn test_lsp_hover_parameter_shows_type() -> TestResult<()> {
     )?
     .ok_or("no hover response for parameter")?;
 
-    assert!(resp.contains("(parameter)"), "hover on parameter should show '(parameter)': {resp}");
-    assert!(resp.contains("name"), "hover should show parameter name: {resp}");
-    assert!(resp.contains("str"), "hover should show parameter type 'str': {resp}");
+    assert!(
+        resp.contains("(parameter)"),
+        "hover on parameter should show '(parameter)': {resp}"
+    );
+    assert!(
+        resp.contains("name"),
+        "hover should show parameter name: {resp}"
+    );
+    assert!(
+        resp.contains("str"),
+        "hover should show parameter type 'str': {resp}"
+    );
     Ok(())
 }
 
@@ -1343,9 +1546,18 @@ fn test_lsp_hover_class_attribute() -> TestResult<()> {
     )?
     .ok_or("no hover response for class attribute")?;
 
-    assert!(resp.contains("(property)"), "hover on class attribute should show '(property)': {resp}");
-    assert!(resp.contains("Animal.name"), "hover should show 'Animal.name': {resp}");
-    assert!(resp.contains("str"), "hover should show attribute type 'str': {resp}");
+    assert!(
+        resp.contains("(property)"),
+        "hover on class attribute should show '(property)': {resp}"
+    );
+    assert!(
+        resp.contains("Animal.name"),
+        "hover should show 'Animal.name': {resp}"
+    );
+    assert!(
+        resp.contains("str"),
+        "hover should show attribute type 'str': {resp}"
+    );
     Ok(())
 }
 
@@ -1420,7 +1632,10 @@ fn test_lsp_goto_definition_from_call_site() -> TestResult<()> {
     );
     let start = &parsed["result"]["range"]["start"];
     // Should jump to line 0, char 4 — where "def greet" begins.
-    assert_eq!(start["line"], 0, "goto-def from call should jump to line 0: {resp}");
+    assert_eq!(
+        start["line"], 0,
+        "goto-def from call should jump to line 0: {resp}"
+    );
     assert_eq!(
         start["character"], 4,
         "goto-def from call should land at char 4 where 'greet' is defined: {resp}"
@@ -1458,7 +1673,10 @@ fn test_lsp_goto_definition_class_from_type_annotation() -> TestResult<()> {
     );
     let start = &parsed["result"]["range"]["start"];
     // "class Dog:" — 'D' of "Dog" is at char 6 on line 0.
-    assert_eq!(start["line"], 0, "goto-def should jump to class definition at line 0: {resp}");
+    assert_eq!(
+        start["line"], 0,
+        "goto-def should jump to class definition at line 0: {resp}"
+    );
     assert_eq!(
         start["character"], 6,
         "goto-def should land at char 6 where 'Dog' is defined: {resp}"
@@ -1475,12 +1693,33 @@ fn test_lsp_initialize_advertises_new_capabilities() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
     let response = fixture.initialize()?;
 
-    assert!(response.contains("\"definitionProvider\""), "should advertise definition: {response}");
-    assert!(response.contains("\"documentSymbolProvider\""), "should advertise document symbols: {response}");
-    assert!(response.contains("\"signatureHelpProvider\""), "should advertise signature help: {response}");
-    assert!(response.contains("\"referencesProvider\""), "should advertise references: {response}");
-    assert!(response.contains("\"renameProvider\""), "should advertise rename: {response}");
-    assert!(response.contains("\"inlayHintProvider\""), "should advertise inlay hints: {response}");
-    assert!(response.contains("\"semanticTokensProvider\""), "should advertise semantic tokens: {response}");
+    assert!(
+        response.contains("\"definitionProvider\""),
+        "should advertise definition: {response}"
+    );
+    assert!(
+        response.contains("\"documentSymbolProvider\""),
+        "should advertise document symbols: {response}"
+    );
+    assert!(
+        response.contains("\"signatureHelpProvider\""),
+        "should advertise signature help: {response}"
+    );
+    assert!(
+        response.contains("\"referencesProvider\""),
+        "should advertise references: {response}"
+    );
+    assert!(
+        response.contains("\"renameProvider\""),
+        "should advertise rename: {response}"
+    );
+    assert!(
+        response.contains("\"inlayHintProvider\""),
+        "should advertise inlay hints: {response}"
+    );
+    assert!(
+        response.contains("\"semanticTokensProvider\""),
+        "should advertise semantic tokens: {response}"
+    );
     Ok(())
 }

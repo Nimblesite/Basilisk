@@ -438,10 +438,7 @@ fn is_type_assignable(source_type: &str, target_type: &str) -> bool {
     }
 
     // `Union[X, Y]` in target.
-    if let Some(inner) = tgt
-        .strip_prefix("Union[")
-        .and_then(|s| s.strip_suffix(']'))
-    {
+    if let Some(inner) = tgt.strip_prefix("Union[").and_then(|s| s.strip_suffix(']')) {
         return split_type_args(inner)
             .iter()
             .any(|part| is_type_assignable(src, part));

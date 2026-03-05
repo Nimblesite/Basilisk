@@ -47,8 +47,7 @@ pub(crate) struct GenericTypeArgViolation;
 
 impl Rule for GenericTypeArgViolation {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let Ok(parsed) =
-            basilisk_parser::parse_source(module.source.clone(), module.path.clone())
+        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
         else {
             return;
         };
@@ -181,7 +180,9 @@ impl ModuleContext {
 
 /// Try to parse `name = TypeVar("name", str, bytes)` into a `ConstrainedTypeVar`.
 fn try_parse_constrained_typevar(lhs_name: &str, expr: &Expr) -> Option<ConstrainedTypeVar> {
-    let Expr::Call(call) = expr else { return None; };
+    let Expr::Call(call) = expr else {
+        return None;
+    };
 
     // Must call `TypeVar` (simple name).
     let callee = expr_name(&call.func)?;
@@ -218,7 +219,12 @@ fn try_parse_constrained_func(
     let mut param_tv: Vec<Option<String>> = Vec::new();
     let mut has_constrained = false;
 
-    for param in func.parameters.args.iter().chain(func.parameters.posonlyargs.iter()) {
+    for param in func
+        .parameters
+        .args
+        .iter()
+        .chain(func.parameters.posonlyargs.iter())
+    {
         let tv_name = param
             .parameter
             .annotation
@@ -303,7 +309,12 @@ fn check_func_body(
     let mut local_types = ctx.var_types.clone();
     let mut local_mapping_vars = ctx.mapping_vars.clone();
 
-    for param in func.parameters.args.iter().chain(func.parameters.posonlyargs.iter()) {
+    for param in func
+        .parameters
+        .args
+        .iter()
+        .chain(func.parameters.posonlyargs.iter())
+    {
         if let Some(ann) = &param.parameter.annotation {
             let ann_text = ann_str(ann);
             local_types.insert(param.parameter.name.to_string(), ann_text.clone());
@@ -325,12 +336,7 @@ fn check_func_body(
     }
 }
 
-fn check_stmt_in_func(
-    stmt: &Stmt,
-    ctx: &ModuleContext,
-    path: &str,
-    diag: &mut Vec<Diagnostic>,
-) {
+fn check_stmt_in_func(stmt: &Stmt, ctx: &ModuleContext, path: &str, diag: &mut Vec<Diagnostic>) {
     match stmt {
         Stmt::Expr(expr_stmt) => {
             check_expr(&expr_stmt.value, ctx, path, diag);
@@ -363,12 +369,7 @@ fn check_expr(expr: &Expr, ctx: &ModuleContext, path: &str, diag: &mut Vec<Diagn
 // Call-site checking (constrained TypeVar)
 // ---------------------------------------------------------------------------
 
-fn check_call(
-    call: &ast::ExprCall,
-    ctx: &ModuleContext,
-    path: &str,
-    diag: &mut Vec<Diagnostic>,
-) {
+fn check_call(call: &ast::ExprCall, ctx: &ModuleContext, path: &str, diag: &mut Vec<Diagnostic>) {
     let Some(callee_name) = expr_name(&call.func) else {
         return;
     };
@@ -500,11 +501,15 @@ fn check_subscript(
 // ---------------------------------------------------------------------------
 
 fn check_class_def(cls: &ast::StmtClassDef, path: &str, diag: &mut Vec<Diagnostic>) {
-    let Some(args) = &cls.arguments else { return; };
+    let Some(args) = &cls.arguments else {
+        return;
+    };
 
     for kw in &args.keywords {
         // Look for `metaclass=SomeGeneric[T]`.
-        let Some(kw_name) = &kw.arg else { continue; };
+        let Some(kw_name) = &kw.arg else {
+            continue;
+        };
         if kw_name.as_str() != "metaclass" {
             continue;
         }
@@ -527,9 +532,7 @@ fn check_class_def(cls: &ast::StmtClassDef, path: &str, diag: &mut Vec<Diagnosti
                 help: Some(
                     "Generic metaclasses are not supported by the Python type system".to_owned(),
                 ),
-                note: Some(
-                    "PEP 484: generic metaclass instances are not supported".to_owned(),
-                ),
+                note: Some("PEP 484: generic metaclass instances are not supported".to_owned()),
             });
         }
     }
@@ -631,4 +634,3 @@ fn call_span(call: &ast::ExprCall) -> Span {
         end: call.range().end().to_u32(),
     }
 }
-

@@ -124,7 +124,9 @@ fn extract_decorator_args(source: &str, decorator_name_end: usize) -> Option<&st
 
 /// Scans functions for `@dataclass_transform(...)` decorators and returns
 /// a map from function name to its default settings.
-pub(crate) fn collect_transform_functions(module: &ResolvedModule) -> HashMap<String, TransformDefaults> {
+pub(crate) fn collect_transform_functions(
+    module: &ResolvedModule,
+) -> HashMap<String, TransformDefaults> {
     let mut result = HashMap::new();
 
     for func in &module.functions {
@@ -167,7 +169,9 @@ pub(crate) fn collect_transform_functions(module: &ResolvedModule) -> HashMap<St
 
 /// For each class, checks if it is decorated by a `dataclass_transform` function
 /// and returns its effective settings (defaults overridden by class-level kwargs).
-pub(crate) fn collect_transform_classes(module: &ResolvedModule) -> HashMap<String, TransformClassInfo> {
+pub(crate) fn collect_transform_classes(
+    module: &ResolvedModule,
+) -> HashMap<String, TransformClassInfo> {
     let transform_funcs = collect_transform_functions(module);
     if transform_funcs.is_empty() {
         return HashMap::new();
@@ -193,8 +197,7 @@ pub(crate) fn collect_transform_classes(module: &ResolvedModule) -> HashMap<Stri
             continue;
         };
 
-        let Some(decorator_region) =
-            module.source.get(cls_start..cls_start + class_kw_offset)
+        let Some(decorator_region) = module.source.get(cls_start..cls_start + class_kw_offset)
         else {
             continue;
         };
@@ -208,7 +211,12 @@ pub(crate) fn collect_transform_classes(module: &ResolvedModule) -> HashMap<Stri
 
             // Check character after decorator name to distinguish @create_model from @create_model_frozen
             let after_at_name = cls_start + at_pos + at_name.len();
-            let next_char = module.source.as_bytes().get(after_at_name).copied().unwrap_or(b'\n');
+            let next_char = module
+                .source
+                .as_bytes()
+                .get(after_at_name)
+                .copied()
+                .unwrap_or(b'\n');
             if next_char.is_ascii_alphanumeric() || next_char == b'_' {
                 continue;
             }

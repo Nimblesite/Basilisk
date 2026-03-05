@@ -97,7 +97,9 @@ fn extract_paren_args(source: &str, name_end: usize) -> Option<&str> {
 
 /// Find all class names (in this module) that are decorated with `@dataclass_transform`
 /// and parse their default settings.
-fn collect_transform_base_classes(module: &ResolvedModule) -> HashMap<String, TransformBaseDefaults> {
+fn collect_transform_base_classes(
+    module: &ResolvedModule,
+) -> HashMap<String, TransformBaseDefaults> {
     let source = &module.source;
     let mut result = HashMap::new();
 
@@ -316,8 +318,7 @@ impl Rule for DataclassTransformClassViolation {
             let Some(rhs_span) = var.rhs_span else {
                 continue;
             };
-            let Some(rhs_text) = source.get(rhs_span.start as usize..rhs_span.end as usize)
-            else {
+            let Some(rhs_text) = source.get(rhs_span.start as usize..rhs_span.end as usize) else {
                 continue;
             };
             // Extract the callee name: `Customer1(...)` -> `"Customer1"`.
@@ -499,7 +500,10 @@ fn is_keyword_arg(arg: &str) -> bool {
         && before
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '_')
-        && before.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && before
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
 }
 
 /// Check 3: Positional arguments to a kw_only transform-class constructor.
@@ -529,9 +533,7 @@ fn check_kw_only_positional_args(
         let callee = callee.rsplit('.').next().unwrap_or(callee);
 
         // Resolve settings (including inherited ones).
-        let Some(settings) =
-            resolve_inherited_settings(callee, module, direct_settings)
-        else {
+        let Some(settings) = resolve_inherited_settings(callee, module, direct_settings) else {
             continue;
         };
 

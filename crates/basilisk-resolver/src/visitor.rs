@@ -12,17 +12,16 @@ use ruff_text_size::{Ranged, TextRange};
 use basilisk_parser::ParsedModule;
 
 use crate::scope::{
-    AssertTypeCallInfo, AttributeInfo, BaseSubscriptEntry, CallSite,
-    ClassInfo, FloatParamIntAttrAccess, FunctionInfo, GenericParamInfo, GenericSubscriptSite,
+    AssertTypeCallInfo, AttributeInfo, BaseSubscriptEntry, CallSite, ClassInfo,
+    FloatParamIntAttrAccess, FunctionInfo, GenericParamInfo, GenericSubscriptSite,
     HistoricalPositionalViolation, HistoricalPositionalViolationKind, ImportInfo, ImportKind,
     LiteralStringEnumMismatch, MatchStmtInfo, NamedTupleDefInfo, NewTypeCallInfo, ParameterInfo,
     Pep695BoundViolation, Pep695BoundViolationKind, ProtocolInstantiationViolation,
-    ProtocolRtcViolation, ProtocolRtcViolationKind,
-    ProtocolSelfViolation, ReadOnlyViolationInfo, ReadOnlyViolationKind,
-    ResolvedModule,
-    ReturnAnnotationKind, ReturnStmtInfo, RevealTypeCallInfo, RhsKind, Span, TypeAliasDefInfo,
-    TypeArg, TypeVarCallInfo, TypedDictCallInfo, TypedDictKeyViolation, TypedDictKeyViolationKind,
-    TypedDictSecondArgKind, UnhashableKeyRef, VariableInfo,
+    ProtocolRtcViolation, ProtocolRtcViolationKind, ProtocolSelfViolation, ReadOnlyViolationInfo,
+    ReadOnlyViolationKind, ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo,
+    RevealTypeCallInfo, RhsKind, Span, TypeAliasDefInfo, TypeArg, TypeVarCallInfo,
+    TypedDictCallInfo, TypedDictKeyViolation, TypedDictKeyViolationKind, TypedDictSecondArgKind,
+    UnhashableKeyRef, VariableInfo,
 };
 
 /// Collect all function definitions and module-level data from the parsed module.
@@ -82,8 +81,7 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         collect_typeddict_key_violations(&module.ast.body, &classes, &module.source);
     let generic_subscript_sites = collect_generic_subscript_sites(&module.ast.body);
     let type_alias_defs = collect_type_alias_defs(&module.ast.body);
-    let unhashable_hash_call_violations =
-        collect_unhashable_hash_calls(&module.ast.body, &classes);
+    let unhashable_hash_call_violations = collect_unhashable_hash_calls(&module.ast.body, &classes);
     let protocol_runtime_checkable_violations =
         collect_protocol_rtc_violations(&module.ast.body, &classes);
 
@@ -116,10 +114,15 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         namedtuple_defs,
         float_param_int_attr_accesses,
         literal_string_enum_mismatches,
-        enum_value_type_violations: collect_enum_value_type_violations(&module.ast.body, &module.source),
+        enum_value_type_violations: collect_enum_value_type_violations(
+            &module.ast.body,
+            &module.source,
+        ),
         local_classvar_violations: Vec::new(),
         pep695_bound_violations: collect_pep695_bound_violations(&module.ast.body),
-        historical_positional_violations: collect_historical_positional_violations(&module.ast.body),
+        historical_positional_violations: collect_historical_positional_violations(
+            &module.ast.body,
+        ),
         invalid_string_annotations: Vec::new(),
         protocol_self_violations,
         protocol_instantiation_violations,
@@ -603,29 +606,29 @@ fn collect_class_body(
                         after_kw_only_sentinel = true;
                         continue;
                     }
-                let is_readonly = annotation_contains_readonly_expr(&ann.annotation);
-                let is_init_var = annotation_is_init_var(&ann.annotation);
-                let field_kw_only = ann.value.as_deref().and_then(field_kw_only_override);
-                // Determine kw_only: explicit field() override wins; then sentinel; then class default.
-                let is_kw_only =
-                    field_kw_only.unwrap_or(after_kw_only_sentinel || class_kw_only);
-                let is_init_false = ann.value.as_deref().is_some_and(field_init_is_false);
-                attributes.push(AttributeInfo {
-                    name,
-                    name_span: text_range_to_span(ann.target.range()),
-                    has_annotation: true,
-                    annotation_span: Some(text_range_to_span(ann.annotation.range())),
-                    has_value: ann.value.is_some(),
-                    rhs_kind: RhsKind::Other,
-                    rhs_span: ann.value.as_ref().map(|v| text_range_to_span(v.range())),
-                    rhs_is_nonmember_call: false,
-                    rhs_is_lambda: false,
-                    rhs_is_descriptor_call: false,
-                    is_readonly,
-                    is_kw_only,
-                    is_init_false,
-                    is_init_var,
-                });
+                    let is_readonly = annotation_contains_readonly_expr(&ann.annotation);
+                    let is_init_var = annotation_is_init_var(&ann.annotation);
+                    let field_kw_only = ann.value.as_deref().and_then(field_kw_only_override);
+                    // Determine kw_only: explicit field() override wins; then sentinel; then class default.
+                    let is_kw_only =
+                        field_kw_only.unwrap_or(after_kw_only_sentinel || class_kw_only);
+                    let is_init_false = ann.value.as_deref().is_some_and(field_init_is_false);
+                    attributes.push(AttributeInfo {
+                        name,
+                        name_span: text_range_to_span(ann.target.range()),
+                        has_annotation: true,
+                        annotation_span: Some(text_range_to_span(ann.annotation.range())),
+                        has_value: ann.value.is_some(),
+                        rhs_kind: RhsKind::Other,
+                        rhs_span: ann.value.as_ref().map(|v| text_range_to_span(v.range())),
+                        rhs_is_nonmember_call: false,
+                        rhs_is_lambda: false,
+                        rhs_is_descriptor_call: false,
+                        is_readonly,
+                        is_kw_only,
+                        is_init_false,
+                        is_init_var,
+                    });
                 }
             }
             Stmt::Assign(assign) => {
@@ -718,12 +721,13 @@ fn class_info_from(
     let (generic_params, generic_non_typevar_args) = extract_generic_params(class);
     let is_typed_dict = bases.iter().any(|b| b == "TypedDict");
     // Detect `total=False` keyword in TypedDict subclass definitions.
-    let is_typeddict_total = !is_typed_dict || !class.arguments.as_ref().is_some_and(|args| {
-        args.keywords.iter().any(|kw| {
-            kw.arg.as_ref().is_some_and(|a| a.as_str() == "total")
-                && matches!(&kw.value, ruff_python_ast::Expr::BooleanLiteral(b) if !b.value)
-        })
-    });
+    let is_typeddict_total = !is_typed_dict
+        || !class.arguments.as_ref().is_some_and(|args| {
+            args.keywords.iter().any(|kw| {
+                kw.arg.as_ref().is_some_and(|a| a.as_str() == "total")
+                    && matches!(&kw.value, ruff_python_ast::Expr::BooleanLiteral(b) if !b.value)
+            })
+        });
 
     let class_keywords: Vec<String> = class
         .arguments
@@ -736,15 +740,12 @@ fn class_info_from(
         })
         .unwrap_or_default();
 
-    let metaclass_name: Option<String> = class
-        .arguments
-        .as_ref()
-        .and_then(|args| {
-            args.keywords
-                .iter()
-                .find(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "metaclass"))
-                .and_then(|kw| expr_simple_name(&kw.value))
-        });
+    let metaclass_name: Option<String> = class.arguments.as_ref().and_then(|args| {
+        args.keywords
+            .iter()
+            .find(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "metaclass"))
+            .and_then(|kw| expr_simple_name(&kw.value))
+    });
 
     let class_decorators: Vec<String> = class
         .decorator_list
@@ -997,9 +998,10 @@ fn build_field_specifier_overloads(
             continue;
         }
 
-        let is_overload = func.decorator_list.iter().any(|d| {
-            matches!(decorator_name(d), Some(n) if n == "overload")
-        });
+        let is_overload = func
+            .decorator_list
+            .iter()
+            .any(|d| matches!(decorator_name(d), Some(n) if n == "overload"));
 
         if has_overloads && !is_overload {
             continue;
@@ -1016,15 +1018,13 @@ fn build_field_specifier_overloads(
 
             if param_name == "init" {
                 if let Some(default_expr) = &pwd.default {
-                    init_default = Some(
-                        matches!(default_expr.as_ref(), Expr::BooleanLiteral(b) if b.value),
-                    );
+                    init_default =
+                        Some(matches!(default_expr.as_ref(), Expr::BooleanLiteral(b) if b.value));
                 }
             } else if param_name == "kw_only" {
                 if let Some(default_expr) = &pwd.default {
-                    kw_only_default = Some(
-                        matches!(default_expr.as_ref(), Expr::BooleanLiteral(b) if b.value),
-                    );
+                    kw_only_default =
+                        Some(matches!(default_expr.as_ref(), Expr::BooleanLiteral(b) if b.value));
                 }
             }
 
@@ -1039,15 +1039,13 @@ fn build_field_specifier_overloads(
 
             if param_name == "init" {
                 if let Some(default_expr) = &pwd.default {
-                    init_default = Some(
-                        matches!(default_expr.as_ref(), Expr::BooleanLiteral(b) if b.value),
-                    );
+                    init_default =
+                        Some(matches!(default_expr.as_ref(), Expr::BooleanLiteral(b) if b.value));
                 }
             } else if param_name == "kw_only" {
                 if let Some(default_expr) = &pwd.default {
-                    kw_only_default = Some(
-                        matches!(default_expr.as_ref(), Expr::BooleanLiteral(b) if b.value),
-                    );
+                    kw_only_default =
+                        Some(matches!(default_expr.as_ref(), Expr::BooleanLiteral(b) if b.value));
                 }
             }
 
@@ -1287,7 +1285,10 @@ fn function_info_from(func: &StmtFunctionDef, class_name: Option<String>) -> Fun
         top_level_return_name_refs,
         unhashable_keys,
         is_stub_body,
-        body_ends_with_return: func.body.last().is_some_and(|s| matches!(s, Stmt::Return(_))),
+        body_ends_with_return: func
+            .body
+            .last()
+            .is_some_and(|s| matches!(s, Stmt::Return(_))),
         body_last_stmt_terminates: func.body.last().is_some_and(|s| match s {
             Stmt::Raise(_) => true,
             Stmt::Expr(e) => matches!(e.value.as_ref(), Expr::Call(_)),
@@ -1390,12 +1391,9 @@ fn collect_yield_exprs_from_stmt(stmt: &Stmt, out: &mut Vec<crate::scope::YieldE
 fn collect_yield_from_expr(expr: &Expr, out: &mut Vec<crate::scope::YieldExprInfo>) {
     match expr {
         Expr::Yield(y) => {
-            let (rhs_kind, call_name) = y
-                .value
-                .as_ref()
-                .map_or((RhsKind::NoneValue, None), |v| {
-                    (classify_rhs(v), extract_call_name(v))
-                });
+            let (rhs_kind, call_name) = y.value.as_ref().map_or((RhsKind::NoneValue, None), |v| {
+                (classify_rhs(v), extract_call_name(v))
+            });
             out.push(crate::scope::YieldExprInfo {
                 span: text_range_to_span(y.range),
                 rhs_kind,
@@ -1651,7 +1649,7 @@ fn collect_all_assigns(stmts: &[Stmt]) -> Vec<String> {
 /// Collect names assigned at the top level of a function body (unconditionally).
 fn collect_unconditional_assigns(stmts: &[Stmt]) -> Vec<String> {
     let mut assignments = Vec::new();
-    
+
     for stmt in stmts {
         match stmt {
             Stmt::Assign(node) => {
@@ -1678,7 +1676,7 @@ fn collect_unconditional_assigns(stmts: &[Stmt]) -> Vec<String> {
             _ => {}
         }
     }
-    
+
     assignments
 }
 
@@ -1686,13 +1684,16 @@ fn collect_unconditional_assigns(stmts: &[Stmt]) -> Vec<String> {
 /// Returns the intersection of assignments from all branches if they cover all paths.
 fn collect_if_else_assignments(if_stmt: &ruff_python_ast::StmtIf) -> Option<Vec<String>> {
     let if_branch_assigns = collect_unconditional_assigns(&if_stmt.body);
-    
+
     // Check if there's an else clause
-    let has_else = if_stmt.elif_else_clauses.iter().any(|clause| clause.test.is_none());
+    let has_else = if_stmt
+        .elif_else_clauses
+        .iter()
+        .any(|clause| clause.test.is_none());
     if !has_else {
         return None;
     }
-    
+
     // Collect assignments from all elif/else branches
     let mut all_else_assigns = Vec::new();
     for clause in &if_stmt.elif_else_clauses {
@@ -1705,20 +1706,23 @@ fn collect_if_else_assignments(if_stmt: &ruff_python_ast::StmtIf) -> Option<Vec<
             return None;
         }
     }
-    
+
     // If there are elif branches, we can't guarantee coverage
-    let has_elif = if_stmt.elif_else_clauses.iter().any(|clause| clause.test.is_some());
+    let has_elif = if_stmt
+        .elif_else_clauses
+        .iter()
+        .any(|clause| clause.test.is_some());
     if has_elif {
         return None;
     }
-    
+
     // Find the intersection of assignments from if and else branches
     let intersection: Vec<String> = if_branch_assigns
         .iter()
         .filter(|name| all_else_assigns.contains(name))
         .cloned()
         .collect();
-    
+
     if intersection.is_empty() {
         None
     } else {
@@ -1915,7 +1919,6 @@ fn collect_unhashable_keys_from_expr(expr: &Expr, out: &mut Vec<UnhashableKeyRef
 // ---------------------------------------------------------------------------
 // Module-level call site collection
 // ---------------------------------------------------------------------------
-
 
 /// Returns the TypeVar-like callee name (`"TypeVar"`, `"TypeVarTuple"`, or `"ParamSpec"`),
 /// or `None` if the expression is not a TypeVar-like call.
@@ -2550,10 +2553,7 @@ fn field_kw_only_override(value: &Expr) -> Option<bool> {
 fn field_init_override(value: &Expr, field_specifier_names: &[&str]) -> Option<bool> {
     let Expr::Call(call) = value else { return None };
     let is_field_call = match call.func.as_ref() {
-        Expr::Name(n) => {
-            n.id.as_str() == "field"
-                || field_specifier_names.contains(&n.id.as_str())
-        }
+        Expr::Name(n) => n.id.as_str() == "field" || field_specifier_names.contains(&n.id.as_str()),
         Expr::Attribute(a) => a.attr.as_str() == "field",
         _ => false,
     };
@@ -2561,12 +2561,7 @@ fn field_init_override(value: &Expr, field_specifier_names: &[&str]) -> Option<b
         return None;
     }
     for kw in &call.arguments.keywords {
-        if kw
-            .arg
-            .as_ref()
-            .map(ruff_python_ast::Identifier::as_str)
-            == Some("init")
-        {
+        if kw.arg.as_ref().map(ruff_python_ast::Identifier::as_str) == Some("init") {
             return Some(matches!(&kw.value, Expr::BooleanLiteral(b) if b.value));
         }
     }
@@ -2578,7 +2573,9 @@ fn field_init_override(value: &Expr, field_specifier_names: &[&str]) -> Option<b
 /// Only checks calls to the standard `dataclasses.field` function.  Field specifier
 /// calls from `@dataclass_transform` are resolved in `apply_dataclass_transform`.
 fn field_init_is_false(value: &Expr) -> bool {
-    let Expr::Call(call) = value else { return false };
+    let Expr::Call(call) = value else {
+        return false;
+    };
     let is_field_call = match call.func.as_ref() {
         Expr::Name(n) => n.id.as_str() == "field",
         Expr::Attribute(a) => a.attr.as_str() == "field",
@@ -2588,9 +2585,7 @@ fn field_init_is_false(value: &Expr) -> bool {
         return false;
     }
     call.arguments.keywords.iter().any(|kw| {
-        kw.arg
-            .as_ref()
-            .is_some_and(|a| a.as_str() == "init")
+        kw.arg.as_ref().is_some_and(|a| a.as_str() == "init")
             && matches!(&kw.value, Expr::BooleanLiteral(b) if !b.value)
     })
 }
@@ -2836,7 +2831,9 @@ fn collect_namedtuple_defs(stmts: &[Stmt], source: &str) -> Vec<NamedTupleDefInf
             let mut field_names = Vec::new();
             let mut field_types = Vec::new();
             for elt in elts {
-                let Expr::Tuple(tuple_expr) = elt else { continue };
+                let Expr::Tuple(tuple_expr) = elt else {
+                    continue;
+                };
                 if tuple_expr.elts.len() < 2 {
                     continue;
                 }
@@ -2921,9 +2918,7 @@ fn extract_string_list(
     elts.iter()
         .filter_map(|elt| match elt {
             Expr::StringLiteral(s) => Some(s.value.to_str().to_owned()),
-            Expr::Name(n) => final_constants
-                .get(n.id.as_str())
-                .map(|s| (*s).to_owned()),
+            Expr::Name(n) => final_constants.get(n.id.as_str()).map(|s| (*s).to_owned()),
             _ => None,
         })
         .collect()
@@ -2934,7 +2929,11 @@ fn extract_string_list(
 /// Returns 0 if no `defaults` keyword is present or it cannot be parsed.
 fn parse_defaults_count(keywords: &[ruff_python_ast::Keyword]) -> usize {
     for kw in keywords {
-        if kw.arg.as_ref().is_some_and(|arg| arg.as_str() == "defaults") {
+        if kw
+            .arg
+            .as_ref()
+            .is_some_and(|arg| arg.as_str() == "defaults")
+        {
             return match &kw.value {
                 Expr::Tuple(t) => t.elts.len(),
                 Expr::List(l) => l.elts.len(),
@@ -2962,7 +2961,9 @@ fn collect_final_string_constants<'a>(
             continue;
         };
         let range = ann.annotation.range();
-        let Some(ann_text) = source.get(range.start().to_u32() as usize..range.end().to_u32() as usize) else {
+        let Some(ann_text) =
+            source.get(range.start().to_u32() as usize..range.end().to_u32() as usize)
+        else {
             continue;
         };
         if !ann_text_is_final(ann_text) {
@@ -2972,7 +2973,9 @@ fn collect_final_string_constants<'a>(
         let Some(val) = ann.value.as_deref() else {
             continue;
         };
-        let Expr::StringLiteral(s) = val else { continue };
+        let Expr::StringLiteral(s) = val else {
+            continue;
+        };
         map.insert(n.id.as_str(), s.value.to_str());
     }
     map
@@ -3141,8 +3144,7 @@ fn extract_base_subscripts(class: &StmtClassDef) -> Vec<BaseSubscriptEntry> {
         }
         let (type_arg_names, type_args) = match sub.slice.as_ref() {
             Expr::Tuple(tup) => {
-                let names: Vec<String> =
-                    tup.elts.iter().filter_map(expr_simple_name).collect();
+                let names: Vec<String> = tup.elts.iter().filter_map(expr_simple_name).collect();
                 let args: Vec<TypeArg> = tup.elts.iter().map(expr_to_type_arg).collect();
                 (names, args)
             }
@@ -3246,12 +3248,7 @@ fn collect_pep695_violations_from_stmts(
         let current_typeparams: std::collections::HashSet<String> = cls
             .type_params
             .as_ref()
-            .map(|tp| {
-                tp.type_params
-                    .iter()
-                    .map(type_param_name)
-                    .collect()
-            })
+            .map(|tp| tp.type_params.iter().map(type_param_name).collect())
             .unwrap_or_default();
 
         if let Some(type_params) = &cls.type_params {
@@ -3351,7 +3348,9 @@ fn check_typevar_bound_expr(
             });
         }
         // Check if the bound itself references an outer-scope TypeVar (e.g. `T: dict[str, V]`).
-        bound_expr if bound_refs_outer_typeparam(bound_expr, current_typeparams, outer_typeparams) => {
+        bound_expr
+            if bound_refs_outer_typeparam(bound_expr, current_typeparams, outer_typeparams) =>
+        {
             out.push(Pep695BoundViolation {
                 kind: Pep695BoundViolationKind::OuterScopeTypeVarInBound,
                 class_name: class_name.to_owned(),
@@ -3545,7 +3544,6 @@ fn tuple_slice_has_invalid_ellipsis(slice: &Expr) -> bool {
         _ => false,
     }
 }
-
 
 /// Collect all annotation spans that contain invalid multiple-unbounded-tuple patterns.
 fn collect_multiple_unbounded_tuple_spans(stmts: &[Stmt]) -> Vec<Span> {
@@ -4265,11 +4263,17 @@ fn collect_typeddict_key_violations<'a>(
                 .iter()
                 .filter_map(|a| {
                     let span = a.annotation_span?;
-                    let type_text = source.get(span.start as usize..span.end as usize)?.trim().to_owned();
+                    let type_text = source
+                        .get(span.start as usize..span.end as usize)?
+                        .trim()
+                        .to_owned();
                     Some((a.name.as_str(), type_text))
                 })
                 .collect();
-            (c.name.as_str(), (all_fields, field_types, c.is_typeddict_total))
+            (
+                c.name.as_str(),
+                (all_fields, field_types, c.is_typeddict_total),
+            )
         })
         .collect();
 
@@ -4286,7 +4290,11 @@ fn collect_typeddict_key_violations<'a>(
 /// `(all_fields, field_types, is_total)` map keyed by class name.
 type TdFieldMap<'a> = std::collections::HashMap<
     &'a str,
-    (Vec<&'a str>, std::collections::HashMap<&'a str, String>, bool),
+    (
+        Vec<&'a str>,
+        std::collections::HashMap<&'a str, String>,
+        bool,
+    ),
 >;
 
 /// Build a variable-name → TypedDict-class-name map from annotated assignments in `stmts`.
@@ -4297,8 +4305,12 @@ fn td_var_type_from_stmts(
     let mut map = std::collections::HashMap::new();
     for stmt in stmts {
         let Stmt::AnnAssign(ann) = stmt else { continue };
-        let Some(var_name) = expr_simple_name(&ann.target) else { continue };
-        let Expr::Name(type_name) = ann.annotation.as_ref() else { continue };
+        let Some(var_name) = expr_simple_name(&ann.target) else {
+            continue;
+        };
+        let Expr::Name(type_name) = ann.annotation.as_ref() else {
+            continue;
+        };
         let class_name = type_name.id.as_str();
         if fields.contains_key(class_name) {
             map.insert(var_name, class_name.to_owned());
@@ -4357,10 +4369,18 @@ fn check_td_stmts(
             Stmt::Delete(del) => {
                 // Detect del movie["key"] — only an error for total=True TypedDicts
                 for target in &del.targets {
-                    let Expr::Subscript(sub) = target else { continue };
-                    let Some(var_name) = expr_simple_name(&sub.value) else { continue };
-                    let Some(class_name) = var_type.get(&var_name) else { continue };
-                    let Some((_, _, is_total)) = fields.get(class_name.as_str()) else { continue };
+                    let Expr::Subscript(sub) = target else {
+                        continue;
+                    };
+                    let Some(var_name) = expr_simple_name(&sub.value) else {
+                        continue;
+                    };
+                    let Some(class_name) = var_type.get(&var_name) else {
+                        continue;
+                    };
+                    let Some((_, _, is_total)) = fields.get(class_name.as_str()) else {
+                        continue;
+                    };
                     if *is_total {
                         out.push(TypedDictKeyViolation {
                             span: text_range_to_span(del.range()),
@@ -4390,11 +4410,21 @@ fn td_check_subscript_assign(
 ) {
     use ruff_text_size::Ranged as _;
     for target in &node.targets {
-        let Expr::Subscript(sub) = target else { continue };
-        let Some(var_name) = expr_simple_name(&sub.value) else { continue };
-        let Some(class_name) = var_type.get(&var_name) else { continue };
-        let Some((all_fields, field_types, _)) = fields.get(class_name.as_str()) else { continue };
-        let Expr::StringLiteral(key_str) = sub.slice.as_ref() else { continue };
+        let Expr::Subscript(sub) = target else {
+            continue;
+        };
+        let Some(var_name) = expr_simple_name(&sub.value) else {
+            continue;
+        };
+        let Some(class_name) = var_type.get(&var_name) else {
+            continue;
+        };
+        let Some((all_fields, field_types, _)) = fields.get(class_name.as_str()) else {
+            continue;
+        };
+        let Expr::StringLiteral(key_str) = sub.slice.as_ref() else {
+            continue;
+        };
         let key = key_str.value.to_string();
         if !all_fields.contains(&key.as_str()) {
             out.push(TypedDictKeyViolation {
@@ -4428,16 +4458,25 @@ fn td_check_regular_assign(
 ) {
     use ruff_text_size::Ranged as _;
     for target in &node.targets {
-        let Some(var_name) = expr_simple_name(target) else { continue };
-        let Some(class_name) = var_type.get(&var_name) else { continue };
-        let Some((all_fields, field_types, is_total)) = fields.get(class_name.as_str()) else { continue };
-        let Expr::Dict(dict) = node.value.as_ref() else { continue };
+        let Some(var_name) = expr_simple_name(target) else {
+            continue;
+        };
+        let Some(class_name) = var_type.get(&var_name) else {
+            continue;
+        };
+        let Some((all_fields, field_types, is_total)) = fields.get(class_name.as_str()) else {
+            continue;
+        };
+        let Expr::Dict(dict) = node.value.as_ref() else {
+            continue;
+        };
 
         // Flag any non-literal (variable) key in the dict
-        let has_non_literal = dict
-            .items
-            .iter()
-            .any(|item| item.key.as_ref().is_some_and(|k| !matches!(k, Expr::StringLiteral(_))));
+        let has_non_literal = dict.items.iter().any(|item| {
+            item.key
+                .as_ref()
+                .is_some_and(|k| !matches!(k, Expr::StringLiteral(_)))
+        });
         if has_non_literal {
             out.push(TypedDictKeyViolation {
                 span: text_range_to_span(node.range()),
@@ -4451,7 +4490,9 @@ fn td_check_regular_assign(
             .items
             .iter()
             .filter_map(|item| {
-                let Expr::StringLiteral(s) = item.key.as_ref()? else { return None };
+                let Expr::StringLiteral(s) = item.key.as_ref()? else {
+                    return None;
+                };
                 Some(s.value.to_string())
             })
             .collect();
@@ -4475,14 +4516,19 @@ fn td_check_regular_assign(
             out.push(TypedDictKeyViolation {
                 span: text_range_to_span(node.range()),
                 class_name: class_name.clone(),
-                kind: TypedDictKeyViolationKind::InvalidDictLiteral { invalid_keys, missing_keys },
+                kind: TypedDictKeyViolationKind::InvalidDictLiteral {
+                    invalid_keys,
+                    missing_keys,
+                },
             });
         }
 
         // Check value types for each key-value pair
         for item in &dict.items {
             let Some(key_expr) = &item.key else { continue };
-            let Expr::StringLiteral(s) = key_expr else { continue };
+            let Expr::StringLiteral(s) = key_expr else {
+                continue;
+            };
             let key = s.value.to_string();
             if !all_fields.contains(&key.as_str()) {
                 continue; // Already flagged as invalid key
@@ -4513,16 +4559,23 @@ fn td_check_ann_assign(
 ) {
     use ruff_text_size::Ranged as _;
     let Some(value) = &node.value else { return };
-    let Expr::Name(ann_name) = node.annotation.as_ref() else { return };
+    let Expr::Name(ann_name) = node.annotation.as_ref() else {
+        return;
+    };
     let class_name = ann_name.id.as_str();
-    let Some((all_fields, _, is_total)) = fields.get(class_name) else { return };
-    let Expr::Dict(dict) = value.as_ref() else { return };
+    let Some((all_fields, _, is_total)) = fields.get(class_name) else {
+        return;
+    };
+    let Expr::Dict(dict) = value.as_ref() else {
+        return;
+    };
 
     // Flag any non-literal (variable) key
-    let has_non_literal = dict
-        .items
-        .iter()
-        .any(|item| item.key.as_ref().is_some_and(|k| !matches!(k, Expr::StringLiteral(_))));
+    let has_non_literal = dict.items.iter().any(|item| {
+        item.key
+            .as_ref()
+            .is_some_and(|k| !matches!(k, Expr::StringLiteral(_)))
+    });
     if has_non_literal {
         out.push(TypedDictKeyViolation {
             span: text_range_to_span(node.range()),
@@ -4536,7 +4589,9 @@ fn td_check_ann_assign(
         .items
         .iter()
         .filter_map(|item| {
-            let Expr::StringLiteral(s) = item.key.as_ref()? else { return None };
+            let Expr::StringLiteral(s) = item.key.as_ref()? else {
+                return None;
+            };
             Some(s.value.to_string())
         })
         .collect();
@@ -4560,7 +4615,10 @@ fn td_check_ann_assign(
         out.push(TypedDictKeyViolation {
             span: text_range_to_span(node.range()),
             class_name: class_name.to_owned(),
-            kind: TypedDictKeyViolationKind::InvalidDictLiteral { invalid_keys, missing_keys },
+            kind: TypedDictKeyViolationKind::InvalidDictLiteral {
+                invalid_keys,
+                missing_keys,
+            },
         });
     }
 }
@@ -4584,7 +4642,9 @@ fn td_check_expr_reads(
                                 out.push(TypedDictKeyViolation {
                                     span: text_range_to_span(sub.range()),
                                     class_name: class_name.clone(),
-                                    kind: TypedDictKeyViolationKind::SubscriptReadInvalidKey { key },
+                                    kind: TypedDictKeyViolationKind::SubscriptReadInvalidKey {
+                                        key,
+                                    },
                                 });
                             }
                         }
@@ -4630,7 +4690,6 @@ fn typeddict_field_type_compatible(actual: &str, expected: &str) -> bool {
         || (actual == "bool" && expected == "int")
         || (actual == "int" && expected == "float")
 }
-
 
 /// Collect `ReadOnly` violations from module-level statements and function bodies.
 fn collect_readonly_violations(
@@ -4757,23 +4816,21 @@ fn collect_module_attr_assignments(stmts: &[Stmt]) -> Vec<crate::scope::ModuleAt
 /// Returns `true` when the annotation text refers to `Final`.
 fn ann_text_is_final(text: &str) -> bool {
     let t = text.trim();
-    t == "Final"
-        || t.starts_with("Final[")
-        || t == "typing.Final"
-        || t.starts_with("typing.Final[")
+    t == "Final" || t.starts_with("Final[") || t == "typing.Final" || t.starts_with("typing.Final[")
 }
 
 /// Collect the names of module-level `Final`-annotated variables from a statement list.
-fn collect_file_final_names(
-    stmts: &[Stmt],
-    source: &str,
-) -> std::collections::HashSet<String> {
+fn collect_file_final_names(stmts: &[Stmt], source: &str) -> std::collections::HashSet<String> {
     let mut names = std::collections::HashSet::new();
     for stmt in stmts {
         let Stmt::AnnAssign(ann) = stmt else { continue };
-        let Expr::Name(n) = ann.target.as_ref() else { continue };
+        let Expr::Name(n) = ann.target.as_ref() else {
+            continue;
+        };
         let range = ann.annotation.range();
-        let Some(ann_text) = source.get(range.start().to_u32() as usize..range.end().to_u32() as usize) else {
+        let Some(ann_text) =
+            source.get(range.start().to_u32() as usize..range.end().to_u32() as usize)
+        else {
             continue;
         };
         if ann_text_is_final(ann_text) {
@@ -4793,18 +4850,28 @@ fn collect_imported_final_names(
     module_path: &str,
 ) -> std::collections::HashSet<String> {
     let mut out = std::collections::HashSet::new();
-    let Some(module_dir) = std::path::Path::new(module_path).parent() else { return out };
+    let Some(module_dir) = std::path::Path::new(module_path).parent() else {
+        return out;
+    };
     for stmt in stmts {
-        let Stmt::ImportFrom(import_from) = stmt else { continue };
-        let Some(module_name) = import_from.module.as_ref() else { continue };
+        let Stmt::ImportFrom(import_from) = stmt else {
+            continue;
+        };
+        let Some(module_name) = import_from.module.as_ref() else {
+            continue;
+        };
         let module_str = module_name.to_string();
         // Only handle simple (undotted) local module names.
         if module_str.contains('.') {
             continue;
         }
         let sibling_path = module_dir.join(format!("{module_str}.py"));
-        let Some(sibling_path_str) = sibling_path.to_str() else { continue };
-        let Ok(sibling) = basilisk_parser::parse_file(sibling_path_str) else { continue };
+        let Some(sibling_path_str) = sibling_path.to_str() else {
+            continue;
+        };
+        let Ok(sibling) = basilisk_parser::parse_file(sibling_path_str) else {
+            continue;
+        };
         let sibling_finals = collect_file_final_names(&sibling.ast.body, &sibling.source);
         let is_star = import_from.names.iter().any(|a| a.name.as_str() == "*");
         if is_star {
@@ -4843,9 +4910,12 @@ fn collect_final_violations(
         .iter()
         .filter_map(|s| {
             let Stmt::AnnAssign(ann) = s else { return None };
-            let Expr::Name(n) = ann.target.as_ref() else { return None };
+            let Expr::Name(n) = ann.target.as_ref() else {
+                return None;
+            };
             let range = ann.annotation.range();
-            let ann_text = source.get(range.start().to_u32() as usize..range.end().to_u32() as usize)?;
+            let ann_text =
+                source.get(range.start().to_u32() as usize..range.end().to_u32() as usize)?;
             ann_text_is_final(ann_text).then(|| n.id.as_str())
         })
         .collect();
@@ -4860,9 +4930,7 @@ fn collect_final_violations(
                 .filter(|a| {
                     a.has_annotation
                         && a.annotation_span
-                            .and_then(|sp| {
-                                source.get(sp.start as usize..sp.end as usize)
-                            })
+                            .and_then(|sp| source.get(sp.start as usize..sp.end as usize))
                             .is_some_and(ann_text_is_final)
                 })
                 .map(|a| a.name.as_str())
@@ -4920,14 +4988,23 @@ fn collect_class_final_violations(
         .collect();
 
     // Collect Final attrs in THIS class (annotation-only or with value).
-    let mut this_final_attrs: std::collections::HashMap<&str, bool> = std::collections::HashMap::new();
+    let mut this_final_attrs: std::collections::HashMap<&str, bool> =
+        std::collections::HashMap::new();
     // key = attr name, value = has_initializer
     for body_stmt in &cls_def.body {
-        let Stmt::AnnAssign(ann) = body_stmt else { continue };
-        let Expr::Name(n) = ann.target.as_ref() else { continue };
+        let Stmt::AnnAssign(ann) = body_stmt else {
+            continue;
+        };
+        let Expr::Name(n) = ann.target.as_ref() else {
+            continue;
+        };
         let attr_name = n.id.as_str();
         let range = ann.annotation.range();
-        let Some(ann_text) = source.get(range.start().to_u32() as usize..range.end().to_u32() as usize) else { continue };
+        let Some(ann_text) =
+            source.get(range.start().to_u32() as usize..range.end().to_u32() as usize)
+        else {
+            continue;
+        };
         if ann_text_is_final(ann_text) {
             let has_value = ann.value.is_some();
             this_final_attrs.insert(attr_name, has_value);
@@ -4953,9 +5030,15 @@ fn collect_class_final_violations(
         if !has_value && !init_assigns.contains(*attr_name) {
             // Find the span of this annotation.
             for body_stmt in &cls_def.body {
-                let Stmt::AnnAssign(ann) = body_stmt else { continue };
-                let Expr::Name(n) = ann.target.as_ref() else { continue };
-                if n.id.as_str() != *attr_name { continue; }
+                let Stmt::AnnAssign(ann) = body_stmt else {
+                    continue;
+                };
+                let Expr::Name(n) = ann.target.as_ref() else {
+                    continue;
+                };
+                if n.id.as_str() != *attr_name {
+                    continue;
+                }
                 out.push(FinalViolationInfo {
                     kind: FinalViolationKind::ClassFinalWithoutInit,
                     span: text_range_to_span(ann.range()),
@@ -4968,16 +5051,12 @@ fn collect_class_final_violations(
 
     // Walk all method bodies for instance Final violations.
     for body_stmt in &cls_def.body {
-        let Stmt::FunctionDef(method) = body_stmt else { continue };
+        let Stmt::FunctionDef(method) = body_stmt else {
+            continue;
+        };
         let is_init = method.name.as_str() == "__init__";
         for method_stmt in &method.body {
-            collect_instance_final_violations(
-                method_stmt,
-                is_init,
-                &this_final_attrs,
-                source,
-                out,
-            );
+            collect_instance_final_violations(method_stmt, is_init, &this_final_attrs, source, out);
         }
     }
 
@@ -5051,10 +5130,14 @@ fn collect_instance_final_violations(
             // self.x: Final = ... outside __init__
             if !is_init {
                 if let Expr::Attribute(attr) = ann.target.as_ref() {
-                    let Some(ann_span) = Some(ann.annotation.range()) else { return };
-                    let Some(ann_text) = source.get(
-                        ann_span.start().to_u32() as usize..ann_span.end().to_u32() as usize
-                    ) else { return };
+                    let Some(ann_span) = Some(ann.annotation.range()) else {
+                        return;
+                    };
+                    let Some(ann_text) = source
+                        .get(ann_span.start().to_u32() as usize..ann_span.end().to_u32() as usize)
+                    else {
+                        return;
+                    };
                     if ann_text_is_final(ann_text) {
                         if let Expr::Name(self_name) = attr.value.as_ref() {
                             if self_name.id == "self" {
@@ -5071,9 +5154,15 @@ fn collect_instance_final_violations(
         }
         Stmt::Assign(assign) => {
             for target in &assign.targets {
-                let Expr::Attribute(attr) = target else { continue };
-                let Expr::Name(self_name) = attr.value.as_ref() else { continue };
-                if self_name.id != "self" { continue; }
+                let Expr::Attribute(attr) = target else {
+                    continue;
+                };
+                let Expr::Name(self_name) = attr.value.as_ref() else {
+                    continue;
+                };
+                if self_name.id != "self" {
+                    continue;
+                }
                 let field_name = attr.attr.as_str();
                 if let Some(&has_value) = class_final_attrs.get(field_name) {
                     let kind = if is_init && has_value {
@@ -5093,9 +5182,15 @@ fn collect_instance_final_violations(
         }
         Stmt::AugAssign(aug) => {
             // self.X += 1 — augmented assignment to Final class attr
-            let Expr::Attribute(attr) = aug.target.as_ref() else { return };
-            let Expr::Name(self_name) = attr.value.as_ref() else { return };
-            if self_name.id != "self" { return; }
+            let Expr::Attribute(attr) = aug.target.as_ref() else {
+                return;
+            };
+            let Expr::Name(self_name) = attr.value.as_ref() else {
+                return;
+            };
+            if self_name.id != "self" {
+                return;
+            }
             let field_name = attr.attr.as_str();
             if class_final_attrs.contains_key(field_name) {
                 out.push(FinalViolationInfo {
@@ -5117,8 +5212,12 @@ fn collect_unconditional_self_assigns(stmts: &[Stmt]) -> std::collections::HashS
         match stmt {
             Stmt::Assign(assign) => {
                 for target in &assign.targets {
-                    let Expr::Attribute(attr) = target else { continue };
-                    let Expr::Name(n) = attr.value.as_ref() else { continue };
+                    let Expr::Attribute(attr) = target else {
+                        continue;
+                    };
+                    let Expr::Name(n) = attr.value.as_ref() else {
+                        continue;
+                    };
                     if n.id == "self" {
                         names.insert(attr.attr.to_string());
                     }
@@ -5154,8 +5253,12 @@ fn collect_self_assigns_from_stmts(stmts: &[Stmt]) -> std::collections::HashSet<
     for stmt in stmts {
         let Stmt::Assign(assign) = stmt else { continue };
         for target in &assign.targets {
-            let Expr::Attribute(attr) = target else { continue };
-            let Expr::Name(n) = attr.value.as_ref() else { continue };
+            let Expr::Attribute(attr) = target else {
+                continue;
+            };
+            let Expr::Name(n) = attr.value.as_ref() else {
+                continue;
+            };
             if n.id == "self" {
                 names.insert(attr.attr.to_string());
             }
@@ -5220,7 +5323,9 @@ fn collect_func_stmt_final_violations(
             // Register x: Final = ... as a local Final.
             if let Expr::Name(n) = ann.target.as_ref() {
                 let range = ann.annotation.range();
-                if let Some(ann_text) = source.get(range.start().to_u32() as usize..range.end().to_u32() as usize) {
+                if let Some(ann_text) =
+                    source.get(range.start().to_u32() as usize..range.end().to_u32() as usize)
+                {
                     if ann_text_is_final(ann_text) {
                         local_finals.insert(n.id.to_string());
                     }
@@ -5298,7 +5403,9 @@ fn check_walrus_final(
 ) {
     use crate::scope::{FinalViolationInfo, FinalViolationKind};
     if let Expr::Named(named) = expr {
-        let Expr::Name(n) = named.target.as_ref() else { return };
+        let Expr::Name(n) = named.target.as_ref() else {
+            return;
+        };
         let name = n.id.as_str();
         if global_finals.contains(name) {
             out.push(FinalViolationInfo {
@@ -5315,7 +5422,6 @@ fn check_walrus_final(
         }
     }
 }
-
 
 /// Collect enum `_value_` type annotation violations.
 ///
@@ -5417,7 +5523,14 @@ fn check_enum_init_value_param(
             .collect();
 
         for init_stmt in &func.body {
-            check_init_self_value_assign(init_stmt, &params, source, declared_type, class_name, out);
+            check_init_self_value_assign(
+                init_stmt,
+                &params,
+                source,
+                declared_type,
+                class_name,
+                out,
+            );
         }
     }
 }
@@ -5436,16 +5549,22 @@ fn check_init_self_value_assign<'a>(
     if assign.targets.len() != 1 {
         return;
     }
-    let Expr::Attribute(attr) = &assign.targets[0] else { return };
+    let Expr::Attribute(attr) = &assign.targets[0] else {
+        return;
+    };
     if attr.attr.as_str() != "_value_" {
         return;
     }
-    let Expr::Name(self_name) = attr.value.as_ref() else { return };
+    let Expr::Name(self_name) = attr.value.as_ref() else {
+        return;
+    };
     if self_name.id.as_str() != "self" {
         return;
     }
     // Found self._value_ = <expr>; check if RHS is a parameter name.
-    let Expr::Name(rhs_name) = assign.value.as_ref() else { return };
+    let Expr::Name(rhs_name) = assign.value.as_ref() else {
+        return;
+    };
     let param_name = rhs_name.id.as_str();
     let Some((_, ann_text)) = params.iter().find(|(n, _)| *n == param_name) else {
         return;
@@ -6397,7 +6516,6 @@ fn collect_isinstance_typeddict_in_expr(
     }
 }
 
-
 // ---------------------------------------------------------------------------
 // TypeVar bound=TypedDict detection
 // ---------------------------------------------------------------------------
@@ -6410,7 +6528,9 @@ fn collect_typevar_bound_typeddict_violations(stmts: &[Stmt]) -> Vec<Span> {
     let mut out = Vec::new();
     for stmt in stmts {
         let Stmt::Assign(node) = stmt else { continue };
-        let Expr::Call(call) = node.value.as_ref() else { continue };
+        let Expr::Call(call) = node.value.as_ref() else {
+            continue;
+        };
         if !is_typevar_call(node.value.as_ref()) {
             continue;
         }
@@ -6539,8 +6659,12 @@ fn collect_type_alias_defs(stmts: &[Stmt]) -> Vec<TypeAliasDefInfo> {
             if !is_type_alias {
                 continue;
             }
-            let Some(name) = expr_simple_name(ann.target.as_ref()) else { continue };
-            let Some(rhs) = ann.value.as_ref() else { continue };
+            let Some(name) = expr_simple_name(ann.target.as_ref()) else {
+                continue;
+            };
+            let Some(rhs) = ann.value.as_ref() else {
+                continue;
+            };
             out.push(build_type_alias_info(name, rhs, stmt));
             continue;
         }
@@ -6550,7 +6674,9 @@ fn collect_type_alias_defs(stmts: &[Stmt]) -> Vec<TypeAliasDefInfo> {
             if assign.targets.len() != 1 {
                 continue;
             }
-            let Some(name) = expr_simple_name(&assign.targets[0]) else { continue };
+            let Some(name) = expr_simple_name(&assign.targets[0]) else {
+                continue;
+            };
             // Only treat subscript RHS as implicit alias (Name = Something[...])
             if matches!(assign.value.as_ref(), Expr::Subscript(_)) {
                 out.push(build_type_alias_info(name, &assign.value, stmt));
@@ -6569,12 +6695,8 @@ fn build_type_alias_info(name: String, rhs: &Expr, stmt: &Stmt) -> TypeAliasDefI
         Expr::Subscript(sub) => {
             let base = expr_simple_name(&sub.value);
             let arg_names = match sub.slice.as_ref() {
-                Expr::Tuple(tup) => {
-                    tup.elts.iter().filter_map(expr_simple_name).collect()
-                }
-                single => {
-                    expr_simple_name(single).into_iter().collect()
-                }
+                Expr::Tuple(tup) => tup.elts.iter().filter_map(expr_simple_name).collect(),
+                single => expr_simple_name(single).into_iter().collect(),
             };
             (base, arg_names)
         }
@@ -6620,10 +6742,8 @@ fn collect_protocol_instantiation_violations(
         .map(|cls| cls.name.as_str())
         .collect();
 
-    let class_map: std::collections::HashMap<&str, &ClassInfo> = classes
-        .iter()
-        .map(|cls| (cls.name.as_str(), cls))
-        .collect();
+    let class_map: std::collections::HashMap<&str, &ClassInfo> =
+        classes.iter().map(|cls| (cls.name.as_str(), cls)).collect();
 
     let mut abstract_names: std::collections::HashSet<&str> = classes
         .iter()
@@ -6670,13 +6790,14 @@ fn class_missing_protocol_members(
     cls: &ClassInfo,
     protocol_names: &std::collections::HashSet<&str>,
     class_map: &std::collections::HashMap<&str, &ClassInfo>,
-    protocol_required_methods: &std::collections::HashMap<String, std::collections::HashSet<String>>,
+    protocol_required_methods: &std::collections::HashMap<
+        String,
+        std::collections::HashSet<String>,
+    >,
     protocol_required_attrs: &std::collections::HashMap<String, std::collections::HashSet<String>>,
 ) -> bool {
-    let mut required_methods: std::collections::HashSet<String> =
-        std::collections::HashSet::new();
-    let mut required_attrs: std::collections::HashSet<String> =
-        std::collections::HashSet::new();
+    let mut required_methods: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut required_attrs: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     for base_name in &cls.bases {
         if !protocol_names.contains(base_name.as_str()) {
@@ -6690,9 +6811,13 @@ fn class_missing_protocol_members(
         }
         if let Some(proto) = class_map.get(base_name.as_str()) {
             collect_transitive_required_members(
-                proto, protocol_names, class_map,
-                protocol_required_methods, protocol_required_attrs,
-                &mut required_methods, &mut required_attrs,
+                proto,
+                protocol_names,
+                class_map,
+                protocol_required_methods,
+                protocol_required_attrs,
+                &mut required_methods,
+                &mut required_attrs,
             );
         }
     }
@@ -6701,10 +6826,8 @@ fn class_missing_protocol_members(
         return false;
     }
 
-    let mut provided_methods: std::collections::HashSet<&str> =
-        std::collections::HashSet::new();
-    let mut provided_attrs: std::collections::HashSet<&str> =
-        std::collections::HashSet::new();
+    let mut provided_methods: std::collections::HashSet<&str> = std::collections::HashSet::new();
+    let mut provided_attrs: std::collections::HashSet<&str> = std::collections::HashSet::new();
 
     collect_provided_members(cls, &mut provided_methods, &mut provided_attrs);
 
@@ -6735,7 +6858,10 @@ fn collect_transitive_required_members(
     proto: &ClassInfo,
     protocol_names: &std::collections::HashSet<&str>,
     class_map: &std::collections::HashMap<&str, &ClassInfo>,
-    protocol_required_methods: &std::collections::HashMap<String, std::collections::HashSet<String>>,
+    protocol_required_methods: &std::collections::HashMap<
+        String,
+        std::collections::HashSet<String>,
+    >,
     protocol_required_attrs: &std::collections::HashMap<String, std::collections::HashSet<String>>,
     required_methods: &mut std::collections::HashSet<String>,
     required_attrs: &mut std::collections::HashSet<String>,
@@ -6755,9 +6881,13 @@ fn collect_transitive_required_members(
         }
         if let Some(parent_proto) = class_map.get(base_name.as_str()) {
             collect_transitive_required_members(
-                parent_proto, protocol_names, class_map,
-                protocol_required_methods, protocol_required_attrs,
-                required_methods, required_attrs,
+                parent_proto,
+                protocol_names,
+                class_map,
+                protocol_required_methods,
+                protocol_required_attrs,
+                required_methods,
+                required_attrs,
             );
         }
     }
@@ -6791,14 +6921,16 @@ fn collect_protocol_required_methods(
         }
         let mut required = std::collections::HashSet::new();
         for body_stmt in &cls.body {
-            let Stmt::FunctionDef(func) = body_stmt else { continue };
+            let Stmt::FunctionDef(func) = body_stmt else {
+                continue;
+            };
             let name = func.name.id.as_str();
             if name.starts_with("__") && name.ends_with("__") {
                 continue;
             }
-            let is_abstract = func.decorator_list.iter().any(|d| {
-                matches!(&d.expression, Expr::Name(n) if n.id.as_str() == "abstractmethod")
-            });
+            let is_abstract = func.decorator_list.iter().any(
+                |d| matches!(&d.expression, Expr::Name(n) if n.id.as_str() == "abstractmethod"),
+            );
             let is_stub = is_function_body_stub(&func.body);
             if is_abstract || is_stub {
                 required.insert(name.to_string());
@@ -6835,7 +6967,9 @@ fn collect_protocol_required_attrs(
         }
         let mut required = std::collections::HashSet::new();
         for body_stmt in &cls.body {
-            let Stmt::AnnAssign(ann) = body_stmt else { continue };
+            let Stmt::AnnAssign(ann) = body_stmt else {
+                continue;
+            };
             if ann.value.is_some() {
                 continue;
             }
@@ -6891,9 +7025,7 @@ fn find_protocol_instantiations(
             Stmt::If(node) => {
                 find_protocol_instantiations(&node.body, protocol_names, abstract_names, out);
                 for clause in &node.elif_else_clauses {
-                    find_protocol_instantiations(
-                        &clause.body, protocol_names, abstract_names, out,
-                    );
+                    find_protocol_instantiations(&clause.body, protocol_names, abstract_names, out);
                 }
             }
             Stmt::For(node) => {
@@ -6909,16 +7041,10 @@ fn find_protocol_instantiations(
                 find_protocol_instantiations(&node.body, protocol_names, abstract_names, out);
                 for handler in &node.handlers {
                     let ExceptHandler::ExceptHandler(except) = handler;
-                    find_protocol_instantiations(
-                        &except.body, protocol_names, abstract_names, out,
-                    );
+                    find_protocol_instantiations(&except.body, protocol_names, abstract_names, out);
                 }
-                find_protocol_instantiations(
-                    &node.finalbody, protocol_names, abstract_names, out,
-                );
-                find_protocol_instantiations(
-                    &node.orelse, protocol_names, abstract_names, out,
-                );
+                find_protocol_instantiations(&node.finalbody, protocol_names, abstract_names, out);
+                find_protocol_instantiations(&node.orelse, protocol_names, abstract_names, out);
             }
             _ => {}
         }
@@ -7134,21 +7260,13 @@ fn collect_protocol_rtc_in_expr(
         Expr::Tuple(tuple) => {
             for elt in &tuple.elts {
                 if let Expr::Name(name) = elt {
-                    check_protocol_arg(
-                        call_name,
-                        name.id.as_str(),
-                        call_span,
-                        protocol_map,
-                        out,
-                    );
+                    check_protocol_arg(call_name, name.id.as_str(), call_span, protocol_map, out);
                 }
             }
         }
         _ => {}
     }
 }
-
-
 
 // ---------------------------------------------------------------------------
 // Generator violation collection

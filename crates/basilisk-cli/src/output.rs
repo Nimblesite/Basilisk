@@ -415,14 +415,16 @@ mod tests {
             help: None,
             note: None,
         };
-        let sources = [FileSource {
+        let sources = [
+            FileSource {
                 path: "a.py".to_owned(),
                 text: "aaaa\nbbbb".to_owned(),
             },
             FileSource {
                 path: "b.py".to_owned(),
                 text: "x = 1\n".to_owned(),
-            }];
+            },
+        ];
         let source = sources
             .iter()
             .find(|s| s.path == diag.path)

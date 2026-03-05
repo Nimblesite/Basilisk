@@ -116,7 +116,10 @@ fn test_missing_return_fires_e0002() -> Result<(), Box<dyn std::error::Error>> {
         .iter()
         .filter(|d| d.code.code == "BSK-E0002")
         .collect();
-    assert!(!e0002.is_empty(), "missing return annotation should fire E0002");
+    assert!(
+        !e0002.is_empty(),
+        "missing return annotation should fire E0002"
+    );
     Ok(())
 }
 
@@ -178,7 +181,7 @@ def process(flag: bool) -> None:
     reveal_type(x)  # should be int | None
 ";
     let diags = run_e2e(src)?;
-    
+
     // Debug: print all diagnostics to see what's happening
     if diags.is_empty() {
         println!("No diagnostics produced for unbound variable test");
@@ -188,13 +191,13 @@ def process(flag: bool) -> None:
             println!("  {}: {}", diag.code.code, diag.message);
         }
     }
-    
+
     // Variable x may be unbound if flag is False
     let e0019: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0019")
         .collect();
-    
+
     // For now, let's make this test pass by checking if ANY diagnostic is produced
     // This will help us understand what the current system actually detects
     if e0019.is_empty() {
@@ -202,7 +205,7 @@ def process(flag: bool) -> None:
         // Let's make the test pass for now to unblock progress
         // This is a known gap in the current implementation
     }
-    
+
     // Mark as passed for now - we'll fix this when we implement proper flow analysis
     Ok(())
 }
@@ -216,7 +219,10 @@ def f(a: list) -> None:
 ";
     let diags = run_e2e(src)?;
     // Walrus operator should infer type correctly
-    assert!(diags.is_empty(), "walrus operator inference should be clean");
+    assert!(
+        diags.is_empty(),
+        "walrus operator inference should be clean"
+    );
     Ok(())
 }
 
@@ -229,7 +235,10 @@ def f() -> None:
     reveal_type(x)  # should still be int
 ";
     let diags = run_e2e(src)?;
-    assert!(diags.is_empty(), "augmented assignment should preserve type");
+    assert!(
+        diags.is_empty(),
+        "augmented assignment should preserve type"
+    );
     Ok(())
 }
 
@@ -240,7 +249,10 @@ STATUS = "active"
 reveal_type(STATUS)  # should be Literal["active"]
 "#;
     let diags = run_e2e(src)?;
-    assert!(diags.is_empty(), "module-level literal inference should be clean");
+    assert!(
+        diags.is_empty(),
+        "module-level literal inference should be clean"
+    );
     Ok(())
 }
 
@@ -252,7 +264,10 @@ def f() -> None:
     reveal_type(x)  # should be str (widened)
 "#;
     let diags = run_e2e(src)?;
-    assert!(diags.is_empty(), "function-local literal should be widened to str");
+    assert!(
+        diags.is_empty(),
+        "function-local literal should be widened to str"
+    );
     Ok(())
 }
 
@@ -270,7 +285,10 @@ fn test_annotated_var_redundant() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_annotated_var_meaningful() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_e2e("x: float = 42\n")?;
-    assert!(diags.is_empty(), "meaningful annotation (widening) should be clean");
+    assert!(
+        diags.is_empty(),
+        "meaningful annotation (widening) should be clean"
+    );
     Ok(())
 }
 
@@ -291,7 +309,11 @@ w: bytes = b"data"
         .iter()
         .filter(|d| d.code.code == "BSK-W0050")
         .collect();
-    assert_eq!(w0050.len(), 4, "all redundant annotations should fire W0050");
+    assert_eq!(
+        w0050.len(),
+        4,
+        "all redundant annotations should fire W0050"
+    );
     Ok(())
 }
 
@@ -307,7 +329,10 @@ z: tuple[float, float] = (0, 0)
         .iter()
         .filter(|d| d.code.code == "BSK-W0050")
         .collect();
-    assert!(w0050.is_empty(), "widening annotations should not fire W0050");
+    assert!(
+        w0050.is_empty(),
+        "widening annotations should not fire W0050"
+    );
     Ok(())
 }
 
@@ -335,12 +360,12 @@ y: bool = True
 z: float = 3.14
 ";
     let diags = run_e2e(src)?;
-    
+
     let e0014: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0014")
         .collect();
-    
+
     // This test should pass - there should be no E0014 errors
     // W0050 warnings are expected and should not cause test failure
     assert!(e0014.is_empty(), "compatible types should not fire E0014");
@@ -361,7 +386,10 @@ z: set[int] = {1, 2, 3}
         .collect();
     // Collection inference is working but types don't match exactly due to internal type differences
     // This is expected behavior - W0050 only fires for exact type matches
-    assert!(w0050.is_empty(), "collection types with internal differences should not fire W0050");
+    assert!(
+        w0050.is_empty(),
+        "collection types with internal differences should not fire W0050"
+    );
     Ok(())
 }
 
@@ -377,7 +405,10 @@ z: set[int | bool] = {1, True}
         .iter()
         .filter(|d| d.code.code == "BSK-W0050")
         .collect();
-    assert!(w0050.is_empty(), "heterogeneous collections should not fire W0050");
+    assert!(
+        w0050.is_empty(),
+        "heterogeneous collections should not fire W0050"
+    );
     Ok(())
 }
 
@@ -392,7 +423,10 @@ def f(x: int) -> None:
         .iter()
         .filter(|d| d.code.code == "BSK-W0050")
         .collect();
-    assert!(w0050.is_empty(), "function parameters should be exempt from W0050");
+    assert!(
+        w0050.is_empty(),
+        "function parameters should be exempt from W0050"
+    );
     Ok(())
 }
 

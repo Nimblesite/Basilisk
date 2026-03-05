@@ -198,8 +198,7 @@ fn find_yield_expressions(body: &str, body_offset: usize) -> Vec<YieldExpr> {
                 // Check for `yield from`
                 let is_yield_from = after_pos + 5 <= bytes.len()
                     && &body[after_pos..after_pos + 5] == " from"
-                    && (after_pos + 5 >= bytes.len()
-                        || !is_identifier_char(bytes[after_pos + 5]));
+                    && (after_pos + 5 >= bytes.len() || !is_identifier_char(bytes[after_pos + 5]));
 
                 if is_yield_from {
                     let expr_start = after_pos + 5;

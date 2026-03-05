@@ -80,9 +80,10 @@ fn find_protocol_call_return_type<'a>(
         .find(|c| c.name == class_name && is_protocol_class(c))?;
 
     // Find __call__ method
-    let call_method = module.functions.iter().find(|f| {
-        f.class_name.as_deref() == Some(cls.name.as_str()) && f.name == "__call__"
-    })?;
+    let call_method = module
+        .functions
+        .iter()
+        .find(|f| f.class_name.as_deref() == Some(cls.name.as_str()) && f.name == "__call__")?;
 
     let ann_span = call_method.return_annotation_span?;
     let ann_text = module
@@ -132,9 +133,7 @@ fn is_compatible_return_type(expected_return: &str, actual_return: &str) -> bool
     }
 
     // TypeGuard and TypeIs are NOT interchangeable
-    if (expected_is_typeguard && actual_is_typeis)
-        || (expected_is_typeis && actual_is_typeguard)
-    {
+    if (expected_is_typeguard && actual_is_typeis) || (expected_is_typeis && actual_is_typeguard) {
         return false;
     }
 

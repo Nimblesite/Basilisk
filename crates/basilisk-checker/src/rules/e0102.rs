@@ -181,8 +181,12 @@ impl Rule for TypeVarDefaultReferential {
 
             // 3. Constraint compatibility checks
             // Case 3a: Both have constraints - default's constraints must be a subset
-            if !tv.constraint_type_names.is_empty() && !default_tv.constraint_type_names.is_empty() {
-                if !is_constraint_subset(&default_tv.constraint_type_names, &tv.constraint_type_names) {
+            if !tv.constraint_type_names.is_empty() && !default_tv.constraint_type_names.is_empty()
+            {
+                if !is_constraint_subset(
+                    &default_tv.constraint_type_names,
+                    &tv.constraint_type_names,
+                ) {
                     let default_constraints = default_tv
                         .constraint_type_names
                         .iter()
@@ -217,16 +221,17 @@ impl Rule for TypeVarDefaultReferential {
                     });
                 }
             }
-            
+
             // Case 3b: Default has bound, this TypeVar has constraints - bound must be compatible with constraints
             if !tv.constraint_type_names.is_empty() && default_tv.has_bound {
                 if let Some(ref default_bound) = default_tv.bound_type_name {
                     // Check if the bound is compatible with at least one constraint
                     // For numeric types, check if bound is a subtype of any constraint
-                    let is_compatible = tv.constraint_type_names.iter().any(|constraint| {
-                        is_subtype_for_bound(default_bound, constraint)
-                    });
-                    
+                    let is_compatible = tv
+                        .constraint_type_names
+                        .iter()
+                        .any(|constraint| is_subtype_for_bound(default_bound, constraint));
+
                     if !is_compatible {
                         let tv_constraints = tv
                             .constraint_type_names
@@ -257,14 +262,15 @@ impl Rule for TypeVarDefaultReferential {
                     }
                 }
             }
-            
+
             // Case 3c: Default has constraints, this TypeVar has bound - all constraints must be subtypes of bound
             if tv.has_bound && !default_tv.constraint_type_names.is_empty() {
                 if let Some(ref tv_bound) = tv.bound_type_name {
-                    let all_constraints_compatible = default_tv.constraint_type_names.iter().all(|constraint| {
-                        is_subtype_for_bound(constraint, tv_bound)
-                    });
-                    
+                    let all_constraints_compatible = default_tv
+                        .constraint_type_names
+                        .iter()
+                        .all(|constraint| is_subtype_for_bound(constraint, tv_bound));
+
                     if !all_constraints_compatible {
                         let default_constraints = default_tv
                             .constraint_type_names

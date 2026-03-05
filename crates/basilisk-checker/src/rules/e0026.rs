@@ -27,13 +27,21 @@ impl Rule for TypeVarSingleConstraint {
     }
 }
 
-fn check_typevar_constraints(tv: &basilisk_resolver::TypeVarCallInfo, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+fn check_typevar_constraints(
+    tv: &basilisk_resolver::TypeVarCallInfo,
+    module: &ResolvedModule,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
     // Name inconsistency: variable name must match the string argument.
     if let Some(ref string_name) = tv.string_name {
         if string_name != &tv.name {
-            let kind = if tv.is_typevartuple { "TypeVarTuple" }
-                else if tv.is_paramspec { "ParamSpec" }
-                else { "TypeVar" };
+            let kind = if tv.is_typevartuple {
+                "TypeVarTuple"
+            } else if tv.is_paramspec {
+                "ParamSpec"
+            } else {
+                "TypeVar"
+            };
             diagnostics.push(Diagnostic {
                 code: CODE.clone(),
                 severity: Severity::Error,
@@ -50,8 +58,7 @@ fn check_typevar_constraints(tv: &basilisk_resolver::TypeVarCallInfo, module: &R
                     tv.name
                 )),
                 note: Some(
-                    "PEP 484: the variable name and the string argument must match"
-                        .to_owned(),
+                    "PEP 484: the variable name and the string argument must match".to_owned(),
                 ),
             });
         }
@@ -67,9 +74,7 @@ fn check_typevar_constraints(tv: &basilisk_resolver::TypeVarCallInfo, module: &R
             ),
             span: tv.span,
             path: module.path.clone(),
-            help: Some(
-                "Add a second constraint or remove the single constraint".to_owned(),
-            ),
+            help: Some("Add a second constraint or remove the single constraint".to_owned()),
             note: Some("PEP 484: a TypeVar with one constraint is invalid".to_owned()),
         });
     }
@@ -87,9 +92,7 @@ fn check_typevar_constraints(tv: &basilisk_resolver::TypeVarCallInfo, module: &R
             help: Some(
                 "Use either constraints (positional type args) or `bound=`, not both".to_owned(),
             ),
-            note: Some(
-                "PEP 484: `TypeVar` cannot have both constraints and a `bound`".to_owned(),
-            ),
+            note: Some("PEP 484: `TypeVar` cannot have both constraints and a `bound`".to_owned()),
         });
     }
     // Constraint must not itself be parameterized by a TypeVar (e.g. `list[T]`).
@@ -103,9 +106,7 @@ fn check_typevar_constraints(tv: &basilisk_resolver::TypeVarCallInfo, module: &R
             ),
             span: tv.span,
             path: module.path.clone(),
-            help: Some(
-                "TypeVar constraints must be plain types, not generic types".to_owned(),
-            ),
+            help: Some("TypeVar constraints must be plain types, not generic types".to_owned()),
             note: Some(
                 "PEP 484: TypeVar constraints cannot themselves be parameterized by type variables"
                     .to_owned(),
@@ -123,9 +124,7 @@ fn check_typevar_constraints(tv: &basilisk_resolver::TypeVarCallInfo, module: &R
             ),
             span: tv.span,
             path: module.path.clone(),
-            help: Some(
-                "The `bound=` argument must be a plain type, not a generic type".to_owned(),
-            ),
+            help: Some("The `bound=` argument must be a plain type, not a generic type".to_owned()),
             note: Some(
                 "PEP 484: TypeVar bound cannot itself be parameterized by a type variable"
                     .to_owned(),

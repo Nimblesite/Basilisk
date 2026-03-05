@@ -37,8 +37,11 @@ pub(crate) struct ProtocolTupleElementMismatch;
 
 impl Rule for ProtocolTupleElementMismatch {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let class_map: HashMap<&str, &ClassInfo> =
-            module.classes.iter().map(|c| (c.name.as_str(), c)).collect();
+        let class_map: HashMap<&str, &ClassInfo> = module
+            .classes
+            .iter()
+            .map(|c| (c.name.as_str(), c))
+            .collect();
 
         let method_map: HashMap<(&str, &str), &FunctionInfo> = module
             .functions
@@ -218,10 +221,7 @@ fn parse_self_attr_assignment(line: &str) -> Option<SelfAttrAssignment<'_>> {
     }
 
     // Attribute name must be a simple identifier.
-    if !attr_name
-        .chars()
-        .all(|c| c.is_alphanumeric() || c == '_')
-    {
+    if !attr_name.chars().all(|c| c.is_alphanumeric() || c == '_') {
         return None;
     }
 

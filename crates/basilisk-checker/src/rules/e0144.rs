@@ -38,15 +38,17 @@ pub(crate) struct TypeCallConstructorViolation;
 
 impl Rule for TypeCallConstructorViolation {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let Ok(parsed) =
-            basilisk_parser::parse_source(module.source.clone(), module.path.clone())
+        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
         else {
             return;
         };
 
         // Collect class info and method maps from resolved module.
-        let class_map: HashMap<&str, &basilisk_resolver::ClassInfo> =
-            module.classes.iter().map(|c| (c.name.as_str(), c)).collect();
+        let class_map: HashMap<&str, &basilisk_resolver::ClassInfo> = module
+            .classes
+            .iter()
+            .map(|c| (c.name.as_str(), c))
+            .collect();
 
         let mut method_map: HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>> =
             HashMap::new();
@@ -289,7 +291,11 @@ fn check_stmt(
             }
         }
         Stmt::If(i) => {
-            for s in i.body.iter().chain(i.elif_else_clauses.iter().flat_map(|c| c.body.iter())) {
+            for s in i
+                .body
+                .iter()
+                .chain(i.elif_else_clauses.iter().flat_map(|c| c.body.iter()))
+            {
                 check_stmt(
                     s,
                     source,
@@ -452,13 +458,8 @@ fn check_type_call(
     };
 
     // Determine required / accepted argument counts from the constructor.
-    let constructor_sig = resolve_constructor_sig(
-        class_name,
-        class_info,
-        class_map,
-        method_map,
-        source,
-    );
+    let constructor_sig =
+        resolve_constructor_sig(class_name, class_info, class_map, method_map, source);
 
     match constructor_sig {
         ConstructorSig::NoArgs => {
@@ -531,7 +532,13 @@ fn check_type_call(
                 );
                 // Check positional argument types.
                 check_positional_arg_types(
-                    call, class_name, method_map, source, path, span, diagnostics,
+                    call,
+                    class_name,
+                    method_map,
+                    source,
+                    path,
+                    span,
+                    diagnostics,
                 );
             }
         }
@@ -565,9 +572,7 @@ fn resolve_constructor_sig(
     source: &str,
 ) -> ConstructorSig {
     // 1. Check metaclass __call__ first.
-    if let Some(meta_sig) =
-        check_metaclass_call(class_info, class_map, method_map, source)
-    {
+    if let Some(meta_sig) = check_metaclass_call(class_info, class_map, method_map, source) {
         return meta_sig;
     }
 
@@ -587,13 +592,7 @@ fn resolve_constructor_sig(
             continue;
         }
         if let Some(base_class) = class_map.get(base_name) {
-            let sig = resolve_constructor_sig(
-                base_name,
-                base_class,
-                class_map,
-                method_map,
-                source,
-            );
+            let sig = resolve_constructor_sig(base_name, base_class, class_map, method_map, source);
             if !matches!(sig, ConstructorSig::NoArgs) {
                 return sig;
             }
@@ -734,8 +733,7 @@ fn check_positional_arg_types(
     let Some(func) = func else { return };
 
     // Skip self/cls param.
-    let params: Vec<&basilisk_resolver::ParameterInfo> =
-        func.parameters.iter().skip(1).collect();
+    let params: Vec<&basilisk_resolver::ParameterInfo> = func.parameters.iter().skip(1).collect();
 
     for (idx, arg_expr) in call.arguments.args.iter().enumerate() {
         let Some(param) = params.get(idx) else { break };
@@ -839,8 +837,7 @@ fn is_type_compatible(arg_type: &str, param_type: &str) -> bool {
     if param_type == "float" && (arg_type == "int" || arg_type == "bool") {
         return true;
     }
-    if param_type == "complex" && (arg_type == "int" || arg_type == "float" || arg_type == "bool")
-    {
+    if param_type == "complex" && (arg_type == "int" || arg_type == "float" || arg_type == "bool") {
         return true;
     }
     if param_type.contains('|') {

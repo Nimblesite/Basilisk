@@ -141,9 +141,10 @@ fn find_arg_type<'a>(
     module: &'a ResolvedModule,
 ) -> Option<&'a str> {
     // Find the enclosing function (the one whose def_span contains the call)
-    let enclosing_func = module.functions.iter().find(|func| {
-        func.def_span.start <= call_span.start && call_span.end <= func.def_span.end
-    });
+    let enclosing_func = module
+        .functions
+        .iter()
+        .find(|func| func.def_span.start <= call_span.start && call_span.end <= func.def_span.end);
 
     // Check enclosing function parameters
     if let Some(func) = enclosing_func {

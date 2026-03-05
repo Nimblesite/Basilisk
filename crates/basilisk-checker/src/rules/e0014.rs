@@ -15,9 +15,9 @@
 
 use std::collections::HashMap;
 
-use basilisk_resolver::{ResolvedModule, RhsKind, Span, VariableInfo};
 use crate::inference::infer_rhs;
 use crate::types::{InferredType, LiteralValue};
+use basilisk_resolver::{ResolvedModule, RhsKind, Span, VariableInfo};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
@@ -35,7 +35,13 @@ pub(crate) struct AssignmentTypeMismatch;
 impl Rule for AssignmentTypeMismatch {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         let empty_params = std::collections::HashMap::new();
-        check_vars(&module.module_vars, &module.source, &module.path, diagnostics, &empty_params);
+        check_vars(
+            &module.module_vars,
+            &module.source,
+            &module.path,
+            diagnostics,
+            &empty_params,
+        );
         check_local_vars(module, diagnostics);
         check_tuple_reassignments(module, diagnostics);
     }
@@ -68,7 +74,9 @@ fn check_vars(
             // name, use the parameter's declared type instead.
             if matches!(inferred_type, InferredType::Unknown) {
                 if let Some(rhs_span) = var.rhs_span {
-                    if let Some(rhs_text) = source.get(rhs_span.start as usize..rhs_span.end as usize) {
+                    if let Some(rhs_text) =
+                        source.get(rhs_span.start as usize..rhs_span.end as usize)
+                    {
                         let rhs_name = rhs_text.trim();
                         if let Some(param_type) = param_types.get(rhs_name) {
                             inferred_type = param_type.clone();
@@ -80,11 +88,22 @@ fn check_vars(
             if inferred_type.is_assignable_to(&declared_type) {
                 None
             } else {
-                Some((var, annotation_text.to_owned(), inferred_type, declared_type))
+                Some((
+                    var,
+                    annotation_text.to_owned(),
+                    inferred_type,
+                    declared_type,
+                ))
             }
         })
         .for_each(|(var, annotation, inferred, declared)| {
-            diagnostics.push(make_diagnostic(var, &annotation, &inferred, &declared, path));
+            diagnostics.push(make_diagnostic(
+                var,
+                &annotation,
+                &inferred,
+                &declared,
+                path,
+            ));
         });
 }
 
@@ -98,10 +117,7 @@ fn infer_with_literal_value(
     let base = infer_rhs(&var.rhs_kind);
 
     // Only attempt value-level inference when the target is a Literal type
-    let is_literal_target = matches!(
-        declared,
-        InferredType::Literal(_) | InferredType::Union(_)
-    );
+    let is_literal_target = matches!(declared, InferredType::Literal(_) | InferredType::Union(_));
     if !is_literal_target {
         return base;
     }
@@ -202,7 +218,13 @@ fn check_local_vars(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) 
     let source = &module.source;
     for func in &module.functions {
         let param_types = build_param_type_map(&func.parameters, source);
-        check_vars(&func.local_vars, source, &module.path, diagnostics, &param_types);
+        check_vars(
+            &func.local_vars,
+            source,
+            &module.path,
+            diagnostics,
+            &param_types,
+        );
     }
 }
 
@@ -217,7 +239,9 @@ fn build_param_type_map(
         if !param.has_annotation {
             continue;
         }
-        let Some(ann_span) = param.annotation_span else { continue };
+        let Some(ann_span) = param.annotation_span else {
+            continue;
+        };
         let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
             continue;
         };
@@ -505,7 +529,8 @@ fn literal_elem_matches(elem: &str, expected: &str) -> bool {
         && elem.chars().next().is_some_and(|c| c.is_ascii_digit());
     let is_str_lit = (elem.starts_with('"') && elem.ends_with('"'))
         || (elem.starts_with('\'') && elem.ends_with('\''));
-    let is_float_lit = elem.contains('.') && elem.chars().next().is_some_and(|c| c.is_ascii_digit());
+    let is_float_lit =
+        elem.contains('.') && elem.chars().next().is_some_and(|c| c.is_ascii_digit());
     let is_bytes_lit = (elem.starts_with("b\"") || elem.starts_with("b'"))
         && (elem.ends_with('"') || elem.ends_with('\''));
     let is_bool_lit = elem == "True" || elem == "False";
@@ -673,7 +698,11 @@ fn classify_literal(text: &str) -> Option<RhsKind> {
     }
 
     // String literal
-    if text.starts_with('"') || text.starts_with('\'') || text.starts_with("f\"") || text.starts_with("f'") {
+    if text.starts_with('"')
+        || text.starts_with('\'')
+        || text.starts_with("f\"")
+        || text.starts_with("f'")
+    {
         return Some(RhsKind::StrLiteral);
     }
 

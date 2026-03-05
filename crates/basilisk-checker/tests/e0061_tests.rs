@@ -32,7 +32,10 @@ def process(status: Status) -> None:
         .iter()
         .filter(|d| d.code.code == "BSK-E0061")
         .collect();
-    assert!(!e0061.is_empty(), "assert_type with Literal[Enum.MEMBER] should fire E0061");
+    assert!(
+        !e0061.is_empty(),
+        "assert_type with Literal[Enum.MEMBER] should fire E0061"
+    );
     Ok(())
 }
 
@@ -54,7 +57,10 @@ def process(status: Status) -> None:
         .iter()
         .filter(|d| d.code.code == "BSK-E0061")
         .collect();
-    assert!(e0061.is_empty(), "assert_type with enum type should not fire E0061");
+    assert!(
+        e0061.is_empty(),
+        "assert_type with enum type should not fire E0061"
+    );
     Ok(())
 }
 
@@ -77,7 +83,10 @@ def check_perms(perms: Permissions) -> None:
         .iter()
         .filter(|d| d.code.code == "BSK-E0061")
         .collect();
-    assert!(!e0061.is_empty(), "Flag enum literal narrowing should fire E0061");
+    assert!(
+        !e0061.is_empty(),
+        "Flag enum literal narrowing should fire E0061"
+    );
     Ok(())
 }
 
@@ -101,7 +110,11 @@ def set_color(color: Color) -> None:
         .iter()
         .filter(|d| d.code.code == "BSK-E0061")
         .collect();
-    assert_eq!(e0061.len(), 2, "Multiple assert_type calls should fire multiple E0061");
+    assert_eq!(
+        e0061.len(),
+        2,
+        "Multiple assert_type calls should fire multiple E0061"
+    );
     Ok(())
 }
 

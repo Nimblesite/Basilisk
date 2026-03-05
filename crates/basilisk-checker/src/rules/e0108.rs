@@ -84,14 +84,7 @@ fn check_self_attr_assignments(module: &ResolvedModule, diagnostics: &mut Vec<Di
         };
 
         // Find `self.ATTR = ` patterns in method bodies.
-        find_undeclared_self_assignments(
-            class_source,
-            class_start,
-            fields,
-            cls,
-            path,
-            diagnostics,
-        );
+        find_undeclared_self_assignments(class_source, class_start, fields, cls, path, diagnostics);
     }
 }
 
@@ -246,15 +239,16 @@ fn check_instance_slots_access(
     let path = &module.path;
 
     // Compute byte offset of each line start for span calculation.
-    let line_starts: Vec<usize> = std::iter::once(0)
-        .chain(source.bytes().enumerate().filter_map(|(i, b)| {
-            if b == b'\n' {
-                Some(i + 1)
-            } else {
-                None
-            }
-        }))
-        .collect();
+    let line_starts: Vec<usize> =
+        std::iter::once(0)
+            .chain(source.bytes().enumerate().filter_map(|(i, b)| {
+                if b == b'\n' {
+                    Some(i + 1)
+                } else {
+                    None
+                }
+            }))
+            .collect();
 
     for (line_idx, line) in source.lines().enumerate() {
         let trimmed = line.trim();
@@ -277,8 +271,7 @@ fn check_instance_slots_access(
                 // Compute byte offset for the span.
                 let col_offset = line.len() - trimmed.len();
                 let byte_start = line_starts[line_idx] + col_offset + call_pos;
-                let byte_end =
-                    byte_start + pattern.len() + close_paren + 1 + ".__slots__".len();
+                let byte_end = byte_start + pattern.len() + close_paren + 1 + ".__slots__".len();
 
                 diagnostics.push(Diagnostic {
                     code: CODE.clone(),

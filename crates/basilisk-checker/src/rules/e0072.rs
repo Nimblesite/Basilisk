@@ -48,8 +48,7 @@ impl Rule for NoMatchingOverload {
             .filter(|v| v.rhs_kind == basilisk_resolver::RhsKind::CallExpr)
             .filter_map(|v| {
                 let rhs_span = v.rhs_span?;
-                let rhs_text =
-                    source.get(rhs_span.start as usize..rhs_span.end as usize)?;
+                let rhs_text = source.get(rhs_span.start as usize..rhs_span.end as usize)?;
                 // Extract class name from "ClassName()" or "ClassName(args)"
                 let class_name = rhs_text.split('(').next()?;
                 let class_name = class_name.trim();
@@ -106,9 +105,7 @@ impl Rule for NoMatchingOverload {
 
         // Scan the source for module-level subscript expressions: `varname[literal]`
         // We parse the source with basilisk_parser to get the AST, then walk it.
-        let Ok(parsed) =
-            basilisk_parser::parse_source(source.clone(), path.clone())
-        else {
+        let Ok(parsed) = basilisk_parser::parse_source(source.clone(), path.clone()) else {
             return;
         };
 
@@ -248,10 +245,7 @@ fn type_matches_annotation(type_name: &str, annotation: &str) -> bool {
     }
 
     // `Union[X, Y]`
-    if let Some(inner) = ann
-        .strip_prefix("Union[")
-        .and_then(|s| s.strip_suffix(']'))
-    {
+    if let Some(inner) = ann.strip_prefix("Union[").and_then(|s| s.strip_suffix(']')) {
         return split_union_args(inner)
             .iter()
             .any(|part| type_matches_annotation(type_name, part.trim()));

@@ -346,10 +346,7 @@ fn check_outer_scope(
                 let after = &trimmed[generic_start + 8..];
                 if let Some(bracket_end) = after.find(']') {
                     let params_str = &after[..bracket_end];
-                    let nested_params: Vec<&str> = params_str
-                        .split(',')
-                        .map(str::trim)
-                        .collect();
+                    let nested_params: Vec<&str> = params_str.split(',').map(str::trim).collect();
 
                     for nested_param in &nested_params {
                         let Some(info) = info_map.get(nested_param) else {
@@ -365,13 +362,10 @@ fn check_outer_scope(
 
                         // Is the default referencing an outer class's param?
                         let in_nested = nested_params.contains(&default_name.as_str());
-                        if !in_nested && outer_class_params.contains(default_name.as_str())
-                        {
+                        if !in_nested && outer_class_params.contains(default_name.as_str()) {
                             // Compute byte offset for this line
-                            let byte_offset: u32 = lines[..line_idx]
-                                .iter()
-                                .map(|l| l.len() + 1)
-                                .sum::<usize>() as u32;
+                            let byte_offset: u32 =
+                                lines[..line_idx].iter().map(|l| l.len() + 1).sum::<usize>() as u32;
                             let line_len = line.len() as u32;
 
                             diagnostics.push(Diagnostic {
@@ -478,10 +472,7 @@ fn check_bound_constraint_compat(
                 // ref has a bound, info has constraints — for TypeVar constraints,
                 // the bound must exactly match one of the constraints (constraints
                 // are an exact set, not a subtype hierarchy)
-                let compatible = info
-                    .constraint_names
-                    .iter()
-                    .any(|c| c == ref_bound);
+                let compatible = info.constraint_names.iter().any(|c| c == ref_bound);
                 if !compatible {
                     diagnostics.push(Diagnostic {
                         code: CODE.clone(),
@@ -512,11 +503,8 @@ fn check_bound_constraint_compat(
 
             if !ref_info.constraint_names.is_empty() {
                 // Both have constraints — info's must be a superset
-                let info_set: HashSet<&str> = info
-                    .constraint_names
-                    .iter()
-                    .map(String::as_str)
-                    .collect();
+                let info_set: HashSet<&str> =
+                    info.constraint_names.iter().map(String::as_str).collect();
                 let ref_set: HashSet<&str> = ref_info
                     .constraint_names
                     .iter()
@@ -623,17 +611,11 @@ fn check_subscripted_class_calls(
                 .iter()
                 .map(|s| s.trim().to_owned())
                 .collect();
-            let type_args: Vec<&str> = type_args_owned
-                .iter()
-                .map(String::as_str)
-                .collect();
+            let type_args: Vec<&str> = type_args_owned.iter().map(String::as_str).collect();
 
             // Resolve generic params from type args + defaults
-            let resolved_types = resolve_generic_params(
-                &class_info.generic_params,
-                &type_args,
-                info_map,
-            );
+            let resolved_types =
+                resolve_generic_params(&class_info.generic_params, &type_args, info_map);
 
             // Get __init__ params (skip self)
             let Some(init_fn) = init_map.get(class_name) else {
@@ -773,7 +755,9 @@ fn literal_type_mismatch(arg: &str, expected_type: &str) -> Option<&'static str>
             "int" | "float" | "bool" | "bytes" => Some("a `str` literal"),
             _ => None,
         }
-    } else if arg.parse::<i64>().is_ok() || (arg.starts_with('-') && arg[1..].parse::<i64>().is_ok()) {
+    } else if arg.parse::<i64>().is_ok()
+        || (arg.starts_with('-') && arg[1..].parse::<i64>().is_ok())
+    {
         // Integer literal
         match expected.as_str() {
             "int" | "float" | "complex" | "bool" => None,

@@ -90,7 +90,11 @@ fn has_static_decorator(decorators: &[String]) -> bool {
 
 /// Collect tokens for a single function or method definition.
 fn collect_function_tokens(raw: &mut Vec<RawToken>, func: &FunctionInfo) {
-    let tt = if func.class_name.is_some() { TT_METHOD } else { TT_FUNCTION };
+    let tt = if func.class_name.is_some() {
+        TT_METHOD
+    } else {
+        TT_FUNCTION
+    };
     let mut name_mods = MOD_DEFINITION | MOD_DECLARATION;
     if has_static_decorator(&func.decorators) {
         name_mods |= MOD_STATIC;
@@ -131,7 +135,11 @@ pub fn semantic_tokens(resolved: &ResolvedModule, source: &str) -> Vec<SemanticT
     }
 
     for class in &resolved.classes {
-        raw.push(span_token(class.name_span, TT_CLASS, MOD_DEFINITION | MOD_DECLARATION));
+        raw.push(span_token(
+            class.name_span,
+            TT_CLASS,
+            MOD_DEFINITION | MOD_DECLARATION,
+        ));
 
         for (_, span) in &class.decorator_spans {
             raw.push(span_token(*span, TT_DECORATOR, 0));

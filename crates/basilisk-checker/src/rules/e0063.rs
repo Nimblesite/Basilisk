@@ -86,9 +86,7 @@ impl Rule for NonHashableDataclassAssignment {
             };
 
             // Check whether the annotation is `Hashable` (bare or qualified).
-            let Some(ann_text) =
-                source.get(ann_span.start as usize..ann_span.end as usize)
-            else {
+            let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
                 continue;
             };
             if !is_hashable_annotation(ann_text.trim()) {
@@ -96,9 +94,7 @@ impl Rule for NonHashableDataclassAssignment {
             }
 
             // Extract the callee from the RHS (e.g. `DC1` from `DC1(0)`).
-            let Some(rhs_text) =
-                source.get(rhs_span.start as usize..rhs_span.end as usize)
-            else {
+            let Some(rhs_text) = source.get(rhs_span.start as usize..rhs_span.end as usize) else {
                 continue;
             };
             let callee = rhs_callee(rhs_text);
@@ -134,9 +130,7 @@ impl Rule for NonHashableDataclassAssignment {
 fn is_hashable_annotation(text: &str) -> bool {
     matches!(
         text,
-        "Hashable"
-            | "typing.Hashable"
-            | "collections.abc.Hashable"
+        "Hashable" | "typing.Hashable" | "collections.abc.Hashable"
     )
 }
 

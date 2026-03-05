@@ -116,7 +116,11 @@ impl Rule for ProtocolAssignmentConformance {
                 continue;
             };
             let rhs_class_name = rhs_trimmed[..paren_pos].trim();
-            if rhs_class_name.is_empty() || !rhs_class_name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+            if rhs_class_name.is_empty()
+                || !rhs_class_name
+                    .chars()
+                    .all(|c| c.is_alphanumeric() || c == '_')
+            {
                 continue;
             }
 
@@ -238,9 +242,7 @@ fn collect_protocol_required_methods(
     protocol_class: &basilisk_resolver::ClassInfo,
     class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
 ) -> Vec<String> {
-    let mut methods: Vec<String> = protocol_class
-        .method_names
-        .clone();
+    let mut methods: Vec<String> = protocol_class.method_names.clone();
 
     // Add methods from base protocol classes.
     for base in &protocol_class.bases {

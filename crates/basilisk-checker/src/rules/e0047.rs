@@ -33,7 +33,7 @@
 
 use std::collections::HashSet;
 
-use basilisk_resolver::{ImportKind, RhsKind, ResolvedModule, Span};
+use basilisk_resolver::{ImportKind, ResolvedModule, RhsKind, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
@@ -94,9 +94,7 @@ fn is_invalid_type_annotation(ann: &str) -> bool {
 
     // `Generic[T]` or bare `Generic` used as a type annotation is always invalid.
     // `Generic` is only meaningful in class base lists, not as a value/parameter type.
-    if content_to_check == "Generic"
-        || content_to_check.starts_with("Generic[")
-    {
+    if content_to_check == "Generic" || content_to_check.starts_with("Generic[") {
         return true;
     }
 
@@ -151,12 +149,17 @@ fn is_invalid_type_annotation(ann: &str) -> bool {
 
     // Boolean binary operators: ` or ` / ` and ` at depth 0
     // Note: `|` is valid (union), `or`/`and` keywords are not
-    if has_top_level_token(content_to_check, " or ") || has_top_level_token(content_to_check, " and ") {
+    if has_top_level_token(content_to_check, " or ")
+        || has_top_level_token(content_to_check, " and ")
+    {
         return true;
     }
 
     // Tuple literal: `(int, str)` — parens with comma at depth 0
-    if content_to_check.starts_with('(') && content_to_check.ends_with(')') && paren_contains_top_level_comma(content_to_check) {
+    if content_to_check.starts_with('(')
+        && content_to_check.ends_with(')')
+        && paren_contains_top_level_comma(content_to_check)
+    {
         return true;
     }
 
@@ -311,7 +314,7 @@ fn collect_non_type_names(module: &ResolvedModule) -> HashSet<String> {
 /// Returns `true` when the annotation text is exactly a name bound to a non-type in module scope.
 fn is_non_type_name(ann: &str, non_type_names: &HashSet<String>) -> bool {
     let ann = ann.trim();
-    
+
     // Handle string literal annotations (forward references)
     // If the annotation is a string literal, check the content inside
     let content_to_check = if (ann.starts_with('"') && ann.ends_with('"'))
@@ -323,7 +326,11 @@ fn is_non_type_name(ann: &str, non_type_names: &HashSet<String>) -> bool {
     };
 
     // Only match bare identifiers — no subscripts, dot access, or call expressions.
-    if content_to_check.contains('[') || content_to_check.contains('.') || content_to_check.contains('(') || content_to_check.contains(' ') {
+    if content_to_check.contains('[')
+        || content_to_check.contains('.')
+        || content_to_check.contains('(')
+        || content_to_check.contains(' ')
+    {
         return false;
     }
     non_type_names.contains(content_to_check)
@@ -378,10 +385,9 @@ fn is_paramspec_invalid_annotation(ann: &str, paramspec_names: &HashSet<&str>) -
                         let end = start + name_len;
                         let before_ok = start == 0
                             || !ann_bytes[start - 1].is_ascii_alphanumeric()
-                            && ann_bytes[start - 1] != b'_';
+                                && ann_bytes[start - 1] != b'_';
                         let after_ok = end >= ann.len()
-                            || !ann_bytes[end].is_ascii_alphanumeric()
-                            && ann_bytes[end] != b'_';
+                            || !ann_bytes[end].is_ascii_alphanumeric() && ann_bytes[end] != b'_';
                         if before_ok && after_ok {
                             return true;
                         }
@@ -410,29 +416,109 @@ fn is_paramspec_invalid_annotation(ann: &str, paramspec_names: &HashSet<&str>) -
 /// Python built-in type names that are always valid as forward references in annotations.
 /// Used to avoid false positives in the circular reference check.
 const PYTHON_BUILTIN_TYPE_NAMES: &[&str] = &[
-    "int", "str", "float", "bool", "bytes", "complex", "bytearray",
-    "memoryview", "object", "type", "None", "list", "dict", "set",
-    "frozenset", "tuple", "range", "slice", "super",
-    "classmethod", "staticmethod", "property",
-    "Exception", "BaseException", "ValueError", "TypeError",
-    "AttributeError", "KeyError", "IndexError", "RuntimeError",
-    "StopIteration", "NotImplementedError", "OSError", "IOError",
-    "FileNotFoundError", "PermissionError", "TimeoutError",
-    "ConnectionError", "ArithmeticError", "OverflowError",
-    "ZeroDivisionError", "ImportError", "ModuleNotFoundError",
-    "NameError", "UnboundLocalError", "LookupError", "SyntaxError",
-    "SystemExit", "KeyboardInterrupt", "GeneratorExit",
-    "UnicodeError", "UnicodeDecodeError", "UnicodeEncodeError",
-    "Any", "Union", "Optional", "Callable", "Tuple", "List", "Dict",
-    "Set", "FrozenSet", "Type", "ClassVar", "Final", "Literal",
-    "TypeVar", "Generic", "Protocol", "TypedDict", "NamedTuple",
-    "Annotated", "TypeAlias", "TypeGuard", "ParamSpec", "TypeVarTuple",
-    "Concatenate", "Never", "LiteralString", "Self", "Unpack",
-    "overload", "cast", "assert_type", "reveal_type",
-    "Iterable", "Iterator", "Generator", "Sequence", "Mapping",
-    "MutableMapping", "MutableSequence", "MutableSet", "Coroutine",
-    "AsyncIterator", "AsyncIterable", "AsyncGenerator",
-    "Pattern", "Match", "IO", "TextIO", "BinaryIO", "AbstractSet",
+    "int",
+    "str",
+    "float",
+    "bool",
+    "bytes",
+    "complex",
+    "bytearray",
+    "memoryview",
+    "object",
+    "type",
+    "None",
+    "list",
+    "dict",
+    "set",
+    "frozenset",
+    "tuple",
+    "range",
+    "slice",
+    "super",
+    "classmethod",
+    "staticmethod",
+    "property",
+    "Exception",
+    "BaseException",
+    "ValueError",
+    "TypeError",
+    "AttributeError",
+    "KeyError",
+    "IndexError",
+    "RuntimeError",
+    "StopIteration",
+    "NotImplementedError",
+    "OSError",
+    "IOError",
+    "FileNotFoundError",
+    "PermissionError",
+    "TimeoutError",
+    "ConnectionError",
+    "ArithmeticError",
+    "OverflowError",
+    "ZeroDivisionError",
+    "ImportError",
+    "ModuleNotFoundError",
+    "NameError",
+    "UnboundLocalError",
+    "LookupError",
+    "SyntaxError",
+    "SystemExit",
+    "KeyboardInterrupt",
+    "GeneratorExit",
+    "UnicodeError",
+    "UnicodeDecodeError",
+    "UnicodeEncodeError",
+    "Any",
+    "Union",
+    "Optional",
+    "Callable",
+    "Tuple",
+    "List",
+    "Dict",
+    "Set",
+    "FrozenSet",
+    "Type",
+    "ClassVar",
+    "Final",
+    "Literal",
+    "TypeVar",
+    "Generic",
+    "Protocol",
+    "TypedDict",
+    "NamedTuple",
+    "Annotated",
+    "TypeAlias",
+    "TypeGuard",
+    "ParamSpec",
+    "TypeVarTuple",
+    "Concatenate",
+    "Never",
+    "LiteralString",
+    "Self",
+    "Unpack",
+    "overload",
+    "cast",
+    "assert_type",
+    "reveal_type",
+    "Iterable",
+    "Iterator",
+    "Generator",
+    "Sequence",
+    "Mapping",
+    "MutableMapping",
+    "MutableSequence",
+    "MutableSet",
+    "Coroutine",
+    "AsyncIterator",
+    "AsyncIterable",
+    "AsyncGenerator",
+    "Pattern",
+    "Match",
+    "IO",
+    "TextIO",
+    "BinaryIO",
+    "AbstractSet",
 ];
 
 /// Returns `true` when `ann` is a bare identifier (only alphanumeric chars and underscores,
@@ -571,8 +657,7 @@ fn check_module_var_annotations(
             continue;
         };
         let ann_trimmed = ann.trim();
-        if is_invalid_type_annotation(ann_trimmed)
-            || is_non_type_name(ann_trimmed, non_type_names)
+        if is_invalid_type_annotation(ann_trimmed) || is_non_type_name(ann_trimmed, non_type_names)
         {
             diagnostics.push(make_diagnostic(
                 format!("Invalid type expression in annotation for `{}`", var.name),
@@ -639,8 +724,7 @@ fn check_class_attr_annotations(
     let source = &module.source;
     let path = &module.path;
     for cls in &module.classes {
-        let cls_method_names: HashSet<&str> =
-            cls.method_names.iter().map(String::as_str).collect();
+        let cls_method_names: HashSet<&str> = cls.method_names.iter().map(String::as_str).collect();
         for attr in &cls.attributes {
             let Some(ann) = span_text(source, attr.annotation_span) else {
                 continue;
@@ -692,8 +776,7 @@ fn check_class_attr_annotations(
 fn check_invalid_type_annotations(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
     let non_type_names = collect_non_type_names(module);
     let module_scope_names = build_module_scope_names(module);
-    let builtin_type_names: HashSet<&str> =
-        PYTHON_BUILTIN_TYPE_NAMES.iter().copied().collect();
+    let builtin_type_names: HashSet<&str> = PYTHON_BUILTIN_TYPE_NAMES.iter().copied().collect();
     let paramspec_names: HashSet<&str> = module
         .typevar_calls
         .iter()

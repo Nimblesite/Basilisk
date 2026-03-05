@@ -59,8 +59,7 @@ pub(crate) struct TypeBracketViolation;
 
 impl Rule for TypeBracketViolation {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let Ok(parsed) =
-            basilisk_parser::parse_source(module.source.clone(), module.path.clone())
+        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
         else {
             return;
         };
@@ -411,7 +410,18 @@ fn check_func_stmt(
         }
         Stmt::If(if_stmt) => {
             check_func_body(&if_stmt.body, ctx, param_anns, path, diag);
-            check_func_body(&if_stmt.elif_else_clauses.iter().flat_map(|c| c.body.iter()).cloned().collect::<Vec<_>>(), ctx, param_anns, path, diag);
+            check_func_body(
+                &if_stmt
+                    .elif_else_clauses
+                    .iter()
+                    .flat_map(|c| c.body.iter())
+                    .cloned()
+                    .collect::<Vec<_>>(),
+                ctx,
+                param_anns,
+                path,
+                diag,
+            );
         }
         _ => {}
     }
@@ -605,9 +615,7 @@ fn is_concrete_type_annotation(ann: &str) -> bool {
 /// `type` or `Type` annotation (bare or parameterised).
 fn is_type_annotation(rhs: &str) -> bool {
     let rhs = rhs.trim();
-    matches!(rhs, "type" | "Type")
-        || rhs.starts_with("type[")
-        || rhs.starts_with("Type[")
+    matches!(rhs, "type" | "Type") || rhs.starts_with("type[") || rhs.starts_with("Type[")
 }
 
 /// Returns `true` if `attr` is a well-known attribute on the `type` metaclass

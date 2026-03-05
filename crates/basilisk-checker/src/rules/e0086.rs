@@ -49,8 +49,7 @@ impl Rule for MultipleTypeVarTuplesInGeneric {
                     span: cls.name_span,
                     path: module.path.clone(),
                     help: Some(
-                        "A generic class may contain at most one `TypeVarTuple` (`*Ts`)"
-                            .to_owned(),
+                        "A generic class may contain at most one `TypeVarTuple` (`*Ts`)".to_owned(),
                     ),
                     note: Some(
                         "PEP 646: only a single TypeVarTuple is permitted per generic".to_owned(),

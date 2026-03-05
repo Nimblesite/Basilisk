@@ -36,8 +36,7 @@ impl Rule for InvariantGenericArgMismatch {
         let path = &module.path;
 
         // Step 1: Build a map of class names to their resolved base type text.
-        let class_base_map: HashMap<&str, (&str, Vec<&str>)> =
-            build_class_base_map(module);
+        let class_base_map: HashMap<&str, (&str, Vec<&str>)> = build_class_base_map(module);
 
         if class_base_map.is_empty() {
             return;
@@ -51,9 +50,9 @@ impl Rule for InvariantGenericArgMismatch {
             }
             let mut params = Vec::new();
             for param in &func.parameters {
-                let ann_text = param.annotation_span.and_then(|span| {
-                    source.get(span.start as usize..span.end as usize)
-                });
+                let ann_text = param
+                    .annotation_span
+                    .and_then(|span| source.get(span.start as usize..span.end as usize));
                 if let Some(ann) = ann_text {
                     params.push((param.name.as_str(), ann.trim()));
                 }
@@ -64,9 +63,7 @@ impl Rule for InvariantGenericArgMismatch {
         }
 
         // Step 3: Re-parse and walk function bodies for calls.
-        let Ok(parsed) =
-            basilisk_parser::parse_source(source.clone(), path.clone())
-        else {
+        let Ok(parsed) = basilisk_parser::parse_source(source.clone(), path.clone()) else {
             return;
         };
 
@@ -95,14 +92,10 @@ fn build_class_base_map<'a>(
             if !is_builtin_generic(&entry.base_name) {
                 continue;
             }
-            let span_text = source
-                .get(entry.span.start as usize..entry.span.end as usize);
+            let span_text = source.get(entry.span.start as usize..entry.span.end as usize);
             if let Some(text) = span_text {
                 if let Some(type_args) = extract_subscript_args(text) {
-                    map.insert(
-                        cls.name.as_str(),
-                        (entry.base_name.as_str(), type_args),
-                    );
+                    map.insert(cls.name.as_str(), (entry.base_name.as_str(), type_args));
                 }
             }
         }
@@ -145,8 +138,7 @@ fn split_top_level_commas(inner: &str) -> Vec<&str> {
 fn is_builtin_generic(name: &str) -> bool {
     matches!(
         name,
-        "dict" | "list" | "set" | "frozenset" | "Dict" | "List"
-            | "Set" | "FrozenSet"
+        "dict" | "list" | "set" | "frozenset" | "Dict" | "List" | "Set" | "FrozenSet"
     )
 }
 
@@ -154,8 +146,16 @@ fn is_builtin_generic(name: &str) -> bool {
 fn is_invariant_container(name: &str) -> bool {
     matches!(
         name,
-        "list" | "List" | "dict" | "Dict" | "set" | "Set"
-            | "frozenset" | "FrozenSet" | "deque" | "Deque"
+        "list"
+            | "List"
+            | "dict"
+            | "Dict"
+            | "set"
+            | "Set"
+            | "frozenset"
+            | "FrozenSet"
+            | "deque"
+            | "Deque"
     )
 }
 
@@ -210,13 +210,8 @@ fn build_param_type_map(
         let param = &pwd.parameter;
         if let Some(ann) = &param.annotation {
             let range = ann.range();
-            if let Some(text) =
-                source.get(range.start().to_usize()..range.end().to_usize())
-            {
-                map.insert(
-                    param.name.to_string(),
-                    text.trim().to_string(),
-                );
+            if let Some(text) = source.get(range.start().to_usize()..range.end().to_usize()) {
+                map.insert(param.name.to_string(), text.trim().to_string());
             }
         }
     }
@@ -266,8 +261,7 @@ fn check_body_stmt(
     };
 
     for (arg_idx, arg_expr) in call.arguments.args.iter().enumerate() {
-        let Some(&(param_name, param_ann)) = callee_params.get(arg_idx)
-        else {
+        let Some(&(param_name, param_ann)) = callee_params.get(arg_idx) else {
             continue;
         };
 
@@ -275,20 +269,16 @@ fn check_body_stmt(
             continue;
         };
 
-        let Some(arg_type) = caller_params.get(arg_name.id.as_str())
+        let Some(arg_type) = caller_params.get(arg_name.id.as_str()) else {
+            continue;
+        };
+
+        let Some((class_base_generic, class_type_args)) = class_base_map.get(arg_type.as_str())
         else {
             continue;
         };
 
-        let Some((class_base_generic, class_type_args)) =
-            class_base_map.get(arg_type.as_str())
-        else {
-            continue;
-        };
-
-        let Some((param_generic, param_type_args)) =
-            parse_generic_annotation(param_ann)
-        else {
+        let Some((param_generic, param_type_args)) = parse_generic_annotation(param_ann) else {
             continue;
         };
 
@@ -296,9 +286,7 @@ fn check_body_stmt(
             continue;
         }
 
-        for (class_arg, param_arg) in
-            class_type_args.iter().zip(param_type_args.iter())
-        {
+        for (class_arg, param_arg) in class_type_args.iter().zip(param_type_args.iter()) {
             if class_arg.trim() == param_arg.trim() {
                 continue;
             }
@@ -307,9 +295,7 @@ fn check_body_stmt(
             let class_inner = parse_generic_annotation(class_arg);
             let param_inner = parse_generic_annotation(param_arg);
 
-            if let (Some((cig, _)), Some((pig, _))) =
-                (&class_inner, &param_inner)
-            {
+            if let (Some((cig, _)), Some((pig, _))) = (&class_inner, &param_inner) {
                 if cig == pig && is_invariant_container(cig) {
                     emit_diagnostic(
                         callee_name,

@@ -51,12 +51,21 @@ impl Rule for TypeVarBoundViolation {
         }
 
         // Step 3: Check call sites.
-        check_call_sites(module, source, &typevar_bounds, &func_param_bounds, diagnostics);
+        check_call_sites(
+            module,
+            source,
+            &typevar_bounds,
+            &func_param_bounds,
+            diagnostics,
+        );
     }
 }
 
 /// Step 1: Build a map of `TypeVar` name -> bound text.
-fn build_typevar_bounds<'a>(module: &'a ResolvedModule, source: &'a str) -> HashMap<&'a str, String> {
+fn build_typevar_bounds<'a>(
+    module: &'a ResolvedModule,
+    source: &'a str,
+) -> HashMap<&'a str, String> {
     let mut typevar_bounds: HashMap<&'a str, String> = HashMap::new();
     for tv in &module.typevar_calls {
         if !tv.has_bound {
@@ -71,9 +80,9 @@ fn build_typevar_bounds<'a>(module: &'a ResolvedModule, source: &'a str) -> Hash
 
 /// Step 2: Build a map of function name -> list of (`param_index`, `bound_text`).
 fn build_func_param_bounds<'a>(
-    module: &'a ResolvedModule, 
-    source: &'a str, 
-    typevar_bounds: &'a HashMap<&'a str, String>
+    module: &'a ResolvedModule,
+    source: &'a str,
+    typevar_bounds: &'a HashMap<&'a str, String>,
 ) -> HashMap<&'a str, Vec<(usize, String)>> {
     let mut func_param_bounds: HashMap<&'a str, Vec<(usize, String)>> = HashMap::new();
     for func in &module.functions {
@@ -82,9 +91,7 @@ fn build_func_param_bounds<'a>(
             let Some(ann_span) = param.annotation_span else {
                 continue;
             };
-            let Some(ann_text) =
-                source.get(ann_span.start as usize..ann_span.end as usize)
-            else {
+            let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
                 continue;
             };
             let ann_text = ann_text.trim();
@@ -108,7 +115,6 @@ fn check_call_sites(
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for call in &module.calls {
-
         // Find all functions with this name (could be multiple due to methods)
         let matching_functions: Vec<&basilisk_resolver::FunctionInfo> = module
             .functions
@@ -122,7 +128,15 @@ fn check_call_sites(
 
         // For each matching function, check its parameter bounds
         for func in matching_functions {
-            check_function_call(func, call, source, typevar_bounds, &module.classes, &module.path, diagnostics);
+            check_function_call(
+                func,
+                call,
+                source,
+                typevar_bounds,
+                &module.classes,
+                &module.path,
+                diagnostics,
+            );
         }
     }
 }
@@ -145,7 +159,9 @@ fn check_function_call(
             let ann_span = param.annotation_span?;
             let ann_text = source.get(ann_span.start as usize..ann_span.end as usize)?;
             let ann_text = ann_text.trim();
-            typevar_bounds.get(ann_text).map(|bound| (idx, bound.clone()))
+            typevar_bounds
+                .get(ann_text)
+                .map(|bound| (idx, bound.clone()))
         })
         .collect();
 
@@ -248,7 +264,11 @@ fn literal_type_name(rhs: &basilisk_resolver::RhsKind) -> Option<&'static str> {
 /// Check whether a concrete type satisfies an upper bound.
 ///
 /// Conservative check for well-known bounds and Protocol classes defined in the module.
-fn type_satisfies_bound(concrete_type: &str, bound: &str, classes: &[basilisk_resolver::ClassInfo]) -> bool {
+fn type_satisfies_bound(
+    concrete_type: &str,
+    bound: &str,
+    classes: &[basilisk_resolver::ClassInfo],
+) -> bool {
     match bound {
         // `Sized` requires `__len__` -- only collection types satisfy it.
         "Sized" => matches!(
@@ -264,12 +284,15 @@ fn type_satisfies_bound(concrete_type: &str, bound: &str, classes: &[basilisk_re
         // For unknown bounds, check if it's a user-defined Protocol class.
         // Primitive types don't satisfy custom Protocol bounds.
         _ => {
-            let is_protocol_bound = classes.iter().any(|c| {
-                c.name == bound && c.bases.iter().any(|b| b.contains("Protocol"))
-            });
+            let is_protocol_bound = classes
+                .iter()
+                .any(|c| c.name == bound && c.bases.iter().any(|b| b.contains("Protocol")));
             if is_protocol_bound {
                 // Primitives never implement user-defined protocols
-                !matches!(concrete_type, "int" | "str" | "float" | "bool" | "bytes" | "None")
+                !matches!(
+                    concrete_type,
+                    "int" | "str" | "float" | "bool" | "bytes" | "None"
+                )
             } else {
                 // Conservative: assume satisfied for non-Protocol unknown bounds
                 true

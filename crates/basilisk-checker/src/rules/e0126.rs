@@ -51,10 +51,7 @@ impl Rule for LiteralStringAssignment {
 }
 
 /// Build a map from parameter name → annotation text for a function.
-fn param_annotations<'a>(
-    func: &'a FunctionInfo,
-    source: &'a str,
-) -> HashMap<&'a str, &'a str> {
+fn param_annotations<'a>(func: &'a FunctionInfo, source: &'a str) -> HashMap<&'a str, &'a str> {
     let mut map = HashMap::new();
     for param in func
         .parameters
@@ -80,10 +77,9 @@ fn function_body_range(func: &FunctionInfo, source: &str) -> Option<(usize, usiz
     let def_start = func.def_span.start as usize;
 
     // Find the colon that ends the function signature.
-    let colon_pos = source[def_start..].find(":\n").or_else(|| {
-        source[def_start..].find("):\n")
-            .map(|p| p + 1)
-    })?;
+    let colon_pos = source[def_start..]
+        .find(":\n")
+        .or_else(|| source[def_start..].find("):\n").map(|p| p + 1))?;
     let body_start = def_start + colon_pos + 1; // after ':'
 
     // Determine the indentation of the `def` line.
@@ -139,10 +135,7 @@ struct LocalAssign<'a> {
 /// Parse annotated assignments from function body source text.
 ///
 /// Looks for lines matching the pattern `name: Type = expr`.
-fn parse_annotated_assigns<'a>(
-    body: &'a str,
-    body_offset: usize,
-) -> Vec<LocalAssign<'a>> {
+fn parse_annotated_assigns<'a>(body: &'a str, body_offset: usize) -> Vec<LocalAssign<'a>> {
     let mut results = Vec::new();
 
     for line in body.lines() {

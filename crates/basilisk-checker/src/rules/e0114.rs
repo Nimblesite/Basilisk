@@ -59,9 +59,7 @@ impl Rule for ProtocolRuntimeCheckableViolation {
                     ),
                 ),
                 ProtocolRtcViolationKind::IssubclassDataProtocol { protocol_name } => (
-                    format!(
-                        "`issubclass()` cannot be used with data protocol `{protocol_name}`"
-                    ),
+                    format!("`issubclass()` cannot be used with data protocol `{protocol_name}`"),
                     Some(format!(
                         "Remove the data attributes from `{protocol_name}` or \
                          use `isinstance()` instead"

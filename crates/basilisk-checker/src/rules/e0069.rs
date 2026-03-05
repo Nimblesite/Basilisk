@@ -119,10 +119,8 @@ fn build_positional_counts(classes: &[ClassInfo]) -> HashMap<&str, usize> {
         })
         .collect();
 
-    let class_map: HashMap<&str, &ClassInfo> = classes
-        .iter()
-        .map(|c| (c.name.as_str(), c))
-        .collect();
+    let class_map: HashMap<&str, &ClassInfo> =
+        classes.iter().map(|c| (c.name.as_str(), c)).collect();
 
     classes
         .iter()
@@ -134,7 +132,12 @@ fn build_positional_counts(classes: &[ClassInfo]) -> HashMap<&str, usize> {
                 .iter()
                 .filter_map(|base| class_map.get(base.as_str()))
                 .filter(|base_class| base_class.is_dataclass)
-                .map(|base_class| own_counts.get(base_class.name.as_str()).copied().unwrap_or(0))
+                .map(|base_class| {
+                    own_counts
+                        .get(base_class.name.as_str())
+                        .copied()
+                        .unwrap_or(0)
+                })
                 .sum();
             (c.name.as_str(), own + inherited)
         })

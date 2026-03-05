@@ -271,9 +271,7 @@ fn check_generic_protocol_assignments(
             }
 
             // Find matching method in concrete class.
-            let Some(concrete_method) = rhs_methods
-                .iter()
-                .find(|m| m.name == proto_method.name)
+            let Some(concrete_method) = rhs_methods.iter().find(|m| m.name == proto_method.name)
             else {
                 continue;
             };
@@ -316,10 +314,9 @@ fn check_generic_protocol_assignments(
             }
 
             for (proto_param, concrete_param) in proto_params.iter().zip(concrete_params.iter()) {
-                if let (Some(proto_ann_span), Some(concrete_ann_span)) = (
-                    proto_param.annotation_span,
-                    concrete_param.annotation_span,
-                ) {
+                if let (Some(proto_ann_span), Some(concrete_ann_span)) =
+                    (proto_param.annotation_span, concrete_param.annotation_span)
+                {
                     let proto_ann = source
                         .get(proto_ann_span.start as usize..proto_ann_span.end as usize)
                         .map(str::trim)
@@ -330,8 +327,7 @@ fn check_generic_protocol_assignments(
                         .unwrap_or("");
 
                     // Substitute type vars in protocol annotation.
-                    let expected_ann =
-                        substitute_typevars(proto_ann, &substitution, typevar_info);
+                    let expected_ann = substitute_typevars(proto_ann, &substitution, typevar_info);
 
                     if !types_compatible(&expected_ann, concrete_ann) {
                         mismatch_found = true;
@@ -568,11 +564,7 @@ fn split_top_level_args(inner: &str) -> Vec<&str> {
 fn extract_constructor_name(expr: &str) -> Option<&str> {
     let paren_pos = expr.find('(')?;
     let name = expr[..paren_pos].trim();
-    if name.is_empty()
-        || !name
-            .chars()
-            .all(|c| c.is_alphanumeric() || c == '_')
-    {
+    if name.is_empty() || !name.chars().all(|c| c.is_alphanumeric() || c == '_') {
         return None;
     }
     Some(name)
@@ -603,8 +595,8 @@ fn substitute_typevars<'a>(
         while let Some(pos) = remaining.find(tv_name) {
             let before_ok = pos == 0 || !is_ident_char(remaining.as_bytes()[pos - 1]);
             let after_pos = pos + tv_name.len();
-            let after_ok = after_pos >= remaining.len()
-                || !is_ident_char(remaining.as_bytes()[after_pos]);
+            let after_ok =
+                after_pos >= remaining.len() || !is_ident_char(remaining.as_bytes()[after_pos]);
 
             if before_ok && after_ok {
                 new_result.push_str(&remaining[..pos]);
@@ -766,11 +758,17 @@ fn check_self_typed_method_incompatibility(
                 // Bare self annotation — check if return type looks like a self-type.
                 let is_self_type = concrete_ret_text == "Self"
                     || concrete_ret_text == tv_name
-                    || concrete_ret_text.chars().all(|c| c.is_alphanumeric() || c == '_');
+                    || concrete_ret_text
+                        .chars()
+                        .all(|c| c.is_alphanumeric() || c == '_');
 
-                if !is_self_type || concrete_ret_text == "int" || concrete_ret_text == "str"
-                    || concrete_ret_text == "float" || concrete_ret_text == "bool"
-                    || concrete_ret_text == "bytes" || concrete_ret_text == "None"
+                if !is_self_type
+                    || concrete_ret_text == "int"
+                    || concrete_ret_text == "str"
+                    || concrete_ret_text == "float"
+                    || concrete_ret_text == "bool"
+                    || concrete_ret_text == "bytes"
+                    || concrete_ret_text == "None"
                 {
                     return Some(format!(
                         "method `{}` must return a self-typed value (TypeVar `{tv_name}` or \

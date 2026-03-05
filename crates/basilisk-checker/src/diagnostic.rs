@@ -9,7 +9,7 @@ pub enum Severity {
     Warning,
     /// A type error that must be resolved.
     Error,
-    /// Critical Mojo safety violation (ownership/move semantics). 
+    /// Critical Mojo safety violation (ownership/move semantics).
     SafetyViolation,
 }
 

@@ -107,11 +107,7 @@ fn check_local_assignments(
         let annotation = annotation.trim();
 
         // Strip trailing comments from the RHS.
-        let rhs_name = rhs_part
-            .split('#')
-            .next()
-            .unwrap_or(rhs_part)
-            .trim();
+        let rhs_name = rhs_part.split('#').next().unwrap_or(rhs_part).trim();
 
         // RHS must be a simple identifier (a parameter reference).
         if !is_simple_identifier(rhs_name) {
@@ -119,9 +115,8 @@ fn check_local_assignments(
         }
 
         // Look up the RHS name among the function's parameters.
-        let Some((_, param_annotation)) = param_annotations
-            .iter()
-            .find(|(name, _)| *name == rhs_name)
+        let Some((_, param_annotation)) =
+            param_annotations.iter().find(|(name, _)| *name == rhs_name)
         else {
             continue;
         };
@@ -142,10 +137,8 @@ fn check_local_assignments(
             {
                 let line_offset = line_byte_offset(source, idx);
                 let name_start_in_line = line.find(var_name).unwrap_or(0);
-                let span_start =
-                    u32::try_from(line_offset + name_start_in_line).unwrap_or(0);
-                let span_end =
-                    span_start + u32::try_from(var_name.len()).unwrap_or(0);
+                let span_start = u32::try_from(line_offset + name_start_in_line).unwrap_or(0);
+                let span_end = span_start + u32::try_from(var_name.len()).unwrap_or(0);
 
                 diagnostics.push(make_assignment_diagnostic(
                     Span {
@@ -189,18 +182,14 @@ fn check_return_stmts(
         if !ret_stmt.has_value {
             continue;
         }
-        let Some(ret_full) =
-            source.get(ret_stmt.span.start as usize..ret_stmt.span.end as usize)
+        let Some(ret_full) = source.get(ret_stmt.span.start as usize..ret_stmt.span.end as usize)
         else {
             continue;
         };
         let ret_full = ret_full.trim();
 
         // Strip "return " prefix.
-        let ret_expr = ret_full
-            .strip_prefix("return ")
-            .unwrap_or(ret_full)
-            .trim();
+        let ret_expr = ret_full.strip_prefix("return ").unwrap_or(ret_full).trim();
 
         // Handle call expressions: `ClassC[Never]()` -> `ClassC[Never]`.
         let ret_type_text = strip_call_parens(ret_expr);
@@ -295,9 +284,7 @@ fn strip_call_parens(text: &str) -> &str {
 /// Check if a string looks like a simple Python identifier.
 fn is_simple_identifier(text: &str) -> bool {
     !text.is_empty()
-        && text
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_')
+        && text.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
         && text
             .chars()
             .next()
@@ -360,9 +347,7 @@ fn make_return_diagnostic(
         ),
         span,
         path: path.to_owned(),
-        help: Some(
-            "Change the return type annotation or the returned value".to_owned(),
-        ),
+        help: Some("Change the return type annotation or the returned value".to_owned()),
         note: Some(
             "PEP 484: `Never` is a bottom type and cannot substitute for invariant \
              type parameters"

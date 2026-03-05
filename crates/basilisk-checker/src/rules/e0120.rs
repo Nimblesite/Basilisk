@@ -440,7 +440,16 @@ fn check_yield_from_call(
     }
 
     // Check send type compatibility between Generator types.
-    check_send_type_compat(func, yield_expr, outer_ann, outer_base, callee_ann, callee_base, module, out);
+    check_send_type_compat(
+        func,
+        yield_expr,
+        outer_ann,
+        outer_base,
+        callee_ann,
+        callee_base,
+        module,
+        out,
+    );
 }
 
 /// Check send type compatibility for `yield from` between two `Generator` types.

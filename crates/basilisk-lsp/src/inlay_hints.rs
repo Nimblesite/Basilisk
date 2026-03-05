@@ -6,7 +6,8 @@ use tower_lsp::lsp_types::{InlayHint, InlayHintKind, InlayHintLabel};
 use crate::util::byte_offset_to_position;
 
 /// Compute inlay hints for a resolved module.
-#[must_use] pub fn inlay_hints(resolved: &ResolvedModule, source: &str) -> Vec<InlayHint> {
+#[must_use]
+pub fn inlay_hints(resolved: &ResolvedModule, source: &str) -> Vec<InlayHint> {
     let mut hints = Vec::new();
 
     // Variable type hints — unannotated variables with inferable types.
@@ -22,11 +23,7 @@ use crate::util::byte_offset_to_position;
 }
 
 /// Add type hints for unannotated module-level variables.
-fn variable_type_hints(
-    resolved: &ResolvedModule,
-    source: &str,
-    hints: &mut Vec<InlayHint>,
-) {
+fn variable_type_hints(resolved: &ResolvedModule, source: &str, hints: &mut Vec<InlayHint>) {
     for var in &resolved.module_vars {
         if var.has_annotation {
             continue;
@@ -72,17 +69,10 @@ fn variable_type_hints(
 }
 
 /// Add parameter name hints at call sites.
-fn parameter_name_hints(
-    resolved: &ResolvedModule,
-    source: &str,
-    hints: &mut Vec<InlayHint>,
-) {
+fn parameter_name_hints(resolved: &ResolvedModule, source: &str, hints: &mut Vec<InlayHint>) {
     for call in &resolved.calls {
         // Find the function definition for this call.
-        let func = resolved
-            .functions
-            .iter()
-            .find(|f| f.name == call.callee);
+        let func = resolved.functions.iter().find(|f| f.name == call.callee);
         let Some(func) = func else {
             continue;
         };
@@ -125,11 +115,7 @@ fn parameter_name_hints(
 }
 
 /// Add return type hints for functions without explicit return annotations.
-fn function_return_type_hints(
-    resolved: &ResolvedModule,
-    source: &str,
-    hints: &mut Vec<InlayHint>,
-) {
+fn function_return_type_hints(resolved: &ResolvedModule, source: &str, hints: &mut Vec<InlayHint>) {
     for func in &resolved.functions {
         // Skip functions that already have an explicit return annotation.
         if func.return_annotation_span.is_some() {
@@ -144,9 +130,7 @@ fn function_return_type_hints(
         // Find the closing `)` of the parameter list by scanning from after the
         // function name.  We track parenthesis nesting so nested default-value
         // expressions (e.g. `def f(x=(1,2)):`) do not fool us.
-        let Some(paren_close) =
-            find_closing_paren(source, func.name_span.end as usize)
-        else {
+        let Some(paren_close) = find_closing_paren(source, func.name_span.end as usize) else {
             continue;
         };
 

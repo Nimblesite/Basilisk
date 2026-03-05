@@ -4,15 +4,15 @@ use basilisk_resolver::ResolvedModule;
 use tower_lsp::lsp_types::{GotoDefinitionResponse, Location, Url};
 
 use crate::util::{
-    find_definition_by_name, find_symbol_at_offset, identifier_at_offset, span_to_range,
-    SymbolHit,
+    find_definition_by_name, find_symbol_at_offset, identifier_at_offset, span_to_range, SymbolHit,
 };
 
 /// Compute go-to-definition for a byte offset.
 ///
 /// If the cursor is on a definition site, returns that location.
 /// If the cursor is on a reference (call, variable use), finds the definition.
-#[must_use] pub fn goto_definition(
+#[must_use]
+pub fn goto_definition(
     resolved: &ResolvedModule,
     source: &str,
     byte_offset: usize,

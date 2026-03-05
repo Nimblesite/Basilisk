@@ -19,13 +19,13 @@ pub fn document_highlights(
 
     // Find all occurrences of the name as whole-word matches in the source.
     let occurrences = crate::references::find_identifier_occurrences(source, &name);
-    
+
     // Get the definition range if we're on a symbol
-    let definition_range = find_symbol_at_offset(resolved, byte_offset)
-        .map(|hit| definition_range(&hit, source));
+    let definition_range =
+        find_symbol_at_offset(resolved, byte_offset).map(|hit| definition_range(&hit, source));
 
     let mut highlights = Vec::new();
-    
+
     for range in occurrences {
         // Determine if this is the definition (WRITE) or a reference (READ)
         let kind = if Some(range) == definition_range {
@@ -33,11 +33,8 @@ pub fn document_highlights(
         } else {
             Some(DocumentHighlightKind::READ)
         };
-        
-        highlights.push(DocumentHighlight {
-            range,
-            kind,
-        });
+
+        highlights.push(DocumentHighlight { range, kind });
     }
 
     highlights
@@ -45,11 +42,7 @@ pub fn document_highlights(
 
 /// Get the symbol name at a byte offset, either from the symbol table or from
 /// the identifier under the cursor.
-fn symbol_name_at(
-    resolved: &ResolvedModule,
-    source: &str,
-    byte_offset: usize,
-) -> Option<String> {
+fn symbol_name_at(resolved: &ResolvedModule, source: &str, byte_offset: usize) -> Option<String> {
     if let Some(hit) = find_symbol_at_offset(resolved, byte_offset) {
         return Some(symbol_hit_name(&hit).to_owned());
     }

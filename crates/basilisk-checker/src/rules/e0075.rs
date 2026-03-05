@@ -57,8 +57,7 @@ impl Rule for SelfTypeAttributeIncompatible {
                 let Some(ann_span) = attr.annotation_span else {
                     continue;
                 };
-                let Some(ann_text) =
-                    source.get(ann_span.start as usize..ann_span.end as usize)
+                let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize)
                 else {
                     continue;
                 };
@@ -77,9 +76,7 @@ impl Rule for SelfTypeAttributeIncompatible {
 
         // Step 2: Parse the source to build parent-child class relationships
         // (handles subscripted bases like `LinkedList[int]`).
-        let Ok(parsed) =
-            basilisk_parser::parse_source(source.clone(), path.clone())
-        else {
+        let Ok(parsed) = basilisk_parser::parse_source(source.clone(), path.clone()) else {
             return;
         };
 
@@ -112,8 +109,7 @@ impl Rule for SelfTypeAttributeIncompatible {
             .filter(|v| v.rhs_kind == basilisk_resolver::RhsKind::CallExpr)
             .filter_map(|v| {
                 let rhs_span = v.rhs_span?;
-                let rhs_text =
-                    source.get(rhs_span.start as usize..rhs_span.end as usize)?;
+                let rhs_text = source.get(rhs_span.start as usize..rhs_span.end as usize)?;
                 let class_name = extract_callee_name(rhs_text)?;
                 Some((v.name.as_str(), class_name))
             })
@@ -248,11 +244,7 @@ fn check_stmt_for_violations(
                         let Some(value_class) = call_expr_class_name(&kw.value) else {
                             continue;
                         };
-                        if is_parent_not_subclass(
-                            &value_class,
-                            &constructor_class,
-                            parent_class,
-                        ) {
+                        if is_parent_not_subclass(&value_class, &constructor_class, parent_class) {
                             let range = assign.value.range();
                             let span = basilisk_resolver::Span {
                                 start: range.start().to_u32(),
@@ -397,10 +389,6 @@ fn call_expr_class_name(expr: &ruff_python_ast::Expr) -> Option<String> {
 
 /// Returns `true` when `value_class` is the parent (or ancestor) of the
 /// expected subclass, but not the subclass itself.
-fn is_parent_not_subclass(
-    value_class: &str,
-    expected_subclass: &str,
-    parent_class: &str,
-) -> bool {
+fn is_parent_not_subclass(value_class: &str, expected_subclass: &str, parent_class: &str) -> bool {
     value_class == parent_class && value_class != expected_subclass
 }

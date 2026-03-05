@@ -25,13 +25,7 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 /// Names that are always allowed as bases alongside `Protocol`.
-const ALLOWED_BASES: &[&str] = &[
-    "Protocol",
-    "object",
-    "Generic",
-    "ABC",
-    "ABCMeta",
-];
+const ALLOWED_BASES: &[&str] = &["Protocol", "object", "Generic", "ABC", "ABCMeta"];
 
 /// Well-known stdlib Protocol classes that may be imported.
 const KNOWN_PROTOCOLS: &[&str] = &[
@@ -73,9 +67,10 @@ pub(crate) struct NonProtocolBaseInProtocol;
 
 /// Check if a class name refers to a Protocol class (has `Protocol` in its bases).
 fn is_protocol_class(name: &str, module: &ResolvedModule) -> bool {
-    module.classes.iter().any(|cls| {
-        cls.name == name && cls.bases.iter().any(|b| b == "Protocol")
-    })
+    module
+        .classes
+        .iter()
+        .any(|cls| cls.name == name && cls.bases.iter().any(|b| b == "Protocol"))
 }
 
 impl Rule for NonProtocolBaseInProtocol {

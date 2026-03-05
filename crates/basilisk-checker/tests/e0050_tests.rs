@@ -10,10 +10,7 @@ fn run(source: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let parsed = parse_source(source.to_owned(), "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let diagnostics = check(&resolved);
-    Ok(diagnostics
-        .into_iter()
-        .map(|d| d.message)
-        .collect())
+    Ok(diagnostics.into_iter().map(|d| d.message).collect())
 }
 
 #[test]
@@ -38,7 +35,9 @@ BadNewType = NewType(int)
 ";
     let diagnostics = run(source)?;
     assert!(
-        diagnostics.iter().any(|msg| msg.contains("takes exactly 2 arguments")),
+        diagnostics
+            .iter()
+            .any(|msg| msg.contains("takes exactly 2 arguments")),
         "Expected E0050 for wrong argument count"
     );
     Ok(())
@@ -52,7 +51,9 @@ Alias = NewType("Alias", Any)
 "#;
     let diagnostics = run(source)?;
     assert!(
-        diagnostics.iter().any(|msg| msg.contains("cannot use `Any`")),
+        diagnostics
+            .iter()
+            .any(|msg| msg.contains("cannot use `Any`")),
         "Expected E0050 for Any base type"
     );
     Ok(())
@@ -66,7 +67,9 @@ Alias = NewType("Alias", Callable)
 "#;
     let diagnostics = run(source)?;
     assert!(
-        diagnostics.iter().any(|msg| msg.contains("cannot use a Protocol class")),
+        diagnostics
+            .iter()
+            .any(|msg| msg.contains("cannot use a Protocol class")),
         "Expected E0050 for Callable base type"
     );
     Ok(())
@@ -82,7 +85,9 @@ result = isinstance(u1, UserId)
 "#;
     let diagnostics = run(source)?;
     assert!(
-        diagnostics.iter().any(|msg| msg.contains("cannot be used as the second argument")),
+        diagnostics
+            .iter()
+            .any(|msg| msg.contains("cannot be used as the second argument")),
         "Expected E0050 for isinstance with NewType"
     );
     Ok(())
@@ -111,7 +116,9 @@ Alias = NewType("Alias", Literal["value"])
 "#;
     let diagnostics = run(source)?;
     assert!(
-        diagnostics.iter().any(|msg| msg.contains("cannot use `Literal`")),
+        diagnostics
+            .iter()
+            .any(|msg| msg.contains("cannot use `Literal`")),
         "Expected E0050 for Literal base type"
     );
     Ok(())
@@ -125,7 +132,9 @@ Alias = NewType("Alias", Union[int, str])
 "#;
     let diagnostics = run(source)?;
     assert!(
-        diagnostics.iter().any(|msg| msg.contains("cannot use a union type")),
+        diagnostics
+            .iter()
+            .any(|msg| msg.contains("cannot use a union type")),
         "Expected E0050 for Union base type"
     );
     Ok(())
@@ -141,7 +150,9 @@ MovieAlias = NewType("MovieAlias", Movie)
 "#;
     let diagnostics = run(source)?;
     assert!(
-        diagnostics.iter().any(|msg| msg.contains("cannot use a `TypedDict` class")),
+        diagnostics
+            .iter()
+            .any(|msg| msg.contains("cannot use a `TypedDict` class")),
         "Expected E0050 for TypedDict base type"
     );
     Ok(())
@@ -157,7 +168,9 @@ class SpecialUserId(UserId):
 "#;
     let diagnostics = run(source)?;
     assert!(
-        diagnostics.iter().any(|msg| msg.contains("cannot subclass")),
+        diagnostics
+            .iter()
+            .any(|msg| msg.contains("cannot subclass")),
         "Expected E0050 for NewType subclassing"
     );
     Ok(())
@@ -172,7 +185,9 @@ x: UserId[int] = UserId(42)
 "#;
     let diagnostics = run(source)?;
     assert!(
-        diagnostics.iter().any(|msg| msg.contains("cannot be used as a generic type")),
+        diagnostics
+            .iter()
+            .any(|msg| msg.contains("cannot be used as a generic type")),
         "Expected E0050 for NewType generic subscript"
     );
     Ok(())
@@ -187,7 +202,9 @@ x: type = UserId
 "#;
     let diagnostics = run(source)?;
     assert!(
-        diagnostics.iter().any(|msg| msg.contains("not an instance of `type`")),
+        diagnostics
+            .iter()
+            .any(|msg| msg.contains("not an instance of `type`")),
         "Expected E0050 for NewType assigned to type"
     );
     Ok(())
@@ -217,7 +234,9 @@ u1: UserId = 42
 "#;
     let diagnostics = run(source)?;
     assert!(
-        diagnostics.iter().any(|msg| msg.contains("Cannot assign a literal value")),
+        diagnostics
+            .iter()
+            .any(|msg| msg.contains("Cannot assign a literal value")),
         "Expected E0050 for literal assignment to NewType"
     );
     Ok(())

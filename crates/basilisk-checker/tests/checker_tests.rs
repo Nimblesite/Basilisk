@@ -2080,7 +2080,11 @@ fn debug_e0047_qualifiers_annotated_fp() -> Result<(), Box<dyn std::error::Error
     let diags = basilisk_checker::check(&resolved);
     let src = &resolved.source;
     for d in &diags {
-        let line = src[..d.span.start as usize].chars().filter(|&c| c == '\n').count() + 1;
+        let line = src[..d.span.start as usize]
+            .chars()
+            .filter(|&c| c == '\n')
+            .count()
+            + 1;
         eprintln!("Line {}: {} - {}", line, d.code.code, d.message);
     }
     Ok(())
@@ -2099,7 +2103,11 @@ fn debug_all_diags_qualifiers_annotated() -> Result<(), Box<dyn std::error::Erro
     let diags = basilisk_checker::check(&resolved);
     let src = &resolved.source;
     for d in &diags {
-        let line = src[..d.span.start as usize].chars().filter(|&c| c == '\n').count() + 1;
+        let line = src[..d.span.start as usize]
+            .chars()
+            .filter(|&c| c == '\n')
+            .count()
+            + 1;
         eprintln!("Line {}: {} - {}", line, d.code.code, d.message);
     }
     Ok(())
@@ -2181,13 +2189,10 @@ fn self_and_cls_do_not_fire_e0001() -> Result<(), Box<dyn std::error::Error>> {
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
         .collect();
-    
+
     // Should only fire for 'data', not 'self' or 'cls'
-    assert!(
-        !e1.is_empty(),
-        "should have E0001 diagnostics"
-    );
-    
+    assert!(!e1.is_empty(), "should have E0001 diagnostics");
+
     let messages: Vec<&str> = e1.iter().map(|d| d.message.as_str()).collect();
     assert!(
         messages.iter().any(|m| m.contains("data")),
@@ -2201,14 +2206,15 @@ fn self_and_cls_do_not_fire_e0001() -> Result<(), Box<dyn std::error::Error>> {
         !messages.iter().any(|m| m.contains("cls")),
         "E0001 should NOT point to 'cls' parameter"
     );
-    
+
     // Should have exactly 1 E0001 (for 'data')
     let data_e1: Vec<_> = e1.iter().filter(|d| d.message.contains("data")).collect();
     assert_eq!(
-        data_e1.len(), 1,
+        data_e1.len(),
+        1,
         "should have exactly 1 E0001 for 'data' parameter"
     );
-    
+
     Ok(())
 }
 
@@ -2284,10 +2290,7 @@ fn e0011_unannotated_return_no_diagnostic() -> Result<(), Box<dyn std::error::Er
         .iter()
         .filter(|d| d.code.code == "BSK-E0011")
         .collect();
-    assert!(
-        e11.is_empty(),
-        "unannotated return must not fire E0011"
-    );
+    assert!(e11.is_empty(), "unannotated return must not fire E0011");
     Ok(())
 }
 
@@ -2316,7 +2319,8 @@ fn w0040_lambda_assigned_to_unannotated_var_fires() -> Result<(), Box<dyn std::e
 }
 
 #[test]
-fn w0040_lambda_assigned_to_annotated_var_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn w0040_lambda_assigned_to_annotated_var_no_diagnostic() -> Result<(), Box<dyn std::error::Error>>
+{
     let src = "f: Callable[[int], int] = lambda x: x + 1\n";
     let diags = run(src)?;
     let w40: Vec<_> = diags

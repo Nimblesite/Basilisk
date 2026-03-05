@@ -75,14 +75,20 @@ impl Rule for TypeVarInvalidKwargs {
                 }
                 if tv.has_bound {
                     diagnostics.push(make_diag(
-                        &format!("`{kind}` `{}` does not support a `bound=` argument", tv.name),
+                        &format!(
+                            "`{kind}` `{}` does not support a `bound=` argument",
+                            tv.name
+                        ),
                         tv.span,
                         path,
                     ));
                 }
                 if tv.constraint_count > 0 {
                     diagnostics.push(make_diag(
-                        &format!("`{kind}` `{}` does not accept type constraint arguments", tv.name),
+                        &format!(
+                            "`{kind}` `{}` does not accept type constraint arguments",
+                            tv.name
+                        ),
                         tv.span,
                         path,
                     ));
@@ -104,14 +110,20 @@ impl Rule for TypeVarInvalidKwargs {
                 }
                 if tv.has_bound {
                     diagnostics.push(make_diag(
-                        &format!("`{kind}` `{}` does not support a `bound=` argument", tv.name),
+                        &format!(
+                            "`{kind}` `{}` does not support a `bound=` argument",
+                            tv.name
+                        ),
                         tv.span,
                         path,
                     ));
                 }
                 if tv.constraint_count > 0 {
                     diagnostics.push(make_diag(
-                        &format!("`{kind}` `{}` does not accept type constraint arguments", tv.name),
+                        &format!(
+                            "`{kind}` `{}` does not accept type constraint arguments",
+                            tv.name
+                        ),
                         tv.span,
                         path,
                     ));

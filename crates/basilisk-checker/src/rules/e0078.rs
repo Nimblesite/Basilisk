@@ -166,30 +166,22 @@ fn check_return_stmt_for_concrete_class(
         }
         Stmt::If(if_stmt) => {
             for body_stmt in &if_stmt.body {
-                check_return_stmt_for_concrete_class(
-                    body_stmt, class_name, path, diagnostics,
-                );
+                check_return_stmt_for_concrete_class(body_stmt, class_name, path, diagnostics);
             }
             for clause in &if_stmt.elif_else_clauses {
                 for body_stmt in &clause.body {
-                    check_return_stmt_for_concrete_class(
-                        body_stmt, class_name, path, diagnostics,
-                    );
+                    check_return_stmt_for_concrete_class(body_stmt, class_name, path, diagnostics);
                 }
             }
         }
         Stmt::For(for_stmt) => {
             for body_stmt in &for_stmt.body {
-                check_return_stmt_for_concrete_class(
-                    body_stmt, class_name, path, diagnostics,
-                );
+                check_return_stmt_for_concrete_class(body_stmt, class_name, path, diagnostics);
             }
         }
         Stmt::While(while_stmt) => {
             for body_stmt in &while_stmt.body {
-                check_return_stmt_for_concrete_class(
-                    body_stmt, class_name, path, diagnostics,
-                );
+                check_return_stmt_for_concrete_class(body_stmt, class_name, path, diagnostics);
             }
         }
         _ => {}

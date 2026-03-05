@@ -7,8 +7,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{ResolvedModule, Span};
 use tower_lsp::lsp_types::{
-    CallHierarchyIncomingCall, CallHierarchyItem, CallHierarchyOutgoingCall, Range, SymbolKind,
-    Url,
+    CallHierarchyIncomingCall, CallHierarchyItem, CallHierarchyOutgoingCall, Range, SymbolKind, Url,
 };
 
 use crate::util::{find_symbol_at_offset, span_to_range, SymbolHit};
@@ -39,11 +38,7 @@ fn function_item(
 }
 
 /// Build a `CallHierarchyItem` for a class definition.
-fn class_item(
-    class: &basilisk_resolver::ClassInfo,
-    source: &str,
-    uri: &Url,
-) -> CallHierarchyItem {
+fn class_item(class: &basilisk_resolver::ClassInfo, source: &str, uri: &Url) -> CallHierarchyItem {
     CallHierarchyItem {
         name: class.name.clone(),
         kind: SymbolKind::CLASS,
@@ -118,10 +113,7 @@ pub fn incoming_calls(
     grouped
         .into_iter()
         .filter_map(|(caller_name, from_ranges)| {
-            let caller_func = resolved
-                .functions
-                .iter()
-                .find(|f| f.name == caller_name)?;
+            let caller_func = resolved.functions.iter().find(|f| f.name == caller_name)?;
             Some(CallHierarchyIncomingCall {
                 from: function_item(caller_func, source, uri),
                 from_ranges,

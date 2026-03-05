@@ -44,8 +44,7 @@ impl Rule for FrozenDataclassAssignment {
             .classes
             .iter()
             .map(|c| {
-                let is_dc = c.is_dataclass
-                    || transform_classes.contains_key(c.name.as_str());
+                let is_dc = c.is_dataclass || transform_classes.contains_key(c.name.as_str());
                 let is_frozen = c.is_dataclass_frozen
                     || transform_classes
                         .get(c.name.as_str())
@@ -145,7 +144,9 @@ fn check_frozen_instance_assigns(module: &ResolvedModule, diagnostics: &mut Vec<
 
     let mut instance_class: HashMap<&str, &str> = HashMap::new();
     for var in &module.module_vars {
-        let Some(rhs_span) = var.rhs_span else { continue };
+        let Some(rhs_span) = var.rhs_span else {
+            continue;
+        };
         let Some(rhs_text) = source.get(rhs_span.start as usize..rhs_span.end as usize) else {
             continue;
         };

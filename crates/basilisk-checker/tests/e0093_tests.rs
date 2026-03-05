@@ -27,7 +27,10 @@ movie["director"] = "Ridley Scott"  # Invalid key
         .iter()
         .filter(|d| d.code.code == "BSK-E0093")
         .collect();
-    assert!(!e0093.is_empty(), "Subscript with bad key should fire E0093");
+    assert!(
+        !e0093.is_empty(),
+        "Subscript with bad key should fire E0093"
+    );
     Ok(())
 }
 
@@ -48,7 +51,10 @@ movie["year"] = "1982"  # Wrong type: str instead of int
         .iter()
         .filter(|d| d.code.code == "BSK-E0093")
         .collect();
-    assert!(!e0093.is_empty(), "Subscript with wrong value type should fire E0093");
+    assert!(
+        !e0093.is_empty(),
+        "Subscript with wrong value type should fire E0093"
+    );
     Ok(())
 }
 
@@ -68,7 +74,10 @@ movie: Movie = {"title": "Blade Runner", "year": 1982}  # Invalid key 'title'
         .iter()
         .filter(|d| d.code.code == "BSK-E0093")
         .collect();
-    assert!(!e0093.is_empty(), "Dict literal with unknown keys should fire E0093");
+    assert!(
+        !e0093.is_empty(),
+        "Dict literal with unknown keys should fire E0093"
+    );
     Ok(())
 }
 
@@ -110,7 +119,10 @@ movie.update({"director": "Ridley Scott"})  # Unknown key 'director'
         .iter()
         .filter(|d| d.code.code == "BSK-E0093")
         .collect();
-    assert!(!e0093.is_empty(), "update() with unknown keys should fire E0093");
+    assert!(
+        !e0093.is_empty(),
+        "update() with unknown keys should fire E0093"
+    );
     Ok(())
 }
 
@@ -151,7 +163,10 @@ movie: Movie = {"name": "Blade Runner", "year": 1982}
         .iter()
         .filter(|d| d.code.code == "BSK-E0093")
         .collect();
-    assert!(e0093.is_empty(), "Valid TypedDict usage should not fire E0093");
+    assert!(
+        e0093.is_empty(),
+        "Valid TypedDict usage should not fire E0093"
+    );
     Ok(())
 }
 
@@ -172,7 +187,10 @@ director = movie["director"]  # Invalid key read
         .iter()
         .filter(|d| d.code.code == "BSK-E0093")
         .collect();
-    assert!(!e0093.is_empty(), "Subscript read with invalid key should fire E0093");
+    assert!(
+        !e0093.is_empty(),
+        "Subscript read with invalid key should fire E0093"
+    );
     Ok(())
 }
 
@@ -213,6 +231,9 @@ movie: Movie = {"name": "Blade Runner"}  # Missing 'year' is OK when total=False
         .iter()
         .filter(|d| d.code.code == "BSK-E0093")
         .collect();
-    assert!(e0093.is_empty(), "Missing keys with total=False should not fire E0093");
+    assert!(
+        e0093.is_empty(),
+        "Missing keys with total=False should not fire E0093"
+    );
     Ok(())
 }

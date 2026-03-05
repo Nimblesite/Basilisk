@@ -144,11 +144,7 @@ fn build_alias_map<'a>(
 }
 
 /// Analyse the RHS of a type alias to count its TypeVar/TypeVarTuple parameters.
-fn analyse_alias_rhs(
-    rhs: &str,
-    typevartuple_names: &[&str],
-    typevar_names: &[&str],
-) -> AliasInfo {
+fn analyse_alias_rhs(rhs: &str, typevartuple_names: &[&str], typevar_names: &[&str]) -> AliasInfo {
     // If no brackets, this might be a bare name — treat as zero params.
     let Some(bracket_pos) = rhs.find('[') else {
         return AliasInfo {
@@ -199,10 +195,22 @@ fn check_stmts(
     for stmt in stmts {
         match stmt {
             Stmt::Expr(expr_stmt) => {
-                check_expr(&expr_stmt.value, alias_map, typevartuple_names, path, diagnostics);
+                check_expr(
+                    &expr_stmt.value,
+                    alias_map,
+                    typevartuple_names,
+                    path,
+                    diagnostics,
+                );
             }
             Stmt::Assign(assign) => {
-                check_expr(&assign.value, alias_map, typevartuple_names, path, diagnostics);
+                check_expr(
+                    &assign.value,
+                    alias_map,
+                    typevartuple_names,
+                    path,
+                    diagnostics,
+                );
                 for target in &assign.targets {
                     check_expr(target, alias_map, typevartuple_names, path, diagnostics);
                 }

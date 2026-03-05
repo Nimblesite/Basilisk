@@ -73,7 +73,12 @@ impl Rule for ConstructorCallNewMismatch {
 
         for stmt in &parsed.ast.body {
             check_stmt_for_specialized_constructor_calls(
-                stmt, source, path, &class_map, &method_map, diagnostics,
+                stmt,
+                source,
+                path,
+                &class_map,
+                &method_map,
+                diagnostics,
             );
         }
     }
@@ -93,12 +98,22 @@ fn check_stmt_for_specialized_constructor_calls(
     match stmt {
         Stmt::Expr(node) => {
             check_expr_recursive(
-                &node.value, source, path, class_map, method_map, diagnostics,
+                &node.value,
+                source,
+                path,
+                class_map,
+                method_map,
+                diagnostics,
             );
         }
         Stmt::Assign(node) => {
             check_expr_recursive(
-                &node.value, source, path, class_map, method_map, diagnostics,
+                &node.value,
+                source,
+                path,
+                class_map,
+                method_map,
+                diagnostics,
             );
         }
         Stmt::AnnAssign(node) => {
@@ -107,14 +122,15 @@ fn check_stmt_for_specialized_constructor_calls(
             }
         }
         Stmt::Try(try_stmt) => {
-            for body in [
-                &try_stmt.body,
-                &try_stmt.orelse,
-                &try_stmt.finalbody,
-            ] {
+            for body in [&try_stmt.body, &try_stmt.orelse, &try_stmt.finalbody] {
                 for s in body {
                     check_stmt_for_specialized_constructor_calls(
-                        s, source, path, class_map, method_map, diagnostics,
+                        s,
+                        source,
+                        path,
+                        class_map,
+                        method_map,
+                        diagnostics,
                     );
                 }
             }
@@ -122,7 +138,12 @@ fn check_stmt_for_specialized_constructor_calls(
                 let ruff_python_ast::ExceptHandler::ExceptHandler(h) = handler;
                 for s in &h.body {
                     check_stmt_for_specialized_constructor_calls(
-                        s, source, path, class_map, method_map, diagnostics,
+                        s,
+                        source,
+                        path,
+                        class_map,
+                        method_map,
+                        diagnostics,
                     );
                 }
             }

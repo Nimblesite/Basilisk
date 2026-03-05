@@ -24,11 +24,7 @@ pub fn format_document(source: &str, file_path: &str) -> Option<Vec<TextEdit>> {
         .ok()?;
 
     // Write source to stdin, then drop to close the pipe.
-    child
-        .stdin
-        .as_mut()?
-        .write_all(source.as_bytes())
-        .ok()?;
+    child.stdin.as_mut()?.write_all(source.as_bytes()).ok()?;
 
     let output = child.wait_with_output().ok()?;
     if !output.status.success() {

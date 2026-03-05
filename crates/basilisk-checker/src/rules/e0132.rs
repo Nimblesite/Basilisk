@@ -51,7 +51,10 @@ struct BaseSubscript {
 }
 
 /// Extract the base class expressions (with subscripts) from source text.
-fn extract_base_subscripts(source: &str, class: &basilisk_resolver::ClassInfo) -> Vec<BaseSubscript> {
+fn extract_base_subscripts(
+    source: &str,
+    class: &basilisk_resolver::ClassInfo,
+) -> Vec<BaseSubscript> {
     let name_end = class.name_span.end as usize;
 
     // Find the opening `(` after the class name.
@@ -231,7 +234,11 @@ fn propagate_ancestors(
     }
 
     // Build a substitution map: parent's generic param name -> child's type arg.
-    let parent_params: Vec<String> = parent.generic_params.iter().map(|p| p.name.clone()).collect();
+    let parent_params: Vec<String> = parent
+        .generic_params
+        .iter()
+        .map(|p| p.name.clone())
+        .collect();
 
     let substitution: HashMap<&str, &str> = parent_params
         .iter()

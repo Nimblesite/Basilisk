@@ -27,11 +27,9 @@
 //!     return 42
 //! ```
 
-use basilisk_resolver::{
-    FunctionInfo, ParameterInfo, ResolvedModule, ReturnAnnotationKind,
-};
 use crate::inference::infer_rhs;
 use crate::types::InferredType;
+use basilisk_resolver::{FunctionInfo, ParameterInfo, ResolvedModule, ReturnAnnotationKind};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
@@ -119,8 +117,7 @@ fn make_param_any_diagnostic(param: &ParameterInfo, path: &str) -> Diagnostic {
             param.name
         )),
         note: Some(
-            "`Any` disables type checking for this parameter; use only when unavoidable"
-                .to_owned(),
+            "`Any` disables type checking for this parameter; use only when unavoidable".to_owned(),
         ),
     }
 }
@@ -168,18 +165,18 @@ fn check_return_type_mismatch(
 
         // Use inference system to get RHS type
         let inferred_type = infer_rhs(&return_stmt.rhs_kind);
-        
+
         // Skip Unknown types - we can't prove they're incompatible
         if matches!(inferred_type, InferredType::Unknown) {
             continue;
         }
-        
+
         // Parse annotation text to InferredType
         let declared_type = InferredType::from_annotation(ann_text);
-        
+
         // Check assignability using inference system
         if !inferred_type.is_assignable_to(&declared_type) {
-                out.push(Diagnostic {
+            out.push(Diagnostic {
                 code: CODE.clone(),
                 severity: Severity::Error,
                 message: format!(
@@ -187,9 +184,7 @@ fn check_return_type_mismatch(
                 ),
                 span: func.name_span,
                 path: module.path.clone(),
-                help: Some(
-                    "Check the return type annotation and return statements".to_owned(),
-                ),
+                help: Some("Check the return type annotation and return statements".to_owned()),
                 note: None,
             });
         }

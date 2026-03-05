@@ -138,11 +138,9 @@ fn load_module_interface(
     let file_path = dir.join(format!("{module_name}.py"));
 
     let source = std::fs::read_to_string(&file_path).ok()?;
-    let parsed = basilisk_parser::parse_source(
-        source.clone(),
-        file_path.to_string_lossy().into_owned(),
-    )
-    .ok()?;
+    let parsed =
+        basilisk_parser::parse_source(source.clone(), file_path.to_string_lossy().into_owned())
+            .ok()?;
 
     let resolved = basilisk_resolver::resolve(&parsed).ok()?;
 

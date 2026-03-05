@@ -11,29 +11,30 @@ use tower_lsp::lsp_types::{
     CallHierarchyOutgoingCall, CallHierarchyOutgoingCallsParams, CallHierarchyPrepareParams,
     CallHierarchyServerCapability, CodeActionKind, CodeActionOptions, CodeActionParams,
     CodeActionProviderCapability, CodeActionResponse, CodeDescription, CodeLens, CodeLensOptions,
-    CodeLensParams, CompletionOptions, CompletionParams, CompletionResponse,
-    Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
-    DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentHighlight,
-    DocumentHighlightParams, DocumentFormattingParams, DocumentSymbolParams,
-    DocumentSymbolResponse, ExecuteCommandOptions, ExecuteCommandParams, FoldingRange,
-    FoldingRangeParams, FoldingRangeProviderCapability, GotoDefinitionParams,
-    GotoDefinitionResponse, Hover, HoverParams, HoverProviderCapability, InitializeParams,
-    InitializeResult, InitializedParams, InlayHint, InlayHintParams, Location, MessageType,
-    NumberOrString, OneOf, Position, PrepareRenameResponse, Range, ReferenceParams, RenameOptions,
-    RenameParams, SelectionRange, SelectionRangeParams, SelectionRangeProviderCapability,
-    SemanticTokens, SemanticTokensFullOptions, SemanticTokensLegend, SemanticTokensOptions,
-    SemanticTokensParams, SemanticTokensResult, SemanticTokensServerCapabilities,
-    ServerCapabilities, ServerInfo, SignatureHelpOptions, SignatureHelpParams, SymbolInformation,
-    TextDocumentPositionParams, TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit,
-    TypeHierarchyItem, TypeHierarchyPrepareParams,
-    TypeHierarchySubtypesParams, TypeHierarchySupertypesParams, Url, WorkDoneProgressOptions,
-    WorkspaceEdit,
-    WorkspaceSymbolParams,
+    CodeLensParams, CompletionOptions, CompletionParams, CompletionResponse, Diagnostic,
+    DiagnosticSeverity, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
+    DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentFormattingParams,
+    DocumentHighlight, DocumentHighlightParams, DocumentSymbolParams, DocumentSymbolResponse,
+    ExecuteCommandOptions, ExecuteCommandParams, FoldingRange, FoldingRangeParams,
+    FoldingRangeProviderCapability, GotoDefinitionParams, GotoDefinitionResponse, Hover,
+    HoverParams, HoverProviderCapability, InitializeParams, InitializeResult, InitializedParams,
+    InlayHint, InlayHintParams, Location, MessageType, NumberOrString, OneOf, Position,
+    PrepareRenameResponse, Range, ReferenceParams, RenameOptions, RenameParams, SelectionRange,
+    SelectionRangeParams, SelectionRangeProviderCapability, SemanticTokens,
+    SemanticTokensFullOptions, SemanticTokensLegend, SemanticTokensOptions, SemanticTokensParams,
+    SemanticTokensResult, SemanticTokensServerCapabilities, ServerCapabilities, ServerInfo,
+    SignatureHelpOptions, SignatureHelpParams, SymbolInformation, TextDocumentPositionParams,
+    TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, TypeHierarchyItem,
+    TypeHierarchyPrepareParams, TypeHierarchySubtypesParams, TypeHierarchySupertypesParams, Url,
+    WorkDoneProgressOptions, WorkspaceEdit, WorkspaceSymbolParams,
 };
 use tower_lsp::{Client, LspService, Server};
 
 use crate::util::{byte_offset_to_position, position_to_byte_offset};
-use crate::{call_hierarchy, code_actions, code_lens, completion, definition, folding, formatting, highlight, hover, inlay_hints, references, selection, signature, symbols, type_hierarchy};
+use crate::{
+    call_hierarchy, code_actions, code_lens, completion, definition, folding, formatting,
+    highlight, hover, inlay_hints, references, selection, signature, symbols, type_hierarchy,
+};
 
 /// Fallback docs URL used when a diagnostic code URL fails to parse.
 const FALLBACK_DOCS_URL: &str = "https://basilisk-lang.org";
@@ -104,10 +105,8 @@ impl LspServer {
         };
 
         let checker_diags = basilisk_checker::check(&resolved);
-        let lsp_diags: Vec<Diagnostic> = checker_diags
-            .iter()
-            .map(|d| bsk_to_lsp(d, text))
-            .collect();
+        let lsp_diags: Vec<Diagnostic> =
+            checker_diags.iter().map(|d| bsk_to_lsp(d, text)).collect();
 
         self.documents.insert(
             uri.clone(),
@@ -125,8 +124,11 @@ impl LspServer {
     fn get_document_data(
         &self,
         uri: &Url,
-    ) -> Option<(String, Arc<basilisk_resolver::ResolvedModule>, Vec<basilisk_checker::Diagnostic>)>
-    {
+    ) -> Option<(
+        String,
+        Arc<basilisk_resolver::ResolvedModule>,
+        Vec<basilisk_checker::Diagnostic>,
+    )> {
         let entry = self.documents.get(uri)?;
         let text = entry.text.clone();
         let resolved = entry.resolved.clone()?;
@@ -204,7 +206,9 @@ impl tower_lsp::LanguageServer for LspServer {
                 call_hierarchy_provider: Some(CallHierarchyServerCapability::Simple(true)),
                 // type_hierarchy_provider is not in lsp-types 0.94's ServerCapabilities;
                 // it is injected at the JSON level by websocket::inject_missing_capabilities.
-                code_lens_provider: Some(CodeLensOptions { resolve_provider: Some(false) }),
+                code_lens_provider: Some(CodeLensOptions {
+                    resolve_provider: Some(false),
+                }),
                 code_action_provider: Some(CodeActionProviderCapability::Options(
                     CodeActionOptions {
                         code_action_kinds: Some(vec![
@@ -324,7 +328,12 @@ impl tower_lsp::LanguageServer for LspServer {
             return Ok(None);
         };
         let byte_offset = position_to_byte_offset(&text, pos);
-        Ok(definition::goto_definition(&resolved, &text, byte_offset, &uri))
+        Ok(definition::goto_definition(
+            &resolved,
+            &text,
+            byte_offset,
+            &uri,
+        ))
     }
 
     // ── Document Symbols ─────────────────────────────────────────────────────
@@ -388,10 +397,7 @@ impl tower_lsp::LanguageServer for LspServer {
 
     // ── Find All References ──────────────────────────────────────────────────
 
-    async fn references(
-        &self,
-        params: ReferenceParams,
-    ) -> LspResult<Option<Vec<Location>>> {
+    async fn references(&self, params: ReferenceParams) -> LspResult<Option<Vec<Location>>> {
         let uri = params.text_document_position.text_document.uri;
         let pos = params.text_document_position.position;
         let include_decl = params.context.include_declaration;
@@ -461,10 +467,7 @@ impl tower_lsp::LanguageServer for LspServer {
 
     // ── Inlay Hints ──────────────────────────────────────────────────────────
 
-    async fn inlay_hint(
-        &self,
-        params: InlayHintParams,
-    ) -> LspResult<Option<Vec<InlayHint>>> {
+    async fn inlay_hint(&self, params: InlayHintParams) -> LspResult<Option<Vec<InlayHint>>> {
         let uri = params.text_document.uri;
         let Some((text, resolved, _)) = self.get_document_data(&uri) else {
             return Ok(None);
@@ -496,18 +499,14 @@ impl tower_lsp::LanguageServer for LspServer {
 
     // ── Code Actions ─────────────────────────────────────────────────────────
 
-    async fn code_action(
-        &self,
-        params: CodeActionParams,
-    ) -> LspResult<Option<CodeActionResponse>> {
+    async fn code_action(&self, params: CodeActionParams) -> LspResult<Option<CodeActionResponse>> {
         let uri = params.text_document.uri;
         let source = self
             .documents
             .get(&uri)
             .map(|d| d.text.clone())
             .unwrap_or_default();
-        let actions =
-            code_actions::code_actions(&uri, &params.context.diagnostics, &source);
+        let actions = code_actions::code_actions(&uri, &params.context.diagnostics, &source);
         if actions.is_empty() {
             Ok(None)
         } else {
@@ -558,10 +557,7 @@ impl tower_lsp::LanguageServer for LspServer {
 
     // ── Completion ───────────────────────────────────────────────────────────
 
-    async fn completion(
-        &self,
-        params: CompletionParams,
-    ) -> LspResult<Option<CompletionResponse>> {
+    async fn completion(&self, params: CompletionParams) -> LspResult<Option<CompletionResponse>> {
         let uri = params.text_document_position.text_document.uri;
         let pos = params.text_document_position.position;
         let Some(entry) = self.documents.get(&uri) else {
@@ -702,10 +698,7 @@ impl tower_lsp::LanguageServer for LspServer {
 
     // ── Code Lens ─────────────────────────────────────────────────────────
 
-    async fn code_lens(
-        &self,
-        params: CodeLensParams,
-    ) -> LspResult<Option<Vec<CodeLens>>> {
+    async fn code_lens(&self, params: CodeLensParams) -> LspResult<Option<Vec<CodeLens>>> {
         let uri = params.text_document.uri;
         let Some((text, resolved, _)) = self.get_document_data(&uri) else {
             return Ok(None);

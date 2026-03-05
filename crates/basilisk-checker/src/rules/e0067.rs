@@ -53,10 +53,10 @@ impl Rule for EnumNonMemberInLiteral {
 
         // Check module-level annotated variables for `Literal[ClassName.X]` annotations.
         for var in &module.module_vars {
-            let Some(ann_span) = var.annotation_span else { continue };
-            let Some(ann_text) =
-                source.get(ann_span.start as usize..ann_span.end as usize)
-            else {
+            let Some(ann_span) = var.annotation_span else {
+                continue;
+            };
+            let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
                 continue;
             };
             // Parse `Literal[ClassName.member]` from the annotation text.
@@ -65,12 +65,7 @@ impl Rule for EnumNonMemberInLiteral {
                     continue;
                 };
                 if is_non_member(cls, member_name) {
-                    diagnostics.push(make_diagnostic(
-                        ann_span,
-                        class_name,
-                        member_name,
-                        path,
-                    ));
+                    diagnostics.push(make_diagnostic(ann_span, class_name, member_name, path));
                 }
             }
         }
@@ -80,18 +75,15 @@ impl Rule for EnumNonMemberInLiteral {
             if call.arg_count != 2 {
                 continue;
             }
-            let Some(expected) = &call.expected_type else { continue };
+            let Some(expected) = &call.expected_type else {
+                continue;
+            };
             if let Some((class_name, member_name)) = parse_literal_class_member(expected.trim()) {
                 let Some(cls) = enum_classes.get(class_name) else {
                     continue;
                 };
                 if is_non_member(cls, member_name) {
-                    diagnostics.push(make_diagnostic(
-                        call.span,
-                        class_name,
-                        member_name,
-                        path,
-                    ));
+                    diagnostics.push(make_diagnostic(call.span, class_name, member_name, path));
                 }
             }
         }
@@ -165,8 +157,8 @@ fn is_non_member(cls: &ClassInfo, member_name: &str) -> bool {
 
     // Class body attributes explicitly declared with `nonmember(...)`, lambda, or descriptor.
     if cls.attributes.iter().any(|a| {
-            a.name == member_name
-                && (a.rhs_is_nonmember_call || a.rhs_is_lambda || a.rhs_is_descriptor_call)
+        a.name == member_name
+            && (a.rhs_is_nonmember_call || a.rhs_is_lambda || a.rhs_is_descriptor_call)
     }) {
         return true;
     }

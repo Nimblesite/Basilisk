@@ -9,7 +9,8 @@ use tower_lsp::lsp_types::{
 ///
 /// Detects if the cursor is inside a function call `(...)` and returns
 /// the function signature with the active parameter highlighted.
-#[must_use] pub fn signature_help_at(
+#[must_use]
+pub fn signature_help_at(
     resolved: &ResolvedModule,
     source: &str,
     byte_offset: usize,
@@ -76,12 +77,7 @@ fn extract_callee(text: &str) -> Option<String> {
         None
     } else {
         // Return just the last segment for method calls (e.g. "self.greet" → "greet")
-        Some(
-            name.rsplit('.')
-                .next()
-                .unwrap_or(&name)
-                .to_owned(),
-        )
+        Some(name.rsplit('.').next().unwrap_or(&name).to_owned())
     }
 }
 
@@ -172,7 +168,11 @@ fn display_params(func: &FunctionInfo, source: &str) -> Vec<String> {
     if let Some(ref va) = func.vararg {
         let s = if let Some(ann_span) = va.annotation_span {
             source
-                .get(ann_span.start as usize..ann_span.end as usize).map_or_else(|| format!("*{}", va.name), |ann| format!("*{}: {}", va.name, ann.trim()))
+                .get(ann_span.start as usize..ann_span.end as usize)
+                .map_or_else(
+                    || format!("*{}", va.name),
+                    |ann| format!("*{}: {}", va.name, ann.trim()),
+                )
         } else {
             format!("*{}", va.name)
         };
@@ -182,7 +182,11 @@ fn display_params(func: &FunctionInfo, source: &str) -> Vec<String> {
     if let Some(ref kw) = func.kwarg {
         let s = if let Some(ann_span) = kw.annotation_span {
             source
-                .get(ann_span.start as usize..ann_span.end as usize).map_or_else(|| format!("**{}", kw.name), |ann| format!("**{}: {}", kw.name, ann.trim()))
+                .get(ann_span.start as usize..ann_span.end as usize)
+                .map_or_else(
+                    || format!("**{}", kw.name),
+                    |ann| format!("**{}: {}", kw.name, ann.trim()),
+                )
         } else {
             format!("**{}", kw.name)
         };

@@ -36,8 +36,7 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
                 .to_owned(),
         ),
         note: Some(
-            "PEP 484: `NewType` accepts only proper concrete classes as the base type"
-                .to_owned(),
+            "PEP 484: `NewType` accepts only proper concrete classes as the base type".to_owned(),
         ),
     }
 }
@@ -131,7 +130,9 @@ fn has_top_level_union(s: &str) -> bool {
 }
 
 fn is_typevar_parameterized_subscript(s: &str) -> bool {
-    let Some(bracket_pos) = s.find('[') else { return false };
+    let Some(bracket_pos) = s.find('[') else {
+        return false;
+    };
     let base_name = s[..bracket_pos].trim();
     if !base_name.chars().all(|c| c.is_alphanumeric() || c == '_') {
         return false;
@@ -217,7 +218,10 @@ fn check_newtype_call(
     if let Some(base_text) = span_text(source, info.base_type_span) {
         if let Some(reason) = is_invalid_base(base_text.trim(), typeddict_names) {
             diagnostics.push(make_diagnostic(
-                format!("Invalid base type for `NewType` `{}`: {reason}", info.lhs_name),
+                format!(
+                    "Invalid base type for `NewType` `{}`: {reason}",
+                    info.lhs_name
+                ),
                 info.span,
                 path,
             ));
@@ -433,7 +437,9 @@ fn check_isinstance_with_newtype(
 
 /// Returns `true` if the annotation text looks like `NewTypeName[...]`.
 fn is_newtype_subscript(ann: &str, newtype_names: &std::collections::HashSet<&str>) -> bool {
-    let Some(bracket_pos) = ann.find('[') else { return false };
+    let Some(bracket_pos) = ann.find('[') else {
+        return false;
+    };
     let name_part = ann[..bracket_pos].trim();
     newtype_names.contains(name_part)
 }
@@ -466,7 +472,8 @@ fn check_newtype_call_arg_types(
                 severity: Severity::Error,
                 message: format!(
                     "Argument to `{}` ({}) is not compatible with its base type `{base_type}`",
-                    call.callee, arg_text.trim()
+                    call.callee,
+                    arg_text.trim()
                 ),
                 span: call.span,
                 path: path.to_owned(),
@@ -474,9 +481,7 @@ fn check_newtype_call_arg_types(
                     "Pass a value of type `{base_type}` to the `{}` constructor",
                     call.callee
                 )),
-                note: Some(
-                    "NewType constructors accept only values of the base type".to_owned(),
-                ),
+                note: Some("NewType constructors accept only values of the base type".to_owned()),
             });
         }
     }

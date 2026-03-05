@@ -1,7 +1,7 @@
 //! Type inference engine for Basilisk.
 
-use basilisk_resolver::{RhsKind, VariableInfo};
 use crate::types::InferredType;
+use basilisk_resolver::{RhsKind, VariableInfo};
 
 /// Infers the type of a right-hand-side expression.
 #[must_use]
@@ -14,10 +14,9 @@ pub fn infer_rhs(rhs: &RhsKind) -> InferredType {
         RhsKind::BytesLiteral => InferredType::Bytes,
         RhsKind::NoneValue => InferredType::None_,
         RhsKind::EmptyList => InferredType::List(Box::new(InferredType::Never)),
-        RhsKind::EmptyDict => InferredType::Dict(
-            Box::new(InferredType::Never),
-            Box::new(InferredType::Never)
-        ),
+        RhsKind::EmptyDict => {
+            InferredType::Dict(Box::new(InferredType::Never), Box::new(InferredType::Never))
+        }
         RhsKind::List(elements) => crate::collection_inference::infer_list_type(elements),
         RhsKind::Set(elements) => crate::collection_inference::infer_set_type(elements),
         RhsKind::Dict(pairs) => crate::collection_inference::infer_dict_type(pairs),
@@ -42,14 +41,14 @@ pub fn infer_rhs(rhs: &RhsKind) -> InferredType {
 pub fn check_annotated_variable(var_info: &VariableInfo) -> Result<(), String> {
     if var_info.has_annotation {
         let rhs_type = infer_rhs(&var_info.rhs_kind);
-        
+
         // For now, we'll return an error if the RHS type is Unknown
         // In a real implementation, we would check assignability against the annotation
         if matches!(rhs_type, InferredType::Unknown) {
             return Err("RHS type cannot be inferred".to_string());
         }
     }
-    
+
     Ok(())
 }
 
@@ -97,10 +96,8 @@ impl FlowUnionTracker {
 
     /// Records a variable assignment in the current branch
     pub fn record_assignment(&mut self, var_name: &str, var_type: InferredType) {
-        let types = self.variable_types
-            .entry(var_name.to_string())
-            .or_default();
-        
+        let types = self.variable_types.entry(var_name.to_string()).or_default();
+
         types.push(var_type);
     }
 
@@ -120,7 +117,7 @@ impl FlowUnionTracker {
                         deduplicated_types.push(t.clone());
                     }
                 }
-                
+
                 if deduplicated_types.len() == 1 {
                     deduplicated_types[0].clone()
                 } else {
@@ -153,18 +150,17 @@ pub fn infer_flow_union_types(
     assignments: &[(String, InferredType)],
 ) -> std::collections::HashMap<String, InferredType> {
     let mut tracker = FlowUnionTracker::new();
-    
+
     for (var_name, var_type) in assignments {
         tracker.record_assignment(var_name, var_type.clone());
     }
-    
+
     let mut result = std::collections::HashMap::new();
     for var_name in tracker.variable_types.keys() {
         if let Some(union_type) = tracker.get_union_type(var_name) {
             result.insert(var_name.clone(), union_type);
         }
     }
-    
+
     result
 }
-

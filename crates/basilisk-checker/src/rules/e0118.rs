@@ -41,8 +41,7 @@ pub(crate) struct SuperAbstractCall;
 
 impl Rule for SuperAbstractCall {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let Ok(parsed) =
-            basilisk_parser::parse_source(module.source.clone(), module.path.clone())
+        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
         else {
             return;
         };
@@ -78,12 +77,7 @@ impl Rule for SuperAbstractCall {
                     parent_stubs.extend(stubs.iter().cloned());
                 }
                 // Also check transitive bases.
-                collect_transitive_stubs(
-                    &base,
-                    &class_bases,
-                    &abstract_stubs,
-                    &mut parent_stubs,
-                );
+                collect_transitive_stubs(&base, &class_bases, &abstract_stubs, &mut parent_stubs);
             }
 
             if parent_stubs.is_empty() {
@@ -95,21 +89,14 @@ impl Rule for SuperAbstractCall {
                 let Stmt::FunctionDef(func) = body_stmt else {
                     continue;
                 };
-                find_super_calls(
-                    &func.body,
-                    &parent_stubs,
-                    &module.path,
-                    diagnostics,
-                );
+                find_super_calls(&func.body, &parent_stubs, &module.path, diagnostics);
             }
         }
     }
 }
 
 /// Collect abstract methods with stub bodies (`...` or `pass`) per class.
-fn collect_abstract_stub_methods(
-    stmts: &[Stmt],
-) -> HashMap<String, HashSet<String>> {
+fn collect_abstract_stub_methods(stmts: &[Stmt]) -> HashMap<String, HashSet<String>> {
     let mut result: HashMap<String, HashSet<String>> = HashMap::new();
     for stmt in stmts {
         let Stmt::ClassDef(cls) = stmt else { continue };
@@ -118,9 +105,9 @@ fn collect_abstract_stub_methods(
             let Stmt::FunctionDef(func) = body_stmt else {
                 continue;
             };
-            let is_abstract = func.decorator_list.iter().any(|d| {
-                matches!(&d.expression, Expr::Name(n) if n.id.as_str() == "abstractmethod")
-            });
+            let is_abstract = func.decorator_list.iter().any(
+                |d| matches!(&d.expression, Expr::Name(n) if n.id.as_str() == "abstractmethod"),
+            );
             if is_abstract && is_stub_body(&func.body) {
                 stubs.insert(func.name.id.to_string());
             }

@@ -76,8 +76,8 @@ fn contains_self(text: &str) -> bool {
     let mut i = 0;
     while i + 4 <= bytes.len() {
         if bytes[i..i + 4] == *target {
-            let before_ok = i == 0
-                || (!bytes[i - 1].is_ascii_alphanumeric() && bytes[i - 1] != b'_');
+            let before_ok =
+                i == 0 || (!bytes[i - 1].is_ascii_alphanumeric() && bytes[i - 1] != b'_');
             let after_ok = i + 4 >= bytes.len()
                 || (!bytes[i + 4].is_ascii_alphanumeric() && bytes[i + 4] != b'_');
             if before_ok && after_ok {
@@ -189,18 +189,30 @@ fn check_functions_self_usage(
         match &func.class_name {
             None => {
                 check_func_annotations_for_self(
-                    func, source, path, "module-level function", diagnostics,
+                    func,
+                    source,
+                    path,
+                    "module-level function",
+                    diagnostics,
                 );
             }
             Some(class_name) => {
                 let is_static = func.decorators.iter().any(|d| d == "staticmethod");
                 if is_static {
                     check_func_annotations_for_self(
-                        func, source, path, "static method", diagnostics,
+                        func,
+                        source,
+                        path,
+                        "static method",
+                        diagnostics,
                     );
                 } else if metaclass_names.contains(class_name.as_str()) {
                     check_func_annotations_for_self(
-                        func, source, path, "metaclass method", diagnostics,
+                        func,
+                        source,
+                        path,
+                        "metaclass method",
+                        diagnostics,
                     );
                 } else {
                     check_typevar_annotated_self(func, source, path, typevar_names, diagnostics);

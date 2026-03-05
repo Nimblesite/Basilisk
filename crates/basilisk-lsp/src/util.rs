@@ -48,10 +48,8 @@ fn in_span(offset: usize, span: Span) -> bool {
 ///
 /// Searches functions (and their parameters), classes (and their attributes),
 /// module variables, and imports. Returns the first match.
-#[must_use] pub fn find_symbol_at_offset(
-    resolved: &ResolvedModule,
-    offset: usize,
-) -> Option<SymbolHit<'_>> {
+#[must_use]
+pub fn find_symbol_at_offset(resolved: &ResolvedModule, offset: usize) -> Option<SymbolHit<'_>> {
     // Check function names and their parameters.
     for func in &resolved.functions {
         if in_span(offset, func.name_span) {
@@ -106,7 +104,8 @@ fn in_span(offset: usize, span: Span) -> bool {
 /// Find a symbol definition by name. Searches functions, classes, variables.
 ///
 /// Returns the definition `SymbolHit` for the first match.
-#[must_use] pub fn find_definition_by_name<'a>(
+#[must_use]
+pub fn find_definition_by_name<'a>(
     resolved: &'a ResolvedModule,
     name: &str,
 ) -> Option<SymbolHit<'a>> {
@@ -134,7 +133,8 @@ fn in_span(offset: usize, span: Span) -> bool {
 /// Extract the identifier at a byte offset from source text.
 ///
 /// Expands left and right from the offset to capture the full identifier.
-#[must_use] pub fn identifier_at_offset(source: &str, offset: usize) -> Option<String> {
+#[must_use]
+pub fn identifier_at_offset(source: &str, offset: usize) -> Option<String> {
     let bytes = source.as_bytes();
     if offset >= bytes.len() {
         return None;
@@ -161,7 +161,8 @@ fn is_ident_char(b: u8) -> bool {
 // ── Type signature formatting ────────────────────────────────────────────────
 
 /// Format a hover markdown string for a symbol hit.
-#[must_use] pub fn format_type_signature(hit: &SymbolHit<'_>, source: &str) -> String {
+#[must_use]
+pub fn format_type_signature(hit: &SymbolHit<'_>, source: &str) -> String {
     match hit {
         SymbolHit::Function(func) => format_function_signature(func, source),
         SymbolHit::Class(class) => format_class_signature(class),
@@ -257,11 +258,7 @@ fn format_parameter_signature(param: &ParameterInfo, source: &str) -> String {
     sig
 }
 
-fn format_attribute_signature(
-    class: &ClassInfo,
-    attr: &AttributeInfo,
-    source: &str,
-) -> String {
+fn format_attribute_signature(class: &ClassInfo, attr: &AttributeInfo, source: &str) -> String {
     let mut sig = format!("(property) {}.{}", class.name, attr.name);
     if let Some(ann) = annotation_text(attr.annotation_span, source) {
         let _ = write!(sig, ": {ann}");
@@ -278,7 +275,11 @@ fn format_import_signature(imp: &ImportInfo) -> String {
     if imp.names.is_empty() {
         format!("(module) import {}", imp.module)
     } else {
-        format!("(import) from {} import {}", imp.module, imp.names.join(", "))
+        format!(
+            "(import) from {} import {}",
+            imp.module,
+            imp.names.join(", ")
+        )
     }
 }
 
@@ -310,7 +311,8 @@ fn infer_rhs_display(rhs: &basilisk_resolver::RhsKind) -> &'static str {
 // ── Position conversion ──────────────────────────────────────────────────────
 
 /// Convert a byte offset to an LSP position (UTF-16 code units).
-#[must_use] pub fn byte_offset_to_position(text: &str, byte_offset: usize) -> Position {
+#[must_use]
+pub fn byte_offset_to_position(text: &str, byte_offset: usize) -> Position {
     let clamped = byte_offset.min(text.len());
     let before = &text[..clamped];
     let line = u32::try_from(before.chars().filter(|&c| c == '\n').count()).unwrap_or(u32::MAX);
@@ -323,7 +325,8 @@ fn infer_rhs_display(rhs: &basilisk_resolver::RhsKind) -> &'static str {
 }
 
 /// Convert an LSP position to a byte offset.
-#[must_use] pub fn position_to_byte_offset(text: &str, pos: Position) -> usize {
+#[must_use]
+pub fn position_to_byte_offset(text: &str, pos: Position) -> usize {
     let mut line = 0u32;
     let mut char_cu = 0u32;
     let mut byte_pos = 0usize;
@@ -347,7 +350,8 @@ fn infer_rhs_display(rhs: &basilisk_resolver::RhsKind) -> &'static str {
 }
 
 /// Convert a `Span` to an LSP `Range`.
-#[must_use] pub fn span_to_range(text: &str, span: Span) -> tower_lsp::lsp_types::Range {
+#[must_use]
+pub fn span_to_range(text: &str, span: Span) -> tower_lsp::lsp_types::Range {
     tower_lsp::lsp_types::Range {
         start: byte_offset_to_position(text, span.start as usize),
         end: byte_offset_to_position(text, span.end as usize),

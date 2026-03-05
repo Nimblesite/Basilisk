@@ -48,7 +48,9 @@ fn has_cycle_inner(
         if neighbour == target {
             return true;
         }
-        if visited.insert(neighbour.to_owned()) && has_cycle_inner(target, neighbour, graph, visited) {
+        if visited.insert(neighbour.to_owned())
+            && has_cycle_inner(target, neighbour, graph, visited)
+        {
             return true;
         }
     }
@@ -66,7 +68,9 @@ fn has_cycle(start: &str, graph: &HashMap<&str, Vec<&str>>) -> bool {
         if neighbour == start {
             return true;
         }
-        if visited.insert(neighbour.to_owned()) && has_cycle_inner(start, neighbour, graph, &mut visited) {
+        if visited.insert(neighbour.to_owned())
+            && has_cycle_inner(start, neighbour, graph, &mut visited)
+        {
             return true;
         }
     }
@@ -107,15 +111,11 @@ impl Rule for CyclicalTypeAliasReference {
                 diagnostics.push(Diagnostic {
                     code: CODE.clone(),
                     severity: Severity::Error,
-                    message: format!(
-                        "Type alias `{}` creates a cyclical reference",
-                        alias.name
-                    ),
+                    message: format!("Type alias `{}` creates a cyclical reference", alias.name),
                     span: alias.span,
                     path: module.path.clone(),
                     help: Some(
-                        "Remove the self-reference or break the mutual reference cycle"
-                            .to_owned(),
+                        "Remove the self-reference or break the mutual reference cycle".to_owned(),
                     ),
                     note: Some(
                         "A TypeAlias whose RHS forward-references itself (directly or \

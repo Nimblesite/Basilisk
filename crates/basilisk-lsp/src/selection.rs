@@ -35,11 +35,7 @@ pub fn selection_ranges(
 /// that contain the offset, sorts them from largest to smallest, then chains
 /// them as a linked list from innermost to outermost. The outermost entry is
 /// always the full document range.
-fn build_selection_range(
-    resolved: &ResolvedModule,
-    source: &str,
-    offset: usize,
-) -> SelectionRange {
+fn build_selection_range(resolved: &ResolvedModule, source: &str, offset: usize) -> SelectionRange {
     let mut spans = collect_containing_spans(resolved, offset);
 
     // Sort by span size descending (largest first) so we build the chain

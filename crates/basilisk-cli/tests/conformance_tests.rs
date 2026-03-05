@@ -262,7 +262,11 @@ fn run_file(path: &Path) -> FileResult {
 
     let file_name = path.file_name().unwrap_or_default().to_string_lossy();
     if missed > 0 {
-        let missed_lines: Vec<usize> = required.iter().filter(|l| !diag_lines.contains(l)).copied().collect();
+        let missed_lines: Vec<usize> = required
+            .iter()
+            .filter(|l| !diag_lines.contains(l))
+            .copied()
+            .collect();
         println!("  DEBUG {file_name}: missed={missed} lines={missed_lines:?}");
     }
 

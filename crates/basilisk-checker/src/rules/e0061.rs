@@ -54,12 +54,17 @@ impl Rule for AssertTypeEnumLiteralMismatch {
             }
 
             // Get the expected type from the assert_type call
-            let Some(expected_type) = &call.expected_type else { continue };
+            let Some(expected_type) = &call.expected_type else {
+                continue;
+            };
 
             // Check if this is a Literal[Enum.MEMBER] pattern
-            if let Some((class_name, member_name)) = parse_literal_enum_member(expected_type.trim()) {
+            if let Some((class_name, member_name)) = parse_literal_enum_member(expected_type.trim())
+            {
                 // Verify this is a valid enum class
-                let Some(enum_class) = enum_classes.get(class_name) else { continue };
+                let Some(enum_class) = enum_classes.get(class_name) else {
+                    continue;
+                };
 
                 // Check if the member exists in the enum
                 if !is_valid_enum_member(enum_class, member_name) {
@@ -69,12 +74,7 @@ impl Rule for AssertTypeEnumLiteralMismatch {
                 // Now check if the first argument (expression) is already typed as the enum
                 // This would require type inference which isn't fully implemented yet
                 // For now, we'll emit the diagnostic for any Literal[Enum.MEMBER] pattern
-                diagnostics.push(make_diagnostic(
-                    call.span,
-                    class_name,
-                    member_name,
-                    path,
-                ));
+                diagnostics.push(make_diagnostic(call.span, class_name, member_name, path));
             }
         }
     }
@@ -88,32 +88,32 @@ fn parse_literal_enum_member(ann: &str) -> Option<(&str, &str)> {
     // Strip `Literal[` prefix and `]` suffix
     let inner = ann.strip_prefix("Literal[")?;
     let inner = inner.strip_suffix(']')?;
-    
+
     // Only handle single-item Literals (no comma means no union)
     if inner.contains(',') {
         return None;
     }
-    
+
     // Must have exactly one `.` separator
     let dot_pos = inner.find('.')?;
     let class_name = &inner[..dot_pos];
     let member_name = &inner[dot_pos + 1..];
-    
+
     // Both parts must be non-empty simple identifiers
     if class_name.is_empty() || member_name.is_empty() {
         return None;
     }
-    
+
     // Class name must not contain dots or brackets
     if class_name.contains('.') || class_name.contains('[') {
         return None;
     }
-    
+
     // Member name must not contain dots or brackets
     if member_name.contains('.') || member_name.contains('[') {
         return None;
     }
-    
+
     Some((class_name, member_name))
 }
 
@@ -122,7 +122,10 @@ fn is_valid_enum_member(class_info: &basilisk_resolver::ClassInfo, member_name: 
     // Check if it's a regular enum member (not a method, property, etc.)
     // For now, we'll assume any attribute that's not a method is a valid member
     // This is a simplification - real implementation would need more sophisticated checking
-    !class_info.method_names.iter().any(|m| m.as_str() == member_name)
+    !class_info
+        .method_names
+        .iter()
+        .any(|m| m.as_str() == member_name)
 }
 
 fn make_diagnostic(span: Span, class_name: &str, member_name: &str, path: &str) -> Diagnostic {

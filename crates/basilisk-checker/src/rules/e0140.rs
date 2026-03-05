@@ -22,8 +22,7 @@ pub(crate) struct CallableAssignmentViolation;
 
 impl Rule for CallableAssignmentViolation {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let Ok(parsed) =
-            basilisk_parser::parse_source(module.source.clone(), module.path.clone())
+        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
         else {
             return;
         };
@@ -73,7 +72,9 @@ impl ModuleContext {
         for stmt in stmts {
             match stmt {
                 Stmt::FunctionDef(func) => {
-                    if let Some(sig) = extract_func_sig(func, false) { functions.push(sig); }
+                    if let Some(sig) = extract_func_sig(func, false) {
+                        functions.push(sig);
+                    }
                 }
                 Stmt::ClassDef(cls) => {
                     if is_protocol_class(cls) {
@@ -85,7 +86,11 @@ impl ModuleContext {
                 _ => {}
             }
         }
-        Self { functions, protocols, non_protocol_classes }
+        Self {
+            functions,
+            protocols,
+            non_protocol_classes,
+        }
     }
     fn find_func(&self, name: &str) -> Option<&FuncSig> {
         self.functions.iter().find(|f| f.name == name)
@@ -102,14 +107,18 @@ fn is_protocol_class(cls: &ast::StmtClassDef) -> bool {
     cls.arguments.as_ref().is_some_and(|args| {
         args.args.iter().any(|arg| match arg {
             Expr::Name(name) => name.id.as_str() == "Protocol",
-            Expr::Subscript(sub) => matches!(sub.value.as_ref(), Expr::Name(n) if n.id.as_str() == "Protocol"),
+            Expr::Subscript(sub) => {
+                matches!(sub.value.as_ref(), Expr::Name(n) if n.id.as_str() == "Protocol")
+            }
             _ => false,
         })
     })
 }
 
 fn has_call_method(cls: &ast::StmtClassDef) -> bool {
-    cls.body.iter().any(|stmt| matches!(stmt, Stmt::FunctionDef(f) if f.name.as_str() == "__call__"))
+    cls.body
+        .iter()
+        .any(|stmt| matches!(stmt, Stmt::FunctionDef(f) if f.name.as_str() == "__call__"))
 }
 
 fn extract_protocol_info(cls: &ast::StmtClassDef) -> ProtocolInfo {
@@ -124,7 +133,10 @@ fn extract_protocol_info(cls: &ast::StmtClassDef) -> ProtocolInfo {
             }
             Stmt::AnnAssign(ann) => {
                 if let Some(attr_name) = expr_name(&ann.target) {
-                    if !matches!(attr_name, "__name__" | "__module__" | "__qualname__" | "__annotations__" | "__doc__") {
+                    if !matches!(
+                        attr_name,
+                        "__name__" | "__module__" | "__qualname__" | "__annotations__" | "__doc__"
+                    ) {
                         has_extra_attrs = true;
                     }
                 }
@@ -132,11 +144,17 @@ fn extract_protocol_info(cls: &ast::StmtClassDef) -> ProtocolInfo {
             _ => {}
         }
     }
-    ProtocolInfo { name: cls.name.to_string(), call_sig, has_extra_attrs }
+    ProtocolInfo {
+        name: cls.name.to_string(),
+        call_sig,
+        has_extra_attrs,
+    }
 }
 
 fn is_overload_decorated(func: &ast::StmtFunctionDef) -> bool {
-    func.decorator_list.iter().any(|dec| matches!(&dec.expression, Expr::Name(n) if n.id.as_str() == "overload"))
+    func.decorator_list
+        .iter()
+        .any(|dec| matches!(&dec.expression, Expr::Name(n) if n.id.as_str() == "overload"))
 }
 
 fn extract_func_sig(func: &ast::StmtFunctionDef, skip_self: bool) -> Option<FuncSig> {
@@ -144,26 +162,62 @@ fn extract_func_sig(func: &ast::StmtFunctionDef, skip_self: bool) -> Option<Func
     let mut positional_params = Vec::new();
     let mut kw_only_params = Vec::new();
     for (idx, param) in params.posonlyargs.iter().enumerate() {
-        if skip_self && idx == 0 && param.parameter.name.as_str() == "self" { continue; }
+        if skip_self && idx == 0 && param.parameter.name.as_str() == "self" {
+            continue;
+        }
         positional_params.push(mk_param(param, true));
     }
     for (idx, param) in params.args.iter().enumerate() {
-        if skip_self && positional_params.is_empty() && idx == 0 && param.parameter.name.as_str() == "self" { continue; }
+        if skip_self
+            && positional_params.is_empty()
+            && idx == 0
+            && param.parameter.name.as_str() == "self"
+        {
+            continue;
+        }
         positional_params.push(mk_param(param, false));
     }
-    for param in &params.kwonlyargs { kw_only_params.push(mk_param(param, false)); }
+    for param in &params.kwonlyargs {
+        kw_only_params.push(mk_param(param, false));
+    }
     let has_varargs = params.vararg.is_some();
-    let varargs_type = params.vararg.as_ref().and_then(|v| v.annotation.as_ref().map(|a| ann_str(a))).unwrap_or_default();
+    let varargs_type = params
+        .vararg
+        .as_ref()
+        .and_then(|v| v.annotation.as_ref().map(|a| ann_str(a)))
+        .unwrap_or_default();
     let has_kwargs = params.kwarg.is_some();
-    let kwargs_type = params.kwarg.as_ref().and_then(|k| k.annotation.as_ref().map(|a| ann_str(a))).unwrap_or_default();
-    let return_type = func.returns.as_ref().map(|r| ann_str(r)).unwrap_or_default();
-    Some(FuncSig { name: func.name.to_string(), positional_params, has_varargs, varargs_type, has_kwargs, kwargs_type, kw_only_params, return_type })
+    let kwargs_type = params
+        .kwarg
+        .as_ref()
+        .and_then(|k| k.annotation.as_ref().map(|a| ann_str(a)))
+        .unwrap_or_default();
+    let return_type = func
+        .returns
+        .as_ref()
+        .map(|r| ann_str(r))
+        .unwrap_or_default();
+    Some(FuncSig {
+        name: func.name.to_string(),
+        positional_params,
+        has_varargs,
+        varargs_type,
+        has_kwargs,
+        kwargs_type,
+        kw_only_params,
+        return_type,
+    })
 }
 
 fn mk_param(param: &ast::ParameterWithDefault, is_pos_only: bool) -> ParamInfo {
     ParamInfo {
         name: param.parameter.name.to_string(),
-        type_annotation: param.parameter.annotation.as_ref().map(|a| ann_str(a)).unwrap_or_default(),
+        type_annotation: param
+            .parameter
+            .annotation
+            .as_ref()
+            .map(|a| ann_str(a))
+            .unwrap_or_default(),
         has_default: param.default.is_some(),
         is_positional_only: is_pos_only,
     }
@@ -178,15 +232,23 @@ fn check_stmts(stmts: &[Stmt], ctx: &ModuleContext, path: &str, diag: &mut Vec<D
                     annotations.push((name.to_owned(), (*ann.annotation).clone()));
                 }
                 if let Some(value) = &ann.value {
-                    let span = Span { start: ann.range().start().to_u32(), end: ann.range().end().to_u32() };
+                    let span = Span {
+                        start: ann.range().start().to_u32(),
+                        end: ann.range().end().to_u32(),
+                    };
                     check_assignment(&ann.annotation, value, ctx, path, diag, span);
                 }
             }
             Stmt::Assign(assign) => {
                 if assign.targets.len() == 1 {
                     if let Some(target_name) = expr_name(&assign.targets[0]) {
-                        if let Some((_, prev_ann)) = annotations.iter().rev().find(|(n, _)| n == target_name) {
-                            let span = Span { start: assign.range().start().to_u32(), end: assign.range().end().to_u32() };
+                        if let Some((_, prev_ann)) =
+                            annotations.iter().rev().find(|(n, _)| n == target_name)
+                        {
+                            let span = Span {
+                                start: assign.range().start().to_u32(),
+                                end: assign.range().end().to_u32(),
+                            };
                             check_assignment(prev_ann, &assign.value, ctx, path, diag, span);
                         }
                     }
@@ -199,7 +261,12 @@ fn check_stmts(stmts: &[Stmt], ctx: &ModuleContext, path: &str, diag: &mut Vec<D
     }
 }
 
-fn check_stmts_in_func(stmts: &[Stmt], ctx: &ModuleContext, path: &str, diag: &mut Vec<Diagnostic>) {
+fn check_stmts_in_func(
+    stmts: &[Stmt],
+    ctx: &ModuleContext,
+    path: &str,
+    diag: &mut Vec<Diagnostic>,
+) {
     let mut local_annotations: Vec<(String, Expr)> = Vec::new();
     for stmt in stmts {
         match stmt {
@@ -208,15 +275,25 @@ fn check_stmts_in_func(stmts: &[Stmt], ctx: &ModuleContext, path: &str, diag: &m
                     local_annotations.push((name.to_owned(), (*ann.annotation).clone()));
                 }
                 if let Some(value) = &ann.value {
-                    let span = Span { start: ann.range().start().to_u32(), end: ann.range().end().to_u32() };
+                    let span = Span {
+                        start: ann.range().start().to_u32(),
+                        end: ann.range().end().to_u32(),
+                    };
                     check_assignment(&ann.annotation, value, ctx, path, diag, span);
                 }
             }
             Stmt::Assign(assign) => {
                 if assign.targets.len() == 1 {
                     if let Some(target_name) = expr_name(&assign.targets[0]) {
-                        if let Some((_, prev_ann)) = local_annotations.iter().rev().find(|(n, _)| n == target_name) {
-                            let span = Span { start: assign.range().start().to_u32(), end: assign.range().end().to_u32() };
+                        if let Some((_, prev_ann)) = local_annotations
+                            .iter()
+                            .rev()
+                            .find(|(n, _)| n == target_name)
+                        {
+                            let span = Span {
+                                start: assign.range().start().to_u32(),
+                                end: assign.range().end().to_u32(),
+                            };
                             check_assignment(prev_ann, &assign.value, ctx, path, diag, span);
                         }
                     }
@@ -227,7 +304,14 @@ fn check_stmts_in_func(stmts: &[Stmt], ctx: &ModuleContext, path: &str, diag: &m
     }
 }
 
-fn check_assignment(annotation: &Expr, value: &Expr, ctx: &ModuleContext, path: &str, diag: &mut Vec<Diagnostic>, span: Span) {
+fn check_assignment(
+    annotation: &Expr,
+    value: &Expr,
+    ctx: &ModuleContext,
+    path: &str,
+    diag: &mut Vec<Diagnostic>,
+    span: Span,
+) {
     let value_name = expr_name(value);
     let ann_s = ann_str(annotation);
 
@@ -249,9 +333,15 @@ fn check_assignment(annotation: &Expr, value: &Expr, ctx: &ModuleContext, path: 
         if let Some(fname) = value_name {
             if ctx.find_func(fname).is_some() {
                 diag.push(Diagnostic {
-                    code: CODE.clone(), severity: Severity::Error,
-                    message: format!("Cannot assign function `{fname}` to non-protocol type `{base}`"),
-                    span, path: path.to_owned(), help: None, note: None,
+                    code: CODE.clone(),
+                    severity: Severity::Error,
+                    message: format!(
+                        "Cannot assign function `{fname}` to non-protocol type `{base}`"
+                    ),
+                    span,
+                    path: path.to_owned(),
+                    help: None,
+                    note: None,
                 });
             }
         }
@@ -275,26 +365,57 @@ struct CallableTypeInfo {
 }
 
 fn parse_callable_type(s: &str) -> Option<CallableTypeInfo> {
-    if !s.starts_with("Callable[") { return None; }
+    if !s.starts_with("Callable[") {
+        return None;
+    }
     let inner = &s["Callable[".len()..s.len().checked_sub(1)?];
     let (first, ret) = split_top_comma(inner)?;
     let first = first.trim();
     let ret = ret.trim().to_owned();
     if first == "..." {
-        return Some(CallableTypeInfo { param_types: None, concatenate_prefix: Vec::new(), is_open_ended: true, return_type: ret });
+        return Some(CallableTypeInfo {
+            param_types: None,
+            concatenate_prefix: Vec::new(),
+            is_open_ended: true,
+            return_type: ret,
+        });
     }
     if first.starts_with("Concatenate[") {
         let ci = &first["Concatenate[".len()..first.len().checked_sub(1)?];
         let parts = split_all_commas(ci);
         let mut prefix = Vec::new();
         let mut open = false;
-        for p in &parts { let p = p.trim(); if p == "..." { open = true; } else { prefix.push(p.to_owned()); } }
-        return Some(CallableTypeInfo { param_types: None, concatenate_prefix: prefix, is_open_ended: open, return_type: ret });
+        for p in &parts {
+            let p = p.trim();
+            if p == "..." {
+                open = true;
+            } else {
+                prefix.push(p.to_owned());
+            }
+        }
+        return Some(CallableTypeInfo {
+            param_types: None,
+            concatenate_prefix: prefix,
+            is_open_ended: open,
+            return_type: ret,
+        });
     }
     if first.starts_with('[') && first.ends_with(']') {
         let li = &first[1..first.len() - 1];
-        let types = if li.trim().is_empty() { Vec::new() } else { split_all_commas(li).iter().map(|s| s.trim().to_owned()).collect() };
-        return Some(CallableTypeInfo { param_types: Some(types), concatenate_prefix: Vec::new(), is_open_ended: false, return_type: ret });
+        let types = if li.trim().is_empty() {
+            Vec::new()
+        } else {
+            split_all_commas(li)
+                .iter()
+                .map(|s| s.trim().to_owned())
+                .collect()
+        };
+        return Some(CallableTypeInfo {
+            param_types: Some(types),
+            concatenate_prefix: Vec::new(),
+            is_open_ended: false,
+            return_type: ret,
+        });
     }
     None
 }
@@ -302,7 +423,12 @@ fn parse_callable_type(s: &str) -> Option<CallableTypeInfo> {
 fn split_top_comma(s: &str) -> Option<(&str, &str)> {
     let mut d: usize = 0;
     for (i, c) in s.char_indices() {
-        match c { '[' | '(' => d += 1, ']' | ')' => d = d.saturating_sub(1), ',' if d == 0 => return Some((&s[..i], &s[i+1..])), _ => {} }
+        match c {
+            '[' | '(' => d += 1,
+            ']' | ')' => d = d.saturating_sub(1),
+            ',' if d == 0 => return Some((&s[..i], &s[i + 1..])),
+            _ => {}
+        }
     }
     None
 }
@@ -312,13 +438,28 @@ fn split_all_commas(s: &str) -> Vec<&str> {
     let mut parts = Vec::new();
     let mut start = 0;
     for (i, c) in s.char_indices() {
-        match c { '[' | '(' => d += 1, ']' | ')' => d = d.saturating_sub(1), ',' if d == 0 => { parts.push(&s[start..i]); start = i+1; } _ => {} }
+        match c {
+            '[' | '(' => d += 1,
+            ']' | ')' => d = d.saturating_sub(1),
+            ',' if d == 0 => {
+                parts.push(&s[start..i]);
+                start = i + 1;
+            }
+            _ => {}
+        }
     }
     parts.push(&s[start..]);
     parts
 }
 
-fn check_callable_compat(ci: &CallableTypeInfo, func: &FuncSig, ann: &str, path: &str, diag: &mut Vec<Diagnostic>, span: Span) {
+fn check_callable_compat(
+    ci: &CallableTypeInfo,
+    func: &FuncSig,
+    ann: &str,
+    path: &str,
+    diag: &mut Vec<Diagnostic>,
+    span: Span,
+) {
     if !ci.concatenate_prefix.is_empty() {
         let req = ci.concatenate_prefix.len();
         let fpos = func.positional_params.len();
@@ -348,7 +489,11 @@ fn check_callable_compat(ci: &CallableTypeInfo, func: &FuncSig, ann: &str, path:
     }
     if let Some(ptypes) = &ci.param_types {
         let exp = ptypes.len();
-        let min = func.positional_params.iter().filter(|p| !p.has_default).count();
+        let min = func
+            .positional_params
+            .iter()
+            .filter(|p| !p.has_default)
+            .count();
         let max = func.positional_params.len();
         if exp < min {
             diag.push(Diagnostic { code: CODE.clone(), severity: Severity::Error,
@@ -362,42 +507,103 @@ fn check_callable_compat(ci: &CallableTypeInfo, func: &FuncSig, ann: &str, path:
     }
 }
 
-fn check_protocol_func_compat(proto: &ProtocolInfo, func: &FuncSig, path: &str, diag: &mut Vec<Diagnostic>, span: Span) {
+fn check_protocol_func_compat(
+    proto: &ProtocolInfo,
+    func: &FuncSig,
+    path: &str,
+    diag: &mut Vec<Diagnostic>,
+    span: Span,
+) {
     if proto.has_extra_attrs {
-        diag.push(Diagnostic { code: CODE.clone(), severity: Severity::Error,
-            message: format!("Function `{}` cannot satisfy protocol `{}`: protocol has extra attributes", func.name, proto.name),
-            span, path: path.to_owned(), help: None, note: None });
+        diag.push(Diagnostic {
+            code: CODE.clone(),
+            severity: Severity::Error,
+            message: format!(
+                "Function `{}` cannot satisfy protocol `{}`: protocol has extra attributes",
+                func.name, proto.name
+            ),
+            span,
+            path: path.to_owned(),
+            help: None,
+            note: None,
+        });
         return;
     }
-    let Some(target) = &proto.call_sig else { return; };
+    let Some(target) = &proto.call_sig else {
+        return;
+    };
 
     // *args check
     if target.has_varargs && !func.has_varargs && target.positional_params.is_empty() {
-        diag.push(Diagnostic { code: CODE.clone(), severity: Severity::Error,
-            message: format!("Function `{}` incompatible with `{}`: missing `*args`", func.name, proto.name),
-            span, path: path.to_owned(), help: None, note: None });
+        diag.push(Diagnostic {
+            code: CODE.clone(),
+            severity: Severity::Error,
+            message: format!(
+                "Function `{}` incompatible with `{}`: missing `*args`",
+                func.name, proto.name
+            ),
+            span,
+            path: path.to_owned(),
+            help: None,
+            note: None,
+        });
         return;
     }
     // **kwargs check
     if target.has_kwargs && !func.has_kwargs {
-        diag.push(Diagnostic { code: CODE.clone(), severity: Severity::Error,
-            message: format!("Function `{}` incompatible with `{}`: missing `**kwargs`", func.name, proto.name),
-            span, path: path.to_owned(), help: None, note: None });
+        diag.push(Diagnostic {
+            code: CODE.clone(),
+            severity: Severity::Error,
+            message: format!(
+                "Function `{}` incompatible with `{}`: missing `**kwargs`",
+                func.name, proto.name
+            ),
+            span,
+            path: path.to_owned(),
+            help: None,
+            note: None,
+        });
         return;
     }
     // Positional param count
-    let src_req = func.positional_params.iter().filter(|p| !p.has_default).count();
+    let src_req = func
+        .positional_params
+        .iter()
+        .filter(|p| !p.has_default)
+        .count();
     if src_req > target.positional_params.len() && !target.has_varargs {
-        diag.push(Diagnostic { code: CODE.clone(), severity: Severity::Error,
-            message: format!("Function `{}` incompatible with `{}`: too many required params", func.name, proto.name),
-            span, path: path.to_owned(), help: None, note: None });
+        diag.push(Diagnostic {
+            code: CODE.clone(),
+            severity: Severity::Error,
+            message: format!(
+                "Function `{}` incompatible with `{}`: too many required params",
+                func.name, proto.name
+            ),
+            span,
+            path: path.to_owned(),
+            help: None,
+            note: None,
+        });
         return;
     }
-    let tgt_req = target.positional_params.iter().filter(|p| !p.has_default).count();
+    let tgt_req = target
+        .positional_params
+        .iter()
+        .filter(|p| !p.has_default)
+        .count();
     if tgt_req > func.positional_params.len() && !func.has_varargs {
-        diag.push(Diagnostic { code: CODE.clone(), severity: Severity::Error,
-            message: format!("Function `{}` incompatible with `{}`: missing required params", func.name, proto.name),
-            span, path: path.to_owned(), help: None, note: None });
+        diag.push(Diagnostic {
+            code: CODE.clone(),
+            severity: Severity::Error,
+            message: format!(
+                "Function `{}` incompatible with `{}`: missing required params",
+                func.name, proto.name
+            ),
+            span,
+            path: path.to_owned(),
+            help: None,
+            note: None,
+        });
         return;
     }
     // Default arg check
@@ -405,9 +611,18 @@ fn check_protocol_func_compat(proto: &ProtocolInfo, func: &FuncSig, path: &str, 
         if tp.has_default {
             if let Some(sp) = func.positional_params.get(idx) {
                 if !sp.has_default && !func.has_varargs {
-                    diag.push(Diagnostic { code: CODE.clone(), severity: Severity::Error,
-                        message: format!("Function `{}` incompatible with `{}`: param `{}` needs default", func.name, proto.name, sp.name),
-                        span, path: path.to_owned(), help: None, note: None });
+                    diag.push(Diagnostic {
+                        code: CODE.clone(),
+                        severity: Severity::Error,
+                        message: format!(
+                            "Function `{}` incompatible with `{}`: param `{}` needs default",
+                            func.name, proto.name, sp.name
+                        ),
+                        span,
+                        path: path.to_owned(),
+                        help: None,
+                        note: None,
+                    });
                 }
             }
         }
@@ -415,20 +630,44 @@ fn check_protocol_func_compat(proto: &ProtocolInfo, func: &FuncSig, path: &str, 
     // Keyword-only params
     for tkw in &target.kw_only_params {
         let has_kw = func.kw_only_params.iter().any(|sk| sk.name == tkw.name);
-        let has_reg = func.positional_params.iter().any(|sp| sp.name == tkw.name && !sp.is_positional_only);
+        let has_reg = func
+            .positional_params
+            .iter()
+            .any(|sp| sp.name == tkw.name && !sp.is_positional_only);
         if !has_kw && !has_reg && !func.has_kwargs {
-            diag.push(Diagnostic { code: CODE.clone(), severity: Severity::Error,
-                message: format!("Function `{}` incompatible with `{}`: missing keyword param `{}`", func.name, proto.name, tkw.name),
-                span, path: path.to_owned(), help: None, note: None });
+            diag.push(Diagnostic {
+                code: CODE.clone(),
+                severity: Severity::Error,
+                message: format!(
+                    "Function `{}` incompatible with `{}`: missing keyword param `{}`",
+                    func.name, proto.name, tkw.name
+                ),
+                span,
+                path: path.to_owned(),
+                help: None,
+                note: None,
+            });
         }
     }
     // Param type compat (contravariant)
     for (idx, tp) in target.positional_params.iter().enumerate() {
         if let Some(sp) = func.positional_params.get(idx) {
-            if !tp.type_annotation.is_empty() && !sp.type_annotation.is_empty() && !types_compat(&tp.type_annotation, &sp.type_annotation) {
-                diag.push(Diagnostic { code: CODE.clone(), severity: Severity::Error,
-                    message: format!("Function `{}` incompatible with `{}`: param `{}` type `{}` vs `{}`", func.name, proto.name, sp.name, sp.type_annotation, tp.type_annotation),
-                    span, path: path.to_owned(), help: None, note: None });
+            if !tp.type_annotation.is_empty()
+                && !sp.type_annotation.is_empty()
+                && !types_compat(&tp.type_annotation, &sp.type_annotation)
+            {
+                diag.push(Diagnostic {
+                    code: CODE.clone(),
+                    severity: Severity::Error,
+                    message: format!(
+                        "Function `{}` incompatible with `{}`: param `{}` type `{}` vs `{}`",
+                        func.name, proto.name, sp.name, sp.type_annotation, tp.type_annotation
+                    ),
+                    span,
+                    path: path.to_owned(),
+                    help: None,
+                    note: None,
+                });
             }
         }
     }
@@ -445,42 +684,90 @@ fn check_protocol_func_compat(proto: &ProtocolInfo, func: &FuncSig, path: &str, 
         }
     }
     // *args type compat
-    if target.has_varargs && func.has_varargs && !target.varargs_type.is_empty() && !func.varargs_type.is_empty() {
+    if target.has_varargs
+        && func.has_varargs
+        && !target.varargs_type.is_empty()
+        && !func.varargs_type.is_empty()
+    {
         if !types_compat(&target.varargs_type, &func.varargs_type) {
-            diag.push(Diagnostic { code: CODE.clone(), severity: Severity::Error,
-                message: format!("Function `{}` incompatible with `{}`: *args type `{}` vs `{}`", func.name, proto.name, func.varargs_type, target.varargs_type),
-                span, path: path.to_owned(), help: None, note: None });
+            diag.push(Diagnostic {
+                code: CODE.clone(),
+                severity: Severity::Error,
+                message: format!(
+                    "Function `{}` incompatible with `{}`: *args type `{}` vs `{}`",
+                    func.name, proto.name, func.varargs_type, target.varargs_type
+                ),
+                span,
+                path: path.to_owned(),
+                help: None,
+                note: None,
+            });
         }
     }
     // **kwargs type compat
-    if target.has_kwargs && func.has_kwargs && !target.kwargs_type.is_empty() && !func.kwargs_type.is_empty() {
+    if target.has_kwargs
+        && func.has_kwargs
+        && !target.kwargs_type.is_empty()
+        && !func.kwargs_type.is_empty()
+    {
         if !types_compat(&target.kwargs_type, &func.kwargs_type) {
-            diag.push(Diagnostic { code: CODE.clone(), severity: Severity::Error,
-                message: format!("Function `{}` incompatible with `{}`: **kwargs type `{}` vs `{}`", func.name, proto.name, func.kwargs_type, target.kwargs_type),
-                span, path: path.to_owned(), help: None, note: None });
+            diag.push(Diagnostic {
+                code: CODE.clone(),
+                severity: Severity::Error,
+                message: format!(
+                    "Function `{}` incompatible with `{}`: **kwargs type `{}` vs `{}`",
+                    func.name, proto.name, func.kwargs_type, target.kwargs_type
+                ),
+                span,
+                path: path.to_owned(),
+                help: None,
+                note: None,
+            });
         }
     }
 }
 
 fn types_compat(target: &str, source: &str) -> bool {
-    if target == source { return true; }
-    if target == "Any" || source == "Any" { return true; }
-    if target.is_empty() || source.is_empty() { return true; }
-    if target == "int" && source == "float" { return true; }
-    if target == "float" && source == "int" { return true; }
-    if target == "bool" && source == "int" { return true; }
-    if target.contains(" | ") { return target.split(" | ").any(|m| m.trim() == source); }
-    let builtins = ["int", "str", "float", "bool", "bytes", "None", "complex", "object"];
-    if builtins.contains(&target) && builtins.contains(&source) { return false; }
+    if target == source {
+        return true;
+    }
+    if target == "Any" || source == "Any" {
+        return true;
+    }
+    if target.is_empty() || source.is_empty() {
+        return true;
+    }
+    if target == "int" && source == "float" {
+        return true;
+    }
+    if target == "float" && source == "int" {
+        return true;
+    }
+    if target == "bool" && source == "int" {
+        return true;
+    }
+    if target.contains(" | ") {
+        return target.split(" | ").any(|m| m.trim() == source);
+    }
+    let builtins = [
+        "int", "str", "float", "bool", "bytes", "None", "complex", "object",
+    ];
+    if builtins.contains(&target) && builtins.contains(&source) {
+        return false;
+    }
     true
 }
 
 fn expr_name(expr: &Expr) -> Option<&str> {
-    match expr { Expr::Name(n) => Some(n.id.as_str()), _ => None }
+    match expr {
+        Expr::Name(n) => Some(n.id.as_str()),
+        _ => None,
+    }
 }
 
 fn extract_base_name(s: &str) -> String {
-    s.find('[').map_or_else(|| s.trim().to_owned(), |i| s[..i].trim().to_owned())
+    s.find('[')
+        .map_or_else(|| s.trim().to_owned(), |i| s[..i].trim().to_owned())
 }
 
 fn ann_str(expr: &Expr) -> String {
@@ -492,7 +779,10 @@ fn ann_str(expr: &Expr) -> String {
         Expr::BinOp(b) => format!("{} | {}", ann_str(&b.left), ann_str(&b.right)),
         Expr::NoneLiteral(_) => "None".to_owned(),
         Expr::EllipsisLiteral(_) => "...".to_owned(),
-        Expr::List(l) => format!("[{}]", l.elts.iter().map(ann_str).collect::<Vec<_>>().join(", ")),
+        Expr::List(l) => format!(
+            "[{}]",
+            l.elts.iter().map(ann_str).collect::<Vec<_>>().join(", ")
+        ),
         Expr::NumberLiteral(n) => format!("{:?}", n.value),
         _ => "...".to_owned(),
     }

@@ -66,7 +66,11 @@ fn check_param(param: &ParameterInfo, source: &str, path: &str, out: &mut Vec<Di
     if let Some(annotation) = extract_param_annotation(source, param.name_span) {
         if let Some(violation) = check_annotation(annotation) {
             out.push(make_diagnostic(
-                &violation, annotation, &param.name, param.name_span, path,
+                &violation,
+                annotation,
+                &param.name,
+                param.name_span,
+                path,
             ));
         }
     }
@@ -82,7 +86,11 @@ fn check_module_var(var: &VariableInfo, source: &str, path: &str, out: &mut Vec<
     };
     if let Some(violation) = check_annotation(annotation.trim()) {
         out.push(make_diagnostic(
-            &violation, annotation.trim(), &var.name, var.name_span, path,
+            &violation,
+            annotation.trim(),
+            &var.name,
+            var.name_span,
+            path,
         ));
     }
 }
@@ -130,7 +138,11 @@ fn check_annotation(annotation: &str) -> Option<Violation> {
             return check_callable_form(inner);
         }
         "union" => {
-            if arg_count < 2 { 2 } else { return None; }
+            if arg_count < 2 {
+                2
+            } else {
+                return None;
+            }
         }
         _ => return None,
     };
@@ -252,15 +264,25 @@ fn extract_param_annotation(source: &str, name_span: Span) -> Option<&str> {
     let annotation_end = line[after_colon..]
         .char_indices()
         .find_map(|(idx, ch)| match ch {
-            '[' => { depth += 1; None }
-            ']' => { depth = depth.saturating_sub(1); None }
+            '[' => {
+                depth += 1;
+                None
+            }
+            ']' => {
+                depth = depth.saturating_sub(1);
+                None
+            }
             ',' | ')' | '=' if depth == 0 => Some(after_colon + idx),
             _ => None,
         })
         .unwrap_or(line.len());
 
     let annotation = line.get(after_colon..annotation_end)?.trim();
-    if annotation.is_empty() { None } else { Some(annotation) }
+    if annotation.is_empty() {
+        None
+    } else {
+        Some(annotation)
+    }
 }
 
 /// Format a violation into a diagnostic.
@@ -272,7 +294,11 @@ fn make_diagnostic(
     path: &str,
 ) -> Diagnostic {
     let (message, help, note) = match violation {
-        Violation::ArgCount { generic_name, found, expected } => (
+        Violation::ArgCount {
+            generic_name,
+            found,
+            expected,
+        } => (
             format!(
                 "Invalid type argument count in annotation `{annotation}` on `{name}`: \
                  `{generic_name}` takes {expected} type argument{} but {found} {} provided",
@@ -296,7 +322,9 @@ fn make_diagnostic(
                  first argument `{first_arg}` is not a valid parameter specification; \
                  expected `[arg_types]`, `...`, a `ParamSpec`, or `Concatenate[...]`"
             ),
-            Some("Use `Callable[[int, str], ReturnType]` or `Callable[..., ReturnType]`".to_owned()),
+            Some(
+                "Use `Callable[[int, str], ReturnType]` or `Callable[..., ReturnType]`".to_owned(),
+            ),
             Some("The first argument to `Callable` defines the parameter types".to_owned()),
         ),
         Violation::CallableReturnType { return_type } => (
@@ -304,7 +332,10 @@ fn make_diagnostic(
                 "Invalid `Callable` annotation on `{name}`: \
                  return type `{return_type}` is a list literal; use a plain type instead"
             ),
-            Some("Use `Callable[[arg_types], int]` instead of `Callable[[arg_types], [int]]`".to_owned()),
+            Some(
+                "Use `Callable[[arg_types], int]` instead of `Callable[[arg_types], [int]]`"
+                    .to_owned(),
+            ),
             Some("The return type in `Callable` must be a single type, not a list".to_owned()),
         ),
         Violation::CallableEllipsisInBrackets => (
@@ -312,7 +343,10 @@ fn make_diagnostic(
                 "Invalid `Callable` annotation on `{name}`: \
                  `[...]` is not valid; use bare `...` for an arbitrary parameter list"
             ),
-            Some("Use `Callable[..., ReturnType]` instead of `Callable[[...], ReturnType]`".to_owned()),
+            Some(
+                "Use `Callable[..., ReturnType]` instead of `Callable[[...], ReturnType]`"
+                    .to_owned(),
+            ),
             Some("Ellipsis must appear directly, not inside brackets".to_owned()),
         ),
     };

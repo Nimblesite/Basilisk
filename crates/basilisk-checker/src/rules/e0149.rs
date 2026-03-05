@@ -96,8 +96,8 @@ fn contains_name(text: &str, name: &str) -> bool {
         if window != needle {
             return false;
         }
-        let before_ok = idx == 0
-            || (!haystack[idx - 1].is_ascii_alphanumeric() && haystack[idx - 1] != b'_');
+        let before_ok =
+            idx == 0 || (!haystack[idx - 1].is_ascii_alphanumeric() && haystack[idx - 1] != b'_');
         let after_ok = idx + nlen >= haystack.len()
             || (!haystack[idx + nlen].is_ascii_alphanumeric() && haystack[idx + nlen] != b'_');
         before_ok && after_ok
@@ -481,17 +481,13 @@ fn check_module_level_type_param_use(
         return;
     }
 
-    let before_comment = trimmed
-        .split_once('#')
-        .map_or(trimmed, |(code, _)| code);
+    let before_comment = trimmed.split_once('#').map_or(trimmed, |(code, _)| code);
 
     for (param_name, _defining_line) in all_pep695_params {
         if contains_name(before_comment, param_name) {
             // Make sure this is not an assignment that defines a new binding
             // of the same name (e.g. `T = int(0)`).
-            let is_assignment = before_comment
-                .trim()
-                .starts_with(&format!("{param_name} "))
+            let is_assignment = before_comment.trim().starts_with(&format!("{param_name} "))
                 || before_comment.trim().starts_with(&format!("{param_name}="))
                 || before_comment.trim() == param_name.as_str();
 
@@ -626,16 +622,11 @@ impl Rule for Pep695TypeParamScopingViolation {
             let trimmed = line.trim();
 
             // --- Violation 1: cross-references in type param bounds ---
-            if trimmed.starts_with("class ") || trimmed.starts_with("def ")
+            if trimmed.starts_with("class ")
+                || trimmed.starts_with("def ")
                 || trimmed.starts_with("async def ")
             {
-                check_pep695_bound_cross_references(
-                    line,
-                    line_number,
-                    source,
-                    path,
-                    diagnostics,
-                );
+                check_pep695_bound_cross_references(line, line_number, source, path, diagnostics);
             }
 
             // --- Violation 3: method re-defines class type param ---

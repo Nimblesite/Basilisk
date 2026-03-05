@@ -47,8 +47,7 @@ pub(crate) struct DataclassTransformMetaViolation;
 
 impl Rule for DataclassTransformMetaViolation {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let Ok(parsed) =
-            basilisk_parser::parse_source(module.source.clone(), module.path.clone())
+        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
         else {
             return;
         };
@@ -115,8 +114,7 @@ impl MetaTransformCtx {
         let transform_bases = collect_transform_bases(stmts, &meta_classes);
 
         // Pass 3: collect all subclasses of the transform bases (recursive 1-level).
-        let transform_classes =
-            collect_transform_classes(stmts, &transform_bases, &meta_classes);
+        let transform_classes = collect_transform_classes(stmts, &transform_bases, &meta_classes);
 
         Self {
             meta_classes,
@@ -151,17 +149,10 @@ impl MetaTransformCtx {
             .collect();
 
         // Build instance → class map from module-level assignments.
-        let instance_class =
-            build_instance_class_map(stmts, &frozen_classes, &class_map);
+        let instance_class = build_instance_class_map(stmts, &frozen_classes, &class_map);
 
         // Check 2: frozen attribute assignment.
-        self.check_frozen_assign(
-            stmts,
-            &frozen_classes,
-            &instance_class,
-            path,
-            diag,
-        );
+        self.check_frozen_assign(stmts, &frozen_classes, &instance_class, path, diag);
 
         // Check 3: kw-only positional argument violations.
         self.check_kw_only_calls(stmts, &class_map, path, diag);
@@ -489,12 +480,10 @@ fn parse_dataclass_transform_expr(expr: &Expr) -> (bool, bool, bool) {
         };
         match arg_name.as_str() {
             "kw_only_default" => {
-                kw_only_default =
-                    matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
+                kw_only_default = matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
             }
             "frozen_default" => {
-                frozen_default =
-                    matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
+                frozen_default = matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
             }
             _ => {}
         }
@@ -616,9 +605,9 @@ fn collect_transform_classes(
                 let args = cls.arguments.as_ref()?;
                 args.args.iter().find_map(|base| {
                     if let Expr::Name(n) = base {
-                        transform_bases.get(n.id.as_str()).map(|meta| {
-                            (tc.name.clone(), meta.clone())
-                        })
+                        transform_bases
+                            .get(n.id.as_str())
+                            .map(|meta| (tc.name.clone(), meta.clone()))
                     } else {
                         None
                     }

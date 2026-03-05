@@ -48,15 +48,21 @@ impl Rule for NamedTupleTupleCompat {
         }
 
         // 2. Build map: variable name -> NamedTuple class name.
-        let var_to_nt: HashMap<&str, &str> =
-            build_var_to_nt_map(module, &namedtuple_classes);
+        let var_to_nt: HashMap<&str, &str> = build_var_to_nt_map(module, &namedtuple_classes);
         if var_to_nt.is_empty() {
             return;
         }
 
         // 3. Check annotated variables with tuple[...] annotations.
         for var in &module.module_vars {
-            check_variable(var, source, path, &var_to_nt, &namedtuple_classes, diagnostics);
+            check_variable(
+                var,
+                source,
+                path,
+                &var_to_nt,
+                &namedtuple_classes,
+                diagnostics,
+            );
         }
     }
 }
@@ -247,9 +253,7 @@ fn check_element_types(
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    for (idx, (tuple_ty, nt_ty)) in
-        tuple_types.iter().zip(nt_field_types.iter()).enumerate()
-    {
+    for (idx, (tuple_ty, nt_ty)) in tuple_types.iter().zip(nt_field_types.iter()).enumerate() {
         if !is_type_compatible(nt_ty, tuple_ty) {
             diagnostics.push(Diagnostic {
                 code: CODE.clone(),

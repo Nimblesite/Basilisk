@@ -152,8 +152,7 @@ impl Rule for ProtocolVarianceMismatch {
                 let tv_name = &param.name;
 
                 // Skip names that are not traditional TypeVars (e.g. ParamSpec, TypeVarTuple).
-                let Some(&(declared_co, declared_contra)) =
-                    typevar_variance.get(tv_name.as_str())
+                let Some(&(declared_co, declared_contra)) = typevar_variance.get(tv_name.as_str())
                 else {
                     continue;
                 };

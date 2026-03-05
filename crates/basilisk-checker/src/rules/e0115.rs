@@ -34,8 +34,7 @@ pub(crate) struct DeprecatedUsage;
 
 impl Rule for DeprecatedUsage {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let Ok(parsed) =
-            basilisk_parser::parse_source(module.source.clone(), module.path.clone())
+        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
         else {
             return;
         };
@@ -83,10 +82,8 @@ impl Rule for DeprecatedUsage {
         }
 
         // Collect deprecated method/attribute info from imported module classes.
-        let deprecated_members = collect_imported_deprecated_members(
-            &parsed.ast.body,
-            &module.path,
-        );
+        let deprecated_members =
+            collect_imported_deprecated_members(&parsed.ast.body, &module.path);
 
         // Build a variable-to-type map from simple assignments, e.g.:
         //   spam = library.Spam()   -> spam -> VarType { module_alias: "library", class_name: "Spam" }
@@ -94,8 +91,10 @@ impl Rule for DeprecatedUsage {
         let var_types = collect_var_types(&parsed.ast.body);
 
         // Walk the AST to find usages of deprecated names.
-        let def_spans: HashSet<u32> =
-            all_deprecated.values().map(|info| info.def_span.start).collect();
+        let def_spans: HashSet<u32> = all_deprecated
+            .values()
+            .map(|info| info.def_span.start)
+            .collect();
         for stmt in &parsed.ast.body {
             visit_stmt_for_usage(
                 stmt,
@@ -220,11 +219,14 @@ fn collect_deprecated_definitions(
                             func.name.to_string()
                         };
 
-                        out.insert(name, DeprecatedInfo {
-                            kind,
-                            message,
-                            def_span: text_range_to_span(func.range()),
-                        });
+                        out.insert(
+                            name,
+                            DeprecatedInfo {
+                                kind,
+                                message,
+                                def_span: text_range_to_span(func.range()),
+                            },
+                        );
                         break;
                     }
                 }
@@ -235,20 +237,19 @@ fn collect_deprecated_definitions(
             Stmt::ClassDef(cls) => {
                 for dec in &cls.decorator_list {
                     if let Some(message) = is_deprecated_decorator(&dec.expression) {
-                        out.insert(cls.name.to_string(), DeprecatedInfo {
-                            kind: "class".to_owned(),
-                            message,
-                            def_span: text_range_to_span(cls.range()),
-                        });
+                        out.insert(
+                            cls.name.to_string(),
+                            DeprecatedInfo {
+                                kind: "class".to_owned(),
+                                message,
+                                def_span: text_range_to_span(cls.range()),
+                            },
+                        );
                         break;
                     }
                 }
                 // Recurse into class body for methods.
-                collect_deprecated_definitions(
-                    &cls.body,
-                    out,
-                    Some(cls.name.as_str()),
-                );
+                collect_deprecated_definitions(&cls.body, out, Some(cls.name.as_str()));
             }
             _ => {}
         }
@@ -290,11 +291,7 @@ fn collect_imported_deprecated(
 
                 // Collect deprecated definitions from the sibling.
                 let mut sibling_deprecated: HashMap<String, DeprecatedInfo> = HashMap::new();
-                collect_deprecated_definitions(
-                    &sibling.ast.body,
-                    &mut sibling_deprecated,
-                    None,
-                );
+                collect_deprecated_definitions(&sibling.ast.body, &mut sibling_deprecated, None);
 
                 for alias in &import_from.names {
                     let name = alias.name.as_str();
@@ -357,11 +354,7 @@ fn collect_imported_deprecated_members(
                     continue;
                 };
                 let mut sibling_deprecated: HashMap<String, DeprecatedInfo> = HashMap::new();
-                collect_deprecated_definitions(
-                    &sibling.ast.body,
-                    &mut sibling_deprecated,
-                    None,
-                );
+                collect_deprecated_definitions(&sibling.ast.body, &mut sibling_deprecated, None);
                 if !sibling_deprecated.is_empty() {
                     result.insert(alias_name, sibling_deprecated);
                 }
@@ -887,7 +880,9 @@ fn visit_expr_for_usage(
                             // Instance method call: look up ClassName.method.
                             let key = format!("{}.{}", var_type.class_name, member_name);
                             if !var_type.module_alias.is_empty() {
-                                if let Some(members) = deprecated_members.get(&var_type.module_alias) {
+                                if let Some(members) =
+                                    deprecated_members.get(&var_type.module_alias)
+                                {
                                     if let Some(info) = members.get(&key) {
                                         diagnostics.push(make_diagnostic(
                                             text_range_to_span(call.range()),

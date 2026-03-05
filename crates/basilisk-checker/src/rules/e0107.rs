@@ -185,14 +185,25 @@ fn resolve_and_check_rich(
 ) -> Option<Vec<VarianceViolation>> {
     // Direct class case: base_name is a known generic class.
     if let Some(params) = class_params.get(base_name) {
-        let violations =
-            check_rich_args_against_params(type_args, params, class_params, alias_info, tv_variance);
+        let violations = check_rich_args_against_params(
+            type_args,
+            params,
+            class_params,
+            alias_info,
+            tv_variance,
+        );
         return Some(violations);
     }
 
     // Alias case: expand the alias, substituting rich type args, then check recursively.
     let expanded = expand_alias_rich(base_name, type_args, alias_info, tv_variance, 0)?;
-    resolve_and_check_rich(&expanded.0, &expanded.1, class_params, alias_info, tv_variance)
+    resolve_and_check_rich(
+        &expanded.0,
+        &expanded.1,
+        class_params,
+        alias_info,
+        tv_variance,
+    )
 }
 
 /// Expand one level of alias, substituting rich type args for the alias's free TypeVars.
@@ -237,7 +248,13 @@ fn expand_alias_rich(
 
     // If target_base is itself an alias, expand recursively.
     if alias_info.contains_key(target_base) {
-        return expand_alias_rich(target_base, &effective_args, alias_info, tv_variance, depth + 1);
+        return expand_alias_rich(
+            target_base,
+            &effective_args,
+            alias_info,
+            tv_variance,
+            depth + 1,
+        );
     }
 
     Some((target_base.to_owned(), effective_args))
@@ -262,7 +279,14 @@ fn check_rich_args_against_params(
 
         // Collect all leaf TypeVars and their composed variances.
         let mut leaves = Vec::new();
-        collect_leaf_variances(type_arg, Variance::Covariant, class_params, alias_info, tv_variance, &mut leaves);
+        collect_leaf_variances(
+            type_arg,
+            Variance::Covariant,
+            class_params,
+            alias_info,
+            tv_variance,
+            &mut leaves,
+        );
 
         for (leaf_name, effective_var) in leaves {
             // Bug 1 fix: invariant TypeVars are compatible with any position.
@@ -310,7 +334,14 @@ fn collect_leaf_variances(
                         .copied()
                         .unwrap_or(Variance::Invariant);
                     let new_accumulated = compose_variance(accumulated, param_var);
-                    collect_leaf_variances(inner_arg, new_accumulated, class_params, alias_info, tv_variance, out);
+                    collect_leaf_variances(
+                        inner_arg,
+                        new_accumulated,
+                        class_params,
+                        alias_info,
+                        tv_variance,
+                        out,
+                    );
                 }
             } else if let Some(&(target_base, alias_type_args)) = alias_info.get(base.as_str()) {
                 // The base is an alias — expand it and recurse.
@@ -341,7 +372,14 @@ fn collect_leaf_variances(
                     base: target_base.to_owned(),
                     args: effective_args,
                 };
-                collect_leaf_variances(&expanded, accumulated, class_params, alias_info, tv_variance, out);
+                collect_leaf_variances(
+                    &expanded,
+                    accumulated,
+                    class_params,
+                    alias_info,
+                    tv_variance,
+                    out,
+                );
             }
         }
     }
@@ -365,7 +403,14 @@ fn resolve_and_check(
     }
 
     // Alias case: resolve through alias chain.
-    resolve_alias_and_check(base_name, type_arg_names, class_params, alias_info, tv_variance, 0)
+    resolve_alias_and_check(
+        base_name,
+        type_arg_names,
+        class_params,
+        alias_info,
+        tv_variance,
+        0,
+    )
 }
 
 /// Compare type argument variances against expected parameter variances.

@@ -40,8 +40,7 @@ pub(crate) struct CallableSubtypingViolation;
 
 impl Rule for CallableSubtypingViolation {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let Ok(parsed) =
-            basilisk_parser::parse_source(module.source.clone(), module.path.clone())
+        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
         else {
             return;
         };
@@ -87,7 +86,10 @@ fn parse_callable_sig(s: &str) -> Option<CallableSig> {
             .collect()
     };
 
-    Some(CallableSig { param_types, return_type })
+    Some(CallableSig {
+        param_types,
+        return_type,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -312,7 +314,10 @@ fn ann_str(expr: &Expr) -> String {
         Expr::NoneLiteral(_) => "None".to_owned(),
         Expr::EllipsisLiteral(_) => "...".to_owned(),
         Expr::List(l) => {
-            format!("[{}]", l.elts.iter().map(ann_str).collect::<Vec<_>>().join(", "))
+            format!(
+                "[{}]",
+                l.elts.iter().map(ann_str).collect::<Vec<_>>().join(", ")
+            )
         }
         Expr::NumberLiteral(n) => format!("{:?}", n.value),
         _ => "...".to_owned(),

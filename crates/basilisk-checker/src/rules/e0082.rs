@@ -185,12 +185,7 @@ fn check_stmt_for_tvt_mismatch(
         return; // Arity mismatch is a different error.
     }
 
-    for (idx, (elt, expected)) in tuple_lit
-        .elts
-        .iter()
-        .zip(expected_types.iter())
-        .enumerate()
-    {
+    for (idx, (elt, expected)) in tuple_lit.elts.iter().zip(expected_types.iter()).enumerate() {
         let actual_type = infer_literal_type(elt);
         let Some(actual) = actual_type else {
             continue;
@@ -235,10 +230,7 @@ fn check_stmt_for_tvt_mismatch(
 /// another has `tuple[*Ts]`, sharing the same `TypeVarTuple` name.
 ///
 /// Returns `(callable_param_name, tuple_param_name, tvt_name)`.
-fn find_linked_tvt_params(
-    func: &FunctionInfo,
-    source: &str,
-) -> Option<(String, String, String)> {
+fn find_linked_tvt_params(func: &FunctionInfo, source: &str) -> Option<(String, String, String)> {
     let mut callable_param: Option<(String, String)> = None; // (param_name, tvt_name)
     let mut tuple_params: Vec<(String, String)> = Vec::new(); // (param_name, tvt_name)
 
@@ -319,9 +311,7 @@ fn extract_tvt_from_tuple(ann: &str) -> Option<String> {
 /// Check if a string is a valid Python identifier.
 fn is_identifier(text: &str) -> bool {
     !text.is_empty()
-        && text
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_')
+        && text.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
         && text
             .chars()
             .next()

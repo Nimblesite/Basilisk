@@ -85,7 +85,11 @@ fn dot_receiver(text: &str, byte_offset: usize) -> Option<String> {
         .into_iter()
         .rev()
         .collect();
-    if name.is_empty() { None } else { Some(name) }
+    if name.is_empty() {
+        None
+    } else {
+        Some(name)
+    }
 }
 
 // ── Dot completions (class attributes + methods) ─────────────────────────────
@@ -118,9 +122,10 @@ fn enclosing_class(
     resolved: &basilisk_resolver::ResolvedModule,
     offset: usize,
 ) -> Option<&basilisk_resolver::scope::ClassInfo> {
-    let func = resolved.functions.iter().find(|f| {
-        f.class_name.is_some() && (f.def_span.start as usize) <= offset
-    })?;
+    let func = resolved
+        .functions
+        .iter()
+        .find(|f| f.class_name.is_some() && (f.def_span.start as usize) <= offset)?;
     let class_name = func.class_name.as_ref()?;
     resolved.classes.iter().find(|c| &c.name == class_name)
 }
@@ -187,7 +192,11 @@ fn kwarg_completions(
         })
         .collect::<Vec<_>>();
 
-    if items.is_empty() { None } else { Some(items) }
+    if items.is_empty() {
+        None
+    } else {
+        Some(items)
+    }
 }
 
 /// Scan backwards from `byte_offset` to find an unmatched `(`, then extract
@@ -222,7 +231,11 @@ fn find_enclosing_call(text: &str, byte_offset: usize) -> Option<String> {
         .rev()
         .collect();
 
-    if name.is_empty() { None } else { Some(name) }
+    if name.is_empty() {
+        None
+    } else {
+        Some(name)
+    }
 }
 
 /// Look up a `FunctionInfo` by name in the resolved module.
@@ -411,27 +424,124 @@ fn add_builtin_completions(
     prefix: &str,
 ) {
     const BUILTIN_FUNCTIONS: &[&str] = &[
-        "abs", "all", "any", "bin", "bool", "breakpoint", "bytearray", "bytes", "callable",
-        "chr", "classmethod", "compile", "complex", "delattr", "dict", "dir", "divmod",
-        "enumerate", "eval", "exec", "filter", "float", "format", "frozenset", "getattr",
-        "globals", "hasattr", "hash", "help", "hex", "id", "input", "int", "isinstance",
-        "issubclass", "iter", "len", "list", "locals", "map", "max", "memoryview", "min",
-        "next", "object", "oct", "open", "ord", "pow", "print", "property", "range", "repr",
-        "reversed", "round", "set", "setattr", "slice", "sorted", "staticmethod", "str",
-        "sum", "super", "tuple", "type", "vars", "zip",
+        "abs",
+        "all",
+        "any",
+        "bin",
+        "bool",
+        "breakpoint",
+        "bytearray",
+        "bytes",
+        "callable",
+        "chr",
+        "classmethod",
+        "compile",
+        "complex",
+        "delattr",
+        "dict",
+        "dir",
+        "divmod",
+        "enumerate",
+        "eval",
+        "exec",
+        "filter",
+        "float",
+        "format",
+        "frozenset",
+        "getattr",
+        "globals",
+        "hasattr",
+        "hash",
+        "help",
+        "hex",
+        "id",
+        "input",
+        "int",
+        "isinstance",
+        "issubclass",
+        "iter",
+        "len",
+        "list",
+        "locals",
+        "map",
+        "max",
+        "memoryview",
+        "min",
+        "next",
+        "object",
+        "oct",
+        "open",
+        "ord",
+        "pow",
+        "print",
+        "property",
+        "range",
+        "repr",
+        "reversed",
+        "round",
+        "set",
+        "setattr",
+        "slice",
+        "sorted",
+        "staticmethod",
+        "str",
+        "sum",
+        "super",
+        "tuple",
+        "type",
+        "vars",
+        "zip",
     ];
     const BUILTIN_CONSTANTS: &[&str] = &["True", "False", "None", "NotImplemented", "Ellipsis"];
     const BUILTIN_EXCEPTIONS: &[&str] = &[
-        "Exception", "BaseException", "ValueError", "TypeError", "KeyError", "IndexError",
-        "AttributeError", "ImportError", "OSError", "RuntimeError", "StopIteration",
-        "ArithmeticError", "LookupError", "SyntaxError", "NameError", "FileNotFoundError",
-        "NotImplementedError", "OverflowError", "ZeroDivisionError", "RecursionError",
-        "PermissionError", "TimeoutError",
+        "Exception",
+        "BaseException",
+        "ValueError",
+        "TypeError",
+        "KeyError",
+        "IndexError",
+        "AttributeError",
+        "ImportError",
+        "OSError",
+        "RuntimeError",
+        "StopIteration",
+        "ArithmeticError",
+        "LookupError",
+        "SyntaxError",
+        "NameError",
+        "FileNotFoundError",
+        "NotImplementedError",
+        "OverflowError",
+        "ZeroDivisionError",
+        "RecursionError",
+        "PermissionError",
+        "TimeoutError",
     ];
 
-    add_builtin_group(items, seen, prefix, BUILTIN_FUNCTIONS, CompletionItemKind::FUNCTION, "built-in");
-    add_builtin_group(items, seen, prefix, BUILTIN_CONSTANTS, CompletionItemKind::CONSTANT, "built-in");
-    add_builtin_group(items, seen, prefix, BUILTIN_EXCEPTIONS, CompletionItemKind::CLASS, "built-in exception");
+    add_builtin_group(
+        items,
+        seen,
+        prefix,
+        BUILTIN_FUNCTIONS,
+        CompletionItemKind::FUNCTION,
+        "built-in",
+    );
+    add_builtin_group(
+        items,
+        seen,
+        prefix,
+        BUILTIN_CONSTANTS,
+        CompletionItemKind::CONSTANT,
+        "built-in",
+    );
+    add_builtin_group(
+        items,
+        seen,
+        prefix,
+        BUILTIN_EXCEPTIONS,
+        CompletionItemKind::CLASS,
+        "built-in exception",
+    );
 }
 
 fn add_builtin_group(

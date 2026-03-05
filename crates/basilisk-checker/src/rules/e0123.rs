@@ -39,8 +39,11 @@ pub(crate) struct SuperCallOnAbstractProtocolMethod;
 
 impl Rule for SuperCallOnAbstractProtocolMethod {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let class_map: HashMap<&str, &ClassInfo> =
-            module.classes.iter().map(|c| (c.name.as_str(), c)).collect();
+        let class_map: HashMap<&str, &ClassInfo> = module
+            .classes
+            .iter()
+            .map(|c| (c.name.as_str(), c))
+            .collect();
 
         let method_map: HashMap<(&str, &str), &FunctionInfo> = module
             .functions
@@ -98,7 +101,9 @@ fn check_class(
                 continue;
             }
 
-            let Some(stmt_text) = source.get(ret_stmt.span.start as usize..ret_stmt.span.end as usize) else {
+            let Some(stmt_text) =
+                source.get(ret_stmt.span.start as usize..ret_stmt.span.end as usize)
+            else {
                 continue;
             };
 
@@ -109,15 +114,14 @@ fn check_class(
 
             // Check if the called method is abstract in any protocol base.
             for protocol_base in &protocol_bases {
-                let Some(base_func) =
-                    method_map.get(&(protocol_base.name.as_str(), called_method))
+                let Some(base_func) = method_map.get(&(protocol_base.name.as_str(), called_method))
                 else {
                     continue;
                 };
 
                 // The base method is abstract if it has @abstractmethod and a stub body.
-                let is_abstract = is_abstract_method(protocol_base, called_method)
-                    && base_func.is_stub_body;
+                let is_abstract =
+                    is_abstract_method(protocol_base, called_method) && base_func.is_stub_body;
 
                 if is_abstract {
                     out.push(Diagnostic {
@@ -179,10 +183,7 @@ fn extract_super_call_method(text: &str) -> Option<&str> {
     }
 
     // Validate it looks like an identifier.
-    if method_name
-        .chars()
-        .all(|c| c.is_alphanumeric() || c == '_')
-    {
+    if method_name.chars().all(|c| c.is_alphanumeric() || c == '_') {
         Some(method_name)
     } else {
         None

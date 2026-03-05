@@ -34,21 +34,21 @@ pub(crate) struct InvalidTupleTypeSyntax;
 impl Rule for InvalidTupleTypeSyntax {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         let source = &module.source;
-        
+
         // Check all variable annotations for tuple type syntax violations
         for var in &module.module_vars {
             if !var.has_annotation {
                 continue;
             }
-            
+
             let Some(ann_span) = var.annotation_span else {
                 continue;
             };
-            
+
             let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
                 continue;
             };
-            
+
             let ann_trimmed = ann_text.trim();
             if let Some(error_msg) = check_tuple_syntax(ann_trimmed) {
                 diagnostics.push(Diagnostic {
@@ -65,14 +65,15 @@ impl Rule for InvalidTupleTypeSyntax {
                 });
             }
         }
-        
+
         // Also check function return type annotations
         for func in &module.functions {
             if let Some(ret_span) = func.return_annotation_span {
-                let Some(ret_text) = source.get(ret_span.start as usize..ret_span.end as usize) else {
+                let Some(ret_text) = source.get(ret_span.start as usize..ret_span.end as usize)
+                else {
                     continue;
                 };
-                
+
                 let ret_trimmed = ret_text.trim();
                 if let Some(error_msg) = check_tuple_syntax(ret_trimmed) {
                     diagnostics.push(Diagnostic {

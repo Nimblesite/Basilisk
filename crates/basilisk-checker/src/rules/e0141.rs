@@ -22,8 +22,7 @@ pub(crate) struct UnpackKwargsViolation;
 
 impl Rule for UnpackKwargsViolation {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let Ok(parsed) =
-            basilisk_parser::parse_source(module.source.clone(), module.path.clone())
+        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
         else {
             return;
         };
@@ -49,18 +48,26 @@ impl KwargsContext {
             match stmt {
                 Stmt::ClassDef(cls) => {
                     if is_typeddict(cls) {
-                        let keys: Vec<String> = cls.body.iter().filter_map(|s| {
-                            if let Stmt::AnnAssign(ann) = s {
-                                expr_name(&ann.target).map(|n| n.to_owned())
-                            } else { None }
-                        }).collect();
+                        let keys: Vec<String> = cls
+                            .body
+                            .iter()
+                            .filter_map(|s| {
+                                if let Stmt::AnnAssign(ann) = s {
+                                    expr_name(&ann.target).map(|n| n.to_owned())
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect();
                         // Also collect keys from base TypedDicts
                         let mut all_keys = Vec::new();
                         if let Some(args) = &cls.arguments {
                             for base in &args.args {
                                 if let Expr::Name(n) = base {
                                     let base_name = n.id.as_str();
-                                    if let Some((_, bkeys)) = typeddict_keys.iter().find(|(n, _)| n == base_name) {
+                                    if let Some((_, bkeys)) =
+                                        typeddict_keys.iter().find(|(n, _)| n == base_name)
+                                    {
                                         all_keys.extend(bkeys.iter().cloned());
                                     }
                                 }
@@ -82,10 +89,16 @@ impl KwargsContext {
                 _ => {}
             }
         }
-        Self { typeddict_keys, typevar_names }
+        Self {
+            typeddict_keys,
+            typevar_names,
+        }
     }
     fn get_td_keys(&self, name: &str) -> Option<&[String]> {
-        self.typeddict_keys.iter().find(|(n, _)| n == name).map(|(_, k)| k.as_slice())
+        self.typeddict_keys
+            .iter()
+            .find(|(n, _)| n == name)
+            .map(|(_, k)| k.as_slice())
     }
     fn is_typevar(&self, name: &str) -> bool {
         self.typevar_names.iter().any(|n| n == name)
@@ -93,7 +106,11 @@ impl KwargsContext {
 }
 
 fn is_typeddict(cls: &ast::StmtClassDef) -> bool {
-    cls.arguments.as_ref().is_some_and(|args| args.args.iter().any(|a| matches!(a, Expr::Name(n) if n.id.as_str() == "TypedDict")))
+    cls.arguments.as_ref().is_some_and(|args| {
+        args.args
+            .iter()
+            .any(|a| matches!(a, Expr::Name(n) if n.id.as_str() == "TypedDict"))
+    })
 }
 
 fn is_typevar_call(expr: &Expr) -> bool {
@@ -101,15 +118,32 @@ fn is_typevar_call(expr: &Expr) -> bool {
 }
 
 fn expr_name(expr: &Expr) -> Option<&str> {
-    match expr { Expr::Name(n) => Some(n.id.as_str()), _ => None }
+    match expr {
+        Expr::Name(n) => Some(n.id.as_str()),
+        _ => None,
+    }
 }
 
-fn check_function(func: &ast::StmtFunctionDef, ctx: &KwargsContext, path: &str, diag: &mut Vec<Diagnostic>) {
-    let Some(kwarg) = &func.parameters.kwarg else { return; };
-    let Some(annotation) = &kwarg.annotation else { return; };
-    let Some(unpack_type) = extract_unpack_arg(annotation) else { return; };
+fn check_function(
+    func: &ast::StmtFunctionDef,
+    ctx: &KwargsContext,
+    path: &str,
+    diag: &mut Vec<Diagnostic>,
+) {
+    let Some(kwarg) = &func.parameters.kwarg else {
+        return;
+    };
+    let Some(annotation) = &kwarg.annotation else {
+        return;
+    };
+    let Some(unpack_type) = extract_unpack_arg(annotation) else {
+        return;
+    };
 
-    let func_span = Span { start: func.range().start().to_u32(), end: func.range().end().to_u32() };
+    let func_span = Span {
+        start: func.range().start().to_u32(),
+        end: func.range().end().to_u32(),
+    };
 
     // Check: Unpack[TypeVar] is invalid
     if ctx.is_typevar(unpack_type) {
@@ -123,15 +157,27 @@ fn check_function(func: &ast::StmtFunctionDef, ctx: &KwargsContext, path: &str, 
     }
 
     // Check: parameter overlap with TypedDict keys
-    let Some(td_keys) = ctx.get_td_keys(unpack_type) else { return; };
-    let non_posonly: Vec<&str> = func.parameters.args.iter().map(|p| p.parameter.name.as_str()).collect();
+    let Some(td_keys) = ctx.get_td_keys(unpack_type) else {
+        return;
+    };
+    let non_posonly: Vec<&str> = func
+        .parameters
+        .args
+        .iter()
+        .map(|p| p.parameter.name.as_str())
+        .collect();
     for pname in &non_posonly {
         if td_keys.iter().any(|k| k == pname) {
             diag.push(Diagnostic {
-                code: CODE.clone(), severity: Severity::Error,
-                message: format!("Parameter `{pname}` overlaps with TypedDict `{unpack_type}` key `{pname}`"),
-                span: func_span, path: path.to_owned(),
-                help: Some(format!("Make `{pname}` positional-only (add `/`)")), note: None,
+                code: CODE.clone(),
+                severity: Severity::Error,
+                message: format!(
+                    "Parameter `{pname}` overlaps with TypedDict `{unpack_type}` key `{pname}`"
+                ),
+                span: func_span,
+                path: path.to_owned(),
+                help: Some(format!("Make `{pname}` positional-only (add `/`)")),
+                note: None,
             });
         }
     }

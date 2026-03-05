@@ -134,11 +134,7 @@ fn is_classvar_annotation(source: &str, annotation_span: Option<Span>) -> bool {
 }
 
 /// Scan the source text line-by-line for class-level instance attribute accesses.
-fn scan_source_lines(
-    source: &str,
-    ctx: &ScanContext<'_>,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
+fn scan_source_lines(source: &str, ctx: &ScanContext<'_>, diagnostics: &mut Vec<Diagnostic>) {
     let mut byte_offset: u32 = 0;
 
     for line in source.lines() {
@@ -269,10 +265,9 @@ fn check_standalone_class_attr(
                 .unwrap_or("");
             let remainder = after_dot[attr_name.len()..].trim();
             if !attr_name.is_empty() && attrs.contains(attr_name) && remainder.is_empty() {
-                let expr_len = u32::try_from(
-                    bracket_prefix.len() + close_pos + 1 + 1 + attr_name.len(),
-                )
-                .unwrap_or(0);
+                let expr_len =
+                    u32::try_from(bracket_prefix.len() + close_pos + 1 + 1 + attr_name.len())
+                        .unwrap_or(0);
                 diagnostics.push(make_diagnostic(
                     class_name,
                     attr_name,

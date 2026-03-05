@@ -20,7 +20,7 @@
 use std::collections::HashMap;
 
 use basilisk_resolver::{
-    AttributeInfo, ClassInfo, FunctionInfo, NamedTupleDefInfo, RhsKind, ResolvedModule, Span,
+    AttributeInfo, ClassInfo, FunctionInfo, NamedTupleDefInfo, ResolvedModule, RhsKind, Span,
 };
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
@@ -31,7 +31,6 @@ const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0041",
     docs_url: "https://basilisk-lang.org/errors/BSK-E0041",
 };
-
 
 /// Emits BSK-E0041 for call sites with too few positional arguments.
 pub(crate) struct TooFewArguments;
@@ -157,9 +156,9 @@ fn metaclass_passes_through(
     }
 
     // Find the metaclass __call__ method
-    let call_method = functions.iter().find(|f| {
-        f.class_name.as_deref() == Some(metaclass_name) && f.name == "__call__"
-    });
+    let call_method = functions
+        .iter()
+        .find(|f| f.class_name.as_deref() == Some(metaclass_name) && f.name == "__call__");
 
     let Some(call_fn) = call_method else {
         // No __call__ method on metaclass — default type.__call__ passes through

@@ -58,7 +58,10 @@ class MyClass[T: (int,)]:
         .iter()
         .filter(|d| d.code.code == "BSK-E0089")
         .collect();
-    assert!(!e0089.is_empty(), "single-element tuple bound should fire E0089");
+    assert!(
+        !e0089.is_empty(),
+        "single-element tuple bound should fire E0089"
+    );
     Ok(())
 }
 
@@ -103,7 +106,10 @@ class MyClass[T: (int, 42)]:
         .iter()
         .filter(|d| d.code.code == "BSK-E0089")
         .collect();
-    assert!(!e0089.is_empty(), "invalid constraint element should fire E0089");
+    assert!(
+        !e0089.is_empty(),
+        "invalid constraint element should fire E0089"
+    );
     Ok(())
 }
 
@@ -119,6 +125,9 @@ class Outer[V: int]:
         .iter()
         .filter(|d| d.code.code == "BSK-E0089")
         .collect();
-    assert!(!e0089.is_empty(), "outer scope TypeVar reference should fire E0089");
+    assert!(
+        !e0089.is_empty(),
+        "outer scope TypeVar reference should fire E0089"
+    );
     Ok(())
 }

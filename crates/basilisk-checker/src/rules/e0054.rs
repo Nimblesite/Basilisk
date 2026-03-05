@@ -142,9 +142,7 @@ fn check_final_violations(
             }
             FinalViolationKind::InstanceFinalOutsideInit => {
                 diagnostics.push(make_diagnostic(
-                    format!(
-                        "`self.{name}: Final` annotation is only allowed inside `__init__`"
-                    ),
+                    format!("`self.{name}: Final` annotation is only allowed inside `__init__`"),
                     span,
                     path,
                     "Move `Final` instance attribute declarations to `__init__`",
@@ -174,9 +172,7 @@ fn check_final_violations(
             }
             FinalViolationKind::SubclassOverrideFinal => {
                 diagnostics.push(make_diagnostic(
-                    format!(
-                        "Cannot override `{name}` — it is declared `Final` in a base class"
-                    ),
+                    format!("Cannot override `{name}` — it is declared `Final` in a base class"),
                     span,
                     path,
                     "Remove the override or rename the attribute",

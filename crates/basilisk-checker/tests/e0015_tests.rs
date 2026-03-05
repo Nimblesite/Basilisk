@@ -26,7 +26,10 @@ x: list[int, str]
         .iter()
         .filter(|d| d.code.code == "BSK-E0015")
         .collect();
-    assert!(!e0015.is_empty(), "list with too many args should fire E0015");
+    assert!(
+        !e0015.is_empty(),
+        "list with too many args should fire E0015"
+    );
     Ok(())
 }
 
@@ -40,7 +43,10 @@ x: dict[str]
         .iter()
         .filter(|d| d.code.code == "BSK-E0015")
         .collect();
-    assert!(!e0015.is_empty(), "dict with too few args should fire E0015");
+    assert!(
+        !e0015.is_empty(),
+        "dict with too few args should fire E0015"
+    );
     Ok(())
 }
 
@@ -54,7 +60,10 @@ x: dict[str, int, float]
         .iter()
         .filter(|d| d.code.code == "BSK-E0015")
         .collect();
-    assert!(!e0015.is_empty(), "dict with too many args should fire E0015");
+    assert!(
+        !e0015.is_empty(),
+        "dict with too many args should fire E0015"
+    );
     Ok(())
 }
 
@@ -68,7 +77,10 @@ x: tuple[int, str, float]
         .iter()
         .filter(|d| d.code.code == "BSK-E0015")
         .collect();
-    assert!(e0015.is_empty(), "tuple with correct args should not fire E0015");
+    assert!(
+        e0015.is_empty(),
+        "tuple with correct args should not fire E0015"
+    );
     Ok(())
 }
 
@@ -82,7 +94,10 @@ x: set[int]
         .iter()
         .filter(|d| d.code.code == "BSK-E0015")
         .collect();
-    assert!(e0015.is_empty(), "set with correct args should not fire E0015");
+    assert!(
+        e0015.is_empty(),
+        "set with correct args should not fire E0015"
+    );
     Ok(())
 }
 
@@ -96,7 +111,10 @@ x: set[int, str]
         .iter()
         .filter(|d| d.code.code == "BSK-E0015")
         .collect();
-    assert!(!e0015.is_empty(), "set with too many args should fire E0015");
+    assert!(
+        !e0015.is_empty(),
+        "set with too many args should fire E0015"
+    );
     Ok(())
 }
 
@@ -110,7 +128,10 @@ x: optional[int]
         .iter()
         .filter(|d| d.code.code == "BSK-E0015")
         .collect();
-    assert!(e0015.is_empty(), "optional with correct args should not fire E0015");
+    assert!(
+        e0015.is_empty(),
+        "optional with correct args should not fire E0015"
+    );
     Ok(())
 }
 
@@ -124,7 +145,10 @@ x: optional[int, str]
         .iter()
         .filter(|d| d.code.code == "BSK-E0015")
         .collect();
-    assert!(!e0015.is_empty(), "optional with too many args should fire E0015");
+    assert!(
+        !e0015.is_empty(),
+        "optional with too many args should fire E0015"
+    );
     Ok(())
 }
 
@@ -138,7 +162,10 @@ x: union[int, str, float]
         .iter()
         .filter(|d| d.code.code == "BSK-E0015")
         .collect();
-    assert!(e0015.is_empty(), "union with correct args should not fire E0015");
+    assert!(
+        e0015.is_empty(),
+        "union with correct args should not fire E0015"
+    );
     Ok(())
 }
 
@@ -152,7 +179,10 @@ x: callable[[int, str], bool]
         .iter()
         .filter(|d| d.code.code == "BSK-E0015")
         .collect();
-    assert!(e0015.is_empty(), "callable with correct args should not fire E0015");
+    assert!(
+        e0015.is_empty(),
+        "callable with correct args should not fire E0015"
+    );
     Ok(())
 }
 
@@ -166,6 +196,9 @@ x: callable[int, str, bool]
         .iter()
         .filter(|d| d.code.code == "BSK-E0015")
         .collect();
-    assert!(!e0015.is_empty(), "callable with malformed args should fire E0015");
+    assert!(
+        !e0015.is_empty(),
+        "callable with malformed args should fire E0015"
+    );
     Ok(())
 }

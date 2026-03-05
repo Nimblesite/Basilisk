@@ -3,12 +3,11 @@
 use basilisk_resolver::ResolvedModule;
 use tower_lsp::lsp_types::{Location, PrepareRenameResponse, Range, TextEdit, Url, WorkspaceEdit};
 
-use crate::util::{
-    find_symbol_at_offset, identifier_at_offset, span_to_range, SymbolHit,
-};
+use crate::util::{find_symbol_at_offset, identifier_at_offset, span_to_range, SymbolHit};
 
 /// Find all references to the symbol at a byte offset.
-#[must_use] pub fn find_references(
+#[must_use]
+pub fn find_references(
     resolved: &ResolvedModule,
     source: &str,
     byte_offset: usize,
@@ -42,7 +41,8 @@ use crate::util::{
 }
 
 /// Prepare rename: check if the position is renameable and return the range + text.
-#[must_use] pub fn prepare_rename(
+#[must_use]
+pub fn prepare_rename(
     resolved: &ResolvedModule,
     source: &str,
     byte_offset: usize,
@@ -66,7 +66,8 @@ use crate::util::{
 }
 
 /// Rename the symbol at a byte offset, returning a workspace edit.
-#[must_use] pub fn rename_symbol(
+#[must_use]
+pub fn rename_symbol(
     resolved: &ResolvedModule,
     source: &str,
     byte_offset: usize,
@@ -97,11 +98,7 @@ use crate::util::{
 
 /// Get the symbol name at a byte offset, either from the symbol table or from
 /// the identifier under the cursor.
-fn symbol_name_at(
-    resolved: &ResolvedModule,
-    source: &str,
-    byte_offset: usize,
-) -> Option<String> {
+fn symbol_name_at(resolved: &ResolvedModule, source: &str, byte_offset: usize) -> Option<String> {
     if let Some(hit) = find_symbol_at_offset(resolved, byte_offset) {
         return Some(symbol_hit_name(&hit).to_owned());
     }
@@ -143,10 +140,8 @@ pub(crate) fn find_identifier_occurrences(source: &str, name: &str) -> Vec<Range
         let end_pos = abs_pos + name.len();
 
         // Check word boundaries.
-        let at_word_start =
-            abs_pos == 0 || !is_ident_byte(bytes[abs_pos - 1]);
-        let at_word_end =
-            end_pos >= bytes.len() || !is_ident_byte(bytes[end_pos]);
+        let at_word_start = abs_pos == 0 || !is_ident_byte(bytes[abs_pos - 1]);
+        let at_word_end = end_pos >= bytes.len() || !is_ident_byte(bytes[end_pos]);
 
         if at_word_start && at_word_end {
             // Make sure we're not inside a string or comment (simple heuristic).

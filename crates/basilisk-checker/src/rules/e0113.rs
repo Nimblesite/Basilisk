@@ -59,7 +59,12 @@ fn contains_typevar(type_text: &str) -> bool {
             continue;
         }
         // Single uppercase letter (T, U, V, etc.)
-        if segment.len() == 1 && segment.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
+        if segment.len() == 1
+            && segment
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_uppercase())
+        {
             return true;
         }
         // TypeVar patterns like T_A, T_co, T_contra
@@ -184,9 +189,10 @@ impl Rule for TypeIsInconsistentNarrowing {
             };
 
             // Find the first non-self/cls parameter (the one being narrowed).
-            let first_param = func.parameters.iter().find(|param| {
-                param.name != "self" && param.name != "cls"
-            });
+            let first_param = func
+                .parameters
+                .iter()
+                .find(|param| param.name != "self" && param.name != "cls");
 
             let Some(param) = first_param else {
                 continue;
@@ -197,7 +203,9 @@ impl Rule for TypeIsInconsistentNarrowing {
                 continue;
             };
 
-            let Some(param_type) = source.get(param_ann_span.start as usize..param_ann_span.end as usize) else {
+            let Some(param_type) =
+                source.get(param_ann_span.start as usize..param_ann_span.end as usize)
+            else {
                 continue;
             };
 

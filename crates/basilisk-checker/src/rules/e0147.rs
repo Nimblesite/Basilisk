@@ -88,15 +88,11 @@ fn check_module_level(source: &str, path: &str, diagnostics: &mut Vec<Diagnostic
         if line_info.indent == 0 {
             if let Some((lhs, rhs)) = parse_bare_assignment(trimmed) {
                 // Find previously declared annotation for this name.
-                if let Some((_, annotation)) =
-                    known_annotations.iter().find(|(n, _)| n == &lhs)
-                {
+                if let Some((_, annotation)) = known_annotations.iter().find(|(n, _)| n == &lhs) {
                     let annotation = annotation.clone();
                     // Only check when RHS is a tuple literal.
                     if let Some(elems) = parse_tuple_literal(rhs) {
-                        if let Some(msg) =
-                            check_literal_against_annotation(&elems, &annotation)
-                        {
+                        if let Some(msg) = check_literal_against_annotation(&elems, &annotation) {
                             let span = line_span(source, line_info.offset);
                             diagnostics.push(make_diag(msg, span, path));
                         }
@@ -124,9 +120,7 @@ fn check_function_bodies(
         let mut param_annotations: Vec<(String, String)> = Vec::new();
         for param in &func.parameters {
             if let Some(ann_span) = param.annotation_span {
-                if let Some(ann_text) =
-                    source.get(ann_span.start as usize..ann_span.end as usize)
-                {
+                if let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) {
                     param_annotations.push((param.name.clone(), ann_text.trim().to_owned()));
                 }
             }
@@ -149,9 +143,7 @@ fn check_function_bodies(
             // type has a starred unpack but the target is a plain fixed-length tuple.
             if let Some((name, annotation)) = parse_annotated_decl(trimmed) {
                 if annotation.starts_with("tuple[") {
-                    if let Some(existing) =
-                        local_annotations.iter_mut().find(|(n, _)| n == &name)
-                    {
+                    if let Some(existing) = local_annotations.iter_mut().find(|(n, _)| n == &name) {
                         existing.1 = annotation;
                     } else {
                         local_annotations.push((name, annotation));
@@ -176,9 +168,7 @@ fn check_function_bodies(
 
                 // RHS is a simple name — look it up as a parameter annotation.
                 if is_simple_name(rhs) {
-                    if let Some((_, src_ann)) =
-                        param_annotations.iter().find(|(n, _)| n == rhs)
-                    {
+                    if let Some((_, src_ann)) = param_annotations.iter().find(|(n, _)| n == rhs) {
                         let src_ann = src_ann.clone();
                         if let Some(msg) = check_var_against_annotation(&src_ann, &target_ann) {
                             let span = line_span_in_source(source, line_info.source_offset);
@@ -227,9 +217,12 @@ fn check_var_against_annotation(src_ann: &str, target_ann: &str) -> Option<&'sta
         (TupleAnnotation::Fixed { count: target_len }, src_t) => {
             let src_may_be_longer = match src_t {
                 TupleAnnotation::Homogeneous { .. } => true,
-                TupleAnnotation::Mixed { fixed_prefix, fixed_suffix, has_unbounded, .. } => {
-                    *has_unbounded || (fixed_prefix + fixed_suffix > *target_len)
-                }
+                TupleAnnotation::Mixed {
+                    fixed_prefix,
+                    fixed_suffix,
+                    has_unbounded,
+                    ..
+                } => *has_unbounded || (fixed_prefix + fixed_suffix > *target_len),
                 TupleAnnotation::Fixed { count: src_len } => src_len > target_len,
             };
             if src_may_be_longer {
@@ -247,18 +240,13 @@ fn check_var_against_annotation(src_ann: &str, target_ann: &str) -> Option<&'sta
 /// with a starred-unpack annotation.
 ///
 /// Returns `Some(message)` when the literal violates the annotation.
-fn check_literal_against_annotation(
-    elems: &[String],
-    annotation: &str,
-) -> Option<&'static str> {
+fn check_literal_against_annotation(elems: &[String], annotation: &str) -> Option<&'static str> {
     let ann = parse_tuple_annotation(annotation)?;
 
     match ann {
         TupleAnnotation::Fixed { count } => {
             if elems.len() != count {
-                return Some(
-                    "tuple literal length does not match fixed starred-unpack annotation",
-                );
+                return Some("tuple literal length does not match fixed starred-unpack annotation");
             }
             None
         }
@@ -282,17 +270,15 @@ fn check_literal_against_annotation(
             prefix_types,
             suffix_types,
             middle_type,
-        } => {
-            check_literal_against_mixed(
-                elems,
-                fixed_prefix,
-                fixed_suffix,
-                has_unbounded,
-                &prefix_types,
-                &suffix_types,
-                middle_type.as_deref(),
-            )
-        }
+        } => check_literal_against_mixed(
+            elems,
+            fixed_prefix,
+            fixed_suffix,
+            has_unbounded,
+            &prefix_types,
+            &suffix_types,
+            middle_type.as_deref(),
+        ),
     }
 }
 
@@ -314,9 +300,7 @@ fn check_literal_against_mixed(
     if !has_unbounded {
         // Fixed total length: prefix + suffix (no unbounded middle).
         if n != min_len {
-            return Some(
-                "tuple literal length does not match fixed starred-unpack annotation",
-            );
+            return Some("tuple literal length does not match fixed starred-unpack annotation");
         }
         // Check prefix types.
         for (i, pt) in prefix_types.iter().enumerate() {
@@ -336,9 +320,7 @@ fn check_literal_against_mixed(
 
     // Unbounded middle: must have at least min_len elements.
     if n < min_len {
-        return Some(
-            "tuple literal has too few elements for starred-unpack annotation",
-        );
+        return Some("tuple literal has too few elements for starred-unpack annotation");
     }
 
     // Check fixed prefix.
@@ -567,8 +549,7 @@ fn is_float_literal(s: &str) -> bool {
 /// Returns `true` when `s` looks like a Python string literal.
 fn is_str_literal(s: &str) -> bool {
     let s = s.trim();
-    (s.starts_with('"') && s.ends_with('"'))
-        || (s.starts_with('\'') && s.ends_with('\''))
+    (s.starts_with('"') && s.ends_with('"')) || (s.starts_with('\'') && s.ends_with('\''))
 }
 
 /// Returns `true` when `annotation` contains a starred unpack `*tuple[...]`.

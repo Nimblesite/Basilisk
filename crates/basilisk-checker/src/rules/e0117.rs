@@ -153,9 +153,7 @@ fn check_module_vars(
                 diagnostics.push(Diagnostic {
                     code: CODE.clone(),
                     severity: Severity::Error,
-                    message: format!(
-                        "Type variable `{tv_name}` is not bound in the current scope"
-                    ),
+                    message: format!("Type variable `{tv_name}` is not bound in the current scope"),
                     span: *ann_span,
                     path: module.path.clone(),
                     help: Some(

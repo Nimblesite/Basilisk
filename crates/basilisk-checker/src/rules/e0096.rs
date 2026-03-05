@@ -48,13 +48,11 @@ impl Rule for DataclassFieldDefaultFactoryMismatch {
                 let Some(rhs_span) = attr.rhs_span else {
                     continue;
                 };
-                let Some(ann_text) =
-                    source.get(ann_span.start as usize..ann_span.end as usize)
+                let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize)
                 else {
                     continue;
                 };
-                let Some(rhs_text) =
-                    source.get(rhs_span.start as usize..rhs_span.end as usize)
+                let Some(rhs_text) = source.get(rhs_span.start as usize..rhs_span.end as usize)
                 else {
                     continue;
                 };
@@ -97,10 +95,7 @@ impl Rule for DataclassFieldDefaultFactoryMismatch {
 /// `field(default_factory=int)`, etc.  Returns `None` for anything more
 /// complex (lambdas, attribute accesses, calls, etc.).
 fn extract_default_factory_type(rhs_text: &str) -> Option<&str> {
-    let inner = rhs_text
-        .trim()
-        .strip_prefix("field(")?
-        .trim_start();
+    let inner = rhs_text.trim().strip_prefix("field(")?.trim_start();
 
     // Find "default_factory="
     let factory_idx = inner.find("default_factory=")?;
@@ -150,4 +145,3 @@ fn is_factory_incompatible_with_annotation(factory_type: &str, field_ann: &str) 
         _ => false,
     }
 }
-

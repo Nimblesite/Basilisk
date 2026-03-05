@@ -50,8 +50,7 @@ pub(crate) struct ProtocolClassObjectViolation;
 
 impl Rule for ProtocolClassObjectViolation {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let Ok(parsed) =
-            basilisk_parser::parse_source(module.source.clone(), module.path.clone())
+        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
         else {
             return;
         };
@@ -124,7 +123,11 @@ impl ModuleCtx {
                 _ => {}
             }
         }
-        Self { protocols, concrete_classes, func_sigs }
+        Self {
+            protocols,
+            concrete_classes,
+            func_sigs,
+        }
     }
 
     fn find_protocol(&self, name: &str) -> Option<&ProtocolInfo> {
@@ -202,7 +205,10 @@ fn extract_protocol_info(cls: &ast::StmtClassDef) -> ProtocolInfo {
             _ => {}
         }
     }
-    ProtocolInfo { name: cls.name.to_string(), members }
+    ProtocolInfo {
+        name: cls.name.to_string(),
+        members,
+    }
 }
 
 fn extract_concrete_info(cls: &ast::StmtClassDef) -> ConcreteClassInfo {
@@ -281,7 +287,10 @@ fn extract_func_sig(func: &ast::StmtFunctionDef) -> FuncSig {
     for p in &func.parameters.args {
         params.push(p.parameter.annotation.as_ref().map(|a| ann_str(a)));
     }
-    FuncSig { name: func.name.to_string(), params }
+    FuncSig {
+        name: func.name.to_string(),
+        params,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -322,8 +331,7 @@ fn check_stmts(stmts: &[Stmt], ctx: &ModuleCtx, path: &str, diag: &mut Vec<Diagn
                             type_proto_vars.iter().find(|(n, _)| n == target_name)
                         {
                             if let Some(value_name) = expr_name(&assign.value) {
-                                if value_name == proto_name.as_str()
-                                    && ctx.is_protocol(proto_name)
+                                if value_name == proto_name.as_str() && ctx.is_protocol(proto_name)
                                 {
                                     let span = Span {
                                         start: assign.range().start().to_u32(),
@@ -459,10 +467,7 @@ fn check_call_with_sigs(
 /// - `ClassVar` protocol attrs: incompatible — would require a metaclass ClassVar.
 /// - Instance attrs: compatible only if the class has a matching `ClassVar` or a
 ///   custom metaclass that can provide the attribute on the class object.
-fn class_satisfies_protocol_as_object(
-    class: &ConcreteClassInfo,
-    protocol: &ProtocolInfo,
-) -> bool {
+fn class_satisfies_protocol_as_object(class: &ConcreteClassInfo, protocol: &ProtocolInfo) -> bool {
     for member in &protocol.members {
         match member {
             ProtocolMember::InstanceMethod => return false,

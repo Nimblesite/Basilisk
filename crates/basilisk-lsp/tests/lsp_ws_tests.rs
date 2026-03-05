@@ -175,7 +175,10 @@ async fn test_ws_initialize() -> TestResult<()> {
     assert!(response.contains("\"basilisk\""));
     assert!(response.contains("\"textDocumentSync\":1"));
     assert!(response.contains("\"hoverProvider\":true"));
-    assert!(response.contains("\"codeActionProvider\""), "should advertise code actions: {response}");
+    assert!(
+        response.contains("\"codeActionProvider\""),
+        "should advertise code actions: {response}"
+    );
     assert!(response.contains("\"completionProvider\""));
     Ok(())
 }
@@ -344,7 +347,9 @@ async fn test_ws_malformed_json_handling() -> TestResult<()> {
     // initialization) and look for the parse error response.
     let mut error_response = None;
     for _ in 0..10 {
-        let Some(msg) = fixture.recv().await else { break };
+        let Some(msg) = fixture.recv().await else {
+            break;
+        };
         if msg.contains("-32700") {
             error_response = Some(msg);
             break;
@@ -364,11 +369,7 @@ async fn test_ws_unknown_method_handling() -> TestResult<()> {
     fixture.initialize().await?;
 
     let resp = fixture
-        .request(
-            99,
-            "textDocument/unknownMethod",
-            serde_json::json!({}),
-        )
+        .request(99, "textDocument/unknownMethod", serde_json::json!({}))
         .await?
         .ok_or("no error response")?;
 
@@ -414,9 +415,7 @@ async fn test_ws_large_file_handling() -> TestResult<()> {
         let _ = writeln!(large_code, "def func{i}(x): return x");
     }
 
-    fixture
-        .did_open("file:///large.py", &large_code)
-        .await?;
+    fixture.did_open("file:///large.py", &large_code).await?;
 
     let diag = fixture
         .wait_for_diagnostics()
@@ -520,8 +519,14 @@ x: int = 42
     }
 
     // Hardened: verify JSON-RPC envelope
-    assert_eq!(parsed["jsonrpc"], "2.0", "must be valid JSON-RPC 2.0: {resp}");
-    assert_eq!(parsed["id"], 10, "response id must match request id: {resp}");
+    assert_eq!(
+        parsed["jsonrpc"], "2.0",
+        "must be valid JSON-RPC 2.0: {resp}"
+    );
+    assert_eq!(
+        parsed["id"], 10,
+        "response id must match request id: {resp}"
+    );
     Ok(())
 }
 
@@ -871,8 +876,14 @@ async fn test_ws_code_action_missing_param_annotation() -> TestResult<()> {
 
     let resp = code_action_for(&mut fixture, "file:///ca_e0001.py", 200, "BSK-E0001").await?;
 
-    assert!(resp.contains(": Any"), "E0001 action should insert ': Any': {resp}");
-    assert!(resp.contains("quickfix"), "E0001 action should be quickfix: {resp}");
+    assert!(
+        resp.contains(": Any"),
+        "E0001 action should insert ': Any': {resp}"
+    );
+    assert!(
+        resp.contains("quickfix"),
+        "E0001 action should be quickfix: {resp}"
+    );
 
     // Hardened: parse and verify code action structure
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
@@ -940,8 +951,14 @@ async fn test_ws_code_action_missing_return_annotation() -> TestResult<()> {
 
     let resp = code_action_for(&mut fixture, "file:///ca_e0002.py", 201, "BSK-E0002").await?;
 
-    assert!(resp.contains("-> None"), "E0002 action should insert '-> None': {resp}");
-    assert!(resp.contains("quickfix"), "E0002 action should be quickfix: {resp}");
+    assert!(
+        resp.contains("-> None"),
+        "E0002 action should insert '-> None': {resp}"
+    );
+    assert!(
+        resp.contains("quickfix"),
+        "E0002 action should be quickfix: {resp}"
+    );
     Ok(())
 }
 
@@ -953,14 +970,16 @@ async fn test_ws_code_action_missing_variable_annotation_empty_list() -> TestRes
     let code = "items = []\n";
     fixture.did_open("file:///ca_e0003_list.py", code).await?;
 
-    let resp =
-        code_action_for(&mut fixture, "file:///ca_e0003_list.py", 202, "BSK-E0003").await?;
+    let resp = code_action_for(&mut fixture, "file:///ca_e0003_list.py", 202, "BSK-E0003").await?;
 
     assert!(
         resp.contains("list[Any]"),
         "E0003 (empty list) action should insert 'list[Any]': {resp}"
     );
-    assert!(resp.contains("quickfix"), "E0003 action should be quickfix: {resp}");
+    assert!(
+        resp.contains("quickfix"),
+        "E0003 action should be quickfix: {resp}"
+    );
     Ok(())
 }
 
@@ -972,14 +991,16 @@ async fn test_ws_code_action_missing_variable_annotation_empty_dict() -> TestRes
     let code = "mapping = {}\n";
     fixture.did_open("file:///ca_e0003_dict.py", code).await?;
 
-    let resp =
-        code_action_for(&mut fixture, "file:///ca_e0003_dict.py", 203, "BSK-E0003").await?;
+    let resp = code_action_for(&mut fixture, "file:///ca_e0003_dict.py", 203, "BSK-E0003").await?;
 
     assert!(
         resp.contains("dict[str, Any]"),
         "E0003 (empty dict) action should insert 'dict[str, Any]': {resp}"
     );
-    assert!(resp.contains("quickfix"), "E0003 action should be quickfix: {resp}");
+    assert!(
+        resp.contains("quickfix"),
+        "E0003 action should be quickfix: {resp}"
+    );
     Ok(())
 }
 
@@ -991,14 +1012,16 @@ async fn test_ws_code_action_missing_variable_annotation_none() -> TestResult<()
     let code = "value = None\n";
     fixture.did_open("file:///ca_e0003_none.py", code).await?;
 
-    let resp =
-        code_action_for(&mut fixture, "file:///ca_e0003_none.py", 204, "BSK-E0003").await?;
+    let resp = code_action_for(&mut fixture, "file:///ca_e0003_none.py", 204, "BSK-E0003").await?;
 
     assert!(
         resp.contains(": Any"),
         "E0003 (None) action should insert ': Any': {resp}"
     );
-    assert!(resp.contains("quickfix"), "E0003 action should be quickfix: {resp}");
+    assert!(
+        resp.contains("quickfix"),
+        "E0003 action should be quickfix: {resp}"
+    );
     Ok(())
 }
 
@@ -1010,8 +1033,7 @@ async fn test_ws_code_action_suppress_with_type_ignore() -> TestResult<()> {
     let code = "def greet(name):\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///ca_suppress.py", code).await?;
 
-    let resp =
-        code_action_for(&mut fixture, "file:///ca_suppress.py", 205, "BSK-E0001").await?;
+    let resp = code_action_for(&mut fixture, "file:///ca_suppress.py", 205, "BSK-E0001").await?;
 
     assert!(
         resp.contains("# type: ignore"),
@@ -1055,8 +1077,7 @@ async fn test_ws_code_action_suppress_inserts_at_end_of_line() -> TestResult<()>
 
     // start == end means pure insertion
     assert_eq!(
-        edit["range"]["start"],
-        edit["range"]["end"],
+        edit["range"]["start"], edit["range"]["end"],
         "suppress action must be a pure insertion: {edit}"
     );
     assert_eq!(
@@ -1070,7 +1091,11 @@ async fn test_ws_code_action_suppress_inserts_at_end_of_line() -> TestResult<()>
 #[tokio::test]
 async fn test_ws_code_action_organize_imports() -> TestResult<()> {
     // Skip if ruff is not installed.
-    if std::process::Command::new("ruff").arg("--version").output().is_err() {
+    if std::process::Command::new("ruff")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
         return Ok(());
     }
 
@@ -1078,8 +1103,7 @@ async fn test_ws_code_action_organize_imports() -> TestResult<()> {
     fixture.initialize().await?;
 
     // Deliberately unsorted imports — ruff should reorder them.
-    let code =
-        "import os\nimport sys\nfrom typing import Optional\nimport json\n\nx: int = 1\n";
+    let code = "import os\nimport sys\nfrom typing import Optional\nimport json\n\nx: int = 1\n";
     fixture.did_open("file:///ca_org.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
@@ -1112,7 +1136,11 @@ async fn test_ws_code_action_organize_imports() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_code_action_organize_imports_fixes_order() -> TestResult<()> {
     // Skip if ruff is not installed.
-    if std::process::Command::new("ruff").arg("--version").output().is_err() {
+    if std::process::Command::new("ruff")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
         return Ok(());
     }
 
@@ -1177,15 +1205,33 @@ async fn test_ws_hover_function_exact_signature() -> TestResult<()> {
         .await?
         .ok_or("no hover response")?;
 
-    assert!(resp.contains("(function)"), "hover should show '(function)' prefix: {resp}");
-    assert!(resp.contains("def greet"), "hover should show 'def greet': {resp}");
-    assert!(resp.contains("name: str"), "hover should show typed parameter 'name: str': {resp}");
-    assert!(resp.contains("-> str"), "hover should show return type '-> str': {resp}");
+    assert!(
+        resp.contains("(function)"),
+        "hover should show '(function)' prefix: {resp}"
+    );
+    assert!(
+        resp.contains("def greet"),
+        "hover should show 'def greet': {resp}"
+    );
+    assert!(
+        resp.contains("name: str"),
+        "hover should show typed parameter 'name: str': {resp}"
+    );
+    assert!(
+        resp.contains("-> str"),
+        "hover should show return type '-> str': {resp}"
+    );
 
     // Hardened: verify JSON-RPC structure and hover contents structure
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
-    assert_eq!(parsed["jsonrpc"], "2.0", "hover must be valid JSON-RPC 2.0: {resp}");
-    assert_eq!(parsed["id"], 300, "hover response id must match request id: {resp}");
+    assert_eq!(
+        parsed["jsonrpc"], "2.0",
+        "hover must be valid JSON-RPC 2.0: {resp}"
+    );
+    assert_eq!(
+        parsed["id"], 300,
+        "hover response id must match request id: {resp}"
+    );
     assert!(
         parsed["result"].get("contents").is_some(),
         "hover result must contain 'contents' field: {resp}"
@@ -1194,7 +1240,10 @@ async fn test_ws_hover_function_exact_signature() -> TestResult<()> {
         !parsed["result"]["contents"].is_null(),
         "hover contents must not be null: {resp}"
     );
-    assert!(resp.contains("greet"), "hover should contain the function name 'greet': {resp}");
+    assert!(
+        resp.contains("greet"),
+        "hover should contain the function name 'greet': {resp}"
+    );
     Ok(())
 }
 
@@ -1221,9 +1270,18 @@ async fn test_ws_hover_from_call_site() -> TestResult<()> {
         .await?
         .ok_or("no hover response at call site")?;
 
-    assert!(resp.contains("(function)"), "call-site hover should resolve to function: {resp}");
-    assert!(resp.contains("greet"), "call-site hover should show function name: {resp}");
-    assert!(resp.contains("name: str"), "call-site hover should show parameter type: {resp}");
+    assert!(
+        resp.contains("(function)"),
+        "call-site hover should resolve to function: {resp}"
+    );
+    assert!(
+        resp.contains("greet"),
+        "call-site hover should show function name: {resp}"
+    );
+    assert!(
+        resp.contains("name: str"),
+        "call-site hover should show parameter type: {resp}"
+    );
     Ok(())
 }
 
@@ -1249,9 +1307,18 @@ async fn test_ws_hover_parameter_shows_type() -> TestResult<()> {
         .await?
         .ok_or("no hover response for parameter")?;
 
-    assert!(resp.contains("(parameter)"), "hover on parameter should show '(parameter)': {resp}");
-    assert!(resp.contains("name"), "hover should show parameter name: {resp}");
-    assert!(resp.contains("str"), "hover should show parameter type 'str': {resp}");
+    assert!(
+        resp.contains("(parameter)"),
+        "hover on parameter should show '(parameter)': {resp}"
+    );
+    assert!(
+        resp.contains("name"),
+        "hover should show parameter name: {resp}"
+    );
+    assert!(
+        resp.contains("str"),
+        "hover should show parameter type 'str': {resp}"
+    );
     Ok(())
 }
 
@@ -1277,9 +1344,18 @@ async fn test_ws_hover_class_attribute() -> TestResult<()> {
         .await?
         .ok_or("no hover response for class attribute")?;
 
-    assert!(resp.contains("(property)"), "hover on class attribute should show '(property)': {resp}");
-    assert!(resp.contains("Animal.name"), "hover should show 'Animal.name': {resp}");
-    assert!(resp.contains("str"), "hover should show attribute type 'str': {resp}");
+    assert!(
+        resp.contains("(property)"),
+        "hover on class attribute should show '(property)': {resp}"
+    );
+    assert!(
+        resp.contains("Animal.name"),
+        "hover should show 'Animal.name': {resp}"
+    );
+    assert!(
+        resp.contains("str"),
+        "hover should show attribute type 'str': {resp}"
+    );
     Ok(())
 }
 
@@ -1306,7 +1382,10 @@ async fn test_ws_goto_definition_function() -> TestResult<()> {
         .await?
         .ok_or("no definition response")?;
 
-    assert!(resp.contains("ws_gotodef.py"), "definition should point to same file: {resp}");
+    assert!(
+        resp.contains("ws_gotodef.py"),
+        "definition should point to same file: {resp}"
+    );
 
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
     assert!(
@@ -1343,8 +1422,14 @@ async fn test_ws_goto_definition_function() -> TestResult<()> {
     }
 
     // Hardened: verify JSON-RPC envelope
-    assert_eq!(parsed["jsonrpc"], "2.0", "must be valid JSON-RPC 2.0: {resp}");
-    assert_eq!(parsed["id"], 310, "response id must match request id: {resp}");
+    assert_eq!(
+        parsed["jsonrpc"], "2.0",
+        "must be valid JSON-RPC 2.0: {resp}"
+    );
+    assert_eq!(
+        parsed["id"], 310,
+        "response id must match request id: {resp}"
+    );
     Ok(())
 }
 
@@ -1369,7 +1454,10 @@ async fn test_ws_goto_definition_class() -> TestResult<()> {
         .await?
         .ok_or("no definition response")?;
 
-    assert!(resp.contains("ws_gotoclass.py"), "definition should point to same file: {resp}");
+    assert!(
+        resp.contains("ws_gotoclass.py"),
+        "definition should point to same file: {resp}"
+    );
     Ok(())
 }
 
@@ -1401,7 +1489,10 @@ async fn test_ws_goto_definition_from_call_site() -> TestResult<()> {
         "goto-def from call site must resolve: {resp}"
     );
     let start = &parsed["result"]["range"]["start"];
-    assert_eq!(start["line"], 0, "goto-def from call should jump to line 0: {resp}");
+    assert_eq!(
+        start["line"], 0,
+        "goto-def from call should jump to line 0: {resp}"
+    );
     assert_eq!(
         start["character"], 4,
         "goto-def from call should land at char 4 where 'greet' is defined: {resp}"
@@ -1441,9 +1532,18 @@ x: int = 42
         .await?
         .ok_or("no document symbols response")?;
 
-    assert!(resp.contains("Animal"), "symbols should include class 'Animal': {resp}");
-    assert!(resp.contains("greet"), "symbols should include function 'greet': {resp}");
-    assert!(resp.contains("\"x\""), "symbols should include variable 'x': {resp}");
+    assert!(
+        resp.contains("Animal"),
+        "symbols should include class 'Animal': {resp}"
+    );
+    assert!(
+        resp.contains("greet"),
+        "symbols should include function 'greet': {resp}"
+    );
+    assert!(
+        resp.contains("\"x\""),
+        "symbols should include variable 'x': {resp}"
+    );
 
     // Hardened: parse and verify symbol count and structure
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
@@ -1462,10 +1562,7 @@ x: int = 42
     // Hardened: verify each symbol has a valid range with start <= end
     for symbol in symbols {
         let range = &symbol["range"];
-        assert!(
-            !range.is_null(),
-            "every symbol must have a range: {resp}"
-        );
+        assert!(!range.is_null(), "every symbol must have a range: {resp}");
         let start_line = range["start"]["line"].as_u64().unwrap_or(u64::MAX);
         let end_line = range["end"]["line"].as_u64().unwrap_or(0);
         assert!(
@@ -1526,8 +1623,14 @@ class Calculator:
 
     assert!(resp.contains("Calculator"), "should contain class: {resp}");
     assert!(resp.contains("add"), "should contain method 'add': {resp}");
-    assert!(resp.contains("multiply"), "should contain method 'multiply': {resp}");
-    assert!(resp.contains("value"), "should contain attribute 'value': {resp}");
+    assert!(
+        resp.contains("multiply"),
+        "should contain method 'multiply': {resp}"
+    );
+    assert!(
+        resp.contains("value"),
+        "should contain attribute 'value': {resp}"
+    );
     Ok(())
 }
 
@@ -1561,9 +1664,18 @@ result: str = greet(\"world\", \"Hi\")
         .await?
         .ok_or("no signature help response")?;
 
-    assert!(resp.contains("greet"), "signature should show function name: {resp}");
-    assert!(resp.contains("name"), "signature should show parameter 'name': {resp}");
-    assert!(resp.contains("greeting"), "signature should show parameter 'greeting': {resp}");
+    assert!(
+        resp.contains("greet"),
+        "signature should show function name: {resp}"
+    );
+    assert!(
+        resp.contains("name"),
+        "signature should show parameter 'name': {resp}"
+    );
+    assert!(
+        resp.contains("greeting"),
+        "signature should show parameter 'greeting': {resp}"
+    );
 
     // Hardened: parse and verify signature help structure
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
@@ -1644,7 +1756,10 @@ result: str = greet(\"world\")
 
     // Should find at least 2 references (definition + usage)
     let count = resp.matches("ws_refs.py").count();
-    assert!(count >= 2, "should find at least 2 references for 'greet' (found {count}): {resp}");
+    assert!(
+        count >= 2,
+        "should find at least 2 references for 'greet' (found {count}): {resp}"
+    );
 
     // Hardened: parse and verify exact reference count and structure
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
@@ -1676,10 +1791,7 @@ result: str = greet(\"world\")
     // Hardened: verify each reference has a valid range
     for reference in refs {
         let range = &reference["range"];
-        assert!(
-            !range.is_null(),
-            "each reference must have a range: {resp}"
-        );
+        assert!(!range.is_null(), "each reference must have a range: {resp}");
         assert!(
             range.get("start").is_some() && range.get("end").is_some(),
             "each reference range must have start and end: {resp}"
@@ -1718,7 +1830,10 @@ async fn test_ws_prepare_rename() -> TestResult<()> {
         .await?
         .ok_or("no prepare rename response")?;
 
-    assert!(resp.contains("result"), "prepare rename should return a result: {resp}");
+    assert!(
+        resp.contains("result"),
+        "prepare rename should return a result: {resp}"
+    );
     Ok(())
 }
 
@@ -1750,8 +1865,14 @@ result: str = greet(\"world\")
         .await?
         .ok_or("no rename response")?;
 
-    assert!(resp.contains("say_hello"), "rename should include new name: {resp}");
-    assert!(resp.contains("changes"), "rename should include workspace changes: {resp}");
+    assert!(
+        resp.contains("say_hello"),
+        "rename should include new name: {resp}"
+    );
+    assert!(
+        resp.contains("changes"),
+        "rename should include workspace changes: {resp}"
+    );
 
     // Hardened: parse and verify workspace edit structure
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
@@ -1772,10 +1893,7 @@ result: str = greet(\"world\")
     let edits = file_edits
         .as_array()
         .ok_or("edits for file should be an array")?;
-    assert!(
-        !edits.is_empty(),
-        "edits array must be non-empty: {resp}"
-    );
+    assert!(!edits.is_empty(), "edits array must be non-empty: {resp}");
 
     // Hardened: verify each edit has both range and newText
     for edit in edits {
@@ -1829,9 +1947,18 @@ async fn test_ws_inlay_hints_variable_types() -> TestResult<()> {
         .await?
         .ok_or("no inlay hint response")?;
 
-    assert!(resp.contains("int"), "inlay hints should show 'int' for x=42: {resp}");
-    assert!(resp.contains("str"), "inlay hints should show 'str' for y=\"hello\": {resp}");
-    assert!(resp.contains("bool"), "inlay hints should show 'bool' for z=True: {resp}");
+    assert!(
+        resp.contains("int"),
+        "inlay hints should show 'int' for x=42: {resp}"
+    );
+    assert!(
+        resp.contains("str"),
+        "inlay hints should show 'str' for y=\"hello\": {resp}"
+    );
+    assert!(
+        resp.contains("bool"),
+        "inlay hints should show 'bool' for z=True: {resp}"
+    );
 
     // Hardened: parse and verify inlay hint structure
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
@@ -1914,8 +2041,14 @@ x: int = 42
         .ok_or("no semantic tokens response")?;
 
     // Should return a data array with encoded tokens
-    assert!(resp.contains("\"data\""), "semantic tokens should contain 'data' array: {resp}");
-    assert!(resp.contains("result"), "semantic tokens should have result: {resp}");
+    assert!(
+        resp.contains("\"data\""),
+        "semantic tokens should contain 'data' array: {resp}"
+    );
+    assert!(
+        resp.contains("result"),
+        "semantic tokens should have result: {resp}"
+    );
 
     // Parse the response and verify we get tokens
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
@@ -1924,7 +2057,11 @@ x: int = 42
         .ok_or("data should be an array")?;
 
     // Each token is 5 integers, so data length should be a multiple of 5
-    assert_eq!(data.len() % 5, 0, "token data length should be multiple of 5");
+    assert_eq!(
+        data.len() % 5,
+        0,
+        "token data length should be multiple of 5"
+    );
     // We should have tokens for Animal, name, speak, self, greet, animal, x at minimum
     assert!(data.len() >= 5, "should have at least 1 token: {resp}");
 
@@ -1952,8 +2089,14 @@ x: int = 42
     );
 
     // Hardened: verify JSON-RPC structure
-    assert_eq!(parsed["jsonrpc"], "2.0", "must be valid JSON-RPC 2.0: {resp}");
-    assert_eq!(parsed["id"], 370, "response id must match request id: {resp}");
+    assert_eq!(
+        parsed["jsonrpc"], "2.0",
+        "must be valid JSON-RPC 2.0: {resp}"
+    );
+    assert_eq!(
+        parsed["id"], 370,
+        "response id must match request id: {resp}"
+    );
     Ok(())
 }
 
@@ -1964,14 +2107,38 @@ async fn test_ws_initialize_advertises_all_phase2_capabilities() -> TestResult<(
     let mut fixture = WsTestFixture::new().await?;
     let response = fixture.initialize().await?;
 
-    assert!(response.contains("\"definitionProvider\""), "should advertise definition: {response}");
-    assert!(response.contains("\"documentSymbolProvider\""), "should advertise document symbols: {response}");
-    assert!(response.contains("\"signatureHelpProvider\""), "should advertise signature help: {response}");
-    assert!(response.contains("\"referencesProvider\""), "should advertise references: {response}");
-    assert!(response.contains("\"renameProvider\""), "should advertise rename: {response}");
-    assert!(response.contains("\"inlayHintProvider\""), "should advertise inlay hints: {response}");
-    assert!(response.contains("\"semanticTokensProvider\""), "should advertise semantic tokens: {response}");
-    assert!(response.contains("\"documentFormattingProvider\""), "should advertise document formatting: {response}");
+    assert!(
+        response.contains("\"definitionProvider\""),
+        "should advertise definition: {response}"
+    );
+    assert!(
+        response.contains("\"documentSymbolProvider\""),
+        "should advertise document symbols: {response}"
+    );
+    assert!(
+        response.contains("\"signatureHelpProvider\""),
+        "should advertise signature help: {response}"
+    );
+    assert!(
+        response.contains("\"referencesProvider\""),
+        "should advertise references: {response}"
+    );
+    assert!(
+        response.contains("\"renameProvider\""),
+        "should advertise rename: {response}"
+    );
+    assert!(
+        response.contains("\"inlayHintProvider\""),
+        "should advertise inlay hints: {response}"
+    );
+    assert!(
+        response.contains("\"semanticTokensProvider\""),
+        "should advertise semantic tokens: {response}"
+    );
+    assert!(
+        response.contains("\"documentFormattingProvider\""),
+        "should advertise document formatting: {response}"
+    );
     Ok(())
 }
 
@@ -2042,9 +2209,7 @@ async fn test_ws_document_symbols_empty_file_returns_empty() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
     fixture.initialize().await?;
 
-    fixture
-        .did_open("file:///ws_edge_symbols.py", "")
-        .await?;
+    fixture.did_open("file:///ws_edge_symbols.py", "").await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     let resp = fixture
@@ -2073,9 +2238,7 @@ async fn test_ws_signature_help_outside_call_returns_null() -> TestResult<()> {
     fixture.initialize().await?;
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n\nx: int = 42\n";
-    fixture
-        .did_open("file:///ws_edge_sighelp.py", code)
-        .await?;
+    fixture.did_open("file:///ws_edge_sighelp.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     // Cursor on `x: int = 42` — not inside a function call.
@@ -2105,9 +2268,7 @@ async fn test_ws_find_references_unknown_symbol_returns_null() -> TestResult<()>
     fixture.initialize().await?;
 
     let code = "x: int = 42\n";
-    fixture
-        .did_open("file:///ws_edge_refs.py", code)
-        .await?;
+    fixture.did_open("file:///ws_edge_refs.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     // Find references at a position with no symbol.
@@ -2139,9 +2300,7 @@ async fn test_ws_rename_non_symbol_position_returns_null() -> TestResult<()> {
     fixture.initialize().await?;
 
     let code = "x: int = 42\n";
-    fixture
-        .did_open("file:///ws_edge_rename.py", code)
-        .await?;
+    fixture.did_open("file:///ws_edge_rename.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     // Rename at an empty position — should return null.
@@ -2173,9 +2332,7 @@ async fn test_ws_inlay_hints_fully_annotated_returns_empty() -> TestResult<()> {
 
     // Every variable has explicit type annotations — no inlay hints needed.
     let code = "x: int = 42\ny: str = \"hello\"\nz: bool = True\n";
-    fixture
-        .did_open("file:///ws_edge_inlay.py", code)
-        .await?;
+    fixture.did_open("file:///ws_edge_inlay.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     let resp = fixture
@@ -2366,9 +2523,7 @@ async fn test_ws_execute_command_organize_imports_returns_success() -> TestResul
 
     // Open a document with unsorted imports so the command has something to work with.
     let code = "import os\nimport sys\n\nx: int = 42\n";
-    fixture
-        .did_open("file:///ws_exec_cmd_org.py", code)
-        .await?;
+    fixture.did_open("file:///ws_exec_cmd_org.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     // Send workspace/executeCommand with basilisk.organizeImports.
@@ -2407,9 +2562,7 @@ async fn test_ws_inlay_hint_return_type_inferred() -> TestResult<()> {
 
     // Function without return annotation — should get a `-> int` inlay hint.
     let code = "def add(a: int, b: int):\n    return 42\n";
-    fixture
-        .did_open("file:///ws_ret_hint.py", code)
-        .await?;
+    fixture.did_open("file:///ws_ret_hint.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     let resp = fixture
@@ -2441,9 +2594,7 @@ async fn test_ws_inlay_hint_return_type_not_shown_when_annotated() -> TestResult
 
     // Function WITH explicit return annotation — no return-type inlay hint.
     let code = "def greet(name: str) -> str:\n    return \"hi\"\n";
-    fixture
-        .did_open("file:///ws_ret_hint_ann.py", code)
-        .await?;
+    fixture.did_open("file:///ws_ret_hint_ann.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     let resp = fixture
@@ -2490,9 +2641,7 @@ def greet(name: str, greeting: str) -> str:
 
 result: str = greet()
 ";
-    fixture
-        .did_open("file:///ws_kwarg_comp.py", code)
-        .await?;
+    fixture.did_open("file:///ws_kwarg_comp.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     // Cursor inside greet() — line 3, character 20 (after the opening paren)
@@ -2535,9 +2684,7 @@ def greet(name: str, greeting: str) -> str:
 
 result: str = greet(name=\"world\", )
 ";
-    fixture
-        .did_open("file:///ws_kwarg_skip.py", code)
-        .await?;
+    fixture.did_open("file:///ws_kwarg_skip.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     // Cursor after "name=\"world\", " — line 3, character 33
@@ -2573,10 +2720,9 @@ async fn test_ws_format_document() -> TestResult<()> {
     fixture.initialize().await?;
 
     // Badly formatted Python: inconsistent spacing, missing trailing newline.
-    let code = "x:int=1\ny:str=\"hello\"\ndef   greet( name:str )->str:\n    return f\"Hello, {name}!\"";
-    fixture
-        .did_open("file:///ws_format.py", code)
-        .await?;
+    let code =
+        "x:int=1\ny:str=\"hello\"\ndef   greet( name:str )->str:\n    return f\"Hello, {name}!\"";
+    fixture.did_open("file:///ws_format.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     let resp = fixture
@@ -2620,10 +2766,7 @@ async fn test_ws_format_document() -> TestResult<()> {
         let new_text = first_edit["newText"]
             .as_str()
             .ok_or("newText should be a string")?;
-        assert_ne!(
-            new_text, code,
-            "formatted text should differ from original"
-        );
+        assert_ne!(new_text, code, "formatted text should differ from original");
     }
 
     Ok(())
@@ -2648,11 +2791,7 @@ async fn test_ws_workspace_symbols() -> TestResult<()> {
 
     // Query all symbols — empty string returns everything.
     let resp_all = fixture
-        .request(
-            500,
-            "workspace/symbol",
-            serde_json::json!({ "query": "" }),
-        )
+        .request(500, "workspace/symbol", serde_json::json!({ "query": "" }))
         .await?
         .ok_or("no workspace/symbol response for empty query")?;
 
@@ -2725,9 +2864,7 @@ class Animal:
 def greet(name: str) -> str:
     return f\"Hello, {name}!\"
 ";
-    fixture
-        .did_open("file:///ws_folding.py", code)
-        .await?;
+    fixture.did_open("file:///ws_folding.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     let resp = fixture
@@ -2795,9 +2932,7 @@ class Greeter:
     def greet(self, name: str) -> str:
         return f\"Hello, {name}!\"
 ";
-    fixture
-        .did_open("file:///ws_selection.py", code)
-        .await?;
+    fixture.did_open("file:///ws_selection.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     // Cursor on the 'n' of `name` parameter (line 1, character 20).
@@ -2928,7 +3063,9 @@ async fn test_ws_shutdown_gracefully() -> TestResult<()> {
     let id_str = "\"id\":900";
     let mut resp = None;
     for _ in 0..10 {
-        let Some(msg) = fixture.recv().await else { break };
+        let Some(msg) = fixture.recv().await else {
+            break;
+        };
         if msg.contains(id_str) {
             resp = Some(msg);
             break;
@@ -3007,9 +3144,7 @@ async fn test_ws_hover_variable_shows_type() -> TestResult<()> {
     fixture.initialize().await?;
 
     let code = "x: int = 42\ny: str = \"hello\"\n";
-    fixture
-        .did_open("file:///ws_hover_var.py", code)
-        .await?;
+    fixture.did_open("file:///ws_hover_var.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     // Hover on "x" — line 0, character 0.
@@ -3103,9 +3238,7 @@ def greet(name: str, greeting: str) -> str:
 
 result: str = greet(\"world\", \"Hi\")
 ";
-    fixture
-        .did_open("file:///ws_inlay_param.py", code)
-        .await?;
+    fixture.did_open("file:///ws_inlay_param.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     let resp = fixture
@@ -3310,9 +3443,7 @@ class Animal:
 class Dog(Animal):
     breed: str
 ";
-    fixture
-        .did_open("file:///ws_hover_bases.py", code)
-        .await?;
+    fixture.did_open("file:///ws_hover_bases.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     // Hover on "Dog" — line 3, character 6 (inside "Dog").
@@ -3356,9 +3487,7 @@ a: int = helper(1)
 b: int = helper(2)
 c: int = helper(3)
 ";
-    fixture
-        .did_open("file:///ws_ren_multi.py", code)
-        .await?;
+    fixture.did_open("file:///ws_ren_multi.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     // Rename "helper" to "assist" (line 0, character 4).
@@ -3404,9 +3533,7 @@ async fn test_ws_goto_definition_variable() -> TestResult<()> {
     fixture.initialize().await?;
 
     let code = "x: int = 42\n";
-    fixture
-        .did_open("file:///ws_goto_var.py", code)
-        .await?;
+    fixture.did_open("file:///ws_goto_var.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     // Goto definition on "x" — line 0, character 0.
@@ -3428,8 +3555,14 @@ async fn test_ws_goto_definition_variable() -> TestResult<()> {
         "goto-def on variable must resolve: {resp}"
     );
     let start = &parsed["result"]["range"]["start"];
-    assert_eq!(start["line"], 0, "variable definition should be on line 0: {resp}");
-    assert_eq!(start["character"], 0, "variable definition should start at char 0: {resp}");
+    assert_eq!(
+        start["line"], 0,
+        "variable definition should be on line 0: {resp}"
+    );
+    assert_eq!(
+        start["character"], 0,
+        "variable definition should start at char 0: {resp}"
+    );
     Ok(())
 }
 
@@ -3439,9 +3572,7 @@ async fn test_ws_hover_import_shows_module() -> TestResult<()> {
     fixture.initialize().await?;
 
     let code = "import os\n\nx: int = 42\n";
-    fixture
-        .did_open("file:///ws_hover_import.py", code)
-        .await?;
+    fixture.did_open("file:///ws_hover_import.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     // Hover on "os" — line 0, character 7 (inside "os").
@@ -3480,9 +3611,7 @@ class Dog:
 def adopt(pet: Dog) -> Dog:
     return pet
 ";
-    fixture
-        .did_open("file:///ws_refs_class.py", code)
-        .await?;
+    fixture.did_open("file:///ws_refs_class.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     // Find references for "Dog" (line 0, character 6).
@@ -3522,9 +3651,7 @@ def render(w: Widget) -> str:
 
 count: int = 0
 ";
-    fixture
-        .did_open("file:///ws_comp_kinds.py", code)
-        .await?;
+    fixture.did_open("file:///ws_comp_kinds.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     let resp = fixture
@@ -3547,7 +3674,10 @@ count: int = 0
 
     // Find the Widget class completion — kind 7 (Class).
     let widget = items.iter().find(|i| i["label"].as_str() == Some("Widget"));
-    assert!(widget.is_some(), "should have Widget in completions: {resp}");
+    assert!(
+        widget.is_some(),
+        "should have Widget in completions: {resp}"
+    );
     assert_eq!(
         widget.map(|w| w["kind"].as_u64()),
         Some(Some(7)),
@@ -3556,7 +3686,10 @@ count: int = 0
 
     // Find the render function completion — kind 3 (Function).
     let render = items.iter().find(|i| i["label"].as_str() == Some("render"));
-    assert!(render.is_some(), "should have render in completions: {resp}");
+    assert!(
+        render.is_some(),
+        "should have render in completions: {resp}"
+    );
     assert_eq!(
         render.map(|r| r["kind"].as_u64()),
         Some(Some(3)),
@@ -3588,9 +3721,7 @@ def greet(name: str) -> str:
 x = greet(\"hello\")
 y = greet(\"world\")
 ";
-    fixture
-        .did_open("file:///ws_code_lens.py", code)
-        .await?;
+    fixture.did_open("file:///ws_code_lens.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     let resp = fixture
@@ -3884,9 +4015,7 @@ class Box(Generic[T]):
 def greet(name: str) -> str:
     return name
 ";
-    fixture
-        .did_open("file:///ws_semtok_dec.py", code)
-        .await?;
+    fixture.did_open("file:///ws_semtok_dec.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     let resp = fixture
@@ -3942,11 +4071,7 @@ async fn test_ws_workspace_symbols_empty_query() -> TestResult<()> {
 
     // Empty query should return all symbols from all open documents.
     let resp = fixture
-        .request(
-            700,
-            "workspace/symbol",
-            serde_json::json!({ "query": "" }),
-        )
+        .request(700, "workspace/symbol", serde_json::json!({ "query": "" }))
         .await?
         .ok_or("no workspace/symbol response for empty query")?;
 
@@ -3983,9 +4108,7 @@ async fn test_ws_workspace_symbols_no_match() -> TestResult<()> {
 
     // Open a document with known symbols.
     let code = "class Apple:\n    color: str\n\ndef eat(fruit: str) -> str:\n    return fruit";
-    fixture
-        .did_open("file:///ws_sym_nomatch.py", code)
-        .await?;
+    fixture.did_open("file:///ws_sym_nomatch.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     // Query for something that matches nothing in the document.
@@ -4028,9 +4151,7 @@ async fn test_ws_format_document_already_formatted() -> TestResult<()> {
 
     // Well-formatted Python code (PEP 8 compliant, trailing newline).
     let code = "x: int = 1\ny: str = \"hello\"\n\n\ndef greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n";
-    fixture
-        .did_open("file:///ws_format_clean.py", code)
-        .await?;
+    fixture.did_open("file:///ws_format_clean.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     let resp = fixture
@@ -4057,9 +4178,7 @@ async fn test_ws_format_document_already_formatted() -> TestResult<()> {
         // If edits are returned, verify the new text is the same as original
         // (ruff may return a whole-file replacement that is identical).
         if !edits.is_empty() {
-            let new_text = edits[0]["newText"]
-                .as_str()
-                .unwrap_or("");
+            let new_text = edits[0]["newText"].as_str().unwrap_or("");
             // The resulting text should be equivalent to the input.
             assert!(
                 new_text == code || edits.is_empty(),
@@ -4079,9 +4198,7 @@ async fn test_ws_format_document_empty_file() -> TestResult<()> {
 
     // Empty file — formatting should not crash.
     let code = "";
-    fixture
-        .did_open("file:///ws_format_empty.py", code)
-        .await?;
+    fixture.did_open("file:///ws_format_empty.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     let resp = fixture
@@ -4140,9 +4257,7 @@ import typing
 def main() -> None:
     pass
 ";
-    fixture
-        .did_open("file:///ws_fold_imports.py", code)
-        .await?;
+    fixture.did_open("file:///ws_fold_imports.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     let resp = fixture
@@ -4207,9 +4322,7 @@ class Outer:
 def standalone(val: int) -> int:
     return val + 1
 ";
-    fixture
-        .did_open("file:///ws_fold_nested.py", code)
-        .await?;
+    fixture.did_open("file:///ws_fold_nested.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     let resp = fixture
@@ -4289,9 +4402,7 @@ class Container:
         result: str = data.upper()
         return result
 ";
-    fixture
-        .did_open("file:///ws_sel_chain.py", code)
-        .await?;
+    fixture.did_open("file:///ws_sel_chain.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     // Cursor on 'result' inside the method body (line 2, character 8).
@@ -4384,9 +4495,7 @@ MAX_SIZE: int = 100
 name: str = \"basilisk\"
 enabled: bool = True
 ";
-    fixture
-        .did_open("file:///ws_symbols_vars.py", code)
-        .await?;
+    fixture.did_open("file:///ws_symbols_vars.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     let resp = fixture
@@ -4401,15 +4510,10 @@ enabled: bool = True
         .ok_or("no document symbols response")?;
 
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
-    let result = parsed["result"]
-        .as_array()
-        .ok_or("expected result array")?;
+    let result = parsed["result"].as_array().ok_or("expected result array")?;
 
     // All three module variables should appear.
-    let names: Vec<&str> = result
-        .iter()
-        .filter_map(|s| s["name"].as_str())
-        .collect();
+    let names: Vec<&str> = result.iter().filter_map(|s| s["name"].as_str()).collect();
     assert!(
         names.contains(&"MAX_SIZE"),
         "symbols should include 'MAX_SIZE': {resp}"
@@ -4478,18 +4582,22 @@ class Bird:
         .ok_or("no document symbols response")?;
 
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
-    let result = parsed["result"]
-        .as_array()
-        .ok_or("expected result array")?;
+    let result = parsed["result"].as_array().ok_or("expected result array")?;
 
     // All three classes should appear at top level.
-    let top_names: Vec<&str> = result
-        .iter()
-        .filter_map(|s| s["name"].as_str())
-        .collect();
-    assert!(top_names.contains(&"Cat"), "should contain class 'Cat': {resp}");
-    assert!(top_names.contains(&"Dog"), "should contain class 'Dog': {resp}");
-    assert!(top_names.contains(&"Bird"), "should contain class 'Bird': {resp}");
+    let top_names: Vec<&str> = result.iter().filter_map(|s| s["name"].as_str()).collect();
+    assert!(
+        top_names.contains(&"Cat"),
+        "should contain class 'Cat': {resp}"
+    );
+    assert!(
+        top_names.contains(&"Dog"),
+        "should contain class 'Dog': {resp}"
+    );
+    assert!(
+        top_names.contains(&"Bird"),
+        "should contain class 'Bird': {resp}"
+    );
 
     // Each class should have children (nested methods).
     for class_name in &["Cat", "Dog", "Bird"] {
@@ -4531,9 +4639,7 @@ class Greeter:
 g: Greeter = Greeter()
 result: str = g.greet(\"world\", True)
 ";
-    fixture
-        .did_open("file:///ws_sighelp_self.py", code)
-        .await?;
+    fixture.did_open("file:///ws_sighelp_self.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     // Cursor inside g.greet( call — line 6, after "g.greet("
@@ -4569,10 +4675,7 @@ result: str = g.greet(\"world\", True)
         let params = sig["parameters"]
             .as_array()
             .ok_or("expected parameters array")?;
-        let param_labels: Vec<&str> = params
-            .iter()
-            .filter_map(|p| p["label"].as_str())
-            .collect();
+        let param_labels: Vec<&str> = params.iter().filter_map(|p| p["label"].as_str()).collect();
         assert!(
             !param_labels.contains(&"self"),
             "signature help should NOT include 'self' as a parameter: {param_labels:?}"
@@ -4597,9 +4700,7 @@ class Point:
 
 p: Point = Point(1, 2)
 ";
-    fixture
-        .did_open("file:///ws_sighelp_ctor.py", code)
-        .await?;
+    fixture.did_open("file:///ws_sighelp_ctor.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     // Cursor inside Point( constructor call — line 7
@@ -4633,13 +4734,10 @@ p: Point = Point(1, 2)
                 "constructor signature should show parameters x and y: {label}"
             );
             // self should not appear in the label.
-            let params = sig["parameters"]
-                .as_array();
+            let params = sig["parameters"].as_array();
             if let Some(params) = params {
-                let param_labels: Vec<&str> = params
-                    .iter()
-                    .filter_map(|p| p["label"].as_str())
-                    .collect();
+                let param_labels: Vec<&str> =
+                    params.iter().filter_map(|p| p["label"].as_str()).collect();
                 assert!(
                     !param_labels.contains(&"self"),
                     "constructor signature should NOT include 'self': {param_labels:?}"
@@ -4663,9 +4761,7 @@ def helper(x: int) -> int:
 a: int = helper(10)
 b: int = helper(20)
 ";
-    fixture
-        .did_open("file:///ws_refs_decl.py", code)
-        .await?;
+    fixture.did_open("file:///ws_refs_decl.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     // Find references for "helper" at its definition (line 0, char 4).
@@ -4730,9 +4826,7 @@ b: str = greeting(\"world\")
         .ok_or("no references response")?;
 
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
-    let locations = parsed["result"]
-        .as_array()
-        .ok_or("expected result array")?;
+    let locations = parsed["result"].as_array().ok_or("expected result array")?;
 
     // "greet" appears on line 0 (def) and line 6 (usage) = 2 refs.
     // "greeting" on lines 3 and 7 should NOT be included.
@@ -4762,9 +4856,7 @@ async fn test_ws_code_action_no_actions_for_clean_code() -> TestResult<()> {
 
     // Fully annotated code with no redundant annotations — no diagnostics expected.
     let code = "def add(a: int, b: int) -> int:\n    return a + b\n";
-    fixture
-        .did_open("file:///ws_ca_clean.py", code)
-        .await?;
+    fixture.did_open("file:///ws_ca_clean.py", code).await?;
 
     let diag_msg = fixture
         .wait_for_diagnostics()
@@ -4972,9 +5064,7 @@ async fn test_ws_semantic_tokens_class_token() -> TestResult<()> {
 class Animal:
     name: str
 ";
-    fixture
-        .did_open("file:///ws_semtok_class.py", code)
-        .await?;
+    fixture.did_open("file:///ws_semtok_class.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     let resp = fixture
@@ -4993,7 +5083,11 @@ class Animal:
         .as_array()
         .ok_or("data should be an array")?;
 
-    assert_eq!(data.len() % 5, 0, "token data length should be multiple of 5");
+    assert_eq!(
+        data.len() % 5,
+        0,
+        "token data length should be multiple of 5"
+    );
     assert!(data.len() >= 5, "should have at least 1 token: {resp}");
 
     // Token type 2 = class. The first token should be "Animal" at line 0.
@@ -5021,9 +5115,7 @@ async fn test_ws_semantic_tokens_parameter_token() -> TestResult<()> {
 def greet(name: str) -> str:
     return name
 ";
-    fixture
-        .did_open("file:///ws_semtok_param.py", code)
-        .await?;
+    fixture.did_open("file:///ws_semtok_param.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     let resp = fixture
@@ -5042,7 +5134,11 @@ def greet(name: str) -> str:
         .as_array()
         .ok_or("data should be an array")?;
 
-    assert_eq!(data.len() % 5, 0, "token data length should be multiple of 5");
+    assert_eq!(
+        data.len() % 5,
+        0,
+        "token data length should be multiple of 5"
+    );
 
     // Token type 3 = parameter. "name" should be classified as a parameter.
     let tokens: Vec<Vec<u64>> = data
@@ -5067,9 +5163,7 @@ async fn test_ws_semantic_tokens_variable_token() -> TestResult<()> {
 x: int = 42
 y: str = \"hello\"
 ";
-    fixture
-        .did_open("file:///ws_semtok_var.py", code)
-        .await?;
+    fixture.did_open("file:///ws_semtok_var.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     let resp = fixture
@@ -5088,7 +5182,11 @@ y: str = \"hello\"
         .as_array()
         .ok_or("data should be an array")?;
 
-    assert_eq!(data.len() % 5, 0, "token data length should be multiple of 5");
+    assert_eq!(
+        data.len() % 5,
+        0,
+        "token data length should be multiple of 5"
+    );
 
     // Token type 4 = variable. Module-level x and y should be classified as variables.
     let tokens: Vec<Vec<u64>> = data
@@ -5138,7 +5236,11 @@ def greet(name: str) -> str:
         .as_array()
         .ok_or("data should be an array")?;
 
-    assert_eq!(data.len() % 5, 0, "token data length should be multiple of 5");
+    assert_eq!(
+        data.len() % 5,
+        0,
+        "token data length should be multiple of 5"
+    );
 
     // Token type 0 = function, 1 = method.
     let tokens: Vec<Vec<u64>> = data
@@ -5197,7 +5299,11 @@ def hello() -> None:
         .as_array()
         .ok_or("data should be an array")?;
 
-    assert_eq!(data.len() % 5, 0, "token data length should be multiple of 5");
+    assert_eq!(
+        data.len() % 5,
+        0,
+        "token data length should be multiple of 5"
+    );
 
     // Token type 7 = decorator. The @my_decorator usage should emit a decorator token.
     let tokens: Vec<Vec<u64>> = data
@@ -5244,7 +5350,11 @@ def process(data: str) -> int:
         .as_array()
         .ok_or("data should be an array")?;
 
-    assert_eq!(data.len() % 5, 0, "token data length should be multiple of 5");
+    assert_eq!(
+        data.len() % 5,
+        0,
+        "token data length should be multiple of 5"
+    );
 
     // Token type 8 = type. Both "str" (param annotation) and "int" (return annotation)
     // should produce type tokens.
@@ -5296,7 +5406,11 @@ class Box(Generic[T]):
         .as_array()
         .ok_or("data should be an array")?;
 
-    assert_eq!(data.len() % 5, 0, "token data length should be multiple of 5");
+    assert_eq!(
+        data.len() % 5,
+        0,
+        "token data length should be multiple of 5"
+    );
 
     // Token type 9 = typeParameter. Generic params in class Box should emit this.
     let tokens: Vec<Vec<u64>> = data
@@ -5345,7 +5459,11 @@ class MathUtils:
         .as_array()
         .ok_or("data should be an array")?;
 
-    assert_eq!(data.len() % 5, 0, "token data length should be multiple of 5");
+    assert_eq!(
+        data.len() % 5,
+        0,
+        "token data length should be multiple of 5"
+    );
 
     // Token type 1 = method. MOD_STATIC = bit 3 = value 8.
     // The "add" method token should have the static modifier set (bit 3).
@@ -5376,9 +5494,7 @@ class Animal:
 def greet(name: str) -> str:
     return name
 ";
-    fixture
-        .did_open("file:///ws_semtok_decl.py", code)
-        .await?;
+    fixture.did_open("file:///ws_semtok_decl.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await;
 
     let resp = fixture
@@ -5397,7 +5513,11 @@ def greet(name: str) -> str:
         .as_array()
         .ok_or("data should be an array")?;
 
-    assert_eq!(data.len() % 5, 0, "token data length should be multiple of 5");
+    assert_eq!(
+        data.len() % 5,
+        0,
+        "token data length should be multiple of 5"
+    );
 
     // MOD_DECLARATION = bit 2 = value 4.
     // Both class (type 2) and function (type 0) definition tokens should have this.
@@ -5454,7 +5574,11 @@ class Person:
         .as_array()
         .ok_or("data should be an array")?;
 
-    assert_eq!(data.len() % 5, 0, "token data length should be multiple of 5");
+    assert_eq!(
+        data.len() % 5,
+        0,
+        "token data length should be multiple of 5"
+    );
 
     // Token type 5 = property. Class attributes "name" and "age" should be properties.
     let tokens: Vec<Vec<u64>> = data
@@ -5501,7 +5625,11 @@ import sys
         .as_array()
         .ok_or("data should be an array")?;
 
-    assert_eq!(data.len() % 5, 0, "token data length should be multiple of 5");
+    assert_eq!(
+        data.len() % 5,
+        0,
+        "token data length should be multiple of 5"
+    );
 
     // Token type 6 = namespace. Import statements should produce namespace tokens.
     let tokens: Vec<Vec<u64>> = data
@@ -5541,7 +5669,9 @@ async fn test_ws_reinitialize_after_shutdown() -> TestResult<()> {
 
         let id_str = "\"id\":5000";
         for _ in 0..10 {
-            let Some(msg) = fixture.recv().await else { break };
+            let Some(msg) = fixture.recv().await else {
+                break;
+            };
             if msg.contains(id_str) {
                 break;
             }
@@ -5600,7 +5730,9 @@ async fn test_ws_requests_after_shutdown_return_error() -> TestResult<()> {
 
     let id_str = "\"id\":5010";
     for _ in 0..10 {
-        let Some(msg) = fixture.recv().await else { break };
+        let Some(msg) = fixture.recv().await else {
+            break;
+        };
         if msg.contains(id_str) {
             break;
         }
@@ -5738,7 +5870,9 @@ async fn test_ws_multiple_initialize_requests() -> TestResult<()> {
     let id_str = "\"id\":5030";
     let mut second_resp = None;
     for _ in 0..10 {
-        let Some(msg) = fixture.recv().await else { break };
+        let Some(msg) = fixture.recv().await else {
+            break;
+        };
         if msg.contains(id_str) {
             second_resp = Some(msg);
             break;

@@ -162,9 +162,27 @@ fn is_numeric_literal(arg: &str) -> bool {
 /// `dict`, `set`, `tuple`, `type`, `object`, `complex`, `range`, `slice`,
 /// `frozenset`, `bytearray`, `memoryview`).
 const LOWERCASE_TYPE_NAMES: &[&str] = &[
-    "int", "str", "float", "bool", "bytes", "list", "dict", "set", "tuple",
-    "type", "object", "complex", "range", "slice", "frozenset", "bytearray",
-    "memoryview", "property", "staticmethod", "classmethod", "super",
+    "int",
+    "str",
+    "float",
+    "bool",
+    "bytes",
+    "list",
+    "dict",
+    "set",
+    "tuple",
+    "type",
+    "object",
+    "complex",
+    "range",
+    "slice",
+    "frozenset",
+    "bytearray",
+    "memoryview",
+    "property",
+    "staticmethod",
+    "classmethod",
+    "super",
 ];
 
 /// Returns `true` when the argument text looks like a runtime variable reference
@@ -178,10 +196,7 @@ fn is_runtime_variable(arg: &str, module_var_names: &[String]) -> bool {
         return false;
     }
     // Must be a simple identifier (no brackets, dots, etc.)
-    if !trimmed
-        .chars()
-        .all(|ch| ch.is_alphanumeric() || ch == '_')
-    {
+    if !trimmed.chars().all(|ch| ch.is_alphanumeric() || ch == '_') {
         return false;
     }
     // Check if it's a known module-level variable (runtime value)
@@ -198,7 +213,10 @@ fn is_runtime_variable(arg: &str, module_var_names: &[String]) -> bool {
 
 /// Check if an annotation's `ClassVar` argument contains any of the given type
 /// parameter names (`TypeVar`, `ParamSpec`, `TypeVarTuple` names).
-fn contains_type_param(ann_inner: &str, type_param_names: &[(String, TypeParamKind)]) -> Option<TypeParamKind> {
+fn contains_type_param(
+    ann_inner: &str,
+    type_param_names: &[(String, TypeParamKind)],
+) -> Option<TypeParamKind> {
     for (name, kind) in type_param_names {
         // Check for the name appearing as a standalone word or as part of a subscript
         // e.g. `T` in `list[T]`, `P` in `Callable[P, Any]`
@@ -222,8 +240,8 @@ fn contains_word(text: &str, word: &str) -> bool {
     for start_idx in 0..=text_bytes.len().saturating_sub(word_len) {
         if &text_bytes[start_idx..start_idx + word_len] == word_bytes {
             // Check that the character before (if any) is not alphanumeric or underscore
-            let before_ok = start_idx == 0
-                || !is_ident_char(text_bytes[start_idx.saturating_sub(1)]);
+            let before_ok =
+                start_idx == 0 || !is_ident_char(text_bytes[start_idx.saturating_sub(1)]);
             // Check that the character after (if any) is not alphanumeric or underscore
             let after_ok = start_idx + word_len >= text_bytes.len()
                 || !is_ident_char(text_bytes[start_idx + word_len]);
@@ -282,7 +300,9 @@ fn find_self_classvar_annotations(source: &str) -> Vec<(String, Span)> {
             continue;
         }
 
-        let attr_name = if let Ok(name) = std::str::from_utf8(&bytes[attr_start..attr_end]) { name.to_owned() } else {
+        let attr_name = if let Ok(name) = std::str::from_utf8(&bytes[attr_start..attr_end]) {
+            name.to_owned()
+        } else {
             idx += 1;
             continue;
         };
@@ -306,12 +326,16 @@ fn find_self_classvar_annotations(source: &str) -> Vec<(String, Span)> {
         }
 
         // Check if annotation starts with "ClassVar" or "CV"
-        let has_cv = if ann_start + 8 <= source_len
-            && &bytes[ann_start..ann_start + 8] == b"ClassVar"
-        {
-            true
-        } else { ann_start + 2 <= source_len
-            && &bytes[ann_start..ann_start + 2] == b"CV" && (ann_start + 2 >= source_len || bytes[ann_start + 2] == b'[' || bytes[ann_start + 2] == b' ') };
+        let has_cv =
+            if ann_start + 8 <= source_len && &bytes[ann_start..ann_start + 8] == b"ClassVar" {
+                true
+            } else {
+                ann_start + 2 <= source_len
+                    && &bytes[ann_start..ann_start + 2] == b"CV"
+                    && (ann_start + 2 >= source_len
+                        || bytes[ann_start + 2] == b'['
+                        || bytes[ann_start + 2] == b' ')
+            };
 
         if has_cv {
             let target_start = idx;
@@ -612,9 +636,7 @@ fn check_classvar_args(
             TypeParamKind::TypeVarTuple => "TypeVarTuple",
         };
         diagnostics.push(make_diagnostic(
-            format!(
-                "`ClassVar` parameter for `{attr_name}` cannot contain {kind_name}",
-            ),
+            format!("`ClassVar` parameter for `{attr_name}` cannot contain {kind_name}",),
             name_span,
             path,
         ));
@@ -643,10 +665,8 @@ fn check_classvar_type_mismatch(
     let rhs_is_dict = trimmed_rhs.starts_with('{');
     let rhs_is_list = trimmed_rhs.starts_with('[');
 
-    let inner_is_list = trimmed_inner.starts_with("list")
-        || trimmed_inner.starts_with("List");
-    let inner_is_dict = trimmed_inner.starts_with("dict")
-        || trimmed_inner.starts_with("Dict");
+    let inner_is_list = trimmed_inner.starts_with("list") || trimmed_inner.starts_with("List");
+    let inner_is_dict = trimmed_inner.starts_with("dict") || trimmed_inner.starts_with("Dict");
     let inner_is_set = trimmed_inner.starts_with("set")
         || trimmed_inner.starts_with("Set")
         || trimmed_inner.starts_with("frozenset")
@@ -681,10 +701,7 @@ fn check_classvar_type_mismatch(
 /// Check module-level attribute assignments to ClassVar-annotated class attributes.
 ///
 /// e.g. `enterprise_d.stats = {}` where `stats: ClassVar[dict[str, int]]` in the class.
-fn check_instance_classvar_assignments(
-    module: &ResolvedModule,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
+fn check_instance_classvar_assignments(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
     let source = &module.source;
     let path = &module.path;
 
@@ -695,14 +712,13 @@ fn check_instance_classvar_assignments(
             .attributes
             .iter()
             .filter(|attr| {
-                span_text(source, attr.annotation_span)
-                    .is_some_and(|ann| {
-                        ann.starts_with("ClassVar[")
-                            || ann.starts_with("ClassVar ")
-                            || ann == "ClassVar"
-                            || ann.starts_with("CV[")
-                            || ann == "CV"
-                    })
+                span_text(source, attr.annotation_span).is_some_and(|ann| {
+                    ann.starts_with("ClassVar[")
+                        || ann.starts_with("ClassVar ")
+                        || ann == "ClassVar"
+                        || ann.starts_with("CV[")
+                        || ann == "CV"
+                })
             })
             .map(|attr| attr.name.as_str())
             .collect();
@@ -728,7 +744,9 @@ fn check_instance_classvar_assignments(
                         .chars()
                         .next()
                         .is_some_and(|ch| ch.is_ascii_uppercase())
-                    && class_name.chars().all(|ch| ch.is_alphanumeric() || ch == '_')
+                    && class_name
+                        .chars()
+                        .all(|ch| ch.is_alphanumeric() || ch == '_')
                 {
                     instance_class_map.push((var.name.clone(), class_name.to_owned()));
                 }
@@ -784,10 +802,7 @@ fn check_instance_classvar_assignments(
 ///
 /// e.g. `a: ProtoA = ProtoAImpl()` where `ProtoA` requires `y: ClassVar[str]`
 /// but `ProtoAImpl` only sets `self.y = ""` in `__init__` (instance variable).
-fn check_protocol_classvar_conformance(
-    module: &ResolvedModule,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
+fn check_protocol_classvar_conformance(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
     let source = &module.source;
     let path = &module.path;
 
@@ -906,4 +921,3 @@ fn check_protocol_classvar_conformance(
         }
     }
 }
-

@@ -157,9 +157,7 @@ fn check_annotated_assignment(
         return;
     }
 
-    let Some((_param_name, param_ann)) = param_literals
-        .iter()
-        .find(|(name, _)| *name == rhs)
+    let Some((_param_name, param_ann)) = param_literals.iter().find(|(name, _)| *name == rhs)
     else {
         return;
     };
@@ -189,9 +187,7 @@ fn check_annotated_assignment(
                 end: (var_byte_start + var_name.len()) as u32,
             },
             path: path.to_owned(),
-            help: Some(
-                "`Literal[0]` and `Literal[False]` are not equivalent (PEP 586)".to_owned(),
-            ),
+            help: Some("`Literal[0]` and `Literal[False]` are not equivalent (PEP 586)".to_owned()),
             note: Some(
                 "int and bool Literal values are distinct even when numerically equal".to_owned(),
             ),
@@ -213,7 +209,9 @@ fn check_augmented_assignment(
     path: &str,
 ) {
     // Detect augmented assignment operators.
-    let aug_ops = ["+=", "-=", "*=", "/=", "//=", "%=", "**=", "&=", "|=", "^=", "<<=", ">>="];
+    let aug_ops = [
+        "+=", "-=", "*=", "/=", "//=", "%=", "**=", "&=", "|=", "^=", "<<=", ">>=",
+    ];
     let mut found_op = None;
     for op in &aug_ops {
         if let Some(pos) = trimmed.find(op) {
@@ -232,9 +230,8 @@ fn check_augmented_assignment(
     };
 
     // Check if the target is a Literal-typed parameter.
-    let Some((_param_name, param_ann)) = param_literals
-        .iter()
-        .find(|(name, _)| *name == target_name)
+    let Some((_param_name, param_ann)) =
+        param_literals.iter().find(|(name, _)| *name == target_name)
     else {
         return;
     };
@@ -272,9 +269,7 @@ fn check_augmented_assignment(
 /// Returns `true` when the annotation text contains `Literal[` (or an alias like `L[`
 /// when imported as `from typing import Literal as L`).
 fn contains_literal_subscript(ann: &str) -> bool {
-    ann.starts_with("Literal[")
-        || ann.contains(".Literal[")
-        || ann.starts_with("L[")
+    ann.starts_with("Literal[") || ann.contains(".Literal[") || ann.starts_with("L[")
 }
 
 /// Extract individual values from a `Literal[v1, v2, ...]` annotation.
@@ -343,7 +338,9 @@ fn split_top_level_commas(source: &str) -> Vec<&str> {
 /// `Literal[0]` is NOT assignable to `Literal[False]` and vice versa.
 fn literal_values_assignable(source_values: &[String], target_values: &[String]) -> bool {
     source_values.iter().all(|source_val| {
-        target_values.iter().any(|target_val| literal_value_eq(source_val, target_val))
+        target_values
+            .iter()
+            .any(|target_val| literal_value_eq(source_val, target_val))
     })
 }
 
@@ -512,5 +509,6 @@ fn is_simple_identifier(source: &str) -> bool {
 
 /// Find the byte offset of a variable name within a line at a given base offset.
 fn find_var_in_line(line: &str, var_name: &str, line_byte_offset: usize) -> usize {
-    line.find(var_name).map_or(line_byte_offset, |pos| line_byte_offset + pos)
+    line.find(var_name)
+        .map_or(line_byte_offset, |pos| line_byte_offset + pos)
 }

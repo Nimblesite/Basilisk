@@ -74,7 +74,13 @@ impl Rule for CrossTypeDataclassOrderComparison {
         }
 
         let comparisons = gather_comparisons(module);
-        emit_comparison_diagnostics(&comparisons, &var_class, &order_classes, module, diagnostics);
+        emit_comparison_diagnostics(
+            &comparisons,
+            &var_class,
+            &order_classes,
+            module,
+            diagnostics,
+        );
     }
 }
 
@@ -104,7 +110,9 @@ fn build_var_class_map<'a>(
         .iter()
         .filter_map(|var| {
             let rhs_span = var.rhs_span?;
-            let rhs_text = module.source.get(rhs_span.start as usize..rhs_span.end as usize)?;
+            let rhs_text = module
+                .source
+                .get(rhs_span.start as usize..rhs_span.end as usize)?;
             let callee = rhs_text.split(['(', '[']).next()?.trim();
             let callee = callee.rsplit('.').next().unwrap_or(callee);
             if all_dc_classes.contains_key(callee) {

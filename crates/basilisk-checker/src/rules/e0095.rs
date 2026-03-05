@@ -111,10 +111,9 @@ fn check_post_init_signatures(module: &ResolvedModule, diagnostics: &mut Vec<Dia
             continue;
         }
 
-        let post_init = module
-            .functions
-            .iter()
-            .find(|f| f.class_name.as_deref() == Some(cls.name.as_str()) && f.name == "__post_init__");
+        let post_init = module.functions.iter().find(|f| {
+            f.class_name.as_deref() == Some(cls.name.as_str()) && f.name == "__post_init__"
+        });
 
         let Some(post_init_fn) = post_init else {
             continue;
@@ -183,7 +182,11 @@ fn check_initvar_attribute_access(module: &ResolvedModule, diagnostics: &mut Vec
                 .filter(|a| a.is_init_var)
                 .map(|a| a.name.as_str())
                 .collect();
-            if names.is_empty() { None } else { Some((c.name.as_str(), names)) }
+            if names.is_empty() {
+                None
+            } else {
+                Some((c.name.as_str(), names))
+            }
         })
         .collect();
 
@@ -232,28 +235,70 @@ fn check_stmt_for_initvar_access(
 
     match stmt {
         Stmt::Expr(node) => {
-            check_expr_for_initvar_access(&node.value, path, var_class_map, initvar_field_map, diagnostics);
+            check_expr_for_initvar_access(
+                &node.value,
+                path,
+                var_class_map,
+                initvar_field_map,
+                diagnostics,
+            );
         }
         Stmt::If(if_stmt) => {
-            check_expr_for_initvar_access(&if_stmt.test, path, var_class_map, initvar_field_map, diagnostics);
+            check_expr_for_initvar_access(
+                &if_stmt.test,
+                path,
+                var_class_map,
+                initvar_field_map,
+                diagnostics,
+            );
             for s in &if_stmt.body {
-                check_stmt_for_initvar_access(s, path, var_class_map, initvar_field_map, diagnostics);
+                check_stmt_for_initvar_access(
+                    s,
+                    path,
+                    var_class_map,
+                    initvar_field_map,
+                    diagnostics,
+                );
             }
             for clause in &if_stmt.elif_else_clauses {
                 if let Some(test) = &clause.test {
-                    check_expr_for_initvar_access(test, path, var_class_map, initvar_field_map, diagnostics);
+                    check_expr_for_initvar_access(
+                        test,
+                        path,
+                        var_class_map,
+                        initvar_field_map,
+                        diagnostics,
+                    );
                 }
                 for s in &clause.body {
-                    check_stmt_for_initvar_access(s, path, var_class_map, initvar_field_map, diagnostics);
+                    check_stmt_for_initvar_access(
+                        s,
+                        path,
+                        var_class_map,
+                        initvar_field_map,
+                        diagnostics,
+                    );
                 }
             }
         }
         Stmt::Assign(assign) => {
-            check_expr_for_initvar_access(&assign.value, path, var_class_map, initvar_field_map, diagnostics);
+            check_expr_for_initvar_access(
+                &assign.value,
+                path,
+                var_class_map,
+                initvar_field_map,
+                diagnostics,
+            );
         }
         Stmt::AnnAssign(ann_assign) => {
             if let Some(value) = &ann_assign.value {
-                check_expr_for_initvar_access(value, path, var_class_map, initvar_field_map, diagnostics);
+                check_expr_for_initvar_access(
+                    value,
+                    path,
+                    var_class_map,
+                    initvar_field_map,
+                    diagnostics,
+                );
             }
         }
         _ => {}
@@ -297,30 +342,78 @@ fn check_expr_for_initvar_access(
                     }
                 }
             }
-            check_expr_for_initvar_access(&attr_expr.value, path, var_class_map, initvar_field_map, diagnostics);
+            check_expr_for_initvar_access(
+                &attr_expr.value,
+                path,
+                var_class_map,
+                initvar_field_map,
+                diagnostics,
+            );
         }
         Expr::Call(call) => {
-            check_expr_for_initvar_access(&call.func, path, var_class_map, initvar_field_map, diagnostics);
+            check_expr_for_initvar_access(
+                &call.func,
+                path,
+                var_class_map,
+                initvar_field_map,
+                diagnostics,
+            );
             for arg in &call.arguments.args {
-                check_expr_for_initvar_access(arg, path, var_class_map, initvar_field_map, diagnostics);
+                check_expr_for_initvar_access(
+                    arg,
+                    path,
+                    var_class_map,
+                    initvar_field_map,
+                    diagnostics,
+                );
             }
             for kw in &call.arguments.keywords {
-                check_expr_for_initvar_access(&kw.value, path, var_class_map, initvar_field_map, diagnostics);
+                check_expr_for_initvar_access(
+                    &kw.value,
+                    path,
+                    var_class_map,
+                    initvar_field_map,
+                    diagnostics,
+                );
             }
         }
         Expr::Tuple(tup) => {
             for elt in &tup.elts {
-                check_expr_for_initvar_access(elt, path, var_class_map, initvar_field_map, diagnostics);
+                check_expr_for_initvar_access(
+                    elt,
+                    path,
+                    var_class_map,
+                    initvar_field_map,
+                    diagnostics,
+                );
             }
         }
         Expr::List(lst) => {
             for elt in &lst.elts {
-                check_expr_for_initvar_access(elt, path, var_class_map, initvar_field_map, diagnostics);
+                check_expr_for_initvar_access(
+                    elt,
+                    path,
+                    var_class_map,
+                    initvar_field_map,
+                    diagnostics,
+                );
             }
         }
         Expr::BinOp(bin) => {
-            check_expr_for_initvar_access(&bin.left, path, var_class_map, initvar_field_map, diagnostics);
-            check_expr_for_initvar_access(&bin.right, path, var_class_map, initvar_field_map, diagnostics);
+            check_expr_for_initvar_access(
+                &bin.left,
+                path,
+                var_class_map,
+                initvar_field_map,
+                diagnostics,
+            );
+            check_expr_for_initvar_access(
+                &bin.right,
+                path,
+                var_class_map,
+                initvar_field_map,
+                diagnostics,
+            );
         }
         _ => {}
     }

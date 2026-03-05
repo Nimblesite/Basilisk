@@ -134,10 +134,7 @@ fn resolve_overload_for_call<'a>(
     match arity_matches.len() {
         0 => {
             // No overload matches arity — fall back to implementation.
-            funcs
-                .iter()
-                .find(|f| !is_overload_stub(f, module))
-                .copied()
+            funcs.iter().find(|f| !is_overload_stub(f, module)).copied()
         }
         1 => {
             // Exactly one overload matches arity — check against it.
@@ -147,10 +144,7 @@ fn resolve_overload_for_call<'a>(
             // Multiple overloads match arity — fall back to implementation
             // to avoid false positives (full type-based overload resolution
             // would be needed to pick the right one).
-            funcs
-                .iter()
-                .find(|f| !is_overload_stub(f, module))
-                .copied()
+            funcs.iter().find(|f| !is_overload_stub(f, module)).copied()
         }
     }
 }
@@ -169,7 +163,11 @@ fn is_overload_stub(func: &FunctionInfo, _module: &ResolvedModule) -> bool {
 ///
 /// `arg_source` is the raw source text of the argument expression, used to
 /// disambiguate `CallExpr` arguments (e.g. detecting `type(None)` vs other calls).
-fn arg_rhs_mismatch(annotation: &str, rhs: &RhsKind, arg_source: Option<&str>) -> Option<&'static str> {
+fn arg_rhs_mismatch(
+    annotation: &str,
+    rhs: &RhsKind,
+    arg_source: Option<&str>,
+) -> Option<&'static str> {
     let base = annotation
         .split('[')
         .next()
@@ -178,7 +176,8 @@ fn arg_rhs_mismatch(annotation: &str, rhs: &RhsKind, arg_source: Option<&str>) -
         .to_ascii_lowercase();
 
     // Check for TypeVarTuple unpack patterns in parameter annotations
-    if annotation.contains("*tuple[Any, ...]") && matches!(rhs, RhsKind::CallExpr | RhsKind::Other) {
+    if annotation.contains("*tuple[Any, ...]") && matches!(rhs, RhsKind::CallExpr | RhsKind::Other)
+    {
         return Some("a generic type that may be incompatible with TypeVarTuple unpacking");
     }
 
@@ -194,15 +193,13 @@ fn arg_rhs_mismatch(annotation: &str, rhs: &RhsKind, arg_source: Option<&str>) -
         }
         // `type(None)` returns a class object (`NoneType`), not the value `None`.
         // A parameter annotated `None` expects the value `None`, not its type.
-        ("none", RhsKind::TypeCall) => {
-            Some("`type(None)` (a class object, not the value `None`)")
-        },
+        ("none", RhsKind::TypeCall) => Some("`type(None)` (a class object, not the value `None`)"),
         // `type(None)` classified as a generic `CallExpr` by the resolver.
         // When the annotation is `None`, a `type(...)` call produces a class
         // object, which is incompatible with the `None` value type.
         ("none", RhsKind::CallExpr) if is_type_call(arg_source) => {
             Some("`type(None)` (a class object, not the value `None`)")
-        },
+        }
         _ => None,
     }
 }

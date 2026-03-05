@@ -151,10 +151,9 @@ fn check_subscript_on_line(
             #[allow(clippy::cast_possible_truncation)]
             if out_of_range {
                 // Compute the span: find this line in the full source
-                let line_offset_in_source = raw_line.as_ptr() as usize - full_source.as_ptr() as usize;
-                let expr_start_in_line = raw_line
-                    .find(trimmed)
-                    .unwrap_or(0);
+                let line_offset_in_source =
+                    raw_line.as_ptr() as usize - full_source.as_ptr() as usize;
+                let expr_start_in_line = raw_line.find(trimmed).unwrap_or(0);
                 let span_start = (line_offset_in_source + expr_start_in_line + abs_pos) as u32;
                 // Span covers `name[index]`
                 let span_end = span_start + (bracket_pos + 1 + close_bracket + 1 - abs_pos) as u32;

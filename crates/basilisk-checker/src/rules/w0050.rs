@@ -10,9 +10,9 @@
 //! z: float = 42      # NO warning — annotation adds information (widening)
 //! ```
 
-use basilisk_resolver::ResolvedModule;
 use crate::inference::infer_rhs;
 use crate::types::InferredType;
+use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
@@ -35,18 +35,18 @@ impl Rule for RedundantAnnotationWarning {
             .filter(|var| var.has_annotation)
             .filter_map(|var| {
                 let annotation_text = extract_annotation(&module.source, var.name_span)?;
-                
+
                 // Use inference system to get RHS type
                 let inferred_type = infer_rhs(&var.rhs_kind);
-                
+
                 // Skip if inference failed
                 if matches!(inferred_type, InferredType::Unknown) {
                     return None;
                 }
-                
+
                 // Parse annotation text to InferredType using existing parser
                 let declared_type = InferredType::from_annotation(annotation_text);
-                
+
                 // Check if annotation is redundant (base type match)
                 if types_match_for_w0050(&inferred_type, &declared_type) {
                     Some((var.name_span, var.name.clone(), annotation_text.to_owned()))
@@ -55,9 +55,14 @@ impl Rule for RedundantAnnotationWarning {
                 }
             })
             .for_each(|(span, name, annotation)| {
-                diagnostics.push(make_diagnostic_for_var(&name, &annotation, span, &module.path));
+                diagnostics.push(make_diagnostic_for_var(
+                    &name,
+                    &annotation,
+                    span,
+                    &module.path,
+                ));
             });
-        
+
         // Check class attributes (skip TypedDict/Protocol/NamedTuple classes)
         module
             .classes
@@ -65,42 +70,57 @@ impl Rule for RedundantAnnotationWarning {
             .filter(|class| {
                 // Skip TypedDict, Protocol, and NamedTuple classes (including subclasses).
                 !class.bases.iter().any(|base| {
-                    base.contains("TypedDict") || base.contains("Protocol") || base.contains("NamedTuple")
+                    base.contains("TypedDict")
+                        || base.contains("Protocol")
+                        || base.contains("NamedTuple")
                 }) && !is_namedtuple_subclass(class, &module.classes)
             })
             .flat_map(|class| &class.attributes)
             .filter(|attr| attr.has_annotation && attr.has_value)
             .filter_map(|attr| {
                 let annotation_text = extract_annotation(&module.source, attr.name_span)?;
-                
+
                 // Use inference system to get RHS type
                 let inferred_type = infer_rhs(&attr.rhs_kind);
-                
+
                 // For class attributes with literal values, we can infer the type from the source
                 let inferred_type = if matches!(inferred_type, InferredType::Unknown) {
                     // Try to infer from the source text
-                    infer_type_from_source(&module.source, attr.name_span, &InferredType::from_annotation(annotation_text))
+                    infer_type_from_source(
+                        &module.source,
+                        attr.name_span,
+                        &InferredType::from_annotation(annotation_text),
+                    )
                 } else {
                     inferred_type
                 };
-                
+
                 // Skip if inference still failed
                 if matches!(inferred_type, InferredType::Unknown) {
                     return None;
                 }
-                
+
                 // Parse annotation text to InferredType using existing parser
                 let declared_type = InferredType::from_annotation(annotation_text);
-                
+
                 // Check if annotation is redundant (base type match)
                 if types_match_for_w0050(&inferred_type, &declared_type) {
-                    Some((attr.name_span, attr.name.clone(), annotation_text.to_owned()))
+                    Some((
+                        attr.name_span,
+                        attr.name.clone(),
+                        annotation_text.to_owned(),
+                    ))
                 } else {
                     None
                 }
             })
             .for_each(|(span, name, annotation)| {
-                diagnostics.push(make_diagnostic_for_var(&name, &annotation, span, &module.path));
+                diagnostics.push(make_diagnostic_for_var(
+                    &name,
+                    &annotation,
+                    span,
+                    &module.path,
+                ));
             });
     }
 }
@@ -162,7 +182,11 @@ fn types_match_for_w0050(inferred: &InferredType, declared: &InferredType) -> bo
 }
 
 /// Infer type from source text when resolver inference fails
-fn infer_type_from_source(source: &str, name_span: basilisk_resolver::Span, declared_type: &InferredType) -> InferredType {
+fn infer_type_from_source(
+    source: &str,
+    name_span: basilisk_resolver::Span,
+    declared_type: &InferredType,
+) -> InferredType {
     // Extract the line containing the assignment
     let start = name_span.start as usize;
     let line_start = source[..start].rfind('\n').map_or(0, |pos| pos + 1);
@@ -180,14 +204,15 @@ fn infer_type_from_source(source: &str, name_span: basilisk_resolver::Span, decl
     };
 
     let value_text = line[equals_pos + 1..].trim();
-    
+
     // Simple literal detection
     if value_text.parse::<i64>().is_ok() {
         InferredType::Int
     } else if value_text.parse::<f64>().is_ok() {
         InferredType::Float
-    } else if (value_text.starts_with('"') && value_text.ends_with('"')) || 
-              (value_text.starts_with('\'') && value_text.ends_with('\'')) {
+    } else if (value_text.starts_with('"') && value_text.ends_with('"'))
+        || (value_text.starts_with('\'') && value_text.ends_with('\''))
+    {
         InferredType::Str
     } else if value_text == "True" || value_text == "False" {
         InferredType::Bool

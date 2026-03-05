@@ -72,8 +72,9 @@ fn collect_type_alias_names(module: &ResolvedModule) -> Vec<String> {
         }
         // Scan the raw import source text for `TypeAlias as <alias>` patterns.
         let import_span = import.span;
-        let Some(import_text) =
-            module.source.get(import_span.start as usize..import_span.end as usize)
+        let Some(import_text) = module
+            .source
+            .get(import_span.start as usize..import_span.end as usize)
         else {
             continue;
         };

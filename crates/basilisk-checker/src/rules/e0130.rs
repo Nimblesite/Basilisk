@@ -60,8 +60,7 @@ fn contains_typevar_reference(text: &str, typevar_name: &str) -> bool {
                 return false;
             }
             let before_ok = idx == 0
-                || (!haystack[idx - 1].is_ascii_alphanumeric()
-                    && haystack[idx - 1] != b'_');
+                || (!haystack[idx - 1].is_ascii_alphanumeric() && haystack[idx - 1] != b'_');
             let after_ok = idx + needle_len >= haystack.len()
                 || (!haystack[idx + needle_len].is_ascii_alphanumeric()
                     && haystack[idx + needle_len] != b'_');
@@ -129,10 +128,7 @@ fn line_to_byte_offset(source: &str, target_line: usize) -> u32 {
 #[allow(clippy::cast_possible_truncation)]
 fn span_for_line(source: &str, line_number: usize) -> Span {
     let start = line_to_byte_offset(source, line_number) as usize;
-    let line_text = source[start..]
-        .lines()
-        .next()
-        .unwrap_or("");
+    let line_text = source[start..].lines().next().unwrap_or("");
     let trimmed_start = start + (line_text.len() - line_text.trim_start().len());
     let trimmed_end = start + line_text.trim_end().len();
     Span {
@@ -226,13 +222,17 @@ fn infer_literal_type(expr: &str) -> Option<&'static str> {
     }
     // Integer literal (possibly negative)
     if expr.chars().all(|c| c.is_ascii_digit())
-        || (expr.starts_with('-') && expr.len() > 1 && expr[1..].chars().all(|c| c.is_ascii_digit()))
+        || (expr.starts_with('-')
+            && expr.len() > 1
+            && expr[1..].chars().all(|c| c.is_ascii_digit()))
     {
         return Some("int");
     }
     // Float literal
     if expr.contains('.')
-        && expr.chars().all(|c| c.is_ascii_digit() || c == '.' || c == '-')
+        && expr
+            .chars()
+            .all(|c| c.is_ascii_digit() || c == '.' || c == '-')
     {
         return Some("float");
     }
@@ -453,23 +453,13 @@ fn collect_generic_instances(source: &str) -> Vec<GenericInstance> {
         };
         let var_name = trimmed[..colon_pos].trim();
         // Variable name must be a simple identifier.
-        if var_name.is_empty()
-            || !var_name.chars().all(|c| c.is_alphanumeric() || c == '_')
-        {
+        if var_name.is_empty() || !var_name.chars().all(|c| c.is_alphanumeric() || c == '_') {
             continue;
         }
         // Extract annotation (up to `=` or end of line, stripping comments).
         let after_colon = &trimmed[colon_pos + 1..];
-        let ann_raw = after_colon
-            .split('=')
-            .next()
-            .unwrap_or(after_colon)
-            .trim();
-        let ann_text = ann_raw
-            .split('#')
-            .next()
-            .unwrap_or(ann_raw)
-            .trim();
+        let ann_raw = after_colon.split('=').next().unwrap_or(after_colon).trim();
+        let ann_text = ann_raw.split('#').next().unwrap_or(ann_raw).trim();
 
         if let Some((class_name, type_args)) = parse_generic_annotation(ann_text) {
             instances.push(GenericInstance {
@@ -506,7 +496,10 @@ fn check_generic_instance_method_calls(
         HashMap::new();
 
     for instance in &instances {
-        if let Some(class_def) = generic_classes.iter().find(|c| c.name == instance.class_name) {
+        if let Some(class_def) = generic_classes
+            .iter()
+            .find(|c| c.name == instance.class_name)
+        {
             let subst: HashMap<String, String> = class_def
                 .typevar_params
                 .iter()
@@ -740,8 +733,7 @@ impl Rule for TypeVarScopeViolation {
 
             // Detect function definitions.
             if trimmed.starts_with("def ") || trimmed.starts_with("async def ") {
-                let bound_tvs =
-                    extract_typevars_from_function_sig(trimmed, &all_typevars);
+                let bound_tvs = extract_typevars_from_function_sig(trimmed, &all_typevars);
                 scope_stack.push(ScopeInfo {
                     indent,
                     bound_typevars: bound_tvs,
@@ -755,15 +747,12 @@ impl Rule for TypeVarScopeViolation {
             // This only applies when there are at least 2 class scopes on the stack
             // (outer generic class + inner class).
             {
-                let class_scopes: Vec<&ScopeInfo> = scope_stack
-                    .iter()
-                    .filter(|scope| scope.is_class)
-                    .collect();
+                let class_scopes: Vec<&ScopeInfo> =
+                    scope_stack.iter().filter(|scope| scope.is_class).collect();
 
                 if class_scopes.len() >= 2 {
                     // Collect TypeVars from all outer class scopes (all but the last).
-                    let outer_class_tvs: HashSet<String> = class_scopes
-                        [..class_scopes.len() - 1]
+                    let outer_class_tvs: HashSet<String> = class_scopes[..class_scopes.len() - 1]
                         .iter()
                         .flat_map(|scope| scope.bound_typevars.iter().cloned())
                         .collect();
@@ -779,12 +768,10 @@ impl Rule for TypeVarScopeViolation {
 
                     if !forbidden_tvs.is_empty() && trimmed.contains(':') {
                         // This is an annotation line — check for forbidden TypeVar refs.
-                        let annotation_part = trimmed
-                            .split_once(':')
-                            .map_or(trimmed, |(_, rhs)| rhs);
+                        let annotation_part =
+                            trimmed.split_once(':').map_or(trimmed, |(_, rhs)| rhs);
                         for typevar_name in &forbidden_tvs {
-                            if contains_typevar_reference(annotation_part, typevar_name)
-                            {
+                            if contains_typevar_reference(annotation_part, typevar_name) {
                                 diagnostics.push(Diagnostic {
                                     code: CODE.clone(),
                                     severity: Severity::Error,
@@ -795,8 +782,7 @@ impl Rule for TypeVarScopeViolation {
                                     span: span_for_line(&module.source, line_number),
                                     path: module.path.clone(),
                                     help: Some(
-                                        "Use a different TypeVar for the inner class"
-                                            .to_owned(),
+                                        "Use a different TypeVar for the inner class".to_owned(),
                                     ),
                                     note: Some(
                                         "PEP 484: the scope of type variables of the \
@@ -820,9 +806,7 @@ impl Rule for TypeVarScopeViolation {
                     .flat_map(|scope| scope.bound_typevars.iter())
                     .collect();
 
-                let annotation_part = trimmed
-                    .split_once(':')
-                    .map_or(trimmed, |(_, rhs)| rhs);
+                let annotation_part = trimmed.split_once(':').map_or(trimmed, |(_, rhs)| rhs);
                 let before_comment = annotation_part
                     .split_once('#')
                     .map_or(annotation_part, |(code, _)| code);
@@ -833,8 +817,8 @@ impl Rule for TypeVarScopeViolation {
                     {
                         // Skip if this is a function def line (already handles its own
                         // TypeVars via scope creation).
-                        let is_def_line = trimmed.starts_with("def ")
-                            || trimmed.starts_with("async def ");
+                        let is_def_line =
+                            trimmed.starts_with("def ") || trimmed.starts_with("async def ");
                         if !is_def_line {
                             diagnostics.push(Diagnostic {
                                 code: CODE.clone(),
@@ -865,18 +849,14 @@ impl Rule for TypeVarScopeViolation {
             // for type alias definitions. `alias: TypeAlias = list[T]` is invalid
             // when T comes from the enclosing class's Generic[T].
             {
-                let class_scopes: Vec<&ScopeInfo> = scope_stack
-                    .iter()
-                    .filter(|scope| scope.is_class)
-                    .collect();
+                let class_scopes: Vec<&ScopeInfo> =
+                    scope_stack.iter().filter(|scope| scope.is_class).collect();
 
                 if class_scopes.len() == 1 && trimmed.contains("TypeAlias") {
                     let enclosing_tvs = &class_scopes[0].bound_typevars;
                     if !enclosing_tvs.is_empty() {
                         // Check the RHS of the TypeAlias assignment for TypeVar refs.
-                        let rhs_part = trimmed
-                            .split_once('=')
-                            .map_or("", |(_, rhs)| rhs);
+                        let rhs_part = trimmed.split_once('=').map_or("", |(_, rhs)| rhs);
                         for typevar_name in enclosing_tvs {
                             if contains_typevar_reference(rhs_part, typevar_name) {
                                 diagnostics.push(Diagnostic {
@@ -910,25 +890,21 @@ impl Rule for TypeVarScopeViolation {
             if indent == 0 && scope_stack.is_empty() {
                 // Skip class/def definitions, imports, assignments with annotations
                 // (those are already handled by other checks or are valid).
-                let dominated_by_other =
-                    trimmed.starts_with("class ")
-                        || trimmed.starts_with("def ")
-                        || trimmed.starts_with("import ")
-                        || trimmed.starts_with("from ")
-                        || trimmed.starts_with('@');
+                let dominated_by_other = trimmed.starts_with("class ")
+                    || trimmed.starts_with("def ")
+                    || trimmed.starts_with("import ")
+                    || trimmed.starts_with("from ")
+                    || trimmed.starts_with('@');
 
                 if !dominated_by_other {
-                    let before_comment = trimmed
-                        .split_once('#')
-                        .map_or(trimmed, |(code, _)| code);
+                    let before_comment = trimmed.split_once('#').map_or(trimmed, |(code, _)| code);
                     for typevar_name in &all_typevars {
                         // Check for TypeVar in annotations (x: T, x: list[T] = ...)
                         // and in expressions (list[T]()).
                         if contains_typevar_reference(before_comment, typevar_name) {
                             // Skip lines that are TypeVar definitions themselves
                             // (e.g. `T = TypeVar('T')`)
-                            let is_typevar_def = before_comment
-                                .contains("TypeVar");
+                            let is_typevar_def = before_comment.contains("TypeVar");
                             if !is_typevar_def {
                                 diagnostics.push(Diagnostic {
                                     code: CODE.clone(),

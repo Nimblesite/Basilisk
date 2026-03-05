@@ -134,11 +134,7 @@ fn collect_class_members(
 }
 
 /// Check if a concrete class has an unsafe overlap with a protocol.
-fn has_unsafe_overlap(
-    concrete_class: &str,
-    protocol_class: &str,
-    module: &ResolvedModule,
-) -> bool {
+fn has_unsafe_overlap(concrete_class: &str, protocol_class: &str, module: &ResolvedModule) -> bool {
     let concrete_members = collect_class_members(concrete_class, module);
     let protocol_members = collect_class_members(protocol_class, module);
 
@@ -170,10 +166,7 @@ fn has_unsafe_overlap(
                         return true;
                     }
                 }
-                if !proto_ret.is_empty()
-                    && !concrete_ret.is_empty()
-                    && proto_ret != concrete_ret
-                {
+                if !proto_ret.is_empty() && !concrete_ret.is_empty() && proto_ret != concrete_ret {
                     return true;
                 }
             }
@@ -265,9 +258,7 @@ fn check_single_protocol(
         diagnostics.push(Diagnostic {
             code: CODE.clone(),
             severity: Severity::Error,
-            message: format!(
-                "`issubclass()` cannot be used with data protocol `{proto_name}`"
-            ),
+            message: format!("`issubclass()` cannot be used with data protocol `{proto_name}`"),
             span: call_span,
             path: module.path.clone(),
             help: Some(format!(
@@ -456,8 +447,7 @@ fn check_expr_for_violations(
 
 impl Rule for ProtocolUnsafeOverlap {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let Ok(parsed) =
-            basilisk_parser::parse_source(module.source.clone(), module.path.clone())
+        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
         else {
             return;
         };

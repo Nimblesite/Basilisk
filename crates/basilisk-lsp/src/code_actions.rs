@@ -109,13 +109,19 @@ fn suppress_with_type_ignore(uri: &Url, diag: &Diagnostic, source: &str) -> Code
         .lines()
         .nth(line_idx)
         .map_or(0, |l| l.chars().count()) as u32;
-    let insert_pos = Position { line: diag.range.start.line, character: line_char_len };
+    let insert_pos = Position {
+        line: diag.range.start.line,
+        character: line_char_len,
+    };
 
     let mut changes = HashMap::new();
     changes.insert(
         uri.clone(),
         vec![TextEdit {
-            range: Range { start: insert_pos, end: insert_pos },
+            range: Range {
+                start: insert_pos,
+                end: insert_pos,
+            },
             new_text: "  # type: ignore".to_owned(),
         }],
     );
@@ -123,7 +129,10 @@ fn suppress_with_type_ignore(uri: &Url, diag: &Diagnostic, source: &str) -> Code
         title: "Suppress with `# type: ignore` (basilisk)".to_owned(),
         kind: Some(CodeActionKind::QUICKFIX),
         diagnostics: Some(vec![diag.clone()]),
-        edit: Some(WorkspaceEdit { changes: Some(changes), ..Default::default() }),
+        edit: Some(WorkspaceEdit {
+            changes: Some(changes),
+            ..Default::default()
+        }),
         is_preferred: Some(false),
         ..Default::default()
     }
@@ -163,25 +172,34 @@ pub(crate) fn organize_imports(uri: &Url, source: &str) -> Option<CodeAction> {
     #[allow(clippy::cast_possible_truncation)]
     let line_count = source.lines().count() as u32;
     #[allow(clippy::cast_possible_truncation)]
-    let last_line_len = source
-        .lines()
-        .last()
-        .map_or(0, |l| l.chars().count()) as u32;
+    let last_line_len = source.lines().last().map_or(0, |l| l.chars().count()) as u32;
     let full_range = Range {
-        start: Position { line: 0, character: 0 },
-        end: Position { line: line_count, character: last_line_len },
+        start: Position {
+            line: 0,
+            character: 0,
+        },
+        end: Position {
+            line: line_count,
+            character: last_line_len,
+        },
     };
 
     let mut changes = HashMap::new();
     changes.insert(
         uri.clone(),
-        vec![TextEdit { range: full_range, new_text: new_source }],
+        vec![TextEdit {
+            range: full_range,
+            new_text: new_source,
+        }],
     );
     Some(CodeAction {
         title: "Organize imports (ruff)".to_owned(),
         kind: Some(CodeActionKind::SOURCE_ORGANIZE_IMPORTS),
         diagnostics: None,
-        edit: Some(WorkspaceEdit { changes: Some(changes), ..Default::default() }),
+        edit: Some(WorkspaceEdit {
+            changes: Some(changes),
+            ..Default::default()
+        }),
         is_preferred: Some(true),
         ..Default::default()
     })
@@ -201,7 +219,10 @@ fn single_insert(
     changes.insert(
         uri.clone(),
         vec![TextEdit {
-            range: Range { start: pos, end: pos },
+            range: Range {
+                start: pos,
+                end: pos,
+            },
             new_text: text.to_owned(),
         }],
     );
@@ -209,7 +230,10 @@ fn single_insert(
         title: title.to_owned(),
         kind: Some(CodeActionKind::QUICKFIX),
         diagnostics: Some(vec![diag.clone()]),
-        edit: Some(WorkspaceEdit { changes: Some(changes), ..Default::default() }),
+        edit: Some(WorkspaceEdit {
+            changes: Some(changes),
+            ..Default::default()
+        }),
         is_preferred: Some(true),
         ..Default::default()
     }

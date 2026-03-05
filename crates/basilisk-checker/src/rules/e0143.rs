@@ -46,8 +46,7 @@ pub(crate) struct NamedTupleUsageViolation;
 
 impl Rule for NamedTupleUsageViolation {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let Ok(parsed) =
-            basilisk_parser::parse_source(module.source.clone(), module.path.clone())
+        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
         else {
             return;
         };
@@ -89,12 +88,9 @@ impl ModuleContext {
         for stmt in stmts {
             if let Stmt::ClassDef(cls) = stmt {
                 if !namedtuple_classes.contains_key(cls.name.as_str()) {
-                    if let Some(base_count) =
-                        namedtuple_base_count(cls, &namedtuple_classes)
-                    {
+                    if let Some(base_count) = namedtuple_base_count(cls, &namedtuple_classes) {
                         let own_fields = count_annotated_fields(cls);
-                        namedtuple_classes
-                            .insert(cls.name.to_string(), base_count + own_fields);
+                        namedtuple_classes.insert(cls.name.to_string(), base_count + own_fields);
                     }
                 }
             }
@@ -107,8 +103,7 @@ impl ModuleContext {
                     if let Some(var_name) = expr_simple_name(&assign.targets[0]) {
                         if let Some(class_name) = call_class_name(&assign.value) {
                             if namedtuple_classes.contains_key(class_name) {
-                                var_to_nt_class
-                                    .insert(var_name.to_owned(), class_name.to_owned());
+                                var_to_nt_class.insert(var_name.to_owned(), class_name.to_owned());
                             }
                         }
                     }
@@ -289,9 +284,7 @@ fn check_tuple_unpack(
         diag.push(Diagnostic {
             code: CODE.clone(),
             severity: Severity::Error,
-            message: format!(
-                "NamedTuple unpack mismatch: {kind}: {detail}"
-            ),
+            message: format!("NamedTuple unpack mismatch: {kind}: {detail}"),
             span: to_span(assign.range()),
             path: path.to_owned(),
             help: Some(format!(
@@ -306,12 +299,7 @@ fn check_tuple_unpack(
 }
 
 /// Check a delete target for NamedTuple violations.
-fn check_delete_target(
-    target: &Expr,
-    ctx: &ModuleContext,
-    path: &str,
-    diag: &mut Vec<Diagnostic>,
-) {
+fn check_delete_target(target: &Expr, ctx: &ModuleContext, path: &str, diag: &mut Vec<Diagnostic>) {
     match target {
         // `del p.x`
         Expr::Attribute(attr) => {
@@ -516,8 +504,7 @@ fn out_of_bounds_diag(
             "Valid indices for `{obj_name}` are -{field_count}..{max_idx} (inclusive)"
         )),
         note: Some(
-            "NamedTuple is a subtype of tuple; index access obeys the same bounds"
-                .to_owned(),
+            "NamedTuple is a subtype of tuple; index access obeys the same bounds".to_owned(),
         ),
     }
 }

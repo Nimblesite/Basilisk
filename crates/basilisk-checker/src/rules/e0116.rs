@@ -163,8 +163,7 @@ fn check_multiple_inheritance(class: &ClassInfo, path: &str, diagnostics: &mut V
                     .to_owned(),
             ),
             note: Some(
-                "Only `Generic[...]` is allowed alongside `NamedTuple` as a base class"
-                    .to_owned(),
+                "Only `Generic[...]` is allowed alongside `NamedTuple` as a base class".to_owned(),
             ),
         });
     }

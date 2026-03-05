@@ -4,9 +4,9 @@
 //! assignable to the declared type. This extends the original `-> None` check to
 //! handle all return type mismatches using the inference system.
 
-use basilisk_resolver::{FunctionInfo, ResolvedModule, ReturnStmtInfo};
 use crate::inference::infer_rhs;
 use crate::types::InferredType;
+use basilisk_resolver::{FunctionInfo, ResolvedModule, ReturnStmtInfo};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
@@ -74,26 +74,28 @@ fn check_function(func: &FunctionInfo, module: &ResolvedModule, out: &mut Vec<Di
         // is valid in a -> None function).
         .filter(|stmt| !stmt.value_is_call)
         .for_each(|stmt| {
-        // Use inference system to get RHS type
-        let inferred_type = infer_rhs(&stmt.rhs_kind);
-        
-        // Skip Unknown types - we can't prove they're incompatible
-        if matches!(inferred_type, InferredType::Unknown) {
-            return;
-        }
-        
-        // Check assignability using inference system
-        if !inferred_type.is_assignable_to(&declared_type) {
-            out.push(make_diagnostic(stmt, &func.name, &inferred_type, &declared_type, &module.path));
-        }
+            // Use inference system to get RHS type
+            let inferred_type = infer_rhs(&stmt.rhs_kind);
+
+            // Skip Unknown types - we can't prove they're incompatible
+            if matches!(inferred_type, InferredType::Unknown) {
+                return;
+            }
+
+            // Check assignability using inference system
+            if !inferred_type.is_assignable_to(&declared_type) {
+                out.push(make_diagnostic(
+                    stmt,
+                    &func.name,
+                    &inferred_type,
+                    &declared_type,
+                    &module.path,
+                ));
+            }
         });
 }
 
-fn make_none_diagnostic(
-    stmt: &ReturnStmtInfo, 
-    func_name: &str, 
-    path: &str
-) -> Diagnostic {
+fn make_none_diagnostic(stmt: &ReturnStmtInfo, func_name: &str, path: &str) -> Diagnostic {
     Diagnostic {
         code: CODE.clone(),
         severity: Severity::Error,
@@ -113,11 +115,11 @@ fn make_none_diagnostic(
 }
 
 fn make_diagnostic(
-    stmt: &ReturnStmtInfo, 
-    func_name: &str, 
+    stmt: &ReturnStmtInfo,
+    func_name: &str,
     inferred_type: &InferredType,
     declared_type: &InferredType,
-    path: &str
+    path: &str,
 ) -> Diagnostic {
     Diagnostic {
         code: CODE.clone(),
