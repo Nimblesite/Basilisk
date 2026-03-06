@@ -7,6 +7,7 @@
 //! - `return` statements
 //! - Top-level expression statements (function calls)
 
+use basilisk_resolver::scope::{FunctionInfo, ResolvedModule, ReturnAnnotationKind};
 use cranelift::prelude::*;
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{FuncId, Linkage, Module};
@@ -19,12 +20,23 @@ use crate::CompileError;
 const ENTRY_NAME: &str = "__basilisk_main__";
 
 /// JIT-compile and execute a parsed module, returning captured stdout.
-pub fn jit_compile_and_run(module: &ast::ModModule) -> Result<String, CompileError> {
+///
+/// Uses type information from the resolver's [`ResolvedModule`] to build
+/// correct function signatures (parameter counts, return types) rather than
+/// re-parsing AST annotations.
+///
+/// # Errors
+///
+/// Returns `CompileError` if JIT compilation or execution fails.
+pub fn jit_compile_and_run(
+    module: &ast::ModModule,
+    resolved: &ResolvedModule,
+) -> Result<String, CompileError> {
     let mut compiler = JitCompiler::new().map_err(|err| {
         CompileError::Codegen(format!("failed to create JIT compiler: {err}"))
     })?;
 
-    compiler.compile_module(module)?;
+    compiler.compile_module(module, resolved)?;
     compiler.execute()
 }
 
@@ -83,11 +95,31 @@ impl JitCompiler {
     }
 
     /// Compile all top-level statements in the module.
-    fn compile_module(&mut self, module: &ast::ModModule) -> Result<(), CompileError> {
-        // First pass: declare all user-defined functions with signatures
+    ///
+    /// Uses resolved [`FunctionInfo`] from the resolver for type-aware
+    /// signature building instead of re-parsing AST annotations.
+    fn compile_module(
+        &mut self,
+        module: &ast::ModModule,
+        resolved: &ResolvedModule,
+    ) -> Result<(), CompileError> {
+        // Build a lookup from function name → resolved FunctionInfo
+        let resolved_funcs: HashMap<&str, &FunctionInfo> = resolved
+            .functions
+            .iter()
+            .map(|fi| (fi.name.as_str(), fi))
+            .collect();
+
+        // First pass: declare all user-defined functions with signatures from resolver
         for stmt in &module.body {
             if let Stmt::FunctionDef(func_def) = stmt {
-                self.declare_function(func_def)?;
+                let name = func_def.name.as_str();
+                let func_info = resolved_funcs.get(name).ok_or_else(|| {
+                    CompileError::Codegen(format!(
+                        "function '{name}' not found in resolved module"
+                    ))
+                })?;
+                self.declare_function(name, func_info)?;
             }
         }
 
@@ -116,14 +148,14 @@ impl JitCompiler {
         Ok(())
     }
 
-    /// Declare a function with proper signature based on AST annotations.
+    /// Declare a function using type info from the resolver's [`FunctionInfo`].
     fn declare_function(
         &mut self,
-        func_def: &ast::StmtFunctionDef,
+        name: &str,
+        func_info: &FunctionInfo,
     ) -> Result<(), CompileError> {
-        let name = func_def.name.as_str();
-        let param_count = func_def.parameters.args.len();
-        let returns_int = Self::returns_int(func_def);
+        let param_count = func_info.parameters.len();
+        let returns_int = func_info.return_annotation == ReturnAnnotationKind::Other;
 
         let mut sig = self.jit_module.make_signature();
         for _ in 0..param_count {
@@ -140,20 +172,13 @@ impl JitCompiler {
 
         self.functions.insert(
             name.to_string(),
-            FuncInfo {
+            CraneliftFuncInfo {
                 id: func_id,
                 param_count,
                 returns_int,
             },
         );
         Ok(())
-    }
-
-    /// Check if a function's return annotation is `int` (vs `None`/missing).
-    fn returns_int(func_def: &ast::StmtFunctionDef) -> bool {
-        func_def.returns.as_ref().is_some_and(|ret| {
-            matches!(ret.as_ref(), Expr::Name(n) if n.id.as_str() == "int")
-        })
     }
 
     /// Compile a user-defined function body.
@@ -422,6 +447,7 @@ impl JitCompiler {
                 .declare_func_in_func(print_func, builder.func);
 
             let ptr = builder.ins().iconst(pointer_type, ptr_val);
+            #[allow(clippy::cast_possible_wrap)]
             let len_val = builder.ins().iconst(pointer_type, len as i64);
             builder.ins().call(print_ref, &[ptr, len_val]);
 

@@ -48,9 +48,6 @@ jobs:
     name: Coverage
     runs-on: ubuntu-latest
     env:
-      # Per-project coverage thresholds (line %).
-      # Set these as Repository Variables in GitHub Settings > Variables.
-      # Minimum allowed is 85%. Fallback defaults match current levels.
       TEST_COVERAGE_BASILISK_CHECKER: ${{ vars.TEST_COVERAGE_BASILISK_CHECKER || '89' }}
       TEST_COVERAGE_BASILISK_CLI: ${{ vars.TEST_COVERAGE_BASILISK_CLI || '96' }}
       TEST_COVERAGE_BASILISK_DB: ${{ vars.TEST_COVERAGE_BASILISK_DB || '100' }}
@@ -66,47 +63,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
-      - name: Generate coverage report
-        run: cargo llvm-cov --workspace --exclude basilisk-lsp --all-targets --lcov --output-path lcov.info
+      - name: Run test.sh (tests + coverage + threshold enforcement)
+        run: ./scripts/test.sh
       - name: Upload to Codecov
         uses: codecov/codecov-action@v4
         with:
           files: lcov.info
           fail_ci_if_error: false
-      - name: Enforce per-project coverage thresholds
-        run: |
-          REPORT=$(cargo llvm-cov report 2>&1)
-          COV_FAILED=0
-          check_crate() {
-            local crate="$1" threshold="$2"
-            local totals
-            totals=$(echo "$REPORT" | grep "^${crate}/" | awk '{total+=$8; missed+=$9} END {print total, missed}')
-            local total_lines missed_lines
-            total_lines=$(echo "$totals" | awk '{print $1}')
-            missed_lines=$(echo "$totals" | awk '{print $2}')
-            if [ -z "$total_lines" ] || [ "$total_lines" -eq 0 ]; then
-              echo "? ${crate}: no coverage data -- skipping"; return
-            fi
-            local pct=$(( (total_lines - missed_lines) * 100 / total_lines ))
-            if [ "$pct" -lt "$threshold" ]; then
-              echo "X ${crate}: ${pct}% < ${threshold}% -- FAIL"; COV_FAILED=1
-            else
-              echo "OK ${crate}: ${pct}% >= ${threshold}%"
-            fi
-          }
-          check_crate basilisk-checker  "$TEST_COVERAGE_BASILISK_CHECKER"
-          check_crate basilisk-cli      "$TEST_COVERAGE_BASILISK_CLI"
-          check_crate basilisk-db       "$TEST_COVERAGE_BASILISK_DB"
-          check_crate basilisk-lsp      "$TEST_COVERAGE_BASILISK_LSP"
-          check_crate basilisk-mojo     "$TEST_COVERAGE_BASILISK_MOJO"
-          check_crate basilisk-parser   "$TEST_COVERAGE_BASILISK_PARSER"
-          check_crate basilisk-plugin   "$TEST_COVERAGE_BASILISK_PLUGIN"
-          check_crate basilisk-resolver "$TEST_COVERAGE_BASILISK_RESOLVER"
-          check_crate basilisk-stubs    "$TEST_COVERAGE_BASILISK_STUBS"
-          if [ "$COV_FAILED" -ne 0 ]; then
-            echo "Coverage regression detected"; exit 1
-          fi
-          echo "All projects meet their coverage thresholds."
 
   mutate:
     name: Mutation Testing
