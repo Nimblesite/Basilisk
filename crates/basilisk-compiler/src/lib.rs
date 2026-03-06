@@ -1,13 +1,14 @@
 //! Basilisk compiler — compiles typed Python to native code.
 //!
-//! This crate takes a type-checked [`basilisk_resolver::ResolvedModule`],
-//! lowers it to a high-level IR, and generates LLVM IR for native execution.
+//! This crate takes Python source, runs it through the analyzer pipeline,
+//! then JIT-compiles and executes it via Cranelift.
 //!
 //! The compilation pipeline:
 //! ```text
-//! .py → parse → resolve → check (GATE) → HIR → LLVM IR → machine code
+//! .py → parse → resolve → check (GATE) → Cranelift JIT → native execution
 //! ```
 
+pub mod codegen;
 pub mod error;
 pub mod hir;
 
@@ -16,28 +17,25 @@ pub use error::CompileError;
 use basilisk_checker::diagnostic::Diagnostic;
 
 /// Result of compiling a single Python source file.
-///
-/// For now this is a stub — the real implementation will produce LLVM IR.
-/// The bare-bones version just runs the analyzer pipeline and captures output.
 #[derive(Debug)]
 pub struct CompileResult {
     /// Diagnostics from the type checker (must be empty to proceed to codegen).
     pub diagnostics: Vec<Diagnostic>,
-    /// Stdout captured from execution (only populated in interpret mode).
+    /// Stdout captured from native execution.
     pub stdout: String,
 }
 
 /// Compile and execute a Python source file.
 ///
-/// This is the entry point for `basilisk run`. Currently it:
+/// This is the entry point for `basilisk run`. It:
 /// 1. Parses the source
 /// 2. Resolves names
 /// 3. Runs the type checker
-/// 4. If no errors, executes via Python interpreter (temporary until LLVM codegen lands)
+/// 4. If no errors, JIT-compiles via Cranelift and executes natively
 ///
 /// # Errors
 ///
-/// Returns [`CompileError`] if parsing, resolution, or execution fails.
+/// Returns [`CompileError`] if parsing, resolution, or code generation fails.
 pub fn compile_and_run(source: &str, path: &str) -> Result<CompileResult, CompileError> {
     // Stage 1: Parse
     let parsed = basilisk_parser::parse_source(source.to_owned(), path.to_owned())
@@ -61,43 +59,11 @@ pub fn compile_and_run(source: &str, path: &str) -> Result<CompileResult, Compil
         });
     }
 
-    // Stage 4: Execute (temporary — runs via Python interpreter until LLVM codegen lands)
-    let output = execute_via_python(source)?;
+    // Stage 4: JIT compile and execute natively
+    let output = codegen::jit_compile_and_run(&parsed.ast)?;
 
     Ok(CompileResult {
         diagnostics: Vec::new(),
         stdout: output,
     })
-}
-
-/// Temporary execution backend — runs source through the system Python interpreter.
-///
-/// This will be replaced by LLVM JIT execution once codegen is implemented.
-fn execute_via_python(source: &str) -> Result<String, CompileError> {
-    use std::process::Command;
-
-    let mut child = Command::new("python3")
-        .arg("-c")
-        .arg(source)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .map_err(|err| CompileError::Execution(format!("failed to spawn python3: {err}")))?;
-
-    // Drop stdin so the child doesn't hang
-    drop(child.stdin.take());
-
-    let output = child
-        .wait_with_output()
-        .map_err(|err| CompileError::Execution(format!("failed to wait on python3: {err}")))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(CompileError::Execution(format!(
-            "python3 exited with {}: {stderr}",
-            output.status
-        )));
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }

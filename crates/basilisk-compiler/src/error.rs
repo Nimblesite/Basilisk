@@ -9,7 +9,7 @@ pub enum CompileError {
     /// Name resolution failed.
     #[error("resolve error: {0}")]
     Resolve(String),
-    /// Execution failed.
-    #[error("execution error: {0}")]
-    Execution(String),
+    /// Code generation failed.
+    #[error("codegen error: {0}")]
+    Codegen(String),
 }

@@ -1,6 +1,6 @@
 [package]
 name        = "basilisk-compiler"
-description = "Basilisk compiler — compiles typed Python to native code via LLVM"
+description = "Basilisk compiler — compiles typed Python to native code"
 version.workspace    = true
 edition.workspace    = true
 license.workspace    = true
@@ -10,6 +10,14 @@ basilisk-parser.workspace   = true
 basilisk-resolver.workspace = true
 basilisk-checker.workspace  = true
 thiserror.workspace         = true
+ruff_python_ast.workspace   = true
+cranelift          = "0.116"
+cranelift-jit      = "0.116"
+cranelift-module   = "0.116"
+cranelift-codegen  = "0.116"
+cranelift-frontend = "0.116"
+cranelift-native   = "0.116"
+target-lexicon     = "0.13"
 
 [dev-dependencies]
 walkdir.workspace = true
