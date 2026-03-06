@@ -158,7 +158,7 @@ fn check_annotation(annotation: &str) -> Option<Violation> {
     }
 }
 
-/// Validates the form of a `Callable[first_arg, return_type]` annotation.
+/// Validates the form of a `Callable[``first_arg``, ``return_type``]` annotation.
 fn check_callable_form(inner: &str) -> Option<Violation> {
     let trimmed = inner.trim();
 
@@ -207,7 +207,7 @@ fn check_callable_form(inner: &str) -> Option<Violation> {
     None
 }
 
-/// Splits `Callable[...]` inner text into (first_arg, return_type) at the
+/// Splits `Callable[...]` inner text into (``first_arg``, ``return_type``) at the
 /// top-level comma separating the two arguments.
 fn split_callable_args(inner: &str) -> Option<(&str, &str)> {
     let mut depth: usize = 0;

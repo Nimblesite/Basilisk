@@ -102,6 +102,7 @@ pub fn render_diagnostics_json(diagnostics: &[Diagnostic], sources: &[FileSource
                 severity: match d.severity {
                     basilisk_checker::Severity::Error => "error",
                     basilisk_checker::Severity::Warning => "warning",
+                    basilisk_checker::Severity::Info => "info",
                     basilisk_checker::Severity::SafetyViolation => "safety violation",
                 },
                 message: &d.message,

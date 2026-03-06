@@ -9,7 +9,7 @@
 //!    in `Generic[...]`.
 //! 3. A `TypeVar` used in a module-level expression (subscript call like `list[T]()`).
 //! 4. A method call on a generic class instance where the argument type does not
-//!    match the substituted TypeVar type (e.g., `a: MyClass[int]`, calling
+//!    match the substituted `TypeVar` type (e.g., `a: MyClass[int]`, calling
 //!    `a.meth('str')` when `meth` expects `T` which is bound to `int`).
 //!
 //! Per PEP 484: "A generic class nested in another generic class cannot use
@@ -141,9 +141,9 @@ fn span_for_line(source: &str, line_number: usize) -> Span {
 struct GenericClassDef {
     /// The class name.
     name: String,
-    /// TypeVar names in `Generic[T, S, ...]` order.
+    /// `TypeVar` names in `Generic[T, S, ...]` order.
     typevar_params: Vec<String>,
-    /// Methods: name -> list of (param_name, annotation_text) pairs (excluding `self`).
+    /// Methods: name -> list of (`param_name``annotation_text`xt) pairs (excluding `self`).
     methods: HashMap<String, Vec<(String, String)>>,
 }
 
@@ -157,7 +157,7 @@ struct GenericInstance {
     type_args: Vec<String>,
 }
 
-/// Extract the TypeVar names from a `Generic[T, S]` base expression.
+/// Extract the `TypeVar` names from a `Generic[T, S]` base expression.
 fn extract_typevar_params_from_generic(source_line: &str) -> Vec<String> {
     let Some(start) = source_line.find("Generic[") else {
         return Vec::new();

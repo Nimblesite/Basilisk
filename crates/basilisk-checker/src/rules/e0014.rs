@@ -44,6 +44,7 @@ impl Rule for AssignmentTypeMismatch {
         );
         check_local_vars(module, diagnostics);
         check_tuple_reassignments(module, diagnostics);
+        check_dataclass_attr_assignments(module, diagnostics);
     }
 }
 

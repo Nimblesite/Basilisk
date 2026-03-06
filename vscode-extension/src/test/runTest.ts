@@ -38,6 +38,18 @@ function findSystemVSCodeElectron(): string | undefined {
     return undefined;
 }
 
+/**
+ * Find the debug-built basilisk binary.
+ */
+function findDebugBinary(): string | undefined {
+    const workspaceRoot = path.resolve(__dirname, '../../..');
+    const debugBinary = path.join(workspaceRoot, 'target', 'debug', 'basilisk');
+    if (fs.existsSync(debugBinary)) {
+        return debugBinary;
+    }
+    return undefined;
+}
+
 async function main(): Promise<void> {
     try {
         const extensionDevelopmentPath = path.resolve(__dirname, '../../');
@@ -45,12 +57,32 @@ async function main(): Promise<void> {
 
         const systemElectron = findSystemVSCodeElectron();
 
+        // Create a temp workspace with settings pointing to the debug binary
+        // so the extension uses the latest build, not a stale installed version.
+        const tmpWorkspace = fs.mkdtempSync(path.join(require('os').tmpdir(), 'basilisk-test-ws-'));
+        const vscodeDir = path.join(tmpWorkspace, '.vscode');
+        fs.mkdirSync(vscodeDir, { recursive: true });
+
+        const debugBinary = findDebugBinary();
+        const settings: Record<string, unknown> = {};
+        if (debugBinary) {
+            settings['basilisk.executablePath'] = debugBinary;
+        }
+        fs.writeFileSync(
+            path.join(vscodeDir, 'settings.json'),
+            JSON.stringify(settings, null, 2),
+            'utf8'
+        );
+
         await runTests({
             extensionDevelopmentPath,
             extensionTestsPath,
             ...(systemElectron ? { vscodeExecutablePath: systemElectron } : {}),
-            launchArgs: ['--disable-extensions'],
+            launchArgs: ['--disable-extensions', tmpWorkspace],
         });
+
+        // Clean up temp workspace.
+        fs.rmSync(tmpWorkspace, { recursive: true, force: true });
     } catch (err) {
         console.error('Failed to run tests', err);
         process.exit(1);

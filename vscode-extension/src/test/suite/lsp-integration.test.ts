@@ -34,7 +34,9 @@ const SERVER_START_WAIT_MS = 5_000;
  */
 function findBasiliskBinary(): string | undefined {
     // Check the workspace-root debug build first.
-    const workspaceRoot = path.resolve(__dirname, '../../../../..');
+    // __dirname at runtime is vscode-extension/out/test/suite/
+    // Go up 4 levels to reach the repo root (Basilisk/).
+    const workspaceRoot = path.resolve(__dirname, '../../../..');
     const debugBinary = path.join(workspaceRoot, 'target', 'debug', 'basilisk');
     if (fs.existsSync(debugBinary)) {
         return debugBinary;
@@ -679,6 +681,168 @@ suite('LSP Integration Tests', () => {
         assert.ok(
             firstAction.title && firstAction.title.length > 0,
             `Expected code action to have a non-empty title, got: "${firstAction.title}"`
+        );
+    });
+
+    // ----------------------------------------------------------------
+    // 11. Go-to-declaration works through extension
+    // ----------------------------------------------------------------
+    test('go-to-declaration works through extension', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + 5_000);
+        if (!basiliskBinary) {
+            this.skip();
+            return;
+        }
+
+        const { uri } = await openPythonFile(
+            tmpDir,
+            'test_goto_decl.py',
+            [
+                'def compute(x: int) -> int:',
+                '    return x * 2',
+                '',
+                'result: int = compute(10)',
+                '',
+            ].join('\n')
+        );
+
+        // Give the server time to index.
+        await new Promise<void>((resolve) => setTimeout(resolve, 3_000));
+
+        // Declaration delegates to definition in single-file mode.
+        // The server advertises declarationProvider and handles textDocument/declaration.
+        const callPosition = new vscode.Position(3, 18);
+        const locations = await vscode.commands.executeCommand<vscode.Location[]>(
+            'vscode.executeDeclarationProvider',
+            uri,
+            callPosition
+        );
+
+        assert.ok(locations, 'Expected declaration locations to be defined');
+        assert.ok(
+            locations.length > 0,
+            'Expected at least one declaration location for the function call'
+        );
+
+        const declLocation = locations[0];
+        assert.strictEqual(
+            declLocation.uri.toString(),
+            uri.toString(),
+            'Expected declaration to be in the same file'
+        );
+        assert.strictEqual(
+            declLocation.range.start.line,
+            0,
+            `Expected declaration to be on line 0 (the function def), ` +
+            `but got line ${declLocation.range.start.line}`
+        );
+    });
+
+    // ----------------------------------------------------------------
+    // 12. Go-to-type-definition works through extension
+    // ----------------------------------------------------------------
+    test('go-to-type-definition works through extension', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + 5_000);
+        if (!basiliskBinary) {
+            this.skip();
+            return;
+        }
+
+        const { uri } = await openPythonFile(
+            tmpDir,
+            'test_goto_typedef.py',
+            [
+                'class MyData:',
+                '    value: int',
+                '',
+                'instance: MyData = MyData()',
+                '',
+            ].join('\n')
+        );
+
+        // Give the server time to index.
+        await new Promise<void>((resolve) => setTimeout(resolve, 3_000));
+
+        // Execute go-to-type-definition on "instance" at line 3, col 2.
+        const varPosition = new vscode.Position(3, 2);
+        const locations = await vscode.commands.executeCommand<vscode.Location[]>(
+            'vscode.executeTypeDefinitionProvider',
+            uri,
+            varPosition
+        );
+
+        assert.ok(locations, 'Expected type definition locations to be defined');
+        assert.ok(
+            locations.length > 0,
+            'Expected at least one type definition location'
+        );
+
+        const typeDefLocation = locations[0];
+        assert.strictEqual(
+            typeDefLocation.uri.toString(),
+            uri.toString(),
+            'Expected type definition to be in the same file'
+        );
+        assert.strictEqual(
+            typeDefLocation.range.start.line,
+            0,
+            `Expected type definition to be on line 0 (class MyData), ` +
+            `but got line ${typeDefLocation.range.start.line}`
+        );
+    });
+
+    // ----------------------------------------------------------------
+    // 13. Hover shows docstrings
+    // ----------------------------------------------------------------
+    test('hover shows docstring for function', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + 5_000);
+        if (!basiliskBinary) {
+            this.skip();
+            return;
+        }
+
+        const { uri } = await openPythonFile(
+            tmpDir,
+            'test_hover_docstring.py',
+            [
+                'def calculate(x: int) -> int:',
+                '    """Compute the square of x."""',
+                '    return x * x',
+                '',
+                'result: int = calculate(5)',
+                '',
+            ].join('\n')
+        );
+
+        // Give the server time to index.
+        await new Promise<void>((resolve) => setTimeout(resolve, 3_000));
+
+        // Request hover at the function definition "calculate" on line 0.
+        const position = new vscode.Position(0, 5);
+        const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
+            'vscode.executeHoverProvider',
+            uri,
+            position
+        );
+
+        assert.ok(hovers, 'Expected hover result to be defined');
+        assert.ok(
+            hovers.length > 0,
+            'Expected at least one hover result'
+        );
+
+        const hoverTexts = hovers.flatMap((h) =>
+            h.contents.map((c) => {
+                if (typeof c === 'string') return c;
+                if ('value' in c) return c.value;
+                return '';
+            })
+        );
+
+        const combinedHover = hoverTexts.join('\n');
+        assert.ok(
+            combinedHover.includes('Compute the square of x'),
+            `Expected hover to include docstring, but got: ${combinedHover}`
         );
     });
 });

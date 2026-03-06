@@ -26,6 +26,7 @@ pub(crate) struct TupleIndexOutOfBounds;
 impl Rule for TupleIndexOutOfBounds {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         for violation in &module.tuple_index_violations {
+            #[allow(clippy::cast_possible_wrap)]
             let len = violation.tuple_length as i64;
             let detail = if violation.index_value >= 0 {
                 format!(

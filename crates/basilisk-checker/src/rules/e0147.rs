@@ -777,12 +777,7 @@ fn func_body_lines(source: &str, def_offset: usize) -> Vec<LineInfo<'_>> {
         let line_end = offset + line.len();
         let indent = line.len() - line.trim_start().len();
 
-        if !found_def {
-            if offset <= def_offset && def_offset <= line_end {
-                found_def = true;
-                def_indent = indent;
-            }
-        } else {
+        if found_def {
             let trimmed = line.trim();
             // Stop when we hit a non-blank, non-comment line at or before the def's indent.
             if !trimmed.is_empty() && !trimmed.starts_with('#') && indent <= def_indent {
@@ -794,6 +789,9 @@ fn func_body_lines(source: &str, def_offset: usize) -> Vec<LineInfo<'_>> {
                 offset,
                 source_offset: offset,
             });
+        } else if offset <= def_offset && def_offset <= line_end {
+            found_def = true;
+            def_indent = indent;
         }
 
         offset += line.len() + 1;
@@ -802,6 +800,7 @@ fn func_body_lines(source: &str, def_offset: usize) -> Vec<LineInfo<'_>> {
 }
 
 /// Compute a `Span` for an entire source line given the line's byte offset.
+#[allow(clippy::cast_possible_truncation)]
 fn line_span(source: &str, line_offset: usize) -> Span {
     let start = line_offset as u32;
     let end = source[line_offset..]

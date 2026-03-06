@@ -5,7 +5,9 @@
 
 use std::collections::HashSet;
 
-use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind};
+use tower_lsp::lsp_types::{
+    CompletionItem, CompletionItemKind, Documentation, MarkupContent, MarkupKind,
+};
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
@@ -338,6 +340,12 @@ fn symbol_completions(
                 label: func.name.clone(),
                 kind: Some(CompletionItemKind::FUNCTION),
                 detail: Some(detail),
+                documentation: func.docstring.as_ref().map(|ds| {
+                    Documentation::MarkupContent(MarkupContent {
+                        kind: MarkupKind::Markdown,
+                        value: ds.clone(),
+                    })
+                }),
                 ..Default::default()
             });
         }
@@ -352,6 +360,12 @@ fn symbol_completions(
                 label: class.name.clone(),
                 kind: Some(CompletionItemKind::CLASS),
                 detail: Some("class".to_owned()),
+                documentation: class.docstring.as_ref().map(|ds| {
+                    Documentation::MarkupContent(MarkupContent {
+                        kind: MarkupKind::Markdown,
+                        value: ds.clone(),
+                    })
+                }),
                 ..Default::default()
             });
         }
@@ -418,6 +432,8 @@ fn add_import_completions(
     }
 }
 
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines)]
 fn add_builtin_completions(
     items: &mut Vec<CompletionItem>,
     seen: &mut HashSet<String>,

@@ -134,12 +134,12 @@ const KNOWN_TYPE_ATTRS: &[&str] = &[
 struct ModuleCtx {
     /// Class names defined at module scope.
     class_names: Vec<String>,
-    /// TypeVar names (i.e., assigned via `TypeVar(...)`).
+    /// `TypeVar` names (i.e., assigned via `TypeVar(...)`).
     typevar_names: Vec<String>,
-    /// TypeAlias bindings: alias name → annotation text of the RHS.
+    /// `TypeAlias` bindings: alias name → annotation text of the RHS.
     /// e.g. `TA1: TypeAlias = Type` → `("TA1", "Type")`.
     type_aliases: HashMap<String, String>,
-    /// Module-level function signatures: name → list of (param_name, annotation_text).
+    /// Module-level function signatures: name → list of (`param_name``annotation_text`xt).
     func_params: HashMap<String, Vec<(String, String)>>,
 }
 
@@ -227,12 +227,12 @@ impl ModuleCtx {
         self.class_names.iter().any(|c| c == name)
     }
 
-    /// Returns true if `name` is a TypeVar.
+    /// Returns true if `name` is a `TypeVar`.
     fn is_typevar(&self, name: &str) -> bool {
         self.typevar_names.iter().any(|t| t == name)
     }
 
-    /// Returns true if `name` is a TypeAlias binding that resolves to a
+    /// Returns true if `name` is a `TypeAlias` binding that resolves to a
     /// `type` / `Type` variant (with or without a parameter).
     fn is_type_alias(&self, name: &str) -> bool {
         self.type_aliases
@@ -242,7 +242,7 @@ impl ModuleCtx {
 
     /// Return the union members if the annotation is `type[A | B | ...]`.
     /// Returns `None` if it is not a union-parameterised `type[…]`.
-    fn type_union_members<'a>(&self, ann: &'a str) -> Option<Vec<&'a str>> {
+    fn type_union_members(ann: &str) -> Option<Vec<&str>> {
         // Accept both `type[...]` and `Type[...]`.
         let inner = strip_type_bracket(ann)?;
         if inner.contains(" | ") {
@@ -302,16 +302,15 @@ fn check_stmt(stmt: &Stmt, ctx: &ModuleCtx, path: &str, diag: &mut Vec<Diagnosti
 
 /// Check bare expression statements at module (or outer) scope for:
 /// - `Callable` / special form passed as argument where `type[T]` is expected.
-/// - Attribute access on TypeAlias names bound to `type`.
+/// - Attribute access on `TypeAlias` names bound to `type`.
 fn check_module_expr(expr: &Expr, ctx: &ModuleCtx, path: &str, diag: &mut Vec<Diagnostic>) {
     match expr {
         // ----------------------------------------------------------------
         // func5(Callable) etc. — `type[T]` call with an invalid argument.
         // ----------------------------------------------------------------
         Expr::Call(call) => {
-            let callee = match expr_simple_name(&call.func) {
-                Some(n) => n,
-                None => return,
+            let Some(callee) = expr_simple_name(&call.func) else {
+                return;
             };
 
             let Some(params) = ctx.func_params.get(callee) else {
@@ -323,9 +322,8 @@ fn check_module_expr(expr: &Expr, ctx: &ModuleCtx, path: &str, diag: &mut Vec<Di
                     continue;
                 };
 
-                let arg_name = match expr_simple_name(arg_expr) {
-                    Some(n) => n,
-                    None => continue,
+                let Some(arg_name) = expr_simple_name(arg_expr) else {
+                    continue;
                 };
 
                 check_type_arg(arg_name, ann, arg_expr, ctx, path, diag);
@@ -427,6 +425,7 @@ fn check_func_stmt(
     }
 }
 
+#[allow(clippy::only_used_in_recursion)]
 fn check_func_expr(
     expr: &Expr,
     ctx: &ModuleCtx,
@@ -532,7 +531,7 @@ fn check_type_arg(
     // Case 2: Union-parameterised `type[A | B]` — argument must be one
     // of the union members or a subclass thereof (we check names only).
     // -----------------------------------------------------------------
-    let Some(members) = ctx.type_union_members(param_ann) else {
+    let Some(members) = ModuleCtx::type_union_members(param_ann) else {
         return;
     };
 
@@ -540,7 +539,7 @@ fn check_type_arg(
     //   a) it is one of the union member names, OR
     //   b) it is a TypeVar (not a concrete class and therefore unchecked), OR
     //   c) we cannot determine the class hierarchy (skip).
-    let is_member = members.iter().any(|m| *m == arg_name);
+    let is_member = members.contains(&arg_name);
     let is_tv = ctx.is_typevar(arg_name);
 
     if is_member || is_tv {
@@ -595,7 +594,7 @@ fn strip_type_bracket(ann: &str) -> Option<&str> {
 /// Returns `true` if `ann` is a `type[X]` where `X` is a **concrete** (non-Any,
 /// non-TypeVar) type — e.g. `type[object]`, `Type[object]`, `type[int]`.
 ///
-/// We intentionally exclude `type[Any]` and `type[T]` (TypeVar parameters)
+/// We intentionally exclude `type[Any]` and `type[T]` (`TypeVar` parameters)
 /// because those expose all attributes.
 fn is_concrete_type_annotation(ann: &str) -> bool {
     let Some(inner) = strip_type_bracket(ann) else {
@@ -611,7 +610,7 @@ fn is_concrete_type_annotation(ann: &str) -> bool {
     matches!(inner, "object" | "int" | "str" | "float" | "bool" | "bytes")
 }
 
-/// Returns `true` if `rhs` (the right-hand side of a TypeAlias) is a
+/// Returns `true` if `rhs` (the right-hand side of a `TypeAlias`) is a
 /// `type` or `Type` annotation (bare or parameterised).
 fn is_type_annotation(rhs: &str) -> bool {
     let rhs = rhs.trim();

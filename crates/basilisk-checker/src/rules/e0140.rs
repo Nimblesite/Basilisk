@@ -40,6 +40,7 @@ struct FuncSig {
     has_kwargs: bool,
     kwargs_type: String,
     kw_only_params: Vec<ParamInfo>,
+    #[allow(dead_code)]
     return_type: String,
 }
 
@@ -72,9 +73,7 @@ impl ModuleContext {
         for stmt in stmts {
             match stmt {
                 Stmt::FunctionDef(func) => {
-                    if let Some(sig) = extract_func_sig(func, false) {
-                        functions.push(sig);
-                    }
+                    functions.push(extract_func_sig(func, false));
                 }
                 Stmt::ClassDef(cls) => {
                     if is_protocol_class(cls) {
@@ -128,7 +127,7 @@ fn extract_protocol_info(cls: &ast::StmtClassDef) -> ProtocolInfo {
         match body_stmt {
             Stmt::FunctionDef(func) => {
                 if func.name.as_str() == "__call__" && !is_overload_decorated(func) {
-                    call_sig = extract_func_sig(func, true);
+                    call_sig = Some(extract_func_sig(func, true));
                 }
             }
             Stmt::AnnAssign(ann) => {
@@ -157,7 +156,7 @@ fn is_overload_decorated(func: &ast::StmtFunctionDef) -> bool {
         .any(|dec| matches!(&dec.expression, Expr::Name(n) if n.id.as_str() == "overload"))
 }
 
-fn extract_func_sig(func: &ast::StmtFunctionDef, skip_self: bool) -> Option<FuncSig> {
+fn extract_func_sig(func: &ast::StmtFunctionDef, skip_self: bool) -> FuncSig {
     let params = &func.parameters;
     let mut positional_params = Vec::new();
     let mut kw_only_params = Vec::new();
@@ -197,7 +196,7 @@ fn extract_func_sig(func: &ast::StmtFunctionDef, skip_self: bool) -> Option<Func
         .as_ref()
         .map(|r| ann_str(r))
         .unwrap_or_default();
-    Some(FuncSig {
+    FuncSig {
         name: func.name.to_string(),
         positional_params,
         has_varargs,
@@ -206,7 +205,7 @@ fn extract_func_sig(func: &ast::StmtFunctionDef, skip_self: bool) -> Option<Func
         kwargs_type,
         kw_only_params,
         return_type,
-    })
+    }
 }
 
 fn mk_param(param: &ast::ParameterWithDefault, is_pos_only: bool) -> ParamInfo {
@@ -356,6 +355,7 @@ fn check_assignment(
     }
 }
 
+#[allow(dead_code)]
 struct CallableTypeInfo {
     param_types: Option<Vec<String>>,
     concatenate_prefix: Vec<String>,
@@ -533,7 +533,26 @@ fn check_protocol_func_compat(
         return;
     };
 
-    // *args check
+    if check_protocol_varargs_kwargs(target, func, proto, path, diag, span) {
+        return;
+    }
+    if check_protocol_param_counts(target, func, proto, path, diag, span) {
+        return;
+    }
+    check_protocol_defaults_and_kw(target, func, proto, path, diag, span);
+    check_protocol_param_types(target, func, proto, path, diag, span);
+}
+
+/// Check *args and **kwargs compatibility. Returns `true` if a fatal mismatch
+/// was found and the caller should stop further checks.
+fn check_protocol_varargs_kwargs(
+    target: &FuncSig,
+    func: &FuncSig,
+    proto: &ProtocolInfo,
+    path: &str,
+    diag: &mut Vec<Diagnostic>,
+    span: Span,
+) -> bool {
     if target.has_varargs && !func.has_varargs && target.positional_params.is_empty() {
         diag.push(Diagnostic {
             code: CODE.clone(),
@@ -547,9 +566,8 @@ fn check_protocol_func_compat(
             help: None,
             note: None,
         });
-        return;
+        return true;
     }
-    // **kwargs check
     if target.has_kwargs && !func.has_kwargs {
         diag.push(Diagnostic {
             code: CODE.clone(),
@@ -563,9 +581,21 @@ fn check_protocol_func_compat(
             help: None,
             note: None,
         });
-        return;
+        return true;
     }
-    // Positional param count
+    false
+}
+
+/// Check positional parameter count compatibility. Returns `true` if a fatal
+/// mismatch was found.
+fn check_protocol_param_counts(
+    target: &FuncSig,
+    func: &FuncSig,
+    proto: &ProtocolInfo,
+    path: &str,
+    diag: &mut Vec<Diagnostic>,
+    span: Span,
+) -> bool {
     let src_req = func
         .positional_params
         .iter()
@@ -584,7 +614,7 @@ fn check_protocol_func_compat(
             help: None,
             note: None,
         });
-        return;
+        return true;
     }
     let tgt_req = target
         .positional_params
@@ -604,8 +634,21 @@ fn check_protocol_func_compat(
             help: None,
             note: None,
         });
-        return;
+        return true;
     }
+    false
+}
+
+/// Check default-argument requirements, keyword-only params, and positional-only
+/// mismatches.
+fn check_protocol_defaults_and_kw(
+    target: &FuncSig,
+    func: &FuncSig,
+    proto: &ProtocolInfo,
+    path: &str,
+    diag: &mut Vec<Diagnostic>,
+    span: Span,
+) {
     // Default arg check
     for (idx, tp) in target.positional_params.iter().enumerate() {
         if tp.has_default {
@@ -649,6 +692,30 @@ fn check_protocol_func_compat(
             });
         }
     }
+    // Positional-only mismatch
+    for (idx, tp) in target.positional_params.iter().enumerate() {
+        if !tp.is_positional_only {
+            if let Some(sp) = func.positional_params.get(idx) {
+                if sp.is_positional_only {
+                    diag.push(Diagnostic { code: CODE.clone(), severity: Severity::Error,
+                        message: format!("Function `{}` incompatible with `{}`: param `{}` is pos-only but must accept keyword", func.name, proto.name, sp.name),
+                        span, path: path.to_owned(), help: None, note: None });
+                }
+            }
+        }
+    }
+}
+
+/// Check parameter type compatibility (contravariant), *args type, and **kwargs
+/// type.
+fn check_protocol_param_types(
+    target: &FuncSig,
+    func: &FuncSig,
+    proto: &ProtocolInfo,
+    path: &str,
+    diag: &mut Vec<Diagnostic>,
+    span: Span,
+) {
     // Param type compat (contravariant)
     for (idx, tp) in target.positional_params.iter().enumerate() {
         if let Some(sp) = func.positional_params.get(idx) {
@@ -671,59 +738,45 @@ fn check_protocol_func_compat(
             }
         }
     }
-    // Positional-only mismatch
-    for (idx, tp) in target.positional_params.iter().enumerate() {
-        if !tp.is_positional_only {
-            if let Some(sp) = func.positional_params.get(idx) {
-                if sp.is_positional_only {
-                    diag.push(Diagnostic { code: CODE.clone(), severity: Severity::Error,
-                        message: format!("Function `{}` incompatible with `{}`: param `{}` is pos-only but must accept keyword", func.name, proto.name, sp.name),
-                        span, path: path.to_owned(), help: None, note: None });
-                }
-            }
-        }
-    }
     // *args type compat
     if target.has_varargs
         && func.has_varargs
         && !target.varargs_type.is_empty()
         && !func.varargs_type.is_empty()
+        && !types_compat(&target.varargs_type, &func.varargs_type)
     {
-        if !types_compat(&target.varargs_type, &func.varargs_type) {
-            diag.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
-                    "Function `{}` incompatible with `{}`: *args type `{}` vs `{}`",
-                    func.name, proto.name, func.varargs_type, target.varargs_type
-                ),
-                span,
-                path: path.to_owned(),
-                help: None,
-                note: None,
-            });
-        }
+        diag.push(Diagnostic {
+            code: CODE.clone(),
+            severity: Severity::Error,
+            message: format!(
+                "Function `{}` incompatible with `{}`: *args type `{}` vs `{}`",
+                func.name, proto.name, func.varargs_type, target.varargs_type
+            ),
+            span,
+            path: path.to_owned(),
+            help: None,
+            note: None,
+        });
     }
     // **kwargs type compat
     if target.has_kwargs
         && func.has_kwargs
         && !target.kwargs_type.is_empty()
         && !func.kwargs_type.is_empty()
+        && !types_compat(&target.kwargs_type, &func.kwargs_type)
     {
-        if !types_compat(&target.kwargs_type, &func.kwargs_type) {
-            diag.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
-                    "Function `{}` incompatible with `{}`: **kwargs type `{}` vs `{}`",
-                    func.name, proto.name, func.kwargs_type, target.kwargs_type
-                ),
-                span,
-                path: path.to_owned(),
-                help: None,
-                note: None,
-            });
-        }
+        diag.push(Diagnostic {
+            code: CODE.clone(),
+            severity: Severity::Error,
+            message: format!(
+                "Function `{}` incompatible with `{}`: **kwargs type `{}` vs `{}`",
+                func.name, proto.name, func.kwargs_type, target.kwargs_type
+            ),
+            span,
+            path: path.to_owned(),
+            help: None,
+            note: None,
+        });
     }
 }
 
@@ -778,7 +831,6 @@ fn ann_str(expr: &Expr) -> String {
         Expr::Tuple(t) => t.elts.iter().map(ann_str).collect::<Vec<_>>().join(", "),
         Expr::BinOp(b) => format!("{} | {}", ann_str(&b.left), ann_str(&b.right)),
         Expr::NoneLiteral(_) => "None".to_owned(),
-        Expr::EllipsisLiteral(_) => "...".to_owned(),
         Expr::List(l) => format!(
             "[{}]",
             l.elts.iter().map(ann_str).collect::<Vec<_>>().join(", ")

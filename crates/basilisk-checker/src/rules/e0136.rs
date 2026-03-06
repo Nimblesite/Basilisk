@@ -96,14 +96,14 @@ fn parse_callable_sig(s: &str) -> Option<CallableSig> {
 // Subtype / supertype relationships
 // ---------------------------------------------------------------------------
 
-/// Returns `true` when `sub` is a subtype of `sup` for the numeric type
+/// Returns `true` when `candidate` is a subtype of `required` for the numeric type
 /// hierarchy used in Python typing.
 ///
 /// The relevant relationship for callable subtyping:
 /// - `bool` <: `int` <: `float` <: `complex`
 /// - Everything else is only a subtype of itself.
-fn is_numeric_subtype(sub: &str, sup: &str) -> bool {
-    if sub == sup {
+fn is_numeric_subtype(candidate: &str, required: &str) -> bool {
+    if candidate == required {
         return true;
     }
     // numeric widening chain: bool < int < float < complex
@@ -116,18 +116,18 @@ fn is_numeric_subtype(sub: &str, sup: &str) -> bool {
             _ => None,
         }
     };
-    match (rank(sub), rank(sup)) {
-        (Some(r_sub), Some(r_sup)) => r_sub <= r_sup,
+    match (rank(candidate), rank(required)) {
+        (Some(candidate_rank), Some(required_rank)) => candidate_rank <= required_rank,
         _ => false,
     }
 }
 
-/// Returns `true` when `sub` is a subtype of `sup`.
-fn is_subtype(sub: &str, sup: &str) -> bool {
-    if sub == sup || sup == "object" || sup == "Any" || sub == "Any" {
+/// Returns `true` when `candidate` is a subtype of `required`.
+fn is_subtype(candidate: &str, required: &str) -> bool {
+    if candidate == required || required == "object" || required == "Any" || candidate == "Any" {
         return true;
     }
-    is_numeric_subtype(sub, sup)
+    is_numeric_subtype(candidate, required)
 }
 
 /// Returns `true` when the return type of the *source* callable is compatible
@@ -269,10 +269,9 @@ fn check_func_body(
                     code: CODE.clone(),
                     severity: Severity::Error,
                     message: format!(
-                        "Callable subtyping violation: parameter type(s) of `{}` \
-                         are not supertypes of `{}` parameter types (parameters must be \
+                        "Callable subtyping violation: parameter type(s) of `{rhs_name}` \
+                         are not supertypes of `{ann_text}` parameter types (parameters must be \
                          contravariant)",
-                        rhs_name, ann_text,
                     ),
                     span,
                     path: path.to_owned(),
@@ -312,7 +311,6 @@ fn ann_str(expr: &Expr) -> String {
         Expr::Tuple(t) => t.elts.iter().map(ann_str).collect::<Vec<_>>().join(", "),
         Expr::BinOp(b) => format!("{} | {}", ann_str(&b.left), ann_str(&b.right)),
         Expr::NoneLiteral(_) => "None".to_owned(),
-        Expr::EllipsisLiteral(_) => "...".to_owned(),
         Expr::List(l) => {
             format!(
                 "[{}]",

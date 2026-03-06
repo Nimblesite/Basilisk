@@ -135,7 +135,7 @@ struct LocalAssign<'a> {
 /// Parse annotated assignments from function body source text.
 ///
 /// Looks for lines matching the pattern `name: Type = expr`.
-fn parse_annotated_assigns<'a>(body: &'a str, body_offset: usize) -> Vec<LocalAssign<'a>> {
+fn parse_annotated_assigns(body: &str, body_offset: usize) -> Vec<LocalAssign<'_>> {
     let mut results = Vec::new();
 
     for line in body.lines() {
@@ -330,8 +330,8 @@ fn check_literal_value_mismatch(
                  — literal values are incompatible"
             ),
             span: Span {
-                start: assign.name_offset as u32,
-                end: (assign.name_offset + assign.name_len) as u32,
+                start: u32::try_from(assign.name_offset).unwrap_or(u32::MAX),
+                end: u32::try_from(assign.name_offset + assign.name_len).unwrap_or(u32::MAX),
             },
             path: path.to_owned(),
             help: Some(format!(
@@ -381,8 +381,8 @@ fn check_literal_string_fstring(
                          `{name}` has type `{param_ann}`, which is not `LiteralString`"
                     ),
                     span: Span {
-                        start: assign.name_offset as u32,
-                        end: (assign.name_offset + assign.name_len) as u32,
+                        start: u32::try_from(assign.name_offset).unwrap_or(u32::MAX),
+                        end: u32::try_from(assign.name_offset + assign.name_len).unwrap_or(u32::MAX),
                     },
                     path: path.to_owned(),
                     help: Some(format!(
@@ -417,36 +417,34 @@ fn check_invariant_generic_literal_string(
     // Lists (and other mutable containers) are invariant, so
     // `list[LiteralString]` is NOT assignable to `list[str]`.
     if let Some((ann_container, ann_inner)) = split_generic(ann) {
-        if is_invariant_container(ann_container) && is_plain_str_type(ann_inner) {
-            if is_simple_identifier(rhs) {
-                if let Some(param_ann) = param_anns.get(rhs) {
-                    if let Some((param_container, param_inner)) = split_generic(param_ann) {
-                        if param_container == ann_container && param_inner.trim() == "LiteralString"
-                        {
-                            diagnostics.push(Diagnostic {
-                                code: CODE.clone(),
-                                severity: Severity::Error,
-                                message: format!(
-                                    "Cannot assign `{param_ann}` to `{ann}` — \
-                                     `{ann_container}` is invariant in its type parameter"
-                                ),
-                                span: Span {
-                                    start: assign.name_offset as u32,
-                                    end: (assign.name_offset + assign.name_len) as u32,
-                                },
-                                path: path.to_owned(),
-                                help: Some(format!(
-                                    "Use `Sequence[str]` (covariant) instead of `{ann}` if you \
-                                     need to accept `{param_ann}`"
-                                )),
-                                note: Some(
-                                    "PEP 484: mutable generic containers like `list` are invariant — \
-                                     `list[LiteralString]` is not a subtype of `list[str]`"
-                                        .to_owned(),
-                                ),
-                            });
-                            return;
-                        }
+        if is_invariant_container(ann_container) && is_plain_str_type(ann_inner) && is_simple_identifier(rhs) {
+            if let Some(param_ann) = param_anns.get(rhs) {
+                if let Some((param_container, param_inner)) = split_generic(param_ann) {
+                    if param_container == ann_container && param_inner.trim() == "LiteralString"
+                    {
+                        diagnostics.push(Diagnostic {
+                            code: CODE.clone(),
+                            severity: Severity::Error,
+                            message: format!(
+                                "Cannot assign `{param_ann}` to `{ann}` — \
+                                 `{ann_container}` is invariant in its type parameter"
+                            ),
+                            span: Span {
+                                start: u32::try_from(assign.name_offset).unwrap_or(u32::MAX),
+                                end: u32::try_from(assign.name_offset + assign.name_len).unwrap_or(u32::MAX),
+                            },
+                            path: path.to_owned(),
+                            help: Some(format!(
+                                "Use `Sequence[str]` (covariant) instead of `{ann}` if you \
+                                 need to accept `{param_ann}`"
+                            )),
+                            note: Some(
+                                "PEP 484: mutable generic containers like `list` are invariant — \
+                                 `list[LiteralString]` is not a subtype of `list[str]`"
+                                    .to_owned(),
+                            ),
+                        });
+                        return;
                     }
                 }
             }
@@ -473,8 +471,8 @@ fn check_invariant_generic_literal_string(
                                      has type `{param_ann}`, not `LiteralString`"
                                 ),
                                 span: Span {
-                                    start: assign.name_offset as u32,
-                                    end: (assign.name_offset + assign.name_len) as u32,
+                                    start: u32::try_from(assign.name_offset).unwrap_or(u32::MAX),
+                                    end: u32::try_from(assign.name_offset + assign.name_len).unwrap_or(u32::MAX),
                                 },
                                 path: path.to_owned(),
                                 help: Some(format!(

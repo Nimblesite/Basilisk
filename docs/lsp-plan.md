@@ -103,7 +103,7 @@
 | 6.3 | Auto-import suggestions — suggest imports from workspace index |
 | 6.4 | Incremental text sync — FULL → INCREMENTAL |
 | 6.5 | Salsa integration — memoized incremental computation |
-| 6.6 | Go to Declaration / Go to Type Definition |
+| ~~6.6~~ | ~~Go to Declaration / Go to Type Definition~~ | DONE |
 
 ---
 
@@ -120,8 +120,8 @@
 | `textDocument/hover` — diagnostic info | ✅ | ✅ DONE | — |
 | `textDocument/hover` — type signatures | ✅ | ✅ DONE | **1** |
 | `textDocument/definition` | ✅ | ✅ DONE | **1** |
-| `textDocument/declaration` | ✅ | ☐ TODO | 6 |
-| `textDocument/typeDefinition` | ✅ | ☐ TODO | 6 |
+| `textDocument/declaration` | ✅ | ✅ DONE | **5** |
+| `textDocument/typeDefinition` | ✅ | ✅ DONE | **5** |
 | `textDocument/documentSymbol` | ✅ | ✅ DONE | **1** |
 | `workspace/symbol` | ✅ | ✅ DONE | **4** |
 | `textDocument/signatureHelp` | ✅ | ✅ DONE | **2** |
@@ -149,7 +149,7 @@
 | Import path completions | ✅ | ✅ DONE | — |
 | Built-in completions (78 builtins) | ✅ | ✅ DONE | — |
 | Auto-import suggestions | ✅ | ☐ TODO | 6 |
-| Completion documentation (docstrings) | ✅ | ☐ TODO | 6 |
+| Completion documentation (docstrings) | ✅ | ✅ DONE | **5** |
 | Completion item resolve | ✅ | ☐ TODO | 6 |
 | Keyword argument completions | ✅ | ✅ DONE | **2** |
 | Override stub completions | ✅ | ☐ TODO | 6 |

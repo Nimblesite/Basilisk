@@ -317,7 +317,7 @@ fn check_pep695_bound_cross_references(
 // ---------------------------------------------------------------------------
 
 /// Collect all PEP 695 type parameter names defined in the file.
-/// Returns a list of (param_name, defining_line_number).
+/// Returns a list of (`param_name``defining_line_number`er).
 fn collect_pep695_type_params(source: &str) -> Vec<(String, usize)> {
     let mut result = Vec::new();
     for (idx, line) in source.lines().enumerate() {

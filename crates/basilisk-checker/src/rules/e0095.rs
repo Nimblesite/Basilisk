@@ -305,6 +305,24 @@ fn check_stmt_for_initvar_access(
     }
 }
 
+/// Collect child expressions that need recursive `InitVar` access checking.
+fn collect_child_exprs(expr: &ruff_python_ast::Expr) -> Vec<&ruff_python_ast::Expr> {
+    use ruff_python_ast::Expr;
+
+    match expr {
+        Expr::Call(call) => {
+            let mut children = vec![call.func.as_ref()];
+            children.extend(call.arguments.args.iter());
+            children.extend(call.arguments.keywords.iter().map(|kw| &kw.value));
+            children
+        }
+        Expr::Tuple(tup) => tup.elts.iter().collect(),
+        Expr::List(lst) => lst.elts.iter().collect(),
+        Expr::BinOp(bin) => vec![&bin.left, &bin.right],
+        _ => vec![],
+    }
+}
+
 /// Recursively walk an expression looking for `var.attr` where `attr` is an `InitVar` field.
 fn check_expr_for_initvar_access(
     expr: &ruff_python_ast::Expr,
@@ -316,106 +334,43 @@ fn check_expr_for_initvar_access(
     use ruff_python_ast::Expr;
     use ruff_text_size::Ranged as _;
 
-    match expr {
-        Expr::Attribute(attr_expr) => {
-            if let Expr::Name(obj_name) = attr_expr.value.as_ref() {
-                let var_name = obj_name.id.as_str();
-                if let Some(&class_name) = var_class_map.get(var_name) {
-                    if let Some(initvar_fields) = initvar_field_map.get(class_name) {
-                        let attr_name = attr_expr.attr.as_str();
-                        if initvar_fields.contains(attr_name) {
-                            let range = expr.range();
-                            let span = Span {
-                                start: range.start().to_u32(),
-                                end: range.end().to_u32(),
-                            };
-                            diagnostics.push(make_diagnostic(
-                                format!(
-                                    "Cannot access `InitVar` field `{attr_name}` on `{var_name}`: \
-                                     `InitVar` fields are not stored as instance attributes"
-                                ),
-                                span,
-                                path,
-                            ));
-                            return;
-                        }
+    if let Expr::Attribute(attr_expr) = expr {
+        if let Expr::Name(obj_name) = attr_expr.value.as_ref() {
+            let var_name = obj_name.id.as_str();
+            if let Some(&class_name) = var_class_map.get(var_name) {
+                if let Some(initvar_fields) = initvar_field_map.get(class_name) {
+                    let attr_name = attr_expr.attr.as_str();
+                    if initvar_fields.contains(attr_name) {
+                        let range = expr.range();
+                        let span = Span {
+                            start: range.start().to_u32(),
+                            end: range.end().to_u32(),
+                        };
+                        diagnostics.push(make_diagnostic(
+                            format!(
+                                "Cannot access `InitVar` field `{attr_name}` on `{var_name}`: \
+                                 `InitVar` fields are not stored as instance attributes"
+                            ),
+                            span,
+                            path,
+                        ));
+                        return;
                     }
                 }
             }
-            check_expr_for_initvar_access(
-                &attr_expr.value,
-                path,
-                var_class_map,
-                initvar_field_map,
-                diagnostics,
-            );
         }
-        Expr::Call(call) => {
-            check_expr_for_initvar_access(
-                &call.func,
-                path,
-                var_class_map,
-                initvar_field_map,
-                diagnostics,
-            );
-            for arg in &call.arguments.args {
-                check_expr_for_initvar_access(
-                    arg,
-                    path,
-                    var_class_map,
-                    initvar_field_map,
-                    diagnostics,
-                );
-            }
-            for kw in &call.arguments.keywords {
-                check_expr_for_initvar_access(
-                    &kw.value,
-                    path,
-                    var_class_map,
-                    initvar_field_map,
-                    diagnostics,
-                );
-            }
-        }
-        Expr::Tuple(tup) => {
-            for elt in &tup.elts {
-                check_expr_for_initvar_access(
-                    elt,
-                    path,
-                    var_class_map,
-                    initvar_field_map,
-                    diagnostics,
-                );
-            }
-        }
-        Expr::List(lst) => {
-            for elt in &lst.elts {
-                check_expr_for_initvar_access(
-                    elt,
-                    path,
-                    var_class_map,
-                    initvar_field_map,
-                    diagnostics,
-                );
-            }
-        }
-        Expr::BinOp(bin) => {
-            check_expr_for_initvar_access(
-                &bin.left,
-                path,
-                var_class_map,
-                initvar_field_map,
-                diagnostics,
-            );
-            check_expr_for_initvar_access(
-                &bin.right,
-                path,
-                var_class_map,
-                initvar_field_map,
-                diagnostics,
-            );
-        }
-        _ => {}
+        check_expr_for_initvar_access(
+            &attr_expr.value,
+            path,
+            var_class_map,
+            initvar_field_map,
+            diagnostics,
+        );
+        return;
+    }
+
+    for child in collect_child_exprs(expr) {
+        check_expr_for_initvar_access(child, path, var_class_map, initvar_field_map, diagnostics);
     }
 }
 

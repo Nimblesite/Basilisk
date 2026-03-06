@@ -59,7 +59,7 @@ fn extract_class_name(expr: &Expr) -> Option<&str> {
 }
 
 /// Extract the source text for a span.
-fn span_text<'a>(source: &'a str, span: &Span) -> &'a str {
+fn span_text(source: &str, span: Span) -> &str {
     let start = span.start as usize;
     let end = span.end as usize;
     if end <= source.len() && start <= end {
@@ -99,7 +99,7 @@ fn collect_class_members(
             .map(|p| {
                 p.annotation_span
                     .as_ref()
-                    .map(|span| span_text(&module.source, span).to_owned())
+                    .map(|span| span_text(&module.source, *span).to_owned())
                     .unwrap_or_default()
             })
             .collect();
@@ -107,7 +107,7 @@ fn collect_class_members(
         let return_annotation = func
             .return_annotation_span
             .as_ref()
-            .map(|span| span_text(&module.source, span).to_owned())
+            .map(|span| span_text(&module.source, *span).to_owned())
             .unwrap_or_default();
 
         members.insert(

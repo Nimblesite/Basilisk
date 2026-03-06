@@ -794,7 +794,7 @@ fn check_instance_classvar_assignments(module: &ResolvedModule, diagnostics: &mu
     }
 }
 
-/// Check module-level annotated assignments for protocol ClassVar conformance.
+/// Check module-level annotated assignments for protocol `ClassVar` conformance.
 ///
 /// When a variable is typed as a `Protocol` with `ClassVar` attributes, the RHS
 /// implementation class must have those attributes defined at the **class level**

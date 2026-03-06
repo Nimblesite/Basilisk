@@ -78,6 +78,7 @@ struct TransformDesc {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)]
 struct TransformClassDesc {
     name: String,
     /// `frozen=True/False` from the class keyword args (overrides `frozen_default`).
@@ -100,6 +101,7 @@ struct MetaTransformCtx {
     /// map from metaclass name -> transform descriptor.
     meta_classes: HashMap<String, TransformDesc>,
     /// map from "base class that has a dataclass-transform metaclass" -> metaclass name.
+    #[allow(dead_code)]
     transform_bases: HashMap<String, String>,
     /// all classes that inherit from a transform base.
     transform_classes: Vec<TransformClassDesc>,
@@ -165,6 +167,7 @@ impl MetaTransformCtx {
     // Frozen inheritance
     // -----------------------------------------------------------------------
 
+    #[allow(clippy::unused_self)]
     fn check_frozen_inheritance(
         &self,
         stmts: &[Stmt],
@@ -230,6 +233,7 @@ impl MetaTransformCtx {
     // Frozen attribute assignment
     // -----------------------------------------------------------------------
 
+    #[allow(clippy::unused_self)]
     fn check_frozen_assign(
         &self,
         stmts: &[Stmt],
@@ -293,6 +297,7 @@ impl MetaTransformCtx {
     // kw-only positional argument violations
     // -----------------------------------------------------------------------
 
+    #[allow(clippy::unused_self)]
     fn check_kw_only_calls(
         &self,
         stmts: &[Stmt],
@@ -398,15 +403,13 @@ impl MetaTransformCtx {
                 code: CODE.clone(),
                 severity: Severity::Error,
                 message: format!(
-                    "Ordering comparison on `{}` instance: class `{}` does not \
+                    "Ordering comparison on `{left}` instance: class `{left_class}` does not \
                      synthesize comparison methods (missing `order=True`)",
-                    left, left_class,
                 ),
                 span,
                 path: path.to_owned(),
                 help: Some(format!(
-                    "Pass `order=True` to `{}(...)` to enable ordering comparisons",
-                    left_class
+                    "Pass `order=True` to `{left_class}(...)` to enable ordering comparisons"
                 )),
                 note: Some(
                     "PEP 681: ordering methods are only synthesized when `order=True` \
@@ -534,9 +537,23 @@ fn collect_transform_classes(
     transform_bases: &HashMap<String, String>,
     meta_classes: &HashMap<String, TransformDesc>,
 ) -> Vec<TransformClassDesc> {
+    // Pass 1: collect classes that directly inherit from a transform base.
+    let mut out = collect_direct_transform_classes(stmts, transform_bases, meta_classes);
+
+    // Pass 2: collect classes that inherit from already-collected transform classes.
+    collect_inherited_transform_classes(stmts, transform_bases, meta_classes, &mut out);
+
+    out
+}
+
+/// Collect classes that directly inherit from a transform base.
+fn collect_direct_transform_classes(
+    stmts: &[Stmt],
+    transform_bases: &HashMap<String, String>,
+    meta_classes: &HashMap<String, TransformDesc>,
+) -> Vec<TransformClassDesc> {
     let mut out = Vec::new();
 
-    // Pass 1: collect classes that directly inherit from a transform base.
     for stmt in stmts {
         let Stmt::ClassDef(cls) = stmt else {
             continue;
@@ -545,12 +562,11 @@ fn collect_transform_classes(
             continue;
         };
 
-        // Check whether any positional base is a transform base.
         let matched_meta: Option<&str> = args.args.iter().find_map(|base| {
             if let Expr::Name(n) = base {
                 let base_name = n.id.as_str();
                 if transform_bases.contains_key(base_name) {
-                    return transform_bases.get(base_name).map(|s| s.as_str());
+                    return transform_bases.get(base_name).map(std::string::String::as_str);
                 }
             }
             None
@@ -563,38 +579,51 @@ fn collect_transform_classes(
             continue;
         };
 
-        // Read class-level keyword overrides.
-        let frozen_kw = class_keyword_bool(cls, "frozen");
-        let order_kw = class_keyword_bool(cls, "order");
-        let kw_only_kw = class_keyword_bool(cls, "kw_only");
-
-        let frozen = frozen_kw.unwrap_or(desc.frozen_default);
-        let order = order_kw.unwrap_or(false);
-        let kw_only = kw_only_kw.unwrap_or(false);
-        let kw_only_effective = kw_only || desc.kw_only_default;
-
-        let def_span = Span {
-            start: cls.range().start().to_u32(),
-            end: cls.range().end().to_u32(),
-        };
-
-        out.push(TransformClassDesc {
-            name: cls.name.to_string(),
-            frozen,
-            order,
-            kw_only,
-            kw_only_effective,
-            def_span,
-        });
+        out.push(build_class_desc_from_meta(cls, desc));
     }
 
-    // Pass 2: collect classes that inherit from already-collected transform classes.
-    // Build a lookup from transform class name -> (meta_name, desc) for parent resolution.
+    out
+}
+
+/// Build a `TransformClassDesc` from a class definition and its metaclass descriptor.
+fn build_class_desc_from_meta(
+    cls: &ruff_python_ast::StmtClassDef,
+    desc: &TransformDesc,
+) -> TransformClassDesc {
+    let frozen_kw = class_keyword_bool(cls, "frozen");
+    let order_kw = class_keyword_bool(cls, "order");
+    let kw_only_kw = class_keyword_bool(cls, "kw_only");
+
+    let frozen = frozen_kw.unwrap_or(desc.frozen_default);
+    let order = order_kw.unwrap_or(false);
+    let kw_only = kw_only_kw.unwrap_or(false);
+    let kw_only_effective = kw_only || desc.kw_only_default;
+
+    let def_span = Span {
+        start: cls.range().start().to_u32(),
+        end: cls.range().end().to_u32(),
+    };
+
+    TransformClassDesc {
+        name: cls.name.to_string(),
+        frozen,
+        order,
+        kw_only,
+        kw_only_effective,
+        def_span,
+    }
+}
+
+/// Collect classes that inherit from already-collected transform classes (transitive).
+fn collect_inherited_transform_classes(
+    stmts: &[Stmt],
+    transform_bases: &HashMap<String, String>,
+    meta_classes: &HashMap<String, TransformDesc>,
+    out: &mut Vec<TransformClassDesc>,
+) {
     let transform_class_names: HashMap<String, String> = out
         .iter()
-        .flat_map(|tc| {
-            // Find which metaclass this transform class belongs to.
-            // We look up the base in transform_bases to get the meta name.
+        .filter_map(|tc| {
             stmts.iter().find_map(|stmt| {
                 let Stmt::ClassDef(cls) = stmt else {
                     return None;
@@ -624,12 +653,10 @@ fn collect_transform_classes(
             continue;
         };
 
-        // Skip if already collected.
         if out.iter().any(|tc| tc.name == cls.name.as_str()) {
             continue;
         }
 
-        // Check if any positional base is an already-collected transform class.
         let parent_tc = args.args.iter().find_map(|base| {
             if let Expr::Name(n) = base {
                 let base_name = n.id.as_str();
@@ -652,7 +679,6 @@ fn collect_transform_classes(
         let order_kw = class_keyword_bool(cls, "order");
         let kw_only_kw = class_keyword_bool(cls, "kw_only");
 
-        // Inherit from parent transform class settings, overridden by explicit keywords.
         let frozen = frozen_kw.unwrap_or(parent_desc.frozen);
         let order = order_kw.unwrap_or(parent_desc.order);
         let kw_only = kw_only_kw.unwrap_or(parent_desc.kw_only);
@@ -672,8 +698,6 @@ fn collect_transform_classes(
             def_span,
         });
     }
-
-    out
 }
 
 /// Read a boolean keyword arg from a class definition's keyword arguments.

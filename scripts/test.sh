@@ -72,7 +72,8 @@ ok "HTML report → $HTML_DIR/index.html"
 # ── Summary ──────────────────────────────────────────────────────────────────
 header "Coverage summary"
 
-cargo llvm-cov report
+REPORT=$(cargo llvm-cov report 2>&1)
+echo "$REPORT"
 
 echo ""
 echo -e "${BOLD}VSCode:${RESET} install 'Coverage Gutters' (ryanluker.vscode-coverage-gutters),"
@@ -82,6 +83,59 @@ if [[ "${1:-}" == "--open" ]]; then
     open "$HTML_DIR/index.html" 2>/dev/null || xdg-open "$HTML_DIR/index.html" 2>/dev/null || true
 fi
 
+# ── Per-project coverage thresholds ─────────────────────────────────────────
+# Minimum allowed is 85%. Each is set to its current level so coverage never
+# regresses. Override via environment variables if needed.
+header "Enforcing per-project coverage thresholds"
+
+TEST_COVERAGE_BASILISK_CHECKER="${TEST_COVERAGE_BASILISK_CHECKER:-89}"
+TEST_COVERAGE_BASILISK_CLI="${TEST_COVERAGE_BASILISK_CLI:-96}"
+TEST_COVERAGE_BASILISK_DB="${TEST_COVERAGE_BASILISK_DB:-100}"
+TEST_COVERAGE_BASILISK_LSP="${TEST_COVERAGE_BASILISK_LSP:-0}"
+TEST_COVERAGE_BASILISK_MOJO="${TEST_COVERAGE_BASILISK_MOJO:-100}"
+TEST_COVERAGE_BASILISK_PARSER="${TEST_COVERAGE_BASILISK_PARSER:-100}"
+TEST_COVERAGE_BASILISK_PLUGIN="${TEST_COVERAGE_BASILISK_PLUGIN:-100}"
+TEST_COVERAGE_BASILISK_RESOLVER="${TEST_COVERAGE_BASILISK_RESOLVER:-94}"
+TEST_COVERAGE_BASILISK_STUBS="${TEST_COVERAGE_BASILISK_STUBS:-100}"
+
+COV_FAILED=0
+
+check_crate() {
+    local crate="$1"
+    local threshold="$2"
+
+    local totals
+    totals=$(echo "$REPORT" | grep "^${crate}/" | awk '{total+=$8; missed+=$9} END {print total, missed}')
+    local total_lines missed_lines
+    total_lines=$(echo "$totals" | awk '{print $1}')
+    missed_lines=$(echo "$totals" | awk '{print $2}')
+
+    if [ -z "$total_lines" ] || [ "$total_lines" -eq 0 ]; then
+        warn "${crate}: no coverage data found — skipping"
+        return
+    fi
+
+    local covered=$((total_lines - missed_lines))
+    local pct=$((covered * 100 / total_lines))
+
+    if [ "$pct" -lt "$threshold" ]; then
+        echo -e "  ${RED}✗ ${crate}: ${pct}% < ${threshold}% threshold — FAIL${RESET}"
+        COV_FAILED=1
+    else
+        echo -e "  ${GREEN}✓ ${crate}: ${pct}% ≥ ${threshold}% threshold${RESET}"
+    fi
+}
+
+check_crate basilisk-checker  "$TEST_COVERAGE_BASILISK_CHECKER"
+check_crate basilisk-cli      "$TEST_COVERAGE_BASILISK_CLI"
+check_crate basilisk-db       "$TEST_COVERAGE_BASILISK_DB"
+check_crate basilisk-lsp      "$TEST_COVERAGE_BASILISK_LSP"
+check_crate basilisk-mojo     "$TEST_COVERAGE_BASILISK_MOJO"
+check_crate basilisk-parser   "$TEST_COVERAGE_BASILISK_PARSER"
+check_crate basilisk-plugin   "$TEST_COVERAGE_BASILISK_PLUGIN"
+check_crate basilisk-resolver "$TEST_COVERAGE_BASILISK_RESOLVER"
+check_crate basilisk-stubs    "$TEST_COVERAGE_BASILISK_STUBS"
+
 # ── Final status ─────────────────────────────────────────────────────────────
 if [[ "$TESTS_EXIT" -ne 0 ]]; then
     echo ""
@@ -90,3 +144,12 @@ if [[ "$TESTS_EXIT" -ne 0 ]]; then
     warn "These are intentional — they document unimplemented functionality."
     exit "$TESTS_EXIT"
 fi
+
+if [[ "$COV_FAILED" -ne 0 ]]; then
+    echo ""
+    echo -e "${RED}Coverage regression detected — one or more projects fell below their threshold.${RESET}"
+    exit 1
+fi
+
+echo ""
+ok "All projects meet their coverage thresholds."

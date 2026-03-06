@@ -160,10 +160,10 @@ pub(crate) trait Rule {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>);
 }
 
-/// Run all registered Phase 1 rules against a resolved module.
-#[must_use]
-pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
-    let rules: &[&dyn Rule] = &[
+/// All registered Phase 1 rules.
+#[allow(clippy::too_many_lines)]
+fn all_rules() -> &'static [&'static dyn Rule] {
+    &[
         &e0001::MissingParameterAnnotation,
         &e0002::MissingReturnAnnotation,
         &e0003::MissingVariableType,
@@ -308,9 +308,13 @@ pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
         &e0149::Pep695TypeParamScopingViolation,
         &w0040::LambdaMissingAnnotations,
         &w0050::RedundantAnnotationWarning,
-    ];
+    ]
+}
 
-    rules.iter().fold(Vec::new(), |mut acc, rule| {
+/// Run all registered Phase 1 rules against a resolved module.
+#[must_use]
+pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
+    all_rules().iter().fold(Vec::new(), |mut acc, rule| {
         rule.check(module, &mut acc);
         acc
     })

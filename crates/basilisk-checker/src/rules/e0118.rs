@@ -66,9 +66,7 @@ impl Rule for SuperAbstractCall {
             for base_name in cls
                 .arguments
                 .as_ref()
-                .map(|args| &args.args)
-                .unwrap_or(&empty_args)
-                .iter()
+                .map_or(&empty_args, |args| &args.args)
             {
                 let Some(base) = expr_simple_name(base_name) else {
                     continue;
@@ -127,13 +125,12 @@ fn collect_class_bases(stmts: &[Stmt]) -> HashMap<String, Vec<String>> {
         let bases: Vec<String> = cls
             .arguments
             .as_ref()
-            .map(|args| {
+            .map_or_else(Vec::new, |args| {
                 args.args
                     .iter()
-                    .filter_map(|arg| expr_simple_name(arg))
+                    .filter_map(expr_simple_name)
                     .collect()
-            })
-            .unwrap_or_default();
+            });
         result.insert(cls.name.id.to_string(), bases);
     }
     result

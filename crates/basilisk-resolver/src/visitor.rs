@@ -832,6 +832,7 @@ fn class_info_from(
         base_subscripts: extract_base_subscripts(class),
         is_dataclass_slots: is_dataclass && dataclass_flag(class, "slots"),
         has_manual_slots: class_has_manual_slots(class),
+        docstring: extract_docstring(&class.body),
     }
 }
 
@@ -840,7 +841,6 @@ fn class_info_from(
 // ---------------------------------------------------------------------------
 
 /// A `@dataclass_transform` factory detected at module level.
-#[allow(dead_code)]
 struct DcTransformFactory {
     /// The function name decorated with `@dataclass_transform(...)`.
     name: String,
@@ -851,7 +851,6 @@ struct DcTransformFactory {
 }
 
 /// Overload parameter info for one definition of a field specifier function.
-#[allow(dead_code)]
 struct FieldSpecOverload {
     /// Names of keyword-only parameters that do NOT have defaults (required).
     required_kwargs: Vec<String>,
@@ -863,7 +862,6 @@ struct FieldSpecOverload {
 
 /// Scan module-level statements for `@dataclass_transform(...)` decorated functions
 /// and apply their semantics to classes decorated by those factories.
-#[allow(dead_code)]
 fn apply_dataclass_transform(
     stmts: &[Stmt],
     classes: &mut [ClassInfo],
@@ -1300,6 +1298,25 @@ fn function_info_from(func: &StmtFunctionDef, class_name: Option<String>) -> Fun
         is_generator: func.body.iter().any(stmt_contains_yield),
         is_async: func.is_async,
         yield_exprs,
+        docstring: extract_docstring(&func.body),
+    }
+}
+
+/// Extract the docstring from a function or class body.
+///
+/// The docstring is the first statement if it is a bare string literal expression.
+fn extract_docstring(body: &[Stmt]) -> Option<String> {
+    let first = body.first()?;
+    let Stmt::Expr(expr_stmt) = first else {
+        return None;
+    };
+    match expr_stmt.value.as_ref() {
+        Expr::StringLiteral(s) => {
+            let text = s.value.to_str().to_owned();
+            // Trim leading/trailing whitespace from docstrings.
+            Some(text.trim().to_owned())
+        }
+        _ => None,
     }
 }
 
@@ -2541,27 +2558,6 @@ fn field_kw_only_override(value: &Expr) -> Option<bool> {
     }
     for kw in &call.arguments.keywords {
         if kw.arg.as_ref().is_some_and(|arg| arg.as_str() == "kw_only") {
-            return Some(matches!(&kw.value, Expr::BooleanLiteral(b) if b.value));
-        }
-    }
-    None
-}
-
-/// For a field value expression, returns `Some(true)` when it is `field(init=True, ...)`
-/// or a field specifier with `init=True`, `Some(false)` when `init=False`, and `None` otherwise.
-#[allow(dead_code)]
-fn field_init_override(value: &Expr, field_specifier_names: &[&str]) -> Option<bool> {
-    let Expr::Call(call) = value else { return None };
-    let is_field_call = match call.func.as_ref() {
-        Expr::Name(n) => n.id.as_str() == "field" || field_specifier_names.contains(&n.id.as_str()),
-        Expr::Attribute(a) => a.attr.as_str() == "field",
-        _ => false,
-    };
-    if !is_field_call {
-        return None;
-    }
-    for kw in &call.arguments.keywords {
-        if kw.arg.as_ref().map(ruff_python_ast::Identifier::as_str) == Some("init") {
             return Some(matches!(&kw.value, Expr::BooleanLiteral(b) if b.value));
         }
     }

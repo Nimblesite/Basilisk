@@ -10,6 +10,7 @@ use tower_lsp::lsp_types::{Hover, HoverContents, MarkupContent, MarkupKind};
 
 use crate::util::{
     find_definition_by_name, find_symbol_at_offset, format_type_signature, identifier_at_offset,
+    SymbolHit,
 };
 
 /// Compute hover information at a byte offset.
@@ -38,6 +39,16 @@ pub fn hover_at(
     if let Some(ref hit) = hit {
         let sig = format_type_signature(hit, source);
         sections.push(format!("```python\n{sig}\n```"));
+
+        // Show docstring if available.
+        let docstring = match hit {
+            SymbolHit::Function(f) => f.docstring.as_deref(),
+            SymbolHit::Class(c) => c.docstring.as_deref(),
+            _ => None,
+        };
+        if let Some(ds) = docstring {
+            sections.push(ds.to_owned());
+        }
     }
 
     // Diagnostic info at this position.

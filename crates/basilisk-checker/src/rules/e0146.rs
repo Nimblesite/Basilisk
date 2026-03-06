@@ -91,7 +91,7 @@ struct ProtocolInfo {
 #[derive(Debug, Clone)]
 struct ConcreteClassInfo {
     name: String,
-    /// Names of class-variable attributes (ClassVar annotations).
+    /// Names of class-variable attributes (`ClassVar` annotations).
     class_vars: Vec<String>,
     /// Whether the class has a custom metaclass that may provide instance attrs.
     has_custom_metaclass: bool,
@@ -464,18 +464,18 @@ fn check_call_with_sigs(
 ///   access gives an unbound function requiring `self`.
 /// - Class-object methods (first param not `self`, e.g. `_self`): compatible.
 /// - `@property` members: incompatible — class access gives a descriptor, not the value.
-/// - `ClassVar` protocol attrs: incompatible — would require a metaclass ClassVar.
+/// - `ClassVar` protocol attrs: incompatible — would require a metaclass `ClassVar`.
 /// - Instance attrs: compatible only if the class has a matching `ClassVar` or a
 ///   custom metaclass that can provide the attribute on the class object.
 fn class_satisfies_protocol_as_object(class: &ConcreteClassInfo, protocol: &ProtocolInfo) -> bool {
     for member in &protocol.members {
         match member {
-            ProtocolMember::InstanceMethod => return false,
+            ProtocolMember::InstanceMethod
+            | ProtocolMember::Property
+            | ProtocolMember::ClassVar => return false,
             ProtocolMember::ClassObjectMethod => {
                 // Compatible — no action needed.
             }
-            ProtocolMember::Property => return false,
-            ProtocolMember::ClassVar => return false,
             ProtocolMember::InstanceAttr { name } => {
                 let has_classvar = class.class_vars.iter().any(|cv| cv == name);
                 if has_classvar || class.has_custom_metaclass {

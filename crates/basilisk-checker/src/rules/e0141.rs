@@ -1,7 +1,7 @@
-//! BSK-E0141: Unpack[TypedDict] kwargs violations.
+//! BSK-E0141: Unpack[`TypedDict`] kwargs violations.
 //!
 //! Detects invalid uses of `**kwargs: Unpack[TypedDict]` in function signatures:
-//! parameter overlap with TypedDict keys, and `Unpack[TypeVar]` (invalid).
+//! parameter overlap with `TypedDict` keys, and `Unpack[TypeVar]` (invalid).
 
 use ruff_python_ast::{self as ast, Expr, Stmt};
 use ruff_text_size::Ranged;
@@ -17,7 +17,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://basilisk-lang.org/errors/BSK-E0141",
 };
 
-/// Emits BSK-E0141 for Unpack[TypedDict] kwargs violations.
+/// Emits BSK-E0141 for Unpack[`TypedDict`] kwargs violations.
 pub(crate) struct UnpackKwargsViolation;
 
 impl Rule for UnpackKwargsViolation {
@@ -53,7 +53,7 @@ impl KwargsContext {
                             .iter()
                             .filter_map(|s| {
                                 if let Stmt::AnnAssign(ann) = s {
-                                    expr_name(&ann.target).map(|n| n.to_owned())
+                                    expr_name(&ann.target).map(std::borrow::ToOwned::to_owned)
                                 } else {
                                     None
                                 }

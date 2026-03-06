@@ -237,7 +237,7 @@ fn collect_transform_subclasses<'a>(
     result
 }
 
-/// Compute the effective frozen/kw_only/order settings for a class that
+/// Compute the effective `frozen/kw_only/order` settings for a class that
 /// **inherits from another transform subclass** (not directly from the base).
 ///
 /// This handles the case where `Customer1Subclass(Customer1)` where `Customer1`
@@ -291,7 +291,7 @@ fn span_for_source_line(source: &str, line: usize) -> Span {
     }
 }
 
-/// Emits BSK-E0142 for dataclass_transform violations via class-based transform.
+/// Emits BSK-E0142 for `dataclass_transform` violations via class-based transform.
 pub(crate) struct DataclassTransformClassViolation;
 
 impl Rule for DataclassTransformClassViolation {
@@ -506,10 +506,10 @@ fn is_keyword_arg(arg: &str) -> bool {
             .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
 }
 
-/// Check 3: Positional arguments to a kw_only transform-class constructor.
+/// Check 3: Positional arguments to a `kw_only` transform-class constructor.
 ///
 /// This scans module-level assignment RHS call expressions for the pattern
-/// `ClassName(positional_arg, ...)` where `ClassName` is a kw_only transform class.
+/// `ClassName(positional_arg, ...)` where `ClassName` is a `kw_only` transform class.
 fn check_kw_only_positional_args(
     module: &ResolvedModule,
     direct_settings: &HashMap<&str, TransformClassSettings>,

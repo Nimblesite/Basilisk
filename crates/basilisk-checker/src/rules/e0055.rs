@@ -57,6 +57,7 @@ fn make_diag(msg: &str, span: basilisk_resolver::Span, path: &str) -> Diagnostic
 pub(crate) struct TypeVarInvalidKwargs;
 
 impl Rule for TypeVarInvalidKwargs {
+    #[allow(clippy::too_many_lines)]
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         let path = &module.path;
         for tv in &module.typevar_calls {

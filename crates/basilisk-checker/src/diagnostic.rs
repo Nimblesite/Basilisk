@@ -3,8 +3,14 @@
 use basilisk_resolver::Span;
 
 /// The severity level of a diagnostic.
+///
+/// Every rule has a default severity determined by its code prefix (`E` = Error,
+/// `W` = Warning). All rules can be overridden to any severity at the line,
+/// block, file, path, or project level.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Severity {
+    /// Informational hint — does not block CI, shown as blue in LSP.
+    Info,
     /// A stylistic suggestion — does not block CI by default.
     Warning,
     /// A type error that must be resolved.
@@ -16,11 +22,42 @@ pub enum Severity {
 impl std::fmt::Display for Severity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Severity::Info => write!(f, "info"),
             Severity::Warning => write!(f, "warning"),
             Severity::Error => write!(f, "error"),
             Severity::SafetyViolation => write!(f, "safety violation"),
         }
     }
+}
+
+/// The mode a rule can be set to via inline comments or configuration.
+///
+/// This controls what happens to a diagnostic after it is emitted by a rule.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuleMode {
+    /// Rule fires at its default severity.
+    Error,
+    /// Rule fires but is demoted to a warning.
+    Warning,
+    /// Rule fires but is demoted to an informational hint.
+    Info,
+    /// Rule is completely disabled — not checked at all.
+    Disabled,
+    /// Suppress the diagnostic entirely (like `# type: ignore`).
+    Ignore,
+}
+
+/// A parsed inline suppression or mode override from a source comment.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InlineOverride {
+    /// The mode to apply.
+    pub mode: RuleMode,
+    /// Specific rule codes this applies to, or empty for all rules.
+    pub codes: Vec<String>,
+    /// Whether this is a block-start directive.
+    pub is_block_start: bool,
+    /// Whether this is a block-end directive.
+    pub is_block_end: bool,
 }
 
 /// A BSK diagnostic code such as `BSK-E0001`.

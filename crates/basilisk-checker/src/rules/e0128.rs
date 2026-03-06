@@ -1,14 +1,14 @@
-//! BSK-E0128: TypeVar default referential violations.
+//! BSK-E0128: ```TypeVar``` default referential violations.
 //!
 //! PEP 696 defines rules for when a `TypeVar` default references another
 //! `TypeVar`:
 //!
-//! 1. **Ordering**: The referenced TypeVar must appear *before* the referencing
-//!    TypeVar in `Generic[...]`.
-//! 2. **Scope**: A TypeVar default must not reference a TypeVar from an outer
+//! 1. **Ordering**: The referenced `TypeVar` must appear *before* the referencing
+//!    `TypeVar` in `Generic[...]`.
+//! 2. **Scope**: A `TypeVar` default must not reference `TypeVar`ar from an outer
 //!    class scope.
-//! 3. **Bound/constraint compatibility**: When TypeVar `T2` defaults to
-//!    TypeVar `T1`, `T1`'s bound must be a subtype of `T2`'s bound, and
+//! 3. **Bound/constraint compatibility**: When `TypeVar` `T2` defaults to
+//!    `TypeVar` `T1`, `T1`'s bound must be a subtype of `T2`'s bound, and
 //!    `T2`'s constraints (if any) must be a superset of `T1`'s constraints.
 //!
 //! ```python
@@ -28,6 +28,8 @@
 //! Invalid2 = TypeVar("Invalid2", float, str, default=Y1)  # E
 //! ```
 
+#![allow(clippy::too_many_lines)]
+
 use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::ResolvedModule;
@@ -41,11 +43,11 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://basilisk-lang.org/errors/BSK-E0128",
 };
 
-/// Information about a TypeVar extracted from source text.
+/// Information about a `TypeVar` extracted from source text.
 struct TypeVarInfo {
-    /// Name of the TypeVar (LHS of assignment).
+    /// Name of the `TypeVar` (LHS of assignment).
     name: String,
-    /// Name of the TypeVar referenced in `default=`, if any.
+    /// Name of the `TypeVar` referenced in `default=`, if any.
     default_typevar_name: Option<String>,
     /// The bound type name, if `bound=` is present.
     bound_name: Option<String>,
@@ -53,7 +55,7 @@ struct TypeVarInfo {
     constraint_names: Vec<String>,
 }
 
-/// Parse TypeVar definitions from source text to extract default value names,
+/// Parse `TypeVar` definitions from source text to extract default value names,
 /// bound names, and constraint names that are not available in the resolver's
 /// `TypeVarCallInfo`.
 fn parse_typevar_info_from_source(source: &str, typevar_names: &HashSet<&str>) -> Vec<TypeVarInfo> {
@@ -184,14 +186,14 @@ fn split_top_level_args(text: &str) -> Vec<String> {
 fn is_numeric_subtype(sub: &str, super_type: &str) -> bool {
     match (sub, super_type) {
         (a, b) if a == b => true,
-        ("bool", "int" | "float" | "complex") => true,
-        ("int", "float" | "complex") => true,
-        ("float", "complex") => true,
+        ("bool", "int" | "float" | "complex")
+        | ("int", "float" | "complex")
+        | ("float", "complex") => true,
         _ => false,
     }
 }
 
-/// Emits BSK-E0128 for TypeVar default referential violations.
+/// Emits BSK-E0128 for `TypeVar` default referential violations.
 pub(crate) struct TypeVarDefaultReferential;
 
 impl Rule for TypeVarDefaultReferential {
@@ -238,7 +240,7 @@ impl Rule for TypeVarDefaultReferential {
     }
 }
 
-/// Check that TypeVar defaults don't reference TypeVars that appear later
+/// Check that `TypeVar` defaults don't referenc`TypeVars`rs that appear later
 /// in the Generic[...] parameter list, or that are not in the list at all.
 fn check_ordering(
     module: &ResolvedModule,
@@ -303,7 +305,7 @@ fn check_ordering(
     }
 }
 
-/// Check that TypeVar defaults don't reference TypeVars from an outer class scope.
+/// Check that `TypeVar` defaults don't referenc`TypeVars`rs from an outer class scope.
 ///
 /// Since the resolver doesn't track nested classes, we detect nested
 /// `class ... (Generic[...])` patterns by scanning the source for indented
@@ -364,17 +366,18 @@ fn check_outer_scope(
                         let in_nested = nested_params.contains(&default_name.as_str());
                         if !in_nested && outer_class_params.contains(default_name.as_str()) {
                             // Compute byte offset for this line
-                            let byte_offset: u32 =
-                                lines[..line_idx].iter().map(|l| l.len() + 1).sum::<usize>() as u32;
-                            let line_len = line.len() as u32;
+                            let byte_offset: u32 = u32::try_from(
+                                lines[..line_idx].iter().map(|l| l.len() + 1).sum::<usize>(),
+                            )
+                            .unwrap_or(u32::MAX);
+                            let line_len = u32::try_from(line.len()).unwrap_or(u32::MAX);
 
                             diagnostics.push(Diagnostic {
                                 code: CODE.clone(),
                                 severity: Severity::Error,
                                 message: format!(
-                                    "TypeVar `{}` has default `{}` which references an \
+                                    "TypeVar `{nested_param}` has default `{default_name}` which references an \
                                      outer-scope TypeVar",
-                                    nested_param, default_name
                                 ),
                                 span: basilisk_resolver::Span {
                                     start: byte_offset,
@@ -405,7 +408,7 @@ fn check_outer_scope(
     }
 }
 
-/// Check that when TypeVar T2 defaults to TypeVar T1:
+/// Check that when `TypeVar` T2 defaults t`TypeVar`ar T1:
 /// - T1's bound is a subtype of T2's bound (if T2 has a bound)
 /// - T2's constraints are a superset of T1's constraints (if T2 has constraints)
 fn check_bound_constraint_compat(
@@ -543,7 +546,7 @@ fn check_bound_constraint_compat(
 }
 
 /// Check subscripted generic class calls where literal arguments mismatch
-/// the resolved parameter types (including TypeVar defaults).
+/// the resolved parameter types (including `TypeVar` defaults).
 ///
 /// Detects patterns like `Foo[int](1, "")` where `Foo.__init__` expects
 /// `(a: int, b: int)` after resolving defaults, but receives a `str` literal.
@@ -649,18 +652,20 @@ fn check_subscripted_class_calls(
                 // Resolve the annotation through the generic mapping
                 let resolved_type = resolved_types
                     .get(ann_text)
-                    .map(String::as_str)
-                    .unwrap_or(ann_text);
+                    .map_or(ann_text, String::as_str);
 
                 // Check literal arg compatibility
                 if let Some(mismatch) = literal_type_mismatch(call_arg, resolved_type) {
-                    let byte_offset: u32 = module
-                        .source
-                        .lines()
-                        .take(line_idx)
-                        .map(|l| l.len() + 1)
-                        .sum::<usize>() as u32;
-                    let line_len = line.len() as u32;
+                    let byte_offset: u32 = u32::try_from(
+                        module
+                            .source
+                            .lines()
+                            .take(line_idx)
+                            .map(|l| l.len() + 1)
+                            .sum::<usize>(),
+                    )
+                    .unwrap_or(u32::MAX);
+                    let line_len = u32::try_from(line.len()).unwrap_or(u32::MAX);
 
                     diagnostics.push(Diagnostic {
                         code: CODE.clone(),
@@ -709,7 +714,7 @@ fn find_matching_bracket(text: &str, open: char, close: char) -> Option<usize> {
 
 /// Resolve generic parameters from explicit type args and defaults.
 ///
-/// Returns a map from TypeVar name to resolved concrete type name.
+/// Returns a map from `TypeVar` name to resolved concrete type name.
 fn resolve_generic_params(
     generic_params: &[basilisk_resolver::GenericParamInfo],
     type_args: &[&str],
@@ -751,7 +756,6 @@ fn literal_type_mismatch(arg: &str, expected_type: &str) -> Option<&'static str>
     if arg.starts_with('"') || arg.starts_with('\'') {
         // String literal
         match expected.as_str() {
-            "str" => None,
             "int" | "float" | "bool" | "bytes" => Some("a `str` literal"),
             _ => None,
         }
@@ -760,14 +764,12 @@ fn literal_type_mismatch(arg: &str, expected_type: &str) -> Option<&'static str>
     {
         // Integer literal
         match expected.as_str() {
-            "int" | "float" | "complex" | "bool" => None,
             "str" | "bytes" => Some("an `int` literal"),
             _ => None,
         }
     } else if arg.contains('.') && arg.parse::<f64>().is_ok() {
         // Float literal
         match expected.as_str() {
-            "float" | "complex" => None,
             "int" | "str" | "bool" => Some("a `float` literal"),
             _ => None,
         }

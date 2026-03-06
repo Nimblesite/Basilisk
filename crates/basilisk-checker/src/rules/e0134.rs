@@ -80,10 +80,10 @@ impl Rule for InvariantGenericArgMismatch {
     }
 }
 
-/// Build a map from class name to (base_generic_name, [type_arg_texts]).
-fn build_class_base_map<'a>(
-    module: &'a ResolvedModule,
-) -> HashMap<&'a str, (&'a str, Vec<&'a str>)> {
+/// Build a map from class name to (`base_generic_name`,`type_arg_texts`ts]).
+fn build_class_base_map(
+    module: &ResolvedModule,
+) -> HashMap<&str, (&str, Vec<&str>)> {
     let source = &module.source;
     let mut map = HashMap::new();
 
@@ -171,7 +171,7 @@ fn visit_stmt(
     use ruff_python_ast::Stmt;
 
     if let Stmt::FunctionDef(func_def) = stmt {
-        let caller_params = build_param_type_map(func_def, source);
+        let func_param_types = build_param_type_map(func_def, source);
 
         for body_stmt in &func_def.body {
             check_body_stmt(
@@ -180,7 +180,7 @@ fn visit_stmt(
                 path,
                 class_base_map,
                 func_params,
-                &caller_params,
+                &func_param_types,
                 diagnostics,
             );
         }
@@ -256,12 +256,12 @@ fn check_body_stmt(
         _ => return,
     };
 
-    let Some(callee_params) = func_params.get(callee_name) else {
+    let Some(callee_param_list) = func_params.get(callee_name) else {
         return;
     };
 
     for (arg_idx, arg_expr) in call.arguments.args.iter().enumerate() {
-        let Some(&(param_name, param_ann)) = callee_params.get(arg_idx) else {
+        let Some(&(param_name, param_ann)) = callee_param_list.get(arg_idx) else {
             continue;
         };
 

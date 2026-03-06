@@ -130,6 +130,8 @@ pub struct FunctionInfo {
     /// Used by E0120 to detect generators with `Generator[Y, S, R]` where R is not
     /// `None` but the function can fall through without returning.
     pub body_ends_with_return: bool,
+    /// The docstring of this function, if present (first statement is a string literal).
+    pub docstring: Option<String>,
 }
 
 /// A `return` statement found inside a function body.
@@ -474,6 +476,8 @@ pub struct ClassInfo {
     pub is_dataclass_slots: bool,
     /// `true` when the class has a manual `__slots__` definition in the body.
     pub has_manual_slots: bool,
+    /// The docstring of this class, if present (first statement is a string literal).
+    pub docstring: Option<String>,
 }
 
 /// Type parameters declared in a `Generic[T1, T2, ...]` base expression.

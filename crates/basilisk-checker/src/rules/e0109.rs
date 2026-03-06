@@ -1,6 +1,6 @@
-//! BSK-E0109: TypeVar bound violation at call site.
+//! BSK-E0109: `TypeVar` bound violation at call site.
 //!
-//! When a function has a parameter typed with a TypeVar that has a `bound`,
+//! When a function has a parameter typed with a `TypeVar` that has a `bound`,
 //! and a call passes an argument whose type is not a subtype of that bound,
 //! this rule reports the mismatch.
 //!
@@ -27,7 +27,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://basilisk-lang.org/errors/BSK-E0109",
 };
 
-/// Emits BSK-E0109 when a call-site argument type violates a TypeVar's bound.
+/// Emits BSK-E0109 when a call-site argument type violates a `TypeVar`'s bound.
 pub(crate) struct TypeVarBoundCallViolation;
 
 /// Map of bound type → list of types that are NOT subtypes of that bound.

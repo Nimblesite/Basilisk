@@ -47,13 +47,13 @@ fn extract_inner_type(ann_text: &str) -> Option<&str> {
     }
 }
 
-/// Returns `true` if the type text contains a TypeVar (single uppercase letter
-/// or a known TypeVar-like name). When TypeVars are present, we can't statically
+/// Returns `true` if the type text contains a `TypeVar` (single uppercase letter
+/// or a known TypeVar-like name). When `TypeVars` are present, we can't statically
 /// determine consistency without full type inference, so we assume consistent.
 fn contains_typevar(type_text: &str) -> bool {
     // Check for single-letter uppercase names that are TypeVars
     // Also check common TypeVar patterns like T, T_A, T_co, etc.
-    for segment in type_text.split(|c: char| c == '[' || c == ']' || c == ',' || c == ' ') {
+    for segment in type_text.split(&['[', ']', ',', ' ']) {
         let segment = segment.trim();
         if segment.is_empty() {
             continue;
@@ -78,7 +78,7 @@ fn contains_typevar(type_text: &str) -> bool {
 /// Check if `narrowed` type is consistent with `input` type.
 /// Returns `true` if they are consistent (no error).
 ///
-/// For TypeIs, the narrowed type must be assignable to the input type.
+/// For `TypeIs`, the narrowed type must be assignable to the input type.
 /// This means narrowed must be a subtype of input.
 fn is_consistent(narrowed: &str, input: &str) -> bool {
     let narrowed = narrowed.trim();

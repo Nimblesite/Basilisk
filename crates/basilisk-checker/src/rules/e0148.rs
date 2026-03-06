@@ -2,7 +2,7 @@
 //!
 //! Detects several generic-type errors:
 //!
-//! 1. **Constrained TypeVar constraint mismatch**: When a function parameter is typed
+//! 1. **Constrained `TypeVar` constraint mismatch**: When a function parameter is typed
 //!    with a constrained `TypeVar` (e.g. `AnyStr = TypeVar("AnyStr", str, bytes)`),
 //!    all arguments bound to the same type variable must belong to the same constraint.
 //!    Passing `(str_val, bytes_val)` for `(x: AnyStr, y: AnyStr)` is an error.
@@ -61,10 +61,10 @@ impl Rule for GenericTypeArgViolation {
 // Context
 // ---------------------------------------------------------------------------
 
-/// Constraint group for a TypeVar: the list of allowed types.
+/// Constraint group for a `TypeVar`: the list of allowed types.
 #[derive(Debug, Clone)]
 struct ConstrainedTypeVar {
-    /// The TypeVar name (e.g. `"AnyStr"`).
+    /// The `TypeVar` name (e.g. `"AnyStr"`).
     name: String,
     /// The constraint types in order (e.g. `["str", "bytes"]`).
     constraints: Vec<String>,
@@ -100,7 +100,7 @@ fn is_subtype_of(subtype: &str, supertype: &str) -> bool {
     }
 }
 
-/// A function signature with constrained TypeVar parameters.
+/// A function signature with constrained `TypeVar` parameters.
 #[derive(Debug, Clone)]
 struct ConstrainedFunc {
     /// The function name.
@@ -111,14 +111,14 @@ struct ConstrainedFunc {
 
 /// Module-level knowledge needed to check calls.
 struct ModuleContext {
-    /// All constrained TypeVars defined at module level.
+    /// All constrained `TypeVars` defined at module level.
     constrained_tvars: HashMap<String, ConstrainedTypeVar>,
     /// Functions that have at least one constrained-TypeVar parameter.
     constrained_funcs: Vec<ConstrainedFunc>,
     /// Variables with known types: name -> type annotation text.
     var_types: HashMap<String, String>,
     /// Classes that represent Mapping types with known key types.
-    /// Maps class name -> (key_type_text, value_type_text).
+    /// Maps class name -> (`key_type_text``value_type_text`xt).
     mapping_vars: HashMap<String, (String, String)>,
 }
 
@@ -198,7 +198,7 @@ fn try_parse_constrained_typevar(lhs_name: &str, expr: &Expr) -> Option<Constrai
     // Collect positional constraint args (skip arg 0 which is the name string).
     let constraints: Vec<String> = call.arguments.args[1..]
         .iter()
-        .map(|a| ann_str(a))
+        .map(ann_str)
         .collect();
 
     if constraints.len() < 2 {
@@ -403,14 +403,11 @@ fn check_call(call: &ast::ExprCall, ctx: &ModuleContext, path: &str, diag: &mut 
         }
 
         // Find which constraint group this argument belongs to.
-        let group = match constrained_tv.group_of(&arg_type_str) {
-            Some(g) => g,
-            None => {
-                // Try to resolve via known subtypes: if arg_type_str is a class
-                // in this module that inherits from one of the constraints, map
-                // to that constraint's group.  We use a conservative heuristic.
-                continue;
-            }
+        let Some(group) = constrained_tv.group_of(&arg_type_str) else {
+            // Try to resolve via known subtypes: if arg_type_str is a class
+            // in this module that inherits from one of the constraints, map
+            // to that constraint's group.  We use a conservative heuristic.
+            continue;
         };
 
         match tv_group.get(tv_name) {
@@ -601,7 +598,6 @@ fn ann_str(expr: &Expr) -> String {
         Expr::Tuple(t) => t.elts.iter().map(ann_str).collect::<Vec<_>>().join(", "),
         Expr::BinOp(b) => format!("{} | {}", ann_str(&b.left), ann_str(&b.right)),
         Expr::NoneLiteral(_) => "None".to_owned(),
-        Expr::EllipsisLiteral(_) => "...".to_owned(),
         Expr::StringLiteral(s) => s.value.to_str().to_owned(),
         _ => "...".to_owned(),
     }

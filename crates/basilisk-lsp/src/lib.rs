@@ -6,6 +6,8 @@
 //! - Diagnostics (real-time type checking)
 //! - Hover (type signatures + diagnostic info)
 //! - Go to Definition
+//! - Go to Declaration
+//! - Go to Type Definition
 //! - Document Symbols (Outline)
 //! - Signature Help
 //! - Find All References
@@ -26,6 +28,7 @@ pub mod call_hierarchy;
 pub mod code_actions;
 pub mod code_lens;
 pub mod completion;
+pub mod declaration;
 pub mod definition;
 pub mod folding;
 pub mod formatting;
@@ -38,6 +41,7 @@ pub mod semantic_tokens;
 pub mod server;
 pub mod signature;
 pub mod symbols;
+pub mod type_definition;
 pub mod type_hierarchy;
 pub mod util;
 pub mod websocket;

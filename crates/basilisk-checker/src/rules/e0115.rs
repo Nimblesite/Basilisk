@@ -95,17 +95,16 @@ impl Rule for DeprecatedUsage {
             .values()
             .map(|info| info.def_span.start)
             .collect();
+        let ctx = DeprecatedUsageContext {
+            deprecated: &all_deprecated,
+            module_aliases: &module_aliases,
+            deprecated_members: &deprecated_members,
+            var_types: &var_types,
+            path: &module.path,
+            _def_spans: &def_spans,
+        };
         for stmt in &parsed.ast.body {
-            visit_stmt_for_usage(
-                stmt,
-                &all_deprecated,
-                &module_aliases,
-                &deprecated_members,
-                &var_types,
-                &module.path,
-                diagnostics,
-                &def_spans,
-            );
+            visit_stmt_for_usage(stmt, &ctx, diagnostics);
         }
     }
 }
@@ -138,6 +137,10 @@ fn text_range_to_span(range: ruff_text_size::TextRange) -> Span {
 }
 
 /// Check if a decorator expression is `@deprecated(...)`.
+///
+/// Returns `None` if not a deprecated decorator, `Some(None)` if deprecated
+/// without a message, and `Some(Some(msg))` if deprecated with a message.
+#[allow(clippy::option_option)]
 fn is_deprecated_decorator(expr: &Expr) -> Option<Option<String>> {
     match expr {
         Expr::Call(call) => {
@@ -324,8 +327,8 @@ fn collect_imported_deprecated(
 
 /// Collect deprecated members from imported module classes.
 ///
-/// Returns a map: module_alias -> member_key -> `DeprecatedInfo`.
-/// Member keys look like "norwegian_blue" (top-level) or "Spam.__add__" (class member).
+/// Returns a map: `module_alias` -`member_key`ey -> `DeprecatedInfo`.
+/// Member keys look like "`norwegian_blue`" (top-level) or "Spam.__add__" (class member).
 fn collect_imported_deprecated_members(
     stmts: &[Stmt],
     module_path: &str,
@@ -367,8 +370,8 @@ fn collect_imported_deprecated_members(
 /// Build a map from variable name to inferred class type by scanning simple assignments.
 ///
 /// Handles:
-/// - `spam = library.Spam()` -> spam: VarType { module_alias: "library", class_name: "Spam" }
-/// - `invocable = Invocable()` -> invocable: VarType { module_alias: "", class_name: "Invocable" }
+/// - `spam = library.Spam()` -> spam: `VarType` `module_alias`as: "librar`class_name`name: "Spam" }
+/// - `invocable = Invocable()` -> invocable: `VarType` `module_alias`as: `class_name`name: "Invocable" }
 fn collect_var_types(stmts: &[Stmt]) -> HashMap<String, VarType> {
     let mut var_types: HashMap<String, VarType> = HashMap::new();
     collect_var_types_from_stmts(stmts, &mut var_types);
@@ -525,48 +528,53 @@ fn check_setter_deprecated_on_type(
     }
 }
 
+/// Contextual data for visiting statements and detecting deprecated usages.
+struct DeprecatedUsageContext<'a> {
+    deprecated: &'a HashMap<String, DeprecatedInfo>,
+    module_aliases: &'a HashMap<String, String>,
+    deprecated_members: &'a HashMap<String, HashMap<String, DeprecatedInfo>>,
+    var_types: &'a HashMap<String, VarType>,
+    path: &'a str,
+    _def_spans: &'a HashSet<u32>,
+}
+
 /// Visit a statement looking for deprecated name usages.
 #[allow(clippy::too_many_lines)]
 fn visit_stmt_for_usage(
     stmt: &Stmt,
-    deprecated: &HashMap<String, DeprecatedInfo>,
-    module_aliases: &HashMap<String, String>,
-    deprecated_members: &HashMap<String, HashMap<String, DeprecatedInfo>>,
-    var_types: &HashMap<String, VarType>,
-    path: &str,
+    ctx: &DeprecatedUsageContext<'_>,
     diagnostics: &mut Vec<Diagnostic>,
-    def_spans: &HashSet<u32>,
 ) {
     match stmt {
         Stmt::Expr(expr_stmt) => {
             visit_expr_for_usage(
                 &expr_stmt.value,
-                deprecated,
-                module_aliases,
-                deprecated_members,
-                var_types,
-                path,
+                ctx.deprecated,
+                ctx.module_aliases,
+                ctx.deprecated_members,
+                ctx.var_types,
+                ctx.path,
                 diagnostics,
             );
         }
         Stmt::Assign(assign) => {
             visit_expr_for_usage(
                 &assign.value,
-                deprecated,
-                module_aliases,
-                deprecated_members,
-                var_types,
-                path,
+                ctx.deprecated,
+                ctx.module_aliases,
+                ctx.deprecated_members,
+                ctx.var_types,
+                ctx.path,
                 diagnostics,
             );
             for target in &assign.targets {
                 // Check for deprecated property setter via assignment target (e.g. `spam.shape = ...`).
                 check_assignment_target_deprecated(
                     target,
-                    deprecated,
-                    deprecated_members,
-                    var_types,
-                    path,
+                    ctx.deprecated,
+                    ctx.deprecated_members,
+                    ctx.var_types,
+                    ctx.path,
                     diagnostics,
                 );
             }
@@ -575,20 +583,20 @@ fn visit_stmt_for_usage(
             // `spam += 1` triggers __add__; `spam.shape += "cube"` triggers property setter.
             visit_expr_for_usage(
                 &aug.value,
-                deprecated,
-                module_aliases,
-                deprecated_members,
-                var_types,
-                path,
+                ctx.deprecated,
+                ctx.module_aliases,
+                ctx.deprecated_members,
+                ctx.var_types,
+                ctx.path,
                 diagnostics,
             );
             check_aug_assign_deprecated(
                 &aug.target,
                 aug.op,
-                deprecated,
-                deprecated_members,
-                var_types,
-                path,
+                ctx.deprecated,
+                ctx.deprecated_members,
+                ctx.var_types,
+                ctx.path,
                 diagnostics,
                 text_range_to_span(aug.range()),
             );
@@ -597,11 +605,11 @@ fn visit_stmt_for_usage(
             if let Some(value) = &ann.value {
                 visit_expr_for_usage(
                     value,
-                    deprecated,
-                    module_aliases,
-                    deprecated_members,
-                    var_types,
-                    path,
+                    ctx.deprecated,
+                    ctx.module_aliases,
+                    ctx.deprecated_members,
+                    ctx.var_types,
+                    ctx.path,
                     diagnostics,
                 );
             }
@@ -610,124 +618,70 @@ fn visit_stmt_for_usage(
             if let Some(value) = &ret.value {
                 visit_expr_for_usage(
                     value,
-                    deprecated,
-                    module_aliases,
-                    deprecated_members,
-                    var_types,
-                    path,
+                    ctx.deprecated,
+                    ctx.module_aliases,
+                    ctx.deprecated_members,
+                    ctx.var_types,
+                    ctx.path,
                     diagnostics,
                 );
             }
         }
         Stmt::FunctionDef(func) => {
             for body_stmt in &func.body {
-                visit_stmt_for_usage(
-                    body_stmt,
-                    deprecated,
-                    module_aliases,
-                    deprecated_members,
-                    var_types,
-                    path,
-                    diagnostics,
-                    def_spans,
-                );
+                visit_stmt_for_usage(body_stmt, ctx, diagnostics);
             }
         }
         Stmt::ClassDef(cls) => {
             for body_stmt in &cls.body {
-                visit_stmt_for_usage(
-                    body_stmt,
-                    deprecated,
-                    module_aliases,
-                    deprecated_members,
-                    var_types,
-                    path,
-                    diagnostics,
-                    def_spans,
-                );
+                visit_stmt_for_usage(body_stmt, ctx, diagnostics);
             }
         }
         Stmt::If(if_stmt) => {
             visit_expr_for_usage(
                 &if_stmt.test,
-                deprecated,
-                module_aliases,
-                deprecated_members,
-                var_types,
-                path,
+                ctx.deprecated,
+                ctx.module_aliases,
+                ctx.deprecated_members,
+                ctx.var_types,
+                ctx.path,
                 diagnostics,
             );
             for body_stmt in &if_stmt.body {
-                visit_stmt_for_usage(
-                    body_stmt,
-                    deprecated,
-                    module_aliases,
-                    deprecated_members,
-                    var_types,
-                    path,
-                    diagnostics,
-                    def_spans,
-                );
+                visit_stmt_for_usage(body_stmt, ctx, diagnostics);
             }
             for elif in &if_stmt.elif_else_clauses {
                 for body_stmt in &elif.body {
-                    visit_stmt_for_usage(
-                        body_stmt,
-                        deprecated,
-                        module_aliases,
-                        deprecated_members,
-                        var_types,
-                        path,
-                        diagnostics,
-                        def_spans,
-                    );
+                    visit_stmt_for_usage(body_stmt, ctx, diagnostics);
                 }
             }
         }
         Stmt::For(for_stmt) => {
             visit_expr_for_usage(
                 &for_stmt.iter,
-                deprecated,
-                module_aliases,
-                deprecated_members,
-                var_types,
-                path,
+                ctx.deprecated,
+                ctx.module_aliases,
+                ctx.deprecated_members,
+                ctx.var_types,
+                ctx.path,
                 diagnostics,
             );
             for body_stmt in &for_stmt.body {
-                visit_stmt_for_usage(
-                    body_stmt,
-                    deprecated,
-                    module_aliases,
-                    deprecated_members,
-                    var_types,
-                    path,
-                    diagnostics,
-                    def_spans,
-                );
+                visit_stmt_for_usage(body_stmt, ctx, diagnostics);
             }
         }
         Stmt::While(while_stmt) => {
             visit_expr_for_usage(
                 &while_stmt.test,
-                deprecated,
-                module_aliases,
-                deprecated_members,
-                var_types,
-                path,
+                ctx.deprecated,
+                ctx.module_aliases,
+                ctx.deprecated_members,
+                ctx.var_types,
+                ctx.path,
                 diagnostics,
             );
             for body_stmt in &while_stmt.body {
-                visit_stmt_for_usage(
-                    body_stmt,
-                    deprecated,
-                    module_aliases,
-                    deprecated_members,
-                    var_types,
-                    path,
-                    diagnostics,
-                    def_spans,
-                );
+                visit_stmt_for_usage(body_stmt, ctx, diagnostics);
             }
         }
         _ => {}

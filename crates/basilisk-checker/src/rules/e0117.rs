@@ -5,11 +5,11 @@
 //! parameter, or function signature parameter.
 //!
 //! Unbound usages include:
-//! - TypeVar in a local variable annotation when the function does not bind it
-//! - TypeVar in a class body attribute when the class does not include it in `Generic[...]`
-//! - Inner class reusing an outer class's TypeVar in `Generic[T]` or body annotations
-//! - TypeVar at module level in annotations
-//! - TypeAlias at class level referencing the class's own TypeVars
+//! - `TypeVar` in a local variable annotation when the function does not bind it
+//! - `TypeVar` in a class body attribute when the class does not include it in `Generic[...]`
+//! - Inner class reusing an outer class's `TypeVar` in `Generic[T]` or body annotations
+//! - `TypeVar` at module level in annotations
+//! - `TypeAlias` at class level referencing the class's own `TypeVar`s
 //!
 //! ```python
 //! T = TypeVar("T")
@@ -84,7 +84,7 @@ impl Rule for UnboundTypeVarScope {
 }
 
 /// Extract all identifier-like tokens from an annotation text that could be
-/// TypeVar references.
+/// `TypeVar` references.
 fn extract_names_from_annotation(annotation_text: &str) -> Vec<&str> {
     let mut names = Vec::new();
     let mut start = None;
@@ -113,14 +113,14 @@ fn extract_names_from_annotation(annotation_text: &str) -> Vec<&str> {
 }
 
 /// Get the annotation text from source given a span.
-fn annotation_text<'a>(source: &'a str, span: &basilisk_resolver::Span) -> Option<&'a str> {
+fn annotation_text(source: &str, span: basilisk_resolver::Span) -> Option<&str> {
     source.get(span.start as usize..span.end as usize)
 }
 
-/// Find TypeVar references in an annotation that are NOT in the allowed set.
+/// Find `TypeVar` references in an annotation that are NOT in the allowed set.
 fn find_unbound_typevars_in_annotation<'a>(
     source: &'a str,
-    span: &basilisk_resolver::Span,
+    span: basilisk_resolver::Span,
     typevar_names: &HashSet<&str>,
     allowed: &HashSet<&str>,
 ) -> Vec<&'a str> {
@@ -134,7 +134,7 @@ fn find_unbound_typevars_in_annotation<'a>(
         .collect()
 }
 
-/// Check module-level variables for unbound TypeVar references in annotations.
+/// Check module-level variables for unbound `TypeVar` references in annotations.
 fn check_module_vars(
     module: &ResolvedModule,
     typevar_names: &HashSet<&str>,
@@ -143,12 +143,12 @@ fn check_module_vars(
     let empty: HashSet<&str> = HashSet::new();
     for var in &module.module_vars {
         if let Some(ref ann_span) = var.annotation_span {
-            let unbound = find_unbound_typevars_in_annotation(
-                &module.source,
-                ann_span,
-                typevar_names,
-                &empty,
-            );
+                let unbound = find_unbound_typevars_in_annotation(
+                    &module.source,
+                    *ann_span,
+                    typevar_names,
+                    &empty,
+                );
             for tv_name in unbound {
                 diagnostics.push(Diagnostic {
                     code: CODE.clone(),
@@ -174,7 +174,7 @@ fn check_module_vars(
     // These are captured as calls; we check the source text around them.
 }
 
-/// Check function local variables for unbound TypeVar references.
+/// Check function local variables for unbound `TypeVar` references.
 fn check_function_locals(
     module: &ResolvedModule,
     typevar_names: &HashSet<&str>,
@@ -201,7 +201,7 @@ fn check_function_locals(
             .chain(func.kwarg.iter())
         {
             if let Some(ref ann_span) = param.annotation_span {
-                if let Some(text) = annotation_text(&module.source, ann_span) {
+                if let Some(text) = annotation_text(&module.source, *ann_span) {
                     for name in extract_names_from_annotation(text) {
                         if typevar_names.contains(name) {
                             in_scope.insert(name);
@@ -213,7 +213,7 @@ fn check_function_locals(
 
         // Add TypeVars from return annotation.
         if let Some(ref ret_span) = func.return_annotation_span {
-            if let Some(text) = annotation_text(&module.source, ret_span) {
+            if let Some(text) = annotation_text(&module.source, *ret_span) {
                 for name in extract_names_from_annotation(text) {
                     if typevar_names.contains(name) {
                         in_scope.insert(name);
@@ -239,7 +239,7 @@ fn check_function_locals(
             if let Some(ref ann_span) = local_var.annotation_span {
                 let unbound = find_unbound_typevars_in_annotation(
                     &module.source,
-                    ann_span,
+                    *ann_span,
                     typevar_names,
                     &in_scope,
                 );
@@ -268,7 +268,7 @@ fn check_function_locals(
     }
 }
 
-/// Check class body attributes for unbound TypeVar usage.
+/// Check class body attributes for unbound `TypeVar` usage.
 fn check_class_attributes(
     module: &ResolvedModule,
     typevar_names: &HashSet<&str>,
@@ -285,7 +285,7 @@ fn check_class_attributes(
         // Check each attribute annotation.
         for attr in &cls.attributes {
             if let Some(ref ann_span) = attr.annotation_span {
-                let ann_text = annotation_text(&module.source, ann_span).unwrap_or("");
+                let ann_text = annotation_text(&module.source, *ann_span).unwrap_or("");
 
                 // Skip method definitions (they have their own scope).
                 // Skip TypeAlias annotations (handled separately).
@@ -295,7 +295,7 @@ fn check_class_attributes(
 
                 let unbound = find_unbound_typevars_in_annotation(
                     &module.source,
-                    ann_span,
+                    *ann_span,
                     typevar_names,
                     &bound_params,
                 );
@@ -325,7 +325,7 @@ fn check_class_attributes(
     }
 }
 
-/// Check inner classes that reuse outer class TypeVars in their Generic bases.
+/// Check inner classes that reuse outer class `TypeVar`s in their Generic bases.
 ///
 /// For example:
 /// ```python
@@ -367,7 +367,7 @@ fn check_inner_class_typevars(
         // Check class-level TypeAlias using class TypeVars.
         for attr in &cls.attributes {
             if let Some(ref ann_span) = attr.annotation_span {
-                let ann_text = annotation_text(&module.source, ann_span).unwrap_or("");
+                let ann_text = annotation_text(&module.source, *ann_span).unwrap_or("");
                 if ann_text == "TypeAlias" {
                     // The RHS of a TypeAlias at class level using the class's
                     // own TypeVars is an error.
@@ -375,7 +375,7 @@ fn check_inner_class_typevars(
                         let empty: HashSet<&str> = HashSet::new();
                         let unbound = find_unbound_typevars_in_annotation(
                             &module.source,
-                            rhs_span,
+                            *rhs_span,
                             typevar_names,
                             &empty,
                         );
@@ -411,11 +411,11 @@ fn check_inner_class_typevars(
     }
 }
 
-/// Check class-level TypeAlias definitions that reference class TypeVars.
+/// Check class-level `TypeAlias` definitions that reference class `TypeVar`s.
 fn check_class_type_aliases(
     module: &ResolvedModule,
     _typevar_names: &HashSet<&str>,
-    _diagnostics: &mut Vec<Diagnostic>,
+    _diagnostics: &mut [Diagnostic],
 ) {
     // This is already handled in check_inner_class_typevars for attributes
     // annotated as TypeAlias. Additional module-level TypeAlias checks are

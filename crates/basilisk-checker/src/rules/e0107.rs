@@ -206,8 +206,8 @@ fn resolve_and_check_rich(
     )
 }
 
-/// Expand one level of alias, substituting rich type args for the alias's free TypeVars.
-/// Returns the resolved (base_name, type_args) after substitution, or None if not an alias.
+/// Expand one level of alias, substituting rich type args for the alias's free `TypeVars`.
+/// Returns the resolved (`base_name`, `type_args`) after substitution, or None if not an alias.
 fn expand_alias_rich(
     alias_name: &str,
     provided_args: &[TypeArg],

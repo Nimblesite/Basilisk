@@ -261,91 +261,13 @@ fn check_generic_protocol_assignments(
             continue;
         };
 
-        let mut mismatch_found = false;
-        let mut mismatch_details = String::new();
-
-        'outer: for proto_method in proto_methods {
-            // Skip __init__ and private dunder methods that are exempt.
-            if proto_method.name == "__init__" {
-                continue;
-            }
-
-            // Find matching method in concrete class.
-            let Some(concrete_method) = rhs_methods.iter().find(|m| m.name == proto_method.name)
-            else {
-                continue;
-            };
-
-            // Compare return types.
-            if let (Some(proto_ret_span), Some(concrete_ret_span)) = (
-                proto_method.return_annotation_span,
-                concrete_method.return_annotation_span,
-            ) {
-                let proto_ret = source
-                    .get(proto_ret_span.start as usize..proto_ret_span.end as usize)
-                    .map(str::trim)
-                    .unwrap_or("");
-                let concrete_ret = source
-                    .get(concrete_ret_span.start as usize..concrete_ret_span.end as usize)
-                    .map(str::trim)
-                    .unwrap_or("");
-
-                // Substitute type vars in the protocol return type.
-                let expected_ret = substitute_typevars(proto_ret, &substitution, typevar_info);
-
-                // If types don't match and neither is a typevar itself, flag it.
-                if !types_compatible(&expected_ret, concrete_ret) {
-                    mismatch_found = true;
-                    mismatch_details = format!(
-                        "method `{}` return type: expected `{expected_ret}`, found `{concrete_ret}`",
-                        proto_method.name
-                    );
-                    break 'outer;
-                }
-            }
-
-            // Compare parameter types (skip self).
-            let proto_params = skip_self_param(&proto_method.parameters);
-            let concrete_params = skip_self_param(&concrete_method.parameters);
-
-            if proto_params.len() != concrete_params.len() {
-                // Different parameter counts — already caught by other rules.
-                continue;
-            }
-
-            for (proto_param, concrete_param) in proto_params.iter().zip(concrete_params.iter()) {
-                if let (Some(proto_ann_span), Some(concrete_ann_span)) =
-                    (proto_param.annotation_span, concrete_param.annotation_span)
-                {
-                    let proto_ann = source
-                        .get(proto_ann_span.start as usize..proto_ann_span.end as usize)
-                        .map(str::trim)
-                        .unwrap_or("");
-                    let concrete_ann = source
-                        .get(concrete_ann_span.start as usize..concrete_ann_span.end as usize)
-                        .map(str::trim)
-                        .unwrap_or("");
-
-                    // Substitute type vars in protocol annotation.
-                    let expected_ann = substitute_typevars(proto_ann, &substitution, typevar_info);
-
-                    if !types_compatible(&expected_ann, concrete_ann) {
-                        mismatch_found = true;
-                        mismatch_details = format!(
-                            "method `{}` parameter `{}`: expected `{expected_ann}`, found `{concrete_ann}`",
-                            proto_method.name, proto_param.name
-                        );
-                        break;
-                    }
-                }
-            }
-
-            if mismatch_found {
-                break;
-            }
-        }
-
-        if mismatch_found {
+        if let Some(mismatch_details) = find_method_mismatch(
+            proto_methods,
+            rhs_methods,
+            source,
+            &substitution,
+            typevar_info,
+        ) {
             diagnostics.push(Diagnostic {
                 code: CODE.clone(),
                 severity: Severity::Error,
@@ -366,6 +288,111 @@ fn check_generic_protocol_assignments(
             });
         }
     }
+}
+
+/// Compare protocol methods against concrete methods, returning the first mismatch detail.
+fn find_method_mismatch(
+    proto_methods: &[&FunctionInfo],
+    rhs_methods: &[&FunctionInfo],
+    source: &str,
+    substitution: &HashMap<&str, &str>,
+    typevar_info: &HashMap<&str, bool>,
+) -> Option<String> {
+    for proto_method in proto_methods {
+        if proto_method.name == "__init__" {
+            continue;
+        }
+
+        let Some(concrete_method) = rhs_methods.iter().find(|m| m.name == proto_method.name)
+        else {
+            continue;
+        };
+
+        if let Some(detail) =
+            check_return_type_mismatch(proto_method, concrete_method, source, substitution, typevar_info)
+        {
+            return Some(detail);
+        }
+
+        if let Some(detail) =
+            check_param_type_mismatch(proto_method, concrete_method, source, substitution, typevar_info)
+        {
+            return Some(detail);
+        }
+    }
+    None
+}
+
+/// Check return type compatibility between a protocol method and a concrete method.
+fn check_return_type_mismatch(
+    proto_method: &FunctionInfo,
+    concrete_method: &FunctionInfo,
+    source: &str,
+    substitution: &HashMap<&str, &str>,
+    typevar_info: &HashMap<&str, bool>,
+) -> Option<String> {
+    let (Some(proto_ret_span), Some(concrete_ret_span)) = (
+        proto_method.return_annotation_span,
+        concrete_method.return_annotation_span,
+    ) else {
+        return None;
+    };
+
+    let proto_ret = source
+        .get(proto_ret_span.start as usize..proto_ret_span.end as usize)
+        .map_or("", str::trim);
+    let concrete_ret = source
+        .get(concrete_ret_span.start as usize..concrete_ret_span.end as usize)
+        .map_or("", str::trim);
+
+    let expected_ret = substitute_typevars(proto_ret, substitution, typevar_info);
+
+    if !types_compatible(&expected_ret, concrete_ret) {
+        return Some(format!(
+            "method `{}` return type: expected `{expected_ret}`, found `{concrete_ret}`",
+            proto_method.name
+        ));
+    }
+    None
+}
+
+/// Check parameter type compatibility between a protocol method and a concrete method.
+fn check_param_type_mismatch(
+    proto_method: &FunctionInfo,
+    concrete_method: &FunctionInfo,
+    source: &str,
+    substitution: &HashMap<&str, &str>,
+    typevar_info: &HashMap<&str, bool>,
+) -> Option<String> {
+    let proto_params = skip_self_param(&proto_method.parameters);
+    let concrete_params = skip_self_param(&concrete_method.parameters);
+
+    if proto_params.len() != concrete_params.len() {
+        return None;
+    }
+
+    for (proto_param, concrete_param) in proto_params.iter().zip(concrete_params.iter()) {
+        if let (Some(proto_ann_span), Some(concrete_ann_span)) =
+            (proto_param.annotation_span, concrete_param.annotation_span)
+        {
+            let proto_ann = source
+                .get(proto_ann_span.start as usize..proto_ann_span.end as usize)
+                .map_or("", str::trim);
+            let concrete_ann = source
+                .get(concrete_ann_span.start as usize..concrete_ann_span.end as usize)
+                .map_or("", str::trim);
+
+            let expected_ann = substitute_typevars(proto_ann, substitution, typevar_info);
+
+            if !types_compatible(&expected_ann, concrete_ann) {
+                return Some(format!(
+                    "method `{}` parameter `{}`: expected `{expected_ann}`, found `{concrete_ann}`",
+                    proto_method.name, proto_param.name
+                ));
+            }
+        }
+    }
+    None
 }
 
 // ---------------------------------------------------------------------------
@@ -570,13 +597,13 @@ fn extract_constructor_name(expr: &str) -> Option<&str> {
     Some(name)
 }
 
-/// Substitute TypeVar names in a type annotation text.
+/// Substitute `TypeVar` names in a type annotation text.
 ///
-/// For each TypeVar in the substitution map, replaces standalone occurrences
-/// of the TypeVar name with the concrete type. This is a best-effort text
+/// For each `TypeVar` in the substitution map, replaces standalone occurrences
+/// of the `TypeVar` name with the concrete type. This is a best-effort text
 /// substitution that works for simple annotations.
-fn substitute_typevars<'a>(
-    text: &'a str,
+fn substitute_typevars(
+    text: &str,
     substitution: &HashMap<&str, &str>,
     typevar_info: &HashMap<&str, bool>,
 ) -> String {
@@ -603,7 +630,7 @@ fn substitute_typevars<'a>(
                 new_result.push_str(concrete_type);
                 remaining = &remaining[after_pos..];
             } else {
-                new_result.push_str(&remaining[..pos + 1]);
+                new_result.push_str(&remaining[..=pos]);
                 remaining = &remaining[pos + 1..];
             }
         }
@@ -652,7 +679,7 @@ fn types_compatible(expected: &str, actual: &str) -> bool {
 
     // If the expected type still contains a TypeVar name (was not substituted),
     // we cannot determine compatibility.
-    if expected.chars().next().is_some_and(|c| c.is_uppercase()) && !expected.contains('[') {
+    if expected.chars().next().is_some_and(char::is_uppercase) && !expected.contains('[') {
         // Could be an unresolved TypeVar — be conservative.
         return true;
     }
@@ -690,7 +717,7 @@ fn method_has_typed_self(method: &FunctionInfo) -> bool {
     false
 }
 
-/// Get the TypeVar name used in a `self: T` annotation, if present.
+/// Get the `TypeVar` name used in a `self: T` annotation, if present.
 fn get_self_typevar_name(method: &FunctionInfo, source: &str) -> Option<String> {
     let first_param = method.parameters.first()?;
     if first_param.name != "self" || !first_param.has_annotation {
@@ -713,7 +740,7 @@ fn get_self_typevar_name(method: &FunctionInfo, source: &str) -> Option<String> 
 /// Returns a human-readable description of the mismatch, or `None` if the
 /// concrete method is compatible.
 ///
-/// The protocol method uses `self: T` where T is a TypeVar, so in the concrete
+/// The protocol method uses `self: T` where T is a `TypeVar`, so in the concrete
 /// class, every use of T in parameters and return type must use the same concrete
 /// type consistently.
 fn check_self_typed_method_incompatibility(
@@ -792,8 +819,7 @@ fn check_self_typed_method_incompatibility(
         let proto_ann = proto_param
             .annotation_span
             .and_then(|span| source.get(span.start as usize..span.end as usize))
-            .map(str::trim)
-            .unwrap_or("");
+            .map_or("", str::trim);
 
         if proto_ann != tv_name {
             // This parameter doesn't use the self TypeVar — skip.
@@ -805,8 +831,7 @@ fn check_self_typed_method_incompatibility(
         let concrete_ann = concrete_param
             .annotation_span
             .and_then(|span| source.get(span.start as usize..span.end as usize))
-            .map(str::trim)
-            .unwrap_or("");
+            .map_or("", str::trim);
 
         // The concrete parameter type must match what is inferred from the self type.
         // If the concrete self is untyped (bare `self`), any concrete type is valid
@@ -845,6 +870,7 @@ fn _collect_class_methods<'a>(
 }
 
 /// Compute the byte span of a line in the source for diagnostic anchoring.
+#[allow(clippy::cast_possible_truncation)]
 fn _line_span(source: &str, line_number: usize) -> Option<Span> {
     let mut current_line = 1;
     let mut start = 0;

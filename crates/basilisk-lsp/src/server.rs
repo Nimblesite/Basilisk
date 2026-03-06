@@ -12,8 +12,9 @@ use tower_lsp::lsp_types::{
     CallHierarchyServerCapability, CodeActionKind, CodeActionOptions, CodeActionParams,
     CodeActionProviderCapability, CodeActionResponse, CodeDescription, CodeLens, CodeLensOptions,
     CodeLensParams, CompletionOptions, CompletionParams, CompletionResponse, Diagnostic,
-    DiagnosticSeverity, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
-    DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentFormattingParams,
+    DeclarationCapability, DiagnosticSeverity, DidChangeTextDocumentParams,
+    DidCloseTextDocumentParams, DidOpenTextDocumentParams, DidSaveTextDocumentParams,
+    DocumentFormattingParams,
     DocumentHighlight, DocumentHighlightParams, DocumentSymbolParams, DocumentSymbolResponse,
     ExecuteCommandOptions, ExecuteCommandParams, FoldingRange, FoldingRangeParams,
     FoldingRangeProviderCapability, GotoDefinitionParams, GotoDefinitionResponse, Hover,
@@ -24,7 +25,8 @@ use tower_lsp::lsp_types::{
     SemanticTokensFullOptions, SemanticTokensLegend, SemanticTokensOptions, SemanticTokensParams,
     SemanticTokensResult, SemanticTokensServerCapabilities, ServerCapabilities, ServerInfo,
     SignatureHelpOptions, SignatureHelpParams, SymbolInformation, TextDocumentPositionParams,
-    TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, TypeHierarchyItem,
+    TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit,
+    TypeDefinitionProviderCapability, TypeHierarchyItem,
     TypeHierarchyPrepareParams, TypeHierarchySubtypesParams, TypeHierarchySupertypesParams, Url,
     WorkDoneProgressOptions, WorkspaceEdit, WorkspaceSymbolParams,
 };
@@ -32,8 +34,9 @@ use tower_lsp::{Client, LspService, Server};
 
 use crate::util::{byte_offset_to_position, position_to_byte_offset};
 use crate::{
-    call_hierarchy, code_actions, code_lens, completion, definition, folding, formatting,
-    highlight, hover, inlay_hints, references, selection, signature, symbols, type_hierarchy,
+    call_hierarchy, code_actions, code_lens, completion, declaration, definition, folding,
+    formatting, highlight, hover, inlay_hints, references, selection, signature, symbols,
+    type_definition, type_hierarchy,
 };
 
 /// Fallback docs URL used when a diagnostic code URL fails to parse.
@@ -148,6 +151,7 @@ fn bsk_to_lsp(d: &basilisk_checker::Diagnostic, text: &str) -> Diagnostic {
             DiagnosticSeverity::ERROR
         }
         basilisk_checker::Severity::Warning => DiagnosticSeverity::WARNING,
+        basilisk_checker::Severity::Info => DiagnosticSeverity::INFORMATION,
     };
     // FALLBACK_DOCS_URL is a compile-time constant that is always a valid URL.
     let Ok(fallback) = Url::parse(FALLBACK_DOCS_URL) else {
@@ -223,7 +227,11 @@ impl tower_lsp::LanguageServer for LspServer {
                     trigger_characters: Some(vec![".".to_owned()]),
                     ..Default::default()
                 }),
+                declaration_provider: Some(DeclarationCapability::Simple(true)),
                 definition_provider: Some(OneOf::Left(true)),
+                type_definition_provider: Some(TypeDefinitionProviderCapability::Simple(
+                    true,
+                )),
                 document_formatting_provider: Some(OneOf::Left(true)),
                 document_highlight_provider: Some(OneOf::Left(true)),
                 document_symbol_provider: Some(OneOf::Left(true)),
@@ -329,6 +337,46 @@ impl tower_lsp::LanguageServer for LspServer {
         };
         let byte_offset = position_to_byte_offset(&text, pos);
         Ok(definition::goto_definition(
+            &resolved,
+            &text,
+            byte_offset,
+            &uri,
+        ))
+    }
+
+    // ── Go to Declaration ────────────────────────────────────────────────────
+
+    async fn goto_declaration(
+        &self,
+        params: GotoDefinitionParams,
+    ) -> LspResult<Option<GotoDefinitionResponse>> {
+        let uri = params.text_document_position_params.text_document.uri;
+        let pos = params.text_document_position_params.position;
+        let Some((text, resolved, _)) = self.get_document_data(&uri) else {
+            return Ok(None);
+        };
+        let byte_offset = position_to_byte_offset(&text, pos);
+        Ok(declaration::goto_declaration(
+            &resolved,
+            &text,
+            byte_offset,
+            &uri,
+        ))
+    }
+
+    // ── Go to Type Definition ───────────────────────────────────────────────
+
+    async fn goto_type_definition(
+        &self,
+        params: GotoDefinitionParams,
+    ) -> LspResult<Option<GotoDefinitionResponse>> {
+        let uri = params.text_document_position_params.text_document.uri;
+        let pos = params.text_document_position_params.position;
+        let Some((text, resolved, _)) = self.get_document_data(&uri) else {
+            return Ok(None);
+        };
+        let byte_offset = position_to_byte_offset(&text, pos);
+        Ok(type_definition::goto_type_definition(
             &resolved,
             &text,
             byte_offset,

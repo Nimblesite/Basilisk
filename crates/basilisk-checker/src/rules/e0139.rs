@@ -1,4 +1,4 @@
-//! BSK-E0139: Invalid TypeVarTuple specialization of generic alias.
+//! BSK-E0139: Invalid `TypeVarTuple` specialization of generic alias.
 //!
 //! Two related violations are detected:
 //!
@@ -31,7 +31,7 @@
 //! ```
 
 use basilisk_resolver::{ResolvedModule, Span};
-use ruff_python_ast::{self as ast, Expr, Stmt};
+use ruff_python_ast::{Expr, Stmt};
 use ruff_text_size::Ranged;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
@@ -43,7 +43,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://basilisk-lang.org/errors/BSK-E0139",
 };
 
-/// Emits BSK-E0139 for invalid TypeVarTuple specializations of generic aliases.
+/// Emits BSK-E0139 for invalid `TypeVarTuple` specializations of generic aliases.
 pub(crate) struct TypeVarTupleSpecializationViolation;
 
 impl Rule for TypeVarTupleSpecializationViolation {
@@ -99,9 +99,9 @@ impl Rule for TypeVarTupleSpecializationViolation {
 /// Information about a module-level type alias.
 #[derive(Debug)]
 struct AliasInfo {
-    /// Number of regular TypeVars in the alias definition.
+    /// Number of regular `TypeVars` in the alias definition.
     regular_typevar_count: usize,
-    /// Whether the alias contains a TypeVarTuple.
+    /// Whether the alias contains a `TypeVarTuple`.
     has_typevartuple: bool,
 }
 
@@ -271,24 +271,24 @@ fn check_expr(
             // Determine the provided type arguments from the slice.
             let provided_args = collect_type_args(&sub.slice);
 
-            if !info.has_typevartuple {
-                // Violation 1: alias has only regular TypeVars — no unpacked
-                // TypeVarTuple or *tuple[...] arguments are allowed.
-                check_unpack_in_plain_generic(
-                    &provided_args,
-                    alias_name.id.as_str(),
-                    typevartuple_names,
-                    span,
-                    path,
-                    diagnostics,
-                );
-            } else {
+            if info.has_typevartuple {
                 // Violation 2: alias has a TypeVarTuple — must supply at least
                 // `regular_typevar_count` arguments.
                 check_too_few_args_for_tvt_alias(
                     &provided_args,
                     alias_name.id.as_str(),
                     info.regular_typevar_count,
+                    span,
+                    path,
+                    diagnostics,
+                );
+            } else {
+                // Violation 1: alias has only regular TypeVars — no unpacked
+                // TypeVarTuple or *tuple[...] arguments are allowed.
+                check_unpack_in_plain_generic(
+                    &provided_args,
+                    alias_name.id.as_str(),
+                    typevartuple_names,
                     span,
                     path,
                     diagnostics,
@@ -318,7 +318,7 @@ fn collect_type_args(slice: &Expr) -> Vec<SliceArg> {
 /// Classification of a single type argument in a subscript.
 #[derive(Debug)]
 enum SliceArg {
-    /// `*Ts` — a starred TypeVarTuple name.
+    /// `*Ts` — a starred `TypeVarTuple` name.
     StarredName(String),
     /// `*tuple[...]` — a starred unpacked homogeneous tuple.
     StarredTuple,
@@ -343,8 +343,8 @@ fn classify_slice_elt(elt: &Expr) -> SliceArg {
     }
 }
 
-/// Check that no unpacked TypeVarTuple or `*tuple[...]` arguments are used
-/// when specialising a generic alias that contains only regular TypeVars.
+/// Check that no unpacked `TypeVarTuple` or `*tuple[...]` arguments are used
+/// when specialising a generic alias that contains only regular `TypeVars`.
 fn check_unpack_in_plain_generic(
     args: &[SliceArg],
     alias_name: &str,

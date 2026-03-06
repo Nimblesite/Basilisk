@@ -2,11 +2,11 @@
 //!
 //! Detects invalid usage of `NamedTuple` instances:
 //!
-//! 1. **Out-of-bounds index access**: `p[3]` on a 3-field NamedTuple (valid: 0..2 or -3..-1).
-//! 2. **Attribute assignment**: `p.x = 3` — NamedTuple fields are read-only.
-//! 3. **Subscript assignment**: `p[0] = 3` — NamedTuple elements are read-only.
-//! 4. **Attribute deletion**: `del p.x` — NamedTuple fields cannot be deleted.
-//! 5. **Subscript deletion**: `del p[0]` — NamedTuple elements cannot be deleted.
+//! 1. **Out-of-bounds index access**: `p[3]` on a 3-field `NamedTuple` (valid: 0..2 or -3..-1).
+//! 2. **Attribute assignment**: `p.x = 3` — `NamedTuple` fields are read-only.
+//! 3. **Subscript assignment**: `p[0] = 3` — `NamedTuple` elements are read-only.
+//! 4. **Attribute deletion**: `del p.x` — `NamedTuple` fields cannot be deleted.
+//! 5. **Subscript deletion**: `del p[0]` — `NamedTuple` elements cannot be deleted.
 //! 6. **Wrong-count tuple unpack**: `x, y = p` when `p` has 3 fields.
 //!
 //! ```python
@@ -60,8 +60,8 @@ impl Rule for NamedTupleUsageViolation {
     }
 }
 
-/// Context built from module-level AST: which classes are NamedTuples and which
-/// variables hold NamedTuple instances.
+/// Context built from module-level AST: which classes are `NamedTuples` and which
+/// variables hold `NamedTuple` instances.
 struct ModuleContext {
     /// Map from class name -> field count.
     namedtuple_classes: HashMap<String, usize>,
@@ -117,7 +117,7 @@ impl ModuleContext {
         }
     }
 
-    /// Return the field count for the NamedTuple class assigned to `var_name`, if known.
+    /// Return the field count for the `NamedTuple` class assigned to `var_name`, if known.
     fn nt_field_count(&self, var_name: &str) -> Option<usize> {
         let class_name = self.var_to_nt_class.get(var_name)?;
         self.namedtuple_classes.get(class_name).copied()
@@ -142,7 +142,7 @@ fn count_annotated_fields(cls: &ast::StmtClassDef) -> usize {
         .count()
 }
 
-/// If `cls` inherits from a known NamedTuple class, return that base class's field count.
+/// If `cls` inherits from a known `NamedTuple` class, return that base class's field count.
 fn namedtuple_base_count(
     cls: &ast::StmtClassDef,
     namedtuple_classes: &HashMap<String, usize>,
@@ -298,7 +298,7 @@ fn check_tuple_unpack(
     }
 }
 
-/// Check a delete target for NamedTuple violations.
+/// Check a delete target for `NamedTuple` violations.
 fn check_delete_target(target: &Expr, ctx: &ModuleContext, path: &str, diag: &mut Vec<Diagnostic>) {
     match target {
         // `del p.x`
@@ -365,7 +365,7 @@ fn check_delete_target(target: &Expr, ctx: &ModuleContext, path: &str, diag: &mu
     }
 }
 
-/// Check an assignment target for NamedTuple violations.
+/// Check an assignment target for `NamedTuple` violations.
 fn check_assignment_target(
     target: &Expr,
     ctx: &ModuleContext,
@@ -436,7 +436,7 @@ fn check_assignment_target(
     }
 }
 
-/// Recursively check expressions for NamedTuple subscript out-of-bounds access.
+/// Recursively check expressions for `NamedTuple` subscript out-of-bounds access.
 fn check_expr_recursive(expr: &Expr, ctx: &ModuleContext, path: &str, diag: &mut Vec<Diagnostic>) {
     match expr {
         // `p[3]` — subscript with a literal integer index.

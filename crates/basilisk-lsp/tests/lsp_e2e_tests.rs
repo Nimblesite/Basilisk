@@ -36,15 +36,16 @@ impl LspTestFixture {
             .arg("lsp")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .spawn()?;
 
         let stdin = child.stdin.take().ok_or("failed to get stdin")?;
         let stdout = child.stdout.take().ok_or("failed to get stdout")?;
+        let stderr = child.stderr.take().ok_or("failed to get stderr")?;
 
         let (tx, rx) = channel();
 
-        // Background reader: parse LSP frames and push bodies into the channel.
+        // Background reader for stdout: parse LSP frames and push bodies into the channel.
         thread::spawn(move || {
             let mut reader = BufReader::new(stdout);
             let mut line = String::new();
@@ -82,6 +83,16 @@ impl LspTestFixture {
                         return; // receiver dropped
                     }
                 }
+            }
+        });
+
+        // Background reader for stderr: print to console for debugging
+        thread::spawn(move || {
+            let mut reader = BufReader::new(stderr);
+            let mut line = String::new();
+            while reader.read_line(&mut line).unwrap_or(0) > 0 {
+                eprint!("[LSP stderr] {}", line);
+                line.clear();
             }
         });
 
@@ -1402,6 +1413,55 @@ fn test_lsp_code_action_missing_return_annotation() -> TestResult<()> {
     Ok(())
 }
 
+#[test]
+fn test_lsp_code_action_redundant_annotation_w0050() -> TestResult<()> {
+    let mut fixture = LspTestFixture::new()?;
+    fixture.initialize()?;
+
+    let code = "x: int = 42\n";
+    fixture.did_open("file:///redundant.py", code)?;
+
+    let diag_msg = fixture
+        .wait_for_diagnostics()
+        .ok_or("no diagnostics published")?;
+
+    // Parse the published diagnostics to pass to the code action request.
+    let diag_json: serde_json::Value = serde_json::from_str(&diag_msg)?;
+    let diagnostics = diag_json["params"]["diagnostics"]
+        .as_array()
+        .ok_or("expected diagnostics array")?;
+
+    // Find the BSK-W0050 diagnostic.
+    let w0050 = diagnostics
+        .iter()
+        .find(|d| d["code"].as_str() == Some("BSK-W0050"))
+        .ok_or("no BSK-W0050 diagnostic")?;
+
+    let resp = send_request(
+        &mut fixture,
+        102,
+        "textDocument/codeAction",
+        serde_json::json!({
+            "textDocument": { "uri": "file:///redundant.py" },
+            "range": w0050["range"],
+            "context": {
+                "diagnostics": [w0050]
+            }
+        }),
+    )?
+    .ok_or("no code action response")?;
+
+    assert!(
+        resp.contains("Remove redundant type annotation"),
+        "code action should offer to remove redundant annotation: {resp}"
+    );
+    assert!(
+        resp.contains("quickfix"),
+        "code action should be a quickfix: {resp}"
+    );
+    Ok(())
+}
+
 // ────────────────────────────────────────────────────────────────────
 // Hover — enhanced (exact format + call-site + parameter + attribute)
 // ────────────────────────────────────────────────────────────────────
@@ -1720,6 +1780,228 @@ fn test_lsp_initialize_advertises_new_capabilities() -> TestResult<()> {
     assert!(
         response.contains("\"semanticTokensProvider\""),
         "should advertise semantic tokens: {response}"
+    );
+    assert!(
+        response.contains("\"declarationProvider\""),
+        "should advertise declaration: {response}"
+    );
+    assert!(
+        response.contains("\"typeDefinitionProvider\""),
+        "should advertise type definition: {response}"
+    );
+    Ok(())
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Go to Declaration tests
+// ────────────────────────────────────────────────────────────────────
+
+#[test]
+fn test_lsp_goto_declaration_function() -> TestResult<()> {
+    let mut fixture = LspTestFixture::new()?;
+    fixture.initialize()?;
+
+    let code = "\
+def compute(x: int) -> int:
+    return x * 2
+
+result: int = compute(10)
+";
+    fixture.did_open("file:///decl.py", code)?;
+    let _ = fixture.wait_for_diagnostics();
+
+    // Cursor on "compute" at the call site: line 3, col 14
+    let resp = send_request(
+        &mut fixture,
+        200,
+        "textDocument/declaration",
+        serde_json::json!({
+            "textDocument": { "uri": "file:///decl.py" },
+            "position": { "line": 3, "character": 16 }
+        }),
+    )?
+    .ok_or("no declaration response")?;
+
+    assert!(
+        resp.contains("\"line\":0"),
+        "declaration should point to line 0 (function def): {resp}"
+    );
+    Ok(())
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Go to Type Definition tests
+// ────────────────────────────────────────────────────────────────────
+
+#[test]
+fn test_lsp_goto_type_definition_variable() -> TestResult<()> {
+    let mut fixture = LspTestFixture::new()?;
+    fixture.initialize()?;
+
+    let code = "\
+class MyData:
+    value: int
+
+instance: MyData = MyData()
+";
+    fixture.did_open("file:///typedef.py", code)?;
+    let _ = fixture.wait_for_diagnostics();
+
+    // Cursor on "instance" at line 3, col 0
+    let resp = send_request(
+        &mut fixture,
+        201,
+        "textDocument/typeDefinition",
+        serde_json::json!({
+            "textDocument": { "uri": "file:///typedef.py" },
+            "position": { "line": 3, "character": 2 }
+        }),
+    )?
+    .ok_or("no type definition response")?;
+
+    assert!(
+        resp.contains("\"line\":0"),
+        "type definition should point to line 0 (class MyData): {resp}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_lsp_goto_type_definition_parameter() -> TestResult<()> {
+    let mut fixture = LspTestFixture::new()?;
+    fixture.initialize()?;
+
+    let code = "\
+class Config:
+    debug: bool
+
+def process(cfg: Config) -> None:
+    pass
+";
+    fixture.did_open("file:///typedef2.py", code)?;
+    let _ = fixture.wait_for_diagnostics();
+
+    // Cursor on "cfg" parameter at line 3, col 12
+    let resp = send_request(
+        &mut fixture,
+        202,
+        "textDocument/typeDefinition",
+        serde_json::json!({
+            "textDocument": { "uri": "file:///typedef2.py" },
+            "position": { "line": 3, "character": 13 }
+        }),
+    )?
+    .ok_or("no type definition response")?;
+
+    assert!(
+        resp.contains("\"line\":0"),
+        "type definition should point to line 0 (class Config): {resp}"
+    );
+    Ok(())
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Docstring tests
+// ────────────────────────────────────────────────────────────────────
+
+#[test]
+fn test_lsp_hover_shows_docstring() -> TestResult<()> {
+    let mut fixture = LspTestFixture::new()?;
+    fixture.initialize()?;
+
+    let code = "\
+def calculate(x: int) -> int:
+    \"\"\"Compute the square of x.\"\"\"
+    return x * x
+";
+    fixture.did_open("file:///docstr.py", code)?;
+    let _ = fixture.wait_for_diagnostics();
+
+    let resp = send_request(
+        &mut fixture,
+        210,
+        "textDocument/hover",
+        serde_json::json!({
+            "textDocument": { "uri": "file:///docstr.py" },
+            "position": { "line": 0, "character": 5 }
+        }),
+    )?
+    .ok_or("no hover response")?;
+
+    assert!(
+        resp.contains("Compute the square of x"),
+        "hover should include docstring: {resp}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_lsp_hover_shows_docstring_at_call_site() -> TestResult<()> {
+    let mut fixture = LspTestFixture::new()?;
+    fixture.initialize()?;
+
+    let code = "\
+def calculate(x: int) -> int:
+    \"\"\"Compute the square of x.\"\"\"
+    return x * x
+
+result: int = calculate(5)
+";
+    fixture.did_open("file:///docstr_call.py", code)?;
+    let _ = fixture.wait_for_diagnostics();
+
+    // Hover at the call site "calculate" on line 4, col 18.
+    let resp = send_request(
+        &mut fixture,
+        211,
+        "textDocument/hover",
+        serde_json::json!({
+            "textDocument": { "uri": "file:///docstr_call.py" },
+            "position": { "line": 4, "character": 18 }
+        }),
+    )?
+    .ok_or("no hover response at call site")?;
+
+    assert!(
+        resp.contains("Compute the square of x"),
+        "hover at call site should include docstring: {resp}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_lsp_completion_includes_docstring() -> TestResult<()> {
+    let mut fixture = LspTestFixture::new()?;
+    fixture.initialize()?;
+
+    let code = "\
+def helper(x: int) -> int:
+    \"\"\"Return x plus one.\"\"\"
+    return x + 1
+
+hel
+";
+    fixture.did_open("file:///compdoc.py", code)?;
+    let _ = fixture.wait_for_diagnostics();
+
+    let resp = send_request(
+        &mut fixture,
+        211,
+        "textDocument/completion",
+        serde_json::json!({
+            "textDocument": { "uri": "file:///compdoc.py" },
+            "position": { "line": 4, "character": 3 }
+        }),
+    )?
+    .ok_or("no completion response")?;
+
+    assert!(
+        resp.contains("helper"),
+        "completions should include 'helper': {resp}"
+    );
+    assert!(
+        resp.contains("Return x plus one"),
+        "completion should include docstring: {resp}"
     );
     Ok(())
 }

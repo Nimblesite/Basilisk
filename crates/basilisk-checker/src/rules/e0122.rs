@@ -71,7 +71,7 @@ fn collect_callable_params(func: &ast::StmtFunctionDef) -> Vec<CallableParam> {
     for param in all_params {
         if let Some(annotation) = &param.parameter.annotation {
             if let Some(cp) =
-                parse_callable_annotation(&param.parameter.name.to_string(), annotation)
+                parse_callable_annotation(param.parameter.name.as_str(), annotation)
             {
                 result.push(cp);
             }
@@ -81,9 +81,8 @@ fn collect_callable_params(func: &ast::StmtFunctionDef) -> Vec<CallableParam> {
 }
 
 fn parse_callable_annotation(param_name: &str, annotation: &Expr) -> Option<CallableParam> {
-    let subscript = match annotation {
-        Expr::Subscript(sub) => sub,
-        _ => return None,
+    let Expr::Subscript(subscript) = annotation else {
+        return None;
     };
     let is_callable = match subscript.value.as_ref() {
         Expr::Name(name) => name.id.as_str() == "Callable",
@@ -145,7 +144,6 @@ fn annotation_to_string(expr: &Expr) -> String {
             annotation_to_string(&b.right)
         ),
         Expr::NoneLiteral(_) => "None".to_owned(),
-        Expr::EllipsisLiteral(_) => "...".to_owned(),
         _ => "...".to_owned(),
     }
 }
@@ -188,8 +186,7 @@ fn check_stmt_calls(stmt: &Stmt, cp: &[CallableParam], path: &str, diag: &mut Ve
             check_body_calls(&node.finalbody, cp, path, diag);
         }
         Stmt::With(node) => check_body_calls(&node.body, cp, path, diag),
-        Stmt::FunctionDef(_) => {} // Don't recurse into nested functions
-        _ => {}
+        _ => {} // Don't recurse into nested functions (FunctionDef, ClassDef, etc.)
     }
 }
 
@@ -236,42 +233,46 @@ fn validate_call(call: &ast::ExprCall, cp: &CallableParam, path: &str, diag: &mu
     let Some(expected) = cp.expected_args else {
         return;
     };
-    if positional_count < expected {
-        diag.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
-                "Too few arguments for `{}`: expected {} but got {}",
-                cp.name, expected, positional_count
-            ),
-            span,
-            path: path.to_owned(),
-            help: Some(format!(
-                "`{}` is typed as `Callable[[{}], ...]`",
-                cp.name,
-                cp.arg_types.join(", ")
-            )),
-            note: None,
-        });
-    } else if positional_count > expected {
-        diag.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
-                "Too many arguments for `{}`: expected {} but got {}",
-                cp.name, expected, positional_count
-            ),
-            span,
-            path: path.to_owned(),
-            help: Some(format!(
-                "`{}` is typed as `Callable[[{}], ...]`",
-                cp.name,
-                cp.arg_types.join(", ")
-            )),
-            note: None,
-        });
-    } else {
-        check_arg_types(call, cp, path, diag);
+    match positional_count.cmp(&expected) {
+        std::cmp::Ordering::Less => {
+            diag.push(Diagnostic {
+                code: CODE.clone(),
+                severity: Severity::Error,
+                message: format!(
+                    "Too few arguments for `{}`: expected {} but got {}",
+                    cp.name, expected, positional_count
+                ),
+                span,
+                path: path.to_owned(),
+                help: Some(format!(
+                    "`{}` is typed as `Callable[[{}], ...]`",
+                    cp.name,
+                    cp.arg_types.join(", ")
+                )),
+                note: None,
+            });
+        }
+        std::cmp::Ordering::Greater => {
+            diag.push(Diagnostic {
+                code: CODE.clone(),
+                severity: Severity::Error,
+                message: format!(
+                    "Too many arguments for `{}`: expected {} but got {}",
+                    cp.name, expected, positional_count
+                ),
+                span,
+                path: path.to_owned(),
+                help: Some(format!(
+                    "`{}` is typed as `Callable[[{}], ...]`",
+                    cp.name,
+                    cp.arg_types.join(", ")
+                )),
+                note: None,
+            });
+        }
+        std::cmp::Ordering::Equal => {
+            check_arg_types(call, cp, path, diag);
+        }
     }
 }
 

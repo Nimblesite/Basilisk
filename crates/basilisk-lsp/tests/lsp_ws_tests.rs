@@ -5924,3 +5924,298 @@ async fn test_ws_initialize_advertises_type_hierarchy_provider() -> TestResult<(
 
     Ok(())
 }
+
+// ── Go to Declaration ──────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_goto_declaration() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+def compute(x: int) -> int:
+    return x * 2
+
+result: int = compute(10)
+";
+    fixture.did_open("file:///decl.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            300,
+            "textDocument/declaration",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///decl.py" },
+                "position": { "line": 3, "character": 16 }
+            }),
+        )
+        .await?
+        .ok_or("no declaration response")?;
+
+    assert!(
+        resp.contains("\"line\":0"),
+        "declaration should point to line 0 (function def): {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_initialize_advertises_declaration_provider() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let response = fixture.initialize().await?;
+
+    assert!(
+        response.contains("\"declarationProvider\""),
+        "initialize response should advertise declarationProvider: {response}"
+    );
+    Ok(())
+}
+
+// ── Go to Type Definition ──────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_goto_type_definition_variable() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+class MyData:
+    value: int
+
+instance: MyData = MyData()
+";
+    fixture.did_open("file:///typedef.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            301,
+            "textDocument/typeDefinition",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///typedef.py" },
+                "position": { "line": 3, "character": 2 }
+            }),
+        )
+        .await?
+        .ok_or("no type definition response")?;
+
+    assert!(
+        resp.contains("\"line\":0"),
+        "type definition should point to line 0 (class MyData): {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_goto_type_definition_parameter() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+class Config:
+    debug: bool
+
+def process(cfg: Config) -> None:
+    pass
+";
+    fixture.did_open("file:///typedef2.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            302,
+            "textDocument/typeDefinition",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///typedef2.py" },
+                "position": { "line": 3, "character": 13 }
+            }),
+        )
+        .await?
+        .ok_or("no type definition response")?;
+
+    assert!(
+        resp.contains("\"line\":0"),
+        "type definition should point to line 0 (class Config): {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_goto_type_definition_optional() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+class Widget:
+    name: str
+
+item: Optional[Widget] = None
+";
+    fixture.did_open("file:///typedef3.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            303,
+            "textDocument/typeDefinition",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///typedef3.py" },
+                "position": { "line": 3, "character": 2 }
+            }),
+        )
+        .await?
+        .ok_or("no type definition response")?;
+
+    assert!(
+        resp.contains("\"line\":0"),
+        "type definition should unwrap Optional and point to class Widget: {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_goto_type_definition_no_annotation_returns_null() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+x = 42
+";
+    fixture.did_open("file:///typedef4.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            304,
+            "textDocument/typeDefinition",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///typedef4.py" },
+                "position": { "line": 0, "character": 0 }
+            }),
+        )
+        .await?
+        .ok_or("no type definition response")?;
+
+    assert!(
+        resp.contains("\"result\":null"),
+        "type definition for unannotated variable should be null: {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_initialize_advertises_type_definition_provider() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let response = fixture.initialize().await?;
+
+    assert!(
+        response.contains("\"typeDefinitionProvider\""),
+        "initialize response should advertise typeDefinitionProvider: {response}"
+    );
+    Ok(())
+}
+
+// ── Docstring tests ────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_hover_shows_docstring() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+def calculate(x: int) -> int:
+    \"\"\"Compute the square of x.\"\"\"
+    return x * x
+";
+    fixture.did_open("file:///docstr.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            310,
+            "textDocument/hover",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///docstr.py" },
+                "position": { "line": 0, "character": 5 }
+            }),
+        )
+        .await?
+        .ok_or("no hover response")?;
+
+    assert!(
+        resp.contains("Compute the square of x"),
+        "hover should include docstring: {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_hover_class_docstring() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+class Animal:
+    \"\"\"Represents an animal with a name.\"\"\"
+    name: str
+";
+    fixture.did_open("file:///classdoc.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            311,
+            "textDocument/hover",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///classdoc.py" },
+                "position": { "line": 0, "character": 7 }
+            }),
+        )
+        .await?
+        .ok_or("no hover response")?;
+
+    assert!(
+        resp.contains("Represents an animal with a name"),
+        "hover should include class docstring: {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_completion_includes_docstring() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let code = "\
+def helper(x: int) -> int:
+    \"\"\"Return x plus one.\"\"\"
+    return x + 1
+
+hel
+";
+    fixture.did_open("file:///compdoc.py", code).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    let resp = fixture
+        .request(
+            312,
+            "textDocument/completion",
+            serde_json::json!({
+                "textDocument": { "uri": "file:///compdoc.py" },
+                "position": { "line": 4, "character": 3 }
+            }),
+        )
+        .await?
+        .ok_or("no completion response")?;
+
+    assert!(
+        resp.contains("helper"),
+        "completions should include 'helper': {resp}"
+    );
+    assert!(
+        resp.contains("Return x plus one"),
+        "completion should include docstring: {resp}"
+    );
+    Ok(())
+}
