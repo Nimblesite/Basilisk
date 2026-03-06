@@ -191,12 +191,20 @@ mod tests {
     use basilisk_resolver::Span;
 
     fn make_diag(help: Option<&str>, note: Option<&str>) -> Diagnostic {
+        make_diag_with_severity(Severity::Error, help, note)
+    }
+
+    fn make_diag_with_severity(
+        severity: Severity,
+        help: Option<&str>,
+        note: Option<&str>,
+    ) -> Diagnostic {
         Diagnostic {
             code: ErrorCode {
                 code: "BSK-E0001",
                 docs_url: "https://basilisk-lang.org/errors/BSK-E0001",
             },
-            severity: Severity::Error,
+            severity,
             message: "missing annotation for `x`".to_owned(),
             span: Span { start: 8, end: 9 },
             path: "test.py".to_owned(),
@@ -214,6 +222,18 @@ mod tests {
         }];
         let count = render_diagnostics(&[diag], &sources);
         assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn render_diagnostics_does_not_count_warnings_as_errors() {
+        let warning = make_diag_with_severity(Severity::Warning, None, None);
+        let error = make_diag(None, None);
+        let sources = vec![FileSource {
+            path: "test.py".to_owned(),
+            text: "def foo(x): pass".to_owned(),
+        }];
+        let count = render_diagnostics(&[warning, error], &sources);
+        assert_eq!(count, 1, "only errors should be counted, not warnings");
     }
 
     #[test]
@@ -304,6 +324,36 @@ mod tests {
     #[test]
     fn render_diagnostics_json_empty_is_safe() {
         render_diagnostics_json(&[], &[]);
+    }
+
+    #[test]
+    fn render_diagnostics_json_warning_severity() {
+        let diag = make_diag_with_severity(Severity::Warning, None, None);
+        let sources = vec![FileSource {
+            path: "test.py".to_owned(),
+            text: "def foo(x): pass".to_owned(),
+        }];
+        render_diagnostics_json(&[diag], &sources);
+    }
+
+    #[test]
+    fn render_diagnostics_json_info_severity() {
+        let diag = make_diag_with_severity(Severity::Info, None, None);
+        let sources = vec![FileSource {
+            path: "test.py".to_owned(),
+            text: "def foo(x): pass".to_owned(),
+        }];
+        render_diagnostics_json(&[diag], &sources);
+    }
+
+    #[test]
+    fn render_diagnostics_json_safety_violation_severity() {
+        let diag = make_diag_with_severity(Severity::SafetyViolation, None, None);
+        let sources = vec![FileSource {
+            path: "test.py".to_owned(),
+            text: "def foo(x): pass".to_owned(),
+        }];
+        render_diagnostics_json(&[diag], &sources);
     }
 
     #[test]

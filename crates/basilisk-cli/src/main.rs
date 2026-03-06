@@ -404,6 +404,39 @@ mod tests {
         assert!(result.is_err(), "NotFound path must return Err, not Ok");
     }
 
+    /// `run_check` Text path: warnings-only code must return 0 (no errors).
+    #[test]
+    fn run_check_text_warnings_only_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = std::env::temp_dir();
+        let py = dir.join("basilisk_test_rc_text_warn.py");
+        // Demote the missing-param-annotation error to a warning via inline override.
+        std::fs::write(&py, b"def foo(x) -> None:  # type: warning[BSK-E0001]\n    pass\n")?;
+        let path = py.to_string_lossy().into_owned();
+        let code = run_check(&[path], OutputFormat::Text);
+        let _ = std::fs::remove_file(&py);
+        assert_eq!(
+            code, 0,
+            "warnings-only code must make run_check return 0 (Text)"
+        );
+        Ok(())
+    }
+
+    /// `run_check` Json path: warnings-only code must return 0 (no errors).
+    #[test]
+    fn run_check_json_warnings_only_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = std::env::temp_dir();
+        let py = dir.join("basilisk_test_rc_json_warn.py");
+        std::fs::write(&py, b"def foo(x) -> None:  # type: warning[BSK-E0001]\n    pass\n")?;
+        let path = py.to_string_lossy().into_owned();
+        let code = run_check(&[path], OutputFormat::Json);
+        let _ = std::fs::remove_file(&py);
+        assert_eq!(
+            code, 0,
+            "warnings-only code must make run_check return 0 (Json)"
+        );
+        Ok(())
+    }
+
     /// Complement: a path that exists but is not .py returns Ok with empty list.
     /// This kills the `true` guard mutant: if all errors → Err, this would fail.
     #[test]

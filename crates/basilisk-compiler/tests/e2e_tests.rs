@@ -107,9 +107,32 @@ fn e2e_all_examples() {
         e2e_dir.display()
     );
 
+    let mut failures: Vec<String> = Vec::new();
+
     for py_path in &py_files {
         let stem = py_path.file_stem().and_then(|s| s.to_str()).unwrap_or("?");
         eprintln!("running e2e test: {stem}");
-        run_e2e_test(py_path);
+        let result = std::panic::catch_unwind(|| run_e2e_test(py_path));
+        match result {
+            Ok(()) => eprintln!("  PASS: {stem}"),
+            Err(err) => {
+                let msg = err
+                    .downcast_ref::<String>()
+                    .map(String::as_str)
+                    .or_else(|| err.downcast_ref::<&str>().copied())
+                    .unwrap_or("unknown panic");
+                eprintln!("  FAIL: {stem}: {msg}");
+                failures.push(format!("{stem}: {msg}"));
+            }
+        }
+    }
+
+    if !failures.is_empty() {
+        panic!(
+            "\n{} of {} e2e tests FAILED:\n  {}",
+            failures.len(),
+            py_files.len(),
+            failures.join("\n  ")
+        );
     }
 }
