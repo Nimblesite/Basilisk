@@ -143,12 +143,12 @@ fn check_module_vars(
     let empty: HashSet<&str> = HashSet::new();
     for var in &module.module_vars {
         if let Some(ref ann_span) = var.annotation_span {
-                let unbound = find_unbound_typevars_in_annotation(
-                    &module.source,
-                    *ann_span,
-                    typevar_names,
-                    &empty,
-                );
+            let unbound = find_unbound_typevars_in_annotation(
+                &module.source,
+                *ann_span,
+                typevar_names,
+                &empty,
+            );
             for tv_name in unbound {
                 diagnostics.push(Diagnostic {
                     code: CODE.clone(),

@@ -2037,10 +2037,7 @@ def greet(name: str) -> str:
     )?
     .ok_or("no foldingRange response")?;
 
-    assert!(
-        resp.contains("\"result\""),
-        "should have a result: {resp}"
-    );
+    assert!(resp.contains("\"result\""), "should have a result: {resp}");
     // The class and two functions should produce folding ranges.
     assert!(
         resp.contains("startLine"),
@@ -2076,10 +2073,7 @@ def greet(name: str) -> str:
     )?
     .ok_or("no selectionRange response")?;
 
-    assert!(
-        resp.contains("\"result\""),
-        "should have a result: {resp}"
-    );
+    assert!(resp.contains("\"result\""), "should have a result: {resp}");
     Ok(())
 }
 
@@ -2113,10 +2107,7 @@ def caller() -> None:
     )?
     .ok_or("no codeLens response")?;
 
-    assert!(
-        resp.contains("\"result\""),
-        "should have a result: {resp}"
-    );
+    assert!(resp.contains("\"result\""), "should have a result: {resp}");
     Ok(())
 }
 
@@ -2148,10 +2139,7 @@ def greet(name: str) -> str:
     )?
     .ok_or("no documentHighlight response")?;
 
-    assert!(
-        resp.contains("\"result\""),
-        "should have a result: {resp}"
-    );
+    assert!(resp.contains("\"result\""), "should have a result: {resp}");
     Ok(())
 }
 
@@ -2219,10 +2207,7 @@ def main() -> None:
     )?
     .ok_or("no prepareCallHierarchy response")?;
 
-    assert!(
-        resp.contains("\"result\""),
-        "should have a result: {resp}"
-    );
+    assert!(resp.contains("\"result\""), "should have a result: {resp}");
     assert!(
         resp.contains("greet"),
         "should contain 'greet' in call hierarchy: {resp}"
@@ -2274,10 +2259,7 @@ def main() -> None:
     )?
     .ok_or("no incomingCalls response")?;
 
-    assert!(
-        resp.contains("\"result\""),
-        "should have a result: {resp}"
-    );
+    assert!(resp.contains("\"result\""), "should have a result: {resp}");
     Ok(())
 }
 
@@ -2324,10 +2306,7 @@ def main() -> None:
     )?
     .ok_or("no outgoingCalls response")?;
 
-    assert!(
-        resp.contains("\"result\""),
-        "should have a result: {resp}"
-    );
+    assert!(resp.contains("\"result\""), "should have a result: {resp}");
     Ok(())
 }
 
@@ -2362,10 +2341,7 @@ class Dog(Animal):
     )?
     .ok_or("no prepareTypeHierarchy response")?;
 
-    assert!(
-        resp.contains("\"result\""),
-        "should have a result: {resp}"
-    );
+    assert!(resp.contains("\"result\""), "should have a result: {resp}");
     assert!(
         resp.contains("Dog"),
         "should contain 'Dog' in type hierarchy: {resp}"
@@ -2415,10 +2391,7 @@ class Dog(Animal):
     )?
     .ok_or("no supertypes response")?;
 
-    assert!(
-        resp.contains("\"result\""),
-        "should have a result: {resp}"
-    );
+    assert!(resp.contains("\"result\""), "should have a result: {resp}");
     assert!(
         resp.contains("Animal"),
         "supertypes of Dog should include Animal: {resp}"
@@ -2469,10 +2442,7 @@ class Dog(Animal):
     )?
     .ok_or("no subtypes response")?;
 
-    assert!(
-        resp.contains("\"result\""),
-        "should have a result: {resp}"
-    );
+    assert!(resp.contains("\"result\""), "should have a result: {resp}");
     assert!(
         resp.contains("Dog"),
         "subtypes of Animal should include Dog: {resp}"
@@ -2509,10 +2479,7 @@ def greet(name: str) -> str:
     )?
     .ok_or("no workspace/symbol response")?;
 
-    assert!(
-        resp.contains("\"result\""),
-        "should have a result: {resp}"
-    );
+    assert!(resp.contains("\"result\""), "should have a result: {resp}");
     assert!(
         resp.contains("greet"),
         "workspace symbols should contain 'greet': {resp}"
@@ -2549,10 +2516,7 @@ fn test_lsp_formatting() -> TestResult<()> {
     .ok_or("no formatting response")?;
 
     // The response should contain either edits or null result (if ruff is not installed).
-    assert!(
-        resp.contains("\"result\""),
-        "should have a result: {resp}"
-    );
+    assert!(resp.contains("\"result\""), "should have a result: {resp}");
     Ok(())
 }
 

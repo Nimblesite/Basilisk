@@ -117,7 +117,7 @@ fn fix_missing_variable_annotation(uri: &Url, diag: &Diagnostic) -> CodeAction {
 /// from the colon to the equals sign (including the colon and space).
 fn fix_remove_redundant_annotation(uri: &Url, diag: &Diagnostic, source: &str) -> CodeAction {
     let line_idx = diag.range.start.line as usize;
-    
+
     // Find the colon after the variable name (within the diagnostic span).
     // The diagnostic span covers the variable name; we need to find the colon
     // that appears after it on the same line.
@@ -177,7 +177,10 @@ fn suppress_with_code(uri: &Url, diag: &Diagnostic, source: &str, code: &str) ->
     changes.insert(
         uri.clone(),
         vec![TextEdit {
-            range: Range { start: insert_pos, end: insert_pos },
+            range: Range {
+                start: insert_pos,
+                end: insert_pos,
+            },
             new_text: comment,
         }],
     );
@@ -202,7 +205,10 @@ fn demote_to_warning(uri: &Url, diag: &Diagnostic, source: &str, code: &str) -> 
     changes.insert(
         uri.clone(),
         vec![TextEdit {
-            range: Range { start: insert_pos, end: insert_pos },
+            range: Range {
+                start: insert_pos,
+                end: insert_pos,
+            },
             new_text: comment,
         }],
     );
@@ -222,12 +228,18 @@ fn demote_to_warning(uri: &Url, diag: &Diagnostic, source: &str, code: &str) -> 
 /// Insert `# basilisk: file-disabled[CODE]` at line 0 to disable for the whole file.
 fn disable_for_file(uri: &Url, diag: &Diagnostic, _source: &str, code: &str) -> CodeAction {
     let comment = format!("# basilisk: file-disabled[{code}]\n");
-    let insert_pos = Position { line: 0, character: 0 };
+    let insert_pos = Position {
+        line: 0,
+        character: 0,
+    };
     let mut changes = HashMap::new();
     changes.insert(
         uri.clone(),
         vec![TextEdit {
-            range: Range { start: insert_pos, end: insert_pos },
+            range: Range {
+                start: insert_pos,
+                end: insert_pos,
+            },
             new_text: comment,
         }],
     );
@@ -401,15 +413,21 @@ fn single_insert(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tower_lsp::lsp_types::{Diagnostic, NumberOrString, Range, Position, Url};
+    use tower_lsp::lsp_types::{Diagnostic, NumberOrString, Position, Range, Url};
 
     #[test]
     fn test_fix_remove_redundant_annotation() {
         let uri = Url::parse("file:///test.py").unwrap();
         let diag = Diagnostic {
             range: Range {
-                start: Position { line: 0, character: 0 },
-                end: Position { line: 0, character: 1 },
+                start: Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: Position {
+                    line: 0,
+                    character: 1,
+                },
             },
             severity: Some(tower_lsp::lsp_types::DiagnosticSeverity::WARNING),
             code: Some(NumberOrString::String("BSK-W0050".to_owned())),
@@ -441,8 +459,14 @@ mod tests {
         let uri = Url::parse("file:///test.py").unwrap();
         let diag = Diagnostic {
             range: Range {
-                start: Position { line: 0, character: 0 },
-                end: Position { line: 0, character: 1 },
+                start: Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: Position {
+                    line: 0,
+                    character: 1,
+                },
             },
             severity: Some(tower_lsp::lsp_types::DiagnosticSeverity::WARNING),
             code: Some(NumberOrString::String("BSK-W0050".to_owned())),
@@ -461,6 +485,9 @@ mod tests {
             CodeActionOrCommand::CodeAction(ca) => ca.title.contains("Remove redundant"),
             _ => false,
         });
-        assert!(remove_action.is_some(), "Should have remove redundant action");
+        assert!(
+            remove_action.is_some(),
+            "Should have remove redundant action"
+        );
     }
 }

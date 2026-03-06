@@ -71,6 +71,13 @@ cargo llvm-cov \
 
 ok "HTML report → $HTML_DIR/index.html"
 
+# ── Compiler E2E (passing tests only) ────────────────────────────────────────
+header "Running passing compiler E2E tests (hello, arithmetic)"
+
+BASILISK_COMPILER_FILTER="hello,arithmetic" \
+    cargo test -p basilisk-compiler --test e2e_tests -- --nocapture
+# The full compiler test suite (including expected failures) lives in scripts/test-compiler.sh
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 header "Coverage summary"
 

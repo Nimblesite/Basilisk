@@ -12,8 +12,7 @@ use basilisk_resolver::ResolvedModule;
 use tower_lsp::lsp_types::{GotoDefinitionResponse, Location, Url};
 
 use crate::util::{
-    find_definition_by_name, find_symbol_at_offset, identifier_at_offset, span_to_range,
-    SymbolHit,
+    find_definition_by_name, find_symbol_at_offset, identifier_at_offset, span_to_range, SymbolHit,
 };
 
 /// Compute go-to-type-definition for a byte offset.

@@ -149,8 +149,7 @@ fn check_bound_compatibility(
                      `{default_bound}` is not a subtype of `{tv_bound}`"
                 )),
                 note: Some(
-                    "When T2 has default=T1, T1's bound must be a subtype of T2's bound"
-                        .to_owned(),
+                    "When T2 has default=T1, T1's bound must be a subtype of T2's bound".to_owned(),
                 ),
             });
         }
@@ -325,13 +324,7 @@ impl Rule for TypeVarDefaultReferential {
 
             check_ordering(tv, default_name, &order_index, &module.path, diagnostics);
             check_bound_compatibility(tv, default_tv, default_name, &module.path, diagnostics);
-            check_constraint_compatibility(
-                tv,
-                default_tv,
-                default_name,
-                &module.path,
-                diagnostics,
-            );
+            check_constraint_compatibility(tv, default_tv, default_name, &module.path, diagnostics);
         }
     }
 }

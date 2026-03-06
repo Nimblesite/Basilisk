@@ -303,20 +303,27 @@ fn find_method_mismatch(
             continue;
         }
 
-        let Some(concrete_method) = rhs_methods.iter().find(|m| m.name == proto_method.name)
-        else {
+        let Some(concrete_method) = rhs_methods.iter().find(|m| m.name == proto_method.name) else {
             continue;
         };
 
-        if let Some(detail) =
-            check_return_type_mismatch(proto_method, concrete_method, source, substitution, typevar_info)
-        {
+        if let Some(detail) = check_return_type_mismatch(
+            proto_method,
+            concrete_method,
+            source,
+            substitution,
+            typevar_info,
+        ) {
             return Some(detail);
         }
 
-        if let Some(detail) =
-            check_param_type_mismatch(proto_method, concrete_method, source, substitution, typevar_info)
-        {
+        if let Some(detail) = check_param_type_mismatch(
+            proto_method,
+            concrete_method,
+            source,
+            substitution,
+            typevar_info,
+        ) {
             return Some(detail);
         }
     }

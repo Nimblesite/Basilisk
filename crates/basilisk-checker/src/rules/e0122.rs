@@ -70,9 +70,7 @@ fn collect_callable_params(func: &ast::StmtFunctionDef) -> Vec<CallableParam> {
         .chain(params.kwonlyargs.iter());
     for param in all_params {
         if let Some(annotation) = &param.parameter.annotation {
-            if let Some(cp) =
-                parse_callable_annotation(param.parameter.name.as_str(), annotation)
-            {
+            if let Some(cp) = parse_callable_annotation(param.parameter.name.as_str(), annotation) {
                 result.push(cp);
             }
         }

@@ -382,7 +382,8 @@ fn check_literal_string_fstring(
                     ),
                     span: Span {
                         start: u32::try_from(assign.name_offset).unwrap_or(u32::MAX),
-                        end: u32::try_from(assign.name_offset + assign.name_len).unwrap_or(u32::MAX),
+                        end: u32::try_from(assign.name_offset + assign.name_len)
+                            .unwrap_or(u32::MAX),
                     },
                     path: path.to_owned(),
                     help: Some(format!(
@@ -417,11 +418,13 @@ fn check_invariant_generic_literal_string(
     // Lists (and other mutable containers) are invariant, so
     // `list[LiteralString]` is NOT assignable to `list[str]`.
     if let Some((ann_container, ann_inner)) = split_generic(ann) {
-        if is_invariant_container(ann_container) && is_plain_str_type(ann_inner) && is_simple_identifier(rhs) {
+        if is_invariant_container(ann_container)
+            && is_plain_str_type(ann_inner)
+            && is_simple_identifier(rhs)
+        {
             if let Some(param_ann) = param_anns.get(rhs) {
                 if let Some((param_container, param_inner)) = split_generic(param_ann) {
-                    if param_container == ann_container && param_inner.trim() == "LiteralString"
-                    {
+                    if param_container == ann_container && param_inner.trim() == "LiteralString" {
                         diagnostics.push(Diagnostic {
                             code: CODE.clone(),
                             severity: Severity::Error,
@@ -431,7 +434,8 @@ fn check_invariant_generic_literal_string(
                             ),
                             span: Span {
                                 start: u32::try_from(assign.name_offset).unwrap_or(u32::MAX),
-                                end: u32::try_from(assign.name_offset + assign.name_len).unwrap_or(u32::MAX),
+                                end: u32::try_from(assign.name_offset + assign.name_len)
+                                    .unwrap_or(u32::MAX),
                             },
                             path: path.to_owned(),
                             help: Some(format!(

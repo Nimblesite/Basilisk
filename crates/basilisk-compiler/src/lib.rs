@@ -59,8 +59,8 @@ pub fn compile_and_run(source: &str, path: &str) -> Result<CompileResult, Compil
         });
     }
 
-    // Stage 4: JIT compile and execute natively
-    let output = codegen::jit_compile_and_run(&parsed.ast)?;
+    // Stage 4: JIT compile and execute natively (using resolved type info)
+    let output = codegen::jit_compile_and_run(&parsed.ast, &resolved)?;
 
     Ok(CompileResult {
         diagnostics: Vec::new(),

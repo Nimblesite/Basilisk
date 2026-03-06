@@ -410,7 +410,10 @@ mod tests {
         let dir = std::env::temp_dir();
         let py = dir.join("basilisk_test_rc_text_warn.py");
         // Demote the missing-param-annotation error to a warning via inline override.
-        std::fs::write(&py, b"def foo(x) -> None:  # type: warning[BSK-E0001]\n    pass\n")?;
+        std::fs::write(
+            &py,
+            b"def foo(x) -> None:  # type: warning[BSK-E0001]\n    pass\n",
+        )?;
         let path = py.to_string_lossy().into_owned();
         let code = run_check(&[path], OutputFormat::Text);
         let _ = std::fs::remove_file(&py);
@@ -426,7 +429,10 @@ mod tests {
     fn run_check_json_warnings_only_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
         let dir = std::env::temp_dir();
         let py = dir.join("basilisk_test_rc_json_warn.py");
-        std::fs::write(&py, b"def foo(x) -> None:  # type: warning[BSK-E0001]\n    pass\n")?;
+        std::fs::write(
+            &py,
+            b"def foo(x) -> None:  # type: warning[BSK-E0001]\n    pass\n",
+        )?;
         let path = py.to_string_lossy().into_owned();
         let code = run_check(&[path], OutputFormat::Json);
         let _ = std::fs::remove_file(&py);

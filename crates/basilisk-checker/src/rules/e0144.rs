@@ -175,10 +175,7 @@ fn check_function(
 
 /// Extract all parameters annotated as `type[X]` in a function definition.
 /// Returns a map from parameter name to the inner type name `X`.
-fn collect_type_params(
-    func: &ast::StmtFunctionDef,
-    source: &str,
-) -> HashMap<String, String> {
+fn collect_type_params(func: &ast::StmtFunctionDef, source: &str) -> HashMap<String, String> {
     let mut map = HashMap::new();
     let params = &func.parameters;
 
@@ -297,11 +294,7 @@ fn check_stmt_inner(stmt: &Stmt, cctx: &CheckCtx<'_>, diagnostics: &mut Vec<Diag
     }
 }
 
-fn check_expr_inner(
-    expr: &Expr,
-    cctx: &CheckCtx<'_>,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
+fn check_expr_inner(expr: &Expr, cctx: &CheckCtx<'_>, diagnostics: &mut Vec<Diagnostic>) {
     let Expr::Call(call) = expr else { return };
 
     // Recurse into arguments.

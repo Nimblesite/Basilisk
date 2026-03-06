@@ -122,15 +122,9 @@ fn collect_class_bases(stmts: &[Stmt]) -> HashMap<String, Vec<String>> {
     let mut result: HashMap<String, Vec<String>> = HashMap::new();
     for stmt in stmts {
         let Stmt::ClassDef(cls) = stmt else { continue };
-        let bases: Vec<String> = cls
-            .arguments
-            .as_ref()
-            .map_or_else(Vec::new, |args| {
-                args.args
-                    .iter()
-                    .filter_map(expr_simple_name)
-                    .collect()
-            });
+        let bases: Vec<String> = cls.arguments.as_ref().map_or_else(Vec::new, |args| {
+            args.args.iter().filter_map(expr_simple_name).collect()
+        });
         result.insert(cls.name.id.to_string(), bases);
     }
     result

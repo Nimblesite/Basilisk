@@ -81,9 +81,7 @@ impl Rule for InvariantGenericArgMismatch {
 }
 
 /// Build a map from class name to (`base_generic_name`,`type_arg_texts`ts]).
-fn build_class_base_map(
-    module: &ResolvedModule,
-) -> HashMap<&str, (&str, Vec<&str>)> {
+fn build_class_base_map(module: &ResolvedModule) -> HashMap<&str, (&str, Vec<&str>)> {
     let source = &module.source;
     let mut map = HashMap::new();
 

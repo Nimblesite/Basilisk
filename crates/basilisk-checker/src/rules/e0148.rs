@@ -196,10 +196,7 @@ fn try_parse_constrained_typevar(lhs_name: &str, expr: &Expr) -> Option<Constrai
     }
 
     // Collect positional constraint args (skip arg 0 which is the name string).
-    let constraints: Vec<String> = call.arguments.args[1..]
-        .iter()
-        .map(ann_str)
-        .collect();
+    let constraints: Vec<String> = call.arguments.args[1..].iter().map(ann_str).collect();
 
     if constraints.len() < 2 {
         return None;

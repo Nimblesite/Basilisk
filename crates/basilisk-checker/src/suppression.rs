@@ -100,28 +100,40 @@ pub fn parse_source_overrides(source: &str) -> SourceOverrides {
         // These appear at the end of a line with code.
         if let Some(rest) = find_comment_directive(line, "# type: ignore") {
             let codes = parse_bracketed_codes(rest);
-            line_overrides.push((line_idx, LineOverride {
-                mode: RuleMode::Ignore,
-                codes,
-            }));
+            line_overrides.push((
+                line_idx,
+                LineOverride {
+                    mode: RuleMode::Ignore,
+                    codes,
+                },
+            ));
         } else if let Some(rest) = find_comment_directive(line, "# type: disabled") {
             let codes = parse_bracketed_codes(rest);
-            line_overrides.push((line_idx, LineOverride {
-                mode: RuleMode::Disabled,
-                codes,
-            }));
+            line_overrides.push((
+                line_idx,
+                LineOverride {
+                    mode: RuleMode::Disabled,
+                    codes,
+                },
+            ));
         } else if let Some(rest) = find_comment_directive(line, "# type: warning") {
             let codes = parse_bracketed_codes(rest);
-            line_overrides.push((line_idx, LineOverride {
-                mode: RuleMode::Warning,
-                codes,
-            }));
+            line_overrides.push((
+                line_idx,
+                LineOverride {
+                    mode: RuleMode::Warning,
+                    codes,
+                },
+            ));
         } else if let Some(rest) = find_comment_directive(line, "# type: info") {
             let codes = parse_bracketed_codes(rest);
-            line_overrides.push((line_idx, LineOverride {
-                mode: RuleMode::Info,
-                codes,
-            }));
+            line_overrides.push((
+                line_idx,
+                LineOverride {
+                    mode: RuleMode::Info,
+                    codes,
+                },
+            ));
         }
     }
 
@@ -256,9 +268,9 @@ fn find_matching_block_start(
     end_override: &LineOverride,
 ) -> Option<usize> {
     // Match by mode and codes (last matching start wins).
-    starts
-        .iter()
-        .rposition(|(_, start)| start.mode == end_override.mode && start.codes == end_override.codes)
+    starts.iter().rposition(|(_, start)| {
+        start.mode == end_override.mode && start.codes == end_override.codes
+    })
 }
 
 /// Convert a byte offset to a 0-based line number in the given source text.
@@ -372,7 +384,10 @@ import os
     fn test_parse_multiple_codes() {
         let source = "x = foo()  # type: ignore[BSK-E0010, BSK-E0012]\n";
         let overrides = parse_source_overrides(source);
-        assert_eq!(overrides.line_overrides[0].1.codes, vec!["BSK-E0010", "BSK-E0012"]);
+        assert_eq!(
+            overrides.line_overrides[0].1.codes,
+            vec!["BSK-E0010", "BSK-E0012"]
+        );
     }
 
     #[test]

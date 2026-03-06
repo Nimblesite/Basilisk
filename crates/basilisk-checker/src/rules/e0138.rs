@@ -566,7 +566,9 @@ fn collect_direct_transform_classes(
             if let Expr::Name(n) = base {
                 let base_name = n.id.as_str();
                 if transform_bases.contains_key(base_name) {
-                    return transform_bases.get(base_name).map(std::string::String::as_str);
+                    return transform_bases
+                        .get(base_name)
+                        .map(std::string::String::as_str);
                 }
             }
             None

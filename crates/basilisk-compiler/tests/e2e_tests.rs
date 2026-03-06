@@ -44,7 +44,10 @@ fn run_e2e_test(py_path: &Path) {
             }
 
             // Print the actual program output
-            eprintln!("--- {stem} stdout ---\n{}\n--- end ---", result.stdout.trim_end());
+            eprintln!(
+                "--- {stem} stdout ---\n{}\n--- end ---",
+                result.stdout.trim_end()
+            );
 
             // Otherwise we expected success — check stdout
             assert!(
@@ -90,12 +93,7 @@ fn e2e_all_examples() {
     let mut py_files: Vec<_> = std::fs::read_dir(&e2e_dir)
         .unwrap_or_else(|e| panic!("failed to read {}: {e}", e2e_dir.display()))
         .filter_map(|entry| entry.ok())
-        .filter(|entry| {
-            entry
-                .path()
-                .extension()
-                .is_some_and(|ext| ext == "py")
-        })
+        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "py"))
         .map(|entry| entry.path())
         .collect();
 
@@ -107,10 +105,22 @@ fn e2e_all_examples() {
         e2e_dir.display()
     );
 
+    // Optional filter: BASILISK_COMPILER_FILTER=hello,arithmetic
+    // When set, only run tests whose stem matches one of the comma-separated names.
+    let filter: Option<Vec<String>> = std::env::var("BASILISK_COMPILER_FILTER")
+        .ok()
+        .map(|val| val.split(',').map(|s| s.trim().to_string()).collect());
+
     let mut failures: Vec<String> = Vec::new();
 
     for py_path in &py_files {
         let stem = py_path.file_stem().and_then(|s| s.to_str()).unwrap_or("?");
+
+        if let Some(ref allowed) = filter {
+            if !allowed.iter().any(|a| a == stem) {
+                continue;
+            }
+        }
         eprintln!("running e2e test: {stem}");
         let result = std::panic::catch_unwind(|| run_e2e_test(py_path));
         match result {

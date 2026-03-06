@@ -142,9 +142,7 @@ fn is_compatible_return_type(expected_return: &str, actual_return: &str) -> bool
 }
 
 /// Build a map of module-level function names to functions returning TypeGuard/TypeIs.
-fn build_typeguard_func_map(
-    module: &ResolvedModule,
-) -> HashMap<&str, &str> {
+fn build_typeguard_func_map(module: &ResolvedModule) -> HashMap<&str, &str> {
     let source = &module.source;
     let mut typeguard_funcs: HashMap<&str, &str> = HashMap::new();
     for func in &module.functions {
