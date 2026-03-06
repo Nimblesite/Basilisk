@@ -33,3 +33,5 @@ vscode-extension/basilisk-0.1.0.vsix
 vscode-extension/out/
 
 vscode-extension/.vscode-test/
+
+.DS_Store
