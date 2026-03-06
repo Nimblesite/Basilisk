@@ -37,16 +37,6 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: cargo test --all-targets
-        run: cargo test --all-targets
-
-  coverage:
-    name: Coverage
-    runs-on: ubuntu-latest
     env:
       TEST_COVERAGE_BASILISK_CHECKER: ${{ vars.TEST_COVERAGE_BASILISK_CHECKER || '89' }}
       TEST_COVERAGE_BASILISK_CLI: ${{ vars.TEST_COVERAGE_BASILISK_CLI || '96' }}
