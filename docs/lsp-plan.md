@@ -14,7 +14,10 @@
 | **3** | Inlay Hints (types + params + return), Semantic Tokens | **P3** | DONE |
 | **4** | Workspace Symbols, Format Document, Folding, Selection Ranges | **P4** | DONE |
 | **5** | Document Highlight, Call Hierarchy, Type Hierarchy, Code Lens | **P5** | DONE |
-| **6** | Cross-module, Auto-import, Incremental Sync, Salsa | Future | NOT STARTED |
+| **6** | Single-file polish: declaration, typeDefinition, docstrings, code actions | **P6** | PARTIAL (3/8) |
+| **7** | Cross-module foundation: workspace resolver, Salsa, stubs, config | **P7** | NOT STARTED |
+| **8** | Cross-module features: cross-file nav, auto-import, multi-root | **P8** | NOT STARTED |
+| **9** | Advanced refactoring: full inference, extract, move, abstract methods | **P9** | NOT STARTED |
 
 ---
 
@@ -94,16 +97,62 @@
 
 ---
 
-## Phase 6 — Future
+## Phase 6 — Single-File Polish (achievable without cross-module infra)
 
-| Task | Description |
-|------|-------------|
-| 6.1 | Cross-module Go to Definition — workspace module resolver |
-| 6.2 | Cross-module Find All References + Rename |
-| 6.3 | Auto-import suggestions — suggest imports from workspace index |
-| 6.4 | Incremental text sync — FULL → INCREMENTAL |
-| 6.5 | Salsa integration — memoized incremental computation |
-| ~~6.6~~ | ~~Go to Declaration / Go to Type Definition~~ | DONE |
+> Items that can be done with the current single-file architecture.
+> **Prerequisite**: None — these build on existing resolver/checker data.
+
+| Task | Description | Difficulty | Status |
+|------|-------------|------------|--------|
+| ~~6.6~~ | ~~Go to Declaration / Go to Type Definition~~ | Easy | DONE |
+| ~~6.7~~ | ~~Completion documentation (docstrings in hover + completions)~~ | Easy | DONE |
+| 6.8 | Completion item resolve — lazy-load docs/detail on selection | Medium | TODO |
+| 6.9 | Generic type parameter inlay hints | Medium | TODO |
+| 6.10 | Expand wildcard import (code action) | Medium | TODO |
+| 6.11 | Convert import style (code action: `import X` ↔ `from X import Y`) | Medium | TODO |
+| 6.12 | Add `__all__` declaration (code action) | Easy | TODO |
+| 6.13 | Color picker for hex color strings (`textDocument/documentColor`) | Easy | TODO |
+
+## Phase 7 — Cross-Module Foundation (BLOCKING for everything below)
+
+> **The big unlock.** Without a workspace module resolver, none of the cross-file
+> features are possible. This phase builds the infrastructure.
+
+| Task | Description | Difficulty | Status |
+|------|-------------|------------|--------|
+| 7.1 | Workspace module resolver — scan workspace, resolve `import X` to file paths | Hard | TODO |
+| 7.2 | Multi-file `ResolvedModule` graph — resolve across files, cache per-file | Hard | TODO |
+| 7.3 | Incremental text sync — FULL → INCREMENTAL (`TextDocumentSyncKind::Incremental`) | Medium | TODO |
+| 7.4 | Salsa integration — memoized incremental computation (like rust-analyzer) | Hard | TODO |
+| 7.5 | Stub file (`.pyi`) support — resolve type info from `.pyi` alongside `.py` | Medium | TODO |
+| 7.6 | Third-party type stubs — typeshed bundling, `py.typed` marker detection | Medium | TODO |
+| 7.7 | `pyrightconfig.json` / `pyproject.toml` config — read strictness, paths, excludes | Medium | TODO |
+
+## Phase 8 — Cross-Module Features (requires Phase 7)
+
+> These all depend on the workspace module resolver from Phase 7.
+
+| Task | Description | Difficulty | Status |
+|------|-------------|------------|--------|
+| 8.1 | Cross-file Go to Definition | Medium | TODO |
+| 8.2 | Cross-file Find All References | Medium | TODO |
+| 8.3 | Cross-file Rename | Hard | TODO |
+| 8.4 | Auto-import suggestions — suggest imports from workspace index | Hard | TODO |
+| 8.5 | Module-level auto-import index | Hard | TODO |
+| 8.6 | Multi-root workspace support | Medium | TODO |
+
+## Phase 9 — Advanced Refactoring (requires Phase 7+8)
+
+> Complex code actions that need full type inference and cross-module awareness.
+
+| Task | Description | Difficulty | Status |
+|------|-------------|------------|--------|
+| 9.1 | Full type inference (generics, unions, narrowing) | Very Hard | TODO |
+| 9.2 | Extract variable (code action) | Medium | TODO |
+| 9.3 | Extract method (code action) | Hard | TODO |
+| 9.4 | Implement abstract methods (code action) | Medium | TODO |
+| 9.5 | Override stub completions | Medium | TODO |
+| 9.6 | Move symbol to another file (code action) | Hard | TODO |
 
 ---
 
@@ -118,10 +167,10 @@
 | `textDocument/publishDiagnostics` | ✅ | ✅ DONE | — |
 | `textDocument/completion` | ✅ | ✅ DONE | — |
 | `textDocument/hover` — diagnostic info | ✅ | ✅ DONE | — |
-| `textDocument/hover` — type signatures | ✅ | ✅ DONE | **1** |
+| `textDocument/hover` — type signatures + docstrings | ✅ | ✅ DONE | **1, 6** |
 | `textDocument/definition` | ✅ | ✅ DONE | **1** |
-| `textDocument/declaration` | ✅ | ✅ DONE | **5** |
-| `textDocument/typeDefinition` | ✅ | ✅ DONE | **5** |
+| `textDocument/declaration` | ✅ | ✅ DONE | **6** |
+| `textDocument/typeDefinition` | ✅ | ✅ DONE | **6** |
 | `textDocument/documentSymbol` | ✅ | ✅ DONE | **1** |
 | `workspace/symbol` | ✅ | ✅ DONE | **4** |
 | `textDocument/signatureHelp` | ✅ | ✅ DONE | **2** |
@@ -139,6 +188,7 @@
 | `textDocument/prepareCallHierarchy` + calls | ✅ | ✅ DONE | **5** |
 | `textDocument/prepareTypeHierarchy` + types | ✅ | ✅ DONE | **5** |
 | `workspace/executeCommand` | ✅ | ✅ DONE | **2** |
+| `textDocument/documentColor` | ✅ | ☐ TODO | **6** |
 
 ### Completion Quality
 
@@ -148,11 +198,11 @@
 | Dot-access (attribute) completions | ✅ | ✅ DONE | — |
 | Import path completions | ✅ | ✅ DONE | — |
 | Built-in completions (78 builtins) | ✅ | ✅ DONE | — |
-| Auto-import suggestions | ✅ | ☐ TODO | 6 |
-| Completion documentation (docstrings) | ✅ | ✅ DONE | **5** |
-| Completion item resolve | ✅ | ☐ TODO | 6 |
+| Completion documentation (docstrings) | ✅ | ✅ DONE | **6** |
 | Keyword argument completions | ✅ | ✅ DONE | **2** |
-| Override stub completions | ✅ | ☐ TODO | 6 |
+| Completion item resolve | ✅ | ☐ TODO | **6** |
+| Auto-import suggestions | ✅ | ☐ TODO | **8** |
+| Override stub completions | ✅ | ☐ TODO | **9** |
 
 ### Code Actions & Refactoring
 
@@ -163,13 +213,13 @@
 | Add variable annotation (E0003) | ✅ | ✅ DONE | **2** |
 | Suppress with `# type: ignore` | ✅ | ✅ DONE | **2** |
 | Organize imports (Ruff) | ✅ | ✅ DONE | **2** |
-| Expand wildcard import | ✅ | ☐ TODO | 6 |
-| Extract variable | ✅ | ☐ TODO | 6 |
-| Extract method | ✅ | ☐ TODO | 6 |
-| Convert import style | ✅ | ☐ TODO | 6 |
-| Implement abstract methods | ✅ | ☐ TODO | 6 |
-| Add `__all__` declaration | ✅ | ☐ TODO | 6 |
-| Move symbol to another file | ✅ | ☐ TODO | 6 |
+| Expand wildcard import | ✅ | ☐ TODO | **6** |
+| Convert import style | ✅ | ☐ TODO | **6** |
+| Add `__all__` declaration | ✅ | ☐ TODO | **6** |
+| Extract variable | ✅ | ☐ TODO | **9** |
+| Extract method | ✅ | ☐ TODO | **9** |
+| Implement abstract methods | ✅ | ☐ TODO | **9** |
+| Move symbol to another file | ✅ | ☐ TODO | **9** |
 
 ### Inlay Hints
 
@@ -178,7 +228,7 @@
 | Variable inferred types | ✅ | ✅ DONE | **3** |
 | Function return types | ✅ | ✅ DONE | **3** |
 | Parameter name labels at call sites | ✅ | ✅ DONE | **3** |
-| Generic type parameter hints | ✅ | ☐ TODO | 6 |
+| Generic type parameter hints | ✅ | ☐ TODO | **6** |
 
 ### Type Checking & Diagnostics
 
@@ -189,21 +239,21 @@
 | Type mismatch / incompatible assignment | ✅ | ✅ partial | — |
 | Unknown / unresolved imports | ✅ | ✅ DONE | — |
 | Undefined variables | ✅ | ✅ partial | — |
-| Full type inference (generics, unions, narrowing) | ✅ | ☐ TODO | 6 |
-| `pyrightconfig.json` / `pyproject.toml` config | ✅ | ☐ TODO | 6 |
-| Stub file (`.pyi`) support | ✅ | ☐ TODO | 6 |
-| Third-party type stubs (typeshed, `py.typed`) | ✅ | ☐ TODO | 6 |
+| Full type inference (generics, unions, narrowing) | ✅ | ☐ TODO | **9** |
+| `pyrightconfig.json` / `pyproject.toml` config | ✅ | ☐ TODO | **7** |
+| Stub file (`.pyi`) support | ✅ | ☐ TODO | **7** |
+| Third-party type stubs (typeshed, `py.typed`) | ✅ | ☐ TODO | **7** |
 
 ### Cross-File & Workspace
 
 | Capability | Pylance | Basilisk | Phase |
 |------------|---------|---------|-------|
 | Single-file analysis | ✅ | ✅ DONE | — |
-| Cross-file Go to Definition | ✅ | ☐ TODO | 6 |
-| Cross-file Find All References | ✅ | ☐ TODO | 6 |
-| Cross-file Rename | ✅ | ☐ TODO | 6 |
-| Module-level auto-import index | ✅ | ☐ TODO | 6 |
-| Multi-root workspace support | ✅ | ☐ TODO | 6 |
+| Cross-file Go to Definition | ✅ | ☐ TODO | **8** |
+| Cross-file Find All References | ✅ | ☐ TODO | **8** |
+| Cross-file Rename | ✅ | ☐ TODO | **8** |
+| Module-level auto-import index | ✅ | ☐ TODO | **8** |
+| Multi-root workspace support | ✅ | ☐ TODO | **8** |
 
 ### Extension / UX
 
@@ -214,7 +264,7 @@
 | Show Output command | ✅ | ✅ DONE | **0** |
 | Auto-restart on crash (max 3) | ✅ | ✅ DONE | **0** |
 | Error message on server failure | ✅ | ✅ DONE | **0** |
-| Color picker for hex color strings | ✅ | ☐ TODO | 6 |
+| Color picker for hex color strings | ✅ | ☐ TODO | **6** |
 
 ---
 

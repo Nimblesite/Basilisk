@@ -1,0 +1,18 @@
+[package]
+name        = "basilisk-compiler"
+description = "Basilisk compiler — compiles typed Python to native code via LLVM"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+
+[dependencies]
+basilisk-parser.workspace   = true
+basilisk-resolver.workspace = true
+basilisk-checker.workspace  = true
+thiserror.workspace         = true
+
+[dev-dependencies]
+walkdir.workspace = true
+
+[lints]
+workspace = true

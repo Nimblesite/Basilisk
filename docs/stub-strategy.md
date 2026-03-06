@@ -1,7 +1,8 @@
 # Type Stub Strategy
 
-**Status**: Design Document
+**Status**: Partially Implemented
 **Date**: 2026-03-06
+**Last Updated**: 2026-03-06
 
 ---
 
@@ -66,7 +67,9 @@ Community-maintained repository of `.pyi` stubs for the Python standard library 
 
 ## Strategy: Four Layers
 
-### Layer 1: Immediate Relief -- Suppression and Configuration
+### Layer 1: Immediate Relief -- Suppression and Configuration ✅ IMPLEMENTED
+
+**Status**: Core suppression system is implemented and working. pyproject.toml config loading is not yet implemented.
 
 **Goal**: Make Basilisk usable on real projects today, without any stub infrastructure.
 
@@ -151,21 +154,38 @@ Update `crates/basilisk-lsp/src/code_actions.rs` to offer for every diagnostic:
 
 Most specific wins: line > block > file > per-path > per-module > global rule > rule default.
 
-#### 1.8 Files to Change
+#### 1.8 Implementation Status
 
-| File | Change |
-|------|--------|
-| `crates/basilisk-checker/src/diagnostic.rs` | Add `Severity::Info` and `Severity::Disabled`, or refactor to 4-mode enum |
-| `crates/basilisk-checker/src/lib.rs` | Replace `line_has_type_ignore` with full suppression parser supporting all modes |
-| `crates/basilisk-checker/src/rules/e0010.rs` | Remove duplicate suppression logic |
-| `crates/basilisk-checker/src/rules/mod.rs` | Pass suppression context to rules |
-| `crates/basilisk-lsp/src/server.rs` | Map `Info` severity to `DiagnosticSeverity::INFORMATION` |
-| `crates/basilisk-lsp/src/code_actions.rs` | Add ergonomic code actions for all suppression modes |
-| New: `crates/basilisk-config/` | Config parsing crate for pyproject.toml |
+| File | Change | Status |
+|------|--------|--------|
+| `crates/basilisk-checker/src/diagnostic.rs` | Added `Severity::Info` and `RuleMode` enum | ✅ Done |
+| `crates/basilisk-checker/src/suppression.rs` | New centralized suppression parser with all modes | ✅ Done |
+| `crates/basilisk-checker/src/lib.rs` | Replaced `line_has_type_ignore` with full suppression system | ✅ Done |
+| `crates/basilisk-checker/src/rules/e0010.rs` | Removed duplicate suppression logic | ✅ Done |
+| `crates/basilisk-lsp/src/server.rs` | Maps `Info` severity to `DiagnosticSeverity::INFORMATION` | ✅ Done |
+| `crates/basilisk-lsp/src/code_actions.rs` | Code actions: ignore, demote to warning, disable for file | ✅ Done |
+| `crates/basilisk-cli/src/output.rs` | Added `Info` severity to JSON output | ✅ Done |
+| New: `crates/basilisk-config/` | Config parsing crate for pyproject.toml | ❌ Not started |
+
+**What works now:**
+- `# type: ignore`, `# type: ignore[CODE]` -- per-line suppression
+- `# type: warning[CODE]`, `# type: info[CODE]`, `# type: disabled[CODE]` -- per-line severity override
+- Block directives: `# type: disabled[CODE]` ... `# type: end-disabled[CODE]`
+- File directives: `# basilisk: relaxed`, `# basilisk: file-disabled[CODE]`, `# basilisk: file-warning[CODE]`
+- LSP code actions for every diagnostic: ignore, demote to warning, disable for file
+- Suppression precedence: line > block > file
+- SPEC.md updated with sections 4.1.3-4.1.6 covering the full system
+
+**What's missing from Layer 1:**
+- pyproject.toml config loading (per-module overrides, per-path overrides, global rule severity)
+- "Disable in project config" code action (needs config crate first)
+- Per-path and per-module override precedence levels
 
 ---
 
-### Layer 2: Stub Discovery -- PEP 561 and typeshed
+### Layer 2: Stub Discovery -- PEP 561 and typeshed ❌ NOT STARTED
+
+**Status**: Design only. `basilisk-stubs` crate is still a placeholder returning `None` for all lookups.
 
 **Goal**: Automatically find and load type information for packages that provide it.
 
@@ -252,7 +272,9 @@ Since Basilisk uses `ruff_python_parser`, the same parser handles `.pyi` files. 
 
 ---
 
-### Layer 3: Type Provenance Tracking
+### Layer 3: Type Provenance Tracking ❌ NOT STARTED
+
+**Status**: Design only. No `TypeProvenance` or `TrackedType` structs exist yet.
 
 **Goal**: Track where type information came from and use that to control diagnostic behavior. This is Basilisk's key differentiator.
 
@@ -347,7 +369,9 @@ Rules that should respect provenance (argument mismatch, return mismatch, attrib
 
 ---
 
-### Layer 4: Auto-Stub Generation (Phase 5)
+### Layer 4: Auto-Stub Generation (Phase 5) ❌ NOT STARTED
+
+**Status**: Design only.
 
 **Goal**: For packages without any stubs, generate best-effort Tier 3 stubs automatically.
 
@@ -401,20 +425,21 @@ This is conceptually elegant but practically infeasible:
 
 ## Implementation Roadmap
 
-| Phase | Layer | Deliverable | Effort | Dependencies |
-|-------|-------|-------------|--------|--------------|
-| **Now** | 1a | `# basilisk: ignore[BSK-E0010]` per-code suppression | Small | None |
-| **Now** | 1b | `# basilisk: relaxed` per-file marker | Small | None |
-| **Next** | 1c | pyproject.toml config parsing + per-module overrides | Medium | New `basilisk-config` crate |
-| **Next** | 1d | LSP code actions for E0010 | Small | Layer 1a |
-| **Next** | 2a | typeshed bundling (replace hardcoded `STDLIB_ROOTS`) | Medium | None |
-| **Next** | 2b | User `stub-paths` resolution | Medium | Layer 1c (config) |
-| **Soon** | 2c | PEP 561 discovery (`-stubs` packages, `py.typed`) | Medium | Layer 2b |
-| **Soon** | 2d | `.pyi` parsing and type extraction | Large | Layer 2c |
-| **Later** | 3 | `TypeProvenance` tracking + cascade suppression | Large | Layer 2d |
-| **Phase 5** | 4 | Auto-stub generation engine | Large | Layer 3 |
+| Phase | Layer | Deliverable | Effort | Dependencies | Status |
+|-------|-------|-------------|--------|--------------|--------|
+| **Now** | 1a | Per-code suppression (`# type: ignore[CODE]`, warning, info, disabled) | Small | None | ✅ Done |
+| **Now** | 1b | Per-file markers (`# basilisk: relaxed`, `file-disabled[CODE]`) | Small | None | ✅ Done |
+| **Now** | 1c | Block directives (`# type: disabled[CODE]` ... `# type: end-disabled[CODE]`) | Small | None | ✅ Done |
+| **Now** | 1d | LSP code actions (ignore, demote, disable for file) | Small | Layer 1a | ✅ Done |
+| **Next** | 1e | pyproject.toml config parsing + per-module overrides | Medium | New `basilisk-config` crate | ❌ Not started |
+| **Next** | 2a | typeshed bundling (replace hardcoded `STDLIB_ROOTS`) | Medium | None | ❌ Not started |
+| **Next** | 2b | User `stub-paths` resolution | Medium | Layer 1e (config) | ❌ Not started |
+| **Soon** | 2c | PEP 561 discovery (`-stubs` packages, `py.typed`) | Medium | Layer 2b | ❌ Not started |
+| **Soon** | 2d | `.pyi` parsing and type extraction | Large | Layer 2c | ❌ Not started |
+| **Later** | 3 | `TypeProvenance` tracking + cascade suppression | Large | Layer 2d | ❌ Not started |
+| **Phase 5** | 4 | Auto-stub generation engine | Large | Layer 3 | ❌ Not started |
 
-Layers 1a and 1b are single-function changes that can ship immediately. Layer 1c (config) is foundational infrastructure needed by everything else. Layer 2a eliminates the technical debt of the hardcoded stdlib list. Layer 3 is the big differentiator.
+Layer 1 (suppression) is mostly complete -- inline, block, and file-level directives all work with LSP code actions. The next priority is Layer 1e (pyproject.toml config) which is foundational infrastructure needed by stub discovery. Layer 2a eliminates the technical debt of the hardcoded stdlib list. Layer 3 is the big differentiator.
 
 ---
 

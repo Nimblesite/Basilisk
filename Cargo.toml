@@ -10,6 +10,7 @@ members = [
     "crates/basilisk-plugin",
     "crates/basilisk-lsp",
     "crates/basilisk-mojo",
+    "crates/basilisk-compiler",
 ]
 
 [workspace.package]
@@ -39,6 +40,7 @@ basilisk-parser   = { path = "crates/basilisk-parser" }
 basilisk-resolver = { path = "crates/basilisk-resolver" }
 basilisk-checker  = { path = "crates/basilisk-checker" }
 basilisk-lsp      = { path = "crates/basilisk-lsp" }
+basilisk-compiler = { path = "crates/basilisk-compiler" }
 
 [workspace.lints.rust]
 unsafe_code  = "deny"

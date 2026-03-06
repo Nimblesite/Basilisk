@@ -54,6 +54,7 @@ TESTS_EXIT=0
 cargo llvm-cov \
     --workspace \
     --exclude basilisk-lsp \
+    --exclude basilisk-compiler \
     --all-targets \
     --lcov \
     --output-path "$LCOV_FILE" || TESTS_EXIT=$?
@@ -63,6 +64,7 @@ ok "lcov.info → $LCOV_FILE"
 cargo llvm-cov \
     --workspace \
     --exclude basilisk-lsp \
+    --exclude basilisk-compiler \
     --all-targets \
     --html \
     --output-dir "$HTML_DIR" 2>/dev/null || true
