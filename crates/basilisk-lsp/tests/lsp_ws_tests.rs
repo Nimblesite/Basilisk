@@ -4379,9 +4379,9 @@ def standalone(val: int) -> int:
     );
 
     // There should be a method fold starting at line 5 (method_b).
-    let has_method_b_fold = fold_pairs.iter().any(|(start, _)| *start == 5);
+    let method_b_has_fold = fold_pairs.iter().any(|(start, _)| *start == 5);
     assert!(
-        has_method_b_fold,
+        method_b_has_fold,
         "method_b should have a folding range starting at line 5: {resp}"
     );
 

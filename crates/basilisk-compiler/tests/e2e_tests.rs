@@ -2,6 +2,7 @@
 //!
 //! Iterates every `.py` file in `tests/e2e/`, compiles and runs it,
 //! then asserts stdout matches the corresponding `-expectedoutput.txt`.
+#![allow(clippy::panic)]
 
 use std::path::Path;
 
@@ -92,7 +93,7 @@ fn e2e_all_examples() {
 
     let mut py_files: Vec<_> = std::fs::read_dir(&e2e_dir)
         .unwrap_or_else(|e| panic!("failed to read {}: {e}", e2e_dir.display()))
-        .filter_map(|entry| entry.ok())
+        .filter_map(std::result::Result::ok)
         .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "py"))
         .map(|entry| entry.path())
         .collect();
@@ -137,12 +138,11 @@ fn e2e_all_examples() {
         }
     }
 
-    if !failures.is_empty() {
-        panic!(
-            "\n{} of {} e2e tests FAILED:\n  {}",
-            failures.len(),
-            py_files.len(),
-            failures.join("\n  ")
-        );
-    }
+    assert!(
+        failures.is_empty(),
+        "\n{} of {} e2e tests FAILED:\n  {}",
+        failures.len(),
+        py_files.len(),
+        failures.join("\n  ")
+    );
 }

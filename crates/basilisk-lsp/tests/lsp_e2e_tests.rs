@@ -91,7 +91,7 @@ impl LspTestFixture {
             let mut reader = BufReader::new(stderr);
             let mut line = String::new();
             while reader.read_line(&mut line).unwrap_or(0) > 0 {
-                eprint!("[LSP stderr] {}", line);
+                eprint!("[LSP stderr] {line}");
                 line.clear();
             }
         });

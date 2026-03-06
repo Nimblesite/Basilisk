@@ -411,6 +411,7 @@ fn single_insert(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use tower_lsp::lsp_types::{Diagnostic, NumberOrString, Position, Range, Url};
@@ -483,7 +484,7 @@ mod tests {
         assert!(actions.len() >= 2);
         let remove_action = actions.iter().find(|a| match a {
             CodeActionOrCommand::CodeAction(ca) => ca.title.contains("Remove redundant"),
-            _ => false,
+            CodeActionOrCommand::Command(_) => false,
         });
         assert!(
             remove_action.is_some(),
