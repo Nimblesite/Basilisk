@@ -1602,7 +1602,7 @@ impl Interpreter {
         match val {
             Value::Instance(inst) => {
                 if let Some(str_method) = inst.methods.get("__str__") {
-                    let result = self.call_func(str_method, &[val.clone()], env)?;
+                    let result = self.call_func(str_method, std::slice::from_ref(val), env)?;
                     match result {
                         Value::Str(s) => Ok(s),
                         other => Ok(format!("{other}")),

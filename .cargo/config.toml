@@ -1,0 +1,2 @@
+[alias]
+c = "clippy --all-targets"

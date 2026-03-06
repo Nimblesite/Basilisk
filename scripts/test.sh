@@ -43,6 +43,12 @@ if ! cargo llvm-cov --version &>/dev/null; then
 fi
 ok "cargo-llvm-cov present"
 
+# ── Clippy ───────────────────────────────────────────────────────────────────
+header "Running clippy (all targets)"
+cargo clippy --all-targets
+
+ok "clippy clean"
+
 # ── Tests + coverage ─────────────────────────────────────────────────────────
 header "Running tests with coverage instrumentation (LSP excluded — use scripts/test-lsp.sh)"
 
