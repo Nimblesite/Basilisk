@@ -9,9 +9,9 @@ use std::path::{Path, PathBuf};
 /// A discovered test item in the workspace.
 #[derive(Debug, Clone)]
 pub struct TestItem {
-    /// Display name (e.g. "test_login", "TestUserEndpoints::test_get_user").
+    /// Display name (e.g. `test_login`, `TestUserEndpoints::test_get_user`).
     pub name: String,
-    /// Full qualified ID for running (e.g. "tests/test_api.py::test_login").
+    /// Full qualified ID for running (e.g. `tests/test_api.py::test_login`).
     pub id: String,
     /// File path where this test is defined.
     pub file: PathBuf,
@@ -26,7 +26,7 @@ pub struct TestItem {
 /// The kind of test item.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TestItemKind {
-    /// A test file (e.g. test_api.py).
+    /// A test file (e.g. `test_api.py`).
     File,
     /// A test function (def test_*).
     Function,
@@ -59,9 +59,9 @@ pub fn discover_tests_in_file(path: &Path, source: &str) -> Vec<TestItem> {
     let relative = path.to_string_lossy();
     let mut items = Vec::new();
 
-    // Find test functions (def test_*).
+    // Find test functions (def test_*) — skip methods (they belong to classes).
     for func in &resolved.functions {
-        if func.name.starts_with("test_") {
+        if func.name.starts_with("test_") && func.class_name.is_none() {
             #[allow(clippy::cast_possible_truncation)]
             let line = func.def_span.start as usize;
             let line_num = byte_offset_to_line(source, line);
@@ -92,7 +92,7 @@ pub fn discover_tests_in_file(path: &Path, source: &str) -> Vec<TestItem> {
                     .is_some_and(|cn| cn == &class.name);
                 if is_method && func.name.starts_with("test") {
                     #[allow(clippy::cast_possible_truncation)]
-                    let method_line = func.span.start as usize;
+                    let method_line = func.def_span.start as usize;
                     let method_line_num = byte_offset_to_line(source, method_line);
                     methods.push(TestItem {
                         name: func.name.clone(),
@@ -140,7 +140,7 @@ pub fn discover_workspace_tests(root: &Path) -> Vec<TestItem> {
             all_items.push(TestItem {
                 name: relative.clone(),
                 id: relative,
-                file: path.to_path_buf(),
+                file: path.clone(),
                 line: 0,
                 kind: TestItemKind::File,
                 children: file_tests,
@@ -253,7 +253,7 @@ mod tests {
 
     #[test]
     fn test_discover_tests_in_source() {
-        let source = r#"
+        let source = r"
 import pytest
 
 def test_login() -> None:
@@ -274,7 +274,7 @@ class TestUserEndpoints:
 
     def not_a_test(self) -> None:
         pass
-"#;
+";
         let path = Path::new("tests/test_api.py");
         let items = discover_tests_in_file(path, source);
 
@@ -299,13 +299,13 @@ class TestUserEndpoints:
 
     #[test]
     fn test_unittest_class_detection() {
-        let source = r#"
+        let source = r"
 import unittest
 
 class TestMyCase(unittest.TestCase):
     def test_something(self) -> None:
         self.assertTrue(True)
-"#;
+";
         let path = Path::new("tests/test_unit.py");
         let items = discover_tests_in_file(path, source);
 

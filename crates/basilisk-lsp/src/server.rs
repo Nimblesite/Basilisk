@@ -2,6 +2,7 @@
 //!
 //! Thin dispatcher that delegates to feature modules for each LSP request.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use dashmap::DashMap;
@@ -90,7 +91,6 @@ impl LspServer {
         drop(roots);
 
         // Group by stem (filename without extension) and prefer .pyi over .py
-        use std::collections::HashMap;
         let mut by_stem: HashMap<String, std::path::PathBuf> = HashMap::new();
         for path in py_files {
             if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
