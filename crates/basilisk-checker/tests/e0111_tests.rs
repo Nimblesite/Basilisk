@@ -115,7 +115,7 @@ Multi[str]("a", "b", 3)
 
 #[test]
 fn e0111_class_with_new_and_init() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Self
 class WithNew:
     def __new__(cls) -> Self:
@@ -124,7 +124,7 @@ class WithNew:
         self.x = x
 
 WithNew(42)
-"#;
+";
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
