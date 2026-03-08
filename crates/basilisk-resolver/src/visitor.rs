@@ -705,7 +705,22 @@ fn class_info_from(
     let bases: Vec<String> = class
         .arguments
         .as_ref()
-        .map(|args| args.args.iter().filter_map(expr_simple_name).collect())
+        .map(|args| {
+            args.args
+                .iter()
+                .filter_map(|expr| {
+                    // Simple name bases (e.g. `object`, `Protocol`)
+                    if let Some(name) = expr_simple_name(expr) {
+                        return Some(name);
+                    }
+                    // Subscripted bases (e.g. `Protocol[T]`, `Generic[T]`): extract the base name
+                    if let ruff_python_ast::Expr::Subscript(sub) = expr {
+                        return expr_simple_name(&sub.value);
+                    }
+                    None
+                })
+                .collect()
+        })
         .unwrap_or_default();
 
     // Pre-compute is_dataclass and is_dataclass_kw_only so we can pass kw_only
@@ -3136,11 +3151,6 @@ fn extract_base_subscripts(class: &StmtClassDef) -> Vec<BaseSubscriptEntry> {
         let Some(base_name) = expr_simple_name(&sub.value) else {
             continue;
         };
-        // Skip Generic[...] and Protocol[...] — they declare type parameters,
-        // not parameterised bases.
-        if base_name == "Generic" || base_name == "Protocol" {
-            continue;
-        }
         let (type_arg_names, type_args) = match sub.slice.as_ref() {
             Expr::Tuple(tup) => {
                 let names: Vec<String> = tup.elts.iter().filter_map(expr_simple_name).collect();

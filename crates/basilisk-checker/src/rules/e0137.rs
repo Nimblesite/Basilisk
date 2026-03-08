@@ -116,8 +116,12 @@ fn check_protocol_generic_combined(
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for class in &module.classes {
-        // Only check classes that have Protocol as a base.
-        let has_protocol_in_bases = class.bases.iter().any(|b| b == "Protocol");
+        // Only check classes that have Protocol as a base (either plain or subscripted).
+        let has_protocol_in_bases = class.bases.iter().any(|b| b == "Protocol")
+            || class
+                .base_subscripts
+                .iter()
+                .any(|bs| bs.base_name == "Protocol");
         if !has_protocol_in_bases {
             continue;
         }
