@@ -23,12 +23,12 @@ fn e0041_messages(diags: &[basilisk_checker::Diagnostic]) -> Vec<String> {
 
 #[test]
 fn e0041_call_with_too_few_args_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def func(a: int, b: str) -> None:
     pass
 
 func()
-"#;
+";
     let msgs = e0041_messages(&run(source)?);
     assert!(
         !msgs.is_empty(),
@@ -71,13 +71,13 @@ func(1)
 
 #[test]
 fn e0041_call_vararg_function_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def func(*args: int) -> None:
     pass
 
 func()
 func(1, 2, 3)
-"#;
+";
     let msgs = e0041_messages(&run(source)?);
     assert!(
         msgs.is_empty(),
@@ -90,10 +90,7 @@ func(1, 2, 3)
 fn e0041_unknown_callee_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = "unknown_function()\n";
     let msgs = e0041_messages(&run(source)?);
-    assert!(
-        msgs.is_empty(),
-        "unknown callee should not fire E0041"
-    );
+    assert!(msgs.is_empty(), "unknown callee should not fire E0041");
     Ok(())
 }
 
@@ -101,18 +98,17 @@ fn e0041_unknown_callee_no_diagnostic() -> Result<(), Box<dyn std::error::Error>
 
 #[test]
 fn e0041_constructor_too_few_args_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class MyClass:
     def __init__(self, x: int, y: str) -> None:
         pass
 
 MyClass()
-"#;
+";
     let msgs = e0041_messages(&run(source)?);
     assert!(
         !msgs.is_empty(),
-        "constructor with too few args should fire E0041, got: {:?}",
-        msgs
+        "constructor with too few args should fire E0041, got: {msgs:?}"
     );
     Ok(())
 }
@@ -136,13 +132,13 @@ MyClass(1, "hi")
 
 #[test]
 fn e0041_constructor_vararg_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class MyClass:
     def __init__(self, *args: int) -> None:
         pass
 
 MyClass()
-"#;
+";
     let msgs = e0041_messages(&run(source)?);
     assert!(
         msgs.is_empty(),
@@ -155,7 +151,7 @@ MyClass()
 
 #[test]
 fn e0041_dataclass_too_few_args_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import dataclass
 
 @dataclass
@@ -164,19 +160,18 @@ class Point:
     y: float
 
 Point()
-"#;
+";
     let msgs = e0041_messages(&run(source)?);
     assert!(
         !msgs.is_empty(),
-        "dataclass with too few args should fire E0041, got: {:?}",
-        msgs
+        "dataclass with too few args should fire E0041, got: {msgs:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0041_dataclass_enough_args_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import dataclass
 
 @dataclass
@@ -185,7 +180,7 @@ class Point:
     y: float
 
 Point(1.0, 2.0)
-"#;
+";
     let msgs = e0041_messages(&run(source)?);
     assert!(
         msgs.is_empty(),
@@ -196,7 +191,7 @@ Point(1.0, 2.0)
 
 #[test]
 fn e0041_dataclass_init_false_with_args_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import dataclass
 
 @dataclass(init=False)
@@ -204,12 +199,11 @@ class NoInit:
     x: int = 0
 
 NoInit(1)
-"#;
+";
     let msgs = e0041_messages(&run(source)?);
     assert!(
         !msgs.is_empty(),
-        "passing args to init=False dataclass should fire E0041, got: {:?}",
-        msgs
+        "passing args to init=False dataclass should fire E0041, got: {msgs:?}"
     );
     Ok(())
 }
@@ -238,7 +232,7 @@ Config("test")
 
 #[test]
 fn e0041_namedtuple_too_few_args_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class Point(NamedTuple):
@@ -246,7 +240,7 @@ class Point(NamedTuple):
     y: float
 
 Point()
-"#;
+";
     let _msgs = e0041_messages(&run(source)?);
     // NamedTuple class-form may or may not be checked here; functional form is the target.
     // This is a best-effort test.
@@ -257,7 +251,7 @@ Point()
 
 #[test]
 fn e0041_overloaded_no_matching_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload
 
 @overload
@@ -270,7 +264,7 @@ def process(a: int, b: str, c: float = 0.0) -> None:
     pass
 
 process()
-"#;
+";
     let _msgs = e0041_messages(&run(source)?);
     // Overloaded functions that don't match any signature should fire E0041
     // This is best-effort since the overload detection may vary

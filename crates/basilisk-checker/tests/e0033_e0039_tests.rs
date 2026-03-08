@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0033 (invalid reveal_type) and BSK-E0039 (invalid assert_type).
+//! Integration tests for BSK-E0033 (invalid `reveal_type`) and BSK-E0039 (invalid `assert_type`).
 #![allow(missing_docs)]
 
 use basilisk_checker::check;

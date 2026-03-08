@@ -21,26 +21,25 @@ fn e0054_messages(diags: &[basilisk_checker::Diagnostic]) -> Vec<String> {
 
 #[test]
 fn e0054_module_final_reassignment_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Final
 RATE: Final = 3000
 RATE = 300
-"#;
+";
     let msgs = e0054_messages(&run(source)?);
     assert!(
         !msgs.is_empty(),
-        "reassignment to module-level Final should fire E0054, got: {:?}",
-        msgs
+        "reassignment to module-level Final should fire E0054, got: {msgs:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0054_module_final_no_reassignment_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Final
 RATE: Final = 3000
-"#;
+";
     let msgs = e0054_messages(&run(source)?);
     assert!(
         msgs.is_empty(),
@@ -51,26 +50,25 @@ RATE: Final = 3000
 
 #[test]
 fn e0054_class_final_attr_reassigned_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Final
 
 class Config:
     DEFAULT_ID: Final[int] = 0
 
 Config.DEFAULT_ID = 42
-"#;
+";
     let msgs = e0054_messages(&run(source)?);
     assert!(
         !msgs.is_empty(),
-        "class Final attr reassignment should fire E0054, got: {:?}",
-        msgs
+        "class Final attr reassignment should fire E0054, got: {msgs:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0054_subclass_final_override_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Final
 
 class Base:
@@ -78,66 +76,62 @@ class Base:
 
 class Child(Base):
     BORDER = 3.0
-"#;
+";
     let msgs = e0054_messages(&run(source)?);
     assert!(
         !msgs.is_empty(),
-        "subclass overriding Final attr should fire E0054, got: {:?}",
-        msgs
+        "subclass overriding Final attr should fire E0054, got: {msgs:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0054_local_final_modification_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Final
 
 def func() -> None:
     x: Final = 3
     x = 4
-"#;
+";
     let msgs = e0054_messages(&run(source)?);
     assert!(
         !msgs.is_empty(),
-        "local Final modification should fire E0054, got: {:?}",
-        msgs
+        "local Final modification should fire E0054, got: {msgs:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0054_instance_final_outside_init_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Final
 
 class MyClass:
     def other_method(self) -> None:
         self.x: Final = 1
-"#;
+";
     let msgs = e0054_messages(&run(source)?);
     assert!(
         !msgs.is_empty(),
-        "instance Final outside __init__ should fire E0054, got: {:?}",
-        msgs
+        "instance Final outside __init__ should fire E0054, got: {msgs:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0054_instance_final_in_init_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Final
 
 class MyClass:
     def __init__(self) -> None:
         self.x: Final = 1
-"#;
+";
     let msgs = e0054_messages(&run(source)?);
     assert!(
         msgs.is_empty(),
-        "instance Final in __init__ should not fire E0054, got: {:?}",
-        msgs
+        "instance Final in __init__ should not fire E0054, got: {msgs:?}"
     );
     Ok(())
 }

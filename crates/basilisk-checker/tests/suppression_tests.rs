@@ -21,7 +21,7 @@ fn type_ignore_suppresses_all() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run(source)?;
     // E0001 should be suppressed by type: ignore
     assert!(
-        !codes(&diags).iter().any(|c| *c == "BSK-E0001"),
+        !codes(&diags).contains(&"BSK-E0001"),
         "type: ignore should suppress E0001"
     );
     Ok(())
@@ -42,7 +42,10 @@ fn type_ignore_with_code_suppresses_specific() -> Result<(), Box<dyn std::error:
 fn type_warning_demotes_to_warning() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def process(data) -> None:  # type: warning[BSK-E0001]\n    pass\n";
     let diags = run(source)?;
-    let e0001_diags: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-E0001").collect();
+    let e0001_diags: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0001")
+        .collect();
     for diag in &e0001_diags {
         assert_eq!(
             diag.severity,
@@ -83,7 +86,10 @@ fn file_disabled_suppresses_specific_rule() -> Result<(), Box<dyn std::error::Er
 fn type_info_demotes_to_info() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def process(data) -> None:  # type: info[BSK-E0001]\n    pass\n";
     let diags = run(source)?;
-    let e0001_diags: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-E0001").collect();
+    let e0001_diags: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0001")
+        .collect();
     for diag in &e0001_diags {
         assert_eq!(
             diag.severity,
@@ -96,12 +102,12 @@ fn type_info_demotes_to_info() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn block_disabled_suppresses_range() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"# type: disabled[BSK-E0010]
+    let source = r"# type: disabled[BSK-E0010]
 import numpy
 import pandas
 # type: end-disabled[BSK-E0010]
 import os
-"#;
+";
     let diags = run(source)?;
     // E0010 should be suppressed for numpy and pandas but not os (os is stdlib anyway)
     let e0010_count = diags.iter().filter(|d| d.code.code == "BSK-E0010").count();

@@ -17,7 +17,7 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 
 #[test]
 fn e0016_incompatible_param_type_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import override
 
 class Base:
@@ -28,7 +28,7 @@ class Child(Base):
     @override
     def process(self, data: int) -> str:
         return str(data)
-"#;
+";
     let diags = run(source)?;
     assert!(
         codes(&diags).contains(&"BSK-E0016"),
@@ -40,7 +40,7 @@ class Child(Base):
 
 #[test]
 fn e0016_incompatible_return_type_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import override
 
 class Base:
@@ -51,7 +51,7 @@ class Child(Base):
     @override
     def process(self, data: str) -> int:
         return 42
-"#;
+";
     let diags = run(source)?;
     assert!(
         codes(&diags).contains(&"BSK-E0016"),
@@ -63,7 +63,7 @@ class Child(Base):
 
 #[test]
 fn e0016_compatible_override_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import override
 
 class Base:
@@ -74,7 +74,7 @@ class Child(Base):
     @override
     def process(self, data: str) -> str:
         return data.upper()
-"#;
+";
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0016"),

@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0032: Invalid `TypedDict` keyword.
+//! Integration tests for BSK-E0099: Protocol instantiation.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -16,34 +16,37 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 }
 
 #[test]
-fn e0032_invalid_keyword_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn e0099_direct_protocol_instantiation_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
-from typing import TypedDict
+from typing import Protocol
 
-class Movie(TypedDict, metaclass=type):
-    name: str
+class MyProto(Protocol):
+    def method(self) -> int: ...
+
+obj = MyProto()
 ";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0032"),
-        "invalid keyword in TypedDict should fire E0032, got: {:?}",
+        codes(&diags).contains(&"BSK-E0099"),
+        "direct Protocol instantiation should fire E0099, got: {:?}",
         codes(&diags)
     );
     Ok(())
 }
 
 #[test]
-fn e0032_total_keyword_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn e0099_non_protocol_class_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
-from typing import TypedDict
+class MyClass:
+    def method(self) -> int:
+        return 42
 
-class Movie(TypedDict, total=False):
-    name: str
+obj = MyClass()
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0032"),
-        "total keyword should not fire E0032"
+        !codes(&diags).contains(&"BSK-E0099"),
+        "non-Protocol instantiation should not fire E0099"
     );
     Ok(())
 }

@@ -93,7 +93,9 @@ fn e0003_diagnostic_has_help() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("items = []\n")?;
     let e0003 = diags.iter().find(|d| d.code.code == "BSK-E0003");
     assert!(e0003.is_some(), "should fire E0003");
-    let diag = e0003.expect("just asserted some");
+    let Some(diag) = e0003 else {
+        return Err("E0003 diagnostic missing after assertion".into());
+    };
     assert!(diag.help.is_some(), "E0003 should have help text");
     assert!(diag.note.is_some(), "E0003 should have note text");
     Ok(())

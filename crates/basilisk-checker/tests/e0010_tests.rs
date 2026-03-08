@@ -100,9 +100,9 @@ fn e0010_diagnostic_has_help() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("import requests\n")?;
     let e0010 = diags.iter().find(|d| d.code.code == "BSK-E0010");
     assert!(e0010.is_some(), "should fire E0010 for requests");
-    assert!(
-        e0010.unwrap().help.is_some(),
-        "E0010 should have help text"
-    );
+    let Some(diag) = e0010 else {
+        return Err("E0010 diagnostic missing after assertion".into());
+    };
+    assert!(diag.help.is_some(), "E0010 should have help text");
     Ok(())
 }

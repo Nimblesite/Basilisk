@@ -44,8 +44,11 @@ fn w0040_lambda_is_warning_not_error() -> Result<(), Box<dyn std::error::Error>>
     let diags = run(source)?;
     let w0040 = diags.iter().find(|d| d.code.code == "BSK-W0040");
     assert!(w0040.is_some(), "should fire W0040");
+    let Some(diag) = w0040 else {
+        return Err("W0040 diagnostic missing after assertion".into());
+    };
     assert_eq!(
-        w0040.expect("asserted").severity,
+        diag.severity,
         basilisk_checker::Severity::Warning,
         "W0040 should be a warning"
     );

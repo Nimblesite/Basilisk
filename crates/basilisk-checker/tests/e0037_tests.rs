@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0037: Invalid TypedDict functional-syntax call.
+//! Integration tests for BSK-E0037: Invalid `TypedDict` functional-syntax call.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -26,7 +26,10 @@ from typing import TypedDict
 Movie = TypedDict("Movie", {"title": str, "year": int})
 "#;
     let msgs = e0037_messages(&run(source)?);
-    assert!(msgs.is_empty(), "valid TypedDict should not fire E0037, got: {:?}", msgs);
+    assert!(
+        msgs.is_empty(),
+        "valid TypedDict should not fire E0037, got: {msgs:?}"
+    );
     Ok(())
 }
 
@@ -39,8 +42,7 @@ Movie = TypedDict("Film", {"title": str})
     let msgs = e0037_messages(&run(source)?);
     assert!(
         msgs.iter().any(|m| m.contains("does not match")),
-        "name mismatch should fire E0037, got: {:?}",
-        msgs
+        "name mismatch should fire E0037, got: {msgs:?}"
     );
     Ok(())
 }
@@ -53,11 +55,13 @@ Movie = TypedDict("Movie", title=str, year=int)
 "#;
     let msgs = e0037_messages(&run(source)?);
     // Keyword-only form should NOT flag keyword names as unrecognised
-    let unrecognised: Vec<_> = msgs.iter().filter(|m| m.contains("Unrecognised keyword")).collect();
+    let unrecognised: Vec<_> = msgs
+        .iter()
+        .filter(|m| m.contains("Unrecognised keyword"))
+        .collect();
     assert!(
         unrecognised.is_empty(),
-        "keyword-only form should not fire unrecognised keyword E0037, got: {:?}",
-        unrecognised
+        "keyword-only form should not fire unrecognised keyword E0037, got: {unrecognised:?}"
     );
     Ok(())
 }

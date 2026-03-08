@@ -1,4 +1,4 @@
-//! Integration tests for the types module: InferredType, Display, from_annotation, is_assignable_to.
+//! Integration tests for the types module: `InferredType`, Display, `from_annotation`, `is_assignable_to`.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -25,10 +25,10 @@ def func() -> None:
 
 #[test]
 fn infers_set_annotation() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def func() -> None:
     x: set[int] = {1, 2, 3}
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -45,142 +45,142 @@ def func() -> None:
 
 #[test]
 fn infers_optional_annotation() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Optional
 def func() -> None:
     x: Optional[int] = None
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn infers_union_annotation() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def func() -> None:
     x: int | str = 1
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn infers_callable_annotation() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 def func() -> None:
     f: Callable[[int, str], bool] = lambda x, y: True
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn infers_callable_ellipsis() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 def func() -> None:
     f: Callable[..., int] = lambda: 42
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn infers_literal_string() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import LiteralString
 def func(x: LiteralString) -> None:
     pass
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn infers_never() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Never
 def func() -> Never:
     raise RuntimeError()
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn infers_any() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Any
 def func(x: Any) -> Any:
     return x
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn callable_empty_params() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 def func() -> None:
     f: Callable[[], int] = lambda: 42
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn callable_multi_params() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 def func() -> None:
     f: Callable[[int, str, float], bool] = lambda x, y, z: True
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn literal_multi_values() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Literal
 def func(x: Literal[1, 2, 3]) -> None:
     pass
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn literal_negative_int() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Literal
 def func(x: Literal[-1]) -> None:
     pass
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn literal_bool() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Literal
 def func(x: Literal[True, False]) -> None:
     pass
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn literal_none() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Literal
 def func(x: Literal[None]) -> None:
     pass
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -198,20 +198,20 @@ def func(x: Literal[b"hello"]) -> None:
 
 #[test]
 fn object_annotation() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def func(x: object) -> None:
     pass
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn bytes_annotation() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def func(x: bytes) -> bytes:
     return x
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -229,12 +229,12 @@ def func() -> None:
 // Test int to float widening path
 #[test]
 fn int_float_widening() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def func(x: float) -> None:
     pass
 
 func(42)
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -242,11 +242,11 @@ func(42)
 // Exercise the return type mismatch via Callable
 #[test]
 fn callable_return_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 def apply(f: Callable[[int], str]) -> str:
     return f(1)
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }

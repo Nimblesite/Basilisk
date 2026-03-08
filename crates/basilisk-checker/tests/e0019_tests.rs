@@ -17,12 +17,12 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 
 #[test]
 fn e0019_conditionally_assigned_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def maybe_assign(flag: bool) -> int:
     if flag:
         result = 42
     return result
-"#;
+";
     let diags = run(source)?;
     assert!(
         codes(&diags).contains(&"BSK-E0019"),
@@ -34,11 +34,11 @@ def maybe_assign(flag: bool) -> int:
 
 #[test]
 fn e0019_unconditionally_assigned_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def always_assign() -> int:
     result = 42
     return result
-"#;
+";
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0019"),

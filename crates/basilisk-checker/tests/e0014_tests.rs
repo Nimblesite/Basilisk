@@ -25,8 +25,7 @@ fn e0014_int_annotated_str_literal_fires() -> Result<(), Box<dyn std::error::Err
     let msgs = e0014_messages(&run(source)?);
     assert!(
         !msgs.is_empty(),
-        "int annotation with str literal should fire E0014, got: {:?}",
-        msgs
+        "int annotation with str literal should fire E0014, got: {msgs:?}"
     );
     Ok(())
 }
@@ -37,8 +36,7 @@ fn e0014_str_annotated_int_literal_fires() -> Result<(), Box<dyn std::error::Err
     let msgs = e0014_messages(&run(source)?);
     assert!(
         !msgs.is_empty(),
-        "str annotation with int literal should fire E0014, got: {:?}",
-        msgs
+        "str annotation with int literal should fire E0014, got: {msgs:?}"
     );
     Ok(())
 }
@@ -49,8 +47,7 @@ fn e0014_bool_annotated_str_literal_fires() -> Result<(), Box<dyn std::error::Er
     let msgs = e0014_messages(&run(source)?);
     assert!(
         !msgs.is_empty(),
-        "bool annotation with str literal should fire E0014, got: {:?}",
-        msgs
+        "bool annotation with str literal should fire E0014, got: {msgs:?}"
     );
     Ok(())
 }
@@ -61,8 +58,7 @@ fn e0014_float_annotated_str_literal_fires() -> Result<(), Box<dyn std::error::E
     let msgs = e0014_messages(&run(source)?);
     assert!(
         !msgs.is_empty(),
-        "float annotation with str literal should fire E0014, got: {:?}",
-        msgs
+        "float annotation with str literal should fire E0014, got: {msgs:?}"
     );
     Ok(())
 }
@@ -98,18 +94,17 @@ def func() -> None:
     let msgs = e0014_messages(&run(source)?);
     assert!(
         !msgs.is_empty(),
-        "local variable type mismatch should fire E0014, got: {:?}",
-        msgs
+        "local variable type mismatch should fire E0014, got: {msgs:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0014_local_var_compatible_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def func() -> None:
     x: int = 42
-"#;
+";
     let msgs = e0014_messages(&run(source)?);
     assert!(
         msgs.is_empty(),

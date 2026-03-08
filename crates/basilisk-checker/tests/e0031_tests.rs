@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0031: Invalid cast() call.
+//! Integration tests for BSK-E0031: Invalid `cast()` call.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -17,11 +17,11 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 
 #[test]
 fn e0031_cast_literal_first_arg_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import cast
 x: int = 1
 y = cast(1, x)
-"#;
+";
     let diags = run(source)?;
     assert!(
         codes(&diags).contains(&"BSK-E0031"),
@@ -33,10 +33,10 @@ y = cast(1, x)
 
 #[test]
 fn e0031_cast_too_few_args_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import cast
 y = cast()
-"#;
+";
     let diags = run(source)?;
     assert!(
         codes(&diags).contains(&"BSK-E0031"),
@@ -48,11 +48,11 @@ y = cast()
 
 #[test]
 fn e0031_cast_valid_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import cast
 x: int = 1
 y = cast(str, x)
-"#;
+";
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0031"),

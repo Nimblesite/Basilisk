@@ -21,15 +21,12 @@ fn e0051_messages(diags: &[basilisk_checker::Diagnostic]) -> Vec<String> {
 
 #[test]
 fn e0051_valid_int_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Literal
 x: Literal[1] = 1
-"#;
+";
     let msgs = e0051_messages(&run(source)?);
-    assert!(
-        msgs.is_empty(),
-        "valid Literal[1] should not fire E0051"
-    );
+    assert!(msgs.is_empty(), "valid Literal[1] should not fire E0051");
     Ok(())
 }
 
@@ -49,109 +46,96 @@ x: Literal["hello"] = "hello"
 
 #[test]
 fn e0051_valid_bool_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Literal
 x: Literal[True] = True
-"#;
+";
     let msgs = e0051_messages(&run(source)?);
-    assert!(
-        msgs.is_empty(),
-        "valid Literal[True] should not fire E0051"
-    );
+    assert!(msgs.is_empty(), "valid Literal[True] should not fire E0051");
     Ok(())
 }
 
 #[test]
 fn e0051_valid_none_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Literal
 x: Literal[None] = None
-"#;
+";
     let msgs = e0051_messages(&run(source)?);
-    assert!(
-        msgs.is_empty(),
-        "valid Literal[None] should not fire E0051"
-    );
+    assert!(msgs.is_empty(), "valid Literal[None] should not fire E0051");
     Ok(())
 }
 
 #[test]
 fn e0051_float_literal_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Literal
 x: Literal[3.14] = 3.14
-"#;
+";
     let msgs = e0051_messages(&run(source)?);
     assert!(
         !msgs.is_empty(),
-        "Literal[3.14] should fire E0051, got: {:?}",
-        msgs
+        "Literal[3.14] should fire E0051, got: {msgs:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0051_bare_literal_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Literal
 x: Literal
-"#;
+";
     let msgs = e0051_messages(&run(source)?);
     assert!(
         !msgs.is_empty(),
-        "bare Literal should fire E0051, got: {:?}",
-        msgs
+        "bare Literal should fire E0051, got: {msgs:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0051_type_object_in_literal_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Literal
 x: Literal[int]
-"#;
+";
     let msgs = e0051_messages(&run(source)?);
     assert!(
         !msgs.is_empty(),
-        "Literal[int] should fire E0051, got: {:?}",
-        msgs
+        "Literal[int] should fire E0051, got: {msgs:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0051_ellipsis_in_literal_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Literal
 x: Literal[...]
-"#;
+";
     let msgs = e0051_messages(&run(source)?);
     assert!(
         !msgs.is_empty(),
-        "Literal[...] should fire E0051, got: {:?}",
-        msgs
+        "Literal[...] should fire E0051, got: {msgs:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0051_valid_negative_int_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Literal
 x: Literal[-1] = -1
-"#;
+";
     let msgs = e0051_messages(&run(source)?);
-    assert!(
-        msgs.is_empty(),
-        "Literal[-1] should not fire E0051"
-    );
+    assert!(msgs.is_empty(), "Literal[-1] should not fire E0051");
     Ok(())
 }
 
 #[test]
 fn e0051_valid_enum_member_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Literal
 from enum import Enum
 
@@ -159,11 +143,8 @@ class Color(Enum):
     RED = 1
 
 x: Literal[Color.RED]
-"#;
+";
     let msgs = e0051_messages(&run(source)?);
-    assert!(
-        msgs.is_empty(),
-        "Literal[Color.RED] should not fire E0051"
-    );
+    assert!(msgs.is_empty(), "Literal[Color.RED] should not fire E0051");
     Ok(())
 }

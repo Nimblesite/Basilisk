@@ -27,9 +27,9 @@ T = TypeVar("T", covariant=True, contravariant=True)
 "#;
     let msgs = e0055_messages(&run(source)?);
     assert!(
-        msgs.iter().any(|m| m.contains("both covariant and contravariant")),
-        "covariant+contravariant should fire E0055, got: {:?}",
-        msgs
+        msgs.iter()
+            .any(|m| m.contains("both covariant and contravariant")),
+        "covariant+contravariant should fire E0055, got: {msgs:?}"
     );
     Ok(())
 }
@@ -43,8 +43,7 @@ T = TypeVar("T", covariant=True, infer_variance=True)
     let msgs = e0055_messages(&run(source)?);
     assert!(
         msgs.iter().any(|m| m.contains("infer_variance")),
-        "infer_variance + covariant should fire E0055, got: {:?}",
-        msgs
+        "infer_variance + covariant should fire E0055, got: {msgs:?}"
     );
     Ok(())
 }
@@ -57,9 +56,9 @@ T = TypeVar("T", str, int, bound=float)
 "#;
     let msgs = e0055_messages(&run(source)?);
     assert!(
-        msgs.iter().any(|m| m.contains("constraints") && m.contains("bound")),
-        "constraints + bound should fire E0055, got: {:?}",
-        msgs
+        msgs.iter()
+            .any(|m| m.contains("constraints") && m.contains("bound")),
+        "constraints + bound should fire E0055, got: {msgs:?}"
     );
     Ok(())
 }
@@ -71,10 +70,7 @@ from typing import TypeVar
 T = TypeVar("T", covariant=True)
 "#;
     let msgs = e0055_messages(&run(source)?);
-    assert!(
-        msgs.is_empty(),
-        "valid TypeVar should not fire E0055"
-    );
+    assert!(msgs.is_empty(), "valid TypeVar should not fire E0055");
     Ok(())
 }
 
@@ -87,8 +83,7 @@ Ts = TypeVarTuple("Ts", covariant=True)
     let msgs = e0055_messages(&run(source)?);
     assert!(
         !msgs.is_empty(),
-        "TypeVarTuple with covariant should fire E0055, got: {:?}",
-        msgs
+        "TypeVarTuple with covariant should fire E0055, got: {msgs:?}"
     );
     Ok(())
 }
@@ -102,8 +97,7 @@ Ts = TypeVarTuple("Ts", bound=int)
     let msgs = e0055_messages(&run(source)?);
     assert!(
         !msgs.is_empty(),
-        "TypeVarTuple with bound should fire E0055, got: {:?}",
-        msgs
+        "TypeVarTuple with bound should fire E0055, got: {msgs:?}"
     );
     Ok(())
 }
@@ -117,8 +111,7 @@ P = ParamSpec("P", covariant=True)
     let msgs = e0055_messages(&run(source)?);
     assert!(
         !msgs.is_empty(),
-        "ParamSpec with covariant should fire E0055, got: {:?}",
-        msgs
+        "ParamSpec with covariant should fire E0055, got: {msgs:?}"
     );
     Ok(())
 }
@@ -132,8 +125,7 @@ P = ParamSpec("P", bound=int)
     let msgs = e0055_messages(&run(source)?);
     assert!(
         !msgs.is_empty(),
-        "ParamSpec with bound should fire E0055, got: {:?}",
-        msgs
+        "ParamSpec with bound should fire E0055, got: {msgs:?}"
     );
     Ok(())
 }

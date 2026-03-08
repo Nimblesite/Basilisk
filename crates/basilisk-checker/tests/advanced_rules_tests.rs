@@ -36,10 +36,10 @@ Bad = TypeAliasType("Bad")
 
 #[test]
 fn e0057_pep695_type_statement() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 type Vector = list[float]
 type Matrix = list[Vector]
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -68,7 +68,7 @@ class NoMatch:
 
 #[test]
 fn e0060_ordering_comparison() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import dataclass
 
 @dataclass(order=True)
@@ -82,7 +82,7 @@ class B:
 a = A(1)
 b = B(1)
 result = a < b
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -93,14 +93,14 @@ result = a < b
 
 #[test]
 fn e0063_non_hashable_dataclass() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import dataclass
 
 @dataclass
 class Point:
     x: int = 0
     y: int = 0
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -155,10 +155,10 @@ Config("test", 42)
 
 #[test]
 fn e0070_never_in_union() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Never, Union
 x: Union[Never, int] = 42
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -169,7 +169,7 @@ x: Union[Never, int] = 42
 
 #[test]
 fn e0072_overload_call_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload
 
 @overload
@@ -180,7 +180,7 @@ def process(x: int | str) -> int | str:
     return x
 
 result = process(1)
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -191,7 +191,7 @@ result = process(1)
 
 #[test]
 fn e0073_namedtuple_tuple_compat() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class Point(NamedTuple):
@@ -200,7 +200,7 @@ class Point(NamedTuple):
 
 p = Point(1, 2)
 t: tuple[int, int] = p
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -232,7 +232,7 @@ s = Singleton()
 
 #[test]
 fn e0078_self_type() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Self
 
 class Builder:
@@ -241,7 +241,7 @@ class Builder:
 
     def build(self) -> Self:
         return self
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -326,7 +326,7 @@ class Config:
 
 #[test]
 fn e0098_protocol_with_non_protocol_base() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class Base:
@@ -334,7 +334,7 @@ class Base:
 
 class MyProto(Protocol, Base):
     def method(self) -> None: ...
-"#;
+";
     let msgs = messages_for(&run(source)?, "BSK-E0098");
     // Exercises the rule whether or not it fires
     let _ = msgs;
@@ -347,14 +347,14 @@ class MyProto(Protocol, Base):
 
 #[test]
 fn e0099_protocol_instantiation() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class Drawable(Protocol):
     def draw(self) -> None: ...
 
 d = Drawable()
-"#;
+";
     let msgs = messages_for(&run(source)?, "BSK-E0099");
     let _ = msgs;
     Ok(())
@@ -381,7 +381,7 @@ B: TypeAlias = "A"
 
 #[test]
 fn e0108_slots_dataclass_with_default() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import dataclass
 
 @dataclass(slots=True)
@@ -392,7 +392,7 @@ class SlottedPoint:
 @dataclass
 class RegularPoint(SlottedPoint):
     z: float = 0.0
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -442,24 +442,24 @@ b = Box(42)
 
 #[test]
 fn e0111_class_no_custom_init() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class Simple:
     pass
 
 s = Simple()
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0111_class_no_init_with_args() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class NoInit:
     pass
 
 s = NoInit(1, 2, 3)
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -578,7 +578,7 @@ class Container(Generic[T]):
 
 #[test]
 fn e0118_super_call_in_class() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from abc import ABC, abstractmethod
 
 class Base(ABC):
@@ -588,7 +588,7 @@ class Base(ABC):
 class Derived(Base):
     def method(self) -> int:
         return 42
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -638,7 +638,7 @@ w: Renderable = Widget()
 
 #[test]
 fn e0121_protocol_missing_method() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class Renderable(Protocol):
@@ -648,7 +648,7 @@ class BadWidget:
     pass
 
 w: Renderable = BadWidget()
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -720,13 +720,13 @@ class Outer(Generic[T]):
 
 #[test]
 fn e0131_generator_types() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Generator
 
 def numbers() -> Generator[int, None, None]:
     for i in range(10):
         yield i
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -760,7 +760,7 @@ class ReversePair(Pair[U, T]):
 
 #[test]
 fn e0136_callable_subtyping() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def takes_int_to_str(f: Callable[[int], str]) -> None:
@@ -770,7 +770,7 @@ def my_func(x: int) -> str:
     return str(x)
 
 takes_int_to_str(my_func)
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -844,28 +844,28 @@ c = Customer(1, "test")
 
 #[test]
 fn e0140_callable_assignment() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def takes_str(x: str) -> int:
     return len(x)
 
 f: Callable[[int], str] = takes_str
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0140_callable_assignment_compatible() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def takes_int(x: int) -> str:
     return str(x)
 
 f: Callable[[int], str] = takes_int
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -895,7 +895,7 @@ c.id = 2
 
 #[test]
 fn e0142_transform_base_order() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import dataclass_transform
 
 @dataclass_transform(order_default=True)
@@ -910,7 +910,7 @@ class CustomerB(ModelBase):
 a = CustomerA(id=1)
 b = CustomerB(id=2)
 result = a < b
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -921,7 +921,7 @@ result = a < b
 
 #[test]
 fn e0143_namedtuple_attribute_assignment() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class Point(NamedTuple):
@@ -930,14 +930,14 @@ class Point(NamedTuple):
 
 p = Point(1, 2)
 p.x = 3
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0143_namedtuple_index_access() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class Point(NamedTuple):
@@ -946,7 +946,7 @@ class Point(NamedTuple):
 
 p = Point(1, 2)
 v = p[0]
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -973,13 +973,13 @@ a = create(Animal, "fido")
 
 #[test]
 fn e0144_type_param_no_args() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class Simple:
     pass
 
 def make(cls: type[Simple]) -> Simple:
     return cls()
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -1073,24 +1073,24 @@ class Stack(Generic[T]):
 
 #[test]
 fn e0149_pep695_scoping() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class Container[T]:
     def get(self) -> T: ...
     def set(self, value: T) -> None: ...
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0149_pep695_function_scoping() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def identity[T](x: T) -> T:
     return x
 
 def pair[T, U](first: T, second: U) -> tuple[T, U]:
     return (first, second)
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }

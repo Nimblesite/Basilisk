@@ -50,14 +50,14 @@ def good() -> None:
 
 #[test]
 fn e0023_match_without_wildcard_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def check_val(x: int) -> None:
     match x:
         case 1:
             pass
         case 2:
             pass
-"#;
+";
     let diags = run(source)?;
     assert!(
         codes(&diags).contains(&"BSK-E0023"),
@@ -69,14 +69,14 @@ def check_val(x: int) -> None:
 
 #[test]
 fn e0023_match_with_wildcard_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def check_val(x: int) -> None:
     match x:
         case 1:
             pass
         case _:
             pass
-"#;
+";
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0023"),

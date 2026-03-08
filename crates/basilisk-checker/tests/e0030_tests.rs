@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0030: Non-default after default TypeVar.
+//! Integration tests for BSK-E0030: Non-default after default `TypeVar`.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;

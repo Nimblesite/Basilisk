@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0038: Invalid TypedDict inheritance.
+//! Integration tests for BSK-E0038: Invalid `TypedDict` inheritance.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -17,7 +17,7 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 
 #[test]
 fn e0038_typeddict_conflicting_field_type_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypedDict
 
 class Base(TypedDict):
@@ -25,7 +25,7 @@ class Base(TypedDict):
 
 class Child(Base):
     name: int
-"#;
+";
     let diags = run(source)?;
     assert!(
         codes(&diags).contains(&"BSK-E0038"),
@@ -36,8 +36,9 @@ class Child(Base):
 }
 
 #[test]
-fn e0038_typeddict_compatible_inheritance_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+fn e0038_typeddict_compatible_inheritance_no_diagnostic() -> Result<(), Box<dyn std::error::Error>>
+{
+    let source = r"
 from typing import TypedDict
 
 class Base(TypedDict):
@@ -45,7 +46,7 @@ class Base(TypedDict):
 
 class Child(Base):
     age: int
-"#;
+";
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0038"),

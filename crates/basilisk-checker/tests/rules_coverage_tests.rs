@@ -30,10 +30,10 @@ fn messages_for(diags: &[basilisk_checker::Diagnostic], code: &str) -> Vec<Strin
 
 #[test]
 fn e0004_unannotated_vararg_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def func(*args) -> None:
     pass
-"#;
+";
     let diags = run(source)?;
     assert!(
         codes(&diags).contains(&"BSK-E0004"),
@@ -45,10 +45,10 @@ def func(*args) -> None:
 
 #[test]
 fn e0004_annotated_vararg_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def func(*args: int) -> None:
     pass
-"#;
+";
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0004"),
@@ -59,10 +59,10 @@ def func(*args: int) -> None:
 
 #[test]
 fn e0004_unannotated_kwarg_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def func(**kwargs) -> None:
     pass
-"#;
+";
     let diags = run(source)?;
     assert!(
         codes(&diags).contains(&"BSK-E0004"),
@@ -78,10 +78,10 @@ def func(**kwargs) -> None:
 
 #[test]
 fn e0018_undefined_var_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def func() -> None:
     x = undefined_name
-"#;
+";
     // Just exercise the code path
     let _diags = run(source)?;
     Ok(())
@@ -93,12 +93,12 @@ def func() -> None:
 
 #[test]
 fn e0019_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def func() -> None:
     if False:
         x: int = 1
     y: int = x
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -109,10 +109,10 @@ def func() -> None:
 
 #[test]
 fn e0024_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Union
 x: Union = 1
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -123,15 +123,12 @@ x: Union = 1
 
 #[test]
 fn e0030_all_defaults_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def func(a: int = 0, b: int = 1) -> None:
     pass
-"#;
+";
     let msgs = messages_for(&run(source)?, "BSK-E0030");
-    assert!(
-        msgs.is_empty(),
-        "all-default params should not fire E0030"
-    );
+    assert!(msgs.is_empty(), "all-default params should not fire E0030");
     Ok(())
 }
 
@@ -141,17 +138,16 @@ def func(a: int = 0, b: int = 1) -> None:
 
 #[test]
 fn e0043_non_typevar_in_generic_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Generic
 
 class Bad(Generic[int]):
     pass
-"#;
+";
     let msgs = messages_for(&run(source)?, "BSK-E0043");
     assert!(
         !msgs.is_empty(),
-        "non-TypeVar in Generic should fire E0043, got: {:?}",
-        msgs
+        "non-TypeVar in Generic should fire E0043, got: {msgs:?}"
     );
     Ok(())
 }
@@ -162,15 +158,14 @@ class Bad(Generic[int]):
 
 #[test]
 fn e0048_valid_type_alias_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeAlias
 MyType: TypeAlias = list[int]
-"#;
+";
     let msgs = messages_for(&run(source)?, "BSK-E0048");
     assert!(
         msgs.is_empty(),
-        "valid TypeAlias should not fire E0048, got: {:?}",
-        msgs
+        "valid TypeAlias should not fire E0048, got: {msgs:?}"
     );
     Ok(())
 }
@@ -182,10 +177,10 @@ MyType: TypeAlias = list[int]
 #[test]
 fn e0049_exercise() -> Result<(), Box<dyn std::error::Error>> {
     // This is hard to trigger through the resolver but exercises the code path
-    let source = r#"
+    let source = r"
 from typing import Unpack
 x: tuple[str, int]
-"#;
+";
     let _msgs = messages_for(&run(source)?, "BSK-E0049");
     Ok(())
 }
@@ -196,12 +191,12 @@ x: tuple[str, int]
 
 #[test]
 fn e0056_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypedDict
 class Movie(TypedDict):
     title: str
     year: int
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -226,10 +221,10 @@ MyType = TypeAliasType("MyType", int)
 
 #[test]
 fn e0058_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Annotated
 x: Annotated[int]
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -256,13 +251,13 @@ def my_func() -> NoReturn:
 
 #[test]
 fn e0064_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class Point(NamedTuple):
     x: int
     y: int
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -273,10 +268,10 @@ class Point(NamedTuple):
 
 #[test]
 fn e0065_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def func(x: float) -> None:
     y = x.numerator
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -287,14 +282,14 @@ def func(x: float) -> None:
 
 #[test]
 fn e0066_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from enum import Enum
 
 class Color(Enum):
     RED = 1
     GREEN = 2
     BLUE = 3
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -319,14 +314,14 @@ class Status(Enum):
 
 #[test]
 fn e0069_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import dataclass
 
 @dataclass(kw_only=True)
 class Config:
     name: str
     value: int
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -337,28 +332,28 @@ class Config:
 
 #[test]
 fn e0070_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Never
 def func() -> Never:
     raise RuntimeError()
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0071_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def func(x: int, /, y: str) -> None:
     pass
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0072_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload
 
 @overload
@@ -367,7 +362,7 @@ def process(x: int) -> int: ...
 def process(x: str) -> str: ...
 def process(x: int | str) -> int | str:
     return x
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -378,12 +373,12 @@ def process(x: int | str) -> int | str:
 
 #[test]
 fn e0088_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypedDict
 
 class Movie(TypedDict):
     title: str
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -413,13 +408,13 @@ T = TypeVar("T", default=int)
 
 #[test]
 fn e0094_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Self
 
 class MyClass:
     def method(self) -> Self:
         return self
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -440,25 +435,25 @@ class Config:
 
 #[test]
 fn e0098_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class MyProtocol(Protocol):
     def method(self) -> int: ...
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0099_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol, runtime_checkable
 
 @runtime_checkable
 class Drawable(Protocol):
     def draw(self) -> None: ...
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -469,47 +464,47 @@ class Drawable(Protocol):
 
 #[test]
 fn e0100_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Literal
 x: Literal[1] = 1
 x += 1
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0101_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeGuard
 
 def is_str(x: object) -> TypeGuard[str]:
     return isinstance(x, str)
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0104_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeAlias
 MyType: TypeAlias = int
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0108_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import dataclass
 
 @dataclass(slots=True)
 class Point:
     x: float
     y: float
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -520,13 +515,13 @@ class Point:
 
 #[test]
 fn e0111_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class MyClass:
     def __init__(self, x: int) -> None:
         self.x: int = x
 
 obj = MyClass(42)
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -546,12 +541,12 @@ def old_func() -> None:
 
 #[test]
 fn e0120_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Generator
 
 def gen() -> Generator[int, None, None]:
     yield 1
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -562,7 +557,7 @@ def gen() -> Generator[int, None, None]:
 
 #[test]
 fn e0121_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class Drawable(Protocol):
@@ -573,19 +568,19 @@ class Circle:
         pass
 
 c: Drawable = Circle()
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0122_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def apply(f: Callable[[int], str], x: int) -> str:
     return f(x)
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -596,7 +591,7 @@ def apply(f: Callable[[int], str], x: int) -> str:
 
 #[test]
 fn e0136_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def take_callback(f: Callable[[int], str]) -> None:
@@ -606,14 +601,14 @@ def my_func(x: int) -> str:
     return str(x)
 
 take_callback(my_func)
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0138_dataclass_transform_metaclass() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import dataclass_transform
 
 @dataclass_transform()
@@ -624,26 +619,26 @@ class ModelBase(metaclass=ModelMeta): ...
 class Customer(ModelBase):
     id: int
     name: str
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0140_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def func() -> None:
     f: Callable[[int], str] = str
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0141_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypedDict, Unpack
 
 class Options(TypedDict):
@@ -652,14 +647,14 @@ class Options(TypedDict):
 
 def func(**kwargs: Unpack[Options]) -> None:
     pass
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0142_dataclass_transform_base() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import dataclass_transform
 
 @dataclass_transform()
@@ -668,14 +663,14 @@ class ModelBase: ...
 class Customer(ModelBase):
     id: int
     name: str
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0143_namedtuple_usage_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class Point(NamedTuple):
@@ -683,7 +678,7 @@ class Point(NamedTuple):
     y: int
 
 p = Point(1, 2)
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -715,12 +710,12 @@ z: list[int] = [1, 2, 3]
 
 #[test]
 fn e0146_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class Sized(Protocol):
     def __len__(self) -> int: ...
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -750,10 +745,10 @@ class Box(Generic[T]):
 
 #[test]
 fn e0149_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class Container[T]:
     value: T
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -884,7 +879,7 @@ result: int = process([1, 2, 3])
 
 #[test]
 fn exercise_dataclass_transform_function() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import dataclass_transform
 
 @dataclass_transform(frozen_default=True, order_default=True)
@@ -895,14 +890,14 @@ def create_model(cls: type) -> type:
 class Customer:
     id: int
     name: str
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn exercise_dataclass_transform_frozen() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import dataclass_transform
 
 @dataclass_transform(frozen_default=True)
@@ -915,7 +910,7 @@ class Frozen:
 
 f = Frozen(id=1)
 f.id = 2
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }

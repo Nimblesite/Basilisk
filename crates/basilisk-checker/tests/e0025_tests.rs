@@ -17,7 +17,7 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 
 #[test]
 fn e0025_missing_override_decorator_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class Base:
     def process(self) -> None:
         pass
@@ -25,7 +25,7 @@ class Base:
 class Child(Base):
     def process(self) -> None:
         pass
-"#;
+";
     let diags = run(source)?;
     assert!(
         codes(&diags).contains(&"BSK-E0025"),
@@ -37,7 +37,7 @@ class Child(Base):
 
 #[test]
 fn e0025_with_override_decorator_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import override
 
 class Base:
@@ -48,7 +48,7 @@ class Child(Base):
     @override
     def process(self) -> None:
         pass
-"#;
+";
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0025"),
@@ -59,7 +59,7 @@ class Child(Base):
 
 #[test]
 fn e0025_different_method_name_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class Base:
     def process(self) -> None:
         pass
@@ -67,7 +67,7 @@ class Base:
 class Child(Base):
     def other_method(self) -> None:
         pass
-"#;
+";
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0025"),
@@ -78,7 +78,7 @@ class Child(Base):
 
 #[test]
 fn e0025_protocol_class_exempt() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class MyProto(Protocol):
@@ -87,7 +87,7 @@ class MyProto(Protocol):
 class Impl(MyProto):
     def method(self) -> None:
         pass
-"#;
+";
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0025"),

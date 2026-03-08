@@ -61,7 +61,10 @@ fn e0004_annotated_kwargs_no_diagnostic() -> Result<(), Box<dyn std::error::Erro
 fn e0004_both_unannotated_fires_twice() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("def foo(*args, **kwargs) -> None:\n    pass\n")?;
     let count = diags.iter().filter(|d| d.code.code == "BSK-E0004").count();
-    assert_eq!(count, 2, "both unannotated *args and **kwargs should fire E0004");
+    assert_eq!(
+        count, 2,
+        "both unannotated *args and **kwargs should fire E0004"
+    );
     Ok(())
 }
 

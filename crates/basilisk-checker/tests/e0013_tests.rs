@@ -17,10 +17,10 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 
 #[test]
 fn e0013_return_list_for_str_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def get_name() -> str:
     return [1, 2, 3]
-"#;
+";
     let diags = run(source)?;
     assert!(
         codes(&diags).contains(&"BSK-E0013") || codes(&diags).contains(&"BSK-E0011"),
@@ -47,10 +47,10 @@ def get_name() -> str:
 #[test]
 fn e0013_return_none_for_int() -> Result<(), Box<dyn std::error::Error>> {
     // None return for int may or may not fire depending on inference depth
-    let source = r#"
+    let source = r"
 def get_count() -> int:
     return None
-"#;
+";
     let diags = run(source)?;
     // Just ensure no panics; whether this fires depends on inference support
     let _ = codes(&diags);

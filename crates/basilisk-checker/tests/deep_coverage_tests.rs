@@ -44,10 +44,7 @@ fn e0057_type_alias_int_literal_exercise() -> Result<(), Box<dyn std::error::Err
 fn e0057_type_alias_valid_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = "type MyList = list[int]\n";
     let msgs = messages_for(&run(source)?, "BSK-E0057");
-    assert!(
-        msgs.is_empty(),
-        "valid type alias should not fire E0057"
-    );
+    assert!(msgs.is_empty(), "valid type alias should not fire E0057");
     Ok(())
 }
 
@@ -163,7 +160,7 @@ s = Singleton()
 
 #[test]
 fn e0079_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class Writable(Protocol):
@@ -174,7 +171,7 @@ class FileWriter:
         return len(data)
 
 w: Writable = FileWriter()
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -310,12 +307,12 @@ c = Child(1, "hello")
 
 #[test]
 fn e0112_typeguard_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeGuard
 
 def is_str_list(val: list[object]) -> TypeGuard[list[str]]:
     return all(isinstance(x, str) for x in val)
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -326,12 +323,12 @@ def is_str_list(val: list[object]) -> TypeGuard[list[str]]:
 
 #[test]
 fn e0113_typeis_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeIs
 
 def is_str(val: object) -> TypeIs[str]:
     return isinstance(val, str)
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -389,7 +386,7 @@ new_func()
 
 #[test]
 fn e0118_super_call_abstract() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from abc import ABC, abstractmethod
 
 class Base(ABC):
@@ -403,7 +400,7 @@ class Middle(Base):
 class Final(Middle):
     def compute(self) -> int:
         return super().compute() + 1
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -414,7 +411,7 @@ class Final(Middle):
 
 #[test]
 fn e0119_protocol_overlap() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol, runtime_checkable
 
 @runtime_checkable
@@ -424,7 +421,7 @@ class Proto1(Protocol):
 @runtime_checkable
 class Proto2(Protocol):
     def method(self) -> str: ...
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -435,13 +432,13 @@ class Proto2(Protocol):
 
 #[test]
 fn e0120_async_generator() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import AsyncGenerator
 
 async def agen() -> AsyncGenerator[int, None]:
     yield 1
     yield 2
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -492,7 +489,7 @@ y: HasName = MyObj()
 
 #[test]
 fn e0125_instance_attr() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class MyClass:
     class_var: int = 0
 
@@ -500,7 +497,7 @@ class MyClass:
         self.instance_var: int = 1
 
 MyClass.instance_var
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -579,7 +576,7 @@ y: Literal["hello"] = "hello"
 
 #[test]
 fn e0131_generator_yield() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Iterator
 
 def count() -> Iterator[int]:
@@ -587,7 +584,7 @@ def count() -> Iterator[int]:
     while True:
         yield n
         n += 1
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -664,7 +661,7 @@ class IntToStr:
 
 #[test]
 fn e0140_callable_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def int_func(x: int) -> int:
@@ -675,7 +672,7 @@ def str_func(x: str) -> str:
 
 # Assigning a function that takes str to a Callable that expects int
 f: Callable[[int], str] = str_func
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -686,7 +683,7 @@ f: Callable[[int], str] = str_func
 
 #[test]
 fn e0143_namedtuple_operations() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class Point(NamedTuple):
@@ -698,7 +695,7 @@ v = p[0]
 # Try attribute access
 a = p.x
 b = p.y
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -747,11 +744,11 @@ t = (2, "world")
 
 #[test]
 fn e0147_tuple_variadic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 t: tuple[int, ...] = (1, 2, 3, 4, 5)
 t = (10,)
 t = ()
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -762,24 +759,24 @@ t = ()
 
 #[test]
 fn e0149_pep695_nested() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class Outer[T]:
     class Inner[U]:
         pass
 
     def method[V](self, x: V) -> V:
         return x
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0149_pep695_type_alias_scoping() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 type Pair[T, U] = tuple[T, U]
 type StrPair = Pair[str, str]
-"#;
+";
     let _diags = run(source)?;
     Ok(())
 }
@@ -789,6 +786,7 @@ type StrPair = Pair[str, str]
 // ============================================================================
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn comprehensive_python_features() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import (

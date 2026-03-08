@@ -21,7 +21,7 @@ fn e0052_messages(diags: &[basilisk_checker::Diagnostic]) -> Vec<String> {
 
 #[test]
 fn e0052_frozen_inherits_nonfrozen_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import dataclass
 
 @dataclass
@@ -31,19 +31,19 @@ class Base:
 @dataclass(frozen=True)
 class Sub(Base):
     y: int = 0
-"#;
+";
     let msgs = e0052_messages(&run(source)?);
     assert!(
-        msgs.iter().any(|m| m.contains("Frozen") && m.contains("non-frozen")),
-        "frozen inheriting non-frozen should fire E0052, got: {:?}",
-        msgs
+        msgs.iter()
+            .any(|m| m.contains("Frozen") && m.contains("non-frozen")),
+        "frozen inheriting non-frozen should fire E0052, got: {msgs:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0052_nonfrozen_inherits_frozen_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import dataclass
 
 @dataclass(frozen=True)
@@ -53,19 +53,19 @@ class Base:
 @dataclass
 class Sub(Base):
     y: int = 0
-"#;
+";
     let msgs = e0052_messages(&run(source)?);
     assert!(
-        msgs.iter().any(|m| m.contains("Non-frozen") && m.contains("frozen")),
-        "non-frozen inheriting frozen should fire E0052, got: {:?}",
-        msgs
+        msgs.iter()
+            .any(|m| m.contains("Non-frozen") && m.contains("frozen")),
+        "non-frozen inheriting frozen should fire E0052, got: {msgs:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0052_both_frozen_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import dataclass
 
 @dataclass(frozen=True)
@@ -75,19 +75,18 @@ class Base:
 @dataclass(frozen=True)
 class Sub(Base):
     y: int = 0
-"#;
+";
     let msgs = e0052_messages(&run(source)?);
     assert!(
         msgs.is_empty(),
-        "both frozen should not fire E0052, got: {:?}",
-        msgs
+        "both frozen should not fire E0052, got: {msgs:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0052_assign_frozen_instance_attr_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import dataclass
 
 @dataclass(frozen=True)
@@ -96,19 +95,18 @@ class Point:
 
 p = Point(1.0)
 p.x = 2.0
-"#;
+";
     let msgs = e0052_messages(&run(source)?);
     assert!(
         msgs.iter().any(|m| m.contains("Cannot assign")),
-        "assigning to frozen instance should fire E0052, got: {:?}",
-        msgs
+        "assigning to frozen instance should fire E0052, got: {msgs:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0052_non_frozen_instance_assign_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import dataclass
 
 @dataclass
@@ -117,7 +115,7 @@ class Point:
 
 p = Point(1.0)
 p.x = 2.0
-"#;
+";
     let msgs = e0052_messages(&run(source)?);
     assert!(
         msgs.is_empty(),

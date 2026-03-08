@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0026: TypeVar with single constraint.
+//! Integration tests for BSK-E0026: `TypeVar` with single constraint.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;

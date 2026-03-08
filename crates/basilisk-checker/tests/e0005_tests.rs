@@ -51,7 +51,8 @@ fn e0005_enum_class_exempt() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn e0005_protocol_class_exempt() -> Result<(), Box<dyn std::error::Error>> {
-    let source = "from typing import Protocol\n\nclass MyProto(Protocol):\n    name = \"default\"\n";
+    let source =
+        "from typing import Protocol\n\nclass MyProto(Protocol):\n    name = \"default\"\n";
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0005"),
@@ -76,6 +77,9 @@ fn e0005_multiple_unannotated_attrs() -> Result<(), Box<dyn std::error::Error>> 
     let source = "class Foo:\n    a = 1\n    b = 2\n    c = 3\n";
     let diags = run(source)?;
     let count = diags.iter().filter(|d| d.code.code == "BSK-E0005").count();
-    assert_eq!(count, 3, "three unannotated attrs should produce three E0005s");
+    assert_eq!(
+        count, 3,
+        "three unannotated attrs should produce three E0005s"
+    );
     Ok(())
 }

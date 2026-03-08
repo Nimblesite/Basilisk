@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0029: Method defined in TypedDict.
+//! Integration tests for BSK-E0029: Method defined in `TypedDict`.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -38,13 +38,13 @@ class Movie(TypedDict):
 
 #[test]
 fn e0029_typeddict_fields_only_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypedDict
 
 class Movie(TypedDict):
     name: str
     year: int
-"#;
+";
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0029"),

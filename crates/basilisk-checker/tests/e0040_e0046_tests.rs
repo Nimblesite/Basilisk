@@ -23,7 +23,7 @@ fn messages_for(diags: &[basilisk_checker::Diagnostic], code: &str) -> Vec<Strin
 
 #[test]
 fn e0040_subclass_enum_with_members_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from enum import Enum
 
 class Color(Enum):
@@ -32,19 +32,19 @@ class Color(Enum):
 
 class ExtendedColor(Color):
     BLUE = 3
-"#;
+";
     let msgs = messages_for(&run(source)?, "BSK-E0040");
     assert!(
-        msgs.iter().any(|m| m.contains("Cannot subclass") && m.contains("Color")),
-        "subclassing enum with members should fire E0040, got: {:?}",
-        msgs
+        msgs.iter()
+            .any(|m| m.contains("Cannot subclass") && m.contains("Color")),
+        "subclassing enum with members should fire E0040, got: {msgs:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0040_subclass_memberless_enum_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from enum import Enum
 
 class BaseEnum(Enum):
@@ -52,25 +52,24 @@ class BaseEnum(Enum):
 
 class Child(BaseEnum):
     VALUE = 1
-"#;
+";
     let msgs = messages_for(&run(source)?, "BSK-E0040");
     assert!(
         msgs.is_empty(),
-        "subclassing memberless enum should not fire E0040, got: {:?}",
-        msgs
+        "subclassing memberless enum should not fire E0040, got: {msgs:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0040_non_enum_class_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class Base:
     x = 1
 
 class Child(Base):
     pass
-"#;
+";
     let msgs = messages_for(&run(source)?, "BSK-E0040");
     assert!(
         msgs.is_empty(),
@@ -83,17 +82,17 @@ class Child(Base):
 
 #[test]
 fn e0046_annotated_enum_member_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from enum import Enum
 
 class Pet(Enum):
     DOG: int = 2
-"#;
+";
     let msgs = messages_for(&run(source)?, "BSK-E0046");
     assert!(
-        msgs.iter().any(|m| m.contains("should not have an explicit type annotation")),
-        "annotated enum member should fire E0046, got: {:?}",
-        msgs
+        msgs.iter()
+            .any(|m| m.contains("should not have an explicit type annotation")),
+        "annotated enum member should fire E0046, got: {msgs:?}"
     );
     Ok(())
 }
@@ -116,12 +115,12 @@ class Pet(Enum):
 
 #[test]
 fn e0046_annotation_only_non_member_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from enum import Enum
 
 class Pet(Enum):
     genus: str
-"#;
+";
     let msgs = messages_for(&run(source)?, "BSK-E0046");
     assert!(
         msgs.is_empty(),
@@ -132,10 +131,10 @@ class Pet(Enum):
 
 #[test]
 fn e0046_non_enum_class_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class Regular:
     x: int = 5
-"#;
+";
     let msgs = messages_for(&run(source)?, "BSK-E0046");
     assert!(
         msgs.is_empty(),

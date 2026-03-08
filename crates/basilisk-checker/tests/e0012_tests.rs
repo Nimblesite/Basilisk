@@ -34,12 +34,12 @@ result: int = add("hello", "world")
 
 #[test]
 fn e0012_correct_arg_types_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def add(x: int, y: int) -> int:
     return x + y
 
 result: int = add(1, 2)
-"#;
+";
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0012"),
@@ -50,12 +50,12 @@ result: int = add(1, 2)
 
 #[test]
 fn e0012_int_literal_for_str_param_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def greet(name: str) -> str:
     return name
 
 result: str = greet(42)
-"#;
+";
     let diags = run(source)?;
     assert!(
         codes(&diags).contains(&"BSK-E0012"),

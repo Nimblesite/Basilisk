@@ -18,7 +18,7 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 #[test]
 fn e0021_identical_unannotated_overloads_fires() -> Result<(), Box<dyn std::error::Error>> {
     // Overlap detection requires at least one side to have unannotated params
-    let source = r#"
+    let source = r"
 from typing import overload
 
 @overload
@@ -29,7 +29,7 @@ def process(x) -> str: ...
 
 def process(x: int) -> int:
     return x
-"#;
+";
     let diags = run(source)?;
     assert!(
         codes(&diags).contains(&"BSK-E0021"),
@@ -41,7 +41,7 @@ def process(x: int) -> int:
 
 #[test]
 fn e0021_distinct_overloads_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload
 
 @overload
@@ -52,7 +52,7 @@ def process(x: str) -> str: ...
 
 def process(x: int | str) -> int | str:
     return x
-"#;
+";
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0021"),

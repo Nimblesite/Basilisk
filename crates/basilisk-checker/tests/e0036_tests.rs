@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0036: ClassVar used in invalid context.
+//! Integration tests for BSK-E0036: `ClassVar` used in invalid context.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -21,68 +21,64 @@ fn e0036_messages(diags: &[basilisk_checker::Diagnostic]) -> Vec<String> {
 
 #[test]
 fn e0036_classvar_in_class_body_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import ClassVar
 
 class MyClass:
     count: ClassVar[int] = 0
-"#;
+";
     let msgs = e0036_messages(&run(source)?);
     assert!(
         msgs.is_empty(),
-        "ClassVar in class body should not fire E0036, got: {:?}",
-        msgs
+        "ClassVar in class body should not fire E0036, got: {msgs:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0036_classvar_in_module_var_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import ClassVar
 bad: ClassVar[int] = 3
-"#;
+";
     let msgs = e0036_messages(&run(source)?);
     assert!(
         !msgs.is_empty(),
-        "ClassVar at module level should fire E0036, got: {:?}",
-        msgs
+        "ClassVar at module level should fire E0036, got: {msgs:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0036_classvar_in_function_param_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import ClassVar
 
 class MyClass:
     def method(self, a: ClassVar[int]) -> None:
         pass
-"#;
+";
     let msgs = e0036_messages(&run(source)?);
     assert!(
         !msgs.is_empty(),
-        "ClassVar in function param should fire E0036, got: {:?}",
-        msgs
+        "ClassVar in function param should fire E0036, got: {msgs:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0036_classvar_in_return_type_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import ClassVar
 
 class MyClass:
     def method(self) -> ClassVar[int]:
         return 0
-"#;
+";
     let msgs = e0036_messages(&run(source)?);
     assert!(
         !msgs.is_empty(),
-        "ClassVar in return type should fire E0036, got: {:?}",
-        msgs
+        "ClassVar in return type should fire E0036, got: {msgs:?}"
     );
     Ok(())
 }
@@ -99,42 +95,39 @@ class MyClass:
     let msgs = e0036_messages(&run(source)?);
     assert!(
         !msgs.is_empty(),
-        "ClassVar in local variable should fire E0036, got: {:?}",
-        msgs
+        "ClassVar in local variable should fire E0036, got: {msgs:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0036_nested_classvar_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import ClassVar, Final
 
 class MyClass:
     bad: Final[ClassVar[int]] = 3
-"#;
+";
     let msgs = e0036_messages(&run(source)?);
     assert!(
         !msgs.is_empty(),
-        "nested ClassVar should fire E0036, got: {:?}",
-        msgs
+        "nested ClassVar should fire E0036, got: {msgs:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0036_classvar_in_list_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import ClassVar
 
 class MyClass:
     bad: list[ClassVar[int]] = []
-"#;
+";
     let msgs = e0036_messages(&run(source)?);
     assert!(
         !msgs.is_empty(),
-        "ClassVar nested in list should fire E0036, got: {:?}",
-        msgs
+        "ClassVar nested in list should fire E0036, got: {msgs:?}"
     );
     Ok(())
 }

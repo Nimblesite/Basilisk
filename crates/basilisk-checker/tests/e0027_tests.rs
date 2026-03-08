@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0027: Duplicate TypeVar in Generic[...].
+//! Integration tests for BSK-E0027: Duplicate `TypeVar` in Generic[...].
 #![allow(missing_docs)]
 
 use basilisk_checker::check;

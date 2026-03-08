@@ -35,13 +35,13 @@ class Child(Base):
 
 #[test]
 fn e0017_compatible_attr_type_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class Base:
     count: int = 0
 
 class Child(Base):
     count: int = 10
-"#;
+";
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0017"),
