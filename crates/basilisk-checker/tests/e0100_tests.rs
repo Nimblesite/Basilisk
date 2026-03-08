@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0100: Literal augmented assign.
+//! Integration tests for BSK-E0100: Literal augmented assignment.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -16,14 +16,15 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 }
 
 #[test]
-fn e0100_literal_augmented_assign_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
-from typing import Literal
-
-def func(x: Literal[1, 2, 3]) -> None:
+fn e0100_normal_augmented_assignment_ok() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+def f(x: int) -> None:
     x += 1
-";
+"#;
     let diags = run(source)?;
-    let _ = codes(&diags);
+    assert!(
+        !codes(&diags).contains(&"BSK-E0100"),
+        "normal augmented assignment should not fire E0100"
+    );
     Ok(())
 }

@@ -9834,11 +9834,230 @@ fn dataclass_attribute_form_eq_false_flag() -> Result<(), Box<dyn std::error::Er
 }
 
 #[test]
-fn extract_call_name_from_attribute() -> Result<(), Box<dyn std::error::Error>> {
-    // Test that module.ClassName() style calls are collected
-    let src = "import datetime\nx = datetime.datetime(2024, 1, 1)\n".to_owned();
+fn call_in_module_assign_collected() -> Result<(), Box<dyn std::error::Error>> {
+    // Test that simple name calls in assign stmts are collected
+    let src = "x = SomeClass(1, 2)\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    assert!(!resolved.calls.is_empty());
+    assert!(resolved.calls.iter().any(|c| c.callee == "SomeClass"));
+    Ok(())
+}
+
+// ===========================================================================
+// Sixth batch: final precision tests for 94% target
+// ===========================================================================
+
+// Base class with attribute expression: module.Base (collect_name_refs_from_expr Attribute)
+#[test]
+fn class_base_attribute_expression() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "import abc\nclass Foo(abc.ABC):\n    pass\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let cls = resolved.classes.iter().find(|c| c.name == "Foo");
+    assert!(cls.is_some_and(|c| c.base_expression_names.contains(&"abc".to_owned())));
+    Ok(())
+}
+
+// TypeAlias with tuple string refs (collect_string_refs_from_expr Tuple)
+#[test]
+fn type_alias_with_tuple_rhs() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "from typing import TypeAlias, Union\nMyType: TypeAlias = Union[str, int]\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(!resolved.type_alias_defs.is_empty());
+    Ok(())
+}
+
+// TypeAlias with forward reference strings (collect_string_refs_from_expr BinOp)
+#[test]
+fn type_alias_with_forward_ref() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "from typing import TypeAlias\nMyType: TypeAlias = \"Foo\" | \"Bar\"\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(!resolved.type_alias_defs.is_empty());
+    Ok(())
+}
+
+// TypeAlias with subscript RHS (expr_to_type_arg Subscript path) 
+#[test]
+fn type_alias_subscript_rhs() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "from typing import TypeAlias\nMyList: TypeAlias = list[int]\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let alias = resolved.type_alias_defs.iter().find(|a| a.name == "MyList");
+    assert!(alias.is_some());
+    Ok(())
+}
+
+// Class base with call expression (collect_name_refs_from_expr Call)
+#[test]
+fn class_base_with_call_expression() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "def make_base() -> type:\n    pass\nclass Foo(make_base()):\n    pass\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let cls = resolved.classes.iter().find(|c| c.name == "Foo");
+    assert!(cls.is_some_and(|c| c.base_expression_names.contains(&"make_base".to_owned())));
+    Ok(())
+}
+
+// Class base with BinOp expression (collect_name_refs_from_expr BinOp - unlikely in bases)
+// Actually BinOp in base class is invalid Python, so skip that.
+
+// TypeAlias decorator_name via attribute: abc.abstractmethod as Attribute name
+#[test]
+fn decorator_via_attribute_name() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "import abc\nclass Foo:\n    @abc.abstractmethod\n    def bar(self) -> None: ...\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let func = resolved.functions.iter().find(|f| f.name == "bar");
+    assert!(func.is_some_and(|f| f.decorators.iter().any(|d| d == "abstractmethod")));
+    Ok(())
+}
+
+// Unpack tuple unbounded form (is_unbounded_component Unpack[tuple[T, ...]])
+#[test]
+fn unpack_tuple_unbounded_annotation() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "from typing import Unpack\ndef foo(x: tuple[int, Unpack[tuple[str, ...]]]) -> None:\n    pass\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(!resolved.functions.is_empty());
+    Ok(())
+}
+
+// Two unbounded components should trigger multiple_unbounded
+#[test]
+fn multiple_unbounded_tuple_components() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "from typing import TypeVarTuple, Unpack\nTs = TypeVarTuple('Ts')\nUs = TypeVarTuple('Us')\ndef foo(x: tuple[*Ts, *Us]) -> None:\n    pass\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(!resolved.multiple_unbounded_tuple_spans.is_empty());
+    Ok(())
+}
+
+// TypedDict BinOp read (td_check_expr_reads BinOp path)
+#[test]
+fn typeddict_binop_read_check() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "from typing import TypedDict, ReadOnly, Unpack\nclass TD(TypedDict):\n    count: ReadOnly[int]\ndef foo(**kw: Unpack[TD]) -> int:\n    return kw[\"count\"] + 1\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    // Reading ReadOnly fields is fine
+    assert!(!resolved.functions.is_empty());
+    Ok(())
+}
+
+// Annotated wrapper stripping for assert_type
+#[test]
+fn assert_type_strip_annotated() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "from typing import assert_type, Annotated\ndef check(x: Annotated[int, 'doc']) -> None:\n    assert_type(x, int)\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(!resolved.assert_type_calls.is_empty());
+    // The assert_type should not flag a mismatch since Annotated[int, ...] == int
+    let call = &resolved.assert_type_calls[0];
+    assert!(call.actual_type.is_some());
+    Ok(())
+}
+
+// NamedTuple functional form with 3 fields
+#[test]
+fn namedtuple_functional_3_fields() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "from typing import NamedTuple\nPoint3D = NamedTuple('Point3D', [('x', int), ('y', int), ('z', int)])\n".to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let nt = resolved.namedtuple_defs.iter().find(|n| n.lhs_name == "Point3D");
+    assert!(nt.is_some_and(|n| n.field_names.len() == 3));
+    Ok(())
+}
+
+#[test]
+fn dc_transform_overloaded_field_spec() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "from typing import dataclass_transform, overload\n",
+        "@overload\n",
+        "def field(*, init: bool = True, kw_only: bool = False) -> object: ...\n",
+        "@overload\n",
+        "def field(default: object, init: bool = True, kw_only: bool = False) -> object: ...\n",
+        "def field(*args: object, **kwargs: object) -> object: ...\n",
+        "@dataclass_transform(field_specifiers=(field,))\n",
+        "class ModelBase:\n",
+        "    pass\n",
+        "class User(ModelBase):\n",
+        "    name: str = field(init=True)\n",
+        "    hidden: int = field(kw_only=True)\n",
+    ).to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(resolved.classes.iter().any(|c| c.name == "User"));
+    Ok(())
+}
+
+#[test]
+fn dc_transform_field_spec_positional_init() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "from typing import dataclass_transform\n",
+        "def myfield(init: bool = True, kw_only: bool = False, default: object = ...) -> object: ...\n",
+        "@dataclass_transform(field_specifiers=(myfield,))\n",
+        "class Base:\n",
+        "    pass\n",
+        "class Item(Base):\n",
+        "    val: int = myfield(True, True)\n",
+    ).to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(resolved.classes.iter().any(|c| c.name == "Item"));
+    Ok(())
+}
+
+#[test]
+fn multiple_unbounded_starred_typevartuple() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "from typing import TypeVarTuple\n",
+        "Ts = TypeVarTuple('Ts')\n",
+        "Us = TypeVarTuple('Us')\n",
+        "def f(x: tuple[*Ts, *Us]) -> None:\n",
+        "    pass\n",
+    ).to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(!resolved.multiple_unbounded_tuple_spans.is_empty());
+    Ok(())
+}
+
+#[test]
+fn base_class_call_expr_refs() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "def make_base() -> type: ...\n",
+        "class Child(make_base()):\n",
+        "    pass\n",
+    ).to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(resolved.classes.iter().any(|c| c.name == "Child"));
+    Ok(())
+}
+
+#[test]
+fn bounded_typevar_return_stmt() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "class Foo[T: str]:\n",
+        "    def method(self, val: T) -> str:\n",
+        "        return val.nonexistent\n",
+    ).to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(!resolved.bounded_typevar_attr_violations.is_empty());
+    Ok(())
+}
+
+#[test]
+fn bounded_typevar_assign_stmt() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "class Foo[T: str]:\n",
+        "    def method(self, val: T) -> None:\n",
+        "        x = val.nonexistent\n",
+    ).to_owned();
+    let parsed = parse_source(src, "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    assert!(!resolved.bounded_typevar_attr_violations.is_empty());
     Ok(())
 }

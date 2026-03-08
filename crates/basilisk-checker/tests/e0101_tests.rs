@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0101: `TypeGuard` no narrowing param.
+//! Integration tests for BSK-E0101: TypeGuard no narrowing param.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -16,30 +16,30 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 }
 
 #[test]
-fn e0101_typeguard_no_param() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+fn e0101_valid_typeguard() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
 from typing import TypeGuard
 
-def check() -> TypeGuard[int]:
-    return True
-";
+def is_str(x: object) -> TypeGuard[str]:
+    return isinstance(x, str)
+"#;
     let diags = run(source)?;
-    let _ = codes(&diags);
+    assert!(
+        !codes(&diags).contains(&"BSK-E0101"),
+        "valid TypeGuard should not fire E0101"
+    );
     Ok(())
 }
 
 #[test]
-fn e0101_typeguard_with_param_ok() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+fn e0101_typeguard_no_param() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
 from typing import TypeGuard
 
-def check(val: object) -> TypeGuard[int]:
-    return isinstance(val, int)
-";
+def is_str() -> TypeGuard[str]:
+    return True
+"#;
     let diags = run(source)?;
-    assert!(
-        !codes(&diags).contains(&"BSK-E0101"),
-        "TypeGuard with narrowing param should not fire E0101"
-    );
+    let _ = codes(&diags);
     Ok(())
 }

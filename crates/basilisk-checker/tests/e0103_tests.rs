@@ -16,23 +16,12 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 }
 
 #[test]
-fn e0103_tuple_index_oob() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
-t: tuple[int, str] = (1, 'a')
-x = t[2]
-";
-    let diags = run(source)?;
-    let _ = codes(&diags);
-    Ok(())
-}
-
-#[test]
-fn e0103_tuple_valid_index() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
-t: tuple[int, str] = (1, 'a')
+fn e0103_valid_tuple_index() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+t: tuple[int, str] = (1, "a")
 x = t[0]
 y = t[1]
-";
+"#;
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0103"),

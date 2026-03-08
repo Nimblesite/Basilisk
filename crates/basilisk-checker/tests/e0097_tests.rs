@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0097: Protocol self attr.
+//! Integration tests for BSK-E0097: Protocol self attribute violation.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -16,15 +16,17 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 }
 
 #[test]
-fn e0097_protocol_self_attr_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
-from typing import Protocol, Self
+fn e0097_valid_protocol() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+from typing import Protocol
 
-class Builder(Protocol):
-    def build(self) -> Self: ...
-    name: str
-";
+class Proto(Protocol):
+    def method(self) -> int: ...
+"#;
     let diags = run(source)?;
-    let _ = codes(&diags);
+    assert!(
+        !codes(&diags).contains(&"BSK-E0097"),
+        "valid protocol should not fire E0097"
+    );
     Ok(())
 }

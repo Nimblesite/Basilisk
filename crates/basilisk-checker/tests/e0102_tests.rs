@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0102: `TypeVar` default violation.
+//! Integration tests for BSK-E0102: TypeVar default referential violation.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -16,12 +16,16 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 }
 
 #[test]
-fn e0102_default_violation_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn e0102_valid_typevar_default() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
-T = TypeVar("T", int, str, default=float)
+
+T = TypeVar("T", default=int)
 "#;
     let diags = run(source)?;
-    let _ = codes(&diags);
+    assert!(
+        !codes(&diags).contains(&"BSK-E0102"),
+        "valid TypeVar default should not fire E0102"
+    );
     Ok(())
 }

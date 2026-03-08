@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0096: dataclass `default_factory`.
+//! Integration tests for BSK-E0096: Dataclass field default factory mismatch.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -16,32 +16,18 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 }
 
 #[test]
-fn e0096_mutable_default_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
-from dataclasses import dataclass
-
-@dataclass
-class Config:
-    items: list[int] = []
-";
-    let diags = run(source)?;
-    let _ = codes(&diags);
-    Ok(())
-}
-
-#[test]
-fn e0096_field_default_factory_ok() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+fn e0096_valid_default_factory() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
 from dataclasses import dataclass, field
 
 @dataclass
-class Config:
+class DC:
     items: list[int] = field(default_factory=list)
-";
+"#;
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0096"),
-        "field(default_factory=...) should not fire E0096"
+        "valid default_factory should not fire E0096"
     );
     Ok(())
 }

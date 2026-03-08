@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0094: Self type invalid location.
+//! Integration tests for BSK-E0094: Self type in invalid location.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -16,31 +16,31 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 }
 
 #[test]
-fn e0094_self_outside_class() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+fn e0094_self_in_method_ok() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
 from typing import Self
 
-def func() -> Self:
-    pass
-";
+class Foo:
+    def clone(self) -> Self:
+        return self
+"#;
     let diags = run(source)?;
-    let _ = codes(&diags);
+    assert!(
+        !codes(&diags).contains(&"BSK-E0094"),
+        "Self in method return should not fire E0094"
+    );
     Ok(())
 }
 
 #[test]
-fn e0094_self_in_class_method_ok() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+fn e0094_self_outside_class() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
 from typing import Self
 
-class MyClass:
-    def copy(self) -> Self:
-        return self
-";
+def standalone() -> Self:
+    pass
+"#;
     let diags = run(source)?;
-    assert!(
-        !codes(&diags).contains(&"BSK-E0094"),
-        "Self in class method should not fire E0094"
-    );
+    let _ = codes(&diags);
     Ok(())
 }
