@@ -392,6 +392,113 @@ Discover and run Python tests (pytest, unittest) directly from VS Code's Test Ex
 }
 ```
 
+### Python Debugger Integration
+
+A full Debug Adapter Protocol (DAP) implementation for Python debugging, shipped as a separate package (`basilisk-dap`) but integrated into the Basilisk VS Code extension.
+
+**Architecture**:
+- Separate Rust crate: `crates/basilisk-dap/` — implements the [Debug Adapter Protocol](https://microsoft.github.io/debug-adapter-protocol/)
+- Communicates with `debugpy` (the standard Python debug adapter) as a backend
+- Basilisk adds type-aware debugging features on top of standard `debugpy` capabilities
+- Ships as part of the VSIX — no separate install needed
+
+**Why a separate package**:
+- DAP is a distinct protocol from LSP — different lifecycle, different transport
+- Keeps `basilisk-lsp` focused on static analysis; `basilisk-dap` handles runtime
+- Can be used standalone (CLI debugging, other editors) without the LSP
+
+**Features**:
+
+| Feature | Description |
+|---------|-------------|
+| Launch & Attach | Launch Python scripts or attach to running processes |
+| Breakpoints | Line, conditional, logpoint, function, exception breakpoints |
+| Step execution | Step in, step over, step out, continue, pause |
+| Variable inspection | View locals, globals, closures with full type info from Basilisk |
+| Watch expressions | Evaluate expressions in the current scope |
+| Call stack | Full call stack with source navigation |
+| Type-aware hover | Hover shows both runtime value AND static type (from LSP) |
+| Conditional breakpoints | Break when a typed expression evaluates to true |
+| Type assertions | Break when a runtime type doesn't match the static annotation |
+| Ownership tracking | (Future) Visualize `Borrowed`/`Owned`/`InOut` state at runtime |
+
+**Type-aware debugging** (unique to Basilisk):
+- **Type mismatch breakpoints**: automatically break when a variable's runtime type doesn't match its annotation
+- **Annotation overlay**: debug hover shows `(static: str, runtime: str)` side-by-side
+- **Type narrowing visualization**: show which branch of a union type is active at a breakpoint
+- **Parameter contract verification**: warn when a function receives a value that violates its annotation at runtime
+
+**Launch configurations**:
+```json
+{
+    "type": "basilisk",
+    "request": "launch",
+    "name": "Basilisk: Run Current File",
+    "program": "${file}",
+    "python": "${command:python.interpreterPath}",
+    "args": [],
+    "env": {},
+    "console": "integratedTerminal",
+    "typeChecking": true
+}
+```
+
+```json
+{
+    "type": "basilisk",
+    "request": "attach",
+    "name": "Basilisk: Attach to Process",
+    "connect": { "host": "localhost", "port": 5678 },
+    "typeChecking": true
+}
+```
+
+**Commands**:
+```json
+{
+    "command": "basilisk.debugFile",
+    "title": "Basilisk: Debug Current File"
+},
+{
+    "command": "basilisk.debugTest",
+    "title": "Basilisk: Debug Test at Cursor"
+},
+{
+    "command": "basilisk.toggleTypeBreakpoints",
+    "title": "Basilisk: Toggle Type Mismatch Breakpoints"
+}
+```
+
+**Configuration**:
+```json
+{
+    "basilisk.debugger.enabled": {
+        "type": "boolean", "default": true,
+        "description": "Enable Basilisk Python debugger."
+    },
+    "basilisk.debugger.typeChecking": {
+        "type": "boolean", "default": false,
+        "description": "Enable type assertion breakpoints during debugging."
+    },
+    "basilisk.debugger.debugpyPath": {
+        "type": "string", "default": "debugpy",
+        "description": "Path to the debugpy module."
+    }
+}
+```
+
+**Crate structure**:
+```
+crates/basilisk-dap/
+    src/
+        server.rs       — DAP server (JSON-RPC over stdio)
+        adapter.rs      — debugpy subprocess management
+        types.rs        — DAP protocol types
+        breakpoints.rs  — breakpoint management + type-aware breakpoints
+        variables.rs    — variable inspection with Basilisk type overlay
+    Cargo.toml
+```
+
 ---
 
 ## Testing Strategy

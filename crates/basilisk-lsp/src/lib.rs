@@ -27,7 +27,9 @@
 pub mod call_hierarchy;
 pub mod code_actions;
 pub mod code_lens;
+pub mod color;
 pub mod completion;
+pub mod config;
 pub mod declaration;
 pub mod definition;
 pub mod folding;
@@ -41,6 +43,7 @@ pub mod semantic_tokens;
 pub mod server;
 pub mod signature;
 pub mod symbols;
+pub mod test_discovery;
 pub mod type_definition;
 pub mod type_hierarchy;
 pub mod util;

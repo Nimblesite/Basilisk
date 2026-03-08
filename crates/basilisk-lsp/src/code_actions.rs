@@ -58,9 +58,233 @@ pub fn code_actions(
         if let Some(action) = organize_imports(uri, source) {
             actions.push(CodeActionOrCommand::CodeAction(action));
         }
+        // Expand wildcard imports (from X import *)
+        if let Some(action) = expand_wildcard_imports(uri, source) {
+            actions.push(CodeActionOrCommand::CodeAction(action));
+        }
+        // Convert import style (import X <-> from X import Y)
+        if let Some(action) = convert_import_style(uri, source) {
+            actions.push(CodeActionOrCommand::CodeAction(action));
+        }
+        // Add __all__ declaration
+        if let Some(action) = add_dunder_all(uri, source) {
+            actions.push(CodeActionOrCommand::CodeAction(action));
+        }
     }
 
     actions
+}
+
+// ── Expand wildcard imports via ruff ──────────────────────────────────────────
+
+/// Run `ruff check --select F403 --fix` on the document source to expand
+/// wildcard imports, or `None` if ruff is not installed or no wildcards exist.
+pub(crate) fn expand_wildcard_imports(uri: &Url, source: &str) -> Option<CodeAction> {
+    // Check if there are any wildcard imports in the source first
+    if !source.contains("import *") {
+        return None;
+    }
+
+    let id = TMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let tmp_path = std::env::temp_dir().join(format!("basilisk_wild_{id}.py"));
+
+    std::fs::write(&tmp_path, source).ok()?;
+
+    let status = std::process::Command::new("ruff")
+        .args(["check", "--select", "F403", "--fix", "--quiet"])
+        .arg(&tmp_path)
+        .status()
+        .ok()?;
+
+    // ruff exits 0 (no changes) or 1 (applied fixes); both are success.
+    if !matches!(status.code(), Some(0 | 1)) {
+        let _ = std::fs::remove_file(&tmp_path);
+        return None;
+    }
+
+    let new_source = std::fs::read_to_string(&tmp_path).ok()?;
+    let _ = std::fs::remove_file(&tmp_path);
+
+    if new_source == source {
+        return None; // Already expanded or no wildcards
+    }
+
+    let mut changes = HashMap::new();
+    changes.insert(
+        uri.clone(),
+        vec![TextEdit {
+            range: full_document_range(source),
+            new_text: new_source,
+        }],
+    );
+    Some(CodeAction {
+        title: "Expand wildcard imports (ruff)".to_owned(),
+        kind: Some(CodeActionKind::QUICKFIX),
+        diagnostics: None,
+        edit: Some(WorkspaceEdit {
+            changes: Some(changes),
+            ..Default::default()
+        }),
+        is_preferred: Some(false),
+        ..Default::default()
+    })
+}
+
+// ── Convert import style via ruff ─────────────────────────────────────────────
+
+/// Run `ruff check --select E401 --fix` to convert between `import X` and
+/// `from X import Y` styles, or `None` if ruff is not installed or no
+/// changes are needed.
+pub(crate) fn convert_import_style(uri: &Url, source: &str) -> Option<CodeAction> {
+    // Only offer when there are actual import statements.
+    if !source.contains("import ") {
+        return None;
+    }
+
+    let id = TMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let tmp_path = std::env::temp_dir().join(format!("basilisk_conv_{id}.py"));
+
+    std::fs::write(&tmp_path, source).ok()?;
+
+    let status = std::process::Command::new("ruff")
+        .args(["check", "--select", "E401", "--fix", "--quiet"])
+        .arg(&tmp_path)
+        .status()
+        .ok()?;
+
+    if !matches!(status.code(), Some(0 | 1)) {
+        let _ = std::fs::remove_file(&tmp_path);
+        return None;
+    }
+
+    let new_source = std::fs::read_to_string(&tmp_path).ok()?;
+    let _ = std::fs::remove_file(&tmp_path);
+
+    if new_source == source {
+        return None;
+    }
+
+    let full_range = full_document_range(source);
+    let mut changes = HashMap::new();
+    changes.insert(
+        uri.clone(),
+        vec![TextEdit {
+            range: full_range,
+            new_text: new_source,
+        }],
+    );
+    Some(CodeAction {
+        title: "Fix multiple imports on one line (ruff E401)".to_owned(),
+        kind: Some(CodeActionKind::QUICKFIX),
+        diagnostics: None,
+        edit: Some(WorkspaceEdit {
+            changes: Some(changes),
+            ..Default::default()
+        }),
+        is_preferred: Some(false),
+        ..Default::default()
+    })
+}
+
+// ── Add __all__ declaration ───────────────────────────────────────────────────
+
+/// Offer to add an `__all__` declaration listing all public names in the module.
+/// Only offered when `__all__` is not already defined.
+pub(crate) fn add_dunder_all(uri: &Url, source: &str) -> Option<CodeAction> {
+    // Don't offer if __all__ already exists.
+    if source.contains("__all__") {
+        return None;
+    }
+
+    // Collect public names: top-level `def`, `class`, and assignments that
+    // don't start with underscore.
+    let mut public_names: Vec<&str> = Vec::new();
+
+    for line in source.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("def ") {
+            if let Some(name) = rest.split('(').next() {
+                let name = name.trim();
+                if !name.starts_with('_') {
+                    public_names.push(name);
+                }
+            }
+        } else if let Some(rest) = trimmed.strip_prefix("class ") {
+            if let Some(name) = rest.split(['(', ':']).next() {
+                let name = name.trim();
+                if !name.starts_with('_') {
+                    public_names.push(name);
+                }
+            }
+        } else if !trimmed.starts_with('#')
+            && !trimmed.starts_with("import ")
+            && !trimmed.starts_with("from ")
+            && !trimmed.is_empty()
+        {
+            // Simple assignment: `NAME = ...`
+            if let Some(name) = trimmed.split('=').next() {
+                let name = name.split(':').next().unwrap_or("").trim();
+                if !name.is_empty()
+                    && !name.starts_with('_')
+                    && name.chars().all(|c| c.is_alphanumeric() || c == '_')
+                {
+                    public_names.push(name);
+                }
+            }
+        }
+    }
+
+    if public_names.is_empty() {
+        return None;
+    }
+
+    // Build the __all__ text.
+    let names_str = public_names
+        .iter()
+        .map(|n| format!("    \"{n}\","))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let all_text = format!("__all__ = [\n{names_str}\n]\n\n");
+
+    // Insert after imports (find last import line).
+    let mut insert_line: u32 = 0;
+    for (idx, line) in source.lines().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("import ") || trimmed.starts_with("from ") {
+            #[allow(clippy::cast_possible_truncation)]
+            {
+                insert_line = (idx + 1) as u32;
+            }
+        }
+    }
+
+    let insert_pos = Position {
+        line: insert_line,
+        character: 0,
+    };
+
+    let mut changes = HashMap::new();
+    changes.insert(
+        uri.clone(),
+        vec![TextEdit {
+            range: Range {
+                start: insert_pos,
+                end: insert_pos,
+            },
+            new_text: all_text,
+        }],
+    );
+    Some(CodeAction {
+        title: "Add __all__ declaration (basilisk)".to_owned(),
+        kind: Some(CodeActionKind::SOURCE),
+        diagnostics: None,
+        edit: Some(WorkspaceEdit {
+            changes: Some(changes),
+            ..Default::default()
+        }),
+        is_preferred: Some(false),
+        ..Default::default()
+    })
 }
 
 // ── Per-diagnostic quick fixes ───────────────────────────────────────────────
@@ -340,26 +564,11 @@ pub(crate) fn organize_imports(uri: &Url, source: &str) -> Option<CodeAction> {
         return None; // Already sorted — don't offer a no-op action.
     }
 
-    #[allow(clippy::cast_possible_truncation)]
-    let line_count = source.lines().count() as u32;
-    #[allow(clippy::cast_possible_truncation)]
-    let last_line_len = source.lines().last().map_or(0, |l| l.chars().count()) as u32;
-    let full_range = Range {
-        start: Position {
-            line: 0,
-            character: 0,
-        },
-        end: Position {
-            line: line_count,
-            character: last_line_len,
-        },
-    };
-
     let mut changes = HashMap::new();
     changes.insert(
         uri.clone(),
         vec![TextEdit {
-            range: full_range,
+            range: full_document_range(source),
             new_text: new_source,
         }],
     );
@@ -377,6 +586,24 @@ pub(crate) fn organize_imports(uri: &Url, source: &str) -> Option<CodeAction> {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/// Compute the LSP range covering the entire document.
+fn full_document_range(source: &str) -> Range {
+    #[allow(clippy::cast_possible_truncation)]
+    let line_count = source.lines().count() as u32;
+    #[allow(clippy::cast_possible_truncation)]
+    let last_line_len = source.lines().last().map_or(0, |l| l.chars().count()) as u32;
+    Range {
+        start: Position {
+            line: 0,
+            character: 0,
+        },
+        end: Position {
+            line: line_count,
+            character: last_line_len,
+        },
+    }
+}
 
 /// Build a [`CodeAction`] that inserts `text` at `pos`.
 fn single_insert(

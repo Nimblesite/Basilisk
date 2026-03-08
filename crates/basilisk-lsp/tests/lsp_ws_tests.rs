@@ -173,7 +173,7 @@ async fn test_ws_initialize() -> TestResult<()> {
     assert!(response.contains("\"id\":1"));
     assert!(response.contains("\"result\""));
     assert!(response.contains("\"basilisk\""));
-    assert!(response.contains("\"textDocumentSync\":1"));
+    assert!(response.contains("\"textDocumentSync\":2"));
     assert!(response.contains("\"hoverProvider\":true"));
     assert!(
         response.contains("\"codeActionProvider\""),
@@ -6213,9 +6213,11 @@ hel
         resp.contains("helper"),
         "completions should include 'helper': {resp}"
     );
+    // Docstrings are now lazy-loaded via completionItem/resolve, so the initial
+    // completion list includes `data` for resolve but not inline documentation.
     assert!(
-        resp.contains("Return x plus one"),
-        "completion should include docstring: {resp}"
+        resp.contains("\"data\""),
+        "completion should include resolve data: {resp}"
     );
     Ok(())
 }

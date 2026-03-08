@@ -85,14 +85,13 @@ pub fn resolve_completion_item(
     }
 
     // Try to resolve the module to find the symbol's documentation
-    let resolved = match try_resolve(text, path) {
-        Some(r) => r,
-        None => return item,
+    let Some(resolved) = try_resolve(text, path) else {
+        return item;
     };
 
     match kind {
         "function" | "method" => {
-            if let Some(func) = resolved.functions.iter().find(|f| &f.name == name) {
+            if let Some(func) = resolved.functions.iter().find(|f| f.name == name) {
                 let mut result = item;
                 // Add signature to detail if not already set
                 if result.detail.is_none() {
@@ -119,7 +118,7 @@ pub fn resolve_completion_item(
             }
         }
         "class" => {
-            if let Some(class) = resolved.classes.iter().find(|c| &c.name == name) {
+            if let Some(class) = resolved.classes.iter().find(|c| c.name == name) {
                 let mut result = item;
                 // Add class info to detail if not already set
                 if result.detail.is_none() {
@@ -144,7 +143,7 @@ pub fn resolve_completion_item(
         }
         "variable" | "attribute" => {
             // For variables, we can at least ensure detail is present
-            if let Some(_var) = resolved.module_vars.iter().find(|v| &v.name == name) {
+            if resolved.module_vars.iter().any(|v| v.name == name) {
                 let mut result = item;
                 if result.detail.is_none() {
                     result.detail = Some("variable".to_owned());

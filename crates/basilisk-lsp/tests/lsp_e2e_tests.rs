@@ -194,7 +194,7 @@ fn test_lsp_initialize() -> TestResult<()> {
     assert!(response.contains("\"id\":1"));
     assert!(response.contains("\"result\""));
     assert!(response.contains("\"basilisk\""));
-    assert!(response.contains("\"textDocumentSync\":1"));
+    assert!(response.contains("\"textDocumentSync\":2"));
     assert!(response.contains("\"hoverProvider\":true"));
     assert!(
         response.contains("\"codeActionProvider\""),
@@ -364,7 +364,19 @@ fn test_lsp_malformed_json_handling() -> TestResult<()> {
     fixture.stdin.write_all(frame.as_bytes())?;
     fixture.stdin.flush()?;
 
-    let error_response = fixture.recv().ok_or("no error response")?;
+    // The server may send logMessage notifications (e.g. workspace scan)
+    // before the error response; skip notifications and find the error.
+    let mut error_response = None;
+    for _ in 0..10 {
+        let Some(msg) = fixture.recv() else {
+            break;
+        };
+        if msg.contains("\"error\"") {
+            error_response = Some(msg);
+            break;
+        }
+    }
+    let error_response = error_response.ok_or("no error response")?;
 
     assert!(error_response.contains("\"error\""));
     assert!(error_response.contains("-32700"));
@@ -1999,9 +2011,11 @@ hel
         resp.contains("helper"),
         "completions should include 'helper': {resp}"
     );
+    // Docstrings are now lazy-loaded via completionItem/resolve, so the initial
+    // completion list includes `data` for resolve but not inline documentation.
     assert!(
-        resp.contains("Return x plus one"),
-        "completion should include docstring: {resp}"
+        resp.contains("\"data\""),
+        "completion should include resolve data: {resp}"
     );
     Ok(())
 }

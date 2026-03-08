@@ -50,10 +50,14 @@ pub fn document_colors(source: &str) -> Vec<ColorInformation> {
 /// Build color presentation strings from an RGBA color value.
 #[must_use]
 pub fn color_presentations(color: &Color, range: &Range) -> Vec<ColorPresentation> {
-    let r = (color.red * 255.0) as u8;
-    let g = (color.green * 255.0) as u8;
-    let b = (color.blue * 255.0) as u8;
-    let a = (color.alpha * 255.0) as u8;
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let r = (color.red * 255.0_f32) as u8;
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let g = (color.green * 255.0_f32) as u8;
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let b = (color.blue * 255.0_f32) as u8;
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let a = (color.alpha * 255.0_f32) as u8;
 
     let mut presentations = Vec::with_capacity(2);
 
@@ -100,10 +104,10 @@ fn parse_hex_color(bytes: &[u8], start: usize) -> Option<(Color, usize)> {
             let b = hex_val(bytes[start + 2])?;
             Some((
                 Color {
-                    red: f64::from(r * 17) / 255.0,
-                    green: f64::from(g * 17) / 255.0,
-                    blue: f64::from(b * 17) / 255.0,
-                    alpha: 1.0,
+                    red: f32::from(r * 17) / 255.0_f32,
+                    green: f32::from(g * 17) / 255.0_f32,
+                    blue: f32::from(b * 17) / 255.0_f32,
+                    alpha: 1.0_f32,
                 },
                 3,
             ))
@@ -114,10 +118,10 @@ fn parse_hex_color(bytes: &[u8], start: usize) -> Option<(Color, usize)> {
             let b = hex_byte(bytes[start + 4], bytes[start + 5])?;
             Some((
                 Color {
-                    red: f64::from(r) / 255.0,
-                    green: f64::from(g) / 255.0,
-                    blue: f64::from(b) / 255.0,
-                    alpha: 1.0,
+                    red: f32::from(r) / 255.0_f32,
+                    green: f32::from(g) / 255.0_f32,
+                    blue: f32::from(b) / 255.0_f32,
+                    alpha: 1.0_f32,
                 },
                 6,
             ))
@@ -129,10 +133,10 @@ fn parse_hex_color(bytes: &[u8], start: usize) -> Option<(Color, usize)> {
             let a = hex_byte(bytes[start + 6], bytes[start + 7])?;
             Some((
                 Color {
-                    red: f64::from(r) / 255.0,
-                    green: f64::from(g) / 255.0,
-                    blue: f64::from(b) / 255.0,
-                    alpha: f64::from(a) / 255.0,
+                    red: f32::from(r) / 255.0_f32,
+                    green: f32::from(g) / 255.0_f32,
+                    blue: f32::from(b) / 255.0_f32,
+                    alpha: f32::from(a) / 255.0_f32,
                 },
                 8,
             ))

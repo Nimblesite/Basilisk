@@ -14,7 +14,7 @@
 | **3** | Inlay Hints (types + params + return), Semantic Tokens | **P3** | DONE |
 | **4** | Workspace Symbols, Format Document, Folding, Selection Ranges | **P4** | DONE |
 | **5** | Document Highlight, Call Hierarchy, Type Hierarchy, Code Lens | **P5** | DONE |
-| **6** | Single-file polish: declaration, typeDefinition, docstrings, code actions | **P6** | PARTIAL (3/8) |
+| **6** | Single-file polish: declaration, typeDefinition, docstrings, code actions | **P6** | DONE |
 | **7** | Cross-module foundation: workspace resolver, Salsa, stubs, config | **P7** | NOT STARTED |
 | **8** | Cross-module features: cross-file nav, auto-import, multi-root | **P8** | NOT STARTED |
 | **9** | Advanced refactoring: full inference, extract, move, abstract methods | **P9** | NOT STARTED |
@@ -106,12 +106,12 @@
 |------|-------------|------------|--------|
 | ~~6.6~~ | ~~Go to Declaration / Go to Type Definition~~ | Easy | DONE |
 | ~~6.7~~ | ~~Completion documentation (docstrings in hover + completions)~~ | Easy | DONE |
-| 6.8 | Completion item resolve — lazy-load docs/detail on selection | Medium | TODO |
-| 6.9 | Generic type parameter inlay hints | Medium | TODO |
-| 6.10 | Expand wildcard import (code action) | Medium | TODO |
-| 6.11 | Convert import style (code action: `import X` ↔ `from X import Y`) | Medium | TODO |
-| 6.12 | Add `__all__` declaration (code action) | Easy | TODO |
-| 6.13 | Color picker for hex color strings (`textDocument/documentColor`) | Easy | TODO |
+| 6.8 | Completion item resolve — lazy-load docs/detail on selection | Medium | DONE |
+| 6.9 | Generic type parameter inlay hints | Medium | DONE |
+| 6.10 | Expand wildcard import (code action) | Medium | DONE |
+| 6.11 | Convert import style (code action: `import X` ↔ `from X import Y`) | Medium | DONE |
+| 6.12 | Add `__all__` declaration (code action) | Easy | DONE |
+| 6.13 | Color picker for hex color strings (`textDocument/documentColor`) | Easy | DONE |
 
 ## Phase 7 — Cross-Module Foundation (BLOCKING for everything below)
 
@@ -120,13 +120,13 @@
 
 | Task | Description | Difficulty | Status |
 |------|-------------|------------|--------|
-| 7.1 | Workspace module resolver — scan workspace, resolve `import X` to file paths | Hard | TODO |
+| 7.1 | Workspace module resolver — scan workspace, resolve `import X` to file paths | Hard | PARTIAL (scanner done, import resolution TODO) |
 | 7.2 | Multi-file `ResolvedModule` graph — resolve across files, cache per-file | Hard | TODO |
-| 7.3 | Incremental text sync — FULL → INCREMENTAL (`TextDocumentSyncKind::Incremental`) | Medium | TODO |
+| 7.3 | Incremental text sync — FULL → INCREMENTAL (`TextDocumentSyncKind::Incremental`) | Medium | DONE |
 | 7.4 | Salsa integration — memoized incremental computation (like rust-analyzer) | Hard | TODO |
 | 7.5 | Stub file (`.pyi`) support — resolve type info from `.pyi` alongside `.py` | Medium | TODO |
 | 7.6 | Third-party type stubs — typeshed bundling, `py.typed` marker detection | Medium | TODO |
-| 7.7 | `pyrightconfig.json` / `pyproject.toml` config — read strictness, paths, excludes | Medium | TODO |
+| 7.7 | `pyrightconfig.json` / `pyproject.toml` config — read strictness, paths, excludes | Medium | DONE |
 
 ## Phase 8 — Cross-Module Features (requires Phase 7)
 
@@ -188,7 +188,7 @@
 | `textDocument/prepareCallHierarchy` + calls | ✅ | ✅ DONE | **5** |
 | `textDocument/prepareTypeHierarchy` + types | ✅ | ✅ DONE | **5** |
 | `workspace/executeCommand` | ✅ | ✅ DONE | **2** |
-| `textDocument/documentColor` | ✅ | ☐ TODO | **6** |
+| `textDocument/documentColor` | ✅ | ✅ DONE | **6** |
 
 ### Completion Quality
 
@@ -200,7 +200,7 @@
 | Built-in completions (78 builtins) | ✅ | ✅ DONE | — |
 | Completion documentation (docstrings) | ✅ | ✅ DONE | **6** |
 | Keyword argument completions | ✅ | ✅ DONE | **2** |
-| Completion item resolve | ✅ | ☐ TODO | **6** |
+| Completion item resolve | ✅ | ✅ DONE | **6** |
 | Auto-import suggestions | ✅ | ☐ TODO | **8** |
 | Override stub completions | ✅ | ☐ TODO | **9** |
 
@@ -213,9 +213,9 @@
 | Add variable annotation (E0003) | ✅ | ✅ DONE | **2** |
 | Suppress with `# type: ignore` | ✅ | ✅ DONE | **2** |
 | Organize imports (Ruff) | ✅ | ✅ DONE | **2** |
-| Expand wildcard import | ✅ | ☐ TODO | **6** |
-| Convert import style | ✅ | ☐ TODO | **6** |
-| Add `__all__` declaration | ✅ | ☐ TODO | **6** |
+| Expand wildcard import | ✅ | ✅ DONE | **6** |
+| Convert import style | ✅ | ✅ DONE | **6** |
+| Add `__all__` declaration | ✅ | ✅ DONE | **6** |
 | Extract variable | ✅ | ☐ TODO | **9** |
 | Extract method | ✅ | ☐ TODO | **9** |
 | Implement abstract methods | ✅ | ☐ TODO | **9** |
@@ -228,7 +228,7 @@
 | Variable inferred types | ✅ | ✅ DONE | **3** |
 | Function return types | ✅ | ✅ DONE | **3** |
 | Parameter name labels at call sites | ✅ | ✅ DONE | **3** |
-| Generic type parameter hints | ✅ | ☐ TODO | **6** |
+| Generic type parameter hints | ✅ | ✅ DONE | **6** |
 
 ### Type Checking & Diagnostics
 
@@ -264,7 +264,7 @@
 | Show Output command | ✅ | ✅ DONE | **0** |
 | Auto-restart on crash (max 3) | ✅ | ✅ DONE | **0** |
 | Error message on server failure | ✅ | ✅ DONE | **0** |
-| Color picker for hex color strings | ✅ | ☐ TODO | **6** |
+| Color picker for hex color strings | ✅ | ✅ DONE | **6** |
 
 ---
 

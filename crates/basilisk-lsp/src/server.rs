@@ -11,10 +11,14 @@ use tower_lsp::lsp_types::{
     CallHierarchyOutgoingCall, CallHierarchyOutgoingCallsParams, CallHierarchyPrepareParams,
     CallHierarchyServerCapability, CodeActionKind, CodeActionOptions, CodeActionParams,
     CodeActionProviderCapability, CodeActionResponse, CodeDescription, CodeLens, CodeLensOptions,
-    CodeLensParams, CompletionItem, CompletionOptions, CompletionParams, CompletionResponse,
+    CodeLensParams, ColorInformation, ColorPresentation, ColorPresentationParams,
+    ColorProviderCapability,
+    CompletionItem, CompletionOptions, CompletionParams, CompletionResponse,
     DeclarationCapability,
-    Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
+    Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams, DidChangeWatchedFilesParams,
+    DidCloseTextDocumentParams, DocumentColorParams,
     DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentFormattingParams,
+    FileChangeType,
     DocumentHighlight, DocumentHighlightParams, DocumentSymbolParams, DocumentSymbolResponse,
     ExecuteCommandOptions, ExecuteCommandParams, FoldingRange, FoldingRangeParams,
     FoldingRangeProviderCapability, GotoDefinitionParams, GotoDefinitionResponse, Hover,
@@ -58,6 +62,8 @@ pub struct LspServer {
     client: Client,
     /// Map from document URI to its current state.
     documents: DashMap<Url, DocumentState>,
+    /// Workspace root folders discovered during initialization.
+    workspace_roots: tokio::sync::RwLock<Vec<std::path::PathBuf>>,
 }
 
 impl LspServer {
@@ -67,7 +73,75 @@ impl LspServer {
         Self {
             client,
             documents: DashMap::new(),
+            workspace_roots: tokio::sync::RwLock::new(Vec::new()),
         }
+    }
+
+    /// Scan workspace directories for all `.py` files and check each one.
+    /// When both `foo.py` and `foo.pyi` exist, only the `.pyi` file is checked.
+    async fn scan_workspace(&self) {
+        let roots = self.workspace_roots.read().await;
+        let mut py_files: Vec<std::path::PathBuf> = Vec::new();
+
+        for root in roots.iter() {
+            let cfg = crate::config::load_config(root);
+            collect_python_files(root, &mut py_files, &cfg.exclude, root);
+        }
+        drop(roots);
+
+        // Group by stem (filename without extension) and prefer .pyi over .py
+        use std::collections::HashMap;
+        let mut by_stem: HashMap<String, std::path::PathBuf> = HashMap::new();
+        for path in py_files {
+            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                let ext = path.extension().and_then(|s| s.to_str());
+                let stem_key = stem.to_string();
+                // If we already have an entry, check if we should replace it
+                match by_stem.get(&stem_key) {
+                    Some(existing) => {
+                        let existing_ext = existing.extension().and_then(|s| s.to_str());
+                        // Prefer .pyi over .py
+                        if existing_ext == Some("py") && ext == Some("pyi") {
+                            by_stem.insert(stem_key, path);
+                        }
+                        // else keep existing (either .pyi or other)
+                    }
+                    None => {
+                        by_stem.insert(stem_key, path);
+                    }
+                }
+            }
+        }
+
+        let deduped_files: Vec<std::path::PathBuf> = by_stem.into_values().collect();
+        let file_count = deduped_files.len();
+        self.client
+            .log_message(
+                MessageType::INFO,
+                format!("Basilisk: scanning {file_count} Python files (after .pyi/.py deduplication)"),
+            )
+            .await;
+
+        for path in &deduped_files {
+            let Ok(text) = std::fs::read_to_string(path) else {
+                continue;
+            };
+            let Some(uri) = path_to_uri(path) else {
+                continue;
+            };
+            // Don't overwrite files the user already has open.
+            if self.documents.contains_key(&uri) {
+                continue;
+            }
+            self.check_and_publish(uri, &text).await;
+        }
+
+        self.client
+            .log_message(
+                MessageType::INFO,
+                format!("Basilisk: workspace scan complete ({file_count} files)"),
+            )
+            .await;
     }
 
     /// Run the checker on a document, cache results, and publish diagnostics.
@@ -196,7 +270,26 @@ fn parse_error_diagnostic(message: &str) -> Diagnostic {
 
 #[tower_lsp::async_trait]
 impl tower_lsp::LanguageServer for LspServer {
-    async fn initialize(&self, _params: InitializeParams) -> LspResult<InitializeResult> {
+    async fn initialize(&self, params: InitializeParams) -> LspResult<InitializeResult> {
+        // Capture workspace roots for later scanning.
+        let mut roots = self.workspace_roots.write().await;
+        if let Some(folders) = &params.workspace_folders {
+            for folder in folders {
+                if let Ok(path) = folder.uri.to_file_path() {
+                    roots.push(path);
+                }
+            }
+        }
+        // Fallback to deprecated root_uri/root_path.
+        if roots.is_empty() {
+            if let Some(ref root_uri) = params.root_uri {
+                if let Ok(path) = root_uri.to_file_path() {
+                    roots.push(path);
+                }
+            }
+        }
+        drop(roots);
+
         Ok(InitializeResult {
             server_info: Some(ServerInfo {
                 name: "basilisk".to_owned(),
@@ -204,7 +297,7 @@ impl tower_lsp::LanguageServer for LspServer {
             }),
             capabilities: ServerCapabilities {
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
-                    TextDocumentSyncKind::FULL,
+                    TextDocumentSyncKind::INCREMENTAL,
                 )),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 call_hierarchy_provider: Some(CallHierarchyServerCapability::Simple(true)),
@@ -265,6 +358,7 @@ impl tower_lsp::LanguageServer for LspServer {
                         },
                     ),
                 ),
+                color_provider: Some(ColorProviderCapability::Simple(true)),
                 ..Default::default()
             },
         })
@@ -274,6 +368,9 @@ impl tower_lsp::LanguageServer for LspServer {
         self.client
             .log_message(MessageType::INFO, "Basilisk LSP initialized")
             .await;
+
+        // Scan the workspace for all Python files and publish diagnostics.
+        self.scan_workspace().await;
     }
 
     async fn shutdown(&self) -> LspResult<()> {
@@ -290,10 +387,28 @@ impl tower_lsp::LanguageServer for LspServer {
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
         let uri = params.text_document.uri;
-        let Some(change) = params.content_changes.into_iter().next() else {
-            return;
-        };
-        self.check_and_publish(uri, &change.text).await;
+
+        // Get the current text as a starting point for incremental edits.
+        let mut text = self
+            .documents
+            .get(&uri)
+            .map(|e| e.text.clone())
+            .unwrap_or_default();
+
+        // Apply each incremental change in order.
+        for change in params.content_changes {
+            if let Some(range) = change.range {
+                // Incremental update: replace the specified range.
+                let start = position_to_byte_offset(&text, range.start);
+                let end = position_to_byte_offset(&text, range.end);
+                text.replace_range(start..end, &change.text);
+            } else {
+                // Full replacement (fallback).
+                text = change.text;
+            }
+        }
+
+        self.check_and_publish(uri, &text).await;
     }
 
     async fn did_save(&self, params: DidSaveTextDocumentParams) {
@@ -309,6 +424,38 @@ impl tower_lsp::LanguageServer for LspServer {
         let uri = params.text_document.uri;
         self.documents.remove(&uri);
         self.client.publish_diagnostics(uri, vec![], None).await;
+    }
+
+    async fn did_change_watched_files(&self, params: DidChangeWatchedFilesParams) {
+        for change in &params.changes {
+            let uri = &change.uri;
+            let path = uri.to_file_path().unwrap_or_default();
+            let is_python = path
+                .extension()
+                .is_some_and(|ext| ext == "py" || ext == "pyi");
+            if !is_python {
+                continue;
+            }
+            match change.typ {
+                FileChangeType::CREATED | FileChangeType::CHANGED => {
+                    // Re-read from disk and check (unless the file is open in the editor).
+                    if self.documents.contains_key(uri) {
+                        continue; // Editor has the live version.
+                    }
+                    if let Ok(text) = std::fs::read_to_string(&path) {
+                        self.check_and_publish(uri.clone(), &text).await;
+                    }
+                }
+                FileChangeType::DELETED => {
+                    // Clear diagnostics for deleted files.
+                    self.documents.remove(uri);
+                    self.client
+                        .publish_diagnostics(uri.clone(), vec![], None)
+                        .await;
+                }
+                _ => {}
+            }
+        }
     }
 
     // ── Hover ────────────────────────────────────────────────────────────────
@@ -651,14 +798,13 @@ impl tower_lsp::LanguageServer for LspServer {
             .documents
             .iter()
             .next()
-            .map(|entry| {
+            .map_or((String::new(), String::new()), |entry| {
                 let text = entry.text.clone();
                 let uri = entry.key().clone();
                 let file_path = uri.to_file_path().unwrap_or_default();
                 let path_str = file_path.to_string_lossy().into_owned();
                 (text, path_str)
-            })
-            .unwrap_or((String::new(), String::new()));
+            });
 
         Ok(completion::resolve_completion_item(item, &text, &path_str))
     }
@@ -848,6 +994,89 @@ impl tower_lsp::LanguageServer for LspServer {
             Ok(Some(items))
         }
     }
+
+    // ── Document Color ──────────────────────────────────────────────────
+
+    async fn document_color(
+        &self,
+        params: DocumentColorParams,
+    ) -> LspResult<Vec<ColorInformation>> {
+        let uri = params.text_document.uri;
+        let source = self
+            .documents
+            .get(&uri)
+            .map(|d| d.text.clone())
+            .unwrap_or_default();
+        Ok(crate::color::document_colors(&source))
+    }
+
+    async fn color_presentation(
+        &self,
+        params: ColorPresentationParams,
+    ) -> LspResult<Vec<ColorPresentation>> {
+        Ok(crate::color::color_presentations(
+            &params.color,
+            &params.range,
+        ))
+    }
+}
+
+// ── Workspace scanning helpers ────────────────────────────────────────────────
+
+/// Recursively collect all `.py` files under `dir`, skipping hidden dirs,
+/// common non-source directories, and user-configured exclude paths.
+fn collect_python_files(
+    dir: &std::path::Path,
+    out: &mut Vec<std::path::PathBuf>,
+    exclude: &[std::path::PathBuf],
+    workspace_root: &std::path::Path,
+) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+            // Skip hidden dirs and common non-source directories.
+            if name_str.starts_with('.')
+                || name_str == "__pycache__"
+                || name_str == "node_modules"
+                || name_str == "venv"
+                || name_str == ".tox"
+                || name_str == ".mypy_cache"
+                || name_str == ".ruff_cache"
+            {
+                continue;
+            }
+            // Skip user-configured exclude paths.
+            if is_excluded(&path, exclude, workspace_root) {
+                continue;
+            }
+            collect_python_files(&path, out, exclude, workspace_root);
+        } else if path.extension().is_some_and(|ext| ext == "py" || ext == "pyi") {
+            out.push(path);
+        }
+    }
+}
+
+/// Check if a path matches any of the configured exclude patterns.
+fn is_excluded(
+    path: &std::path::Path,
+    exclude: &[std::path::PathBuf],
+    workspace_root: &std::path::Path,
+) -> bool {
+    let relative = path.strip_prefix(workspace_root).unwrap_or(path);
+    exclude.iter().any(|exc| {
+        // Match if the relative path starts with the exclude pattern.
+        relative.starts_with(exc)
+    })
+}
+
+/// Convert a filesystem path to an LSP `Url`.
+fn path_to_uri(path: &std::path::Path) -> Option<Url> {
+    Url::from_file_path(path).ok()
 }
 
 // ── Server entry point ───────────────────────────────────────────────────────
