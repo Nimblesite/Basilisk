@@ -12,7 +12,7 @@ fn run(source: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::e
     Ok(check(&resolved))
 }
 
-fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<String> {
+fn _codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<String> {
     diags.iter().map(|d| d.code.code.to_string()).collect()
 }
 
