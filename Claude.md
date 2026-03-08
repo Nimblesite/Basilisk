@@ -52,7 +52,7 @@ Lock files before editing. Don't edit locked files. Check messages ROUTINELY
 - Do not use Git unless asked to
 
 ## Rust Quality Standards
-- Routinely run clippy, check and fix violations immediately
+- Routinely run clippy and fmt, check and fix violations immediately
 - All lints at highest strictness (see Cargo.toml `[lints]` section)
 - `unsafe` code is forbidden (`unsafe_code = "deny"`)
 - No `.unwrap()` or `.expect()` in production code - use `?` with proper error types

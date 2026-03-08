@@ -116,12 +116,18 @@ fn infer_rhs_lambda() {
 
 #[test]
 fn infer_rhs_call_expr() {
-    assert!(matches!(infer_rhs(&RhsKind::CallExpr), InferredType::Unknown));
+    assert!(matches!(
+        infer_rhs(&RhsKind::CallExpr),
+        InferredType::Unknown
+    ));
 }
 
 #[test]
 fn infer_rhs_type_call() {
-    assert!(matches!(infer_rhs(&RhsKind::TypeCall), InferredType::Unknown));
+    assert!(matches!(
+        infer_rhs(&RhsKind::TypeCall),
+        InferredType::Unknown
+    ));
 }
 
 #[test]
@@ -143,17 +149,26 @@ fn infer_rhs_empty_dict() {
 
 #[test]
 fn infer_rhs_none() {
-    assert!(matches!(infer_rhs(&RhsKind::NoneValue), InferredType::None_));
+    assert!(matches!(
+        infer_rhs(&RhsKind::NoneValue),
+        InferredType::None_
+    ));
 }
 
 #[test]
 fn infer_rhs_bytes() {
-    assert!(matches!(infer_rhs(&RhsKind::BytesLiteral), InferredType::Bytes));
+    assert!(matches!(
+        infer_rhs(&RhsKind::BytesLiteral),
+        InferredType::Bytes
+    ));
 }
 
 #[test]
 fn infer_rhs_bool() {
-    assert!(matches!(infer_rhs(&RhsKind::BoolLiteral), InferredType::Bool));
+    assert!(matches!(
+        infer_rhs(&RhsKind::BoolLiteral),
+        InferredType::Bool
+    ));
 }
 
 // --- check_annotated_variable / infer_variable_type ---

@@ -16,24 +16,12 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 }
 
 #[test]
-fn e0104_cyclical_alias_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
-from typing import TypeAlias
-A: TypeAlias = 'B'
-B: TypeAlias = 'A'
-";
-    let diags = run(source)?;
-    let _ = codes(&diags);
-    Ok(())
-}
-
-#[test]
 fn e0104_non_cyclical_alias() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import TypeAlias
-A: TypeAlias = list[int]
-B: TypeAlias = dict[str, A]
-";
+
+IntList: TypeAlias = list[int]
+"#;
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0104"),

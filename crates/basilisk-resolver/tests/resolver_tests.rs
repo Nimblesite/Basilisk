@@ -7496,9 +7496,7 @@ fn class_pep695_type_param_names() -> Result<(), Box<dyn std::error::Error>> {
     let resolved = resolve(&parsed)?;
     let cls = resolved.classes.iter().find(|c| c.name == "Foo");
     assert!(cls.is_some_and(|c| c.has_pep695_type_params));
-    assert!(cls.is_some_and(|c| c
-        .pep695_type_param_names
-        .contains(&"T".to_string())));
+    assert!(cls.is_some_and(|c| c.pep695_type_param_names.contains(&"T".to_string())));
     Ok(())
 }
 
@@ -7976,11 +7974,7 @@ fn type_alias_with_subscript_rhs() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn function_body_ends_with_return_flag() -> Result<(), Box<dyn std::error::Error>> {
-    let src = concat!(
-        "def foo(x: int) -> int:\n",
-        "    return x\n",
-    )
-    .to_owned();
+    let src = concat!("def foo(x: int) -> int:\n", "    return x\n",).to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let func = resolved.functions.iter().find(|f| f.name == "foo");
@@ -7994,11 +7988,7 @@ fn function_body_ends_with_return_flag() -> Result<(), Box<dyn std::error::Error
 
 #[test]
 fn function_body_last_stmt_raise() -> Result<(), Box<dyn std::error::Error>> {
-    let src = concat!(
-        "def foo() -> None:\n",
-        "    raise ValueError('oops')\n",
-    )
-    .to_owned();
+    let src = concat!("def foo() -> None:\n", "    raise ValueError('oops')\n",).to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let func = resolved.functions.iter().find(|f| f.name == "foo");
@@ -8012,11 +8002,7 @@ fn function_body_last_stmt_raise() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn function_pep695_type_params() -> Result<(), Box<dyn std::error::Error>> {
-    let src = concat!(
-        "def foo[T](x: T) -> T:\n",
-        "    return x\n",
-    )
-    .to_owned();
+    let src = concat!("def foo[T](x: T) -> T:\n", "    return x\n",).to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let func = resolved.functions.iter().find(|f| f.name == "foo");
@@ -8064,11 +8050,7 @@ fn module_order_comparison_simple_lt() -> Result<(), Box<dyn std::error::Error>>
 
 #[test]
 fn reveal_type_calls_in_function() -> Result<(), Box<dyn std::error::Error>> {
-    let src = concat!(
-        "def foo(x: int) -> None:\n",
-        "    reveal_type(x)\n",
-    )
-    .to_owned();
+    let src = concat!("def foo(x: int) -> None:\n", "    reveal_type(x)\n",).to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.reveal_type_calls.is_empty());
@@ -8081,12 +8063,7 @@ fn reveal_type_calls_in_function() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn reveal_type_calls_in_if_body() -> Result<(), Box<dyn std::error::Error>> {
-    let src = concat!(
-        "x = 5\n",
-        "if True:\n",
-        "    reveal_type(x)\n",
-    )
-    .to_owned();
+    let src = concat!("x = 5\n", "if True:\n", "    reveal_type(x)\n",).to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.reveal_type_calls.is_empty());
@@ -8099,11 +8076,7 @@ fn reveal_type_calls_in_if_body() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn unhashable_keys_in_return_dict() -> Result<(), Box<dyn std::error::Error>> {
-    let src = concat!(
-        "def foo() -> None:\n",
-        "    return {[1]: 'bad'}\n",
-    )
-    .to_owned();
+    let src = concat!("def foo() -> None:\n", "    return {[1]: 'bad'}\n",).to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let func = resolved.functions.iter().find(|f| f.name == "foo");
@@ -8117,11 +8090,7 @@ fn unhashable_keys_in_return_dict() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn module_attr_access_bare_expr() -> Result<(), Box<dyn std::error::Error>> {
-    let src = concat!(
-        "import os\n",
-        "os.path\n",
-    )
-    .to_owned();
+    let src = concat!("import os\n", "os.path\n",).to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.module_attr_accesses.is_empty());
@@ -8193,11 +8162,7 @@ fn literal_string_enum_mismatch_detected() -> Result<(), Box<dyn std::error::Err
 
 #[test]
 fn float_param_int_attr_numerator() -> Result<(), Box<dyn std::error::Error>> {
-    let src = concat!(
-        "def foo(x: float) -> None:\n",
-        "    x.numerator\n",
-    )
-    .to_owned();
+    let src = concat!("def foo(x: float) -> None:\n", "    x.numerator\n",).to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.float_param_int_attr_accesses.is_empty());
@@ -8308,11 +8273,7 @@ fn reveal_type_calls_in_while_loop() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn reveal_type_calls_in_for_loop() -> Result<(), Box<dyn std::error::Error>> {
-    let src = concat!(
-        "for x in [1, 2, 3]:\n",
-        "    reveal_type(x)\n",
-    )
-    .to_owned();
+    let src = concat!("for x in [1, 2, 3]:\n", "    reveal_type(x)\n",).to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.reveal_type_calls.is_empty());
@@ -8325,11 +8286,7 @@ fn reveal_type_calls_in_for_loop() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn reveal_type_calls_in_with_block() -> Result<(), Box<dyn std::error::Error>> {
-    let src = concat!(
-        "with open('f') as fh:\n",
-        "    reveal_type(fh)\n",
-    )
-    .to_owned();
+    let src = concat!("with open('f') as fh:\n", "    reveal_type(fh)\n",).to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.reveal_type_calls.is_empty());
@@ -8423,7 +8380,8 @@ fn generator_no_violation_valid_return() -> Result<(), Box<dyn std::error::Error
         "from typing import Generator\n",
         "def gen() -> Generator[int, None, None]:\n",
         "    yield 1\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(resolved.generator_violations.is_empty());
@@ -8437,7 +8395,8 @@ fn generator_user_defined_return_not_flagged() -> Result<(), Box<dyn std::error:
         "    def __next__(self) -> int: ...\n",
         "def gen() -> MyIterator:\n",
         "    yield 1\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(resolved.generator_violations.is_empty());
@@ -8450,7 +8409,8 @@ fn async_generator_valid_return() -> Result<(), Box<dyn std::error::Error>> {
         "from typing import AsyncGenerator\n",
         "async def gen() -> AsyncGenerator[int, None]:\n",
         "    yield 1\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(resolved.generator_violations.is_empty());
@@ -8463,7 +8423,8 @@ fn multiple_unbounded_with_unpack_form() -> Result<(), Box<dyn std::error::Error
         "from typing import Unpack\n",
         "def f(x: tuple[Unpack[tuple[str, ...]], Unpack[tuple[int, ...]]]) -> None:\n",
         "    pass\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.multiple_unbounded_tuple_spans.is_empty());
@@ -8478,7 +8439,8 @@ fn dataclass_field_kw_only_override_v2() -> Result<(), Box<dyn std::error::Error
         "class Conf:\n",
         "    name: str\n",
         "    debug: bool = field(kw_only=True)\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(resolved.classes.iter().any(|c| c.name == "Conf"));
@@ -8493,7 +8455,8 @@ fn dataclass_field_init_false_v2() -> Result<(), Box<dyn std::error::Error>> {
         "class Conf:\n",
         "    name: str\n",
         "    cached: int = field(init=False, default=0)\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(resolved.classes.iter().any(|c| c.name == "Conf"));
@@ -8524,7 +8487,8 @@ fn dataclass_transform_bare_decorator() -> Result<(), Box<dyn std::error::Error>
         "@dataclass_transform\n",
         "class Meta(type):\n",
         "    pass\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.classes.is_empty());
@@ -8538,7 +8502,8 @@ fn dataclass_transform_attribute_form() -> Result<(), Box<dyn std::error::Error>
         "@typing.dataclass_transform()\n",
         "class Meta(type):\n",
         "    pass\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.classes.is_empty());
@@ -8554,7 +8519,8 @@ fn readonly_kwargs_subscript_assign() -> Result<(), Box<dyn std::error::Error>> 
         "    value: int\n",
         "def f(**kwargs: Unpack[Config]) -> None:\n",
         "    kwargs['name'] = 'new'\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.readonly_violations.is_empty());
@@ -8569,7 +8535,8 @@ fn final_walrus_operator_violation_v2() -> Result<(), Box<dyn std::error::Error>
         "X: Final[int] = 10\n",
         "if (X := 20):\n",
         "    pass\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.final_violations.is_empty());
@@ -8584,7 +8551,8 @@ fn abstract_class_instantiation_detected_v2() -> Result<(), Box<dyn std::error::
         "    @abstractmethod\n",
         "    def speak(self) -> str: ...\n",
         "a = Animal()\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let abstract_violations: Vec<_> = resolved
@@ -8604,10 +8572,14 @@ fn dataclass_attribute_form_eq_false() -> Result<(), Box<dyn std::error::Error>>
         "class Point:\n",
         "    x: int\n",
         "    y: int\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    assert!(resolved.classes.iter().any(|c| c.name == "Point" && c.is_dataclass_eq_false));
+    assert!(resolved
+        .classes
+        .iter()
+        .any(|c| c.name == "Point" && c.is_dataclass_eq_false));
     Ok(())
 }
 
@@ -8619,7 +8591,8 @@ fn field_attribute_form_kw_only() -> Result<(), Box<dyn std::error::Error>> {
         "class Conf:\n",
         "    name: str\n",
         "    debug: bool = dataclasses.field(kw_only=True)\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(resolved.classes.iter().any(|c| c.name == "Conf"));
@@ -8634,7 +8607,8 @@ fn field_attribute_form_init_false() -> Result<(), Box<dyn std::error::Error>> {
         "class Conf:\n",
         "    name: str\n",
         "    cached: int = dataclasses.field(init=False, default=0)\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(resolved.classes.iter().any(|c| c.name == "Conf"));
@@ -8649,7 +8623,8 @@ fn initvar_attribute_form() -> Result<(), Box<dyn std::error::Error>> {
         "class Foo:\n",
         "    x: int\n",
         "    y: dataclasses.InitVar[int] = 0\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(resolved.classes.iter().any(|c| c.name == "Foo"));
@@ -8667,7 +8642,8 @@ fn unconditional_self_assign_if_else() -> Result<(), Box<dyn std::error::Error>>
         "        else:\n",
         "            self.x = 3\n",
         "        self.z = 4\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(resolved.classes.iter().any(|c| c.name == "Foo"));
@@ -8682,7 +8658,8 @@ fn typeddict_ann_assign_missing_keys() -> Result<(), Box<dyn std::error::Error>>
         "    name: str\n",
         "    year: int\n",
         "m: Movie = {'name': 'test'}\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let missing = resolved.typeddict_key_violations.iter().any(|v| {
@@ -8706,7 +8683,8 @@ fn typeddict_dict_literal_wrong_value_type() -> Result<(), Box<dyn std::error::E
         "    x: int\n",
         "    y: int\n",
         "p: Point = {'x': 1, 'y': 'not_int'}\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     // The td_check_ann_assign checks dict literal values at module level
@@ -8717,7 +8695,10 @@ fn typeddict_dict_literal_wrong_value_type() -> Result<(), Box<dyn std::error::E
             if key == "y"
         )
     });
-    assert!(wrong, "should flag string literal for int field in dict literal");
+    assert!(
+        wrong,
+        "should flag string literal for int field in dict literal"
+    );
     Ok(())
 }
 
@@ -8727,7 +8708,8 @@ fn pep695_bound_refs_outer_typevar() -> Result<(), Box<dyn std::error::Error>> {
         "class Outer[T]:\n",
         "    class Inner[U: T]:\n",
         "        pass\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.pep695_bound_violations.is_empty());
@@ -8740,7 +8722,8 @@ fn pep695_bound_binop_outer_ref() -> Result<(), Box<dyn std::error::Error>> {
         "class Outer[T]:\n",
         "    class Inner[U: str | T]:\n",
         "        pass\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.pep695_bound_violations.is_empty());
@@ -8753,7 +8736,8 @@ fn pep695_bound_subscript_outer_ref() -> Result<(), Box<dyn std::error::Error>> 
         "class Outer[T]:\n",
         "    class Inner[U: dict[str, T]]:\n",
         "        pass\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.pep695_bound_violations.is_empty());
@@ -8768,7 +8752,8 @@ fn typeddict_subscript_assign_wrong_int_for_str() -> Result<(), Box<dyn std::err
         "    name: str\n",
         "m: Movie = {'name': 'test'}\n",
         "m['name'] = 42\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let wrong = resolved.typeddict_key_violations.iter().any(|v| {
@@ -8790,7 +8775,8 @@ fn typeddict_none_literal_value() -> Result<(), Box<dyn std::error::Error>> {
         "    value: int\n",
         "c: Config = {'value': 0}\n",
         "c['value'] = None\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let wrong = resolved.typeddict_key_violations.iter().any(|v| {
@@ -8812,7 +8798,8 @@ fn typeddict_bool_literal_for_str_field() -> Result<(), Box<dyn std::error::Erro
         "    name: str\n",
         "c: Config = {'name': 'x'}\n",
         "c['name'] = True\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let wrong = resolved.typeddict_key_violations.iter().any(|v| {
@@ -8833,7 +8820,8 @@ fn typeddict_bool_compatible_with_int() -> Result<(), Box<dyn std::error::Error>
         "class Flags(TypedDict):\n",
         "    count: int\n",
         "f: Flags = {'count': True}\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let wrong = resolved.typeddict_key_violations.iter().any(|v| {
@@ -8855,7 +8843,8 @@ fn typeddict_float_literal_compatible() -> Result<(), Box<dyn std::error::Error>
         "    value: float\n",
         "def f(m: Measurement) -> None:\n",
         "    m['value'] = 3.14\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let wrong = resolved.typeddict_key_violations.iter().any(|v| {
@@ -8865,7 +8854,10 @@ fn typeddict_float_literal_compatible() -> Result<(), Box<dyn std::error::Error>
             if key == "value"
         )
     });
-    assert!(!wrong, "float literal should be compatible with float field");
+    assert!(
+        !wrong,
+        "float literal should be compatible with float field"
+    );
     Ok(())
 }
 
@@ -8877,7 +8869,8 @@ fn typeddict_float_literal_for_int_field() -> Result<(), Box<dyn std::error::Err
         "    x: int\n",
         "p: Point = {'x': 0}\n",
         "p['x'] = 3.14\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let wrong = resolved.typeddict_key_violations.iter().any(|v| {
@@ -8897,7 +8890,8 @@ fn bounded_typevar_kwonly_param_v2() -> Result<(), Box<dyn std::error::Error>> {
         "class Foo[T: str]:\n",
         "    def method(self, *, val: T) -> None:\n",
         "        val.nonexistent_attr\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.bounded_typevar_attr_violations.is_empty());
@@ -8913,7 +8907,8 @@ fn bounded_typevar_in_try_body() -> Result<(), Box<dyn std::error::Error>> {
         "            val.nonexistent\n",
         "        except Exception:\n",
         "            pass\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.bounded_typevar_attr_violations.is_empty());
@@ -8927,7 +8922,8 @@ fn bounded_typevar_in_with_body() -> Result<(), Box<dyn std::error::Error>> {
         "    def method(self, val: T) -> None:\n",
         "        with open('x') as f:\n",
         "            val.nonexistent\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.bounded_typevar_attr_violations.is_empty());
@@ -8941,7 +8937,8 @@ fn bounded_typevar_in_for_body() -> Result<(), Box<dyn std::error::Error>> {
         "    def method(self, val: T) -> None:\n",
         "        for _ in range(3):\n",
         "            val.fake_method\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.bounded_typevar_attr_violations.is_empty());
@@ -8956,7 +8953,8 @@ fn bounded_typevar_in_while_body() -> Result<(), Box<dyn std::error::Error>> {
         "        while True:\n",
         "            val.nonexistent\n",
         "            break\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.bounded_typevar_attr_violations.is_empty());
@@ -8969,7 +8967,8 @@ fn bounded_typevar_in_compare_expr() -> Result<(), Box<dyn std::error::Error>> {
         "class Foo[T: int]:\n",
         "    def method(self, val: T) -> None:\n",
         "        x = val.nonexistent < 5\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.bounded_typevar_attr_violations.is_empty());
@@ -8982,7 +8981,8 @@ fn bounded_typevar_in_unaryop_expr() -> Result<(), Box<dyn std::error::Error>> {
         "class Foo[T: str]:\n",
         "    def method(self, val: T) -> None:\n",
         "        x = not val.nonexistent\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.bounded_typevar_attr_violations.is_empty());
@@ -8995,7 +8995,8 @@ fn bounded_typevar_in_boolop_expr() -> Result<(), Box<dyn std::error::Error>> {
         "class Foo[T: str]:\n",
         "    def method(self, val: T) -> None:\n",
         "        x = val.nonexistent or True\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.bounded_typevar_attr_violations.is_empty());
@@ -9008,7 +9009,8 @@ fn bounded_typevar_in_annassign() -> Result<(), Box<dyn std::error::Error>> {
         "class Foo[T: str]:\n",
         "    def method(self, val: T) -> None:\n",
         "        x: int = val.nonexistent\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.bounded_typevar_attr_violations.is_empty());
@@ -9021,7 +9023,8 @@ fn bounded_typevar_in_binop_expr() -> Result<(), Box<dyn std::error::Error>> {
         "class Foo[T: int]:\n",
         "    def method(self, val: T) -> None:\n",
         "        x = val.nonexistent + 1\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.bounded_typevar_attr_violations.is_empty());
@@ -9037,7 +9040,8 @@ fn bounded_typevar_in_elif_body() -> Result<(), Box<dyn std::error::Error>> {
         "            pass\n",
         "        elif not flag:\n",
         "            val.nonexistent\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.bounded_typevar_attr_violations.is_empty());
@@ -9050,7 +9054,8 @@ fn bounded_typevar_call_arg() -> Result<(), Box<dyn std::error::Error>> {
         "class Foo[T: str]:\n",
         "    def method(self, val: T) -> None:\n",
         "        print(val.nonexistent)\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.bounded_typevar_attr_violations.is_empty());
@@ -9066,7 +9071,8 @@ fn base_subscript_with_subscript_arg() -> Result<(), Box<dyn std::error::Error>>
         "    pass\n",
         "class Child(Base[list[int]]):\n",
         "    pass\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let cls = resolved.classes.iter().find(|c| c.name == "Child");
@@ -9083,7 +9089,8 @@ fn base_subscript_with_literal_type_arg() -> Result<(), Box<dyn std::error::Erro
         "    pass\n",
         "class Child(Base[42]):\n",
         "    pass\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let cls = resolved.classes.iter().find(|c| c.name == "Child");
@@ -9101,7 +9108,8 @@ fn protocol_class_factory_instantiation() -> Result<(), Box<dyn std::error::Erro
         "def factory(cls: type[Drawable]) -> Drawable:\n",
         "    return cls()\n",
         "factory(Drawable)\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.protocol_instantiation_violations.is_empty());
@@ -9130,7 +9138,8 @@ fn pep695_bound_with_parameterized_subscript() -> Result<(), Box<dyn std::error:
     let src = concat!(
         "from typing import TypeVar\n",
         "T = TypeVar('T', bound=list[int])\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.typevar_calls.is_empty());
@@ -9143,7 +9152,8 @@ fn pep695_bound_tuple_outer_ref() -> Result<(), Box<dyn std::error::Error>> {
         "class Outer[T]:\n",
         "    class Inner[U: tuple[T, str]]:\n",
         "        pass\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.pep695_bound_violations.is_empty());
@@ -9254,7 +9264,8 @@ fn non_typevar_expr_in_generic_brackets() -> Result<(), Box<dyn std::error::Erro
 
 #[test]
 fn dataclass_attribute_style_frozen() -> Result<(), Box<dyn std::error::Error>> {
-    let src = "import dataclasses\n@dataclasses.dataclass(frozen=True)\nclass Foo:\n    x: int\n".to_owned();
+    let src = "import dataclasses\n@dataclasses.dataclass(frozen=True)\nclass Foo:\n    x: int\n"
+        .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let cls = resolved.classes.iter().find(|c| c.name == "Foo");
@@ -9294,7 +9305,9 @@ fn pep695_typevartuple_name() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn pep695_paramspec_name() -> Result<(), Box<dyn std::error::Error>> {
-    let src = "from typing import Callable\ndef foo[**P](f: Callable[P, None]) -> None:\n    pass\n".to_owned();
+    let src =
+        "from typing import Callable\ndef foo[**P](f: Callable[P, None]) -> None:\n    pass\n"
+            .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let func = resolved.functions.iter().find(|f| f.name == "foo");
@@ -9316,7 +9329,10 @@ fn abstract_class_instantiation_subscript() -> Result<(), Box<dyn std::error::Er
     let src = "from abc import ABC, abstractmethod\nfrom typing import Generic, TypeVar\nT = TypeVar('T')\nclass Base(ABC, Generic[T]):\n    @abstractmethod\n    def method(self) -> T: ...\nx = Base[int]()\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    assert!(resolved.protocol_instantiation_violations.iter().any(|v| v.is_abstract));
+    assert!(resolved
+        .protocol_instantiation_violations
+        .iter()
+        .any(|v| v.is_abstract));
     Ok(())
 }
 
@@ -9334,7 +9350,8 @@ fn abstract_class_via_abc_attribute() -> Result<(), Box<dyn std::error::Error>> 
 
 #[test]
 fn enum_value_none_vs_str() -> Result<(), Box<dyn std::error::Error>> {
-    let src = "from enum import Enum\nclass Status(Enum):\n    _value_: str\n    NONE = None\n".to_owned();
+    let src = "from enum import Enum\nclass Status(Enum):\n    _value_: str\n    NONE = None\n"
+        .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.enum_value_type_violations.is_empty());
@@ -9343,7 +9360,8 @@ fn enum_value_none_vs_str() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn enum_value_float_vs_int() -> Result<(), Box<dyn std::error::Error>> {
-    let src = "from enum import Enum\nclass Values(Enum):\n    _value_: int\n    PI = 3.14\n".to_owned();
+    let src =
+        "from enum import Enum\nclass Values(Enum):\n    _value_: int\n    PI = 3.14\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.enum_value_type_violations.is_empty());
@@ -9352,7 +9370,8 @@ fn enum_value_float_vs_int() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn enum_value_bytes_vs_str() -> Result<(), Box<dyn std::error::Error>> {
-    let src = "from enum import Enum\nclass Data(Enum):\n    _value_: str\n    BIN = b'hello'\n".to_owned();
+    let src = "from enum import Enum\nclass Data(Enum):\n    _value_: str\n    BIN = b'hello'\n"
+        .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.enum_value_type_violations.is_empty());
@@ -9366,7 +9385,10 @@ fn typeddict_non_literal_key_access() -> Result<(), Box<dyn std::error::Error>> 
     let src = "from typing import TypedDict\nclass TD(TypedDict):\n    name: str\ndef foo(td: TD) -> None:\n    key = \"name\"\n    td[key]\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    assert!(resolved.typeddict_key_violations.iter().any(|v| matches!(v.kind, TypedDictKeyViolationKind::NonLiteralDictKey)));
+    assert!(resolved
+        .typeddict_key_violations
+        .iter()
+        .any(|v| matches!(v.kind, TypedDictKeyViolationKind::NonLiteralDictKey)));
     Ok(())
 }
 
@@ -9377,7 +9399,10 @@ fn typeddict_subscript_wrong_value_type() -> Result<(), Box<dyn std::error::Erro
     let src = "from typing import TypedDict\nclass TD(TypedDict):\n    name: str\ndef foo(td: TD) -> None:\n    td[\"name\"] = 42\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    assert!(resolved.typeddict_key_violations.iter().any(|v| matches!(v.kind, TypedDictKeyViolationKind::WrongSubscriptValueType { .. })));
+    assert!(resolved.typeddict_key_violations.iter().any(|v| matches!(
+        v.kind,
+        TypedDictKeyViolationKind::WrongSubscriptValueType { .. }
+    )));
     Ok(())
 }
 
@@ -9388,7 +9413,10 @@ fn type_arg_subscript_in_base_class() -> Result<(), Box<dyn std::error::Error>> 
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let cls = resolved.classes.iter().find(|c| c.name == "Child");
-    assert!(cls.is_some_and(|c| c.base_subscripts.iter().any(|bs| bs.type_args.iter().any(|a| matches!(a, TypeArg::Subscript { .. })))));
+    assert!(cls.is_some_and(|c| c.base_subscripts.iter().any(|bs| bs
+        .type_args
+        .iter()
+        .any(|a| matches!(a, TypeArg::Subscript { .. })))));
     Ok(())
 }
 
@@ -9398,7 +9426,10 @@ fn global_final_augmented_assign() -> Result<(), Box<dyn std::error::Error>> {
     let src = "from typing import Final\nCOUNTER: Final[int] = 0\ndef increment() -> None:\n    global COUNTER\n    COUNTER += 1\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    assert!(resolved.final_violations.iter().any(|v| matches!(v.kind, FinalViolationKind::GlobalFinalModification)));
+    assert!(resolved
+        .final_violations
+        .iter()
+        .any(|v| matches!(v.kind, FinalViolationKind::GlobalFinalModification)));
     Ok(())
 }
 
@@ -9408,7 +9439,10 @@ fn subclass_override_final_attr() -> Result<(), Box<dyn std::error::Error>> {
     let src = "from typing import Final\nclass Base:\n    x: Final[int] = 10\nclass Child(Base):\n    x: int = 20\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    assert!(resolved.final_violations.iter().any(|v| matches!(v.kind, FinalViolationKind::SubclassOverrideFinal)));
+    assert!(resolved
+        .final_violations
+        .iter()
+        .any(|v| matches!(v.kind, FinalViolationKind::SubclassOverrideFinal)));
     Ok(())
 }
 
@@ -9475,7 +9509,9 @@ fn numeric_literal_return_annotation() -> Result<(), Box<dyn std::error::Error>>
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let func = resolved.functions.iter().find(|f| f.name == "foo");
-    assert!(func.is_some_and(|f| matches!(f.return_annotation, ReturnAnnotationKind::NumericLiteral)));
+    assert!(
+        func.is_some_and(|f| matches!(f.return_annotation, ReturnAnnotationKind::NumericLiteral))
+    );
     Ok(())
 }
 
@@ -9502,19 +9538,28 @@ fn stub_body_pass_statement() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn typeddict_functional_form_dict() -> Result<(), Box<dyn std::error::Error>> {
-    let src = "from typing import TypedDict\nTD = TypedDict('TD', {'name': str, 'age': int})\n".to_owned();
+    let src = "from typing import TypedDict\nTD = TypedDict('TD', {'name': str, 'age': int})\n"
+        .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    assert!(resolved.typeddict_calls.iter().any(|td| td.lhs_name == "TD"));
+    assert!(resolved
+        .typeddict_calls
+        .iter()
+        .any(|td| td.lhs_name == "TD"));
     Ok(())
 }
 
 #[test]
 fn namedtuple_list_second_arg_form() -> Result<(), Box<dyn std::error::Error>> {
-    let src = "from typing import NamedTuple\nPoint = NamedTuple('Point', [('x', int), ('y', int)])\n".to_owned();
+    let src =
+        "from typing import NamedTuple\nPoint = NamedTuple('Point', [('x', int), ('y', int)])\n"
+            .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    assert!(resolved.namedtuple_defs.iter().any(|nt| nt.lhs_name == "Point"));
+    assert!(resolved
+        .namedtuple_defs
+        .iter()
+        .any(|nt| nt.lhs_name == "Point"));
     Ok(())
 }
 
@@ -9540,20 +9585,29 @@ fn pep695_type_statement_info() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 #[ignore = "TypeAliasType call not yet detected"]
 fn type_alias_type_call_info() -> Result<(), Box<dyn std::error::Error>> {
-    let src = "from typing import TypeAliasType\nIntList = TypeAliasType('IntList', list[int])\n".to_owned();
+    let src = "from typing import TypeAliasType\nIntList = TypeAliasType('IntList', list[int])\n"
+        .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    assert!(resolved.type_alias_type_calls.iter().any(|t| t.lhs_name == "IntList"));
+    assert!(resolved
+        .type_alias_type_calls
+        .iter()
+        .any(|t| t.lhs_name == "IntList"));
     Ok(())
 }
 
 #[test]
 #[ignore = "TypeAliasType call not yet detected"]
 fn type_alias_type_ann_assign() -> Result<(), Box<dyn std::error::Error>> {
-    let src = "from typing import TypeAliasType\nIntList: object = TypeAliasType('IntList', list[int])\n".to_owned();
+    let src =
+        "from typing import TypeAliasType\nIntList: object = TypeAliasType('IntList', list[int])\n"
+            .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    assert!(resolved.type_alias_type_calls.iter().any(|t| t.lhs_name == "IntList"));
+    assert!(resolved
+        .type_alias_type_calls
+        .iter()
+        .any(|t| t.lhs_name == "IntList"));
     Ok(())
 }
 
@@ -9563,7 +9617,10 @@ fn base_subscript_multiple_type_args() -> Result<(), Box<dyn std::error::Error>>
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let cls = resolved.classes.iter().find(|c| c.name == "Child");
-    assert!(cls.is_some_and(|c| c.base_subscripts.iter().any(|bs| bs.type_arg_names.len() == 2)));
+    assert!(cls.is_some_and(|c| c
+        .base_subscripts
+        .iter()
+        .any(|bs| bs.type_arg_names.len() == 2)));
     Ok(())
 }
 
@@ -9593,7 +9650,10 @@ fn class_final_with_init_assignment() -> Result<(), Box<dyn std::error::Error>> 
     let src = "from typing import Final\nclass Foo:\n    x: Final[int]\n    def __init__(self) -> None:\n        self.x = 10\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    assert!(resolved.final_violations.iter().all(|v| !matches!(v.kind, FinalViolationKind::ClassFinalWithoutInit)));
+    assert!(resolved
+        .final_violations
+        .iter()
+        .all(|v| !matches!(v.kind, FinalViolationKind::ClassFinalWithoutInit)));
     Ok(())
 }
 
@@ -9618,7 +9678,8 @@ fn pep695_bound_binop_outer_typevar_ref() -> Result<(), Box<dyn std::error::Erro
 
 #[test]
 fn pep695_bound_tuple_outer_typevar_ref() -> Result<(), Box<dyn std::error::Error>> {
-    let src = "class Outer[T]:\n    def method[U: (T, int)](self, x: U) -> U:\n        return x\n".to_owned();
+    let src = "class Outer[T]:\n    def method[U: (T, int)](self, x: U) -> U:\n        return x\n"
+        .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.functions.is_empty());
@@ -9636,7 +9697,8 @@ fn match_statement_info() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn enum_annotated_member() -> Result<(), Box<dyn std::error::Error>> {
-    let src = "from enum import Enum\nclass Color(Enum):\n    RED: int = 1\n    GREEN: int = 2\n".to_owned();
+    let src = "from enum import Enum\nclass Color(Enum):\n    RED: int = 1\n    GREEN: int = 2\n"
+        .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let cls = resolved.classes.iter().find(|c| c.name == "Color");
@@ -9671,7 +9733,10 @@ fn typevar_covariant_flag() -> Result<(), Box<dyn std::error::Error>> {
     let src = "from typing import TypeVar\nT = TypeVar('T', covariant=True)\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    assert!(resolved.typevar_calls.iter().any(|t| t.name == "T" && t.is_covariant));
+    assert!(resolved
+        .typevar_calls
+        .iter()
+        .any(|t| t.name == "T" && t.is_covariant));
     Ok(())
 }
 
@@ -9680,7 +9745,10 @@ fn typevar_contravariant_flag() -> Result<(), Box<dyn std::error::Error>> {
     let src = "from typing import TypeVar\nT = TypeVar('T', contravariant=True)\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    assert!(resolved.typevar_calls.iter().any(|t| t.name == "T" && t.is_contravariant));
+    assert!(resolved
+        .typevar_calls
+        .iter()
+        .any(|t| t.name == "T" && t.is_contravariant));
     Ok(())
 }
 
@@ -9689,14 +9757,18 @@ fn typevar_infer_variance_flag() -> Result<(), Box<dyn std::error::Error>> {
     let src = "from typing import TypeVar\nT = TypeVar('T', infer_variance=True)\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    assert!(resolved.typevar_calls.iter().any(|t| t.name == "T" && t.has_infer_variance));
+    assert!(resolved
+        .typevar_calls
+        .iter()
+        .any(|t| t.name == "T" && t.has_infer_variance));
     Ok(())
 }
 
 #[test]
 fn generic_with_subscript_non_typevar_arg() -> Result<(), Box<dyn std::error::Error>> {
     // `list[int]` is not a simple name, so it should be reported as non-typevar
-    let src = "from typing import Generic\nclass MyClass(Generic[list[int]]):\n    pass\n".to_owned();
+    let src =
+        "from typing import Generic\nclass MyClass(Generic[list[int]]):\n    pass\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let cls = resolved.classes.iter().find(|c| c.name == "MyClass");
@@ -9715,7 +9787,8 @@ fn unconditional_assigns_elif_chain() -> Result<(), Box<dyn std::error::Error>> 
         "    else:\n",
         "        result = 0\n",
         "    return result\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.functions.is_empty());
@@ -9732,7 +9805,8 @@ fn dataclass_transform_bare_name_decorator() -> Result<(), Box<dyn std::error::E
         "@my_decorator\n",
         "class Foo:\n",
         "    x: int\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let cls = resolved.classes.iter().find(|c| c.name == "Foo");
@@ -9750,7 +9824,8 @@ fn dataclass_transform_attribute_form_decorator() -> Result<(), Box<dyn std::err
         "@my_deco\n",
         "class Bar:\n",
         "    name: str\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let cls = resolved.classes.iter().find(|c| c.name == "Bar");
@@ -9777,7 +9852,8 @@ fn field_attribute_form_field_call() -> Result<(), Box<dyn std::error::Error>> {
         "class Foo:\n",
         "    x: int = dataclasses.field(kw_only=True)\n",
         "    y: int = dataclasses.field(init=False, default=0)\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let cls = resolved.classes.iter().find(|c| c.name == "Foo");
@@ -9794,7 +9870,8 @@ fn initvar_attribute_form_annotation() -> Result<(), Box<dyn std::error::Error>>
         "class Foo:\n",
         "    x: int\n",
         "    y: dataclasses.InitVar[int] = 0\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let cls = resolved.classes.iter().find(|c| c.name == "Foo");
@@ -9808,7 +9885,10 @@ fn typevar_first_arg_non_string() -> Result<(), Box<dyn std::error::Error>> {
     let src = "from typing import TypeVar\nT = TypeVar(42)\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    assert!(resolved.typevar_calls.iter().any(|t| t.name == "T" && t.string_name.is_none()));
+    assert!(resolved
+        .typevar_calls
+        .iter()
+        .any(|t| t.name == "T" && t.string_name.is_none()));
     Ok(())
 }
 
@@ -9825,7 +9905,8 @@ fn complex_number_rhs_classified() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn dataclass_attribute_form_eq_false_flag() -> Result<(), Box<dyn std::error::Error>> {
-    let src = "import dataclasses\n@dataclasses.dataclass(eq=False)\nclass Foo:\n    x: int\n".to_owned();
+    let src =
+        "import dataclasses\n@dataclasses.dataclass(eq=False)\nclass Foo:\n    x: int\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let cls = resolved.classes.iter().find(|c| c.name == "Foo");
@@ -9861,7 +9942,8 @@ fn class_base_attribute_expression() -> Result<(), Box<dyn std::error::Error>> {
 // TypeAlias with tuple string refs (collect_string_refs_from_expr Tuple)
 #[test]
 fn type_alias_with_tuple_rhs() -> Result<(), Box<dyn std::error::Error>> {
-    let src = "from typing import TypeAlias, Union\nMyType: TypeAlias = Union[str, int]\n".to_owned();
+    let src =
+        "from typing import TypeAlias, Union\nMyType: TypeAlias = Union[str, int]\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.type_alias_defs.is_empty());
@@ -9878,7 +9960,7 @@ fn type_alias_with_forward_ref() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-// TypeAlias with subscript RHS (expr_to_type_arg Subscript path) 
+// TypeAlias with subscript RHS (expr_to_type_arg Subscript path)
 #[test]
 fn type_alias_subscript_rhs() -> Result<(), Box<dyn std::error::Error>> {
     let src = "from typing import TypeAlias\nMyList: TypeAlias = list[int]\n".to_owned();
@@ -9906,7 +9988,8 @@ fn class_base_with_call_expression() -> Result<(), Box<dyn std::error::Error>> {
 // TypeAlias decorator_name via attribute: abc.abstractmethod as Attribute name
 #[test]
 fn decorator_via_attribute_name() -> Result<(), Box<dyn std::error::Error>> {
-    let src = "import abc\nclass Foo:\n    @abc.abstractmethod\n    def bar(self) -> None: ...\n".to_owned();
+    let src = "import abc\nclass Foo:\n    @abc.abstractmethod\n    def bar(self) -> None: ...\n"
+        .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let func = resolved.functions.iter().find(|f| f.name == "bar");
@@ -9964,7 +10047,10 @@ fn namedtuple_functional_3_fields() -> Result<(), Box<dyn std::error::Error>> {
     let src = "from typing import NamedTuple\nPoint3D = NamedTuple('Point3D', [('x', int), ('y', int), ('z', int)])\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    let nt = resolved.namedtuple_defs.iter().find(|n| n.lhs_name == "Point3D");
+    let nt = resolved
+        .namedtuple_defs
+        .iter()
+        .find(|n| n.lhs_name == "Point3D");
     assert!(nt.is_some_and(|n| n.field_names.len() == 3));
     Ok(())
 }
@@ -9984,7 +10070,8 @@ fn dc_transform_overloaded_field_spec() -> Result<(), Box<dyn std::error::Error>
         "class User(ModelBase):\n",
         "    name: str = field(init=True)\n",
         "    hidden: int = field(kw_only=True)\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(resolved.classes.iter().any(|c| c.name == "User"));
@@ -10016,7 +10103,8 @@ fn multiple_unbounded_starred_typevartuple() -> Result<(), Box<dyn std::error::E
         "Us = TypeVarTuple('Us')\n",
         "def f(x: tuple[*Ts, *Us]) -> None:\n",
         "    pass\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.multiple_unbounded_tuple_spans.is_empty());
@@ -10029,7 +10117,8 @@ fn base_class_call_expr_refs() -> Result<(), Box<dyn std::error::Error>> {
         "def make_base() -> type: ...\n",
         "class Child(make_base()):\n",
         "    pass\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(resolved.classes.iter().any(|c| c.name == "Child"));
@@ -10042,7 +10131,8 @@ fn bounded_typevar_return_stmt() -> Result<(), Box<dyn std::error::Error>> {
         "class Foo[T: str]:\n",
         "    def method(self, val: T) -> str:\n",
         "        return val.nonexistent\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.bounded_typevar_attr_violations.is_empty());
@@ -10055,7 +10145,8 @@ fn bounded_typevar_assign_stmt() -> Result<(), Box<dyn std::error::Error>> {
         "class Foo[T: str]:\n",
         "    def method(self, val: T) -> None:\n",
         "        x = val.nonexistent\n",
-    ).to_owned();
+    )
+    .to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     assert!(!resolved.bounded_typevar_attr_violations.is_empty());
