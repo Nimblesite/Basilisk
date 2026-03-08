@@ -17,12 +17,12 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 
 #[test]
 fn e0097_valid_protocol() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class Proto(Protocol):
     def method(self) -> int: ...
-"#;
+";
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0097"),

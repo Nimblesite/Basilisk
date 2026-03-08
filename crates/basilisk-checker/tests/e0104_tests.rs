@@ -17,11 +17,11 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 
 #[test]
 fn e0104_non_cyclical_alias() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeAlias
 
 IntList: TypeAlias = list[int]
-"#;
+";
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0104"),
