@@ -95,3 +95,75 @@ x = old_func
     let _ = codes(&diags);
     Ok(())
 }
+
+#[test]
+fn e0115_deprecated_in_class_body() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+from typing import deprecated
+
+@deprecated("Use NewBase instead")
+class OldBase:
+    pass
+
+class Child(OldBase):
+    pass
+"#;
+    let diags = run(source)?;
+    let _ = codes(&diags);
+    Ok(())
+}
+
+#[test]
+fn e0115_deprecated_overload() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+from typing import deprecated, overload
+
+class MyClass:
+    @overload
+    def method(self, x: int) -> int: ...
+    @overload
+    @deprecated("Use method(str) instead")
+    def method(self, x: str) -> str: ...
+    def method(self, x: int | str) -> int | str:
+        return x
+
+obj = MyClass()
+obj.method("hello")
+"#;
+    let diags = run(source)?;
+    let _ = codes(&diags);
+    Ok(())
+}
+
+#[test]
+fn e0115_deprecated_class_in_annotation() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+from typing import deprecated
+
+@deprecated("Use NewType")
+class OldType:
+    pass
+
+def func(x: OldType) -> None:
+    pass
+"#;
+    let diags = run(source)?;
+    let _ = codes(&diags);
+    Ok(())
+}
+
+#[test]
+fn e0115_deprecated_module_import() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+from typing import deprecated
+
+@deprecated("Use new_var")
+def old_var() -> int:
+    return 42
+
+result = old_var() + 1
+"#;
+    let diags = run(source)?;
+    let _ = codes(&diags);
+    Ok(())
+}

@@ -1,4 +1,3 @@
-#![doc = "Tests for BSK-E0080: TypeVar upper bound violation at call site."]
 //! Tests for BSK-E0080: `TypeVar` upper bound violation at call site.
 //!
 //! This rule detects when a call site passes a value whose type does not satisfy

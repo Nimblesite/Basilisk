@@ -1,5 +1,4 @@
-#![doc = "Tests for BSK-E0061: assert_type with Literal[Enum.MEMBER] on enum-typed param."]
-//! Tests for BSK-E0061: assert_type with Literal[Enum.MEMBER] on enum-typed param.
+//! Tests for BSK-E0061: `assert_type` with `Literal[Enum.MEMBER]` on enum-typed param.
 //!
 //! This rule detects when `assert_type()` is used with a `Literal[Enum.MEMBER]` type
 //! on a parameter that is already typed as the enum itself.
