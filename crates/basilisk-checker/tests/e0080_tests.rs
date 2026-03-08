@@ -2,7 +2,7 @@
 //! Tests for BSK-E0080: TypeVar upper bound violation at call site.
 //!
 //! This rule detects when a call site passes a value whose type does not satisfy
-//! the TypeVar upper bound declared on the corresponding parameter.
+//! the `TypeVar` upper bound declared on the corresponding parameter.
 
 use basilisk_checker::check;
 use basilisk_parser::parse_source;

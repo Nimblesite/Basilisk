@@ -73,7 +73,7 @@ impl WsTestFixture {
     /// Receive the next text message with a timeout.
     async fn recv(&mut self) -> Option<String> {
         match timeout(RECV_TIMEOUT, self.ws_read.next()).await {
-            Ok(Some(Ok(Message::Text(text)))) => Some(text.to_string()),
+            Ok(Some(Ok(Message::Text(text)))) => Some(text.clone()),
             _ => None,
         }
     }
@@ -5426,7 +5426,7 @@ class Box(Generic[T]):
     Ok(())
 }
 
-/// Verify MOD_STATIC (bit 3, value 8) is set for @staticmethod function tokens.
+/// Verify `MOD_STATIC` (bit 3, value 8) is set for @staticmethod function tokens.
 #[tokio::test]
 async fn test_ws_semantic_tokens_static_modifier() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
@@ -5481,7 +5481,7 @@ class MathUtils:
     Ok(())
 }
 
-/// Verify MOD_DECLARATION (bit 2, value 4) is set on function/class definition tokens.
+/// Verify `MOD_DECLARATION` (bit 2, value 4) is set on function/class definition tokens.
 #[tokio::test]
 async fn test_ws_semantic_tokens_declaration_modifier() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
@@ -5705,7 +5705,7 @@ async fn test_ws_reinitialize_after_shutdown() -> TestResult<()> {
 }
 
 /// After shutdown, sending a regular request must not crash the server.
-/// The LSP spec says the server should return InvalidRequest (-32600) for
+/// The LSP spec says the server should return `InvalidRequest` (-32600) for
 /// any request received after shutdown.  tower-lsp may also close the
 /// connection.  Either outcome is acceptable — a crash is not.
 #[tokio::test]
@@ -5782,7 +5782,7 @@ async fn test_ws_requests_after_shutdown_return_error() -> TestResult<()> {
 }
 
 /// Sending a request with structurally invalid params must return a
-/// JSON-RPC error (typically InvalidParams -32602), not crash the server.
+/// JSON-RPC error (typically `InvalidParams` -32602), not crash the server.
 #[tokio::test]
 async fn test_ws_invalid_params_returns_error() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
