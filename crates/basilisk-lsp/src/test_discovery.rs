@@ -246,7 +246,7 @@ fn collect_test_files(dir: &Path, out: &mut Vec<PathBuf>) {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
 
@@ -291,7 +291,7 @@ class TestUserEndpoints:
         let class = items
             .iter()
             .find(|i| i.kind == TestItemKind::Class)
-            .unwrap();
+            .expect("should find TestUserEndpoints class");
         assert_eq!(class.name, "TestUserEndpoints");
         assert_eq!(class.children.len(), 2);
     }

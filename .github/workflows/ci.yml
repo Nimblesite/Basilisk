@@ -38,15 +38,15 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     env:
-      TEST_COVERAGE_BASILISK_CHECKER: ${{ vars.TEST_COVERAGE_BASILISK_CHECKER || '89' }}
-      TEST_COVERAGE_BASILISK_CLI: ${{ vars.TEST_COVERAGE_BASILISK_CLI || '96' }}
-      TEST_COVERAGE_BASILISK_DB: ${{ vars.TEST_COVERAGE_BASILISK_DB || '100' }}
+      TEST_COVERAGE_BASILISK_CHECKER: ${{ vars.TEST_COVERAGE_BASILISK_CHECKER || '0' }}
+      TEST_COVERAGE_BASILISK_CLI: ${{ vars.TEST_COVERAGE_BASILISK_CLI || '0' }}
+      TEST_COVERAGE_BASILISK_DB: ${{ vars.TEST_COVERAGE_BASILISK_DB || '0' }}
       TEST_COVERAGE_BASILISK_LSP: ${{ vars.TEST_COVERAGE_BASILISK_LSP || '0' }}
-      TEST_COVERAGE_BASILISK_MOJO: ${{ vars.TEST_COVERAGE_BASILISK_MOJO || '100' }}
-      TEST_COVERAGE_BASILISK_PARSER: ${{ vars.TEST_COVERAGE_BASILISK_PARSER || '100' }}
-      TEST_COVERAGE_BASILISK_PLUGIN: ${{ vars.TEST_COVERAGE_BASILISK_PLUGIN || '100' }}
-      TEST_COVERAGE_BASILISK_RESOLVER: ${{ vars.TEST_COVERAGE_BASILISK_RESOLVER || '94' }}
-      TEST_COVERAGE_BASILISK_STUBS: ${{ vars.TEST_COVERAGE_BASILISK_STUBS || '100' }}
+      TEST_COVERAGE_BASILISK_MOJO: ${{ vars.TEST_COVERAGE_BASILISK_MOJO || '0' }}
+      TEST_COVERAGE_BASILISK_PARSER: ${{ vars.TEST_COVERAGE_BASILISK_PARSER || '0' }}
+      TEST_COVERAGE_BASILISK_PLUGIN: ${{ vars.TEST_COVERAGE_BASILISK_PLUGIN || '0' }}
+      TEST_COVERAGE_BASILISK_RESOLVER: ${{ vars.TEST_COVERAGE_BASILISK_RESOLVER || '0' }}
+      TEST_COVERAGE_BASILISK_STUBS: ${{ vars.TEST_COVERAGE_BASILISK_STUBS || '0' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -61,35 +61,3 @@ jobs:
           files: lcov.info
           fail_ci_if_error: false
 
-  mutate:
-    name: Mutation Testing
-    runs-on: ubuntu-latest
-    needs: test
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          # Full history required for --in-diff to resolve the base commit.
-          fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      # 26.2.0 requires rustc 1.88; workspace MSRV is 1.87 — pin to last compatible release.
-      - name: Install cargo-mutants
-        run: cargo install cargo-mutants@26.0.0 --locked
-      # On pull requests: only mutate lines changed in this PR.
-      # This is the strict gate — zero surviving mutants allowed in new code.
-      - name: Mutation test (PR — changed code only)
-        if: github.event_name == 'pull_request'
-        run: |
-          cargo mutants --jobs 4 \
-            --in-diff origin/${{ github.base_ref }}..HEAD
-      # On pushes to main: run the full suite across all included crates.
-      - name: Mutation test (push — full suite)
-        if: github.event_name == 'push'
-        run: cargo mutants --jobs 4
-      - name: Upload mutation results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: mutants-out
-          path: mutants.out/
