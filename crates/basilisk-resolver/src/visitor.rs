@@ -14,7 +14,7 @@ use basilisk_parser::ParsedModule;
 use crate::scope::{
     AssertTypeCallInfo, AttributeInfo, BaseSubscriptEntry, CallSite, ClassInfo,
     FloatParamIntAttrAccess, FunctionInfo, GenericParamInfo, GenericSubscriptSite,
-    HistoricalPositionalViolation, HistoricalPositionalViolationKind, ImportInfo, ImportKind,
+    HistoricalPositionalViolation, HistoricalPositionalViolationKind, ImportInfo, ImportKind, ImportResolution,
     LiteralStringEnumMismatch, MatchStmtInfo, NamedTupleDefInfo, NewTypeCallInfo, ParameterInfo,
     Pep695BoundViolation, Pep695BoundViolationKind, ProtocolInstantiationViolation,
     ProtocolRtcViolation, ProtocolRtcViolationKind, ProtocolSelfViolation, ReadOnlyViolationInfo,
@@ -2361,6 +2361,7 @@ fn import_infos_from(node: &StmtImport) -> Vec<ImportInfo> {
             names: Vec::new(),
             span: text_range_to_span(node.range),
             kind: ImportKind::Plain,
+            resolution: ImportResolution::Unresolved,
         })
         .collect()
 }
@@ -2380,6 +2381,7 @@ fn import_from_infos_from(node: &StmtImportFrom) -> Vec<ImportInfo> {
             names: Vec::new(),
             span: text_range_to_span(node.range),
             kind: ImportKind::Star,
+            resolution: ImportResolution::Unresolved,
         }];
     }
 
@@ -2389,6 +2391,7 @@ fn import_from_infos_from(node: &StmtImportFrom) -> Vec<ImportInfo> {
         names,
         span: text_range_to_span(node.range),
         kind: ImportKind::From,
+        resolution: ImportResolution::Unresolved,
     }]
 }
 

@@ -581,6 +581,17 @@ pub enum ImportKind {
     Star,
 }
 
+/// How an import was resolved (source file type).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ImportResolution {
+    /// Import resolved from a .py source file.
+    SourcePy,
+    /// Import resolved from a .pyi stub file.
+    StubPyi,
+    /// Import resolution failed or not yet resolved.
+    Unresolved,
+}
+
 /// A single import statement.
 #[derive(Debug, Clone)]
 pub struct ImportInfo {
@@ -593,6 +604,8 @@ pub struct ImportInfo {
     pub span: Span,
     /// The kind of import.
     pub kind: ImportKind,
+    /// How the import was resolved (source file type).
+    pub resolution: ImportResolution,
 }
 
 /// A `match` statement with exhaustiveness information.

@@ -9,7 +9,7 @@ use ruff_text_size::Ranged;
 use crate::scope::{BoundedTypeVarAttrViolation, Span};
 
 /// Convert a `TextRange` into a resolver `Span`.
-fn text_range_to_span(range: ruff_text_size::TextRange) -> Span {
+const fn text_range_to_span(range: ruff_text_size::TextRange) -> Span {
     Span {
         start: range.start().to_u32(),
         end: range.end().to_u32(),
