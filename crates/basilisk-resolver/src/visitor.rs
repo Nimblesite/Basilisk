@@ -14,9 +14,9 @@ use basilisk_parser::ParsedModule;
 use crate::scope::{
     AssertTypeCallInfo, AttributeInfo, BaseSubscriptEntry, CallSite, ClassInfo,
     FloatParamIntAttrAccess, FunctionInfo, GenericParamInfo, GenericSubscriptSite,
-    HistoricalPositionalViolation, HistoricalPositionalViolationKind, ImportInfo, ImportKind, ImportResolution,
-    LiteralStringEnumMismatch, MatchStmtInfo, NamedTupleDefInfo, NewTypeCallInfo, ParameterInfo,
-    Pep695BoundViolation, Pep695BoundViolationKind, ProtocolInstantiationViolation,
+    HistoricalPositionalViolation, HistoricalPositionalViolationKind, ImportInfo, ImportKind,
+    ImportResolution, LiteralStringEnumMismatch, MatchStmtInfo, NamedTupleDefInfo, NewTypeCallInfo,
+    ParameterInfo, Pep695BoundViolation, Pep695BoundViolationKind, ProtocolInstantiationViolation,
     ProtocolRtcViolation, ProtocolRtcViolationKind, ProtocolSelfViolation, ReadOnlyViolationInfo,
     ReadOnlyViolationKind, ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo,
     RevealTypeCallInfo, RhsKind, Span, TypeAliasDefInfo, TypeArg, TypeVarCallInfo,
