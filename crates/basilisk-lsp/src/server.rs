@@ -13,27 +13,24 @@ use tower_lsp::lsp_types::{
     CallHierarchyServerCapability, CodeActionKind, CodeActionOptions, CodeActionParams,
     CodeActionProviderCapability, CodeActionResponse, CodeDescription, CodeLens, CodeLensOptions,
     CodeLensParams, ColorInformation, ColorPresentation, ColorPresentationParams,
-    ColorProviderCapability,
-    CompletionItem, CompletionOptions, CompletionParams, CompletionResponse,
-    DeclarationCapability,
-    Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams, DidChangeWatchedFilesParams,
-    DidCloseTextDocumentParams, DocumentColorParams,
-    DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentFormattingParams,
-    FileChangeType,
-    DocumentHighlight, DocumentHighlightParams, DocumentSymbolParams, DocumentSymbolResponse,
-    ExecuteCommandOptions, ExecuteCommandParams, FoldingRange, FoldingRangeParams,
-    FoldingRangeProviderCapability, GotoDefinitionParams, GotoDefinitionResponse, Hover,
-    HoverParams, HoverProviderCapability, InitializeParams, InitializeResult, InitializedParams,
-    InlayHint, InlayHintParams, Location, MessageType, NumberOrString, OneOf, Position,
-    PrepareRenameResponse, Range, ReferenceParams, RenameOptions, RenameParams, SelectionRange,
-    SelectionRangeParams, SelectionRangeProviderCapability, SemanticTokens,
-    SemanticTokensFullOptions, SemanticTokensLegend, SemanticTokensOptions, SemanticTokensParams,
-    SemanticTokensResult, SemanticTokensServerCapabilities, ServerCapabilities, ServerInfo,
-    SignatureHelpOptions, SignatureHelpParams, SymbolInformation, TextDocumentPositionParams,
-    TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, TypeDefinitionProviderCapability,
-    TypeHierarchyItem, TypeHierarchyPrepareParams, TypeHierarchySubtypesParams,
-    TypeHierarchySupertypesParams, Url, WorkDoneProgressOptions, WorkspaceEdit,
-    WorkspaceSymbolParams,
+    ColorProviderCapability, CompletionItem, CompletionOptions, CompletionParams,
+    CompletionResponse, DeclarationCapability, Diagnostic, DiagnosticSeverity,
+    DidChangeTextDocumentParams, DidChangeWatchedFilesParams, DidCloseTextDocumentParams,
+    DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentColorParams,
+    DocumentFormattingParams, DocumentHighlight, DocumentHighlightParams, DocumentSymbolParams,
+    DocumentSymbolResponse, ExecuteCommandOptions, ExecuteCommandParams, FileChangeType,
+    FoldingRange, FoldingRangeParams, FoldingRangeProviderCapability, GotoDefinitionParams,
+    GotoDefinitionResponse, Hover, HoverParams, HoverProviderCapability, InitializeParams,
+    InitializeResult, InitializedParams, InlayHint, InlayHintParams, Location, MessageType,
+    NumberOrString, OneOf, Position, PrepareRenameResponse, Range, ReferenceParams, RenameOptions,
+    RenameParams, SelectionRange, SelectionRangeParams, SelectionRangeProviderCapability,
+    SemanticTokens, SemanticTokensFullOptions, SemanticTokensLegend, SemanticTokensOptions,
+    SemanticTokensParams, SemanticTokensResult, SemanticTokensServerCapabilities,
+    ServerCapabilities, ServerInfo, SignatureHelpOptions, SignatureHelpParams, SymbolInformation,
+    TextDocumentPositionParams, TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit,
+    TypeDefinitionProviderCapability, TypeHierarchyItem, TypeHierarchyPrepareParams,
+    TypeHierarchySubtypesParams, TypeHierarchySupertypesParams, Url, WorkDoneProgressOptions,
+    WorkspaceEdit, WorkspaceSymbolParams,
 };
 use tower_lsp::{Client, LspService, Server};
 
@@ -118,7 +115,9 @@ impl LspServer {
         self.client
             .log_message(
                 MessageType::INFO,
-                format!("Basilisk: scanning {file_count} Python files (after .pyi/.py deduplication)"),
+                format!(
+                    "Basilisk: scanning {file_count} Python files (after .pyi/.py deduplication)"
+                ),
             )
             .await;
 
@@ -788,23 +787,20 @@ impl tower_lsp::LanguageServer for LspServer {
     /// This is called when the user selects a completion item, allowing us to
     /// lazily load documentation (docstrings) that wasn't included in the
     /// initial completion list.
-    async fn completion_resolve(
-        &self,
-        item: CompletionItem,
-    ) -> LspResult<CompletionItem> {
+    async fn completion_resolve(&self, item: CompletionItem) -> LspResult<CompletionItem> {
         // Get the document text to resolve the module
         // We need to find which document this completion belongs to
-        let (text, path_str) = self
-            .documents
-            .iter()
-            .next()
-            .map_or((String::new(), String::new()), |entry| {
-                let text = entry.text.clone();
-                let uri = entry.key().clone();
-                let file_path = uri.to_file_path().unwrap_or_default();
-                let path_str = file_path.to_string_lossy().into_owned();
-                (text, path_str)
-            });
+        let (text, path_str) =
+            self.documents
+                .iter()
+                .next()
+                .map_or((String::new(), String::new()), |entry| {
+                    let text = entry.text.clone();
+                    let uri = entry.key().clone();
+                    let file_path = uri.to_file_path().unwrap_or_default();
+                    let path_str = file_path.to_string_lossy().into_owned();
+                    (text, path_str)
+                });
 
         Ok(completion::resolve_completion_item(item, &text, &path_str))
     }
@@ -1055,7 +1051,10 @@ fn collect_python_files(
                 continue;
             }
             collect_python_files(&path, out, exclude, workspace_root);
-        } else if path.extension().is_some_and(|ext| ext == "py" || ext == "pyi") {
+        } else if path
+            .extension()
+            .is_some_and(|ext| ext == "py" || ext == "pyi")
+        {
             out.push(path);
         }
     }

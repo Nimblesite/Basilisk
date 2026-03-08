@@ -44,8 +44,6 @@ pub mod server;
 pub mod signature;
 pub mod symbols;
 pub mod test_discovery;
-/// Test Explorer provider for LSP.
-pub mod test_provider;
 pub mod type_definition;
 pub mod type_hierarchy;
 pub mod util;

@@ -67,11 +67,7 @@ pub fn patch_cursor_line(text: &str, line_number: u32) -> String {
 /// - `name`: the symbol name
 /// - For functions/classes: `data.file_path` for the source file
 #[must_use]
-pub fn resolve_completion_item(
-    item: CompletionItem,
-    text: &str,
-    path: &str,
-) -> CompletionItem {
+pub fn resolve_completion_item(item: CompletionItem, text: &str, path: &str) -> CompletionItem {
     let Some(data) = &item.data else {
         return item;
     };

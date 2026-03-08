@@ -233,7 +233,11 @@ fn generic_type_param_hints(resolved: &ResolvedModule, source: &str, hints: &mut
         if class.generic_params.is_empty() || class.has_pep695_type_params {
             continue;
         }
-        let params: Vec<&str> = class.generic_params.iter().map(|p| p.name.as_str()).collect();
+        let params: Vec<&str> = class
+            .generic_params
+            .iter()
+            .map(|p| p.name.as_str())
+            .collect();
         let label = format!("[{}]", params.join(", "));
         hints.push(InlayHint {
             position: byte_offset_to_position(source, class.name_span.end as usize),

@@ -86,10 +86,7 @@ pub fn discover_tests_in_file(path: &Path, source: &str) -> Vec<TestItem> {
             // Find test methods by matching functions whose class_name == this class.
             let mut methods = Vec::new();
             for func in &resolved.functions {
-                let is_method = func
-                    .class_name
-                    .as_ref()
-                    .is_some_and(|cn| cn == &class.name);
+                let is_method = func.class_name.as_ref().is_some_and(|cn| cn == &class.name);
                 if is_method && func.name.starts_with("test") {
                     #[allow(clippy::cast_possible_truncation)]
                     let method_line = func.def_span.start as usize;
@@ -175,7 +172,9 @@ pub fn run_tests(
         cmd.arg(test_id);
     }
 
-    let output = cmd.output().map_err(|e| format!("Failed to run pytest: {e}"))?;
+    let output = cmd
+        .output()
+        .map_err(|e| format!("Failed to run pytest: {e}"))?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
