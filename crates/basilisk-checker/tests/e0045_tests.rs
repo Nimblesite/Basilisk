@@ -68,11 +68,11 @@ x: Annotated[1, ""] = 1
 
 #[test]
 fn e0045_annotated_too_few_args() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Annotated
 
 x: Annotated[int] = 42
-"#;
+";
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())

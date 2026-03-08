@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0059: dataclass match_args=False.
+//! Integration tests for BSK-E0059: dataclass `match_args=False`.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;

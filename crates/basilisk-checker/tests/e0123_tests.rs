@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0118: Super call on abstract method with no implementation.
+//! Integration tests for BSK-E0123: Super call on abstract protocol method.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -16,7 +16,7 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 }
 
 #[test]
-fn e0118_super_on_abstract_stub() -> Result<(), Box<dyn std::error::Error>> {
+fn e0123_super_on_protocol_abstract() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 from abc import abstractmethod
@@ -36,20 +36,22 @@ class BadColor(PColor):
 }
 
 #[test]
-fn e0118_super_on_concrete_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn e0123_super_on_protocol_with_default() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
-class Base:
-    def method(self) -> str:
-        return "base"
+from typing import Protocol
 
-class Child(Base):
-    def method(self) -> str:
-        return super().method()
+class PColor(Protocol):
+    def draw(self) -> str:
+        return "default"
+
+class GoodColor(PColor):
+    def draw(self) -> str:
+        return super().draw() + " extended"
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0118"),
-        "super() on concrete method should not fire E0118"
+        !codes(&diags).contains(&"BSK-E0123"),
+        "super() on protocol with default impl should not fire E0123"
     );
     Ok(())
 }

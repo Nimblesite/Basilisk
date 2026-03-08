@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0121: Protocol conformance.
+//! Integration tests for BSK-E0121: Protocol conformance violation.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -16,36 +16,39 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 }
 
 #[test]
-fn e0121_protocol_conformance_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn e0121_conforming_class() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
-class HasStr(Protocol):
-    def __str__(self) -> str: ...
+class P(Protocol):
+    def method(self) -> None: ...
 
-class MyClass:
-    def __str__(self) -> str:
-        return 'hello'
+class C:
+    def method(self) -> None:
+        pass
 
-x: HasStr = MyClass()
+x: P = C()
 ";
     let diags = run(source)?;
-    let _ = codes(&diags);
+    assert!(
+        !codes(&diags).contains(&"BSK-E0121"),
+        "conforming class should not fire E0121"
+    );
     Ok(())
 }
 
 #[test]
-fn e0121_non_conforming_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn e0121_non_conforming_class() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
-class HasLen(Protocol):
-    def __len__(self) -> int: ...
+class P(Protocol):
+    def method(self) -> None: ...
 
-class NoLen:
+class C:
     pass
 
-x: HasLen = NoLen()
+x: P = C()
 ";
     let diags = run(source)?;
     let _ = codes(&diags);

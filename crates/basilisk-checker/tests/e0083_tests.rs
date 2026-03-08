@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0083: TypeVarTuple unpack required.
+//! Integration tests for BSK-E0083: `TypeVarTuple` unpack required.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;

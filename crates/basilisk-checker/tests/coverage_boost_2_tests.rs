@@ -72,14 +72,14 @@ Node.label = 1
 
 #[test]
 fn e0125_classvar_access_ok() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import ClassVar
 
 class MyClass:
     count: ClassVar[int] = 0
 
 MyClass.count
-"#;
+";
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -102,12 +102,12 @@ y: Literal["hello"] = "world"
 
 #[test]
 fn e0126_literal_int_assignment() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Literal
 
 x: Literal[1] = 1
 y: Literal[1] = 2
-"#;
+";
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -115,12 +115,12 @@ y: Literal[1] = 2
 
 #[test]
 fn e0126_literal_bool_assignment() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Literal
 
 x: Literal[True] = True
 y: Literal[True] = False
-"#;
+";
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -243,11 +243,11 @@ w: Literal["hello"] = "bye"
 
 #[test]
 fn e0129_literal_none_assignment() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Literal
 
 x: Literal[None] = None
-"#;
+";
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -323,7 +323,7 @@ x.method("hello")
 
 #[test]
 fn e0131_generator_yield_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Generator
 
 class A: ...
@@ -331,7 +331,7 @@ class B: ...
 
 def bad_gen() -> Generator[A, None, None]:
     yield 3
-"#;
+";
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -339,14 +339,14 @@ def bad_gen() -> Generator[A, None, None]:
 
 #[test]
 fn e0131_iterator_yield_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Iterator
 
 class A: ...
 
 def bad_iter() -> Iterator[A]:
     yield 42
-"#;
+";
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -354,12 +354,12 @@ def bad_iter() -> Iterator[A]:
 
 #[test]
 fn e0131_generator_yield_correct() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Generator
 
 def good_gen() -> Generator[int, None, None]:
     yield 42
-"#;
+";
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -420,7 +420,7 @@ class Readable(Protocol[T_co]):
 
 #[test]
 fn e0134_invariant_generic_subclass() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class Node: ...
 
 class SymbolTable(dict[str, list[Node]]): ...
@@ -429,7 +429,7 @@ def takes(x: dict[str, list[object]]) -> None: ...
 
 def test(s: SymbolTable) -> None:
     takes(s)
-"#;
+";
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -439,7 +439,7 @@ def test(s: SymbolTable) -> None:
 
 #[test]
 fn e0136_callable_param_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def takes_int_func(f: Callable[[int], None]) -> None:
@@ -449,7 +449,7 @@ def str_func(x: str) -> None:
     pass
 
 takes_int_func(str_func)
-"#;
+";
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -593,14 +593,14 @@ y: Array[int] = Array()
 
 #[test]
 fn e0140_callable_annotation_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def add(x: int, y: int) -> int:
     return x + y
 
 f: Callable[[str], str] = add
-"#;
+";
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -608,14 +608,14 @@ f: Callable[[str], str] = add
 
 #[test]
 fn e0140_callable_annotation_correct() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def add(x: int, y: int) -> int:
     return x + y
 
 f: Callable[[int, int], int] = add
-"#;
+";
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -623,7 +623,7 @@ f: Callable[[int, int], int] = add
 
 #[test]
 fn e0140_protocol_callback() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class Callback(Protocol):
@@ -633,7 +633,7 @@ def my_func(x: int) -> str:
     return str(x)
 
 cb: Callback = my_func
-"#;
+";
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -641,7 +641,7 @@ cb: Callback = my_func
 
 #[test]
 fn e0140_protocol_callback_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class Callback(Protocol):
@@ -651,7 +651,7 @@ def wrong_func(x: str) -> int:
     return len(x)
 
 cb: Callback = wrong_func
-"#;
+";
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -707,7 +707,7 @@ a = Admin(name="Alice", age=30, role="admin")
 
 #[test]
 fn e0143_namedtuple_class_usage() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class Point(NamedTuple):
@@ -716,7 +716,7 @@ class Point(NamedTuple):
 
 p = Point(1.0, 2.0)
 q = Point(x=1.0, y=2.0)
-"#;
+";
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -738,7 +738,7 @@ c = Color(255, 128, 0)
 
 #[test]
 fn e0143_namedtuple_method_override() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class Point(NamedTuple):
@@ -747,7 +747,7 @@ class Point(NamedTuple):
 
     def distance(self) -> float:
         return (self.x ** 2 + self.y ** 2) ** 0.5
-"#;
+";
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -767,9 +767,9 @@ MyClass = type("MyClass", (object,), {"x": 1})
 
 #[test]
 fn e0144_type_call_single_arg() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 t = type(42)
-"#;
+";
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())

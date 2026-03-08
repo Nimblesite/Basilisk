@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0081: TypeVarTuple unpack minimum args.
+//! Integration tests for BSK-E0081: `TypeVarTuple` unpack minimum args.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;

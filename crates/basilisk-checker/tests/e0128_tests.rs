@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0128: TypeVar default referential violations.
+//! Integration tests for BSK-E0128: `TypeVar` default referential violations.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;

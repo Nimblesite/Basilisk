@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0138: dataclass_transform metaclass violations.
+//! Integration tests for BSK-E0138: `dataclass_transform` metaclass violations.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -58,7 +58,7 @@ m = Model(1, "x")
 
 #[test]
 fn e0138_valid_transform_metaclass() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import dataclass_transform
 
 @dataclass_transform()
@@ -68,7 +68,7 @@ class Model(metaclass=ModelMeta):
     id: int
 
 m = Model(id=1)
-"#;
+";
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0138"),

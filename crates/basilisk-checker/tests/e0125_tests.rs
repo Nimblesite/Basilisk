@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0109: `TypeVar` bound violation at call site.
+//! Integration tests for BSK-E0125: Instance attribute on class object.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -16,35 +16,37 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 }
 
 #[test]
-fn e0109_valid_bound_usage() -> Result<(), Box<dyn std::error::Error>> {
+fn e0125_instance_attr_access_on_instance_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
-from typing import TypeVar, LiteralString
+from typing import Generic, TypeVar
 
-TLiteral = TypeVar("TLiteral", bound=LiteralString)
+T = TypeVar("T")
 
-def literal_identity(s: TLiteral) -> TLiteral:
-    return s
+class Node(Generic[T]):
+    label: T
+
+n1: Node[int] = Node()
+x = n1.label
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0109"),
-        "valid bound usage should not fire E0109"
+        !codes(&diags).contains(&"BSK-E0125"),
+        "instance attr access on instance should not fire E0125"
     );
     Ok(())
 }
 
 #[test]
-fn e0109_bound_violation() -> Result<(), Box<dyn std::error::Error>> {
+fn e0125_instance_attr_on_class() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
-from typing import TypeVar, LiteralString
+from typing import Generic, TypeVar
 
-TLiteral = TypeVar("TLiteral", bound=LiteralString)
+T = TypeVar("T")
 
-def literal_identity(s: TLiteral) -> TLiteral:
-    return s
+class Node(Generic[T]):
+    label: T
 
-def func5(s: str) -> None:
-    literal_identity(s)
+Node.label = 1
 "#;
     let diags = run(source)?;
     let _ = codes(&diags);

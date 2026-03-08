@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0084: TypeVarTuple invalid params.
+//! Integration tests for BSK-E0084: `TypeVarTuple` invalid params.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;

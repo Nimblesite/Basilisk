@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0073: NamedTuple tuple compatibility.
+//! Integration tests for BSK-E0073: `NamedTuple` tuple compatibility.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;

@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0114: Protocol isinstance/issubclass violations.
+//! Integration tests for BSK-E0146: Protocol class object violations.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -16,35 +16,42 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 }
 
 #[test]
-fn e0114_runtime_checkable_isinstance_ok() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
-from typing import Protocol, runtime_checkable
-
-@runtime_checkable
-class Proto(Protocol):
-    def meth(self) -> int: ...
-
-x: object = None
-isinstance(x, Proto)
-";
-    let diags = run(source)?;
-    assert!(
-        !codes(&diags).contains(&"BSK-E0114"),
-        "runtime_checkable protocol isinstance should not fire E0114"
-    );
-    Ok(())
-}
-
-#[test]
-fn e0114_non_runtime_checkable_isinstance() -> Result<(), Box<dyn std::error::Error>> {
+fn e0146_concrete_subtype_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
 class Proto(Protocol):
     def meth(self) -> int: ...
 
-x: object = None
-isinstance(x, Proto)
+class Concrete:
+    def meth(self) -> int:
+        return 42
+
+def fun(cls: type[Proto]) -> int:
+    return cls().meth()
+
+fun(Concrete)
+";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0146"),
+        "concrete subtype should not fire E0146"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0146_protocol_class_passed() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Protocol
+
+class Proto(Protocol):
+    def meth(self) -> int: ...
+
+def fun(cls: type[Proto]) -> int:
+    return cls().meth()
+
+fun(Proto)
 ";
     let diags = run(source)?;
     let _ = codes(&diags);
@@ -52,16 +59,15 @@ isinstance(x, Proto)
 }
 
 #[test]
-fn e0114_issubclass_data_protocol() -> Result<(), Box<dyn std::error::Error>> {
+fn e0146_protocol_class_assigned() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
-from typing import Protocol, runtime_checkable
+from typing import Protocol
 
-@runtime_checkable
 class Proto(Protocol):
-    name: str
-    def method(self) -> int: ...
+    def meth(self) -> int: ...
 
-issubclass(int, Proto)
+var: type[Proto]
+var = Proto
 ";
     let diags = run(source)?;
     let _ = codes(&diags);

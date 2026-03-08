@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0130: TypeVar scoping violation.
+//! Integration tests for BSK-E0130: `TypeVar` scoping violation.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;

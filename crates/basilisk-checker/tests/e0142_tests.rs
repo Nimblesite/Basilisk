@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0142: dataclass_transform base violations.
+//! Integration tests for BSK-E0142: `dataclass_transform` base violations.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -17,7 +17,7 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 
 #[test]
 fn e0142_frozen_attr_assignment() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import dataclass_transform
 @dataclass_transform(kw_only_default=True)
 class ModelBase: ...
@@ -27,7 +27,7 @@ class Customer(ModelBase, frozen=True):
 
 c = Customer(id=3)
 c.id = 4
-"#;
+";
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -35,7 +35,7 @@ c.id = 4
 
 #[test]
 fn e0142_kw_only_positional_arg() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import dataclass_transform
 @dataclass_transform(kw_only_default=True)
 class ModelBase: ...
@@ -44,7 +44,7 @@ class Customer(ModelBase):
     id: int
 
 c = Customer(3)
-"#;
+";
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -52,7 +52,7 @@ c = Customer(3)
 
 #[test]
 fn e0142_non_frozen_inherits_frozen() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import dataclass_transform
 @dataclass_transform()
 class ModelBase: ...
@@ -62,7 +62,7 @@ class Frozen(ModelBase, frozen=True):
 
 class NonFrozen(Frozen):
     name: str
-"#;
+";
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -70,7 +70,7 @@ class NonFrozen(Frozen):
 
 #[test]
 fn e0142_comparison_without_order() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import dataclass_transform
 @dataclass_transform()
 class ModelBase: ...
@@ -81,7 +81,7 @@ class Item(ModelBase):
 a = Item(value=1)
 b = Item(value=2)
 result = a < b
-"#;
+";
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())

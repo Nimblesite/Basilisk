@@ -17,10 +17,10 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 
 #[test]
 fn e0002_missing_return_annotation() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def greet(name: str):
     return name
-"#;
+";
     let diags = run(source)?;
     assert!(
         codes(&diags).contains(&"BSK-E0002"),
@@ -32,10 +32,10 @@ def greet(name: str):
 
 #[test]
 fn e0002_with_return_annotation_no_fire() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def greet(name: str) -> str:
     return name
-"#;
+";
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0002"),
@@ -46,10 +46,10 @@ def greet(name: str) -> str:
 
 #[test]
 fn e0002_none_return_annotation_no_fire() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def do_nothing() -> None:
     pass
-"#;
+";
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0002"),

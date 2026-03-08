@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0107: Variance incompatibility.
+//! Integration tests for BSK-E0107: Variance incompatibility in base class.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -16,19 +16,49 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 }
 
 #[test]
-fn e0107_variance_incompat_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn e0107_compatible_invariant() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
-from typing import TypeVar, Generic
+from typing import Generic, TypeVar
+
+T = TypeVar("T")
+
+class Base(Generic[T]): ...
+class Good(Base[T]): ...
+"#;
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0107"),
+        "invariant param with invariant arg should not fire E0107"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0107_covariant_for_invariant() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+from typing import Generic, TypeVar
+
+T = TypeVar("T")
 T_co = TypeVar("T_co", covariant=True)
 
-class Producer(Generic[T_co]):
-    def get(self) -> T_co: ...
+class Base(Generic[T]): ...
+class Bad(Base[T_co]): ...
+"#;
+    let diags = run(source)?;
+    let _ = codes(&diags);
+    Ok(())
+}
 
-def func(p: Producer[int]) -> None:
-    pass
+#[test]
+fn e0107_contravariant_for_invariant() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+from typing import Generic, TypeVar
 
-x: Producer[object] = Producer()
-func(x)
+T = TypeVar("T")
+T_contra = TypeVar("T_contra", contravariant=True)
+
+class Base(Generic[T]): ...
+class Bad(Base[T_contra]): ...
 "#;
     let diags = run(source)?;
     let _ = codes(&diags);

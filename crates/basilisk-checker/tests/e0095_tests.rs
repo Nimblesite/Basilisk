@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0095: InitVar field validation.
+//! Integration tests for BSK-E0095: `InitVar` field validation.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -17,7 +17,7 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 
 #[test]
 fn e0095_post_init_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import InitVar, dataclass
 
 @dataclass
@@ -27,7 +27,7 @@ class DC1:
 
     def __post_init__(self, x: int, y: int) -> None:
         pass
-"#;
+";
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -35,7 +35,7 @@ class DC1:
 
 #[test]
 fn e0095_initvar_attr_access() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import InitVar, dataclass
 
 @dataclass
@@ -48,7 +48,7 @@ class DC1:
 
 dc1 = DC1(1)
 dc1.x
-"#;
+";
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -56,7 +56,7 @@ dc1.x
 
 #[test]
 fn e0095_valid_initvar_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import InitVar, dataclass
 
 @dataclass
@@ -66,7 +66,7 @@ class DC2:
 
     def __post_init__(self, x: int) -> None:
         self.y = x
-"#;
+";
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0095"),

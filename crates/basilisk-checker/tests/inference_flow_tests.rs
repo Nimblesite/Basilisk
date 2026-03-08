@@ -1,5 +1,5 @@
-//! Tests targeting inference.rs (FlowUnionTracker, check_annotated_variable, infer_flow_union_types)
-//! and guards.rs (dataclass_transform, collect_transform_functions, collect_transform_classes).
+//! Tests targeting inference.rs (`FlowUnionTracker`, `check_annotated_variable`, `infer_flow_union_types`)
+//! and guards.rs (`dataclass_transform`, `collect_transform_functions`, `collect_transform_classes`).
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -214,7 +214,7 @@ fn infer_variable_type_int() {
 
 #[test]
 fn guards_dataclass_transform_frozen() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import dataclass_transform
 
 @dataclass_transform(frozen_default=True)
@@ -225,7 +225,7 @@ def create_model(cls):
 class User:
     name: str
     age: int
-"#;
+";
     let diags = run(source)?;
     let _ = diags;
     Ok(())
@@ -233,7 +233,7 @@ class User:
 
 #[test]
 fn guards_dataclass_transform_order() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import dataclass_transform
 
 @dataclass_transform(order_default=True)
@@ -248,7 +248,7 @@ class Point:
 p1 = Point()
 p2 = Point()
 result = p1 < p2
-"#;
+";
     let diags = run(source)?;
     let _ = diags;
     Ok(())
@@ -256,7 +256,7 @@ result = p1 < p2
 
 #[test]
 fn guards_dataclass_transform_class_override() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import dataclass_transform
 
 @dataclass_transform()
@@ -270,7 +270,7 @@ class FrozenUser:
 @create_model(order=True)
 class OrderedUser:
     name: str
-"#;
+";
     let diags = run(source)?;
     let _ = diags;
     Ok(())
@@ -278,13 +278,13 @@ class OrderedUser:
 
 #[test]
 fn guards_protocol_method_exempt() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class Drawable(Protocol):
     def draw(self, x, y):
         ...
-"#;
+";
     let diags = run(source)?;
     let _ = diags;
     Ok(())
@@ -292,7 +292,7 @@ class Drawable(Protocol):
 
 #[test]
 fn guards_overload_not_exempt() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload
 
 @overload
@@ -302,7 +302,7 @@ def f(x: str) -> str: ...
 
 def f(x):
     return x
-"#;
+";
     let diags = run(source)?;
     let _ = diags;
     Ok(())
@@ -310,14 +310,14 @@ def f(x):
 
 #[test]
 fn guards_abstractmethod_exempt() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from abc import ABC, abstractmethod
 
 class Base(ABC):
     @abstractmethod
     def do_thing(self):
         pass
-"#;
+";
     let diags = run(source)?;
     let _ = diags;
     Ok(())

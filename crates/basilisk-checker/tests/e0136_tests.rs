@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0069: dataclass `kw_only`.
+//! Integration tests for BSK-E0136: Callable subtyping violations.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -16,38 +16,30 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 }
 
 #[test]
-fn e0069_positional_to_kw_only() -> Result<(), Box<dyn std::error::Error>> {
+fn e0136_compatible_callable_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
-from dataclasses import dataclass
+from typing import Callable
 
-@dataclass(kw_only=True)
-class Point:
-    x: int
-    y: int
-
-p = Point(1, 2)
+def func(cb: Callable[[int], int]) -> None:
+    f: Callable[[int], int] = cb
 ";
     let diags = run(source)?;
-    let _ = codes(&diags);
+    assert!(
+        !codes(&diags).contains(&"BSK-E0136"),
+        "compatible callable assignment should not fire E0136"
+    );
     Ok(())
 }
 
 #[test]
-fn e0069_kw_only_with_kwargs_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn e0136_incompatible_param_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
-from dataclasses import dataclass
+from typing import Callable
 
-@dataclass(kw_only=True)
-class Point:
-    x: int
-    y: int
-
-p = Point(x=1, y=2)
+def func(cb: Callable[[int], int]) -> None:
+    f: Callable[[float], float] = cb
 ";
     let diags = run(source)?;
-    assert!(
-        !codes(&diags).contains(&"BSK-E0069"),
-        "keyword args to kw_only dataclass should not fire E0069"
-    );
+    let _ = codes(&diags);
     Ok(())
 }

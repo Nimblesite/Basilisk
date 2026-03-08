@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0096: dataclass default_factory.
+//! Integration tests for BSK-E0096: dataclass `default_factory`.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;

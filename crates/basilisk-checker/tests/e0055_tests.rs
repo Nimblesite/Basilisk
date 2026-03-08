@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0055: Invalid TypeVar/TypeVarTuple/ParamSpec kwargs.
+//! Integration tests for BSK-E0055: Invalid `TypeVar`/`TypeVarTuple`/`ParamSpec` kwargs.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;

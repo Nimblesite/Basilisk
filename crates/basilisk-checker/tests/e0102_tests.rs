@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0102: TypeVar default violation.
+//! Integration tests for BSK-E0102: `TypeVar` default violation.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;

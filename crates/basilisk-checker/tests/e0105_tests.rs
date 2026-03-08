@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0105: Bounded TypeVar attr access.
+//! Integration tests for BSK-E0105: Bounded type var attribute access.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -16,21 +16,27 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 }
 
 #[test]
-fn e0105_bounded_typevar_attr_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
-from typing import TypeVar
+fn e0105_valid_attr_on_bound() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+class C[T: str]:
+    def method(self, x: T) -> str:
+        return x.upper()
+";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0105"),
+        "accessing valid str method on str-bounded typevar should not fire E0105"
+    );
+    Ok(())
+}
 
-class HasName:
-    name: str
-
-T = TypeVar("T", bound=HasName)
-
-def get_name(x: T) -> str:
-    return x.name
-
-def bad_attr(x: T) -> str:
-    return x.nonexistent
-"#;
+#[test]
+fn e0105_invalid_attr_on_bound() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+class C[T: str]:
+    def method(self, x: T) -> None:
+        x.is_integer()
+";
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())

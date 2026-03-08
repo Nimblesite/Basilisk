@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0126: LiteralString assignment incompatibilities.
+//! Integration tests for BSK-E0126: `LiteralString` assignment incompatibilities.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;

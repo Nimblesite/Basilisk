@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0085: `TypeVarTuple` arg count.
+//! Integration tests for BSK-E0022: Unhashable dict key.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -16,19 +16,24 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 }
 
 #[test]
-fn e0085_arg_count_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn e0022_hashable_key_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
-from typing import TypeVarTuple, Generic
-Ts = TypeVarTuple("Ts")
+def good_key() -> None:
+    mapping: dict[str, int] = {"key": 1}
+"#;
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0022"),
+        "string key should not fire E0022"
+    );
+    Ok(())
+}
 
-class Tensor(Generic[*Ts]):
-    pass
-
-def takes_3d(t: Tensor[int, int, int]) -> None:
-    pass
-
-x: Tensor[int, int] = Tensor()
-takes_3d(x)
+#[test]
+fn e0022_list_as_key() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+def bad_key() -> None:
+    mapping = {[1, 2]: "value"}
 "#;
     let diags = run(source)?;
     let _ = codes(&diags);

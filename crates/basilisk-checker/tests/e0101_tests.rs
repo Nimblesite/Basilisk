@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0101: TypeGuard no narrowing param.
+//! Integration tests for BSK-E0101: `TypeGuard` no narrowing param.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;

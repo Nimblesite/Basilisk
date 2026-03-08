@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0143: NamedTuple usage violations.
+//! Integration tests for BSK-E0143: `NamedTuple` usage violations.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -35,7 +35,7 @@ print(p[3])
 
 #[test]
 fn e0143_attribute_assignment() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class Point(NamedTuple):
@@ -44,7 +44,7 @@ class Point(NamedTuple):
 
 p = Point(1, 2)
 p.x = 3
-"#;
+";
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -52,7 +52,7 @@ p.x = 3
 
 #[test]
 fn e0143_subscript_assignment() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class Point(NamedTuple):
@@ -61,7 +61,7 @@ class Point(NamedTuple):
 
 p = Point(1, 2)
 p[0] = 3
-"#;
+";
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -69,7 +69,7 @@ p[0] = 3
 
 #[test]
 fn e0143_attribute_deletion() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class Point(NamedTuple):
@@ -78,7 +78,7 @@ class Point(NamedTuple):
 
 p = Point(1, 2)
 del p.x
-"#;
+";
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -86,7 +86,7 @@ del p.x
 
 #[test]
 fn e0143_valid_access_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class Point(NamedTuple):
@@ -97,7 +97,7 @@ p = Point(1, 2)
 print(p.x)
 print(p[0])
 x, y = p
-"#;
+";
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0143"),

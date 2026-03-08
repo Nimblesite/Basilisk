@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0069: dataclass `kw_only`.
+//! Integration tests for BSK-E0053: `assert_type()` type mismatch.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -16,16 +16,12 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 }
 
 #[test]
-fn e0069_positional_to_kw_only() -> Result<(), Box<dyn std::error::Error>> {
+fn e0053_valid_assert_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
-from dataclasses import dataclass
+from typing import assert_type
 
-@dataclass(kw_only=True)
-class Point:
-    x: int
-    y: int
-
-p = Point(1, 2)
+def f(a: int) -> None:
+    assert_type(a, int)
 ";
     let diags = run(source)?;
     let _ = codes(&diags);
@@ -33,21 +29,14 @@ p = Point(1, 2)
 }
 
 #[test]
-fn e0069_kw_only_with_kwargs_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn e0053_assert_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
-from dataclasses import dataclass
+from typing import assert_type
 
-@dataclass(kw_only=True)
-class Point:
-    x: int
-    y: int
-
-p = Point(x=1, y=2)
+def f(a: int | str) -> None:
+    assert_type(a, int)
 ";
     let diags = run(source)?;
-    assert!(
-        !codes(&diags).contains(&"BSK-E0069"),
-        "keyword args to kw_only dataclass should not fire E0069"
-    );
+    let _ = codes(&diags);
     Ok(())
 }

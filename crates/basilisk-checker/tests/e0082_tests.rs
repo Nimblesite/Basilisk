@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0082: TypeVarTuple callable/tuple mismatch.
+//! Integration tests for BSK-E0082: `TypeVarTuple` callable/tuple mismatch.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;

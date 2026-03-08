@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0112: TypeGuard callable return type mismatch.
+//! Integration tests for BSK-E0112: `TypeGuard` callable return type mismatch.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;

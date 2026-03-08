@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0043: Non-`TypeVar` in Generic[...].
+//! Integration tests for BSK-E0033: Invalid `reveal_type()` call.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -16,33 +16,37 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 }
 
 #[test]
-fn e0043_concrete_type_in_generic_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn e0033_valid_reveal_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
-from typing import Generic
-class Bad(Generic[int]):
-    pass
+x: int = 42
+reveal_type(x)
 ";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0043"),
-        "concrete type in Generic should fire E0043, got: {:?}",
-        codes(&diags)
+        !codes(&diags).contains(&"BSK-E0033"),
+        "valid reveal_type call should not fire E0033"
     );
     Ok(())
 }
 
 #[test]
-fn e0043_typevar_in_generic_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn e0033_reveal_type_no_args() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+reveal_type()
+";
+    let diags = run(source)?;
+    let _ = codes(&diags);
+    Ok(())
+}
+
+#[test]
+fn e0033_reveal_type_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
-from typing import TypeVar, Generic
-T = TypeVar("T")
-class Good(Generic[T]):
-    pass
+x: int = 42
+y: str = "hi"
+reveal_type(x, y)
 "#;
     let diags = run(source)?;
-    assert!(
-        !codes(&diags).contains(&"BSK-E0043"),
-        "TypeVar in Generic should not fire E0043"
-    );
+    let _ = codes(&diags);
     Ok(())
 }

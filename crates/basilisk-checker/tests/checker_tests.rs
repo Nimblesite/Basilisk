@@ -1900,7 +1900,7 @@ fn e0035_not_required_outside_typed_dict_fires() -> Result<(), Box<dyn std::erro
 
 /// E0035 — `is_in_typed_dict_hierarchy` `FnValue → true` at line 78.
 /// If always true, the rule would only check for NESTED usage even outside `TypedDict`.
-/// A non-TypedDict class with Required must still fire E0035.
+/// A non-`TypedDict` class with Required must still fire E0035.
 #[test]
 fn e0035_non_typed_dict_class_not_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(

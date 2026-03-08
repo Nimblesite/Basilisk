@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0091: TypeVar default incompatible.
+//! Integration tests for BSK-E0091: `TypeVar` default incompatible.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;

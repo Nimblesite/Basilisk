@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0106: Protocol class used where type[Proto] expected.
+//! Integration tests for BSK-E0124: Protocol tuple element type mismatch.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -16,42 +16,36 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 }
 
 #[test]
-fn e0106_concrete_class_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn e0124_valid_tuple_protocol_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
-class Proto(Protocol):
-    def meth(self) -> int: ...
+class RGB(Protocol):
+    rgb: tuple[int, int, int]
 
-class Concrete:
-    def meth(self) -> int:
-        return 42
-
-def fun(cls: type[Proto]) -> int:
-    return cls().meth()
-
-fun(Concrete)
+class Point(RGB):
+    def __init__(self, red: int, green: int, blue: int) -> None:
+        self.rgb = red, green, blue
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0106"),
-        "passing concrete class should not fire E0106"
+        !codes(&diags).contains(&"BSK-E0124"),
+        "valid tuple assignment should not fire E0124"
     );
     Ok(())
 }
 
 #[test]
-fn e0106_protocol_class_itself() -> Result<(), Box<dyn std::error::Error>> {
+fn e0124_mismatched_tuple_protocol_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
-class Proto(Protocol):
-    def meth(self) -> int: ...
+class RGB(Protocol):
+    rgb: tuple[int, int, int]
 
-def fun(cls: type[Proto]) -> int:
-    return cls().meth()
-
-fun(Proto)
+class Point(RGB):
+    def __init__(self, red: int, green: int, blue: str) -> None:
+        self.rgb = red, green, blue
 ";
     let diags = run(source)?;
     let _ = codes(&diags);

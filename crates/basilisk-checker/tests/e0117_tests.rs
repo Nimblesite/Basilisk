@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0117: Unbound TypeVar.
+//! Integration tests for BSK-E0117: Unbound type variable in scope.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -16,12 +16,34 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 }
 
 #[test]
-fn e0117_unbound_typevar_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn e0117_bound_typevar_in_function() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
-from typing import TypeVar
+from typing import TypeVar, Generic
+
 T = TypeVar("T")
 
-x: T
+def fun(x: T) -> list[T]:
+    return [x]
+"#;
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0117"),
+        "TypeVar bound in function sig should not fire E0117"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0117_unbound_typevar_in_function_body() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+from typing import TypeVar, Generic
+
+T = TypeVar("T")
+S = TypeVar("S")
+
+def fun(x: T) -> list[T]:
+    z: list[S] = []
+    return [x]
 "#;
     let diags = run(source)?;
     let _ = codes(&diags);
@@ -29,18 +51,35 @@ x: T
 }
 
 #[test]
-fn e0117_bound_typevar_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn e0117_bound_typevar_in_class() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
+
 T = TypeVar("T")
 
 class Container(Generic[T]):
-    value: T
+    items: list[T]
 "#;
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0117"),
-        "bound TypeVar should not fire E0117"
+        "TypeVar bound in Generic class should not fire E0117"
     );
+    Ok(())
+}
+
+#[test]
+fn e0117_unbound_typevar_in_class() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+from typing import TypeVar, Generic
+
+T = TypeVar("T")
+S = TypeVar("S")
+
+class Bar(Generic[T]):
+    an_attr: list[S]
+"#;
+    let diags = run(source)?;
+    let _ = codes(&diags);
     Ok(())
 }

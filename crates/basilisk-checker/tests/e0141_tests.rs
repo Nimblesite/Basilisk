@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0113: `TypeIs` inconsistent narrowing.
+//! Integration tests for BSK-E0141: Unpack kwargs violations.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -16,28 +16,36 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 }
 
 #[test]
-fn e0113_valid_typeis() -> Result<(), Box<dyn std::error::Error>> {
+fn e0141_valid_unpack_kwargs() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
-from typing import TypeIs
+from typing import TypedDict, Unpack
 
-def is_str(x: object) -> TypeIs[str]:
-    return isinstance(x, str)
+class Config(TypedDict):
+    name: str
+    value: int
+
+def func(**kwargs: Unpack[Config]) -> None:
+    pass
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0113"),
-        "valid TypeIs should not fire E0113"
+        !codes(&diags).contains(&"BSK-E0141"),
+        "valid Unpack kwargs should not fire E0141"
     );
     Ok(())
 }
 
 #[test]
-fn e0113_inconsistent_narrowing() -> Result<(), Box<dyn std::error::Error>> {
+fn e0141_overlap_with_positional() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
-from typing import TypeIs
+from typing import TypedDict, Unpack
 
-def bad_check(x: int) -> TypeIs[str]:
-    return isinstance(x, str)
+class Config(TypedDict):
+    name: str
+    value: int
+
+def func(name: str, **kwargs: Unpack[Config]) -> None:
+    pass
 ";
     let diags = run(source)?;
     let _ = codes(&diags);

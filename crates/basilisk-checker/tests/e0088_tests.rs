@@ -1,4 +1,4 @@
-//! Integration tests for BSK-E0088: TypedDict isinstance.
+//! Integration tests for BSK-E0088: `TypedDict` isinstance.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;

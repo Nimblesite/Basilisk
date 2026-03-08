@@ -17,10 +17,10 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
 
 #[test]
 fn e0001_missing_param_annotation() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def greet(name):
     return name
-"#;
+";
     let diags = run(source)?;
     assert!(
         codes(&diags).contains(&"BSK-E0001"),
@@ -32,10 +32,10 @@ def greet(name):
 
 #[test]
 fn e0001_annotated_param_no_fire() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def greet(name: str) -> str:
     return name
-"#;
+";
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0001"),
@@ -46,11 +46,11 @@ def greet(name: str) -> str:
 
 #[test]
 fn e0001_self_exempt() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class Foo:
     def method(self) -> None:
         pass
-"#;
+";
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0001"),
@@ -61,12 +61,12 @@ class Foo:
 
 #[test]
 fn e0001_cls_exempt() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class Foo:
     @classmethod
     def method(cls) -> None:
         pass
-"#;
+";
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0001"),
@@ -77,10 +77,10 @@ class Foo:
 
 #[test]
 fn e0001_multiple_unannotated_params() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def add(a, b):
     return a + b
-"#;
+";
     let diags = run(source)?;
     let e0001_count = codes(&diags).iter().filter(|c| **c == "BSK-E0001").count();
     assert!(
