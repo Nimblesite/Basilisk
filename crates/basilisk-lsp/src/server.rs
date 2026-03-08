@@ -11,7 +11,8 @@ use tower_lsp::lsp_types::{
     CallHierarchyOutgoingCall, CallHierarchyOutgoingCallsParams, CallHierarchyPrepareParams,
     CallHierarchyServerCapability, CodeActionKind, CodeActionOptions, CodeActionParams,
     CodeActionProviderCapability, CodeActionResponse, CodeDescription, CodeLens, CodeLensOptions,
-    CodeLensParams, CompletionOptions, CompletionParams, CompletionResponse, DeclarationCapability,
+    CodeLensParams, CompletionItem, CompletionOptions, CompletionParams, CompletionResponse,
+    DeclarationCapability,
     Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
     DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentFormattingParams,
     DocumentHighlight, DocumentHighlightParams, DocumentSymbolParams, DocumentSymbolResponse,
@@ -224,6 +225,7 @@ impl tower_lsp::LanguageServer for LspServer {
                 )),
                 completion_provider: Some(CompletionOptions {
                     trigger_characters: Some(vec![".".to_owned()]),
+                    resolve_provider: Some(true),
                     ..Default::default()
                 }),
                 declaration_provider: Some(DeclarationCapability::Simple(true)),
@@ -632,6 +634,33 @@ impl tower_lsp::LanguageServer for LspServer {
         } else {
             Ok(Some(CompletionResponse::Array(items)))
         }
+    }
+
+    /// Resolve additional documentation for a completion item.
+    ///
+    /// This is called when the user selects a completion item, allowing us to
+    /// lazily load documentation (docstrings) that wasn't included in the
+    /// initial completion list.
+    async fn completion_resolve(
+        &self,
+        item: CompletionItem,
+    ) -> LspResult<CompletionItem> {
+        // Get the document text to resolve the module
+        // We need to find which document this completion belongs to
+        let (text, path_str) = self
+            .documents
+            .iter()
+            .next()
+            .map(|entry| {
+                let text = entry.text.clone();
+                let uri = entry.key().clone();
+                let file_path = uri.to_file_path().unwrap_or_default();
+                let path_str = file_path.to_string_lossy().into_owned();
+                (text, path_str)
+            })
+            .unwrap_or((String::new(), String::new()));
+
+        Ok(completion::resolve_completion_item(item, &text, &path_str))
     }
 
     // ── Document Formatting ─────────────────────────────────────────────────

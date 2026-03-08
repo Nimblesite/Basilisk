@@ -2,6 +2,8 @@
 //!
 //! Provides symbol completions, dot completions, import completions,
 //! keyword argument completions, and Python builtin completions.
+//!
+//! Supports lazy-loading of documentation via `completionItem/resolve`.
 
 use std::collections::HashSet;
 
@@ -53,6 +55,107 @@ pub fn patch_cursor_line(text: &str, line_number: u32) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// Resolve additional data for a completion item (lazy-load documentation/detail).
+///
+/// This is called when the user selects a completion item, allowing us to
+/// provide rich detail information without including it in every completion list.
+///
+/// The completion item's `data` field should contain a JSON object with:
+/// - `kind`: "function", "class", "variable", "attribute", "method"
+/// - `name`: the symbol name
+/// - For functions/classes: `data.file_path` for the source file
+#[must_use]
+pub fn resolve_completion_item(
+    item: CompletionItem,
+    text: &str,
+    path: &str,
+) -> CompletionItem {
+    let Some(data) = &item.data else {
+        return item;
+    };
+
+    // Parse the data to determine what kind of symbol this is
+    let kind = data.get("kind").and_then(|k| k.as_str()).unwrap_or("");
+    let name = data.get("name").and_then(|n| n.as_str()).unwrap_or("");
+
+    if name.is_empty() {
+        return item;
+    }
+
+    // Try to resolve the module to find the symbol's documentation
+    let resolved = match try_resolve(text, path) {
+        Some(r) => r,
+        None => return item,
+    };
+
+    match kind {
+        "function" | "method" => {
+            if let Some(func) = resolved.functions.iter().find(|f| &f.name == name) {
+                let mut result = item;
+                // Add signature to detail if not already set
+                if result.detail.is_none() {
+                    let mut detail = String::from("(");
+                    for (idx, param) in func.parameters.iter().enumerate() {
+                        if idx > 0 {
+                            detail.push_str(", ");
+                        }
+                        detail.push_str(&param.name);
+                    }
+                    detail.push(')');
+                    result.detail = Some(detail);
+                }
+                // Add docstring to documentation if not already set
+                if result.documentation.is_none() {
+                    if let Some(ref docstring) = func.docstring {
+                        result.documentation = Some(Documentation::MarkupContent(MarkupContent {
+                            kind: MarkupKind::Markdown,
+                            value: docstring.clone(),
+                        }));
+                    }
+                }
+                return result;
+            }
+        }
+        "class" => {
+            if let Some(class) = resolved.classes.iter().find(|c| &c.name == name) {
+                let mut result = item;
+                // Add class info to detail if not already set
+                if result.detail.is_none() {
+                    let detail = if class.bases.is_empty() {
+                        "class".to_owned()
+                    } else {
+                        format!("class({})", class.bases.join(", "))
+                    };
+                    result.detail = Some(detail);
+                }
+                // Add docstring to documentation if not already set
+                if result.documentation.is_none() {
+                    if let Some(ref docstring) = class.docstring {
+                        result.documentation = Some(Documentation::MarkupContent(MarkupContent {
+                            kind: MarkupKind::Markdown,
+                            value: docstring.clone(),
+                        }));
+                    }
+                }
+                return result;
+            }
+        }
+        "variable" | "attribute" => {
+            // For variables, we can at least ensure detail is present
+            if let Some(_var) = resolved.module_vars.iter().find(|v| &v.name == name) {
+                let mut result = item;
+                if result.detail.is_none() {
+                    result.detail = Some("variable".to_owned());
+                }
+                return result;
+            }
+        }
+        _ => {}
+    }
+
+    item
 }
 
 // ── Prefix / dot detection ───────────────────────────────────────────────────
@@ -336,16 +439,18 @@ fn symbol_completions(
                 detail.push_str(&param.name);
             }
             detail.push(')');
+            // For resolve, we include minimal data - docstrings can be loaded lazily
+            let data = serde_json::json!({
+                "kind": "function",
+                "name": func.name
+            });
             items.push(CompletionItem {
                 label: func.name.clone(),
                 kind: Some(CompletionItemKind::FUNCTION),
                 detail: Some(detail),
-                documentation: func.docstring.as_ref().map(|ds| {
-                    Documentation::MarkupContent(MarkupContent {
-                        kind: MarkupKind::Markdown,
-                        value: ds.clone(),
-                    })
-                }),
+                data: Some(serde_json::to_value(data).unwrap_or_default()),
+                // Skip inline documentation - let resolve_completion_item load it lazily
+                documentation: None,
                 ..Default::default()
             });
         }
@@ -356,16 +461,17 @@ fn symbol_completions(
             continue;
         }
         if seen.insert(class.name.clone()) {
+            let data = serde_json::json!({
+                "kind": "class",
+                "name": class.name
+            });
             items.push(CompletionItem {
                 label: class.name.clone(),
                 kind: Some(CompletionItemKind::CLASS),
                 detail: Some("class".to_owned()),
-                documentation: class.docstring.as_ref().map(|ds| {
-                    Documentation::MarkupContent(MarkupContent {
-                        kind: MarkupKind::Markdown,
-                        value: ds.clone(),
-                    })
-                }),
+                data: Some(serde_json::to_value(data).unwrap_or_default()),
+                // Skip inline documentation - let resolve_completion_item load it lazily
+                documentation: None,
                 ..Default::default()
             });
         }
@@ -376,10 +482,15 @@ fn symbol_completions(
             continue;
         }
         if seen.insert(var.name.clone()) {
+            let data = serde_json::json!({
+                "kind": "variable",
+                "name": var.name
+            });
             items.push(CompletionItem {
                 label: var.name.clone(),
                 kind: Some(CompletionItemKind::VARIABLE),
                 detail: Some("variable".to_owned()),
+                data: Some(serde_json::to_value(data).unwrap_or_default()),
                 ..Default::default()
             });
         }
@@ -432,7 +543,6 @@ fn add_import_completions(
     }
 }
 
-#[allow(clippy::too_many_lines)]
 #[allow(clippy::too_many_lines)]
 fn add_builtin_completions(
     items: &mut Vec<CompletionItem>,

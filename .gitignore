@@ -35,3 +35,6 @@ vscode-extension/out/
 vscode-extension/.vscode-test/
 
 .DS_Store
+
+
+logs/

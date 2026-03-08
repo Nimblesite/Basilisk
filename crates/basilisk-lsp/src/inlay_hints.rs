@@ -19,6 +19,9 @@ pub fn inlay_hints(resolved: &ResolvedModule, source: &str) -> Vec<InlayHint> {
     // Return type hints for functions without explicit annotations.
     function_return_type_hints(resolved, source, &mut hints);
 
+    // Generic type parameter hints — variance, bounds, constraints.
+    generic_type_param_hints(resolved, source, &mut hints);
+
     hints
 }
 
@@ -201,6 +204,90 @@ fn find_closing_paren(source: &str, start: usize) -> Option<usize> {
         }
     }
     None
+}
+
+/// Add generic type parameter hints: variance, bounds, and constraints for
+/// `TypeVar(...)` definitions and classes with `Generic[...]` parameters.
+fn generic_type_param_hints(resolved: &ResolvedModule, source: &str, hints: &mut Vec<InlayHint>) {
+    // TypeVar definition hints — show variance / bound / constraints after the call.
+    for tv in &resolved.typevar_calls {
+        let label = typevar_hint_label(tv);
+        if label.is_empty() {
+            continue;
+        }
+        hints.push(InlayHint {
+            position: byte_offset_to_position(source, tv.span.end as usize),
+            label: InlayHintLabel::String(format!("  {label}")),
+            kind: Some(InlayHintKind::TYPE),
+            text_edits: None,
+            tooltip: None,
+            padding_left: Some(true),
+            padding_right: None,
+            data: None,
+        });
+    }
+
+    // Class generic parameter hints — show `[T, U, ...]` after the class name
+    // when the params come from `Generic[...]` (not PEP 695, where they're already visible).
+    for class in &resolved.classes {
+        if class.generic_params.is_empty() || class.has_pep695_type_params {
+            continue;
+        }
+        let params: Vec<&str> = class.generic_params.iter().map(|p| p.name.as_str()).collect();
+        let label = format!("[{}]", params.join(", "));
+        hints.push(InlayHint {
+            position: byte_offset_to_position(source, class.name_span.end as usize),
+            label: InlayHintLabel::String(label),
+            kind: Some(InlayHintKind::TYPE),
+            text_edits: None,
+            tooltip: Some(tower_lsp::lsp_types::InlayHintTooltip::String(
+                "Generic type parameters from Generic[...] base".to_owned(),
+            )),
+            padding_left: None,
+            padding_right: None,
+            data: None,
+        });
+    }
+}
+
+/// Build a concise label for a `TypeVar` definition hint.
+///
+/// Shows variance, bound, constraints, and/or default — whichever are present.
+fn typevar_hint_label(tv: &basilisk_resolver::scope::TypeVarCallInfo) -> String {
+    let mut parts = Vec::new();
+
+    // Kind prefix for non-TypeVar variants.
+    if tv.is_typevartuple {
+        parts.push("TypeVarTuple".to_owned());
+    } else if tv.is_paramspec {
+        parts.push("ParamSpec".to_owned());
+    }
+
+    // Variance.
+    if tv.is_covariant {
+        parts.push("covariant".to_owned());
+    } else if tv.is_contravariant {
+        parts.push("contravariant".to_owned());
+    } else if tv.has_infer_variance {
+        parts.push("infer_variance".to_owned());
+    }
+
+    // Bound.
+    if let Some(ref bound) = tv.bound_type_name {
+        parts.push(format!("bound: {bound}"));
+    }
+
+    // Constraints.
+    if !tv.constraint_type_names.is_empty() {
+        parts.push(tv.constraint_type_names.join(" | "));
+    }
+
+    // Default (PEP 696).
+    if let Some(ref default) = tv.default_type_name {
+        parts.push(format!("default: {default}"));
+    }
+
+    parts.join(", ")
 }
 
 /// Simple type name from `RhsKind`.
