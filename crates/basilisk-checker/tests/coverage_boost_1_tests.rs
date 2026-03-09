@@ -1,7 +1,11 @@
 //! Coverage boost tests batch 1: targeting rules with highest uncovered line counts.
 //! Covers: e0070, e0072, e0074, e0075, e0076, e0079, e0081, e0082, e0095, e0102,
 //!         e0107, e0110, e0111, e0112, e0113, e0114, e0119, e0120, e0121, e0122
-#![allow(missing_docs)]
+#![allow(
+    missing_docs,
+    clippy::needless_raw_string_hashes,
+    clippy::uninlined_format_args
+)]
 
 use basilisk_checker::check;
 use basilisk_parser::parse_source;
@@ -25,7 +29,7 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<String> {
 
 #[test]
 fn e0070_never_return_assignment() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Never, NoReturn
 
 def f() -> Never:
@@ -37,7 +41,7 @@ def g() -> NoReturn:
     raise SystemExit()
 
 y: str = g()
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -45,12 +49,12 @@ y: str = g()
 
 #[test]
 fn e0070_never_in_union() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Never, Union
 
 x: Union[int, Never] = 42
 y: int | Never = 42
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -58,12 +62,12 @@ y: int | Never = 42
 
 #[test]
 fn e0070_never_param_type() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Never
 
 def f(x: Never) -> None:
     pass
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -73,7 +77,7 @@ def f(x: Never) -> None:
 
 #[test]
 fn e0072_overload_with_incompatible_call() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import overload
 
 @overload
@@ -86,7 +90,7 @@ def process(x):
     return x
 
 result = process(3.14)
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -94,7 +98,7 @@ result = process(3.14)
 
 #[test]
 fn e0072_overload_matching_call() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import overload
 
 @overload
@@ -107,7 +111,7 @@ def double(x):
     return x
 
 result = double(42)
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -115,7 +119,7 @@ result = double(42)
 
 #[test]
 fn e0072_overload_no_args() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import overload
 
 @overload
@@ -128,7 +132,7 @@ def make(x, y=None):
     return x
 
 result = make()
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -219,7 +223,7 @@ xs = OrdinalLinkedList(value=1, next=LinkedList[int](value=2))
 
 #[test]
 fn e0075_self_attr_correct() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Self
 from dataclasses import dataclass
 
@@ -228,7 +232,7 @@ class Node:
     child: Self | None = None
 
 n = Node(child=Node())
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -238,7 +242,7 @@ n = Node(child=Node())
 
 #[test]
 fn e0076_overload_union_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import overload, Union
 
 @overload
@@ -251,7 +255,7 @@ def f(x):
 
 def caller(val: Union[int, str]) -> None:
     result = f(val)
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -259,7 +263,7 @@ def caller(val: Union[int, str]) -> None:
 
 #[test]
 fn e0076_overload_union_with_incompatible() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import overload, Union
 
 @overload
@@ -272,7 +276,7 @@ def g(x):
 
 def caller2(val: Union[int, float]) -> None:
     result = g(val)
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -282,7 +286,7 @@ def caller2(val: Union[int, float]) -> None:
 
 #[test]
 fn e0079_module_protocol_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Protocol
 
 class HasTimeout(Protocol):
@@ -291,7 +295,7 @@ class HasTimeout(Protocol):
 import os
 
 x: HasTimeout = os
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -359,12 +363,12 @@ c = Config("test", True)
 
 #[test]
 fn e0095_initvar_in_non_dataclass() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from dataclasses import InitVar
 
 class NotDataclass:
     x: InitVar[int]
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -372,7 +376,7 @@ class NotDataclass:
 
 #[test]
 fn e0095_multiple_initvar_fields() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from dataclasses import dataclass, InitVar
 
 @dataclass
@@ -384,7 +388,7 @@ class Server:
 
     def __post_init__(self, port: int, debug: bool) -> None:
         pass
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -568,12 +572,12 @@ class Container(Protocol[T]):
 
 #[test]
 fn e0111_no_custom_init_with_args() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 class Empty:
     pass
 
 x = Empty(1, 2, 3)
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -633,12 +637,12 @@ class MyClass(Generic[T]):
 
 #[test]
 fn e0111_no_init_no_args() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 class Simple:
     x: int = 0
 
 s = Simple()
-";
+"#;
     let diags = run(source)?;
     assert!(
         !has_code(&diags, "BSK-E0111"),
@@ -651,7 +655,7 @@ s = Simple()
 
 #[test]
 fn e0112_typeguard_in_callable_str() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import TypeGuard, Callable
 
 def is_int(val: object) -> TypeGuard[int]:
@@ -661,7 +665,7 @@ def takes_str_callable(f: Callable[[object], str]) -> None:
     pass
 
 takes_str_callable(is_int)
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -669,7 +673,7 @@ takes_str_callable(is_int)
 
 #[test]
 fn e0112_typeguard_in_callable_bool() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import TypeGuard, Callable
 
 def is_int(val: object) -> TypeGuard[int]:
@@ -679,7 +683,7 @@ def takes_bool_callable(f: Callable[[object], bool]) -> None:
     pass
 
 takes_bool_callable(is_int)
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -687,7 +691,7 @@ takes_bool_callable(is_int)
 
 #[test]
 fn e0112_typeis_in_callable() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import TypeIs, Callable
 
 def is_str(val: object) -> TypeIs[str]:
@@ -697,7 +701,7 @@ def takes_int_callable(f: Callable[[object], int]) -> None:
     pass
 
 takes_int_callable(is_str)
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -707,12 +711,12 @@ takes_int_callable(is_str)
 
 #[test]
 fn e0113_typeis_inconsistent() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import TypeIs
 
 def is_int(val: str) -> TypeIs[int]:
     return isinstance(val, int)
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -722,14 +726,14 @@ def is_int(val: str) -> TypeIs[int]:
 
 #[test]
 fn e0114_protocol_isinstance() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Protocol, runtime_checkable
 
 class Drawable(Protocol):
     def draw(self) -> None: ...
 
 isinstance(42, Drawable)
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -737,7 +741,7 @@ isinstance(42, Drawable)
 
 #[test]
 fn e0114_runtime_checkable_protocol() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Protocol, runtime_checkable
 
 @runtime_checkable
@@ -745,7 +749,7 @@ class Drawable(Protocol):
     def draw(self) -> None: ...
 
 isinstance(42, Drawable)
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -755,7 +759,7 @@ isinstance(42, Drawable)
 
 #[test]
 fn e0119_protocol_isinstance_overlap() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Protocol, runtime_checkable
 
 @runtime_checkable
@@ -767,7 +771,7 @@ class MyList:
         return 0
 
 x: Sizeable = MyList()
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -777,10 +781,10 @@ x: Sizeable = MyList()
 
 #[test]
 fn e0120_generator_with_non_generator_return() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 def bad_gen() -> int:
     yield 1
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -788,12 +792,12 @@ def bad_gen() -> int:
 
 #[test]
 fn e0120_generator_with_iterator_return() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Iterator
 
 def good_gen() -> Iterator[int]:
     yield 1
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -801,13 +805,13 @@ def good_gen() -> Iterator[int]:
 
 #[test]
 fn e0120_generator_with_generator_return() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Generator
 
 def gen() -> Generator[int, None, None]:
     yield 1
     yield 2
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -815,10 +819,10 @@ def gen() -> Generator[int, None, None]:
 
 #[test]
 fn e0120_async_generator_invalid_return() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 async def bad_async_gen() -> int:
     yield 1
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -826,7 +830,7 @@ async def bad_async_gen() -> int:
 
 #[test]
 fn e0120_generator_yield_from() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Generator
 
 def inner() -> Generator[int, None, None]:
@@ -834,7 +838,7 @@ def inner() -> Generator[int, None, None]:
 
 def outer() -> Generator[int, None, None]:
     yield from inner()
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -844,7 +848,7 @@ def outer() -> Generator[int, None, None]:
 
 #[test]
 fn e0121_protocol_conformance_missing_method() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Protocol
 
 class Drawable(Protocol):
@@ -857,7 +861,7 @@ def render(item: Drawable) -> None:
     item.draw()
 
 render(Circle())
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -865,7 +869,7 @@ render(Circle())
 
 #[test]
 fn e0121_protocol_conformance_satisfied() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Protocol
 
 class Drawable(Protocol):
@@ -879,7 +883,7 @@ def render(item: Drawable) -> None:
     item.draw()
 
 render(Circle())
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -889,7 +893,7 @@ render(Circle())
 
 #[test]
 fn e0122_callable_arity_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Callable
 
 def takes_binary(f: Callable[[int, int], int]) -> None:
@@ -899,7 +903,7 @@ def unary(x: int) -> int:
     return x
 
 takes_binary(unary)
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -907,7 +911,7 @@ takes_binary(unary)
 
 #[test]
 fn e0122_callable_arity_correct() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Callable
 
 def takes_binary(f: Callable[[int, int], int]) -> None:
@@ -917,7 +921,7 @@ def add(x: int, y: int) -> int:
     return x + y
 
 takes_binary(add)
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -925,7 +929,7 @@ takes_binary(add)
 
 #[test]
 fn e0122_callable_with_varargs() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Callable
 
 def takes_unary(f: Callable[[int], int]) -> None:
@@ -935,7 +939,7 @@ def vararg(*args: int) -> int:
     return sum(args)
 
 takes_unary(vararg)
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())

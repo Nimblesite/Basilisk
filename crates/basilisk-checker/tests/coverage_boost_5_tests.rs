@@ -1,6 +1,10 @@
 //! Coverage boost tests batch 5: exercising deep code paths in complex rules.
 //! Focuses on rules that walk calls, function bodies, and class hierarchies.
-#![allow(missing_docs)]
+#![allow(
+    missing_docs,
+    clippy::needless_raw_string_hashes,
+    clippy::uninlined_format_args
+)]
 
 use basilisk_checker::check;
 use basilisk_parser::parse_source;
@@ -48,7 +52,7 @@ c = Config[int](42, name="test")
 
 #[test]
 fn e0075_optional_self_attr() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Self, Optional
 from dataclasses import dataclass
 
@@ -59,14 +63,14 @@ class TreeNode:
     right: Optional[Self] = None
 
 node = TreeNode(1, left=TreeNode(2), right=TreeNode(3))
-";
+"#;
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0075_self_in_method_return() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Self
 
 class Builder:
@@ -77,7 +81,7 @@ class Builder:
         return self
 
 b = Builder().set_name('test').set_value(42)
-";
+"#;
     let _ = run(source)?;
     Ok(())
 }
@@ -86,14 +90,14 @@ b = Builder().set_name('test').set_value(42)
 
 #[test]
 fn e0079_protocol_with_multiple_attrs() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Protocol
 
 class Config(Protocol):
     host: str
     port: int
     debug: bool
-";
+"#;
     let _ = run(source)?;
     Ok(())
 }
@@ -102,7 +106,7 @@ class Config(Protocol):
 
 #[test]
 fn e0121_protocol_multiple_methods() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Protocol
 
 class Serializable(Protocol):
@@ -119,14 +123,14 @@ def process(item: Serializable) -> None:
     pass
 
 process(JsonObject())
-";
+"#;
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0121_protocol_partial_impl() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Protocol
 
 class Readable(Protocol):
@@ -141,7 +145,7 @@ def use_readable(r: Readable) -> None:
     pass
 
 use_readable(PartialImpl())
-";
+"#;
     let _ = run(source)?;
     Ok(())
 }
@@ -150,7 +154,7 @@ use_readable(PartialImpl())
 
 #[test]
 fn e0122_callable_with_positional_only() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Callable
 
 def takes_unary(f: Callable[[int], None]) -> None:
@@ -160,14 +164,14 @@ def pos_only(x: int, /) -> None:
     pass
 
 takes_unary(pos_only)
-";
+"#;
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0122_callable_with_mixed_params() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Callable
 
 def takes_binary(f: Callable[[int, str], bool]) -> None:
@@ -181,7 +185,7 @@ def wrong_arity(a: int) -> bool:
 
 takes_binary(checker)
 takes_binary(wrong_arity)
-";
+"#;
     let _ = run(source)?;
     Ok(())
 }
@@ -190,7 +194,7 @@ takes_binary(wrong_arity)
 
 #[test]
 fn e0127_named_tuple_index() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import NamedTuple
 
 class Point(NamedTuple):
@@ -201,7 +205,7 @@ p = Point(1.0, 2.0)
 a = p[0]
 b = p[1]
 c = p[5]
-";
+"#;
     let _ = run(source)?;
     Ok(())
 }
@@ -210,7 +214,7 @@ c = p[5]
 
 #[test]
 fn e0136_callable_contravariance() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Callable
 
 def takes_object_func(f: Callable[[object], None]) -> None:
@@ -224,14 +228,14 @@ def object_func(x: object) -> None:
 
 takes_object_func(int_func)
 takes_object_func(object_func)
-";
+"#;
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0136_callable_covariance_return() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Callable
 
 def takes_int_returning(f: Callable[[], int]) -> None:
@@ -245,7 +249,7 @@ def returns_float() -> float:
 
 takes_int_returning(returns_bool)
 takes_int_returning(returns_float)
-";
+"#;
     let _ = run(source)?;
     Ok(())
 }
@@ -254,7 +258,7 @@ takes_int_returning(returns_float)
 
 #[test]
 fn e0145_various_subscripts() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import List, Dict, Set, FrozenSet, Tuple, Optional, Union, Type
 
 a: List[int] = []
@@ -265,19 +269,19 @@ e: Tuple[int, str] = (1, 'a')
 f: Optional[int] = None
 g: Union[int, str] = 1
 h: Type[int] = int
-";
+"#;
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0145_nested_subscripts() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Dict, List, Optional
 
 x: Dict[str, List[Optional[int]]] = {}
 y: List[Dict[str, int]] = []
-";
+"#;
     let _ = run(source)?;
     Ok(())
 }
@@ -286,7 +290,7 @@ y: List[Dict[str, int]] = []
 
 #[test]
 fn e0146_type_protocol_usage() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Protocol, TypeVar
 
 T = TypeVar('T')
@@ -302,7 +306,7 @@ def create(cls: type[Constructable[int]], val: int) -> Constructable[int]:
     return cls(val)
 
 obj = create(IntWrapper, 42)
-";
+"#;
     let _ = run(source)?;
     Ok(())
 }
@@ -311,7 +315,7 @@ obj = create(IntWrapper, 42)
 
 #[test]
 fn e0148_constrained_typevar() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import TypeVar, Generic
 
 T = TypeVar('T', int, str)
@@ -323,7 +327,7 @@ class Store(Generic[T]):
 s1: Store[int] = Store(42)
 s2: Store[str] = Store('hello')
 s3: Store[float] = Store(3.14)
-";
+"#;
     let _ = run(source)?;
     Ok(())
 }
@@ -332,7 +336,7 @@ s3: Store[float] = Store(3.14)
 
 #[test]
 fn e0149_nested_generic_classes() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import TypeVar, Generic
 
 T = TypeVar('T')
@@ -343,7 +347,7 @@ class Container(Generic[T]):
         def get(self) -> U: ...
 
     def outer_method(self) -> T: ...
-";
+"#;
     let _ = run(source)?;
     Ok(())
 }
@@ -352,7 +356,7 @@ class Container(Generic[T]):
 
 #[test]
 fn e0107_invariant_used_correctly() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import TypeVar, Generic
 
 T = TypeVar('T')
@@ -361,14 +365,14 @@ class MutableContainer(Generic[T]):
     def get(self) -> T: ...
     def set(self, val: T) -> None: ...
     def swap(self, other: T) -> T: ...
-";
+"#;
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0107_variance_with_property() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import TypeVar, Generic
 
 T_co = TypeVar('T_co', covariant=True)
@@ -376,7 +380,7 @@ T_co = TypeVar('T_co', covariant=True)
 class ReadOnly(Generic[T_co]):
     @property
     def value(self) -> T_co: ...
-";
+"#;
     let _ = run(source)?;
     Ok(())
 }
@@ -385,21 +389,21 @@ class ReadOnly(Generic[T_co]):
 
 #[test]
 fn e0117_typevar_in_function_only() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import TypeVar
 
 T = TypeVar('T')
 
 def identity(x: T) -> T:
     return x
-";
+"#;
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0117_multiple_unbound_in_method() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import TypeVar, Generic
 
 T = TypeVar('T')
@@ -409,7 +413,7 @@ V = TypeVar('V')
 class MyClass(Generic[T]):
     def method(self, x: U, y: V) -> None:
         pass
-";
+"#;
     let _ = run(source)?;
     Ok(())
 }
@@ -418,7 +422,7 @@ class MyClass(Generic[T]):
 
 #[test]
 fn e0118_diamond_inheritance() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from abc import ABC, abstractmethod
 
 class A(ABC):
@@ -436,7 +440,7 @@ class C(A):
 class D(B, C):
     def method(self) -> int:
         return super().method()
-";
+"#;
     let _ = run(source)?;
     Ok(())
 }
@@ -445,7 +449,7 @@ class D(B, C):
 
 #[test]
 fn e0092_generic_with_defaults() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import TypeVar, Generic, TypeAlias
 
 T = TypeVar('T')
@@ -456,7 +460,7 @@ class Container(Generic[T, U]):
 
 x: Container[str]
 y: Container[str, float]
-";
+"#;
     let _ = run(source)?;
     Ok(())
 }
@@ -465,28 +469,28 @@ y: Container[str, float]
 
 #[test]
 fn e0094_self_in_classmethod() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Self
 
 class Factory:
     @classmethod
     def create(cls) -> Self:
         return cls()
-";
+"#;
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0094_self_in_staticmethod() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Self
 
 class Bad:
     @staticmethod
     def create() -> Self:
         pass
-";
+"#;
     let _ = run(source)?;
     Ok(())
 }

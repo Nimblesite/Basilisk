@@ -23,7 +23,7 @@ fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<String> {
 
 #[test]
 fn e0146_protocol_class_object_pass() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Protocol
 
 class Comparable(Protocol):
@@ -31,7 +31,7 @@ class Comparable(Protocol):
 
 def sort_things(cls: type[Comparable]) -> None:
     pass
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -94,14 +94,14 @@ t2 = (1, 2, "a")
 
 #[test]
 fn e0147_starred_tuple_in_function() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 def f(t1: tuple[int], t2: tuple[int, *tuple[int, ...]], t3: tuple[int, ...]) -> None:
     v2: tuple[int, *tuple[int, ...]]
     v2 = t3
     v3: tuple[int]
     v3 = t2
     v3 = t3
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -166,7 +166,7 @@ class Outer(Generic[T]):
 
 #[test]
 fn e0047_complex_invalid_type_expr() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Final
 
 class Config:
@@ -174,7 +174,7 @@ class Config:
 
 def f() -> None:
     x: Final[int] = 10
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -201,14 +201,14 @@ class Color(Enum):
 
 #[test]
 fn e0067_non_member_with_value() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from enum import Enum, nonmember
 
 class Animal(Enum):
     DOG = 1
     CAT = 2
     legs = nonmember(4)
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -218,14 +218,14 @@ class Animal(Enum):
 
 #[test]
 fn e0069_dataclass_kwonly() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from dataclasses import dataclass
 
 @dataclass(kw_only=True)
 class Config:
     name: str
     value: int = 0
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -259,7 +259,7 @@ do_clone(Sheep())
 
 #[test]
 fn e0078_self_type_violation() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Self
 
 class Base:
@@ -269,7 +269,7 @@ class Base:
 class Child(Base):
     def copy(self) -> Base:
         return Base()
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -392,11 +392,11 @@ x: Pair[int]
 
 #[test]
 fn e0094_self_type_module_level() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Self
 
 x: Self = None
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -404,12 +404,12 @@ x: Self = None
 
 #[test]
 fn e0094_self_type_in_free_function() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Self
 
 def f() -> Self:
     pass
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -417,13 +417,13 @@ def f() -> Self:
 
 #[test]
 fn e0094_self_type_in_method() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Self
 
 class MyClass:
     def create(self) -> Self:
         return self
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -448,13 +448,13 @@ class Config:
 
 #[test]
 fn e0096_dataclass_mutable_default() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from dataclasses import dataclass
 
 @dataclass
 class Bad:
     items: list[int] = []
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -464,12 +464,12 @@ class Bad:
 
 #[test]
 fn e0100_literal_augmented_assign() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Literal
 
 x: Literal[1] = 1
 x += 1
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -479,12 +479,12 @@ x += 1
 
 #[test]
 fn e0101_typeguard_no_param() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import TypeGuard
 
 def is_int() -> TypeGuard[int]:
     return True
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -492,12 +492,12 @@ def is_int() -> TypeGuard[int]:
 
 #[test]
 fn e0101_typeguard_with_param() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import TypeGuard
 
 def is_int(x: object) -> TypeGuard[int]:
     return isinstance(x, int)
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -535,12 +535,12 @@ B: TypeAlias = "A"
 
 #[test]
 fn e0104_non_cyclical_alias() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import TypeAlias
 
 Vector: TypeAlias = list[float]
 Matrix: TypeAlias = list[Vector]
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -567,14 +567,14 @@ def f(x: T) -> T:
 
 #[test]
 fn e0106_protocol_as_type() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Protocol
 
 class Drawable(Protocol):
     def draw(self) -> None: ...
 
 x: type[Drawable]
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -584,14 +584,14 @@ x: type[Drawable]
 
 #[test]
 fn e0108_dataclass_slots() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from dataclasses import dataclass
 
 @dataclass(slots=True)
 class Point:
     x: float
     y: float
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -599,7 +599,7 @@ class Point:
 
 #[test]
 fn e0108_dataclass_slots_inheritance() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from dataclasses import dataclass
 
 @dataclass
@@ -609,7 +609,7 @@ class Base:
 @dataclass(slots=True)
 class Child(Base):
     y: int
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -730,12 +730,12 @@ result = process("test")
 
 #[test]
 fn e0115_non_deprecated_function() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 def normal_func() -> None:
     pass
 
 normal_func()
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -758,14 +758,14 @@ p = Point(1.0, 2.0)
 
 #[test]
 fn e0116_namedtuple_definition_class() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import NamedTuple
 
 class Point(NamedTuple):
     x: float
     y: float
     z: float = 0.0
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -810,7 +810,7 @@ class MyClass(Generic[T]):
 
 #[test]
 fn e0118_super_abstract_no_impl() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from abc import ABC, abstractmethod
 
 class Base(ABC):
@@ -820,7 +820,7 @@ class Base(ABC):
 class Child(Base):
     def do_thing(self) -> None:
         super().do_thing()
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
@@ -828,7 +828,7 @@ class Child(Base):
 
 #[test]
 fn e0118_super_concrete_method() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 class Base:
     def do_thing(self) -> None:
         pass
@@ -836,7 +836,7 @@ class Base:
 class Child(Base):
     def do_thing(self) -> None:
         super().do_thing()
-";
+"#;
     let diags = run(source)?;
     let _ = codes(&diags);
     Ok(())
