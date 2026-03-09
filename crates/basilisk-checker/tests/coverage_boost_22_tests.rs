@@ -18,13 +18,13 @@ fn run(source: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::e
 
 #[test]
 fn e0129_literal_0_vs_false() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Literal
 
 def func(a: Literal[0], b: Literal[False]):
     x1: Literal[False] = a
     x2: Literal[0] = b
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -35,12 +35,12 @@ def func(a: Literal[0], b: Literal[False]):
 
 #[test]
 fn e0129_augmented_assignment() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Literal
 
 def func(a: Literal[3, 4, 5]):
     a += 3
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -51,7 +51,7 @@ def func(a: Literal[3, 4, 5]):
 
 #[test]
 fn e0129_multiple_augmented_ops() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Literal
 
 def func(a: Literal[1, 2], b: Literal[10]):
@@ -59,7 +59,7 @@ def func(a: Literal[1, 2], b: Literal[10]):
     b *= 2
     a //= 1
     b **= 2
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -70,13 +70,13 @@ def func(a: Literal[1, 2], b: Literal[10]):
 
 #[test]
 fn e0129_literal_1_vs_true() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Literal
 
 def func(a: Literal[1], b: Literal[True]):
     x1: Literal[True] = a
     x2: Literal[1] = b
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -103,13 +103,13 @@ def func(a: Literal["hello"]):
 
 #[test]
 fn e0129_literal_hex_octal() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Literal
 
 def func(a: Literal[0xFF]):
     x: Literal[255] = a
     y: Literal[256] = a
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -120,13 +120,13 @@ def func(a: Literal[0xFF]):
 
 #[test]
 fn e0129_valid_literal_assignment() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Literal
 
 def func(a: Literal[1, 2, 3]):
     x: Literal[1, 2, 3] = a
     y: Literal[1, 2, 3, 4] = a
-"#;
+";
     let diagnostics = run(source)?;
     let e0129 = diagnostics
         .iter()
@@ -139,12 +139,12 @@ def func(a: Literal[1, 2, 3]):
 
 #[test]
 fn e0129_nested_literal() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Literal
 
 def func(a: Literal[Literal[1, 2], 3]):
     b: Literal[4] = a
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -172,10 +172,10 @@ ratio: float = "1.5"
 
 #[test]
 fn e0014_negative_int_literal() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 x: str = -42
 y: bool = -1
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -200,11 +200,11 @@ y: str = b"world"
 
 #[test]
 fn e0014_none_assignment() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 x: int = None
 y: str = None
 z: float = None
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -215,11 +215,11 @@ z: float = None
 
 #[test]
 fn e0014_bool_literal_assignment() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 x: str = True
 y: float = False
 z: bytes = True
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -246,10 +246,10 @@ w: int = (1, 2)
 
 #[test]
 fn e0014_empty_collection_assignment() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 x: int = []
 y: int = {}
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -454,12 +454,12 @@ x: Callable[Concatenate[int, P], str] = lambda n, *args, **kwargs: str(n)
 
 #[test]
 fn e0140_callable_ellipsis_param() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 x: Callable[..., int] = lambda: 42
 y: Callable[..., str] = lambda x: str(x)
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -467,7 +467,7 @@ y: Callable[..., str] = lambda x: str(x)
 
 #[test]
 fn e0140_non_callable_assignment() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def my_func(x: int) -> str:
@@ -475,7 +475,7 @@ def my_func(x: int) -> str:
 
 # Annotated assignment of function to non-protocol type
 y: Callable[[int], str] = my_func
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -528,11 +528,11 @@ def g(a: {int: str}) -> None:
 
 #[test]
 fn e0015_optional_multiple_args() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Optional
 
 x: Optional[int, str] = None
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -543,11 +543,11 @@ x: Optional[int, str] = None
 
 #[test]
 fn e0015_dict_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Dict
 
 x: Dict[str, int, float] = {}
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -575,12 +575,12 @@ y: Tuple[int, str, ...] = (1, "a")
 
 #[test]
 fn e0113_typeis_completely_unrelated() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeIs
 
 def is_int(x: str) -> TypeIs[int]:
     return isinstance(x, int)
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -591,7 +591,7 @@ def is_int(x: str) -> TypeIs[int]:
 
 #[test]
 fn e0113_typeis_with_optional() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeIs, Optional
 
 def is_str(x: Optional[str]) -> TypeIs[str]:
@@ -599,7 +599,7 @@ def is_str(x: Optional[str]) -> TypeIs[str]:
 
 def is_int(x: Optional[int]) -> TypeIs[str]:
     return False
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -647,7 +647,7 @@ s = Singleton(42)
 
 #[test]
 fn e0111_metaclass_call() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class Meta(type):
     def __call__(cls, *args, **kwargs):
         return super().__call__(*args, **kwargs)
@@ -657,7 +657,7 @@ class MyClass(metaclass=Meta):
         self.x = x
 
 obj = MyClass(42)
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -706,7 +706,7 @@ class Foo:
 
 #[test]
 fn e0075_self_optional_attr() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Self, Optional
 from dataclasses import dataclass
 
@@ -720,7 +720,7 @@ class SpecialTree(Tree):
     pass
 
 t = SpecialTree(value=1, left=Tree(value=2))
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -728,7 +728,7 @@ t = SpecialTree(value=1, left=Tree(value=2))
 
 #[test]
 fn e0075_self_in_if_branch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Self
 from dataclasses import dataclass
 
@@ -743,7 +743,7 @@ class Special(Node):
 n = Special(value=1)
 if True:
     n.child = Node(value=2)
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())

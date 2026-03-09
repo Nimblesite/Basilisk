@@ -3,9 +3,9 @@
 //! e0147 tuple starred unpack mixed/literal/var compat, e0146 class-satisfies-protocol,
 //! e0119 protocol isinstance overlap deep, e0137 method mismatches,
 //! e0130 constraint deep, e0131 yield deep, e0120 generator deep,
-//! e0138 transform frozen/kw-only/order, e0139 TypeVarTuple deep,
-//! e0112 TypeGuard message building, e0121 nominal subclass + protocol hierarchy,
-//! e0102 TypeVar default deep, e0095 InitVar stmt walking, e0054 class attr deep,
+//! e0138 transform frozen/kw-only/order, e0139 `TypeVarTuple` deep,
+//! e0112 `TypeGuard` message building, e0121 nominal subclass + protocol hierarchy,
+//! e0102 `TypeVar` default deep, e0095 `InitVar` stmt walking, e0054 class attr deep,
 //! e0076 overload union, e0148 generic args, e0111 constructor deep.
 #![allow(missing_docs)]
 
@@ -40,8 +40,7 @@ def make(cls: type[Config]) -> Config:
         .collect::<Vec<_>>();
     assert!(
         !e0144.is_empty(),
-        "Should detect kwarg type mismatch: {:?}",
-        diagnostics
+        "Should detect kwarg type mismatch: {diagnostics:?}"
     );
     Ok(())
 }
@@ -63,15 +62,14 @@ def make(cls: type[Widget]) -> Widget:
         .collect::<Vec<_>>();
     assert!(
         !e0144.is_empty(),
-        "Should detect positional arg type mismatch: {:?}",
-        diagnostics
+        "Should detect positional arg type mismatch: {diagnostics:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0144_constructor_arg_in_nested_call() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class Inner:
     def __init__(self, x: int) -> None:
         pass
@@ -82,7 +80,7 @@ class Outer:
 
 def make(cls: type[Outer]) -> Outer:
     return cls(Inner(42))
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -93,7 +91,7 @@ def make(cls: type[Outer]) -> Outer:
 
 #[test]
 fn e0145_special_form_as_type_arg() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 class Base:
@@ -103,7 +101,7 @@ def check(cls: type[Base]) -> None:
     pass
 
 check(Callable)
-"#;
+";
     let diagnostics = run(source)?;
     let e0145 = diagnostics
         .iter()
@@ -111,15 +109,14 @@ check(Callable)
         .collect::<Vec<_>>();
     assert!(
         !e0145.is_empty(),
-        "Should detect special form as type arg: {:?}",
-        diagnostics
+        "Should detect special form as type arg: {diagnostics:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0145_union_type_bracket_arg() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class Cat:
     pass
 
@@ -133,7 +130,7 @@ def check(cls: type[Cat | Dog]) -> None:
     pass
 
 check(Bird)
-"#;
+";
     let diagnostics = run(source)?;
     let e0145 = diagnostics
         .iter()
@@ -141,15 +138,14 @@ check(Bird)
         .collect::<Vec<_>>();
     assert!(
         !e0145.is_empty(),
-        "Should detect non-member of union: {:?}",
-        diagnostics
+        "Should detect non-member of union: {diagnostics:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0145_type_bracket_method_call() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class Animal:
     pass
 
@@ -162,7 +158,7 @@ def check(cls: type[Animal]) -> None:
 # Valid - Dog is a subclass
 check(Dog)
 check(Animal)
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -173,25 +169,25 @@ check(Animal)
 
 #[test]
 fn e0147_tuple_starred_mixed_annotation() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Tuple
 
 def process(x: tuple[int, *tuple[str, ...], float]) -> None:
     pass
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0147_tuple_fixed_length_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Tuple
 
 def process() -> None:
     x: tuple[int] = (1, 2, 3)
     y: tuple[int, str] = (1,)
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -210,20 +206,20 @@ def process() -> None:
 
 #[test]
 fn e0147_tuple_var_assignment_compat() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def process(src: tuple[int, ...]) -> None:
     dest: tuple[int] = src
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0147_tuple_mixed_to_fixed() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def process(src: tuple[int, *tuple[str, ...], float]) -> None:
     dest: tuple[int] = src
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -254,7 +250,7 @@ x: type[HasProp] = Impl
 
 #[test]
 fn e0146_protocol_class_object_classvar() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol, ClassVar
 
 class HasClassVar(Protocol):
@@ -264,7 +260,7 @@ class Impl:
     count: ClassVar[int] = 0
 
 x: type[HasClassVar] = Impl
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -292,7 +288,7 @@ x: type[HasAttr] = Impl
 
 #[test]
 fn e0119_protocol_method_param_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol, runtime_checkable
 
 @runtime_checkable
@@ -304,14 +300,14 @@ class Impl:
         return x
 
 x: HasProcess = Impl()
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0119_protocol_method_return_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol, runtime_checkable
 
 @runtime_checkable
@@ -323,7 +319,7 @@ class Impl:
         return 42
 
 x: HasProcess = Impl()
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -406,21 +402,20 @@ def gen() -> Generator[int, None, None]:
         .collect::<Vec<_>>();
     assert!(
         !e0131.is_empty(),
-        "Should detect wrong yield type in loop: {:?}",
-        diagnostics
+        "Should detect wrong yield type in loop: {diagnostics:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0131_generator_return_wrong_type() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Generator
 
 def gen() -> Generator[int, None, str]:
     yield 1
     return 42
-"#;
+";
     let diagnostics = run(source)?;
     let e0131 = diagnostics
         .iter()
@@ -454,8 +449,7 @@ def gen2() -> Generator[str, None, None]:
         .count();
     assert!(
         gen_errors >= 1,
-        "Should detect generator violations: {:?}",
-        diagnostics
+        "Should detect generator violations: {diagnostics:?}"
     );
     Ok(())
 }
@@ -492,7 +486,7 @@ g = GrandChild(1, "hi", 3.0)
 
 #[test]
 fn e0138_transform_order_true() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import dataclass_transform
 
 @dataclass_transform()
@@ -521,7 +515,7 @@ r1 = a < b
 
 # No order - should flag
 r2 = c < d
-"#;
+";
     let diagnostics = run(source)?;
     let e0138 = diagnostics
         .iter()
@@ -529,8 +523,7 @@ r2 = c < d
         .collect::<Vec<_>>();
     assert!(
         !e0138.is_empty(),
-        "Should detect ordering without order=True: {:?}",
-        diagnostics
+        "Should detect ordering without order=True: {diagnostics:?}"
     );
     Ok(())
 }
@@ -541,7 +534,7 @@ r2 = c < d
 
 #[test]
 fn e0112_typeguard_inner_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeGuard, Callable
 
 def is_int(x: object) -> TypeGuard[int]:
@@ -551,7 +544,7 @@ def takes_str_check(fn: Callable[[object], TypeGuard[str]]) -> None:
     pass
 
 takes_str_check(is_int)
-"#;
+";
     let diagnostics = run(source)?;
     let e0112 = diagnostics
         .iter()
@@ -559,15 +552,14 @@ takes_str_check(is_int)
         .collect::<Vec<_>>();
     assert!(
         !e0112.is_empty(),
-        "Should detect TypeGuard inner mismatch: {:?}",
-        diagnostics
+        "Should detect TypeGuard inner mismatch: {diagnostics:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0112_typeis_vs_typeguard_different_kinds() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeIs, TypeGuard, Callable
 
 def is_str_typeis(x: object) -> TypeIs[str]:
@@ -577,7 +569,7 @@ def takes_typeguard(fn: Callable[[object], TypeGuard[str]]) -> None:
     pass
 
 takes_typeguard(is_str_typeis)
-"#;
+";
     let diagnostics = run(source)?;
     let e0112 = diagnostics
         .iter()
@@ -585,15 +577,14 @@ takes_typeguard(is_str_typeis)
         .collect::<Vec<_>>();
     assert!(
         !e0112.is_empty(),
-        "Should detect TypeIs vs TypeGuard incompatibility: {:?}",
-        diagnostics
+        "Should detect TypeIs vs TypeGuard incompatibility: {diagnostics:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0112_typeguard_bool_expected_ok() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeGuard, Callable
 
 def is_str(x: object) -> TypeGuard[str]:
@@ -603,7 +594,7 @@ def takes_bool(fn: Callable[[object], bool]) -> None:
     pass
 
 takes_bool(is_str)
-"#;
+";
     let diagnostics = run(source)?;
     let e0112 = diagnostics
         .iter()
@@ -611,8 +602,7 @@ takes_bool(is_str)
         .collect::<Vec<_>>();
     assert!(
         e0112.is_empty(),
-        "TypeGuard to bool should be OK: {:?}",
-        e0112
+        "TypeGuard to bool should be OK: {e0112:?}"
     );
     Ok(())
 }
@@ -623,7 +613,7 @@ takes_bool(is_str)
 
 #[test]
 fn e0121_nominal_subclass_accepted() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class Drawable(Protocol):
@@ -638,14 +628,14 @@ class Circle(Shape):
 
 # Circle inherits draw from Shape
 x: Drawable = Circle()
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0121_protocol_with_inherited_methods() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class Base(Protocol):
@@ -660,7 +650,7 @@ class Impl:
 
 # Missing method_b
 x: Extended = Impl()
-"#;
+";
     let diagnostics = run(source)?;
     let e0121 = diagnostics
         .iter()
@@ -668,8 +658,7 @@ x: Extended = Impl()
         .collect::<Vec<_>>();
     assert!(
         !e0121.is_empty(),
-        "Should detect missing inherited protocol method: {:?}",
-        diagnostics
+        "Should detect missing inherited protocol method: {diagnostics:?}"
     );
     Ok(())
 }
@@ -697,7 +686,7 @@ T3 = TypeVar("T3", default=T2)
 
 #[test]
 fn e0076_overload_with_union_return() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload, Union
 
 @overload
@@ -709,7 +698,7 @@ def process(x: Union[int, str]) -> Union[str, int]:
     if isinstance(x, int):
         return str(x)
     return len(x)
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -720,23 +709,23 @@ def process(x: Union[int, str]) -> Union[str, int]:
 
 #[test]
 fn e0148_set_wrong_args() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Set, FrozenSet
 
 x: Set[int, str] = set()
 y: FrozenSet[int, str] = frozenset()
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0148_deque_wrong_args() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Deque
 
 x: Deque[int, str] = []
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -893,16 +882,14 @@ def test_bound(cls: type[TB]) -> TB:
         .count();
     assert!(
         e0144 >= 3,
-        "Should detect multiple constructor issues: found {} in {:?}",
-        e0144,
-        diagnostics
+        "Should detect multiple constructor issues: found {e0144} in {diagnostics:?}"
     );
     Ok(())
 }
 
 #[test]
 fn mega_type_bracket_all_paths() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeVar, Callable
 
 class Animal:
@@ -929,7 +916,7 @@ check_union(Bird)
 
 # Special form
 check_union(Callable)
-"#;
+";
     let diagnostics = run(source)?;
     let e0145 = diagnostics
         .iter()
@@ -937,16 +924,14 @@ check_union(Callable)
         .count();
     assert!(
         e0145 >= 1,
-        "Should detect type bracket violations: found {} in {:?}",
-        e0145,
-        diagnostics
+        "Should detect type bracket violations: found {e0145} in {diagnostics:?}"
     );
     Ok(())
 }
 
 #[test]
 fn mega_protocol_isinstance_all_cases() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol, runtime_checkable
 
 @runtime_checkable
@@ -970,7 +955,7 @@ isinstance(x, HasLen)
 # Error - not runtime_checkable
 y = WithoutLen()
 isinstance(y, NotRuntime)
-"#;
+";
     let diagnostics = run(source)?;
     let e0119 = diagnostics
         .iter()
@@ -978,9 +963,7 @@ isinstance(y, NotRuntime)
         .count();
     assert!(
         e0119 >= 1,
-        "Should detect isinstance issues: found {} in {:?}",
-        e0119,
-        diagnostics
+        "Should detect isinstance issues: found {e0119} in {diagnostics:?}"
     );
     Ok(())
 }
@@ -1033,16 +1016,14 @@ r2 = c < d
         .count();
     assert!(
         e0138 >= 1,
-        "Should detect transform violations: found {} in {:?}",
-        e0138,
-        diagnostics
+        "Should detect transform violations: found {e0138} in {diagnostics:?}"
     );
     Ok(())
 }
 
 #[test]
 fn mega_typeguard_all_message_paths() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeGuard, TypeIs, Callable
 
 def is_int_guard(x: object) -> TypeGuard[int]:
@@ -1078,7 +1059,7 @@ def takes_bool(fn: Callable[[object], bool]) -> None:
 
 takes_bool(is_int_guard)
 takes_bool(is_str_is)
-"#;
+";
     let diagnostics = run(source)?;
     let e0112 = diagnostics
         .iter()
@@ -1086,9 +1067,7 @@ takes_bool(is_str_is)
         .count();
     assert!(
         e0112 >= 2,
-        "Should detect TypeGuard compat issues: found {} in {:?}",
-        e0112,
-        diagnostics
+        "Should detect TypeGuard compat issues: found {e0112} in {diagnostics:?}"
     );
     Ok(())
 }
@@ -1122,9 +1101,7 @@ def gen_multiple_yields() -> Generator[int, None, None]:
         .count();
     assert!(
         gen_errors >= 1,
-        "Should detect generator violations: found {} in {:?}",
-        gen_errors,
-        diagnostics
+        "Should detect generator violations: found {gen_errors} in {diagnostics:?}"
     );
     Ok(())
 }
@@ -1167,9 +1144,7 @@ d.Z = False
         .count();
     assert!(
         e0054 >= 3,
-        "Should detect multiple final violations: found {} in {:?}",
-        e0054,
-        diagnostics
+        "Should detect multiple final violations: found {e0054} in {diagnostics:?}"
     );
     Ok(())
 }
@@ -1212,9 +1187,7 @@ print(s.debug)
         .count();
     assert!(
         e0095 >= 1,
-        "Should detect InitVar access: found {} in {:?}",
-        e0095,
-        diagnostics
+        "Should detect InitVar access: found {e0095} in {diagnostics:?}"
     );
     Ok(())
 }

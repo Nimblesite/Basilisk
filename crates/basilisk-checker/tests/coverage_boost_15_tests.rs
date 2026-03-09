@@ -197,7 +197,7 @@ WithBase = type("WithBase", (object,), {})
 
 #[test]
 fn e0138_transform_with_init_false() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import dataclass_transform
 
 @dataclass_transform()
@@ -208,14 +208,14 @@ class NoInitBase:
 class NoInitModel(NoInitBase, init=False):
     x: int
     y: str
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0138_transform_multiple_subclasses() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import dataclass_transform
 
 @dataclass_transform()
@@ -235,7 +235,7 @@ class Order(BaseModel):
     user: str
     product: str
     quantity: int = 1
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -257,21 +257,21 @@ Config = NamedTuple("Config", name=str, value=int, debug=bool)
 
 #[test]
 fn e0143_namedtuple_with_classvar() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple, ClassVar
 
 class Point(NamedTuple):
     x: int
     y: int
     dimensions: ClassVar[int] = 2
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0143_namedtuple_with_many_fields() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class HTTPResponse(NamedTuple):
@@ -281,7 +281,7 @@ class HTTPResponse(NamedTuple):
     body: bytes
     url: str
     elapsed: float
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -292,14 +292,14 @@ class HTTPResponse(NamedTuple):
 
 #[test]
 fn e0095_initvar_without_post_init() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import dataclass, InitVar
 
 @dataclass
 class Config:
     name: str
     debug: InitVar[bool] = False
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -329,14 +329,14 @@ class Config:
 
 #[test]
 fn e0122_callable_positional_only_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def pos_only(a: int, b: str, /) -> bool:
     return True
 
 f: Callable[[int], bool] = pos_only
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -363,7 +363,7 @@ f3: Callable[..., None] = complex
 
 #[test]
 fn e0073_namedtuple_tuple_fewer_fields() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class Point(NamedTuple):
@@ -371,7 +371,7 @@ class Point(NamedTuple):
     y: int
 
 p: tuple[int, int, int, int] = Point(1, 2)
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -428,26 +428,26 @@ U = TypeVar("U", default=T)
 
 #[test]
 fn e0112_typeguard_method_no_narrow_param() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeGuard
 
 class Checker:
     def check(self) -> TypeGuard[str]:
         return True
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0112_typeis_method() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeIs
 
 class Validator:
     def validate(self, x: object) -> TypeIs[int]:
         return isinstance(x, int)
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -518,11 +518,11 @@ y: Tuple[()] = ()
 
 #[test]
 fn e0148_optional_wrong_args() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Optional
 
 x: Optional[int, str] = None
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -596,19 +596,19 @@ x: Literal[b"hello"] = b"world"
 
 #[test]
 fn e0054_final_augmented_assign() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Final
 
 X: Final = 42
 X += 1
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0054_final_multiple_reassignments() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Final
 
 A: Final = 1
@@ -618,7 +618,7 @@ C: Final = 3
 A = 10
 B = 20
 C = 30
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -629,7 +629,7 @@ C = 30
 
 #[test]
 fn e0076_overload_complex() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload, Union
 
 @overload
@@ -643,7 +643,7 @@ def parse(data: Union[str, bytes, int]) -> Union[dict, str]:
     if isinstance(data, int):
         return str(data)
     return {}
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -654,7 +654,7 @@ def parse(data: Union[str, bytes, int]) -> Union[dict, str]:
 
 #[test]
 fn e0121_protocol_with_static_method() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class HasUtility(Protocol):
@@ -665,7 +665,7 @@ class MyClass:
     @staticmethod
     def utility() -> int:
         return 42
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -719,7 +719,7 @@ TupleType: TypeAlias = tuple[Unpack[Ts]]
 
 #[test]
 fn e0146_protocol_with_init() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class HasInit(Protocol):
@@ -728,7 +728,7 @@ class HasInit(Protocol):
 class MyClass:
     def __init__(self, x: int) -> None:
         self.x = x
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -789,7 +789,7 @@ c3 = Complex(1, 2, 3.14)
 
 #[test]
 fn e0140_protocol_with_varargs_in_call() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class VarArgsProto(Protocol):
@@ -799,7 +799,7 @@ def my_func(*args: int, **kwargs: str) -> bool:
     return True
 
 f: VarArgsProto = my_func
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -875,20 +875,20 @@ z: tuple[()] = ()
 
 #[test]
 fn e0047_class_attr_walrus_op() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def foo() -> None:
     x: (y := int) = 42
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0047_class_attr_comparison() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class Foo:
     x: int > str = 42
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -899,13 +899,13 @@ class Foo:
 
 #[test]
 fn e0036_classvar_with_nested_brackets() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import ClassVar, Dict, List
 
 class Config:
     items: ClassVar[Dict[str, List[int]]] = {}
     mapping: ClassVar[List[Dict[str, int]]] = []
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -916,11 +916,11 @@ class Config:
 
 #[test]
 fn e0014_literal_underscore_int() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Literal
 
 x: Literal[1_000_000] = 1_000_000
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }

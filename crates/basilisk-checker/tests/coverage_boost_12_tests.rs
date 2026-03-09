@@ -2,10 +2,14 @@
 //! Focuses heavily on: e0115 (deprecated usage - all stmt visit branches),
 //! e0137 (generic protocol assignments with type checking),
 //! e0140 (callable assignment compatibility with AST walking),
-//! e0144 (type() constructor deeper paths),
+//! e0144 (`type()` constructor deeper paths),
 //! e0149 (PEP 695 scoping - deeper nesting),
 //! e0111 (constructor errors - subclass/Self checks).
-#![allow(missing_docs)]
+#![allow(
+    missing_docs,
+    clippy::needless_raw_string_hashes,
+    clippy::uninlined_format_args
+)]
 
 use basilisk_checker::check;
 use basilisk_parser::parse_source;

@@ -18,7 +18,7 @@ fn run(source: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::e
 
 #[test]
 fn e0076_overload_union_arg_no_match() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload, Union
 
 @overload
@@ -31,7 +31,7 @@ def process(x: Union[int, str]) -> Union[str, int]:
 
 def caller(val: Union[int, str, float]) -> None:
     process(val)
-"#;
+";
     let diagnostics = run(source)?;
     let e0076 = diagnostics
         .iter()
@@ -44,7 +44,7 @@ def caller(val: Union[int, str, float]) -> None:
 
 #[test]
 fn e0076_overload_pipe_union() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload
 
 @overload
@@ -57,7 +57,7 @@ def convert(x: int | str) -> str | int:
 
 def caller(val: int | str | bytes) -> None:
     convert(val)
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -111,8 +111,7 @@ x: Getter[int] = IntGetter()
         .collect::<Vec<_>>();
     assert!(
         !e0137.is_empty(),
-        "Should detect return type mismatch after substitution: {:?}",
-        diagnostics
+        "Should detect return type mismatch after substitution: {diagnostics:?}"
     );
     Ok(())
 }
@@ -140,8 +139,7 @@ x: Setter[int] = StrSetter()
         .collect::<Vec<_>>();
     assert!(
         !e0137.is_empty(),
-        "Should detect param type mismatch after substitution: {:?}",
-        diagnostics
+        "Should detect param type mismatch after substitution: {diagnostics:?}"
     );
     Ok(())
 }
@@ -170,8 +168,7 @@ x: Mapper[int, str] = WrongMapper()
         .collect::<Vec<_>>();
     assert!(
         !e0137.is_empty(),
-        "Should detect key param type mismatch: {:?}",
-        diagnostics
+        "Should detect key param type mismatch: {diagnostics:?}"
     );
     Ok(())
 }
@@ -200,14 +197,14 @@ fn: Callable[Concatenate[int, str, P], None] = too_few
 
 #[test]
 fn e0140_callable_param_type_check() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def wrong_types(x: str, y: int) -> None:
     pass
 
 fn: Callable[[int, str], None] = wrong_types
-"#;
+";
     let diagnostics = run(source)?;
     // Callable param type checking may not be implemented for annotated assignments
     let _ = diagnostics;
@@ -216,14 +213,14 @@ fn: Callable[[int, str], None] = wrong_types
 
 #[test]
 fn e0140_callable_return_type_check() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def returns_int(x: int) -> int:
     return x
 
 fn: Callable[[int], str] = returns_int
-"#;
+";
     let diagnostics = run(source)?;
     // Callable return type checking via annotated assignment may not be implemented
     let _ = diagnostics;
@@ -232,14 +229,14 @@ fn: Callable[[int], str] = returns_int
 
 #[test]
 fn e0140_callable_arity_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def one_arg(x: int) -> None:
     pass
 
 fn: Callable[[int, str], None] = one_arg
-"#;
+";
     let diagnostics = run(source)?;
     let e0140 = diagnostics
         .iter()
@@ -247,15 +244,14 @@ fn: Callable[[int, str], None] = one_arg
         .collect::<Vec<_>>();
     assert!(
         !e0140.is_empty(),
-        "Should detect callable arity mismatch: {:?}",
-        diagnostics
+        "Should detect callable arity mismatch: {diagnostics:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0140_protocol_func_compat() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class Handler(Protocol):
@@ -265,7 +261,7 @@ def wrong_handler(x: str) -> str:
     return x
 
 h: Handler = wrong_handler
-"#;
+";
     let diagnostics = run(source)?;
     let e0140 = diagnostics
         .iter()
@@ -380,8 +376,7 @@ def gen() -> Generator[int, None, None]:
         .collect::<Vec<_>>();
     assert!(
         !e0131.is_empty(),
-        "Should detect wrong yield in if: {:?}",
-        diagnostics
+        "Should detect wrong yield in if: {diagnostics:?}"
     );
     Ok(())
 }
@@ -404,8 +399,7 @@ def gen() -> Generator[int, None, None]:
         .collect::<Vec<_>>();
     assert!(
         !e0131.is_empty(),
-        "Should detect wrong yield in try: {:?}",
-        diagnostics
+        "Should detect wrong yield in try: {diagnostics:?}"
     );
     Ok(())
 }
@@ -426,8 +420,7 @@ def gen() -> Generator[int, None, None]:
         .collect::<Vec<_>>();
     assert!(
         !e0131.is_empty(),
-        "Should detect wrong yield in with: {:?}",
-        diagnostics
+        "Should detect wrong yield in with: {diagnostics:?}"
     );
     Ok(())
 }
@@ -456,24 +449,24 @@ T2 = TypeVar("T2", int, str, default=int)
 
 #[test]
 fn e0149_pep695_type_alias_stmt() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 type Alias[T] = list[T]
 type SimpleAlias = int
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0149_pep695_async_def() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 async def fetch[T](url: str) -> T:
     pass
 
 class Repo[T]:
     async def get[U](self, key: str) -> U:
         pass
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -507,7 +500,7 @@ def gen3() -> Generator[float, None, str]:
 
 #[test]
 fn e0119_runtime_protocol_isinstance_ok() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol, runtime_checkable
 
 @runtime_checkable
@@ -516,14 +509,14 @@ class Comparable(Protocol):
 
 x = 42
 isinstance(x, Comparable)
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0119_non_runtime_protocol_isinstance() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class NotRuntime(Protocol):
@@ -535,7 +528,7 @@ class Another(Protocol):
 x = object()
 isinstance(x, NotRuntime)
 isinstance(x, Another)
-"#;
+";
     let diagnostics = run(source)?;
     let e0119 = diagnostics
         .iter()
@@ -543,9 +536,7 @@ isinstance(x, Another)
         .count();
     assert!(
         e0119 >= 2,
-        "Should detect multiple isinstance violations: found {} in {:?}",
-        e0119,
-        diagnostics
+        "Should detect multiple isinstance violations: found {e0119} in {diagnostics:?}"
     );
     Ok(())
 }
@@ -581,22 +572,22 @@ x: type[Serializable] = JsonSerializer
 
 #[test]
 fn e0148_callable_wrong_args() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 x: Callable[int] = lambda: None
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0148_type_wrong_args() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Type
 
 x: Type[int, str] = int
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -607,13 +598,13 @@ x: Type[int, str] = int
 
 #[test]
 fn e0054_final_in_function_body() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Final
 
 def process() -> None:
     X: Final[int] = 10
     X = 20
-"#;
+";
     let diagnostics = run(source)?;
     let e0054 = diagnostics
         .iter()
@@ -630,14 +621,14 @@ def process() -> None:
 
 #[test]
 fn e0095_initvar_no_post_init() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import dataclass, InitVar
 
 @dataclass
 class NoPostInit:
     name: str
     debug: InitVar[bool]
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -719,9 +710,7 @@ h2: Handler = wrong_ret
         .count();
     assert!(
         e0140 >= 1,
-        "Should detect callable compat issues: found {} in {:?}",
-        e0140,
-        diagnostics
+        "Should detect callable compat issues: found {e0140} in {diagnostics:?}"
     );
     Ok(())
 }
@@ -769,9 +758,7 @@ def gen_multiple() -> Generator[int, None, None]:
         .count();
     assert!(
         e0131 >= 3,
-        "Should detect multiple wrong yield types: found {} in {:?}",
-        e0131,
-        diagnostics
+        "Should detect multiple wrong yield types: found {e0131} in {diagnostics:?}"
     );
     Ok(())
 }
@@ -828,9 +815,7 @@ cr: Reader[int] = CorrectReader()
         .count();
     assert!(
         e0137 >= 2,
-        "Should detect multiple generic protocol violations: found {} in {:?}",
-        e0137,
-        diagnostics
+        "Should detect multiple generic protocol violations: found {e0137} in {diagnostics:?}"
     );
     Ok(())
 }
@@ -871,7 +856,7 @@ class Nested[T]:
 
 #[test]
 fn mega_isinstance_protocol_all() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol, runtime_checkable
 
 @runtime_checkable
@@ -895,7 +880,7 @@ isinstance(x, HasIter)
 y = object()
 isinstance(y, NotRuntime1)
 isinstance(y, NotRuntime2)
-"#;
+";
     let diagnostics = run(source)?;
     let e0119 = diagnostics
         .iter()
@@ -903,9 +888,7 @@ isinstance(y, NotRuntime2)
         .count();
     assert!(
         e0119 >= 2,
-        "Should detect non-runtime protocol isinstance: found {} in {:?}",
-        e0119,
-        diagnostics
+        "Should detect non-runtime protocol isinstance: found {e0119} in {diagnostics:?}"
     );
     Ok(())
 }
@@ -994,9 +977,7 @@ c2.A = 30
         .count();
     assert!(
         e0054 >= 4,
-        "Should detect many final violations: found {} in {:?}",
-        e0054,
-        diagnostics
+        "Should detect many final violations: found {e0054} in {diagnostics:?}"
     );
     Ok(())
 }

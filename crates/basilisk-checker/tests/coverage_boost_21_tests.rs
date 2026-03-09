@@ -39,7 +39,7 @@ class Color(Enum):
 
 #[test]
 fn e0066_init_value_param_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from enum import Enum
 
 class Planet(Enum):
@@ -47,7 +47,7 @@ class Planet(Enum):
 
     def __init__(self, value: int, mass: float, radius: float):
         self._value_ = value
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -81,11 +81,11 @@ class Status(Enum):
 
 #[test]
 fn e0071_keyword_passed_to_positional_only() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def f1(__x: int) -> None: ...
 
 f1(__x=3)
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -96,9 +96,9 @@ f1(__x=3)
 
 #[test]
 fn e0071_positional_after_keyword() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def f2(x: int, __y: int) -> None: ...
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -109,11 +109,11 @@ def f2(x: int, __y: int) -> None: ...
 
 #[test]
 fn e0071_valid_positional_only() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def f3(__x: int, __y: int) -> None: ...
 
 f3(1, 2)
-"#;
+";
     let diagnostics = run(source)?;
     let e0071 = diagnostics
         .iter()
@@ -129,7 +129,7 @@ f3(1, 2)
 
 #[test]
 fn e0096_factory_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import dataclass, field
 
 @dataclass
@@ -137,7 +137,7 @@ class DC:
     a: int = field(default_factory=str)
     b: str = field(default_factory=int)
     c: list = field(default_factory=dict)
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -148,7 +148,7 @@ class DC:
 
 #[test]
 fn e0096_factory_correct() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import dataclass, field
 
 @dataclass
@@ -156,7 +156,7 @@ class DC:
     a: list = field(default_factory=list)
     b: dict = field(default_factory=dict)
     c: set = field(default_factory=set)
-"#;
+";
     let diagnostics = run(source)?;
     let e0096 = diagnostics
         .iter()
@@ -388,12 +388,12 @@ class Foo(Generic[T]):
 
 #[test]
 fn e0094_self_in_module_function() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Self
 
 def foo(bar: Self) -> Self:
     return bar
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -404,11 +404,11 @@ def foo(bar: Self) -> Self:
 
 #[test]
 fn e0094_self_in_module_var() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Self
 
 bar: Self = None
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -419,14 +419,14 @@ bar: Self = None
 
 #[test]
 fn e0094_self_in_staticmethod() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Self
 
 class Base:
     @staticmethod
     def make() -> Self:
         return Base()
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -437,7 +437,7 @@ class Base:
 
 #[test]
 fn e0094_self_in_base_class() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Self, Generic
 
 class Foo(Self):
@@ -445,7 +445,7 @@ class Foo(Self):
 
 class Bar(Generic[Self]):
     pass
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -456,7 +456,7 @@ class Bar(Generic[Self]):
 
 #[test]
 fn e0094_valid_self_usage() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Self
 
 class MyClass:
@@ -468,7 +468,7 @@ class MyClass:
         return cls()
 
     attr: Self
-"#;
+";
     let diagnostics = run(source)?;
     let e0094 = diagnostics
         .iter()
@@ -485,7 +485,7 @@ class MyClass:
 
 #[test]
 fn e0078_return_concrete_instead_of_self() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Self
 
 class Shape:
@@ -495,7 +495,7 @@ class Shape:
     @classmethod
     def cls_method(cls) -> Self:
         return Shape()
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -525,7 +525,7 @@ class Container(Generic[T]):
 
 #[test]
 fn e0078_return_in_if() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Self
 
 class Shape:
@@ -533,7 +533,7 @@ class Shape:
         if True:
             return Shape()
         return self
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -544,7 +544,7 @@ class Shape:
 
 #[test]
 fn e0078_return_in_for() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Self
 
 class Shape:
@@ -552,7 +552,7 @@ class Shape:
         for i in range(10):
             return Shape()
         return self
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -563,7 +563,7 @@ class Shape:
 
 #[test]
 fn e0078_return_in_while() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Self
 
 class Shape:
@@ -571,7 +571,7 @@ class Shape:
         while True:
             return Shape()
         return self
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -614,7 +614,7 @@ xs = OrdinalLinkedList(value=1, next=LinkedList[int](value=2))
 
 #[test]
 fn e0075_self_attr_reassignment() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Self
 from dataclasses import dataclass
 
@@ -628,7 +628,7 @@ class SpecialNode(Node):
 
 n = SpecialNode(value=1)
 n.next = Node(value=2)
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -643,7 +643,7 @@ n.next = Node(value=2)
 
 #[test]
 fn e0118_super_abstract_no_impl() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 from abc import abstractmethod
 
@@ -655,7 +655,7 @@ class PColor(Protocol):
 class BadColor(PColor):
     def draw(self) -> str:
         return super().draw()
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -763,13 +763,13 @@ class MyClass:
 
 #[test]
 fn e0036_classvar_in_return_type() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import ClassVar
 
 class MyClass:
     def method(self) -> ClassVar[int]:
         return 1
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -780,13 +780,13 @@ class MyClass:
 
 #[test]
 fn e0036_classvar_nested() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import ClassVar, Final
 
 class MyClass:
     bad1: Final[ClassVar[int]] = 3
     bad2: list[ClassVar[int]] = []
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -797,12 +797,12 @@ class MyClass:
 
 #[test]
 fn e0036_classvar_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import ClassVar
 
 class MyClass:
     x: ClassVar[int, str] = 1
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -813,7 +813,7 @@ class MyClass:
 
 #[test]
 fn e0036_classvar_instance_assign() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import ClassVar
 
 class MyClass:
@@ -821,7 +821,7 @@ class MyClass:
 
 obj = MyClass()
 obj.count = 5
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -832,11 +832,11 @@ obj.count = 5
 
 #[test]
 fn e0036_classvar_module_level() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import ClassVar
 
 x: ClassVar[int] = 1
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -872,12 +872,12 @@ p = Point(1, 2, "wrong")
 
 #[test]
 fn e0041_args_kwargs() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def f(a: int, b: str, *args: float) -> None:
     pass
 
 f(1)
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -892,7 +892,7 @@ f(1)
 
 #[test]
 fn e0072_overload_multiple_methods() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload
 
 class MyList:
@@ -909,7 +909,7 @@ class MyList:
     def put(self, idx: str, val: int) -> None: ...
     def put(self, idx, val):
         pass
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -941,12 +941,12 @@ def decorator(func: Callable[P, int]) -> Callable[P, str]:
 
 #[test]
 fn e0047_nested_brackets_depth() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Dict, List, Optional, Tuple
 
 def deep(x: Dict[str, List[Tuple[int, Optional[str]]]]) -> None:
     pass
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -958,12 +958,12 @@ def deep(x: Dict[str, List[Tuple[int, Optional[str]]]]) -> None:
 
 #[test]
 fn e0015_callable_return_type_invalid() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def f(cb: Callable[[int, str], float, bool]) -> None:
     pass
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -974,12 +974,12 @@ def f(cb: Callable[[int, str], float, bool]) -> None:
 
 #[test]
 fn e0015_callable_ellipsis_in_brackets() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def f(cb: Callable[[...], int]) -> None:
     pass
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -990,12 +990,12 @@ def f(cb: Callable[[...], int]) -> None:
 
 #[test]
 fn e0015_callable_first_arg_invalid() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def f(cb: Callable[42, int]) -> None:
     pass
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -1031,7 +1031,7 @@ def is_int_container(x: Container[str]) -> TypeIs[Container[int]]:
 
 #[test]
 fn e0113_typeis_union_narrowing() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeIs, Union
 
 def is_str(x: Union[int, str, float]) -> TypeIs[str]:
@@ -1039,7 +1039,7 @@ def is_str(x: Union[int, str, float]) -> TypeIs[str]:
 
 def is_int(x: int | str) -> TypeIs[int]:
     return isinstance(x, int)
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -1054,7 +1054,7 @@ def is_int(x: int | str) -> TypeIs[int]:
 
 #[test]
 fn e0111_abstract_instantiation() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from abc import ABC, abstractmethod
 
 class Animal(ABC):
@@ -1062,7 +1062,7 @@ class Animal(ABC):
     def speak(self) -> str: ...
 
 a = Animal()
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
@@ -1292,14 +1292,14 @@ class Foo(Generic[T]):
 
 #[test]
 fn mega_historical_positional_all() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def f1(__x: int) -> None: ...
 def f2(x: int, __y: int) -> None: ...
 def f3(__a: int, __b: str) -> None: ...
 
 f1(__x=3)
 f3(1, 2)
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -1341,7 +1341,7 @@ class Child2(P2):
 
 #[test]
 fn mega_dataclass_factory_all() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import dataclass, field
 
 @dataclass
@@ -1352,7 +1352,7 @@ class DC:
     d: dict = field(default_factory=dict)
     e: set = field(default_factory=set)
     f: float = field(default_factory=bool)
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())

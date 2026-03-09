@@ -1,5 +1,5 @@
 //! Coverage boost tests batch 24: targeting suppression.rs, types.rs,
-//! collection_inference.rs, and many more deeper rule paths.
+//! `collection_inference.rs`, and many more deeper rule paths.
 #![allow(
     missing_docs,
     clippy::needless_raw_string_hashes,

@@ -178,7 +178,7 @@ class Config:
 
 #[test]
 fn e0137_generic_protocol_full_check() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol, TypeVar, Generic
 
 T = TypeVar('T')
@@ -197,14 +197,14 @@ class StrToInt:
 
 t1: Transformer[int, str] = IntToStr()
 t2: Transformer[str, int] = StrToInt()
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0137_protocol_with_multiple_methods_and_attrs() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol, TypeVar
 
 T_co = TypeVar('T_co', covariant=True)
@@ -222,7 +222,7 @@ class UserRepo:
         return []
 
 repo: Repository[str] = UserRepo()
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -231,7 +231,7 @@ repo: Repository[str] = UserRepo()
 
 #[test]
 fn e0140_callable_complex_assignment() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable, Protocol
 
 class EventHandler(Protocol):
@@ -253,14 +253,14 @@ def three_arg(a: str, b: int, c: float) -> bool:
     return True
 
 p2: Callable[[str, int, float], bool] = three_arg
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0140_protocol_with_class_attrs() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class Configurable(Protocol):
@@ -272,14 +272,14 @@ def simple_func(data: str) -> None:
     pass
 
 c: Configurable = simple_func
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0140_callable_annotated_in_class() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 class EventSystem:
@@ -295,7 +295,7 @@ def key_handler(key: str) -> bool:
 es = EventSystem()
 es.on_click = click_handler
 es.on_key = key_handler
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -304,7 +304,7 @@ es.on_key = key_handler
 
 #[test]
 fn e0107_variance_with_type_alias() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeVar, Generic, TypeAlias
 
 T = TypeVar('T')
@@ -319,14 +319,14 @@ InvAlias: TypeAlias = Container[T]
 
 # Alias with covariant TypeVar - should error when used in invariant position
 CoAlias: TypeAlias = Container[T_co]
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0107_multiple_base_classes() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeVar, Generic
 
 T = TypeVar('T')
@@ -341,7 +341,7 @@ class Second(Generic[U]):
 
 class Combined(First[T_co], Second[T_co]):
     pass
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -350,7 +350,7 @@ class Combined(First[T_co], Second[T_co]):
 
 #[test]
 fn e0036_classvar_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import ClassVar, Optional, List, Dict
 
 class MyClass:
@@ -370,14 +370,14 @@ class MyClass:
 
 class Derived(MyClass):
     extra: ClassVar[int] = 10
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0036_classvar_invalid_locations() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import ClassVar
 
 # Module level - invalid
@@ -400,7 +400,7 @@ class Container:
     def method(self) -> None:
         # Method local - invalid
         local: ClassVar[str] = 'bad'
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -409,7 +409,7 @@ class Container:
 
 #[test]
 fn e0149_complex_nesting() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeVar, Generic, Callable
 
 T = TypeVar('T')
@@ -429,7 +429,7 @@ def identity(x: T) -> T:
 
 def compose(f: Callable[[T], U], g: Callable[[U], V]) -> Callable[[T], V]:
     return lambda x: g(f(x))
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -438,7 +438,7 @@ def compose(f: Callable[[T], U], g: Callable[[U], V]) -> Callable[[T], V]:
 
 #[test]
 fn e0079_protocol_with_complex_types() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol, Callable, List, Dict
 
 class DataSource(Protocol):
@@ -451,7 +451,7 @@ class DataSource(Protocol):
 
 import os
 src: DataSource = os
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -538,7 +538,7 @@ def no_ann_gen():
 
 #[test]
 fn e0138_comprehensive_transform() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import dataclass_transform
 
 @dataclass_transform(frozen_default=True, order_default=True)
@@ -568,7 +568,7 @@ class KWConfig:
 
 class DerivedModel(BaseModel):
     value: float
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -645,7 +645,7 @@ o: Literal[True] = False
 
 #[test]
 fn e0014_local_var_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def func(param_int: int, param_str: str, param_float: float) -> None:
     x: str = param_int
     y: int = param_str
@@ -653,7 +653,7 @@ def func(param_int: int, param_str: str, param_float: float) -> None:
 
 def func2(data: list) -> None:
     x: dict = data
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -662,7 +662,7 @@ def func2(data: list) -> None:
 
 #[test]
 fn e0130_typevar_scoping_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeVar, Generic, Callable
 
 T = TypeVar('T')
@@ -684,7 +684,7 @@ class Pair(Generic[T, U]):
 
 def zip_with(f: Callable[[T, U], V], xs: list, ys: list) -> list: ...
 def curry(f: Callable[[T, U], V]) -> Callable[[T], Callable[[U], V]]: ...
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -776,7 +776,7 @@ def bad4(x: var1) -> None:
 
 #[test]
 fn e0122_callable_arity_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def takes_nullary(f: Callable[[], int]) -> None: pass
@@ -800,7 +800,7 @@ takes_any(three_args)
 takes_unary(two_args)  # too many params
 takes_binary(one_arg)  # too few params
 takes_nullary(one_arg)  # extra param
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -809,7 +809,7 @@ takes_nullary(one_arg)  # extra param
 
 #[test]
 fn e0121_protocol_conformance_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class Serializable(Protocol):
@@ -844,7 +844,7 @@ process_serializable(GoodSerializer())
 process_serializable(BadSerializer())
 process_serializable(PartialSerializer())
 process_sizeable([1, 2, 3])
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -853,7 +853,7 @@ process_sizeable([1, 2, 3])
 
 #[test]
 fn e0095_initvar_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import dataclass, InitVar, field
 
 @dataclass
@@ -877,7 +877,7 @@ class ComplexConfig:
 
 c = DatabaseConnection('localhost', 5432, 'secret')
 d = DatabaseConnection('localhost', 5432, 'secret', True)
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -953,7 +953,7 @@ status: Literal[0, 1, -1] = 0
 
 #[test]
 fn e0139_typevartuple_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeVar, TypeVarTuple, Generic, Unpack
 
 T = TypeVar('T')
@@ -972,7 +972,7 @@ matrix: Tensor[int, int] = Tensor()
 cube: Tensor[int, int, int] = Tensor()
 
 tagged: TaggedTensor[str, int, int] = TaggedTensor()
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }

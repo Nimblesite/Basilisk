@@ -1,7 +1,11 @@
 //! Coverage boost tests batch 2: targeting rules with high uncovered line counts.
 //! Covers: e0125, e0126, e0127, e0128, e0129, e0130, e0131, e0132, e0133, e0134,
 //!         e0136, e0137, e0138, e0139, e0140, e0141, e0142, e0143, e0144, e0145
-#![allow(missing_docs)]
+#![allow(
+    missing_docs,
+    clippy::needless_raw_string_hashes,
+    clippy::uninlined_format_args
+)]
 
 use basilisk_checker::check;
 use basilisk_parser::parse_source;

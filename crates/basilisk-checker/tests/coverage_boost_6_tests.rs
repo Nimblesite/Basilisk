@@ -110,7 +110,7 @@ c = Config()
 
 #[test]
 fn e0115_deprecated_no_message() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import deprecated
 
 @deprecated
@@ -118,7 +118,7 @@ def bare_deprecated() -> None:
     pass
 
 bare_deprecated()
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -274,7 +274,7 @@ b[""]
 
 #[test]
 fn e0072_getitem_valid_int() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload
 
 class MyBytes:
@@ -287,7 +287,7 @@ class MyBytes:
 
 b = MyBytes()
 b[0]
-"#;
+";
     let diags = run(source)?;
     let cnt = diags.iter().filter(|d| d.code.code == "BSK-E0072").count();
     assert_eq!(cnt, 0);
@@ -296,7 +296,7 @@ b[0]
 
 #[test]
 fn e0072_getitem_float_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload
 
 class Container:
@@ -309,7 +309,7 @@ class Container:
 
 c = Container()
 c[3.14]
-"#;
+";
     let diags = run(source)?;
     assert!(diags.iter().any(|d| d.code.code == "BSK-E0072"));
     Ok(())
@@ -317,7 +317,7 @@ c[3.14]
 
 #[test]
 fn e0072_getitem_slice() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload
 
 class Seq:
@@ -330,14 +330,14 @@ class Seq:
 
 s = Seq()
 s[1:3]
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0072_getitem_tuple() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload
 
 class Grid:
@@ -350,14 +350,14 @@ class Grid:
 
 g = Grid()
 g[(1, 2)]
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0072_getitem_none() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload
 
 class Store:
@@ -370,7 +370,7 @@ class Store:
 
 s = Store()
 s[None]
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -397,7 +397,7 @@ d[b"hello"]
 
 #[test]
 fn e0072_getitem_list() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload
 
 class Matrix:
@@ -410,14 +410,14 @@ class Matrix:
 
 m = Matrix()
 m[[1, 2]]
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0072_getitem_dict() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload
 
 class Lookup:
@@ -430,14 +430,14 @@ class Lookup:
 
 l = Lookup()
 l[{}]
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0072_getitem_set() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload
 
 class SetLookup:
@@ -450,14 +450,14 @@ class SetLookup:
 
 s = SetLookup()
 s[{1, 2}]
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0072_getitem_bool() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload
 
 class Container:
@@ -470,7 +470,7 @@ class Container:
 
 c = Container()
 c[True]
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -479,7 +479,7 @@ c[True]
 
 #[test]
 fn e0107_co_in_invariant() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeVar, Generic
 
 T = TypeVar('T')
@@ -490,7 +490,7 @@ class Base(Generic[T]):
 
 class Bad(Base[T_co]):
     pass
-"#;
+";
     let diags = run(source)?;
     assert!(diags.iter().any(|d| d.code.code == "BSK-E0107"));
     Ok(())
@@ -498,7 +498,7 @@ class Bad(Base[T_co]):
 
 #[test]
 fn e0107_contra_in_invariant() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeVar, Generic
 
 T = TypeVar('T')
@@ -509,7 +509,7 @@ class Base(Generic[T]):
 
 class Bad(Base[T_contra]):
     pass
-"#;
+";
     let diags = run(source)?;
     assert!(diags.iter().any(|d| d.code.code == "BSK-E0107"));
     Ok(())
@@ -517,7 +517,7 @@ class Bad(Base[T_contra]):
 
 #[test]
 fn e0107_co_correct() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeVar, Generic
 
 T_co = TypeVar('T_co', covariant=True)
@@ -527,7 +527,7 @@ class ReadOnly(Generic[T_co]):
 
 class Sub(ReadOnly[T_co]):
     pass
-"#;
+";
     let diags = run(source)?;
     let cnt = diags.iter().filter(|d| d.code.code == "BSK-E0107").count();
     assert_eq!(cnt, 0);
@@ -536,7 +536,7 @@ class Sub(ReadOnly[T_co]):
 
 #[test]
 fn e0107_multi_typevar() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeVar, Generic
 
 T = TypeVar('T')
@@ -548,7 +548,7 @@ class Pair(Generic[T, U]):
 
 class BadPair(Pair[T_co, T_co]):
     pass
-"#;
+";
     let diags = run(source)?;
     assert!(diags.iter().any(|d| d.code.code == "BSK-E0107"));
     Ok(())
@@ -556,7 +556,7 @@ class BadPair(Pair[T_co, T_co]):
 
 #[test]
 fn e0107_contra_correct() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeVar, Generic
 
 T_contra = TypeVar('T_contra', contravariant=True)
@@ -566,7 +566,7 @@ class Sink(Generic[T_contra]):
 
 class Sub(Sink[T_contra]):
     pass
-"#;
+";
     let diags = run(source)?;
     let cnt = diags.iter().filter(|d| d.code.code == "BSK-E0107").count();
     assert_eq!(cnt, 0);
@@ -575,7 +575,7 @@ class Sub(Sink[T_contra]):
 
 #[test]
 fn e0107_co_in_contra() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeVar, Generic
 
 T_contra = TypeVar('T_contra', contravariant=True)
@@ -586,7 +586,7 @@ class Sink(Generic[T_contra]):
 
 class Bad(Sink[T_co]):
     pass
-"#;
+";
     let diags = run(source)?;
     assert!(diags.iter().any(|d| d.code.code == "BSK-E0107"));
     Ok(())
@@ -596,14 +596,14 @@ class Bad(Sink[T_co]):
 
 #[test]
 fn e0070_local_assign() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Never, Generic, TypeVar
 
 T = TypeVar('T')
 
 def func(c: list[Never]) -> None:
     v: list[int] = c
-"#;
+";
     let diags = run(source)?;
     assert!(diags.iter().any(|d| d.code.code == "BSK-E0070"));
     Ok(())
@@ -611,7 +611,7 @@ def func(c: list[Never]) -> None:
 
 #[test]
 fn e0070_return_invariant() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Never, Generic, TypeVar
 
 T = TypeVar('T')
@@ -622,7 +622,7 @@ class ClassC(Generic[T]):
 
 def func(x: U) -> ClassC[U]:
     return ClassC[Never]()
-"#;
+";
     let diags = run(source)?;
     assert!(diags.iter().any(|d| d.code.code == "BSK-E0070"));
     Ok(())
@@ -630,7 +630,7 @@ def func(x: U) -> ClassC[U]:
 
 #[test]
 fn e0070_covariant_ok() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Never, Generic, TypeVar
 
 T_co = TypeVar('T_co', covariant=True)
@@ -640,7 +640,7 @@ class ReadOnly(Generic[T_co]):
 
 def func() -> ReadOnly[int]:
     return ReadOnly[Never]()
-"#;
+";
     let diags = run(source)?;
     let cnt = diags.iter().filter(|d| d.code.code == "BSK-E0070").count();
     assert_eq!(cnt, 0);
@@ -649,12 +649,12 @@ def func() -> ReadOnly[int]:
 
 #[test]
 fn e0070_any_ok() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Never, Any
 
 def func(c: list[Never]) -> None:
     v: list[Any] = c
-"#;
+";
     let diags = run(source)?;
     let cnt = diags.iter().filter(|d| d.code.code == "BSK-E0070").count();
     assert_eq!(cnt, 0);
@@ -663,12 +663,12 @@ def func(c: list[Never]) -> None:
 
 #[test]
 fn e0070_never_to_never() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Never
 
 def func(c: list[Never]) -> None:
     v: list[Never] = c
-"#;
+";
     let diags = run(source)?;
     let cnt = diags.iter().filter(|d| d.code.code == "BSK-E0070").count();
     assert_eq!(cnt, 0);
@@ -677,12 +677,12 @@ def func(c: list[Never]) -> None:
 
 #[test]
 fn e0070_dict_invariant() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Never
 
 def func(c: dict[str, Never]) -> None:
     v: dict[str, int] = c
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -691,7 +691,7 @@ def func(c: dict[str, Never]) -> None:
 
 #[test]
 fn e0079_module_protocol() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class HasTimeout(Protocol):
@@ -700,19 +700,19 @@ class HasTimeout(Protocol):
 
 import socket
 x: HasTimeout = socket
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0079_no_import_no_error() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class HasAttr(Protocol):
     name: str
-"#;
+";
     let diags = run(source)?;
     let cnt = diags.iter().filter(|d| d.code.code == "BSK-E0079").count();
     assert_eq!(cnt, 0);
@@ -721,7 +721,7 @@ class HasAttr(Protocol):
 
 #[test]
 fn e0079_multiple_methods() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class Connectable(Protocol):
@@ -730,7 +730,7 @@ class Connectable(Protocol):
 
 import os
 c: Connectable = os
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }

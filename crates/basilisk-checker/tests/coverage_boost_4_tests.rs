@@ -36,7 +36,7 @@ q = Pair[int, str](1.0, "hello")
 
 #[test]
 fn e0111_inherited_init() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class Base:
     def __init__(self, x: int) -> None:
         self.x = x
@@ -46,7 +46,7 @@ class Child(Base):
 
 c = Child(42)
 d = Child()
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -143,18 +143,18 @@ f: Callable[[str], str] = greet
 
 #[test]
 fn e0140_lambda_to_callable() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 f: Callable[[int], int] = lambda x: x * 2
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0140_protocol_with_extra_attrs() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class Handler(Protocol):
@@ -167,35 +167,35 @@ class ConcreteHandler:
         return str(x)
 
 h: Handler = ConcreteHandler()
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0140_callable_ellipsis_params() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def any_func(*args: int) -> int:
     return sum(args)
 
 f: Callable[..., int] = any_func
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0140_callable_kw_only() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def my_func(x: int, *, key: str) -> None:
     pass
 
 f: Callable[[int], None] = my_func
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -204,7 +204,7 @@ f: Callable[[int], None] = my_func
 
 #[test]
 fn e0130_typevar_correct_nested() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeVar, Generic
 
 T = TypeVar('T')
@@ -214,14 +214,14 @@ class Outer(Generic[T]):
     class Inner(Generic[U]):
         def method(self, x: U) -> U:
             return x
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0130_method_call_correct_type() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeVar, Generic
 
 T = TypeVar('T')
@@ -233,7 +233,7 @@ class Container(Generic[T]):
 
 x: Container[int] = Container()
 x.append(42)
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -266,21 +266,21 @@ t = (1, "a", "b")
 
 #[test]
 fn e0125_instance_attr_with_default() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class MyClass:
     x: int = 10
     y: str
 
 MyClass.x
 MyClass.y
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0125_type_call_attr_access() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Generic, TypeVar
 
 T = TypeVar('T')
@@ -290,7 +290,7 @@ class Node(Generic[T]):
 
 n1 = Node()
 type(n1).label
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -313,12 +313,12 @@ w: Literal["a", "b"] = "c"
 
 #[test]
 fn e0129_literal_negative_int() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Literal
 
 x: Literal[-1] = -1
 y: Literal[-1] = 1
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -327,7 +327,7 @@ y: Literal[-1] = 1
 
 #[test]
 fn e0128_complex_default_chain() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeVar, Generic
 
 A = TypeVar('A')
@@ -335,35 +335,35 @@ B = TypeVar('B', default=A)
 C = TypeVar('C', default=B)
 
 class Triple(Generic[A, B, C]): ...
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0128_default_with_constraints() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeVar, Generic
 
 X = TypeVar('X', int, str)
 Y = TypeVar('Y', int, str, float, default=X)
 
 class Pair(Generic[X, Y]): ...
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0128_default_with_bound() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeVar, Generic
 
 P = TypeVar('P', bound=int)
 Q = TypeVar('Q', bound=float, default=P)
 
 class Numeric(Generic[P, Q]): ...
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -372,7 +372,7 @@ class Numeric(Generic[P, Q]): ...
 
 #[test]
 fn e0131_generator_with_send_type() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Generator
 
 def accumulator() -> Generator[int, int, str]:
@@ -380,21 +380,21 @@ def accumulator() -> Generator[int, int, str]:
     while True:
         value = yield total
         total += value
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0131_iterable_yield() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Iterable
 
 def items() -> Iterable[int]:
     yield 1
     yield 2
     yield 3
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -403,28 +403,28 @@ def items() -> Iterable[int]:
 
 #[test]
 fn e0134_dict_subclass() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class IntDict(dict[str, int]): ...
 
 def takes_object_dict(d: dict[str, object]) -> None: ...
 
 def test(d: IntDict) -> None:
     takes_object_dict(d)
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0134_list_subclass() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class IntList(list[int]): ...
 
 def takes_object_list(lst: list[object]) -> None: ...
 
 def test(il: IntList) -> None:
     takes_object_list(il)
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -433,7 +433,7 @@ def test(il: IntList) -> None:
 
 #[test]
 fn e0137_multi_typevar_protocol() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol, TypeVar
 
 T = TypeVar('T')
@@ -447,7 +447,7 @@ class IntToStr:
         return str(x)
 
 f: BiFunc[int, str] = IntToStr()
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -456,23 +456,23 @@ f: BiFunc[int, str] = IntToStr()
 
 #[test]
 fn e0120_generator_no_annotation() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def gen():
     yield 1
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0120_async_generator_correct() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import AsyncIterator
 
 async def agen() -> AsyncIterator[int]:
     yield 1
     yield 2
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -481,7 +481,7 @@ async def agen() -> AsyncIterator[int]:
 
 #[test]
 fn e0142_metaclass_transform() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import dataclass_transform
 
 @dataclass_transform()
@@ -494,7 +494,7 @@ class Model(metaclass=ModelMeta):
 class User(Model):
     name: str
     age: int
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -503,7 +503,7 @@ class User(Model):
 
 #[test]
 fn e0143_namedtuple_with_defaults() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class Config(NamedTuple):
@@ -514,7 +514,7 @@ class Config(NamedTuple):
 c1 = Config('localhost')
 c2 = Config('localhost', 9090)
 c3 = Config('localhost', 9090, True)
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -582,7 +582,7 @@ p2 = Pair[int, str](1.0, "hello")
 
 #[test]
 fn e0110_protocol_init_exempt() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol, TypeVar
 
 T = TypeVar('T')
@@ -590,14 +590,14 @@ T = TypeVar('T')
 class Factory(Protocol[T]):
     def __init__(self, val: T) -> None: ...
     def create(self) -> T: ...
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0110_protocol_multiple_methods() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol, TypeVar
 
 T_co = TypeVar('T_co', covariant=True)
@@ -606,7 +606,7 @@ class MultiRead(Protocol[T_co]):
     def read(self) -> T_co: ...
     def peek(self) -> T_co: ...
     def __iter__(self) -> T_co: ...
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -615,7 +615,7 @@ class MultiRead(Protocol[T_co]):
 
 #[test]
 fn e0119_protocol_structural_subtyping() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol, runtime_checkable
 
 @runtime_checkable
@@ -634,7 +634,7 @@ class MyList:
 
 x: HasLength = MyList()
 y: HasIter = MyList()
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -643,7 +643,7 @@ y: HasIter = MyList()
 
 #[test]
 fn e0095_initvar_with_default_factory() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import dataclass, InitVar, field
 
 @dataclass
@@ -655,7 +655,7 @@ class Builder:
     def __post_init__(self, validate: bool) -> None:
         if validate:
             pass
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -664,25 +664,25 @@ class Builder:
 
 #[test]
 fn e0036_classvar_in_local_function() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import ClassVar
 
 def f() -> None:
     x: ClassVar[int] = 10
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0036_classvar_in_self_attr() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import ClassVar
 
 class MyClass:
     def __init__(self) -> None:
         self.x: ClassVar[int] = 10
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -691,7 +691,7 @@ class MyClass:
 
 #[test]
 fn e0108_slots_with_manual_slots() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import dataclass
 
 @dataclass(slots=True)
@@ -699,7 +699,7 @@ class HasManualSlots:
     __slots__ = ('extra',)
     x: int
     y: int
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -708,7 +708,7 @@ class HasManualSlots:
 
 #[test]
 fn e0109_bound_with_numeric_hierarchy() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeVar
 
 T = TypeVar('T', bound=float)
@@ -720,7 +720,7 @@ a = process(42)
 b = process(3.14)
 c = process(True)
 d = process('invalid')
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -729,24 +729,24 @@ d = process('invalid')
 
 #[test]
 fn e0102_complex_constraint_check() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeVar
 
 T1 = TypeVar('T1', int, str, float)
 T2 = TypeVar('T2', int, str, default=T1)
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0102_default_with_numeric_bound() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeVar
 
 N1 = TypeVar('N1', bound=bool)
 N2 = TypeVar('N2', bound=complex, default=N1)
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }

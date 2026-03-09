@@ -1,6 +1,6 @@
 //! Coverage boost tests batch 29: final push to 89%.
 //! Targeting e0147 (tuple starred unpack), e0149 (PEP695 scoping),
-//! e0107 (variance alias paths), e0137 (generic protocol), e0139 (TypeVarTuple),
+//! e0107 (variance alias paths), e0137 (generic protocol), e0139 (`TypeVarTuple`),
 //! e0140 (callable assignment), e0102 (typevar default), e0131 (generator yield).
 #![allow(missing_docs)]
 
@@ -52,14 +52,14 @@ t1 = (1, "a", "extra")
 
 #[test]
 fn e0147_function_body_var_assignment() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def f(t1: tuple[int, ...], t2: tuple[int, *tuple[int, ...]], t3: tuple[int]) -> None:
     v2: tuple[int, *tuple[int, ...]]
     v2 = t1
     v3: tuple[int]
     v3 = t2
     v3 = t1
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -83,11 +83,11 @@ def f() -> None:
 
 #[test]
 fn e0147_homogeneous_to_mixed_starred() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def g(x: tuple[int, ...]) -> None:
     v: tuple[int, *tuple[int, ...]]
     v = x
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -163,10 +163,10 @@ t1 = (1, "ok", 99, "bad", 5)
 
 #[test]
 fn e0147_too_few_elements() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 t1: tuple[int, *tuple[str, ...], int] = (1, 5)
 t1 = (1,)
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -174,11 +174,11 @@ t1 = (1,)
 
 #[test]
 fn e0147_fixed_length_source_to_fixed_target() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def h(x: tuple[int, int, int]) -> None:
     v: tuple[int, int]
     v = x
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -201,7 +201,7 @@ t2: tuple[str, ...] = ("a", "b")
 
 #[test]
 fn e0149_decorator_uses_class_type_param() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeVar
 
 def decorator(x):
@@ -210,7 +210,7 @@ def decorator(x):
 @decorator(T)
 class Foo[T]:
     pass
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -218,7 +218,7 @@ class Foo[T]:
 
 #[test]
 fn e0149_decorator_with_prior_module_assignment() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 T = int
 
 def decorator(x):
@@ -227,7 +227,7 @@ def decorator(x):
 @decorator(T)
 class Foo[T]:
     pass
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -235,7 +235,7 @@ class Foo[T]:
 
 #[test]
 fn e0149_decorator_with_prior_annotated_assignment() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 T: type = int
 
 def decorator(x):
@@ -244,7 +244,7 @@ def decorator(x):
 @decorator(T)
 class Foo[T]:
     pass
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -252,14 +252,14 @@ class Foo[T]:
 
 #[test]
 fn e0149_no_prior_assignment_triggers_error() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def decorator(x):
     return x
 
 @decorator(T)
 class Foo[T]:
     pass
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -267,14 +267,14 @@ class Foo[T]:
 
 #[test]
 fn e0149_func_decorator_type_param() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def decorator(x):
     return x
 
 @decorator(T)
 def foo[T](x: T) -> T:
     return x
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -282,7 +282,7 @@ def foo[T](x: T) -> T:
 
 #[test]
 fn e0149_decorator_indented_prior_assignment_ignored() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def decorator(x):
     return x
 
@@ -292,7 +292,7 @@ def setup():
 @decorator(T)
 class Foo[T]:
     pass
-"#;
+";
     let diagnostics = run(source)?;
     // The indented T = int should NOT count as module-level assignment
     let _ = diagnostics;
@@ -523,7 +523,7 @@ x: MultiAlias[int] = Multi()
 
 #[test]
 fn e0140_function_to_non_protocol_type() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def my_func(x: int) -> str:
@@ -533,7 +533,7 @@ class NotCallable:
     pass
 
 x: NotCallable = my_func
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -541,7 +541,7 @@ x: NotCallable = my_func
 
 #[test]
 fn e0140_callable_varargs_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class TakesVarArgs(Protocol):
@@ -551,7 +551,7 @@ def wrong_varargs(*args: str) -> None:
     pass
 
 x: TakesVarArgs = wrong_varargs
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -559,7 +559,7 @@ x: TakesVarArgs = wrong_varargs
 
 #[test]
 fn e0140_callable_kwargs_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class TakesKwargs(Protocol):
@@ -569,7 +569,7 @@ def wrong_kwargs(**kwargs: str) -> None:
     pass
 
 x: TakesKwargs = wrong_kwargs
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -632,7 +632,7 @@ U = TypeVar("U", int, str, default=int)
 
 #[test]
 fn e0131_yield_from_type_check() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Generator, Iterator
 
 def gen_ints() -> Generator[int, None, None]:
@@ -641,7 +641,7 @@ def gen_ints() -> Generator[int, None, None]:
 
 def gen_strs() -> Generator[str, None, None]:
     yield from gen_ints()
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -707,14 +707,14 @@ def main_gen() -> Generator[str, None, None]:
 
 #[test]
 fn e0120_generator_send_type() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Generator
 
 def echo() -> Generator[int, str, None]:
     value = yield 0
     while True:
         value = yield len(value)
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -726,7 +726,7 @@ def echo() -> Generator[int, str, None]:
 
 #[test]
 fn e0054_final_in_nested_function() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Final
 
 def outer() -> None:
@@ -736,7 +736,7 @@ def outer() -> None:
     def inner() -> None:
         Y: Final = 30
         Y = 40
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -744,12 +744,12 @@ def outer() -> None:
 
 #[test]
 fn e0054_final_in_comprehension() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Final
 
 X: Final = 10
 X = [i for i in range(10)]
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -761,13 +761,13 @@ X = [i for i in range(10)]
 
 #[test]
 fn e0148_nested_generic_subscript() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Dict, List, Optional
 
 x: Dict[str, List[Optional[int]]] = {}
 y: Dict[str, Dict[str, List[int]]] = {}
 z: Dict[List[int], str] = {}
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -822,7 +822,7 @@ class Impl:
 
 #[test]
 fn e0119_protocol_abstract_methods() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 from abc import abstractmethod
 
@@ -836,7 +836,7 @@ class Writable(Protocol):
 
 class ReadWritable(Readable, Writable, Protocol):
     pass
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -910,7 +910,7 @@ class Container(Generic[T]):
 
 #[test]
 fn e0143_namedtuple_delete_field() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class Point(NamedTuple):
@@ -919,7 +919,7 @@ class Point(NamedTuple):
 
 p = Point(1, 2)
 del p.x
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -927,7 +927,7 @@ del p.x
 
 #[test]
 fn e0143_namedtuple_field_assignment() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class Color(NamedTuple):
@@ -937,7 +937,7 @@ class Color(NamedTuple):
 
 c = Color(255, 0, 0)
 c.r = 128
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -949,7 +949,7 @@ c.r = 128
 
 #[test]
 fn e0116_namedtuple_multiple_inheritance() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class A(NamedTuple):
@@ -960,7 +960,7 @@ class B(NamedTuple):
 
 class C(A, B):
     pass
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -972,7 +972,7 @@ class C(A, B):
 
 #[test]
 fn e0138_frozen_inheritance_conflict() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import dataclass
 
 @dataclass(frozen=True)
@@ -982,7 +982,7 @@ class Frozen:
 @dataclass(frozen=False)
 class Mutable(Frozen):
     y: str
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -990,7 +990,7 @@ class Mutable(Frozen):
 
 #[test]
 fn e0138_transform_eq_and_order() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import dataclass
 
 @dataclass(eq=True, order=True)
@@ -1000,7 +1000,7 @@ class Ordered:
 @dataclass(eq=False, order=True)
 class BadOrder:
     value: int
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -1012,7 +1012,7 @@ class BadOrder:
 
 #[test]
 fn e0142_transform_with_field_specifiers() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import dataclass_transform
 from dataclasses import field
 
@@ -1024,7 +1024,7 @@ class ModelBase:
 class User(ModelBase):
     name: str
     age: int = field(default=0)
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -1098,13 +1098,13 @@ c = Child()
 
 #[test]
 fn e0047_deeply_nested_annotation() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Dict, List, Optional, Callable, Tuple
 
 x: Dict[str, List[Optional[Callable[[int, str], bool]]]] = {}
 y: List[Dict[str, List[Dict[str, int]]]] = []
 z: Optional[Callable[[Dict[str, int]], List[str]]] = None
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -1116,12 +1116,12 @@ z: Optional[Callable[[Dict[str, int]], List[str]]] = None
 
 #[test]
 fn e0015_lambda_callable_annotation() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 f: Callable[[int, str], bool] = lambda x, y: len(y) > x
 g: Callable[..., int] = lambda: 42
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -1207,6 +1207,6 @@ sized: Sized = MyList()
 "#;
     let diagnostics = run(source)?;
     // Just verify the pipeline runs
-    assert!(diagnostics.len() >= 0);
+    let _ = diagnostics;
     Ok(())
 }

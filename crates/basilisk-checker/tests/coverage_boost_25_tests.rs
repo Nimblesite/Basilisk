@@ -1,5 +1,5 @@
 //! Coverage boost tests batch 25: ultra-targeted tests for specific uncovered
-//! functions and branches. Focus on make_diagnostic paths, deeper rule branches,
+//! functions and branches. Focus on `make_diagnostic` paths, deeper rule branches,
 //! and edge cases that trigger specific code paths.
 #![allow(
     missing_docs,
@@ -950,6 +950,7 @@ v = c.get()
 // =============================================================================
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn mega_all_v5_final_push() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import (

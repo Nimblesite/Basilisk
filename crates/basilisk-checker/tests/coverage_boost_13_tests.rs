@@ -1,15 +1,15 @@
 //! Coverage boost tests batch 13: targeting deep uncovered code paths.
 //! Focuses on: e0140 (protocol/callable compat - varargs, kwargs, positional-only,
 //! kw-only, defaults, Concatenate, param types), e0115 (deprecated - Try/With stmts),
-//! e0144 (type() constructor edge cases), e0149 (PEP 695 scoping),
+//! e0144 (`type()` constructor edge cases), e0149 (PEP 695 scoping),
 //! e0107 (variance deeper), e0111 (constructor subclass checks),
 //! e0138 (dataclass transform deeper), e0131 (yield type deeper),
 //! e0130 (typevar scoping deeper), e0120 (generator deeper),
-//! e0036 (ClassVar deeper), e0095 (InitVar deeper), e0143 (NamedTuple deeper),
-//! e0121 (Protocol conformance deeper), e0139 (TypeVarTuple deeper),
+//! e0036 (`ClassVar` deeper), e0095 (`InitVar` deeper), e0143 (`NamedTuple` deeper),
+//! e0121 (Protocol conformance deeper), e0139 (`TypeVarTuple` deeper),
 //! e0126 (Literal string deeper), e0119 (Protocol isinstance deeper),
-//! e0116 (NamedTuple definition deeper), e0073 (NamedTuple compat deeper),
-//! e0122 (Callable arity deeper), e0102 (TypeVar default deeper).
+//! e0116 (`NamedTuple` definition deeper), e0073 (`NamedTuple` compat deeper),
+//! e0122 (Callable arity deeper), e0102 (`TypeVar` default deeper).
 #![allow(
     missing_docs,
     clippy::needless_raw_string_hashes,

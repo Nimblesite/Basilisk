@@ -1,10 +1,10 @@
 //! Coverage boost tests batch 16: deep-dive into remaining uncovered paths.
-//! Focus areas: e0138 frozen/kw_only/order, e0144 type() deep constructor paths,
-//! e0111 constructor self-type/base/generic, e0143 NamedTuple delete/unpack/index,
-//! e0095 InitVar attribute access, e0122 callable stmt branches, e0126 literal
-//! invariant generics, e0054 final class/module/rhs-inferred, e0112 TypeGuard
-//! callable return, e0121 protocol conformance init/hierarchy, e0073 NamedTuple
-//! tuple compat delete, e0139 TypeVarTuple alias specialization,
+//! Focus areas: e0138 `frozen/kw_only/order`, e0144 `type()` deep constructor paths,
+//! e0111 constructor self-type/base/generic, e0143 `NamedTuple` delete/unpack/index,
+//! e0095 `InitVar` attribute access, e0122 callable stmt branches, e0126 literal
+//! invariant generics, e0054 final class/module/rhs-inferred, e0112 `TypeGuard`
+//! callable return, e0121 protocol conformance init/hierarchy, e0073 `NamedTuple`
+//! tuple compat delete, e0139 `TypeVarTuple` alias specialization,
 //! e0130 typevar constraint deep, e0107 alias variance expansion,
 //! e0076 overload missing impl, e0146 protocol class deep, e0119 protocol isinstance,
 //! e0147 tuple starred, e0148 generic type arg, e0131 generator complex,
@@ -52,7 +52,7 @@ u.name = "new"
 
 #[test]
 fn e0138_kw_only_positional_call() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import dataclass_transform
 
 @dataclass_transform(kw_only_default=True)
@@ -67,7 +67,7 @@ class Derived(Point):
     z: int
 
 p = Derived(1, 2, 3)
-"#;
+";
     let diagnostics = run(source)?;
     let e0138 = diagnostics
         .iter()
@@ -79,7 +79,7 @@ p = Derived(1, 2, 3)
 
 #[test]
 fn e0138_order_comparison() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import dataclass_transform
 
 @dataclass_transform()
@@ -95,7 +95,7 @@ class Derived(Score):
 a = Derived()
 b = Derived()
 result = a < b
-"#;
+";
     let diagnostics = run(source)?;
     let e0138 = diagnostics
         .iter()
@@ -110,7 +110,7 @@ result = a < b
 
 #[test]
 fn e0138_non_frozen_inherits_frozen() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import dataclass_transform
 
 @dataclass_transform()
@@ -122,7 +122,7 @@ class Base(metaclass=ModelMeta, frozen=True):
 
 class Child(Base, frozen=False):
     y: int
-"#;
+";
     let diagnostics = run(source)?;
     // Non-frozen inheriting frozen requires both classes to be in the transform pipeline
     let _ = diagnostics;
@@ -131,7 +131,7 @@ class Child(Base, frozen=False):
 
 #[test]
 fn e0138_transform_with_attribute_decorator() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import dataclass_transform
 
 @typing.dataclass_transform(kw_only_default=True, frozen_default=True)
@@ -140,7 +140,7 @@ class ModelMeta(type):
 
 class Item(metaclass=ModelMeta):
     name: str
-"#;
+";
     let diagnostics = run(source)?;
     // Just check it parses and runs
     let _ = diagnostics;
@@ -174,15 +174,14 @@ def create(cls: type[Animal]) -> Animal:
         .collect::<Vec<_>>();
     assert!(
         e0144.iter().any(|d| d.message.contains("at least")),
-        "Should detect too few args: {:?}",
-        e0144
+        "Should detect too few args: {e0144:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0144_type_param_call_in_for_loop() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class Widget:
     def __init__(self, width: int) -> None:
         pass
@@ -190,14 +189,14 @@ class Widget:
 def make_widgets(cls: type[Widget], sizes: list) -> None:
     for size in sizes:
         cls(size)
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0144_type_param_call_in_while() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class Node:
     def __init__(self, value: int) -> None:
         pass
@@ -206,21 +205,21 @@ def build(cls: type[Node]) -> None:
     i = 0
     while i < 10:
         cls(i)
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0144_type_param_return() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class Obj:
     def __init__(self, x: int) -> None:
         pass
 
 def factory(cls: type[Obj]) -> Obj:
     return cls(42)
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -281,7 +280,7 @@ def create(cls: type[T]) -> T:
 
 #[test]
 fn e0144_metaclass_call() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class Meta(type):
     def __call__(cls, x: int) -> None:
         pass
@@ -291,7 +290,7 @@ class Obj(metaclass=Meta):
 
 def factory(cls: type[Obj]) -> None:
     cls(42)
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -312,13 +311,13 @@ def make(cls: type[Singleton]) -> Singleton:
 
 #[test]
 fn e0144_no_init_with_args() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class Empty:
     pass
 
 def make(cls: type[Empty]) -> Empty:
     return cls(1, 2, 3)
-"#;
+";
     let diagnostics = run(source)?;
     let e0144 = diagnostics
         .iter()
@@ -330,14 +329,14 @@ def make(cls: type[Empty]) -> Empty:
 
 #[test]
 fn e0144_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class Simple:
     def __init__(self, x: int) -> None:
         pass
 
 def make(cls: type[Simple]) -> Simple:
     return cls(1, 2, 3)
-"#;
+";
     let diagnostics = run(source)?;
     let e0144 = diagnostics
         .iter()
@@ -349,7 +348,7 @@ def make(cls: type[Simple]) -> Simple:
 
 #[test]
 fn e0144_base_class_init() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class Base:
     def __init__(self, x: int, y: int) -> None:
         pass
@@ -359,21 +358,21 @@ class Derived(Base):
 
 def make(cls: type[Derived]) -> Derived:
     return cls(1, 2)
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0144_varargs_constructor() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class Flexible:
     def __init__(self, *args: int) -> None:
         pass
 
 def make(cls: type[Flexible]) -> Flexible:
     return cls(1, 2, 3, 4, 5)
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -384,12 +383,12 @@ def make(cls: type[Flexible]) -> Flexible:
 
 #[test]
 fn e0111_no_init_class_with_args() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 class Empty:
     pass
 
 x = Empty(1, 2)
-"#;
+";
     let diagnostics = run(source)?;
     let e0111 = diagnostics
         .iter()
@@ -397,15 +396,14 @@ x = Empty(1, 2)
         .collect::<Vec<_>>();
     assert!(
         !e0111.is_empty(),
-        "Should detect no-init class called with args: {:?}",
-        diagnostics
+        "Should detect no-init class called with args: {diagnostics:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0111_self_type_incompatibility() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Self
 
 class Base:
@@ -416,7 +414,7 @@ class Sub(Base):
     pass
 
 x = Sub(Base())
-"#;
+";
     let diagnostics = run(source)?;
     let e0111 = diagnostics
         .iter()
@@ -447,8 +445,7 @@ x: Box[int] = Box[int]("string")
         .collect::<Vec<_>>();
     assert!(
         !e0111.is_empty(),
-        "Should detect generic constructor type mismatch: {:?}",
-        diagnostics
+        "Should detect generic constructor type mismatch: {diagnostics:?}"
     );
     Ok(())
 }
@@ -501,7 +498,7 @@ x = Leaf(1, "hello")
 
 #[test]
 fn e0143_namedtuple_delete_attribute() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class Point(NamedTuple):
@@ -510,7 +507,7 @@ class Point(NamedTuple):
 
 p = Point(1, 2)
 del p.x
-"#;
+";
     let diagnostics = run(source)?;
     let e0143 = diagnostics
         .iter()
@@ -518,15 +515,14 @@ del p.x
         .collect::<Vec<_>>();
     assert!(
         !e0143.is_empty(),
-        "Should detect delete on NamedTuple field: {:?}",
-        diagnostics
+        "Should detect delete on NamedTuple field: {diagnostics:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0143_namedtuple_delete_subscript() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class Point(NamedTuple):
@@ -535,7 +531,7 @@ class Point(NamedTuple):
 
 p = Point(1, 2)
 del p[0]
-"#;
+";
     let diagnostics = run(source)?;
     let e0143 = diagnostics
         .iter()
@@ -543,15 +539,14 @@ del p[0]
         .collect::<Vec<_>>();
     assert!(
         !e0143.is_empty(),
-        "Should detect delete on NamedTuple element: {:?}",
-        diagnostics
+        "Should detect delete on NamedTuple element: {diagnostics:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0143_namedtuple_tuple_unpack_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class Point(NamedTuple):
@@ -561,7 +556,7 @@ class Point(NamedTuple):
 
 p = Point(1, 2, 3)
 a, b = p
-"#;
+";
     let diagnostics = run(source)?;
     let e0143 = diagnostics
         .iter()
@@ -569,15 +564,14 @@ a, b = p
         .collect::<Vec<_>>();
     assert!(
         !e0143.is_empty(),
-        "Should detect tuple unpack mismatch: {:?}",
-        diagnostics
+        "Should detect tuple unpack mismatch: {diagnostics:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0143_namedtuple_out_of_bounds_index() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class Point(NamedTuple):
@@ -586,7 +580,7 @@ class Point(NamedTuple):
 
 p = Point(1, 2)
 v = p[5]
-"#;
+";
     let diagnostics = run(source)?;
     // Out-of-bounds requires the expression to be checked via check_expr_recursive
     let _ = diagnostics;
@@ -595,7 +589,7 @@ v = p[5]
 
 #[test]
 fn e0143_namedtuple_negative_out_of_bounds() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class Point(NamedTuple):
@@ -604,7 +598,7 @@ class Point(NamedTuple):
 
 p = Point(1, 2)
 v = p[-3]
-"#;
+";
     let diagnostics = run(source)?;
     // Negative out-of-bounds requires expression-level checking
     let _ = diagnostics;
@@ -613,7 +607,7 @@ v = p[-3]
 
 #[test]
 fn e0143_namedtuple_assign_attribute() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class Point(NamedTuple):
@@ -622,7 +616,7 @@ class Point(NamedTuple):
 
 p = Point(1, 2)
 p.x = 10
-"#;
+";
     let diagnostics = run(source)?;
     let e0143 = diagnostics
         .iter()
@@ -630,15 +624,14 @@ p.x = 10
         .collect::<Vec<_>>();
     assert!(
         !e0143.is_empty(),
-        "Should detect assignment to NamedTuple field: {:?}",
-        diagnostics
+        "Should detect assignment to NamedTuple field: {diagnostics:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0143_namedtuple_assign_subscript() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class Point(NamedTuple):
@@ -647,7 +640,7 @@ class Point(NamedTuple):
 
 p = Point(1, 2)
 p[0] = 10
-"#;
+";
     let diagnostics = run(source)?;
     let e0143 = diagnostics
         .iter()
@@ -655,15 +648,14 @@ p[0] = 10
         .collect::<Vec<_>>();
     assert!(
         !e0143.is_empty(),
-        "Should detect assignment to NamedTuple element: {:?}",
-        diagnostics
+        "Should detect assignment to NamedTuple element: {diagnostics:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0143_namedtuple_tuple_unpack_too_many() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class Point(NamedTuple):
@@ -672,7 +664,7 @@ class Point(NamedTuple):
 
 p = Point(1, 2)
 a, b, c, d = p
-"#;
+";
     let diagnostics = run(source)?;
     let e0143 = diagnostics
         .iter()
@@ -680,8 +672,7 @@ a, b, c, d = p
         .collect::<Vec<_>>();
     assert!(
         !e0143.is_empty(),
-        "Should detect tuple unpack too many: {:?}",
-        diagnostics
+        "Should detect tuple unpack too many: {diagnostics:?}"
     );
     Ok(())
 }
@@ -713,15 +704,14 @@ x = c.debug
         .collect::<Vec<_>>();
     assert!(
         !e0095.is_empty(),
-        "Should detect InitVar attribute access: {:?}",
-        diagnostics
+        "Should detect InitVar attribute access: {diagnostics:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0095_initvar_post_init_param_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import dataclass, InitVar
 
 @dataclass
@@ -732,7 +722,7 @@ class Config:
 
     def __post_init__(self, debug: str, level: int) -> None:
         pass
-"#;
+";
     let diagnostics = run(source)?;
     let e0095 = diagnostics
         .iter()
@@ -740,15 +730,14 @@ class Config:
         .collect::<Vec<_>>();
     assert!(
         !e0095.is_empty(),
-        "Should detect InitVar param type mismatch: {:?}",
-        diagnostics
+        "Should detect InitVar param type mismatch: {diagnostics:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0095_initvar_post_init_count_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import dataclass, InitVar
 
 @dataclass
@@ -759,7 +748,7 @@ class Config:
 
     def __post_init__(self, debug: bool) -> None:
         pass
-"#;
+";
     let diagnostics = run(source)?;
     let e0095 = diagnostics
         .iter()
@@ -767,8 +756,7 @@ class Config:
         .collect::<Vec<_>>();
     assert!(
         !e0095.is_empty(),
-        "Should detect InitVar param count mismatch: {:?}",
-        diagnostics
+        "Should detect InitVar param count mismatch: {diagnostics:?}"
     );
     Ok(())
 }
@@ -797,8 +785,7 @@ if True:
         .collect::<Vec<_>>();
     assert!(
         !e0095.is_empty(),
-        "Should detect InitVar access in if: {:?}",
-        diagnostics
+        "Should detect InitVar access in if: {diagnostics:?}"
     );
     Ok(())
 }
@@ -809,7 +796,7 @@ if True:
 
 #[test]
 fn e0122_callable_in_try_body() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def process(handler: Callable[[int, str], None]) -> None:
@@ -817,7 +804,7 @@ def process(handler: Callable[[int, str], None]) -> None:
         handler(1)
     except Exception:
         pass
-"#;
+";
     let diagnostics = run(source)?;
     let e0122 = diagnostics
         .iter()
@@ -825,21 +812,20 @@ def process(handler: Callable[[int, str], None]) -> None:
         .collect::<Vec<_>>();
     assert!(
         !e0122.is_empty(),
-        "Should detect callable arity in try body: {:?}",
-        diagnostics
+        "Should detect callable arity in try body: {diagnostics:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0122_callable_in_for_loop() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def process(fn: Callable[[int, str], None]) -> None:
     for i in range(10):
         fn(i)
-"#;
+";
     let diagnostics = run(source)?;
     let e0122 = diagnostics
         .iter()
@@ -847,21 +833,20 @@ def process(fn: Callable[[int, str], None]) -> None:
         .collect::<Vec<_>>();
     assert!(
         !e0122.is_empty(),
-        "Should detect callable arity in for loop: {:?}",
-        diagnostics
+        "Should detect callable arity in for loop: {diagnostics:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0122_callable_in_while_loop() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def process(fn: Callable[[int, str], None]) -> None:
     while True:
         fn(1)
-"#;
+";
     let diagnostics = run(source)?;
     let e0122 = diagnostics
         .iter()
@@ -869,8 +854,7 @@ def process(fn: Callable[[int, str], None]) -> None:
         .collect::<Vec<_>>();
     assert!(
         !e0122.is_empty(),
-        "Should detect callable arity in while loop: {:?}",
-        diagnostics
+        "Should detect callable arity in while loop: {diagnostics:?}"
     );
     Ok(())
 }
@@ -893,8 +877,7 @@ def process(fn: Callable[[int, str], None]) -> None:
         .collect::<Vec<_>>();
     assert!(
         !e0122.is_empty(),
-        "Should detect callable arity in if branch: {:?}",
-        diagnostics
+        "Should detect callable arity in if branch: {diagnostics:?}"
     );
     Ok(())
 }
@@ -915,20 +898,19 @@ def process(fn: Callable[[int], None]) -> None:
         .collect::<Vec<_>>();
     assert!(
         !e0122.is_empty(),
-        "Should detect callable arity in with stmt: {:?}",
-        diagnostics
+        "Should detect callable arity in with stmt: {diagnostics:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0122_callable_return_expr() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def process(fn: Callable[[int, str], int]) -> int:
     return fn(1)
-"#;
+";
     let diagnostics = run(source)?;
     let e0122 = diagnostics
         .iter()
@@ -936,20 +918,19 @@ def process(fn: Callable[[int, str], int]) -> int:
         .collect::<Vec<_>>();
     assert!(
         !e0122.is_empty(),
-        "Should detect callable arity in return: {:?}",
-        diagnostics
+        "Should detect callable arity in return: {diagnostics:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0122_callable_ann_assign() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def process(fn: Callable[[int, str], int]) -> None:
     result: int = fn(1)
-"#;
+";
     let diagnostics = run(source)?;
     let e0122 = diagnostics
         .iter()
@@ -957,8 +938,7 @@ def process(fn: Callable[[int, str], int]) -> None:
         .collect::<Vec<_>>();
     assert!(
         !e0122.is_empty(),
-        "Should detect callable arity in ann assign: {:?}",
-        diagnostics
+        "Should detect callable arity in ann assign: {diagnostics:?}"
     );
     Ok(())
 }
@@ -978,20 +958,19 @@ def process(fn: Callable[[int], str]) -> None:
         .collect::<Vec<_>>();
     assert!(
         !e0122.is_empty(),
-        "Should detect callable arg type mismatch: {:?}",
-        diagnostics
+        "Should detect callable arg type mismatch: {diagnostics:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0122_callable_nested_call() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def process(fn: Callable[[int], int], gn: Callable[[str], str]) -> None:
     fn(gn(42))
-"#;
+";
     let diagnostics = run(source)?;
     let e0122 = diagnostics
         .iter()
@@ -999,8 +978,7 @@ def process(fn: Callable[[int], int], gn: Callable[[str], str]) -> None:
         .collect::<Vec<_>>();
     assert!(
         !e0122.is_empty(),
-        "Should detect callable type mismatch in nested call: {:?}",
-        diagnostics
+        "Should detect callable type mismatch in nested call: {diagnostics:?}"
     );
     Ok(())
 }
@@ -1011,13 +989,13 @@ def process(fn: Callable[[int], int], gn: Callable[[str], str]) -> None:
 
 #[test]
 fn e0126_literal_string_invariant_list() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import LiteralString
 
 def process(s: LiteralString) -> None:
     x: list[str] = [s]
     y: list[LiteralString] = x
-"#;
+";
     let diagnostics = run(source)?;
     // Check for any relevant diagnostics
     let _ = diagnostics;
@@ -1026,7 +1004,7 @@ def process(s: LiteralString) -> None:
 
 #[test]
 fn e0126_literal_string_container_construct() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import LiteralString
 
 class Container:
@@ -1035,7 +1013,7 @@ class Container:
 
 def process(s: str) -> None:
     x: Container[LiteralString] = Container(s)
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -1047,7 +1025,7 @@ def process(s: str) -> None:
 
 #[test]
 fn e0054_final_class_attr_via_instance() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Final
 
 class Config:
@@ -1055,7 +1033,7 @@ class Config:
 
 c = Config()
 c.MAX_SIZE = 200
-"#;
+";
     let diagnostics = run(source)?;
     let e0054 = diagnostics
         .iter()
@@ -1063,22 +1041,21 @@ c.MAX_SIZE = 200
         .collect::<Vec<_>>();
     assert!(
         !e0054.is_empty(),
-        "Should detect final attr via instance: {:?}",
-        diagnostics
+        "Should detect final attr via instance: {diagnostics:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0054_final_class_attr_via_class() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Final
 
 class Config:
     MAX_SIZE: Final[int] = 100
 
 Config.MAX_SIZE = 200
-"#;
+";
     let diagnostics = run(source)?;
     let e0054 = diagnostics
         .iter()
@@ -1086,20 +1063,19 @@ Config.MAX_SIZE = 200
         .collect::<Vec<_>>();
     assert!(
         !e0054.is_empty(),
-        "Should detect final attr via class: {:?}",
-        diagnostics
+        "Should detect final attr via class: {diagnostics:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0054_final_module_bare_reassign() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Final
 
 MAX: Final[int] = 100
 MAX = 200
-"#;
+";
     let diagnostics = run(source)?;
     let e0054 = diagnostics
         .iter()
@@ -1107,15 +1083,14 @@ MAX = 200
         .collect::<Vec<_>>();
     assert!(
         !e0054.is_empty(),
-        "Should detect final module bare reassign: {:?}",
-        diagnostics
+        "Should detect final module bare reassign: {diagnostics:?}"
     );
     Ok(())
 }
 
 #[test]
 fn e0054_final_rhs_inferred_instance() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Final
 
 class Settings:
@@ -1123,7 +1098,7 @@ class Settings:
 
 s = Settings()
 s.DEBUG = True
-"#;
+";
     let diagnostics = run(source)?;
     let e0054 = diagnostics
         .iter()
@@ -1131,8 +1106,7 @@ s.DEBUG = True
         .collect::<Vec<_>>();
     assert!(
         !e0054.is_empty(),
-        "Should detect final rhs-inferred instance: {:?}",
-        diagnostics
+        "Should detect final rhs-inferred instance: {diagnostics:?}"
     );
     Ok(())
 }
@@ -1143,7 +1117,7 @@ s.DEBUG = True
 
 #[test]
 fn e0112_typeguard_callable_return() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeGuard, Callable
 
 def is_str(x: object) -> TypeGuard[str]:
@@ -1151,7 +1125,7 @@ def is_str(x: object) -> TypeGuard[str]:
 
 def apply(fn: Callable[[object], TypeGuard[str]]) -> None:
     pass
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -1224,8 +1198,7 @@ class Bad(Container[T_contra]):
         .collect::<Vec<_>>();
     assert!(
         !e0107.is_empty(),
-        "Should detect variance violation: {:?}",
-        diagnostics
+        "Should detect variance violation: {diagnostics:?}"
     );
     Ok(())
 }
@@ -1317,7 +1290,7 @@ class Outer(Generic[T]):
 
 #[test]
 fn e0076_overload_union_expansion_deep() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload, Union
 
 @overload
@@ -1333,7 +1306,7 @@ def process(x: Union[int, str, float]) -> Union[str, int, bool]:
     elif isinstance(x, str):
         return len(x)
     return True
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -1373,12 +1346,12 @@ Point = NamedTuple("Point", [("x", int), ("y", int)])
 
 #[test]
 fn e0116_namedtuple_empty_class() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class Empty(NamedTuple):
     pass
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -1389,13 +1362,13 @@ class Empty(NamedTuple):
 
 #[test]
 fn e0147_tuple_starred_unpack_deep() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Tuple
 
 def process(t: Tuple[int, str, float]) -> None:
     a, *rest = t
     x, y, z, w = t
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -1406,19 +1379,18 @@ def process(t: Tuple[int, str, float]) -> None:
 
 #[test]
 fn e0148_optional_nested() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Optional, List
 
 x: Optional[List[int]] = None
 y: Optional[int, str] = None
-"#;
+";
     let diagnostics = run(source)?;
     // Optional[int, str] gets caught by e0015 (type arg count), not e0148
     let has_type_arg_error = diagnostics.iter().any(|d| d.code.code == "BSK-E0015");
     assert!(
         has_type_arg_error,
-        "Should detect wrong type arg count: {:?}",
-        diagnostics
+        "Should detect wrong type arg count: {diagnostics:?}"
     );
     Ok(())
 }
@@ -1458,8 +1430,7 @@ T = TypeVar("T", bound=int, default=str)
         .collect::<Vec<_>>();
     assert!(
         !e0091.is_empty(),
-        "Should detect default violating bound: {:?}",
-        diagnostics
+        "Should detect default violating bound: {diagnostics:?}"
     );
     Ok(())
 }
@@ -1470,7 +1441,7 @@ T = TypeVar("T", bound=int, default=str)
 
 #[test]
 fn e0073_namedtuple_replace_wrong_field() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class Point(NamedTuple):
@@ -1479,7 +1450,7 @@ class Point(NamedTuple):
 
 p = Point(1, 2)
 q = p._replace(z=3)
-"#;
+";
     let diagnostics = run(source)?;
     // _replace field validation may not be implemented yet
     let _ = diagnostics;
@@ -1492,7 +1463,7 @@ q = p._replace(z=3)
 
 #[test]
 fn e0121_protocol_conformance_static_method() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class HasStatic(Protocol):
@@ -1506,7 +1477,7 @@ class Impl:
 
 def use_it(obj: HasStatic) -> None:
     obj.compute(42)
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -1517,7 +1488,7 @@ def use_it(obj: HasStatic) -> None:
 
 #[test]
 fn e0119_protocol_isinstance_overlap_deep() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol, runtime_checkable
 
 @runtime_checkable
@@ -1531,7 +1502,7 @@ class MyList:
 x = MyList()
 if isinstance(x, HasLen):
     pass
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -1597,9 +1568,7 @@ del r[1]
         .count();
     assert!(
         e0143 >= 4,
-        "Should detect multiple NamedTuple violations: found {} in {:?}",
-        e0143,
-        diagnostics
+        "Should detect multiple NamedTuple violations: found {e0143} in {diagnostics:?}"
     );
     Ok(())
 }
@@ -1666,9 +1635,7 @@ def test_too_many(cls: type[WithInit]) -> WithInit:
         .count();
     assert!(
         e0144 >= 2,
-        "Should detect multiple type() constructor violations: found {} in {:?}",
-        e0144,
-        diagnostics
+        "Should detect multiple type() constructor violations: found {e0144} in {diagnostics:?}"
     );
     Ok(())
 }
@@ -1719,9 +1686,7 @@ def test(fn: Callable[[int, str], None], gn: Callable[[int], int]) -> int:
         .count();
     assert!(
         e0122 >= 3,
-        "Should detect multiple callable arity violations: found {} in {:?}",
-        e0122,
-        diagnostics
+        "Should detect multiple callable arity violations: found {e0122} in {diagnostics:?}"
     );
     Ok(())
 }
@@ -1759,9 +1724,7 @@ print(s.debug)
         .count();
     assert!(
         e0095 >= 1,
-        "Should detect InitVar access: found {} in {:?}",
-        e0095,
-        diagnostics
+        "Should detect InitVar access: found {e0095} in {diagnostics:?}"
     );
     Ok(())
 }
@@ -1798,9 +1761,7 @@ MIN = -1
         .count();
     assert!(
         e0054 >= 2,
-        "Should detect multiple final violations: found {} in {:?}",
-        e0054,
-        diagnostics
+        "Should detect multiple final violations: found {e0054} in {diagnostics:?}"
     );
     Ok(())
 }
@@ -1840,9 +1801,7 @@ result = a < b
         .count();
     assert!(
         e0138 >= 1,
-        "Should detect dataclass_transform violations: found {} in {:?}",
-        e0138,
-        diagnostics
+        "Should detect dataclass_transform violations: found {e0138} in {diagnostics:?}"
     );
     Ok(())
 }
@@ -1889,9 +1848,7 @@ class BadNested(Wrapper[Consumer[T_co]]):
         .count();
     assert!(
         e0107 >= 2,
-        "Should detect variance violations: found {} in {:?}",
-        e0107,
-        diagnostics
+        "Should detect variance violations: found {e0107} in {diagnostics:?}"
     );
     Ok(())
 }

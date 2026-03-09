@@ -1,12 +1,12 @@
 //! Coverage boost tests batch 17: targeting long tail of uncovered code paths.
 //! Focus: e0073 tuple compatibility deep, e0116 namedtuple inheritance/fields,
 //! e0137 generic protocol method mismatches, e0140 callable/protocol deep,
-//! e0139 TypeVarTuple specialization deep, e0112 TypeGuard return compat,
+//! e0139 `TypeVarTuple` specialization deep, e0112 `TypeGuard` return compat,
 //! e0121 protocol conformance deep paths, e0130 constraint checking,
-//! e0131 generator complex, e0147 tuple operations, e0102 TypeVar defaults,
+//! e0131 generator complex, e0147 tuple operations, e0102 `TypeVar` defaults,
 //! e0149 PEP695 deep, e0145 type bracket deep, e0076 overload,
 //! e0119 protocol isinstance, e0120 generator return, e0054 final deep,
-//! e0111 constructor hierarchy, e0095 InitVar deep, e0148 generic args deep.
+//! e0111 constructor hierarchy, e0095 `InitVar` deep, e0148 generic args deep.
 #![allow(
     missing_docs,
     clippy::needless_raw_string_hashes,

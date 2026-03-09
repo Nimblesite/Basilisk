@@ -1,6 +1,10 @@
 //! Coverage boost tests batch 14: targeting PEP 695 syntax, deeper e0107/e0144/e0115 paths.
 //! Also targets remaining uncovered branches in many other rules with highly specific patterns.
-#![allow(missing_docs)]
+#![allow(
+    missing_docs,
+    clippy::needless_raw_string_hashes,
+    clippy::uninlined_format_args
+)]
 
 use basilisk_checker::check;
 use basilisk_parser::parse_source;
