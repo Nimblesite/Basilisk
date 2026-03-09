@@ -8528,7 +8528,6 @@ fn readonly_kwargs_subscript_assign() -> Result<(), Box<dyn std::error::Error>> 
 }
 
 #[test]
-#[ignore = "walrus operator Final reassignment not yet detected"]
 fn final_walrus_operator_violation_v2() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import Final\n",
@@ -8674,7 +8673,6 @@ fn typeddict_ann_assign_missing_keys() -> Result<(), Box<dyn std::error::Error>>
 }
 
 #[test]
-#[ignore = "TypedDict value type checking not yet implemented"]
 fn typeddict_dict_literal_wrong_value_type() -> Result<(), Box<dyn std::error::Error>> {
     // Dict literal with string value for int field - should be flagged at ann_assign level
     let src = concat!(
@@ -9099,7 +9097,6 @@ fn base_subscript_with_literal_type_arg() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[test]
-#[ignore = "protocol factory instantiation not yet detected"]
 fn protocol_class_factory_instantiation() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import Protocol\n",
@@ -9187,7 +9184,6 @@ fn classify_rhs_set_literal_form() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-#[ignore = "return_name_refs does not walk into attribute expressions yet"]
 fn return_name_refs_from_attribute_expr() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo(obj: object) -> str:\n    return obj.name\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
@@ -9198,7 +9194,6 @@ fn return_name_refs_from_attribute_expr() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[test]
-#[ignore = "return_name_refs does not walk into call expressions yet"]
 fn return_name_refs_from_call_expr() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo(x: int) -> int:\n    return bar(x)\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
@@ -9209,7 +9204,6 @@ fn return_name_refs_from_call_expr() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-#[ignore = "return_name_refs does not walk into tuple expressions yet"]
 fn return_name_refs_from_tuple_expr() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo(a: int, b: int) -> tuple:\n    return a, b\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
@@ -9220,7 +9214,6 @@ fn return_name_refs_from_tuple_expr() -> Result<(), Box<dyn std::error::Error>> 
 }
 
 #[test]
-#[ignore = "return_name_refs does not walk into binop expressions yet"]
 fn return_name_refs_from_binop_expr() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo(a: int, b: int) -> int:\n    return a + b\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
@@ -9231,7 +9224,6 @@ fn return_name_refs_from_binop_expr() -> Result<(), Box<dyn std::error::Error>> 
 }
 
 #[test]
-#[ignore = "return_name_refs only handles simple Expr::Name"]
 fn return_name_refs_from_subscript_expr() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo(items: list) -> int:\n    return items[0]\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
@@ -9252,7 +9244,6 @@ fn starred_typevartuple_generic_param() -> Result<(), Box<dyn std::error::Error>
 }
 
 #[test]
-#[ignore = "generic_non_typevar_args not yet populated"]
 fn non_typevar_expr_in_generic_brackets() -> Result<(), Box<dyn std::error::Error>> {
     let src = "from typing import Generic\nclass MyClass(Generic[int]):\n    pass\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
@@ -9337,7 +9328,6 @@ fn abstract_class_instantiation_subscript() -> Result<(), Box<dyn std::error::Er
 }
 
 #[test]
-#[ignore = "attribute-style base class resolution not yet implemented"]
 fn abstract_class_via_abc_attribute() -> Result<(), Box<dyn std::error::Error>> {
     let src = "import abc\nclass Foo(abc.ABC):\n    @abc.abstractmethod\n    def bar(self) -> None: ...\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
@@ -9379,7 +9369,6 @@ fn enum_value_bytes_vs_str() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-#[ignore = "NonLiteralDictKey detection not yet implemented"]
 fn typeddict_non_literal_key_access() -> Result<(), Box<dyn std::error::Error>> {
     use basilisk_resolver::TypedDictKeyViolationKind;
     let src = "from typing import TypedDict\nclass TD(TypedDict):\n    name: str\ndef foo(td: TD) -> None:\n    key = \"name\"\n    td[key]\n".to_owned();
@@ -9393,7 +9382,6 @@ fn typeddict_non_literal_key_access() -> Result<(), Box<dyn std::error::Error>> 
 }
 
 #[test]
-#[ignore = "TypedDict value type checking not yet implemented"]
 fn typeddict_subscript_wrong_value_type() -> Result<(), Box<dyn std::error::Error>> {
     use basilisk_resolver::TypedDictKeyViolationKind;
     let src = "from typing import TypedDict\nclass TD(TypedDict):\n    name: str\ndef foo(td: TD) -> None:\n    td[\"name\"] = 42\n".to_owned();
@@ -9526,7 +9514,6 @@ fn enum_from_strenum() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-#[ignore = "stub body detection for pass not yet working"]
 fn stub_body_pass_statement() -> Result<(), Box<dyn std::error::Error>> {
     let src = "from typing import Protocol\nclass P(Protocol):\n    def method(self) -> None:\n        pass\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
@@ -9573,7 +9560,6 @@ fn protocol_isinstance_non_rtc_module() -> Result<(), Box<dyn std::error::Error>
 }
 
 #[test]
-#[ignore = "type_statements not yet collected"]
 fn pep695_type_statement_info() -> Result<(), Box<dyn std::error::Error>> {
     let src = "type IntList = list[int]\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
@@ -9583,7 +9569,6 @@ fn pep695_type_statement_info() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-#[ignore = "TypeAliasType call not yet detected"]
 fn type_alias_type_call_info() -> Result<(), Box<dyn std::error::Error>> {
     let src = "from typing import TypeAliasType\nIntList = TypeAliasType('IntList', list[int])\n"
         .to_owned();
@@ -9597,7 +9582,6 @@ fn type_alias_type_call_info() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-#[ignore = "TypeAliasType call not yet detected"]
 fn type_alias_type_ann_assign() -> Result<(), Box<dyn std::error::Error>> {
     let src =
         "from typing import TypeAliasType\nIntList: object = TypeAliasType('IntList', list[int])\n"
@@ -9658,7 +9642,6 @@ fn class_final_with_init_assignment() -> Result<(), Box<dyn std::error::Error>> 
 }
 
 #[test]
-#[ignore = "invalid tuple annotation not yet detected"]
 fn invalid_tuple_bare_ellipsis() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo(x: tuple[...]) -> None:\n    pass\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
