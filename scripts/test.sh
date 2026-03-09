@@ -52,25 +52,22 @@ ok "clippy clean"
 # ── Tests + coverage ─────────────────────────────────────────────────────────
 header "Running tests with coverage instrumentation"
 
-# Capture test exit code — failing tests are expected and intentional.
-# We still want coverage data even when they fail.
-# basilisk-lsp is excluded: its e2e tests require a live LSP process and hang.
-TESTS_EXIT=0
+# FAIL FAST: if any test fails, the script dies here with full panic output.
+# No deferred exit codes, no "continue anyway", no bullshit.
 cargo llvm-cov \
     --workspace \
     --exclude basilisk-compiler \
     --all-targets \
     --lcov \
-    --output-path "$LCOV_FILE" || TESTS_EXIT=$?
+    --output-path "$LCOV_FILE"
 
+ok "All workspace tests passed"
 ok "lcov.info → $LCOV_FILE"
 
-cargo llvm-cov \
-    --workspace \
-    --exclude basilisk-compiler \
-    --all-targets \
+# HTML report (uses cached coverage data from above — no re-run)
+cargo llvm-cov report \
     --html \
-    --output-dir "$HTML_DIR" || warn "HTML report generation failed"
+    --output-dir "$HTML_DIR"
 
 ok "HTML report → $HTML_DIR/index.html"
 
@@ -79,7 +76,8 @@ header "Running passing compiler E2E tests (hello, arithmetic)"
 
 BASILISK_COMPILER_FILTER="hello,arithmetic" \
     cargo test -p basilisk-compiler --test e2e_tests -- --nocapture
-# The full compiler test suite (including expected failures) lives in scripts/test-compiler.sh
+
+ok "Compiler E2E tests passed"
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 header "Coverage summary"
@@ -150,13 +148,6 @@ check_crate basilisk-resolver "$TEST_COVERAGE_BASILISK_RESOLVER"
 check_crate basilisk-stubs    "$TEST_COVERAGE_BASILISK_STUBS"
 
 # ── Final status ─────────────────────────────────────────────────────────────
-if [[ "$TESTS_EXIT" -ne 0 ]]; then
-    echo ""
-    echo -e "${RED}TESTS FAILED (exit $TESTS_EXIT).${RESET}"
-    echo -e "${RED}Review the test output above for full panic details.${RESET}"
-    exit "$TESTS_EXIT"
-fi
-
 if [[ "$COV_FAILED" -ne 0 ]]; then
     echo ""
     echo -e "${RED}Coverage regression detected — one or more projects fell below their threshold.${RESET}"
