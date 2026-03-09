@@ -50,16 +50,14 @@ cargo clippy --all-targets
 ok "clippy clean"
 
 # ── Tests + coverage ─────────────────────────────────────────────────────────
-header "Running tests with coverage instrumentation (LSP excluded — use scripts/test-lsp.sh)"
+header "Running tests with coverage instrumentation"
 
-# Capture test exit code — intentional Phase-1-limitation failures (E0012,
-# E0016-E0019, E0022) panic with "not yet implemented" messages and are
-# expected to fail.  We still want coverage data even when they do.
+# Capture test exit code — failing tests are expected and intentional.
+# We still want coverage data even when they fail.
 # basilisk-lsp is excluded: its e2e tests require a live LSP process and hang.
 TESTS_EXIT=0
 cargo llvm-cov \
     --workspace \
-    --exclude basilisk-lsp \
     --exclude basilisk-compiler \
     --all-targets \
     --lcov \
@@ -69,11 +67,10 @@ ok "lcov.info → $LCOV_FILE"
 
 cargo llvm-cov \
     --workspace \
-    --exclude basilisk-lsp \
     --exclude basilisk-compiler \
     --all-targets \
     --html \
-    --output-dir "$HTML_DIR" 2>/dev/null || true
+    --output-dir "$HTML_DIR" || warn "HTML report generation failed"
 
 ok "HTML report → $HTML_DIR/index.html"
 
@@ -106,7 +103,7 @@ header "Enforcing per-project coverage thresholds"
 TEST_COVERAGE_BASILISK_CHECKER="${TEST_COVERAGE_BASILISK_CHECKER:-89}"
 TEST_COVERAGE_BASILISK_CLI="${TEST_COVERAGE_BASILISK_CLI:-96}"
 TEST_COVERAGE_BASILISK_DB="${TEST_COVERAGE_BASILISK_DB:-100}"
-TEST_COVERAGE_BASILISK_LSP="${TEST_COVERAGE_BASILISK_LSP:-0}"
+TEST_COVERAGE_BASILISK_LSP="${TEST_COVERAGE_BASILISK_LSP:-50}"
 TEST_COVERAGE_BASILISK_MOJO="${TEST_COVERAGE_BASILISK_MOJO:-100}"
 TEST_COVERAGE_BASILISK_PARSER="${TEST_COVERAGE_BASILISK_PARSER:-100}"
 TEST_COVERAGE_BASILISK_PLUGIN="${TEST_COVERAGE_BASILISK_PLUGIN:-100}"
@@ -126,7 +123,8 @@ check_crate() {
     missed_lines=$(echo "$totals" | awk '{print $2}')
 
     if [ -z "$total_lines" ] || [ "$total_lines" -eq 0 ]; then
-        warn "${crate}: no coverage data found — skipping"
+        echo -e "  ${RED}✗ ${crate}: NO COVERAGE DATA — tests likely panicked before coverage could flush. FAIL${RESET}"
+        COV_FAILED=1
         return
     fi
 
@@ -154,9 +152,8 @@ check_crate basilisk-stubs    "$TEST_COVERAGE_BASILISK_STUBS"
 # ── Final status ─────────────────────────────────────────────────────────────
 if [[ "$TESTS_EXIT" -ne 0 ]]; then
     echo ""
-    warn "Some tests failed (exit $TESTS_EXIT)."
-    warn "Expected Phase-1 limitation failures: E0012, E0016, E0017, E0018, E0019, E0022"
-    warn "These are intentional — they document unimplemented functionality."
+    echo -e "${RED}TESTS FAILED (exit $TESTS_EXIT).${RESET}"
+    echo -e "${RED}Review the test output above for full panic details.${RESET}"
     exit "$TESTS_EXIT"
 fi
 
