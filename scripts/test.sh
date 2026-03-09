@@ -52,19 +52,32 @@ ok "clippy clean"
 # ── Tests + coverage ─────────────────────────────────────────────────────────
 header "Running tests with coverage instrumentation"
 
-# FAIL FAST: if any test fails, the script dies here with full panic output.
-# No deferred exit codes, no "continue anyway", no bullshit.
+# We need coverage data even when tests fail (panics kill profraw otherwise).
+# Capture exit code, collect coverage, THEN fail immediately if tests failed.
+set +e
 cargo llvm-cov \
     --workspace \
     --exclude basilisk-compiler \
     --all-targets \
     --lcov \
     --output-path "$LCOV_FILE"
+TESTS_EXIT=$?
+set -e
 
-ok "All workspace tests passed"
 ok "lcov.info → $LCOV_FILE"
 
-# HTML report (uses cached coverage data from above — no re-run)
+# FAIL IMMEDIATELY if tests failed — no more processing, no excuses.
+if [[ "$TESTS_EXIT" -ne 0 ]]; then
+    echo ""
+    echo -e "${RED}${BOLD}TESTS FAILED (exit $TESTS_EXIT).${RESET}"
+    echo -e "${RED}Review the full panic output above. Fix every failure.${RESET}"
+    echo -e "${RED}No coverage analysis, no thresholds — NOTHING runs until tests pass.${RESET}"
+    exit "$TESTS_EXIT"
+fi
+
+ok "All workspace tests passed"
+
+# HTML report (uses cached coverage data — no re-run)
 cargo llvm-cov report \
     --html \
     --output-dir "$HTML_DIR"

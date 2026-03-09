@@ -99,7 +99,7 @@ fn compute_arities<'a>(module: &'a ResolvedModule) -> HashMap<&'a str, TypeArity
             arities.insert(
                 cls.name.as_str(),
                 TypeArity {
-                    min: (required > 0 && required < total).then_some(required),
+                    min: (required > 0).then_some(required),
                     max: (!has_tvt).then_some(total),
                 },
             );

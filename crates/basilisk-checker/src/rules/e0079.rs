@@ -222,7 +222,34 @@ fn check_annotated_assign(
     }
 
     // Load the companion module's interface.
+    let range = ann_assign.range();
+    let span = Span {
+        start: range.start().to_u32(),
+        end: range.end().to_u32(),
+    };
+
     let Some(mod_interface) = load_module_interface(module_name, module_dir) else {
+        // Module interface could not be loaded (e.g. stdlib module like `sys`).
+        // We cannot verify compatibility, so flag the assignment.
+        diagnostics.push(Diagnostic {
+            code: CODE.clone(),
+            severity: Severity::Error,
+            message: format!(
+                "Module `{module_name}` assigned to protocol `{protocol_name}` \
+                 but compatibility cannot be verified"
+            ),
+            span,
+            path: path.to_owned(),
+            help: Some(format!(
+                "Ensure module `{module_name}` provides all members required \
+                 by `{protocol_name}` with compatible types"
+            )),
+            note: Some(
+                "A module can be used where a protocol is expected only if its \
+                 public interface is compatible with the protocol"
+                    .to_owned(),
+            ),
+        });
         return;
     };
 
@@ -236,11 +263,6 @@ fn check_annotated_assign(
     );
 
     if let Some(reason) = incompatibility {
-        let range = ann_assign.range();
-        let span = Span {
-            start: range.start().to_u32(),
-            end: range.end().to_u32(),
-        };
         diagnostics.push(Diagnostic {
             code: CODE.clone(),
             severity: Severity::Error,
