@@ -44,8 +44,7 @@ impl Rule for ProtocolNewSelfAttrViolation {
         }
 
         // Re-parse the source to walk the AST.
-        let Ok(parsed) =
-            basilisk_parser::parse_source(module.source.clone(), module.path.clone())
+        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
         else {
             return;
         };
@@ -245,9 +244,7 @@ fn check_self_attr_target(
         diagnostics.push(Diagnostic {
             code: CODE.clone(),
             severity: Severity::Error,
-            message: format!(
-                "Protocol member `{attr_name}` is not declared in the Protocol body"
-            ),
+            message: format!("Protocol member `{attr_name}` is not declared in the Protocol body"),
             span: Span {
                 start: range.start().to_u32(),
                 end: range.end().to_u32(),

@@ -90,8 +90,7 @@ impl Rule for TypeVarTupleArgCountMismatch {
         }
 
         // Re-parse to walk the AST for call expressions.
-        let Ok(parsed) =
-            basilisk_parser::parse_source(module.source.clone(), module.path.clone())
+        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
         else {
             return;
         };
@@ -136,13 +135,7 @@ fn walk_stmts_for_tvt_calls(
             }
             Stmt::AnnAssign(ann_assign) => {
                 if let Some(value) = &ann_assign.value {
-                    check_expr_for_tvt_call(
-                        value,
-                        tvt_classes,
-                        tvt_init_info,
-                        path,
-                        diagnostics,
-                    );
+                    check_expr_for_tvt_call(value, tvt_classes, tvt_init_info, path, diagnostics);
                 }
             }
             Stmt::FunctionDef(func_def) => {

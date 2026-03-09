@@ -31,12 +31,15 @@ impl Rule for LiteralAugmentedAssign {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         // First, emit any violations collected by the resolver.
         for violation in &module.literal_augmented_assign_violations {
-            diagnostics.push(make_diagnostic(&violation.var_name, violation.span, &module.path));
+            diagnostics.push(make_diagnostic(
+                &violation.var_name,
+                violation.span,
+                &module.path,
+            ));
         }
 
         // Also walk the AST to find violations the resolver didn't collect.
-        let Ok(parsed) =
-            basilisk_parser::parse_source(module.source.clone(), module.path.clone())
+        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
         else {
             return;
         };
