@@ -274,7 +274,7 @@ b[""]
 
 #[test]
 fn e0072_getitem_valid_int() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload
 
 class MyBytes:
@@ -287,7 +287,7 @@ class MyBytes:
 
 b = MyBytes()
 b[0]
-"#;
+";
     let diags = run(source)?;
     let cnt = diags.iter().filter(|d| d.code.code == "BSK-E0072").count();
     assert_eq!(cnt, 0);
@@ -296,7 +296,7 @@ b[0]
 
 #[test]
 fn e0072_getitem_float_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload
 
 class Container:
@@ -309,7 +309,7 @@ class Container:
 
 c = Container()
 c[3.14]
-"#;
+";
     let diags = run(source)?;
     assert!(diags.iter().any(|d| d.code.code == "BSK-E0072"));
     Ok(())
@@ -317,7 +317,7 @@ c[3.14]
 
 #[test]
 fn e0072_getitem_slice() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload
 
 class Seq:
@@ -330,14 +330,14 @@ class Seq:
 
 s = Seq()
 s[1:3]
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0072_getitem_tuple() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload
 
 class Grid:
@@ -350,14 +350,14 @@ class Grid:
 
 g = Grid()
 g[(1, 2)]
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0072_getitem_none() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload
 
 class Store:
@@ -370,7 +370,7 @@ class Store:
 
 s = Store()
 s[None]
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -397,7 +397,7 @@ d[b"hello"]
 
 #[test]
 fn e0072_getitem_list() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload
 
 class Matrix:
@@ -410,14 +410,14 @@ class Matrix:
 
 m = Matrix()
 m[[1, 2]]
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0072_getitem_dict() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload
 
 class Lookup:
@@ -430,14 +430,14 @@ class Lookup:
 
 l = Lookup()
 l[{}]
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0072_getitem_set() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload
 
 class SetLookup:
@@ -450,14 +450,14 @@ class SetLookup:
 
 s = SetLookup()
 s[{1, 2}]
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
 fn e0072_getitem_bool() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import overload
 
 class Container:
@@ -470,7 +470,7 @@ class Container:
 
 c = Container()
 c[True]
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -691,7 +691,7 @@ def func(c: dict[str, Never]) -> None:
 
 #[test]
 fn e0079_module_protocol() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class HasTimeout(Protocol):
@@ -700,7 +700,7 @@ class HasTimeout(Protocol):
 
 import socket
 x: HasTimeout = socket
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -721,7 +721,7 @@ class HasAttr(Protocol):
 
 #[test]
 fn e0079_multiple_methods() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class Connectable(Protocol):
@@ -730,7 +730,7 @@ class Connectable(Protocol):
 
 import os
 c: Connectable = os
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }

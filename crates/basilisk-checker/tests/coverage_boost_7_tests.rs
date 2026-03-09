@@ -509,12 +509,12 @@ takes_nullary(no_args)
 
 #[test]
 fn e0143_namedtuple_functional_syntax() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 Point = NamedTuple('Point', [('x', float), ('y', float)])
 p = Point(1.0, 2.0)
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -1044,7 +1044,7 @@ class Copyable(Protocol):
 
 #[test]
 fn e0038_typeddict_multiple_inheritance() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypedDict
 
 class Base1(TypedDict):
@@ -1055,7 +1055,7 @@ class Base2(TypedDict):
 
 class Combined(Base1, Base2):
     email: str
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
@@ -1164,13 +1164,13 @@ class Color(Enum):
 
 #[test]
 fn e0116_namedtuple_invalid_field() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import NamedTuple
 
 class BadTuple(NamedTuple):
     _x: int
     y: str
-"#;
+";
     let _ = run(source)?;
     Ok(())
 }
