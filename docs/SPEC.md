@@ -301,19 +301,72 @@ def process(data: Any) -> Any:  # BSK-W0011: Explicit Any requires reason commen
     pass
 ```
 
-#### 4.1.3 Opting Out
+#### 4.1.3 Diagnostic Severity Modes
 
-Developers opt OUT of strictness, not in. Escape hatches are explicit and auditable:
+Every rule has four severity modes:
 
-**Per-line suppression** (requires reason):
+| Mode | Behavior | Blocks CI | LSP Indicator |
+|---|---|---|---|
+| `error` | Full diagnostic with fix suggestions | Yes | Red squiggly |
+| `warning` | Diagnostic shown but does not block | No | Yellow squiggly |
+| `info` | Informational hint only | No | Blue hint |
+| `disabled` | Rule is not checked at all (zero cost) | No | Nothing |
+
+The default mode for each rule is determined by its code prefix (`E` = error, `W` = warning). All modes can be overridden at every level: per-line, per-block, per-file, and per-project.
+
+#### 4.1.4 Inline Suppression and Mode Override
+
+Basilisk supports both standard `# type: ignore` (for compatibility with mypy/Pyright) and its own ergonomic comment directives.
+
+**Per-line: standard compatibility**
 ```python
-x = untyped_call()  # basilisk: ignore[BSK-E0010] -- legacy dependency
+from fastmcp import FastMCP  # type: ignore
 ```
 
-**Per-file opt-out**:
+**Per-line: Basilisk-specific with error code**
+```python
+from fastmcp import FastMCP  # type: ignore[BSK-E0010]
+```
+
+**Per-line: severity override (demote or promote)**
+```python
+from fastmcp import FastMCP  # type: warning[BSK-E0010]
+from fastmcp import FastMCP  # type: info[BSK-E0010]
+from fastmcp import FastMCP  # type: disabled[BSK-E0010]
+```
+
+**Per-line: override all rules on this line**
+```python
+data = unsafe_cast(value)  # type: warning
+data = unsafe_cast(value)  # type: disabled
+```
+
+**Per-block: override severity for a range of lines**
+```python
+# type: disabled[BSK-E0010]
+from fastmcp import FastMCP
+from result import Result, Ok, Err
+from errors import AutomatorError, ErrorCode
+from models import Platform, Credentials
+# type: end-disabled[BSK-E0010]
+```
+
+Block directives work with all modes: `# type: warning[CODE]` / `# type: end-warning[CODE]`, `# type: info[CODE]` / `# type: end-info[CODE]`, `# type: disabled[CODE]` / `# type: end-disabled[CODE]`. Omitting the code applies to all rules.
+
+**Per-file: file-level mode at the top of the file**
 ```python
 # basilisk: relaxed
-# This file uses gradual typing (e.g., legacy code being migrated)
+# All errors become warnings in this file
+```
+
+```python
+# basilisk: file-disabled[BSK-E0010]
+# Disable E0010 for the entire file
+```
+
+```python
+# basilisk: file-warning[BSK-E0010, BSK-E0011]
+# Demote E0010 and E0011 to warnings for the entire file
 ```
 
 **Per-directory configuration** in `pyproject.toml`:
@@ -324,6 +377,27 @@ strict = true  # default, cannot be set to false globally
 [tool.basilisk.per-path-overrides."legacy/**"]
 strict = false  # gradual typing for legacy code
 deadline = "2025-12-31"  # enforcement deadline -- becomes strict after this date
+
+[tool.basilisk.per-path-overrides."vendor/**"]
+rules.disabled = ["BSK-E0010"]
+rules.warning = ["BSK-E0001", "BSK-E0002"]
+```
+
+**Per-module override** (for third-party imports):
+```toml
+[tool.basilisk.per-module-overrides."requests"]
+ignore-missing-stubs = true
+
+[tool.basilisk.per-module-overrides."django.*"]
+ignore-missing-stubs = true
+```
+
+**Global rule severity override**:
+```toml
+[tool.basilisk.rules]
+"BSK-E0010" = "warning"    # demote globally
+"BSK-W0050" = "error"      # promote globally
+"BSK-E0060" = "disabled"   # disable globally
 ```
 
 **Migration mode** (project-wide, time-boxed):
@@ -331,8 +405,40 @@ deadline = "2025-12-31"  # enforcement deadline -- becomes strict after this dat
 [tool.basilisk.migration]
 enabled = true
 started = "2025-06-01"
-enforce_after = "2025-12-01"  # errors become warnings until this date
+enforce_after = "2025-12-01"  # all errors become warnings until this date
 ```
+
+#### 4.1.5 Suppression Precedence
+
+When multiple overrides apply, the most specific wins:
+
+1. **Per-line comment** (highest priority)
+2. **Per-block comment**
+3. **Per-file directive**
+4. **Per-path override** in pyproject.toml
+5. **Per-module override** in pyproject.toml
+6. **Global rule override** in pyproject.toml
+7. **Rule default** (lowest priority)
+
+#### 4.1.6 Compatibility
+
+Basilisk recognizes these comment formats for maximum interop:
+
+| Comment | Behavior |
+|---|---|
+| `# type: ignore` | Suppress all diagnostics on this line (PEP 484 / mypy / Pyright compatible) |
+| `# type: ignore[BSK-E0010]` | Suppress specific code (Basilisk extension, mypy-compatible syntax) |
+| `# type: warning` | Demote all diagnostics to warnings (Basilisk-specific) |
+| `# type: warning[BSK-E0010]` | Demote specific code to warning (Basilisk-specific) |
+| `# type: info` | Demote all diagnostics to info (Basilisk-specific) |
+| `# type: info[BSK-E0010]` | Demote specific code to info (Basilisk-specific) |
+| `# type: disabled` | Disable all diagnostics on this line (Basilisk-specific) |
+| `# type: disabled[BSK-E0010]` | Disable specific code on this line (Basilisk-specific) |
+| `# basilisk: relaxed` | Per-file: all errors become warnings |
+| `# basilisk: file-disabled[CODE]` | Per-file: disable specific rules |
+| `# basilisk: file-warning[CODE]` | Per-file: demote specific rules to warnings |
+
+The `# type:` prefix ensures compatibility with editors and tools that already recognize `# type: ignore`. Other type checkers will treat `# type: warning` as an unknown directive and ignore it gracefully.
 
 ### 4.2 Python Typing PEP Coverage
 
@@ -566,10 +672,12 @@ Inspired by `rustc`'s diagnostic system and ty's approach.
 
 ### 6.2 Error Code System
 
-Format: `BSK-Xnnnn` where X = severity class:
-- `E` = Error (blocks CI)
+Format: `BSK-Xnnnn` where X = default severity class:
+- `E` = Error (blocks CI by default)
 - `W` = Warning (does not block by default)
-- `I` = Info (suggestion)
+- `I` = Info (suggestion by default)
+
+The prefix determines the **default** severity. Every rule can be overridden to any of the four modes (`error`, `warning`, `info`, `disabled`) at every scope level (line, block, file, path, global). See Section 4.1.3 for the mode system and Section 4.1.4 for override syntax.
 
 ### 6.3 Rule Categories
 
@@ -899,7 +1007,7 @@ basilisk init                     # Generate starter pyproject.toml config
 
 **GitHub Actions**:
 ```yaml
-- uses: basilisk-lang/setup-basilisk@v1
+- uses: MelbourneDeveloper/setup-basilisk@v1
 - run: basilisk check --output-format sarif > results.sarif
 - uses: github/codeql-action/upload-sarif@v3
   with:
@@ -908,7 +1016,7 @@ basilisk init                     # Generate starter pyproject.toml config
 
 **pre-commit**:
 ```yaml
-- repo: https://github.com/basilisk-lang/basilisk
+- repo: https://github.com/MelbourneDeveloper/Basilisk
   rev: v0.1.0
   hooks:
     - id: basilisk-check
@@ -1035,7 +1143,7 @@ error[BSK-E0001]: Missing parameter type annotation
    |
    = help: Add a type annotation: `data: <type>`
    = note: In Basilisk, all function parameters require explicit types
-   = see: https://basilisk-lang.org/errors/BSK-E0001
+   = see: https://www.basilisk-python.dev/errors/BSK-E0001
 ```
 
 ### 15.2 Quick Fixes
@@ -1210,7 +1318,7 @@ Basilisk follows the Python Typing Council's governance (PEP 729). We implement 
 
 | Term | Definition |
 |---|---|
-| **Basilisk** | This project -- a Rust-based static type analyzer for Python enforcing complete type safety |
+| **Basilisk** | This project — a strict-by-default Python type checker built in Rust. No escape hatches. |
 | **Borrowed** | Parameter convention: function reads but does not mutate or transfer the value (default) |
 | **Owned** | Parameter convention: function takes exclusive ownership; caller must not use value afterward |
 | **InOut** | Parameter convention: function may mutate the value in place |

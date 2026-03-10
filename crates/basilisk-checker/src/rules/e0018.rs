@@ -17,7 +17,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0018",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0018",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0018",
 };
 
 /// Emits BSK-E0018 for return statements that reference undefined names.
@@ -25,21 +25,72 @@ pub(crate) struct UndefinedVariable;
 
 impl Rule for UndefinedVariable {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+        // Collect all import-bound names (both `import X` and `from X import Y`).
+        let import_names: Vec<&str> = module
+            .imports
+            .iter()
+            .flat_map(|imp| {
+                if imp.names.is_empty() {
+                    // Plain `import X` — the bound name is the top-level module.
+                    imp.module.split('.').next().into_iter().collect::<Vec<_>>()
+                } else {
+                    imp.names.iter().map(String::as_str).collect::<Vec<_>>()
+                }
+            })
+            .collect();
+
         module.functions.iter().for_each(|func| {
-            check_function(func, &module.path, diagnostics);
+            check_function(
+                func,
+                &module.functions,
+                &import_names,
+                &module.path,
+                diagnostics,
+            );
         });
     }
 }
 
-fn check_function(func: &FunctionInfo, path: &str, out: &mut Vec<Diagnostic>) {
+/// Check whether `name` is defined in any enclosing function's scope.
+///
+/// A function is "enclosing" if its `def_span` fully contains the current
+/// function's `def_span` (i.e. the current function is nested inside it).
+fn is_in_enclosing_scope(name: &str, func: &FunctionInfo, all_functions: &[FunctionInfo]) -> bool {
+    let my_start = func.def_span.start;
+    let my_end = func.def_span.end;
+
+    all_functions.iter().any(|outer| {
+        // Must strictly contain this function (not be the same function).
+        outer.def_span.start < my_start
+            && outer.def_span.end >= my_end
+            && (outer.parameters.iter().any(|p| p.name == name)
+                || outer.vararg.as_ref().is_some_and(|v| v.name == name)
+                || outer.kwarg.as_ref().is_some_and(|k| k.name == name)
+                || outer.all_local_assigns.iter().any(|a| a == name))
+    })
+}
+
+fn check_function(
+    func: &FunctionInfo,
+    all_functions: &[FunctionInfo],
+    import_names: &[&str],
+    path: &str,
+    out: &mut Vec<Diagnostic>,
+) {
     let param_names: Vec<&str> = func.parameters.iter().map(|p| p.name.as_str()).collect();
 
     for (name, span) in &func.return_name_refs {
-        if !param_names.contains(&name.as_str())
-            && !func.all_local_assigns.iter().any(|a| a == name)
+        let name_str = name.as_str();
+        if param_names.contains(&name_str)
+            || func.vararg.as_ref().is_some_and(|v| v.name == name_str)
+            || func.kwarg.as_ref().is_some_and(|k| k.name == name_str)
+            || func.all_local_assigns.iter().any(|a| a == name)
+            || import_names.contains(&name_str)
+            || is_in_enclosing_scope(name_str, func, all_functions)
         {
-            out.push(make_diagnostic(func, name, *span, path));
+            continue;
         }
+        out.push(make_diagnostic(func, name, *span, path));
     }
 }
 

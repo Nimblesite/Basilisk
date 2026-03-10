@@ -10,13 +10,14 @@ members = [
     "crates/basilisk-plugin",
     "crates/basilisk-lsp",
     "crates/basilisk-mojo",
+    "crates/basilisk-compiler",
 ]
 
 [workspace.package]
 version      = "0.1.0"
 edition      = "2021"
 license      = "MIT OR Apache-2.0"
-repository   = "https://github.com/basilisk-lang/basilisk"
+repository   = "https://github.com/MelbourneDeveloper/Basilisk"
 rust-version = "1.87"
 
 [workspace.dependencies]
@@ -38,14 +39,16 @@ basilisk-db       = { path = "crates/basilisk-db" }
 basilisk-parser   = { path = "crates/basilisk-parser" }
 basilisk-resolver = { path = "crates/basilisk-resolver" }
 basilisk-checker  = { path = "crates/basilisk-checker" }
+basilisk-lsp      = { path = "crates/basilisk-lsp" }
+basilisk-compiler = { path = "crates/basilisk-compiler" }
 
 [workspace.lints.rust]
 unsafe_code  = "deny"
 missing_docs = "warn"
 
 [workspace.lints.clippy]
-all                  = { level = "warn", priority = -1 }
-pedantic             = { level = "warn", priority = -1 }
+all                  = { level = "deny", priority = -1 }
+pedantic             = { level = "deny", priority = -1 }
 unwrap_used          = "deny"
 expect_used          = "deny"
 panic                = "deny"

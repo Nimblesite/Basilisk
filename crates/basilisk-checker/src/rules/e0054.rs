@@ -39,7 +39,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0054",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0054",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0054",
 };
 
 fn make_diagnostic(message: String, span: Span, path: &str, help: &str) -> Diagnostic {
@@ -142,9 +142,7 @@ fn check_final_violations(
             }
             FinalViolationKind::InstanceFinalOutsideInit => {
                 diagnostics.push(make_diagnostic(
-                    format!(
-                        "`self.{name}: Final` annotation is only allowed inside `__init__`"
-                    ),
+                    format!("`self.{name}: Final` annotation is only allowed inside `__init__`"),
                     span,
                     path,
                     "Move `Final` instance attribute declarations to `__init__`",
@@ -174,9 +172,7 @@ fn check_final_violations(
             }
             FinalViolationKind::SubclassOverrideFinal => {
                 diagnostics.push(make_diagnostic(
-                    format!(
-                        "Cannot override `{name}` — it is declared `Final` in a base class"
-                    ),
+                    format!("Cannot override `{name}` — it is declared `Final` in a base class"),
                     span,
                     path,
                     "Remove the override or rename the attribute",
@@ -260,13 +256,42 @@ fn check_class_attr_assignments(
         })
         .collect();
 
+    // Build a RHS-based map: variable name → class name inferred from constructor call.
+    // Handles `d = D(...)` without an explicit annotation.
+    let source = &module.source;
+    let rhs_instance_map: HashMap<&str, &str> = module
+        .module_vars
+        .iter()
+        .filter_map(|v| {
+            let rhs_span = v.rhs_span?;
+            let rhs = source.get(rhs_span.start as usize..rhs_span.end as usize)?;
+            let callee = rhs.split(['(', '[']).next()?.trim();
+            if callee.is_empty() {
+                return None;
+            }
+            let callee = callee.rsplit('.').next().unwrap_or(callee);
+            if class_final_map.contains_key(callee) {
+                Some((v.name.as_str(), callee))
+            } else {
+                None
+            }
+        })
+        .collect();
+
     for attr_assign in &module.module_attr_assignments {
         // Try direct class name lookup first (e.g., `D.final_attr = ...`).
         let finals = if let Some(f) = class_final_map.get(&attr_assign.object_name) {
             f
         } else if let Some(type_name) = var_type_map.get(attr_assign.object_name.as_str()) {
-            // Fall back to instance variable type lookup (e.g., `d: D = D(...); d.final_attr = ...`).
+            // Fall back to annotated instance variable type lookup (e.g., `d: D = D(...); d.final_attr = ...`).
             if let Some(f) = class_final_map.get(*type_name) {
+                f
+            } else {
+                continue;
+            }
+        } else if let Some(class_name) = rhs_instance_map.get(attr_assign.object_name.as_str()) {
+            // Fall back to RHS-inferred instance type (e.g., `d = D(...); d.final_attr = ...`).
+            if let Some(f) = class_final_map.get(*class_name) {
                 f
             } else {
                 continue;

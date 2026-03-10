@@ -17,7 +17,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0024",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0024",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0024",
 };
 
 const HELP: &str = "Use a type name like `int`, `str`, `float` instead of a literal value";

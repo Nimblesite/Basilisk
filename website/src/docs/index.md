@@ -1,8 +1,8 @@
 ---
 layout: layouts/docs.njk
 title: Introduction
-description: What Basilisk is, why it exists, and how it differs from every other Python type checker.
-keywords: basilisk, python, type checker, static analysis, strict, rust
+description: What Basilisk is, why it exists, and how it replaces Pylance and Pyright as a fully open-source Python language server.
+keywords: basilisk, python, language server, pylance replacement, pyright, type checker, lsp, vs code, strict, rust
 eleventyNavigation:
   key: Introduction
   order: 1
@@ -10,24 +10,23 @@ eleventyNavigation:
 
 # Introduction
 
-Basilisk is a static type analyzer for Python that enforces **complete type safety by default**. There is no gradual mode. There is no `--strict` flag you need to remember to pass. There is only one mode: strict.
+Basilisk is a **complete Python language server and VS Code extension** that replaces Pylance and Pyright. Everything Pylance does — autocomplete, go-to-definition, hover information, refactoring, diagnostics — Basilisk does too, fully open source and strict by default.
 
-If your Python function has an untyped parameter, Basilisk flags it. If your return type is missing, Basilisk flags it. If you use `Any` without an explicit annotation, Basilisk flags it. Every time. With no configuration required.
+It is not just a type checker. It is a feature-complete LSP that works in VS Code, Neovim, Emacs, and any editor that speaks the Language Server Protocol. No proprietary extensions. No Node.js. A single Rust binary.
 
 ## The problem Basilisk solves
 
-Python's type annotation syntax has existed since PEP 484 in 2015. Over the following decade, the ecosystem built increasingly sophisticated type checkers — Pyright, mypy, ty, Pyrefly — all capable of finding real bugs when pointed at fully-typed code.
+Pylance is the most-used Python extension in VS Code. It is also **proprietary** — you cannot inspect, modify, or redistribute it. Pyright, the open-source type checker underneath, is powerful but is *only* a type checker — it does not provide completions, hover, go-to-definition, or refactoring without the proprietary Pylance wrapper.
 
-The catch: every one of them defaults to *gradual typing*. Untyped code passes silently. `Any` spreads through type inference without warning. Strictness is something you must deliberately opt into, configure, remember to enforce in CI, and re-explain to every new team member.
+Every other Python type checker (mypy, ty, Pyrefly) defaults to *gradual typing*. Untyped code passes silently. `Any` spreads through type inference without warning. Strictness is something you must deliberately opt into, configure, remember to enforce in CI, and re-explain to every new team member.
 
-The result: 88% of Python developers use type hints "always" or "often" — yet nearly 30% of those developers have no type checking in their CI pipeline ([Meta/Microsoft Python Typing Survey 2024](https://engineering.fb.com/2024/12/09/developer-tools/typed-python-2024-survey-meta/)).
-
-Basilisk takes a different position. **Type annotations are contracts, not documentation.** A function without a return type annotation is not "partially typed" — it is untyped, and that is an error.
+Basilisk takes a different position. **It replaces the entire Pylance stack** — type checking, language features, and VS Code integration — with an open-source alternative that is strict by default. Type annotations are contracts, not documentation.
 
 ## What Basilisk is
 
-- A **static type analyzer** that runs on `.py` files — no Python interpreter, no execution
-- A **language server** (LSP) that brings real-time type checking to every editor
+- A **full-featured language server** (LSP) — autocomplete, go-to-definition, hover, find references, rename, code actions, inlay hints
+- A **VS Code extension** that replaces Pylance — install it, disable Pylance, and everything works
+- A **strict-by-default type checker** — no `--strict` flag, no gradual mode, no opt-in
 - A **CLI tool** for CI integration — exits with code 1 when errors are found
 - A **migration assistant** that reads your existing `pyrightconfig.json` or `mypy.ini`
 - Written in **Rust** — ships as a single binary with no runtime dependencies
@@ -66,13 +65,13 @@ These are not runtime constructs. They are statically checked annotations. Code 
 
 ## Project status
 
-Basilisk is currently at **v0.1.0** — Phase 1 of a seven-phase roadmap. The core checker, name resolver, parser, and CLI are complete. All E0001–E0025 diagnostic rules are implemented and passing.
+Basilisk is currently at **v0.1.0** — the core checker, LSP server, and VS Code extension are all working. Autocomplete, go-to-definition, hover, diagnostics, and inlay hints are shipping today.
 
 | Phase | Milestone | Status |
 |---|---|---|
 | 1 | Parser, resolver, type checker, CLI | Complete |
-| 2 | LSP server, VS Code extension | In progress |
-| 3 | All E0001–E0025 rules, 80% PEP coverage, migration mode | Planned |
+| 2 | LSP server, VS Code extension | Complete |
+| 3 | All E0001–E0025 rules, 80% PEP coverage, migration mode | In progress |
 | 4 | Mojo safety annotations (ownership, immutability, coercion) | Planned |
 | 5 | WASM plugins, Django/Pydantic/SQLAlchemy | Planned |
 | 6 | 95%+ PEP, SARIF/JUnit, enterprise hardening | Planned |

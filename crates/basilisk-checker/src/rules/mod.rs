@@ -66,7 +66,89 @@ pub(crate) mod e0065;
 pub(crate) mod e0066;
 pub(crate) mod e0067;
 pub(crate) mod e0068;
+pub(crate) mod e0069;
+pub(crate) mod e0070;
+pub(crate) mod e0071;
+pub(crate) mod e0072;
+pub(crate) mod e0073;
+pub(crate) mod e0074;
+pub(crate) mod e0075;
+pub(crate) mod e0076;
+pub(crate) mod e0077;
+pub(crate) mod e0078;
+pub(crate) mod e0079;
+pub(crate) mod e0080;
+pub(crate) mod e0081;
+pub(crate) mod e0082;
+pub(crate) mod e0083;
+pub(crate) mod e0084;
+pub(crate) mod e0085;
+pub(crate) mod e0086;
+pub(crate) mod e0087;
+pub(crate) mod e0088;
+pub(crate) mod e0089;
+pub(crate) mod e0090;
+pub(crate) mod e0091;
+pub(crate) mod e0092;
+pub(crate) mod e0093;
+pub(crate) mod e0094;
+pub(crate) mod e0095;
+pub(crate) mod e0096;
+pub(crate) mod e0097;
+pub(crate) mod e0098;
+pub(crate) mod e0099;
+pub(crate) mod e0100;
+pub(crate) mod e0101;
+pub(crate) mod e0102;
+pub(crate) mod e0103;
+pub(crate) mod e0104;
+pub(crate) mod e0105;
+pub(crate) mod e0106;
+pub(crate) mod e0107;
+pub(crate) mod e0108;
+pub(crate) mod e0109;
+pub(crate) mod e0110;
+pub(crate) mod e0111;
+pub(crate) mod e0112;
+pub(crate) mod e0113;
+pub(crate) mod e0114;
+pub(crate) mod e0115;
+pub(crate) mod e0116;
+pub(crate) mod e0117;
+pub(crate) mod e0118;
+pub(crate) mod e0119;
+pub(crate) mod e0120;
+pub(crate) mod e0121;
+pub(crate) mod e0122;
+pub(crate) mod e0123;
+pub(crate) mod e0124;
+pub(crate) mod e0125;
+pub(crate) mod e0126;
+pub(crate) mod e0127;
+pub(crate) mod e0128;
+pub(crate) mod e0129;
+pub(crate) mod e0130;
+pub(crate) mod e0131;
+pub(crate) mod e0132;
+pub(crate) mod e0133;
+pub(crate) mod e0134;
+pub(crate) mod e0136;
+pub(crate) mod e0137;
+pub(crate) mod e0138;
+pub(crate) mod e0139;
+pub(crate) mod e0140;
+pub(crate) mod e0141;
+pub(crate) mod e0142;
+pub(crate) mod e0143;
+pub(crate) mod e0144;
+pub(crate) mod e0145;
+pub(crate) mod e0146;
+pub(crate) mod e0147;
+pub(crate) mod e0148;
+pub(crate) mod e0149;
 pub(crate) mod guards;
+pub(crate) mod w0040;
+pub(crate) mod w0050;
 
 use basilisk_resolver::ResolvedModule;
 
@@ -78,17 +160,17 @@ pub(crate) trait Rule {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>);
 }
 
-/// Run all registered Phase 1 rules against a resolved module.
-#[must_use]
-pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
-    let rules: &[&dyn Rule] = &[
+/// All registered Phase 1 rules.
+#[allow(clippy::too_many_lines)]
+fn all_rules() -> &'static [&'static dyn Rule] {
+    &[
         &e0001::MissingParameterAnnotation,
         &e0002::MissingReturnAnnotation,
         &e0003::MissingVariableType,
         &e0004::MissingVarArgAnnotation,
         &e0005::MissingAttributeAnnotation,
         &e0010::ImportFromUntypedModule,
-        &e0011::ImplicitAny,
+        &e0011::ReturnTypeMismatch,
         &e0012::ArgumentTypeMismatch,
         &e0013::ReturnTypeMismatch,
         &e0014::AssignmentTypeMismatch,
@@ -132,7 +214,7 @@ pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
         &e0053::AssertTypeMismatch,
         &e0054::FinalAnnotationViolation,
         &e0055::TypeVarInvalidKwargs,
-        &e0056::TypeAliasTypeInvalidRhs,
+        &e0056::ReadOnlyTypedDictMutation,
         &e0057::TypeStatementInvalidRhs,
         &e0058::AnnotatedTooFewArguments,
         &e0059::MatchArgsFalseAccess,
@@ -145,9 +227,94 @@ pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
         &e0066::EnumValueTypeMismatch,
         &e0067::EnumNonMemberInLiteral,
         &e0068::LiteralStringEnumMismatch,
-    ];
+        &e0069::DataclassKwOnlyViolation,
+        &e0070::NeverTypeCompatibility,
+        &e0071::HistoricalPositionalViolation,
+        &e0072::NoMatchingOverload,
+        &e0073::NamedTupleTupleCompat,
+        &e0074::ConstructorCallNewMismatch,
+        &e0075::SelfTypeAttributeIncompatible,
+        &e0076::OverloadUnionExpansionFailure,
+        &e0077::ProtocolSelfViolation,
+        &e0078::SelfTypeViolation,
+        &e0079::ModuleProtocolIncompatible,
+        &e0080::TypeVarBoundViolation,
+        &e0081::TypeVarTupleUnpackViolation,
+        &e0082::TypeVarTupleCallableMismatch,
+        &e0083::TypeVarTupleUnpackRequired,
+        &e0084::TypeVarTupleInvalidParams,
+        &e0085::TypeVarTupleArgCountMismatch,
+        &e0086::MultipleTypeVarTuplesInGeneric,
+        &e0088::TypedDictRuntimeViolation,
+        &e0089::Pep695InvalidBound,
+        &e0090::InvalidTupleTypeSyntax,
+        &e0091::TypeVarDefaultIncompatible,
+        &e0092::TooFewTypeArguments,
+        &e0093::TypedDictKeyValidation,
+        &e0094::SelfInvalidLocation,
+        &e0095::InitVarViolation,
+        &e0096::DataclassFieldDefaultFactoryMismatch,
+        &e0097::ProtocolNewSelfAttrViolation,
+        &e0098::NonProtocolBaseInProtocol,
+        &e0099::ProtocolInstantiation,
+        &e0100::LiteralAugmentedAssign,
+        &e0101::TypeGuardNoNarrowingParam,
+        &e0102::TypeVarDefaultReferential,
+        &e0103::TupleIndexOutOfBounds,
+        &e0104::CyclicalTypeAliasReference,
+        &e0105::BoundedTypeVarAttrAccess,
+        &e0106::ProtocolClassObject,
+        &e0107::VarianceIncompatibleBase,
+        &e0108::DataclassSlotsViolation,
+        &e0109::TypeVarBoundCallViolation,
+        &e0110::ProtocolVarianceViolation,
+        &e0111::ConstructorCallError,
+        &e0112::TypeGuardCallableReturnMismatch,
+        &e0113::TypeIsInconsistentNarrowing,
+        &e0114::ProtocolRuntimeCheckableViolation,
+        &e0115::DeprecatedUsage,
+        &e0116::NamedTupleDefError,
+        &e0117::UnboundTypeVarScope,
+        &e0118::SuperAbstractCall,
+        &e0119::ProtocolUnsafeOverlap,
+        &e0120::GeneratorReturnTypeViolation,
+        &e0121::ProtocolAssignmentConformance,
+        &e0122::CallableCallSiteViolation,
+        &e0123::SuperCallOnAbstractProtocolMethod,
+        &e0124::ProtocolTupleElementMismatch,
+        &e0125::InstanceAttrOnClass,
+        &e0126::LiteralStringAssignment,
+        &e0127::TupleIndexOutOfRange,
+        &e0128::TypeVarDefaultReferential,
+        &e0129::LiteralValueIncompatible,
+        &e0130::TypeVarScopeViolation,
+        &e0131::GeneratorTypeMismatch,
+        &e0132::InconsistentTypeVarOrder,
+        &e0133::ProtocolVarianceMismatch,
+        &e0134::InvariantGenericArgMismatch,
+        &e0136::CallableSubtypingViolation,
+        &e0137::GenericProtocolViolation,
+        &e0138::DataclassTransformMetaViolation,
+        &e0139::TypeVarTupleSpecializationViolation,
+        &e0140::CallableAssignmentViolation,
+        &e0141::UnpackKwargsViolation,
+        &e0142::DataclassTransformClassViolation,
+        &e0143::NamedTupleUsageViolation,
+        &e0144::TypeCallConstructorViolation,
+        &e0145::TypeBracketViolation,
+        &e0146::ProtocolClassObjectViolation,
+        &e0147::TupleStarredUnpackCompatibility,
+        &e0148::GenericTypeArgViolation,
+        &e0149::Pep695TypeParamScopingViolation,
+        &w0040::LambdaMissingAnnotations,
+        &w0050::RedundantAnnotationWarning,
+    ]
+}
 
-    rules.iter().fold(Vec::new(), |mut acc, rule| {
+/// Run all registered Phase 1 rules against a resolved module.
+#[must_use]
+pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
+    all_rules().iter().fold(Vec::new(), |mut acc, rule| {
         rule.check(module, &mut acc);
         acc
     })

@@ -1,0 +1,13 @@
+{
+	"mcpServers": {
+		"TMC": {
+			"url": "http://localhost:4040/mcp",
+			"type": "streamable-http",
+			"disabled": false,
+			"alwaysAllow": [
+				"register",
+				"plan"
+			]
+		}
+	}
+}

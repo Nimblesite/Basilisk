@@ -1,16 +1,53 @@
 //! Language Server Protocol support for Basilisk.
 //!
-//! # Current state
+//! This crate provides both a simple `check_source` function for subprocess
+//! usage and a full LSP server implementation with IDE features:
 //!
-//! This crate exposes [`check_source`], which runs the full checker pipeline
-//! on an in-memory Python source string and returns diagnostic messages.
-//! It is used directly by the VS Code extension (subprocess approach) and
-//! will become the foundation for a full LSP server in a later phase.
-//!
-//! # LSP server
-//!
-//! A full `textDocument/publishDiagnostics` server is deferred — see
-//! `docs/lsp-plan.md` for the implementation plan.
+//! - Diagnostics (real-time type checking)
+//! - Hover (type signatures + diagnostic info)
+//! - Go to Definition
+//! - Go to Declaration
+//! - Go to Type Definition
+//! - Document Symbols (Outline)
+//! - Signature Help
+//! - Find All References
+//! - Rename Symbol
+//! - Inlay Hints (inferred types + parameter names)
+//! - Completion (symbol + dot + builtins)
+//! - Code Actions (quick fixes)
+//! - Document Formatting (via Ruff)
+//! - Document Highlight (symbol occurrences)
+//! - Call Hierarchy (incoming + outgoing calls)
+//! - Code Lens (reference counts)
+//! - Type Hierarchy (supertypes + subtypes)
+//! - Folding Ranges (functions, classes, imports)
+//! - Selection Ranges (Smart Select)
+//! - Semantic Tokens (syntax-aware highlighting)
+
+pub mod call_hierarchy;
+pub mod code_actions;
+pub mod code_lens;
+pub mod color;
+pub mod completion;
+pub mod config;
+pub mod declaration;
+pub mod definition;
+pub mod folding;
+pub mod formatting;
+pub mod highlight;
+pub mod hover;
+pub mod inlay_hints;
+pub mod references;
+pub mod selection;
+pub mod semantic_tokens;
+pub mod server;
+pub mod signature;
+pub mod symbols;
+pub mod test_discovery;
+pub mod type_definition;
+pub mod type_hierarchy;
+pub mod util;
+pub mod websocket;
 
 /// Run the Basilisk checker on a Python source string.
 ///
@@ -54,3 +91,10 @@ fn byte_offset_to_line_col(source: &str, offset: usize) -> (usize, usize) {
     let col = before.rfind('\n').map_or(clamped, |pos| clamped - pos - 1) + 1;
     (line, col)
 }
+
+/// Start the Basilisk LSP server.
+///
+/// This function starts a JSON-RPC server on stdio that implements the
+/// Language Server Protocol. It's intended to be called from the CLI.
+pub use server::run_server;
+pub use websocket::run_server_ws_blocking;

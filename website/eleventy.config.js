@@ -1,10 +1,23 @@
+import { readFileSync, writeFileSync, existsSync } from "fs";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 import techdoc from "eleventy-plugin-techdoc";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// Patch the techdoc plugin's base layout with our custom version (adds favicon + logo)
+const localOverride = join(__dirname, "src/_includes/layouts/base.njk");
+const pluginTarget = join(__dirname, "node_modules/eleventy-plugin-techdoc/templates/layouts/base.njk");
+
+if (existsSync(localOverride)) {
+  writeFileSync(pluginTarget, readFileSync(localOverride, "utf-8"));
+}
 
 export default function (eleventyConfig) {
   eleventyConfig.addPlugin(techdoc, {
     site: {
       name: "Basilisk",
-      url: "https://basilisk-lang.org",
+      url: "https://www.basilisk-python.dev",
       description:
         "Strict-by-default Python type checker. Every parameter typed. Every return declared. No escape hatches. Built in Rust.",
       author: "The Basilisk Project",
@@ -13,10 +26,10 @@ export default function (eleventyConfig) {
       ogImage: "/assets/images/og-image.png",
       organization: {
         name: "Basilisk",
-        url: "https://basilisk-lang.org",
+        url: "https://www.basilisk-python.dev",
         logo: "/assets/images/logo.svg",
         sameAs: [
-          "https://github.com/basilisk-lang/basilisk",
+          "https://github.com/MelbourneDeveloper/Basilisk",
         ],
       },
     },
@@ -29,6 +42,7 @@ export default function (eleventyConfig) {
   });
 
   eleventyConfig.addPassthroughCopy("src/assets");
+  eleventyConfig.addPassthroughCopy("src/CNAME");
 
   return {
     dir: {

@@ -831,7 +831,7 @@
  
  const CODE: ErrorCode = ErrorCode {
      code: &quot;BSK-E0017&quot;,
-     docs_url: &quot;https://basilisk-lang.org/errors/BSK-E0017&quot;,
+     docs_url: &quot;https://www.basilisk-python.dev/errors/BSK-E0017&quot;,
  };
  
  /// Emits BSK-E0017 for class attributes that override a base-class attribute
@@ -1514,7 +1514,7 @@
         <pre id='diff-274' class='diff hidden'>--- crates/basilisk-checker/src/rules/e0026.rs
 +++ replace &lt;impl Rule for TypeVarSingleConstraint&gt;::check with ()
 @@ -15,30 +15,11 @@
-     docs_url: &quot;https://basilisk-lang.org/errors/BSK-E0026&quot;,
+     docs_url: &quot;https://www.basilisk-python.dev/errors/BSK-E0026&quot;,
  };
  
  /// Emits BSK-E0026 when a `TypeVar` is declared with exactly one constraint.
@@ -1589,7 +1589,7 @@
         <pre id='diff-276' class='diff hidden'>--- crates/basilisk-checker/src/rules/e0027.rs
 +++ replace &lt;impl Rule for DuplicateTypeVarInGeneric&gt;::check with ()
 @@ -14,36 +14,11 @@
-     docs_url: &quot;https://basilisk-lang.org/errors/BSK-E0027&quot;,
+     docs_url: &quot;https://www.basilisk-python.dev/errors/BSK-E0027&quot;,
  };
  
  /// Emits BSK-E0027 when the same `TypeVar` appears more than once in `Generic[...]`.
@@ -1639,7 +1639,7 @@
         <pre id='diff-277' class='diff hidden'>--- crates/basilisk-checker/src/rules/e0029.rs
 +++ replace &lt;impl Rule for TypedDictMethodNotAllowed&gt;::check with ()
 @@ -14,45 +14,11 @@
-     docs_url: &quot;https://basilisk-lang.org/errors/BSK-E0029&quot;,
+     docs_url: &quot;https://www.basilisk-python.dev/errors/BSK-E0029&quot;,
  };
  
  /// Emits BSK-E0029 when a method is defined inside a `TypedDict` class.
@@ -1791,7 +1791,7 @@
         <pre id='diff-281' class='diff hidden'>--- crates/basilisk-checker/src/rules/e0030.rs
 +++ replace &lt;impl Rule for NonDefaultAfterDefault&gt;::check with ()
 @@ -17,50 +17,11 @@
-     docs_url: &quot;https://basilisk-lang.org/errors/BSK-E0030&quot;,
+     docs_url: &quot;https://www.basilisk-python.dev/errors/BSK-E0030&quot;,
  };
  
  /// Emits BSK-E0030 when a non-default `TypeVar` follows a default `TypeVar` in `Generic[...]`.
@@ -1855,7 +1855,7 @@
         <pre id='diff-282' class='diff hidden'>--- crates/basilisk-checker/src/rules/e0031.rs
 +++ replace &lt;impl Rule for InvalidCastCall&gt;::check with ()
 @@ -18,58 +18,11 @@
-     docs_url: &quot;https://basilisk-lang.org/errors/BSK-E0031&quot;,
+     docs_url: &quot;https://www.basilisk-python.dev/errors/BSK-E0031&quot;,
  };
  
  /// Emits BSK-E0031 for invalid `cast()` calls.
@@ -1927,7 +1927,7 @@
         <pre id='diff-283' class='diff hidden'>--- crates/basilisk-checker/src/rules/e0031.rs
 +++ replace == with != in &lt;impl Rule for InvalidCastCall&gt;::check
 @@ -18,17 +18,17 @@
-     docs_url: &quot;https://basilisk-lang.org/errors/BSK-E0031&quot;,
+     docs_url: &quot;https://www.basilisk-python.dev/errors/BSK-E0031&quot;,
  };
  
  /// Emits BSK-E0031 for invalid `cast()` calls.
@@ -5045,7 +5045,7 @@
         <pre id='diff-53' class='diff hidden'>--- crates/basilisk-checker/src/rules/e0005.rs
 +++ replace &lt;impl Rule for MissingAttributeAnnotation&gt;::check with ()
 @@ -22,21 +22,17 @@
-     docs_url: &quot;https://basilisk-lang.org/errors/BSK-E0005&quot;,
+     docs_url: &quot;https://www.basilisk-python.dev/errors/BSK-E0005&quot;,
  };
  
  /// Emits BSK-E0005 for every unannotated class attribute.
@@ -5939,7 +5939,7 @@
         <pre id='diff-87' class='diff hidden'>--- crates/basilisk-checker/src/rules/e0013.rs
 +++ replace &lt;impl Rule for ReturnTypeMismatch&gt;::check with ()
 @@ -15,21 +15,17 @@
-     docs_url: &quot;https://basilisk-lang.org/errors/BSK-E0013&quot;,
+     docs_url: &quot;https://www.basilisk-python.dev/errors/BSK-E0013&quot;,
  };
  
  /// Emits BSK-E0013 for every `-&gt; None` function that contains a valued return.
@@ -8668,7 +8668,7 @@
  
  const CODE: ErrorCode = ErrorCode {
      code: &quot;BSK-E0017&quot;,
-     docs_url: &quot;https://basilisk-lang.org/errors/BSK-E0017&quot;,
+     docs_url: &quot;https://www.basilisk-python.dev/errors/BSK-E0017&quot;,
  };
  
  /// Emits BSK-E0017 for class attributes that override a base-class attribute
@@ -9114,7 +9114,7 @@
         <pre id='diff-197' class='diff hidden'>--- crates/basilisk-checker/src/rules/e0018.rs
 +++ replace &lt;impl Rule for UndefinedVariable&gt;::check with ()
 @@ -20,19 +20,17 @@
-     docs_url: &quot;https://basilisk-lang.org/errors/BSK-E0018&quot;,
+     docs_url: &quot;https://www.basilisk-python.dev/errors/BSK-E0018&quot;,
  };
  
  /// Emits BSK-E0018 for return statements that reference undefined names.
@@ -9279,7 +9279,7 @@
         <pre id='diff-203' class='diff hidden'>--- crates/basilisk-checker/src/rules/e0019.rs
 +++ replace &lt;impl Rule for UnboundVariable&gt;::check with ()
 @@ -23,19 +23,17 @@
-     docs_url: &quot;https://basilisk-lang.org/errors/BSK-E0019&quot;,
+     docs_url: &quot;https://www.basilisk-python.dev/errors/BSK-E0019&quot;,
  };
  
  /// Emits BSK-E0019 for return statements that reference conditionally-assigned names.
@@ -10360,7 +10360,7 @@
         <pre id='diff-248' class='diff hidden'>--- crates/basilisk-checker/src/rules/e0022.rs
 +++ replace &lt;impl Rule for UnhashableDictKey&gt;::check with ()
 @@ -19,23 +19,17 @@
-     docs_url: &quot;https://basilisk-lang.org/errors/BSK-E0022&quot;,
+     docs_url: &quot;https://www.basilisk-python.dev/errors/BSK-E0022&quot;,
  };
  
  /// Emits BSK-E0022 for unhashable types used as dictionary keys.
@@ -10397,7 +10397,7 @@
         <pre id='diff-249' class='diff hidden'>--- crates/basilisk-checker/src/rules/e0023.rs
 +++ replace &lt;impl Rule for NonExhaustiveMatch&gt;::check with ()
 @@ -16,21 +16,17 @@
-     docs_url: &quot;https://basilisk-lang.org/errors/BSK-E0023&quot;,
+     docs_url: &quot;https://www.basilisk-python.dev/errors/BSK-E0023&quot;,
  };
  
  /// Emits BSK-E0023 for every `match` statement that lacks a wildcard branch.

@@ -14,14 +14,23 @@ use crate::output::{render_diagnostics, render_diagnostics_json, FileSource, Out
 
 mod output;
 
-/// Basilisk — strict-by-default Python type analyzer.
+/// Basilisk — strict-by-default Python type checker.
 ///
-/// TypeScript for Python. Every parameter typed. Every return declared.
+/// No escape hatches. Every parameter typed. Every return declared.
 #[derive(Parser)]
 #[command(name = "basilisk", version, about, long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
+}
+
+/// Transport protocol for the LSP server.
+#[derive(Clone, Debug, clap::ValueEnum)]
+enum Transport {
+    /// JSON-RPC over standard input/output (default).
+    Stdio,
+    /// JSON-RPC over WebSocket.
+    Ws,
 }
 
 #[derive(Subcommand)]
@@ -35,6 +44,15 @@ enum Command {
         #[arg(long, default_value = "text")]
         output: OutputFormat,
     },
+    /// Start the Basilisk Language Server.
+    Lsp {
+        /// Transport protocol: stdio (default) or ws (WebSocket).
+        #[arg(long, default_value = "stdio")]
+        transport: Transport,
+        /// Port for WebSocket transport (ignored for stdio).
+        #[arg(long, default_value_t = 8765)]
+        port: u16,
+    },
 }
 
 fn main() {
@@ -42,6 +60,22 @@ fn main() {
 
     let exit_code = match cli.command {
         Command::Check { paths, output } => run_check(&paths, output),
+        Command::Lsp { transport, port } => match transport {
+            Transport::Stdio => match basilisk_lsp::run_server() {
+                Ok(()) => 0,
+                Err(err) => {
+                    eprintln!("error: failed to start LSP server (stdio): {err}");
+                    1
+                }
+            },
+            Transport::Ws => match basilisk_lsp::run_server_ws_blocking(port) {
+                Ok(()) => 0,
+                Err(err) => {
+                    eprintln!("error: failed to start LSP server (ws): {err}");
+                    1
+                }
+            },
+        },
     };
 
     process::exit(exit_code);
@@ -368,6 +402,45 @@ mod tests {
     fn collect_python_files_not_found_returns_err() {
         let result = collect_python_files(&["/absolutely/does/not/exist/file.py".to_owned()]);
         assert!(result.is_err(), "NotFound path must return Err, not Ok");
+    }
+
+    /// `run_check` Text path: warnings-only code must return 0 (no errors).
+    #[test]
+    fn run_check_text_warnings_only_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = std::env::temp_dir();
+        let py = dir.join("basilisk_test_rc_text_warn.py");
+        // Demote the missing-param-annotation error to a warning via inline override.
+        std::fs::write(
+            &py,
+            b"def foo(x) -> None:  # type: warning[BSK-E0001]\n    pass\n",
+        )?;
+        let path = py.to_string_lossy().into_owned();
+        let code = run_check(&[path], OutputFormat::Text);
+        let _ = std::fs::remove_file(&py);
+        assert_eq!(
+            code, 0,
+            "warnings-only code must make run_check return 0 (Text)"
+        );
+        Ok(())
+    }
+
+    /// `run_check` Json path: warnings-only code must return 0 (no errors).
+    #[test]
+    fn run_check_json_warnings_only_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = std::env::temp_dir();
+        let py = dir.join("basilisk_test_rc_json_warn.py");
+        std::fs::write(
+            &py,
+            b"def foo(x) -> None:  # type: warning[BSK-E0001]\n    pass\n",
+        )?;
+        let path = py.to_string_lossy().into_owned();
+        let code = run_check(&[path], OutputFormat::Json);
+        let _ = std::fs::remove_file(&py);
+        assert_eq!(
+            code, 0,
+            "warnings-only code must make run_check return 0 (Json)"
+        );
+        Ok(())
     }
 
     /// Complement: a path that exists but is not .py returns Ok with empty list.

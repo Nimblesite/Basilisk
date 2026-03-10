@@ -24,7 +24,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0059",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0059",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0059",
 };
 
 /// Emits BSK-E0059 when `__match_args__` is accessed on a dataclass with `match_args=False`.

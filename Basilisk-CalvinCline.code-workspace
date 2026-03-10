@@ -1,0 +1,19 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"rust-analyzer.cargo.features": "all",
+		"rust-analyzer.check.command": "clippy",
+		"rust-analyzer.check.extraArgs": [
+			"--",
+			"-D",
+			"warnings"
+		],
+		"rust-analyzer.check.allTargets": true,
+		"rust-analyzer.cargo.allTargets": true,
+		"rust-analyzer.testExplorer": true
+	}
+}

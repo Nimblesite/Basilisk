@@ -23,7 +23,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0049",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0049",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0049",
 };
 
 /// Emits BSK-E0049 when a tuple type annotation has more than one unbounded component.
@@ -43,8 +43,7 @@ impl Rule for MultipleUnboundedTupleTypes {
                         .to_owned(),
                 ),
                 note: Some(
-                    "PEP 646: a tuple type may contain at most one unbounded unpack"
-                        .to_owned(),
+                    "PEP 646: a tuple type may contain at most one unbounded unpack".to_owned(),
                 ),
             });
         }

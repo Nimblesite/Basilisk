@@ -13,7 +13,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0023",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0023",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0023",
 };
 
 /// Emits BSK-E0023 for every `match` statement that lacks a wildcard branch.

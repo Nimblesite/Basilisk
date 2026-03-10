@@ -28,7 +28,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0066",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0066",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0066",
 };
 
 /// Emits BSK-E0066 when an enum member value is incompatible with `_value_: T`.

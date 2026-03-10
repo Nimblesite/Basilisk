@@ -17,7 +17,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0058",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0058",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0058",
 };
 
 fn make_diag(span: Span, path: &str) -> Diagnostic {
@@ -28,9 +28,7 @@ fn make_diag(span: Span, path: &str) -> Diagnostic {
         span,
         path: path.to_owned(),
         help: Some("Use `Annotated[Type, metadata]` with at least one metadata value".to_owned()),
-        note: Some(
-            "PEP 593: `Annotated[X]` with a single argument is invalid".to_owned(),
-        ),
+        note: Some("PEP 593: `Annotated[X]` with a single argument is invalid".to_owned()),
     }
 }
 
@@ -99,7 +97,9 @@ impl Rule for AnnotatedTooFewArguments {
 
         // Module-level variable annotations
         for var in &module.module_vars {
-            let Some(ann_span) = var.annotation_span else { continue };
+            let Some(ann_span) = var.annotation_span else {
+                continue;
+            };
             let Some(ann) = source.get(ann_span.start as usize..ann_span.end as usize) else {
                 continue;
             };
@@ -109,7 +109,9 @@ impl Rule for AnnotatedTooFewArguments {
         // Function parameter annotations
         for func in &module.functions {
             for param in &func.parameters {
-                let Some(ann_span) = param.annotation_span else { continue };
+                let Some(ann_span) = param.annotation_span else {
+                    continue;
+                };
                 let Some(ann) = source.get(ann_span.start as usize..ann_span.end as usize) else {
                     continue;
                 };

@@ -30,7 +30,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0064",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0064",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0064",
 };
 
 fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
@@ -41,9 +41,7 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
         span,
         path: path.to_owned(),
         help: None,
-        note: Some(
-            "PEP 544/NamedTuple: keyword arguments must match declared fields".to_owned(),
-        ),
+        note: Some("PEP 544/NamedTuple: keyword arguments must match declared fields".to_owned()),
     }
 }
 
@@ -84,53 +82,99 @@ impl Rule for InvalidNamedTupleCall {
                 continue;
             };
 
-            // Only check keyword calls — positional calls are handled by E0041.
+            // Check positional argument type mismatches (only when types are known).
+            if nt.has_types && !call.args.is_empty() {
+                check_positional_types(nt, call, &module.path, diagnostics);
+            }
+
+            // Only check keyword calls for unknown fields / keyword type mismatches.
             if call.keywords.is_empty() {
                 continue;
             }
 
-            // Build a field-name → field-type map for quick lookup.
-            let field_type_map: HashMap<&str, &str> = nt
-                .field_names
-                .iter()
-                .zip(nt.field_types.iter())
-                .map(|(name, typ)| (name.as_str(), typ.as_str()))
-                .collect();
+            check_keyword_args(nt, call, &module.path, diagnostics);
+        }
+    }
+}
 
-            for (kw_name, kw_rhs) in &call.keywords {
-                match field_type_map.get(kw_name.as_str()) {
-                    None => {
-                        // Unknown field.
-                        diagnostics.push(make_diagnostic(
-                            format!(
-                                "Argument `{kw_name}` is not a field of `{}`; \
-                                 valid fields are: {}",
-                                nt.lhs_name,
-                                nt.field_names
-                                    .iter()
-                                    .map(String::as_str)
-                                    .collect::<Vec<_>>()
-                                    .join(", ")
-                            ),
-                            call.span,
-                            &module.path,
-                        ));
-                    }
-                    Some(declared_type) => {
-                        // Type mismatch check.
-                        if let Some(got_type) = keyword_rhs_mismatch(declared_type, kw_rhs) {
-                            diagnostics.push(make_diagnostic(
-                                format!(
-                                    "Field `{kw_name}` of `{}` expects `{declared_type}` \
-                                     but received a `{got_type}` literal",
-                                    nt.lhs_name,
-                                ),
-                                call.span,
-                                &module.path,
-                            ));
-                        }
-                    }
-                }
+/// Check positional argument types against `NamedTuple` field types.
+fn check_positional_types(
+    nt: &NamedTupleDefInfo,
+    call: &basilisk_resolver::CallSite,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for (idx, (arg_rhs, _arg_span)) in call.args.iter().enumerate() {
+        let Some(field_type) = nt.field_types.get(idx) else {
+            break;
+        };
+        if let Some(got_type) = keyword_rhs_mismatch(field_type, arg_rhs) {
+            let field_name = nt.field_names.get(idx).map_or("?", String::as_str);
+            diagnostics.push(make_diagnostic(
+                format!(
+                    "Argument {} to `{}()` has type `{got_type}` but \
+                     field `{field_name}` expects `{field_type}`",
+                    idx + 1,
+                    nt.lhs_name,
+                ),
+                call.span,
+                path,
+            ));
+        }
+    }
+}
+
+/// Check keyword arguments for unknown field names and type mismatches.
+fn check_keyword_args(
+    nt: &NamedTupleDefInfo,
+    call: &basilisk_resolver::CallSite,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    // Build a field-name set for existence checks.
+    let field_name_set: std::collections::HashSet<&str> =
+        nt.field_names.iter().map(String::as_str).collect();
+
+    // Build a field-name → field-type map for type checks (only when types are known).
+    let field_type_map: HashMap<&str, &str> = if nt.has_types {
+        nt.field_names
+            .iter()
+            .zip(nt.field_types.iter())
+            .map(|(name, typ)| (name.as_str(), typ.as_str()))
+            .collect()
+    } else {
+        HashMap::new()
+    };
+
+    for (kw_name, kw_rhs) in &call.keywords {
+        if !field_name_set.contains(kw_name.as_str()) {
+            // Unknown field.
+            diagnostics.push(make_diagnostic(
+                format!(
+                    "Argument `{kw_name}` is not a field of `{}`; \
+                     valid fields are: {}",
+                    nt.lhs_name,
+                    nt.field_names
+                        .iter()
+                        .map(String::as_str)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+                call.span,
+                path,
+            ));
+        } else if let Some(declared_type) = field_type_map.get(kw_name.as_str()) {
+            // Type mismatch check (only when types are known).
+            if let Some(got_type) = keyword_rhs_mismatch(declared_type, kw_rhs) {
+                diagnostics.push(make_diagnostic(
+                    format!(
+                        "Field `{kw_name}` of `{}` expects `{declared_type}` \
+                         but received a `{got_type}` literal",
+                        nt.lhs_name,
+                    ),
+                    call.span,
+                    path,
+                ));
             }
         }
     }

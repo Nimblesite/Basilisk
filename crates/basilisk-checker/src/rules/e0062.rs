@@ -39,7 +39,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0062",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0062",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0062",
 };
 
 /// Emits BSK-E0062 when a `-> NoReturn` or `-> Never` function can fall through.

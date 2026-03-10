@@ -54,42 +54,43 @@ class, while being strict-by-default and not requiring a Node.js runtime.
 cargo test --test conformance_tests -- --nocapture
 ```
 
-The output is a scorecard broken down by PEP category:
+The output is a scorecard broken down by PEP category. This is an example only. This is not the current state of the scorecard.
 
 ```
 ╔══════════════════════════════════════════════════════════════╗
 ║           BASILISK PEP CONFORMANCE SCORECARD                 ║
 ╠══════════════════════════════════════════════════════════════╣
-║  Files:     145 total │   27 pass │  118 fail                ║
-║  Score:    18.6%                                             ║
-║  Required:   28 caught │  950 missed                         ║
-║  Tagged:      7 groups ok │   48 groups missed               ║
-║  False+:    408 unexpected diagnostics                       ║
+║  Files:     145 total │   86 pass │   59 fail            ║
+║  Score:    59.3%                                           ║
+║  Required:  343 caught │  595 missed                       ║
+║  Tagged:     13 groups ok │   46 groups missed              ║
+║  False+:     39 unexpected diagnostics                       ║
 ╠══════════════════════════════════════════════════════════════╣
 ║  Category breakdown                                          ║
 ╠══════════════════════════════════════════════════════════════╣
-║  (unnamed)              7/7   100.0%  ████████████████████   ║
-║  aliases                0/7     0.0%  ░░░░░░░░░░░░░░░░░░░░   ║
-║  annotations            2/5    40.0%  ████████░░░░░░░░░░░░   ║
-║  callables              0/4     0.0%  ░░░░░░░░░░░░░░░░░░░░   ║
-║  classes                0/2     0.0%  ░░░░░░░░░░░░░░░░░░░░   ║
-║  constructors           1/6    16.7%  ███░░░░░░░░░░░░░░░░░   ║
-║  dataclasses            2/16   12.5%  ███░░░░░░░░░░░░░░░░░   ║
-║  directives             5/10   50.0%  ██████████░░░░░░░░░░   ║
-║  enums                  2/6    33.3%  ███████░░░░░░░░░░░░░   ║
-║  exceptions             1/1   100.0%  ████████████████████   ║
-║  generics               3/30   10.0%  ██░░░░░░░░░░░░░░░░░░   ║
-║  historical             0/1     0.0%  ░░░░░░░░░░░░░░░░░░░░   ║
-║  literals               0/4     0.0%  ░░░░░░░░░░░░░░░░░░░░   ║
-║  namedtuples            0/4     0.0%  ░░░░░░░░░░░░░░░░░░░░   ║
-║  narrowing              0/2     0.0%  ░░░░░░░░░░░░░░░░░░░░   ║
-║  overloads              0/4     0.0%  ░░░░░░░░░░░░░░░░░░░░   ║
-║  protocols              2/11   18.2%  ████░░░░░░░░░░░░░░░░   ║
-║  qualifiers             0/3     0.0%  ░░░░░░░░░░░░░░░░░░░░   ║
-║  specialtypes           1/5    20.0%  ████░░░░░░░░░░░░░░░░   ║
-║  tuples                 0/3     0.0%  ░░░░░░░░░░░░░░░░░░░░   ║
-║  typeddicts             1/14    7.1%  █░░░░░░░░░░░░░░░░░░░   ║
-╚══════════════════════════════════════════════════════════════╝
+║                          7/7   100.0%  ████████████████████  ║
+║  aliases                 1/7    14.3%  ███░░░░░░░░░░░░░░░░░  ║
+║  annotations             4/5    80.0%  ████████████████░░░░  ║
+║  callables               0/4     0.0%  ░░░░░░░░░░░░░░░░░░░░  ║
+║  classes                 1/2    50.0%  ██████████░░░░░░░░░░  ║
+║  constructors            3/6    50.0%  ██████████░░░░░░░░░░  ║
+║  dataclasses            11/16   68.8%  ██████████████░░░░░░  ║
+║  directives              9/10   90.0%  ██████████████████░░  ║
+║  enums                   6/6   100.0%  ████████████████████  ║
+║  exceptions              1/1   100.0%  ████████████████████  ║
+║  generics               14/30   46.7%  █████████░░░░░░░░░░░  ║
+║  historical              1/1   100.0%  ████████████████████  ║
+║  literals                1/4    25.0%  █████░░░░░░░░░░░░░░░  ║
+║  namedtuples             1/4    25.0%  █████░░░░░░░░░░░░░░░  ║
+║  narrowing               0/2     0.0%  ░░░░░░░░░░░░░░░░░░░░  ║
+║  overloads               4/4   100.0%  ████████████████████  ║
+║  protocols               3/11   27.3%  █████░░░░░░░░░░░░░░░  ║
+║  qualifiers              3/3   100.0%  ████████████████████  ║
+║  specialtypes            4/5    80.0%  ████████████████░░░░  ║
+║  tuples                  2/3    66.7%  █████████████░░░░░░░  ║
+║  typeddicts             10/14   71.4%  ██████████████░░░░░░  ║
+╠══════════════════════════════════════════════════════════════╣
+
 ```
 
 This is the **Phase 1 baseline** measured 2026-02-28.
@@ -101,27 +102,9 @@ It fails only if the conformance directory is missing (setup problem).
 
 ## What the score means today
 
-Basilisk is in **Phase 1**.  The checker implements 25 rules covering:
+Basilisk is in **Phase 2**.  The checker implements 25 rules covering:
 
-- Missing type annotations on parameters, returns, variables, class attributes
-  (BSK-E0001–E0005)
-- Explicit `Any` discipline (BSK-E0010–E0011)
-- Basic argument/return/assignment type mismatches against literal types
-  (BSK-E0012–E0015)
-- Override correctness and `@override` enforcement (BSK-E0016–E0017, E0025)
-- Undefined and unbound variables (BSK-E0018–E0019)
-- Overload completeness and overlap (BSK-E0020–E0021)
-- Unhashable dict keys (BSK-E0022)
-- Non-exhaustive `match` (BSK-E0023)
-- Invalid type forms (BSK-E0024)
-
-This covers the **strictness layer** that no other tool enforces by default.
-It does not yet cover the deep typing mechanics the conformance suite tests:
-protocols, generics, TypeVar, overloads with dispatch, TypedDict, dataclasses,
-Literal, narrowing, and so on.
-
-The initial score will be low — that is expected.  The score is the baseline
-from which every subsequent phase of implementation is measured.
+The score has improved significantly, showing good progress in Phase 2 implementation.
 
 ---
 

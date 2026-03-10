@@ -19,7 +19,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0043",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0043",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0043",
 };
 
 fn make_diagnostic(message: String, span: basilisk_resolver::Span, path: &str) -> Diagnostic {
@@ -97,6 +97,44 @@ impl Rule for NonTypeVarInGeneric {
                     param.span,
                     &module.path,
                 ));
+            }
+
+            // Check that all TypeVars used in non-Generic base subscripts are declared
+            // in the explicit `Generic[...]` or `Protocol[...]` parameter list.
+            // e.g. `class Bad(Iterable[T_co], Generic[S_co])` is invalid because
+            // T_co is used in a base but not listed in Generic[S_co].
+            if !class.generic_params.is_empty() {
+                let declared_in_generic: HashSet<&str> = class
+                    .generic_params
+                    .iter()
+                    .map(|p| p.name.as_str())
+                    .collect();
+
+                // Collect TypeVar names used anywhere in base class expressions
+                // but not declared in Generic[...]/Protocol[...].
+                let mut undeclared: Vec<&str> = class
+                    .base_expression_names
+                    .iter()
+                    .map(String::as_str)
+                    .filter(|n| typevar_names.contains(n))
+                    .filter(|n| !declared_in_generic.contains(n))
+                    .collect::<HashSet<_>>()
+                    .into_iter()
+                    .collect();
+                undeclared.sort_unstable();
+
+                if !undeclared.is_empty() {
+                    diagnostics.push(make_diagnostic(
+                        format!(
+                            "Type parameter`{}` used in a base class of `{}` \
+                             but not listed in `Generic[...]` or `Protocol[...]`",
+                            undeclared.join("`, `"),
+                            class.name
+                        ),
+                        class.name_span,
+                        &module.path,
+                    ));
+                }
             }
         }
     }

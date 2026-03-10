@@ -20,7 +20,7 @@ use super::Rule;
 #[allow(dead_code)]
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0053",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0053",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0053",
 };
 
 /// Emits BSK-E0053 when `assert_type(expr, T)` has a detectable type mismatch.

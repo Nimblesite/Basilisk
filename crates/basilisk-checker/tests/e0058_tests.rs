@@ -1,0 +1,45 @@
+//! Integration tests for BSK-E0058: Annotated too few arguments.
+#![allow(missing_docs)]
+
+use basilisk_checker::check;
+use basilisk_parser::parse_source;
+use basilisk_resolver::resolve;
+
+fn run(source: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::error::Error>> {
+    let parsed = parse_source(source.to_owned(), "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    Ok(check(&resolved))
+}
+
+fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
+    diags.iter().map(|d| d.code.code).collect()
+}
+
+#[test]
+fn e0058_annotated_single_arg_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Annotated
+x: Annotated[int]
+";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"BSK-E0058"),
+        "Annotated with single arg should fire E0058, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn e0058_annotated_two_args_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+from typing import Annotated
+x: Annotated[int, "metadata"]
+"#;
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0058"),
+        "Annotated with two args should not fire E0058"
+    );
+    Ok(())
+}

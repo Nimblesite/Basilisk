@@ -27,7 +27,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0051",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0051",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0051",
 };
 
 fn make_diag(message: String, span: basilisk_resolver::Span, path: &str) -> Diagnostic {
@@ -128,7 +128,10 @@ fn is_invalid_single_arg(arg: &str) -> bool {
     }
     // String literal — must be a complete literal (ends with matching closing quote),
     // not a method call like `"foo".replace(...)`.
-    if (arg.starts_with('"') || arg.starts_with('\'') || arg.starts_with("r\"") || arg.starts_with("r'"))
+    if (arg.starts_with('"')
+        || arg.starts_with('\'')
+        || arg.starts_with("r\"")
+        || arg.starts_with("r'"))
         && is_complete_string_literal(arg)
     {
         return false;
@@ -147,13 +150,20 @@ fn is_invalid_single_arg(arg: &str) -> bool {
 
 fn is_integer_literal(arg: &str) -> bool {
     let s = arg.trim();
-    let s = s.strip_prefix('-').or_else(|| s.strip_prefix('+')).map_or(s, str::trim);
+    let s = s
+        .strip_prefix('-')
+        .or_else(|| s.strip_prefix('+'))
+        .map_or(s, str::trim);
     if s.is_empty() {
         return false;
     }
-    if let Some(rest) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X"))
-        .or_else(|| s.strip_prefix("0b")).or_else(|| s.strip_prefix("0B"))
-        .or_else(|| s.strip_prefix("0o")).or_else(|| s.strip_prefix("0O"))
+    if let Some(rest) = s
+        .strip_prefix("0x")
+        .or_else(|| s.strip_prefix("0X"))
+        .or_else(|| s.strip_prefix("0b"))
+        .or_else(|| s.strip_prefix("0B"))
+        .or_else(|| s.strip_prefix("0o"))
+        .or_else(|| s.strip_prefix("0O"))
     {
         return !rest.is_empty() && rest.chars().all(|c| c.is_ascii_alphanumeric());
     }
@@ -165,14 +175,20 @@ fn is_enum_member(arg: &str) -> bool {
         return false;
     }
     let mut parts = arg.splitn(2, '.');
-    let Some(obj) = parts.next() else { return false };
-    let Some(attr) = parts.next() else { return false };
+    let Some(obj) = parts.next() else {
+        return false;
+    };
+    let Some(attr) = parts.next() else {
+        return false;
+    };
     !attr.contains('.') && is_ident(obj) && is_ident(attr)
 }
 
 fn is_ident(s: &str) -> bool {
     !s.is_empty()
-        && s.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_')
+        && s.chars()
+            .next()
+            .is_some_and(|c| c.is_alphabetic() || c == '_')
         && s.chars().all(|c| c.is_alphanumeric() || c == '_')
 }
 
@@ -186,7 +202,11 @@ fn is_complete_string_literal(arg: &str) -> bool {
     let (quote, body_start) = if arg.starts_with("\"\"\"") || arg.starts_with("'''") {
         let q = &arg[..3];
         (q.to_owned(), 3usize)
-    } else if arg.starts_with("b\"") || arg.starts_with("b'") || arg.starts_with("r\"") || arg.starts_with("r'") {
+    } else if arg.starts_with("b\"")
+        || arg.starts_with("b'")
+        || arg.starts_with("r\"")
+        || arg.starts_with("r'")
+    {
         let q = arg.chars().nth(1).map_or('"', |c| c).to_string();
         (q, 2usize)
     } else if arg.starts_with('"') || arg.starts_with('\'') {
@@ -214,19 +234,29 @@ impl Rule for InvalidLiteralParam {
 
         // Module-level variable annotations: `x: Literal[...]`
         for var in &module.module_vars {
-            let Some(ann_span) = var.annotation_span else { continue };
-            let Some(ann) = source.get(ann_span.start as usize..ann_span.end as usize) else { continue };
+            let Some(ann_span) = var.annotation_span else {
+                continue;
+            };
+            let Some(ann) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+                continue;
+            };
             let ann = ann.trim();
 
             if is_bare_literal(ann) {
                 diagnostics.push(make_diag(
-                    format!("`Literal` must be parameterized (variable `{}` has no arguments)", var.name),
+                    format!(
+                        "`Literal` must be parameterized (variable `{}` has no arguments)",
+                        var.name
+                    ),
                     var.name_span,
                     path,
                 ));
             } else if is_literal_subscript(ann) && has_invalid_literal_param(ann) {
                 diagnostics.push(make_diag(
-                    format!("Invalid parameterization of `Literal` in annotation for `{}`", var.name),
+                    format!(
+                        "Invalid parameterization of `Literal` in annotation for `{}`",
+                        var.name
+                    ),
                     var.name_span,
                     path,
                 ));
@@ -236,19 +266,29 @@ impl Rule for InvalidLiteralParam {
         // Function parameter annotations
         for func in &module.functions {
             for param in &func.parameters {
-                let Some(ann_span) = param.annotation_span else { continue };
-                let Some(ann) = source.get(ann_span.start as usize..ann_span.end as usize) else { continue };
+                let Some(ann_span) = param.annotation_span else {
+                    continue;
+                };
+                let Some(ann) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+                    continue;
+                };
                 let ann = ann.trim();
 
                 if is_bare_literal(ann) {
                     diagnostics.push(make_diag(
-                        format!("`Literal` must be parameterized (parameter `{}` has no arguments)", param.name),
+                        format!(
+                            "`Literal` must be parameterized (parameter `{}` has no arguments)",
+                            param.name
+                        ),
                         param.name_span,
                         path,
                     ));
                 } else if is_literal_subscript(ann) && has_invalid_literal_param(ann) {
                     diagnostics.push(make_diag(
-                        format!("Invalid parameterization of `Literal` for parameter `{}`", param.name),
+                        format!(
+                            "Invalid parameterization of `Literal` for parameter `{}`",
+                            param.name
+                        ),
                         param.name_span,
                         path,
                     ));

@@ -14,7 +14,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0032",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0032",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0032",
 };
 
 /// Emits BSK-E0032 for invalid keyword arguments or bases in a `TypedDict` class.

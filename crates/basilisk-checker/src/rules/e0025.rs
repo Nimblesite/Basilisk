@@ -21,7 +21,7 @@ use super::{guards::is_protocol_class, Rule};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0025",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0025",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0025",
 };
 
 /// Emits BSK-E0025 for methods that override a same-module base-class method

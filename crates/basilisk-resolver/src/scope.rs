@@ -54,6 +54,7 @@ impl ReturnAnnotationKind {
 
 /// Information about a single function definition.
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct FunctionInfo {
     /// The function name.
     pub name: String,
@@ -67,6 +68,8 @@ pub struct FunctionInfo {
     pub return_annotation: ReturnAnnotationKind,
     /// Decorator names applied to this function (e.g. `"overload"`, `"override"`).
     pub decorators: Vec<String>,
+    /// Decorator name spans paired with their names (for semantic token highlighting).
+    pub decorator_spans: Vec<(String, Span)>,
     /// Return statements found in this function body.
     pub return_stmts: Vec<ReturnStmtInfo>,
     /// The span of the `def` keyword (start of the function definition).
@@ -108,6 +111,27 @@ pub struct FunctionInfo {
     ///
     /// For `def foo[T, *Ts, **P](): ...`, this is `["T", "Ts", "P"]`.
     pub pep695_type_param_names: Vec<String>,
+    /// Annotated local variables declared anywhere in the function body
+    /// (excluding nested function bodies).
+    ///
+    /// For `x: int = 0` inside the function, this contains a `VariableInfo`
+    /// with `has_annotation = true`.  Used by E0047 to check for invalid type
+    /// annotations in local variable declarations.
+    pub local_vars: Vec<VariableInfo>,
+    /// `true` when the function body contains at least one `yield` or `yield from`.
+    pub is_generator: bool,
+    /// `true` when the function is declared with `async def`.
+    pub is_async: bool,
+    /// Yield expressions found in this function body.
+    pub yield_exprs: Vec<YieldExprInfo>,
+    /// `true` when the last top-level statement in the function body is a `return`
+    /// statement (with or without a value).
+    ///
+    /// Used by E0120 to detect generators with `Generator[Y, S, R]` where R is not
+    /// `None` but the function can fall through without returning.
+    pub body_ends_with_return: bool,
+    /// The docstring of this function, if present (first statement is a string literal).
+    pub docstring: Option<String>,
 }
 
 /// A `return` statement found inside a function body.
@@ -123,6 +147,24 @@ pub struct ReturnStmtInfo {
     /// Callable[..., None]`).  Without full type inference we cannot verify
     /// the callee's return type, so E0013 conservatively skips these.
     pub value_is_call: bool,
+    /// What kind of expression is returned, if any.
+    ///
+    /// Used for return type inference in E0002.
+    pub rhs_kind: RhsKind,
+}
+
+/// A `yield` or `yield from` expression found inside a generator function body.
+#[derive(Debug, Clone)]
+pub struct YieldExprInfo {
+    /// The span of the `yield` keyword.
+    pub span: Span,
+    /// What kind of expression is yielded, if any.
+    pub rhs_kind: RhsKind,
+    /// `true` when this is a `yield from` expression.
+    pub is_yield_from: bool,
+    /// The name of the called function/constructor, if the yield value is a call expression.
+    /// For `yield SomeClass()`, this is `Some("SomeClass")`.
+    pub call_name: Option<String>,
 }
 
 /// A reference to an unhashable expression used as a dict key.
@@ -132,6 +174,18 @@ pub struct UnhashableKeyRef {
     pub span: Span,
     /// A human-readable description of the key type (`"list"`, `"set"`, `"dict"`).
     pub key_type: &'static str,
+}
+
+/// A `ClassName(args).__hash__()` call on a non-hashable dataclass.
+///
+/// A `@dataclass` with `eq=True` (the default) sets `__hash__` to `None`
+/// unless `frozen=True`, `unsafe_hash=True`, or the class defines `__hash__`.
+#[derive(Debug, Clone)]
+pub struct UnhashableHashCallViolation {
+    /// The class name that is not hashable.
+    pub class_name: String,
+    /// The span of the entire `.__hash__()` call expression.
+    pub span: Span,
 }
 
 /// A call site detected in module-level code.
@@ -167,8 +221,17 @@ pub struct NamedTupleDefInfo {
     /// Field type texts in declaration order (parallel to `field_names`).
     ///
     /// Contains the source text of each type expression (e.g. `"int"`, `"str"`).
+    /// Empty when `has_types` is `false` (i.e., for `collections.namedtuple`).
     pub field_types: Vec<String>,
-    /// Span of the entire `NamedTuple(...)` call expression.
+    /// Number of trailing fields that have default values.
+    ///
+    /// Set from the `defaults` keyword argument, e.g. `namedtuple("N", "a b c", defaults=(1, 2))`
+    /// yields `defaults_count = 2` (fields `b` and `c` have defaults).
+    pub defaults_count: usize,
+    /// `true` when field type information is available (i.e., `typing.NamedTuple`).
+    /// `false` for `collections.namedtuple` where no type information is given.
+    pub has_types: bool,
+    /// Span of the entire `NamedTuple(...)` or `namedtuple(...)` call expression.
     pub span: Span,
 }
 
@@ -185,6 +248,14 @@ pub enum RhsKind {
     BoolLiteral,
     /// Bytes literal — type is trivially `bytes`.
     BytesLiteral,
+    /// A list literal with known element kinds.
+    List(Vec<RhsKind>),
+    /// A dict literal with known key/value kinds.
+    Dict(Vec<(RhsKind, RhsKind)>),
+    /// A set literal with known element kinds.
+    Set(Vec<RhsKind>),
+    /// A tuple literal with known element kinds.
+    Tuple(Vec<RhsKind>),
     /// Empty list literal `[]` — element type unknown without annotation.
     EmptyList,
     /// Empty dict literal `{}` — key/value types unknown without annotation.
@@ -193,6 +264,10 @@ pub enum RhsKind {
     NoneValue,
     /// A function or constructor call — return type may be unknown.
     CallExpr,
+    /// A `type(X)` call — returns a class object (e.g. `type(None)` → `NoneType`).
+    TypeCall,
+    /// A lambda expression (`lambda x: x + 1`).
+    Lambda,
     /// Any other expression.
     Other,
 }
@@ -216,6 +291,7 @@ pub struct VariableInfo {
 
 /// A class attribute (declared in the class body).
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct AttributeInfo {
     /// The attribute name.
     pub name: String,
@@ -236,6 +312,37 @@ pub struct AttributeInfo {
     /// In enum class bodies, `nonmember(value)` explicitly marks an attribute
     /// as a non-member so it is not treated as an enum value.
     pub rhs_is_nonmember_call: bool,
+    /// `true` when the right-hand-side is a lambda expression (`attr = lambda ...`).
+    ///
+    /// In enum class bodies, lambda attributes are non-members.
+    pub rhs_is_lambda: bool,
+    /// `true` when the right-hand-side is a call to `staticmethod(...)` or `classmethod(...)`.
+    ///
+    /// In enum class bodies, static/class method descriptors are non-members.
+    pub rhs_is_descriptor_call: bool,
+    /// `true` when the annotation contains `ReadOnly[...]` (directly or nested).
+    ///
+    /// Used by `BSK-E0056` to detect mutation of read-only `TypedDict` fields.
+    pub is_readonly: bool,
+    /// `true` when the field is keyword-only in a dataclass `__init__`.
+    ///
+    /// A field is `kw_only` when:
+    /// - It appears after the `_: KW_ONLY` sentinel in the class body.
+    /// - It uses `field(kw_only=True, ...)` as its value.
+    /// - The class is `@dataclass(kw_only=True)` and the field does not use `field(kw_only=False)`.
+    pub is_kw_only: bool,
+    /// `true` when the field is excluded from the dataclass `__init__`.
+    ///
+    /// A field has `init=False` when:
+    /// - It uses `field(init=False)` as its value.
+    /// - A `dataclass_transform` field specifier function implicitly sets `init=False`
+    ///   (e.g. via an overload with `init: Literal[False]` as default).
+    pub is_init_false: bool,
+    /// `true` when the field is an `InitVar[T]` annotation.
+    ///
+    /// `InitVar` fields are not real attributes — they are passed as parameters
+    /// to `__post_init__` and cannot be accessed as instance attributes.
+    pub is_init_var: bool,
 }
 
 /// Information about an enum `_value_` type mismatch detected during resolution.
@@ -288,16 +395,25 @@ pub struct ClassInfo {
     pub method_names: Vec<String>,
     /// Decorators for each method: `(method_name, [decorator_names])`.
     pub method_decorators: Vec<(String, Vec<String>)>,
+    /// Class-level decorator name spans (for semantic token highlighting).
+    pub decorator_spans: Vec<(String, Span)>,
     /// Type parameter names extracted from a `Generic[...]` base, if present.
     pub generic_params: Vec<GenericParamInfo>,
     /// `true` when the class inherits from `TypedDict`.
     pub is_typed_dict: bool,
+    /// `true` when the `TypedDict` has `total=True` (the default). `false` when `total=False`.
+    pub is_typeddict_total: bool,
     /// Keyword argument names in the class definition (e.g. `metaclass`, `total`, `other`).
     pub class_keywords: Vec<String>,
     /// `true` when the class is decorated with `@dataclass` or `@dataclass(...)`.
     pub is_dataclass: bool,
     /// `true` when the dataclass is decorated with `frozen=True`.
     pub is_dataclass_frozen: bool,
+    /// `true` when the dataclass is decorated with `kw_only=True`.
+    ///
+    /// When `kw_only=True`, all fields are keyword-only in `__init__`
+    /// unless individually overridden with `field(kw_only=False)`.
+    pub is_dataclass_kw_only: bool,
     /// `true` when the dataclass is decorated with `match_args=False`
     /// (suppresses `__match_args__` generation).
     pub is_dataclass_match_args_false: bool,
@@ -314,6 +430,11 @@ pub struct ClassInfo {
     /// When `eq=False`, `__hash__` is not touched by the dataclass machinery,
     /// so the class retains the inherited `__hash__` from `object`.
     pub is_dataclass_eq_false: bool,
+    /// `true` when the dataclass is decorated with `init=False`.
+    ///
+    /// When `init=False`, no `__init__` is synthesized.  If the class also
+    /// defines no explicit `__init__`, calling it with arguments is an error.
+    pub is_dataclass_init_false: bool,
     /// `true` when the class is decorated with `@final` or `typing.final`.
     pub is_final: bool,
     /// `true` when the class directly or transitively inherits from an `Enum` family class.
@@ -335,6 +456,28 @@ pub struct ClassInfo {
     /// For `class Foo(Generic[int])`, this would contain the span of `int`.
     /// Used by E0043 to detect non-TypeVar arguments to Generic/Protocol.
     pub generic_non_typevar_args: Vec<Span>,
+    /// The metaclass name if specified via `metaclass=Meta` keyword.
+    ///
+    /// For `class Foo(metaclass=Meta): ...`, this is `Some("Meta")`.
+    /// `None` when no explicit metaclass is specified.
+    pub metaclass_name: Option<String>,
+    /// `true` when at least one base class expression is a subscript.
+    ///
+    /// For example, `class Foo(SubclassMe[float])` has a subscript base.
+    /// Used by `BSK-E0092` to detect classes that have fully specialised their
+    /// generic bases and therefore cannot be further subscripted.
+    pub has_subscript_base: bool,
+    /// Structured information about subscripted base classes.
+    ///
+    /// For `class Foo(Base[T, int])`, this contains an entry with `base_name = "Base"`.
+    /// Used by `BSK-E0107` for variance checking.
+    pub base_subscripts: Vec<BaseSubscriptEntry>,
+    /// `true` when the dataclass is decorated with `slots=True`.
+    pub is_dataclass_slots: bool,
+    /// `true` when the class has a manual `__slots__` definition in the body.
+    pub has_manual_slots: bool,
+    /// The docstring of this class, if present (first statement is a string literal).
+    pub docstring: Option<String>,
 }
 
 /// Type parameters declared in a `Generic[T1, T2, ...]` base expression.
@@ -343,6 +486,41 @@ pub struct GenericParamInfo {
     /// The name of the type parameter (e.g. `"T"`, `"T_co"`).
     pub name: String,
     /// The source span of this parameter name inside `Generic[...]`.
+    pub span: Span,
+    /// `true` when this param was extracted from a starred expression (`*Ts`),
+    /// indicating it is a `TypeVarTuple` unpack in `Generic[...]`.
+    pub is_typevartuple: bool,
+}
+
+/// A module-level `TypeAlias` annotated assignment.
+///
+/// Represents `MyAlias: TypeAlias = SomeGeneric[int, T]` at module level.
+/// The `rhs_names` field contains all simple names referenced in the RHS expression.
+/// Used by `BSK-E0092` to check that subscript sites respect the alias arity.
+#[derive(Debug, Clone)]
+pub struct TypeAliasDefInfo {
+    /// The alias name (e.g. `"MyAlias"`).
+    pub name: String,
+    /// All simple names referenced in the RHS expression (includes both `TypeVar`s and non-`TypeVar`s).
+    pub rhs_names: Vec<String>,
+    /// The base name of the RHS expression, if it is a subscript (e.g. `"Generic"` from `Generic[T]`).
+    pub rhs_base_name: Option<String>,
+    /// Type argument names from the RHS subscript expression.
+    pub rhs_type_arg_names: Vec<String>,
+    /// Forward-reference strings found in the RHS expression.
+    pub rhs_string_refs: Vec<String>,
+    /// The source span of the type alias definition.
+    pub span: Span,
+}
+
+/// A module-level subscript expression (e.g. `MyGeneric[int]`) used as a statement.
+#[derive(Debug, Clone)]
+pub struct GenericSubscriptSite {
+    /// The name of the subscripted type (e.g. `"MyGeneric"`).
+    pub base_name: String,
+    /// Number of type arguments supplied.
+    pub arg_count: usize,
+    /// Span of the subscript expression.
     pub span: Span,
 }
 
@@ -372,6 +550,24 @@ pub struct TypeVarCallInfo {
     pub has_infer_variance: bool,
     /// The span of the entire `TypeVar` call expression.
     pub span: Span,
+    /// Simple type name from the `bound=` keyword argument (e.g. `"str"` from `bound=str`).
+    /// `None` if not present or not a simple name.
+    pub bound_type_name: Option<String>,
+    /// Simple type name from the `default=` keyword argument (e.g. `"int"` from `default=int`).
+    /// `None` if not present or not a simple name.
+    pub default_type_name: Option<String>,
+    /// Type names from positional constraint arguments (excluding the `TypeVar` name string arg).
+    /// Empty when there are no constraints.
+    pub constraint_type_names: Vec<String>,
+    /// `true` when this is a `TypeVarTuple(...)` call rather than `TypeVar(...)`.
+    pub is_typevartuple: bool,
+    /// `true` when this is a `ParamSpec(...)` call rather than `TypeVar(...)`.
+    pub is_paramspec: bool,
+    /// The string value of the first positional argument (the name string passed to the call).
+    ///
+    /// For `T = TypeVar("T")`, this is `Some("T")`.
+    /// `None` when the first argument is not a plain string literal.
+    pub string_name: Option<String>,
 }
 
 /// How an import statement is structured.
@@ -383,6 +579,17 @@ pub enum ImportKind {
     From,
     /// `from X import *`
     Star,
+}
+
+/// How an import was resolved (source file type).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ImportResolution {
+    /// Import resolved from a .py source file.
+    SourcePy,
+    /// Import resolved from a .pyi stub file.
+    StubPyi,
+    /// Import resolution failed or not yet resolved.
+    Unresolved,
 }
 
 /// A single import statement.
@@ -397,6 +604,8 @@ pub struct ImportInfo {
     pub span: Span,
     /// The kind of import.
     pub kind: ImportKind,
+    /// How the import was resolved (source file type).
+    pub resolution: ImportResolution,
 }
 
 /// A `match` statement with exhaustiveness information.
@@ -547,6 +756,8 @@ pub struct ModuleAttrAssignment {
     pub attr_name: String,
     /// Span of the entire `Class.attr` target expression.
     pub target_span: Span,
+    /// Span of the right-hand-side value expression, if present.
+    pub rhs_span: Option<Span>,
 }
 
 /// A module-level attribute access expression (`Name.attr` as a standalone statement).
@@ -574,6 +785,31 @@ pub enum CompareOp {
     Gt,
     /// `>=`
     GtE,
+}
+
+/// A violation of `ReadOnly` `TypedDict` field mutation rules.
+///
+/// Covers module-level subscript assignment (`td["key"] = val`) and `.update()` calls
+/// on `TypedDict` variables that have `ReadOnly` fields.
+#[derive(Debug, Clone)]
+pub struct ReadOnlyViolationInfo {
+    /// The name of the variable being mutated.
+    pub var_name: String,
+    /// The `ReadOnly` field key being mutated, if applicable (subscript assignment).
+    pub field_name: Option<String>,
+    /// The kind of violation.
+    pub kind: ReadOnlyViolationKind,
+    /// Span of the offending expression.
+    pub span: Span,
+}
+
+/// Kind of `ReadOnly` `TypedDict` mutation violation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReadOnlyViolationKind {
+    /// Direct subscript assignment: `td["key"] = val`.
+    SubscriptAssign,
+    /// `.update(...)` call on a `TypedDict` with `ReadOnly` fields.
+    UpdateCall,
 }
 
 /// A module-level comparison between two simple names using an ordering operator.
@@ -744,6 +980,37 @@ pub enum InvalidStringAnnotationKind {
     StringInUnion,
 }
 
+/// A protocol conformance violation where a class is passed where a `Protocol`
+/// with `Self`-returning methods is expected, but the class's corresponding
+/// method does not return `Self` or the class itself.
+///
+/// ```python
+/// class ShapeProtocol(Protocol):
+///     def set_scale(self, scale: float) -> Self: ...
+///
+/// class BadReturn:
+///     def set_scale(self, scale: float) -> int:  # returns int, not Self
+///         return 42
+///
+/// def accepts(s: ShapeProtocol) -> None: ...
+/// accepts(BadReturn())  # E — BadReturn does not conform
+/// ```
+///
+/// Used by `BSK-E0073`.
+#[derive(Debug, Clone)]
+pub struct ProtocolSelfViolation {
+    /// The name of the class that was passed as argument.
+    pub class_name: String,
+    /// The name of the protocol that is expected.
+    pub protocol_name: String,
+    /// The method name with the `Self` return type in the protocol.
+    pub method_name: String,
+    /// What the class's method actually returns (source text of return annotation).
+    pub actual_return_type: String,
+    /// The span of the call argument.
+    pub span: Span,
+}
+
 /// An invalid string annotation detected during AST resolution.
 #[derive(Debug, Clone)]
 pub struct InvalidStringAnnotation {
@@ -751,6 +1018,103 @@ pub struct InvalidStringAnnotation {
     pub kind: InvalidStringAnnotationKind,
     /// The span of the annotation expression.
     pub span: Span,
+}
+
+/// A direct instantiation of a Protocol class or a concrete class that fails
+/// to implement all required members of its Protocol base(s).
+///
+/// The typing spec forbids instantiating Protocol classes directly, and
+/// concrete subclasses that do not implement all abstract/stub methods or
+/// required `ClassVar` attributes are effectively abstract and cannot be
+/// instantiated.
+#[derive(Debug, Clone)]
+pub struct ProtocolInstantiationViolation {
+    /// The name of the class being instantiated.
+    pub class_name: String,
+    /// The span of the call expression.
+    pub span: Span,
+    /// `true` when the class is a concrete subclass missing protocol members
+    /// (treated as abstract), `false` when it is a Protocol class itself.
+    pub is_abstract: bool,
+}
+
+/// A violation related to `isinstance`/`issubclass` calls on Protocol classes
+/// that are not decorated with `@runtime_checkable` or are data protocols used
+/// with `issubclass`.
+///
+/// Used by `BSK-E0114`.
+#[derive(Debug, Clone)]
+pub struct ProtocolRtcViolation {
+    /// The span of the offending call expression.
+    pub span: Span,
+    /// The kind of violation.
+    pub kind: ProtocolRtcViolationKind,
+}
+
+/// The kind of `@runtime_checkable` protocol violation.
+#[derive(Debug, Clone)]
+pub enum ProtocolRtcViolationKind {
+    /// Protocol is not decorated with `@runtime_checkable`.
+    NotRuntimeCheckable {
+        /// The protocol class name.
+        protocol_name: String,
+        /// `isinstance` or `issubclass`.
+        call_name: String,
+    },
+    /// A data protocol used with `issubclass()`.
+    IssubclassDataProtocol {
+        /// The protocol class name.
+        protocol_name: String,
+    },
+}
+
+/// A generator-related type violation detected during resolution.
+///
+/// Covers:
+/// - Generator function with non-generator return type (e.g. `-> int` with `yield`)
+/// - Yield type mismatch (`yield 3` in `Generator[str, ...]`)
+/// - Yield-from type mismatch (`yield from iter_a` in `Iterator[B]` where A != B)
+///
+/// Used by `BSK-E0115`.
+#[derive(Debug, Clone)]
+pub struct GeneratorViolation {
+    /// The span of the offending expression.
+    pub span: Span,
+    /// The kind of violation.
+    pub kind: GeneratorViolationKind,
+}
+
+/// The kind of generator violation.
+#[derive(Debug, Clone)]
+pub enum GeneratorViolationKind {
+    /// A generator function (has yield) with a non-generator return type.
+    InvalidReturnType {
+        /// The function name.
+        func_name: String,
+        /// The declared return type text.
+        return_type: String,
+    },
+    /// Yield expression produces a type incompatible with the declared yield type.
+    YieldTypeMismatch {
+        /// The expected yield type from the annotation.
+        expected: String,
+        /// The actual inferred yield type.
+        actual: String,
+    },
+    /// `yield from` expression produces a type incompatible with the declared yield type.
+    YieldFromTypeMismatch {
+        /// The expected yield type from the annotation.
+        expected: String,
+        /// The actual inferred yield type.
+        actual: String,
+    },
+    /// `yield from` subgenerator has an incompatible send type.
+    YieldFromSendTypeMismatch {
+        /// The expected send type from the outer generator annotation.
+        expected: String,
+        /// The actual send type from the subgenerator.
+        actual: String,
+    },
 }
 
 /// The complete resolved view of a parsed module.
@@ -802,6 +1166,10 @@ pub struct ResolvedModule {
     ///
     /// Used by `BSK-E0058` to detect cross-type comparisons of `order=True` dataclass instances.
     pub module_order_comparisons: Vec<ModuleOrderComparisonInfo>,
+    /// `ReadOnly` `TypedDict` field mutation violations detected at module level.
+    ///
+    /// Used by `BSK-E0056`.
+    pub readonly_violations: Vec<ReadOnlyViolationInfo>,
     /// Spans of direct calls to `Annotated` (whether bare or parameterized).
     ///
     /// PEP 593 forbids calling `Annotated` as a callable:
@@ -869,8 +1237,242 @@ pub struct ResolvedModule {
     /// lambda calls, conditional expressions, etc.).
     /// Used by `BSK-E0069`.
     pub invalid_string_annotations: Vec<InvalidStringAnnotation>,
+    /// Protocol `Self`-return conformance violations detected during resolution.
+    ///
+    /// When a class is passed where a `Protocol` with `Self`-returning methods
+    /// is expected, but the class's corresponding method returns a different type.
+    /// Used by `BSK-E0073`.
+    pub protocol_self_violations: Vec<ProtocolSelfViolation>,
+    /// Protocol instantiation violations: direct `Proto()` calls or instantiation
+    /// of concrete subclasses that fail to implement all required protocol members.
+    ///
+    /// Used by `BSK-E0099`.
+    pub protocol_instantiation_violations: Vec<ProtocolInstantiationViolation>,
+    /// Spans of `isinstance(x, T)` calls where `T` is a `TypedDict` class.
+    ///
+    /// PEP 589: `TypedDict` type objects cannot be used in `isinstance()` tests.
+    /// Used by `BSK-E0088`.
+    pub isinstance_typeddict_violations: Vec<Span>,
+    /// `TypedDict` subscript key/value violations and invalid dict-literal assignments.
+    ///
+    /// Covers:
+    /// - `td["invalid_key"] = val` where `"invalid_key"` is not a `TypedDict` field.
+    /// - `td["field"] = wrong_type_val` where the value type mismatches the field type.
+    /// - `var: TypedDict = {invalid/missing keys}` where the literal doesn't match the schema.
+    ///   Used by `BSK-E0089`.
+    pub typeddict_key_violations: Vec<TypedDictKeyViolation>,
+    /// Module-level `TypeAlias` annotated assignments.
+    ///
+    /// Each entry represents `Name: TypeAlias = expr` at module level.
+    /// Used by `BSK-E0092` to check that subscript sites respect the alias arity.
+    pub type_alias_defs: Vec<TypeAliasDefInfo>,
+    /// Module-level subscript expression sites (`Name[args...]` used as a statement).
+    ///
+    /// Collected so that rules can check whether user-defined generic types are
+    /// subscripted with the correct number of type arguments.
+    /// Used by `BSK-E0092`.
+    pub generic_subscript_sites: Vec<GenericSubscriptSite>,
+    /// Augmented-assignment violations on `Literal`-typed variables.
+    ///
+    /// Used by `BSK-E0100`.
+    pub literal_augmented_assign_violations: Vec<LiteralAugmentedAssignViolation>,
+    /// Tuple index out-of-bounds violations.
+    ///
+    /// Used by `BSK-E0103`.
+    pub tuple_index_violations: Vec<TupleIndexViolation>,
+    /// Invalid attribute accesses on bounded type variables.
+    ///
+    /// Used by `BSK-E0105`.
+    pub bounded_typevar_attr_violations: Vec<BoundedTypeVarAttrViolation>,
+    /// Protocol class used where `type[Proto]` is expected.
+    ///
+    /// Used by `BSK-E0106`.
+    pub protocol_class_object_violations: Vec<ProtocolClassObjectViolation>,
+    /// `ClassName(args).__hash__()` calls on non-hashable dataclasses.
+    ///
+    /// A `@dataclass` with `eq=True` (the default) sets `__hash__` to `None`
+    /// unless `frozen=True`, `unsafe_hash=True`, or `__hash__` is defined explicitly.
+    /// Calling `.__hash__()` on such an instance is an error.
+    ///
+    /// Used by `BSK-E0063`.
+    pub unhashable_hash_call_violations: Vec<UnhashableHashCallViolation>,
+    /// Protocol `isinstance`/`issubclass` violations.
+    ///
+    /// Covers:
+    /// - `isinstance(x, Proto)` / `issubclass(x, Proto)` where `Proto` is not
+    ///   decorated with `@runtime_checkable`.
+    /// - `issubclass(x, Proto)` where `Proto` is a data protocol (has attributes).
+    ///
+    /// Used by `BSK-E0114`.
+    pub protocol_runtime_checkable_violations: Vec<ProtocolRtcViolation>,
+    /// Generator-related type violations (invalid return type, yield mismatches).
+    ///
+    /// Used by `BSK-E0115`.
+    pub generator_violations: Vec<GeneratorViolation>,
+    /// Unbound type variable usages detected during AST resolution.
+    ///
+    /// Covers inner class `TypeVar` reuse and function-nested Generic classes
+    /// that cannot be detected from the flattened `ResolvedModule` data alone.
+    ///
+    /// Used by `BSK-E0117`.
+    pub unbound_typevar_usages: Vec<UnboundTypeVarUsage>,
     /// The source file path.
     pub path: String,
     /// The original source text (forwarded from parser for span restoration).
     pub source: String,
+}
+
+/// A `TypedDict` key/value violation detected during resolution.
+#[derive(Debug, Clone)]
+pub struct TypedDictKeyViolation {
+    /// The span of the offending expression.
+    pub span: Span,
+    /// The name of the `TypedDict` class.
+    pub class_name: String,
+    /// The kind of violation.
+    pub kind: TypedDictKeyViolationKind,
+}
+
+/// Kind of `TypedDict` key/value violation.
+#[derive(Debug, Clone)]
+pub enum TypedDictKeyViolationKind {
+    /// Subscript assignment with an invalid key: `td["invalid_key"] = val`.
+    InvalidSubscriptKey {
+        /// The invalid key name.
+        key: String,
+    },
+    /// Subscript assignment where the value type mismatches the declared field type.
+    WrongSubscriptValueType {
+        /// The field being assigned.
+        key: String,
+        /// The declared field type annotation text.
+        expected: String,
+    },
+    /// Annotated assignment with a dict literal containing invalid or missing keys.
+    InvalidDictLiteral {
+        /// Keys in the dict that are not in the `TypedDict` schema.
+        invalid_keys: Vec<String>,
+        /// Required `TypedDict` fields missing from the dict literal.
+        missing_keys: Vec<String>,
+    },
+    /// Subscript read access with a key that is not a valid `TypedDict` field.
+    SubscriptReadInvalidKey {
+        /// The invalid key name.
+        key: String,
+    },
+    /// Dict literal used for a `TypedDict` variable contains a non-literal (variable) key.
+    NonLiteralDictKey,
+    /// A call to a method that is disallowed on `TypedDict` instances (e.g. `.clear()`).
+    DisallowedMethodCall {
+        /// The method name.
+        method: String,
+    },
+    /// A `del` statement on a `TypedDict` subscript.
+    DeleteSubscript,
+}
+
+/// A type argument in a subscript expression, possibly nested.
+///
+/// Represents both simple names (`T`) and parameterised types (`list[T]`).
+#[derive(Debug, Clone)]
+pub enum TypeArg {
+    /// A simple name reference (e.g. `T`, `int`).
+    Simple(String),
+    /// A subscript expression (e.g. `list[T]`, `Mapping[K, V]`).
+    Subscript {
+        /// The base name of the subscript.
+        base: String,
+        /// The type arguments inside the brackets.
+        args: Vec<TypeArg>,
+    },
+}
+
+/// A base class subscript entry, recording the base name and its type arguments.
+///
+/// For `class Foo(Base[T, int])`, this captures `base_name = "Base"`,
+/// `type_arg_names = ["T", "int"]`, and the structured `type_args`.
+#[derive(Debug, Clone)]
+pub struct BaseSubscriptEntry {
+    /// The base class name being subscripted.
+    pub base_name: String,
+    /// Flat list of type argument names (for simple cases).
+    pub type_arg_names: Vec<String>,
+    /// Rich structured type arguments (for nested generics).
+    pub type_args: Vec<TypeArg>,
+    /// The source span of the subscript expression.
+    pub span: Span,
+}
+
+/// A violation where augmented assignment widens a `Literal`-typed variable.
+#[derive(Debug, Clone)]
+pub struct LiteralAugmentedAssignViolation {
+    /// The source span of the augmented assignment.
+    pub span: Span,
+    /// The name of the variable being augmented.
+    pub var_name: String,
+}
+
+/// A violation where a tuple is indexed out of bounds.
+#[derive(Debug, Clone)]
+pub struct TupleIndexViolation {
+    /// The source span of the index expression.
+    pub span: Span,
+    /// The name of the tuple variable.
+    pub tuple_var_name: String,
+    /// The literal index value used.
+    pub index_value: i64,
+    /// The length of the fixed-size tuple.
+    pub tuple_length: usize,
+}
+
+/// A violation where an attribute is accessed on a bounded type variable
+/// that does not exist on the bound type.
+#[derive(Debug, Clone)]
+pub struct BoundedTypeVarAttrViolation {
+    /// The source span of the attribute access.
+    pub span: Span,
+    /// The name of the type variable.
+    pub typevar_name: String,
+    /// The name of the parameter typed with the type variable.
+    pub param_name: String,
+    /// The bound type of the type variable.
+    pub bound_type: String,
+    /// The attribute name that was accessed.
+    pub attr_name: String,
+}
+
+/// A violation where a Protocol class is used where `type[Proto]` is expected.
+#[derive(Debug, Clone)]
+pub struct ProtocolClassObjectViolation {
+    /// The source span of the violation.
+    pub span: Span,
+    /// The name of the Protocol class.
+    pub protocol_name: String,
+    /// Description of the context (e.g. "argument" or "assignment").
+    pub context: String,
+}
+
+/// A forward-reference string found in a type alias RHS.
+#[derive(Debug, Clone)]
+pub struct RhsStringRef {
+    /// The referenced name.
+    pub name: String,
+    /// The source span of the string reference.
+    pub span: Span,
+}
+
+/// An unbound type variable usage detected during AST resolution.
+///
+/// Captures cases where a `TypeVar` is used outside its binding scope, such as:
+/// - Inner class reusing an outer class's `TypeVar` in `Generic[T]`
+/// - Inner class body annotations using outer class `TypeVars`
+/// - Function-nested class using function-scoped `TypeVars` in `Generic[T]`
+#[derive(Debug, Clone)]
+pub struct UnboundTypeVarUsage {
+    /// The source span of the unbound usage.
+    pub span: Span,
+    /// The name of the type variable that is unbound.
+    pub typevar_name: String,
+    /// Human-readable context description (e.g. "inner class `Bad`").
+    pub context: String,
 }

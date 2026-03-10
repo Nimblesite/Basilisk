@@ -5,20 +5,27 @@
 //! class, import, and module-level variable.  The checker operates on
 //! [`ResolvedModule`] without touching the raw AST.
 
+mod bounded_typevar;
 pub mod scope;
 mod visitor;
 
 pub use scope::{
-    AnnotatedTooFewArgs, AssertTypeCallInfo, AttributeInfo, CallSite, ClassInfo, CompareOp,
-    EnumValueTypeViolationInfo, EnumValueTypeViolationKind, FinalViolationInfo, FinalViolationKind,
-    FloatParamIntAttrAccess, FunctionInfo, GenericParamInfo, HistoricalPositionalViolation,
+    AnnotatedTooFewArgs, AssertTypeCallInfo, AttributeInfo, BaseSubscriptEntry,
+    BoundedTypeVarAttrViolation, CallSite, ClassInfo, CompareOp, EnumValueTypeViolationInfo,
+    EnumValueTypeViolationKind, FinalViolationInfo, FinalViolationKind, FloatParamIntAttrAccess,
+    FunctionInfo, GenericParamInfo, HistoricalPositionalViolation,
     HistoricalPositionalViolationKind, ImportInfo, ImportKind, InvalidStringAnnotation,
-    InvalidStringAnnotationKind, LiteralStringEnumMismatch, LocalClassVarViolation, MatchStmtInfo,
-    ModuleAttrAccessInfo, ModuleAttrAssignment, ModuleBareAssignment, ModuleOrderComparisonInfo,
-    NamedTupleDefInfo, NewTypeCallInfo, ParameterInfo, Pep695BoundViolation,
-    Pep695BoundViolationKind, ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo,
-    RevealTypeCallInfo, RhsKind, Span, TypeAliasTypeCallInfo, TypeStatementInfo, TypeVarCallInfo,
-    TypedDictCallInfo, TypedDictSecondArgKind, UnhashableKeyRef, VariableInfo,
+    InvalidStringAnnotationKind, LiteralAugmentedAssignViolation, LiteralStringEnumMismatch,
+    LocalClassVarViolation, MatchStmtInfo, ModuleAttrAccessInfo, ModuleAttrAssignment,
+    ModuleBareAssignment, ModuleOrderComparisonInfo, NamedTupleDefInfo, NewTypeCallInfo,
+    ParameterInfo, Pep695BoundViolation, Pep695BoundViolationKind, ProtocolClassObjectViolation,
+    ProtocolInstantiationViolation, ProtocolRtcViolation, ProtocolRtcViolationKind,
+    ProtocolSelfViolation, ReadOnlyViolationInfo, ReadOnlyViolationKind, ResolvedModule,
+    ReturnAnnotationKind, ReturnStmtInfo, RevealTypeCallInfo, RhsKind, RhsStringRef, Span,
+    TupleIndexViolation, TypeAliasDefInfo, TypeAliasTypeCallInfo, TypeArg, TypeStatementInfo,
+    TypeVarCallInfo, TypedDictCallInfo, TypedDictKeyViolation, TypedDictKeyViolationKind,
+    TypedDictSecondArgKind, UnboundTypeVarUsage, UnhashableHashCallViolation, UnhashableKeyRef,
+    VariableInfo, YieldExprInfo,
 };
 
 use basilisk_parser::ParsedModule;

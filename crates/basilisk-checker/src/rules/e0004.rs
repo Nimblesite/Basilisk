@@ -11,7 +11,7 @@ use super::{guards::is_stub_context, Rule};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0004",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0004",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0004",
 };
 
 /// Emits BSK-E0004 for unannotated `*args` and `**kwargs` parameters.

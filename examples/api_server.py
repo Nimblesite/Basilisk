@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from typing import Any, overload
 
-
+ 
 # ── BSK-E0003: can't infer type from empty dict literal ─────────────────────
 _route_table = {}                          # BSK-E0003: empty dict, no annotation
 _middleware_stack = []                     # BSK-E0003: empty list, no annotation
@@ -76,7 +76,7 @@ class PrefixRouter(Router):
     prefix: str = "/api"
 
     def resolve(self, path: str) -> str:  # BSK-E0025: missing @override
-        return self.prefix + path
+        return self.p + path
 
 
 # ── BSK-E0019: variable assigned inside if, returned outside ─────────────────

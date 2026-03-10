@@ -13,7 +13,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0033",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0033",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0033",
 };
 
 /// Emits BSK-E0033 for invalid `reveal_type()` calls.

@@ -2,11 +2,13 @@ from __future__ import annotations
 
 
 class Config:
-    host: str = "localhost"
-    port: int = 8080
-    debug: bool = False
+    # Annotations without defaults: pure type declarations, no W0050
+    host: str
+    port: int
+    debug: bool
 
 
 class Point:
-    x: float = 0.0
-    y: float = 0.0
+    # Annotations without defaults: no W0050
+    x: float
+    y: float

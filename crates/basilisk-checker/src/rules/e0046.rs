@@ -26,7 +26,7 @@ use super::{guards::is_enum_class, Rule};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0046",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0046",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0046",
 };
 
 /// Emits BSK-E0046 when an Enum member carries an explicit type annotation.

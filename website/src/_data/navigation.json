@@ -3,7 +3,7 @@
     { "text": "Docs", "url": "/docs/" },
     { "text": "Rules", "url": "/docs/rules/" },
     { "text": "Blog", "url": "/blog/" },
-    { "text": "GitHub", "url": "https://github.com/basilisk-lang/basilisk", "external": true }
+    { "text": "GitHub", "url": "https://github.com/MelbourneDeveloper/Basilisk", "external": true }
   ],
   "docs": [
     {
@@ -63,15 +63,15 @@
     {
       "title": "Community",
       "items": [
-        { "text": "GitHub", "url": "https://github.com/basilisk-lang/basilisk" },
-        { "text": "Issues", "url": "https://github.com/basilisk-lang/basilisk/issues" },
-        { "text": "Discussions", "url": "https://github.com/basilisk-lang/basilisk/discussions" }
+        { "text": "GitHub", "url": "https://github.com/MelbourneDeveloper/Basilisk" },
+        { "text": "Issues", "url": "https://github.com/MelbourneDeveloper/Basilisk/issues" },
+        { "text": "Discussions", "url": "https://github.com/MelbourneDeveloper/Basilisk/discussions" }
       ]
     },
     {
       "title": "Legal",
       "items": [
-        { "text": "MIT / Apache-2.0", "url": "https://github.com/basilisk-lang/basilisk/blob/main/LICENSE" }
+        { "text": "MIT / Apache-2.0", "url": "https://github.com/MelbourneDeveloper/Basilisk/blob/main/LICENSE" }
       ]
     }
   ]
