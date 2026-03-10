@@ -38,7 +38,7 @@ fn is_typed_dict_hierarchy(child: &ClassInfo, class_map: &HashMap<&str, &ClassIn
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0017",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0017",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0017",
 };
 
 /// Emits BSK-E0017 for class attributes that override a base-class attribute

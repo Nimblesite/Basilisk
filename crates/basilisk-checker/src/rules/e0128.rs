@@ -40,7 +40,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0128",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0128",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0128",
 };
 
 /// Information about a `TypeVar` extracted from source text.

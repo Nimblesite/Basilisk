@@ -28,7 +28,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0082",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0082",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0082",
 };
 
 /// Emits BSK-E0082 when a tuple literal argument has elements whose types do

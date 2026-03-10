@@ -32,7 +32,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0126",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0126",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0126",
 };
 
 /// Emits BSK-E0126 for `LiteralString` / `Literal[...]` assignment

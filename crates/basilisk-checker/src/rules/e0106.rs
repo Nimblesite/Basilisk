@@ -31,7 +31,7 @@ use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0106",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0106",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0106",
 };
 
 /// Emits BSK-E0106 when a Protocol class is used where `type[Proto]` is expected.

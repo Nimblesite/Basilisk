@@ -30,7 +30,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0048",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0048",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0048",
 };
 
 fn span_text(source: &str, span: Option<Span>) -> Option<&str> {

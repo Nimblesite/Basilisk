@@ -29,7 +29,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0079",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0079",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0079",
 };
 
 /// Emits BSK-E0079 when a module is assigned to a protocol-typed variable

@@ -28,7 +28,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0131",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0131",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0131",
 };
 
 /// Emits BSK-E0131 for generator yield/send/return type mismatches.

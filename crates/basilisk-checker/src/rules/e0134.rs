@@ -23,7 +23,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0134",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0134",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0134",
 };
 
 /// Emits BSK-E0134 for calls where a subclass argument is incompatible

@@ -34,7 +34,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0083",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0083",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0083",
 };
 
 fn make_diag(msg: String, span: basilisk_resolver::Span, path: &str) -> Diagnostic {

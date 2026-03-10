@@ -30,7 +30,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0123",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0123",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0123",
 };
 
 /// Emits BSK-E0123 when a method calls `super().method()` on an abstract

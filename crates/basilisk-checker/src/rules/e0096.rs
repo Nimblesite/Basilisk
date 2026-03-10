@@ -22,7 +22,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0096",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0096",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0096",
 };
 
 /// Emits BSK-E0096 for dataclass fields whose `default_factory` type is

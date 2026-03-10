@@ -14,9 +14,9 @@ use crate::output::{render_diagnostics, render_diagnostics_json, FileSource, Out
 
 mod output;
 
-/// Basilisk — strict-by-default Python type analyzer.
+/// Basilisk — strict-by-default Python type checker.
 ///
-/// TypeScript for Python. Every parameter typed. Every return declared.
+/// No escape hatches. Every parameter typed. Every return declared.
 #[derive(Parser)]
 #[command(name = "basilisk", version, about, long_about = None)]
 struct Cli {

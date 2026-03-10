@@ -20,7 +20,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-W0040",
-    docs_url: "https://basilisk-lang.org/warnings/BSK-W0040",
+    docs_url: "https://www.basilisk-python.dev/warnings/BSK-W0040",
 };
 
 /// Emits BSK-W0040 when lambda functions are assigned to unannotated variables.

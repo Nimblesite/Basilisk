@@ -25,7 +25,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0088",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0088",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0088",
 };
 
 /// Emits BSK-E0088 for `TypedDict` runtime violations.

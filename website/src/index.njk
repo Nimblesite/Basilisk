@@ -1,7 +1,7 @@
 ---
 layout: layouts/base.njk
-title: "Basilisk — Complete Type Safety for Python"
-description: "Strict-by-default Python type checker. Every parameter typed. Every return declared. No escape hatches. Built in Rust."
+title: "Basilisk — The Open-Source Pylance Replacement"
+description: "A complete Python language server and VS Code extension that replaces Pylance and Pyright. Everything Pylance does — and more. Strict by default. Built in Rust."
 permalink: /
 ---
 
@@ -18,14 +18,15 @@ permalink: /
         <span class="hero__kicker">// basilisk — v0.1 alpha</span>
 
         <h1 class="hero__headline">
-          Python&rsquo;s type system.<br>
-          Actually enforced.
+          The open-source<br>
+          Pylance replacement.
         </h1>
 
         <p class="hero__subheadline">
-          Basilisk is a strict-by-default static type analyzer for Python.
-          Every parameter must be typed. Every return declared.
-          <code>Any</code> is always explicit. No gradual mode. No escape hatches.
+          Basilisk is a complete Python language server and VS Code extension
+          that replaces Pylance and Pyright. Autocomplete, go-to-definition,
+          hover info, refactoring, diagnostics &mdash; everything you rely on, fully open source.
+          Strict by default. Built in Rust.
         </p>
 
         <div class="hero__cta-group">
@@ -38,13 +39,14 @@ permalink: /
             <svg class="copy-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
             <svg class="copy-check" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="display:none;color:var(--color-success)"><polyline points="20 6 9 17 4 12"/></svg>
           </button>
-          <a href="https://github.com/basilisk-lang/basilisk" class="btn btn--secondary" target="_blank" rel="noopener">
+          <a href="https://github.com/MelbourneDeveloper/Basilisk" class="btn btn--secondary" target="_blank" rel="noopener">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.741 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
             GitHub
           </a>
         </div>
 
         <div class="hero__meta">
+          <span>Full <strong>LSP</strong></span>
           <span>Built in <strong>Rust</strong></span>
           <span><strong><10ms</strong> incremental</span>
           <span>No <strong>Node.js</strong></span>
@@ -141,25 +143,25 @@ permalink: /
     <div class="problem__grid">
 
       <div class="problem__statement">
-        Every Python type checker asks you to <em>opt in</em> to the thing they were built to do.
+        Pylance is proprietary. Pyright is just a type checker. Python deserves a fully open-source language server that does <em>everything</em>.
       </div>
 
       <ul class="problem__bullets">
         <li>
           <span class="problem__num">01</span>
-          <span><strong>Pyright and mypy default to permissive mode.</strong> You get type checking only where you add <code>--strict</code> or configure it per-file. The rest ships unchecked.</span>
+          <span><strong>Pylance is closed source.</strong> The most-used Python VS Code extension is proprietary. You can&rsquo;t inspect, modify, or redistribute it. Basilisk is MIT/Apache-2.0 &mdash; fully open.</span>
         </li>
         <li>
           <span class="problem__num">02</span>
-          <span><strong>Gradual typing is a footgun.</strong> A codebase where 80% is typed is a codebase where 20% of bugs slip through every check. Safety requires 100%.</span>
+          <span><strong>Pyright is only a type checker.</strong> No autocomplete, no hover, no refactoring &mdash; not without Pylance wrapping it. Basilisk is a complete LSP: diagnostics, completions, go-to-definition, inlay hints, and more.</span>
         </li>
         <li>
           <span class="problem__num">03</span>
-          <span><strong>PEP conformance varies widely across type checkers.</strong> mypy passes ~58% of the typing conformance suite. Pyrefly ~86%. Basilisk is currently at 54.5% and rising rapidly — we're catching up fast.</span>
+          <span><strong>Every type checker defaults to permissive.</strong> You get type checking only where you add <code>--strict</code>. Basilisk is strict by default &mdash; no opt-in required.</span>
         </li>
         <li>
           <span class="problem__num">04</span>
-          <span><strong>Ownership semantics don&rsquo;t exist in Python.</strong> You can&rsquo;t express &ldquo;this function must not mutate its argument.&rdquo; Basilisk adds this, today, as standard Python annotations.</span>
+          <span><strong>Node.js is not a Python dependency.</strong> Pyright requires Node.js. Basilisk is a single Rust binary &mdash; no runtime, no npm, instant startup.</span>
         </li>
       </ul>
 
@@ -242,7 +244,7 @@ permalink: /
   <div class="feature-row">
     <div class="feature-row__visual">
       <div class="stat-block">
-        <span class="stat-block__number">54.5<span class="stat-block__unit">%</span></span>
+        <span class="stat-block__number">83.4<span class="stat-block__unit">%</span></span>
         <span class="stat-block__label">PEP conformance score</span>
       </div>
     </div>
@@ -281,7 +283,7 @@ permalink: /
 <span class="tok-fn">cargo</span> install basilisk
 
 <span class="tok-cmt"># or download the binary</span>
-<span class="tok-fn">curl</span> -sSfL https://get.basilisk-lang.org | sh
+<span class="tok-fn">curl</span> -sSfL https://get.basilisk-python.dev | sh
 
 <span class="tok-cmt"># then just run it</span>
 <span class="tok-fn">basilisk</span> check src/</pre>
@@ -298,10 +300,10 @@ permalink: /
 <section class="comparison-section">
   <div class="container">
     <p class="section-label">How it compares</p>
-    <h2 class="section-heading">The ecosystem,<br>honestly.</h2>
+    <h2 class="section-heading">Pylance features.<br>Open source.</h2>
     <p class="section-subhead">
-      Every other type checker treats strictness as optional.
-      Basilisk doesn&rsquo;t.
+      A feature-complete language server that replaces Pylance &mdash;
+      with stricter type checking and no proprietary lock-in.
     </p>
 
     <div class="table-wrapper">
@@ -379,6 +381,14 @@ permalink: /
             <td><span class="check-partial">Python hooks</span></td>
             <td><span class="check-partial">Planned</span></td>
             <td class="check-no">&mdash;</td>
+          </tr>
+          <tr>
+            <td>Full LSP (completions, hover, goto)</td>
+            <td class="col-basilisk check-yes">&#10003;</td>
+            <td><span class="cell-warn">Pylance only</span></td>
+            <td class="check-no">&mdash;</td>
+            <td><span class="check-partial">Basic</span></td>
+            <td><span class="check-partial">Basic</span></td>
           </tr>
           <tr>
             <td>VS Code extension</td>
@@ -524,7 +534,7 @@ permalink: /
 <span class="diag-bar"> 6 | </span><span class="diag-src">def save_record(data: Any) -> bool:</span>
 <span class="diag-bar">   |                     </span><span class="diag-caret">^^^</span> <span class="diag-note">use of `Any` must be justified</span>
 <span class="diag-bar">   = </span><span class="diag-help">help: replace `Any` with a concrete type, or add a suppression comment with reason</span>
-<span class="diag-bar">   = </span><span class="diag-see">see: https://basilisk-lang.org/docs/rules/#BSK-E0011</span>
+<span class="diag-bar">   = </span><span class="diag-see">see: https://www.basilisk-python.dev/docs/rules/#BSK-E0011</span>
           </div>
         </div>
 
@@ -556,7 +566,7 @@ permalink: /
 <span class="diag-bar">   |</span>
 <span class="diag-bar">   = </span><span class="diag-help">help: change annotation to `Annotated[list[int], InOut]` to allow mutation</span>
 <span class="diag-bar">   = </span><span class="diag-note">note: `Borrowed` parameters are immutable by contract</span>
-<span class="diag-bar">   = </span><span class="diag-see">see: https://basilisk-lang.org/docs/mojo-safety/</span>
+<span class="diag-bar">   = </span><span class="diag-see">see: https://www.basilisk-python.dev/docs/mojo-safety/</span>
           </div>
         </div>
 
@@ -601,16 +611,16 @@ permalink: /
 <section class="cta-section">
   <div class="container">
     <div class="cta-inner">
-      <h2>Stop letting Python<br>ship untyped.</h2>
+      <h2>Drop Pylance.<br>Pick up Basilisk.</h2>
       <div>
         <p>
-          Basilisk is in alpha. The parser, resolver, and core checker are working.
-          The standard library stubs, LSP, and VS Code extension are in progress.
-          Early adopters shape the roadmap.
+          Basilisk is in alpha. The type checker, LSP, and VS Code extension are working.
+          Autocomplete, go-to-definition, hover info, diagnostics &mdash; all shipping today.
+          Open source. No proprietary lock-in. Early adopters shape the roadmap.
         </p>
         <div class="cta-inner__actions">
           <a href="/docs/" class="btn btn--primary">Read the Docs</a>
-          <a href="https://github.com/basilisk-lang/basilisk" class="btn btn--secondary" target="_blank" rel="noopener">View on GitHub</a>
+          <a href="https://github.com/MelbourneDeveloper/Basilisk" class="btn btn--secondary" target="_blank" rel="noopener">View on GitHub</a>
         </div>
       </div>
     </div>

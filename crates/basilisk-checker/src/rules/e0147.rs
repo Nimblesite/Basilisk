@@ -37,7 +37,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0147",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0147",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0147",
 };
 
 /// Emits BSK-E0147 for incompatible starred-unpack tuple assignments.

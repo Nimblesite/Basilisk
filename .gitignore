@@ -1,44 +1,36 @@
-.commandtree/
-.too_many_cooks/
+# Build
 target/
 
+# Coverage & mutation testing
 lcov.info
-
+*.profraw
 mutants.out/
-
 mutants.out.old/
+mutants.out.backup-*/
 
-.playwright-mcp/
-
-
-
-
-node_modules/
-
-# Downloaded conformance test suite (python/typing) — fetch with scripts/fetch-conformance.sh
-crates/basilisk-cli/tests/conformance/
-.venv/
-
-mutants.out.backup-2026-02-28/
-
+# Benchmarks
 benchmarks/results/
-.aider*
 
+# Python
+.venv/
+.mypy_cache/
 
-coordination/
-vscode-extension/basilisk-0.1.0.vsix
-
-
-.mypy_cache
+# Node / VS Code extension
+node_modules/
 vscode-extension/out/
-
 vscode-extension/.vscode-test/
+*.vsix
 
-.DS_Store
+# Conformance test suite (fetched via scripts/fetch-conformance.sh)
+crates/basilisk-cli/tests/conformance/
 
-
+# Tool / agent state
+.aider*
+.commandtree/
+.too_many_cooks/
+.playwright-mcp/
+coordination/
 logs/
 
-
-*.profraw
-too-many-cooks-0.3.0.vsix
+# OS
+.DS_Store

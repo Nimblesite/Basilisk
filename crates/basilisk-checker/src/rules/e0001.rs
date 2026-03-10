@@ -8,7 +8,7 @@ use super::{guards::is_stub_context, Rule};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0001",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0001",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0001",
 };
 
 /// Emits BSK-E0001 for every unannotated regular parameter (not `*args`/`**kwargs`).

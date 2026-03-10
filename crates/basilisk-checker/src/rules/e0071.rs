@@ -31,7 +31,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0071",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0071",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0071",
 };
 
 /// Emits BSK-E0071 for historical positional-only parameter violations.

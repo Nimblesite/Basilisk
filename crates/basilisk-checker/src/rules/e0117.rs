@@ -32,7 +32,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0117",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0117",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0117",
 };
 
 /// Emits BSK-E0117 when a type variable is used outside its binding scope.

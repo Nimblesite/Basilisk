@@ -32,7 +32,7 @@ use crate::types::InferredType;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0120",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0120",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0120",
 };
 
 /// Valid return type base names for synchronous generator functions.

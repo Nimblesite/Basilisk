@@ -24,7 +24,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0116",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0116",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0116",
 };
 
 /// Emits BSK-E0116 for `NamedTuple` class definition errors.

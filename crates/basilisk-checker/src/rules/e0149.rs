@@ -41,7 +41,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0149",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0149",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0149",
 };
 
 /// Emits BSK-E0149 for PEP 695 generic type parameter scoping violations.

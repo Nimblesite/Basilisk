@@ -1,26 +1,43 @@
 {
   "name": "basilisk",
   "displayName": "Basilisk",
-  "description": "Strict-by-default Python type checker. Every parameter typed. Every return declared.",
+  "description": "Complete Python language server — the open-source replacement for Pylance. Type checking, completions, go-to-definition, and more. Built in Rust.",
   "version": "0.1.0",
   "publisher": "basilisk-lang",
   "license": "MIT OR Apache-2.0",
+  "icon": "images/basilisk-logo.png",
+  "galleryBanner": {
+    "color": "#0a0c12",
+    "theme": "dark"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/basilisk-lang/basilisk"
+    "url": "https://github.com/MelbourneDeveloper/Basilisk"
+  },
+  "homepage": "https://www.basilisk-python.dev",
+  "bugs": {
+    "url": "https://github.com/MelbourneDeveloper/Basilisk/issues"
   },
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
+    "Programming Languages",
     "Linters",
-    "Programming Languages"
+    "Other"
   ],
   "keywords": [
     "python",
+    "language server",
+    "pylance",
+    "pyright",
     "type checker",
-    "static analysis",
-    "basilisk"
+    "intellisense",
+    "autocomplete",
+    "go to definition",
+    "rust",
+    "basilisk",
+    "lsp"
   ],
   "activationEvents": [
     "onLanguage:python"

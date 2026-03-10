@@ -27,7 +27,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0077",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0077",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0077",
 };
 
 /// Emits BSK-E0077 for classes passed where a `Protocol` with `Self`-returning

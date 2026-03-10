@@ -8,7 +8,7 @@ use super::{guards::is_stub_context, Rule};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0002",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0002",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0002",
 };
 
 /// Emits BSK-E0002 for every function without a return type annotation.

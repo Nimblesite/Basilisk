@@ -29,7 +29,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0093",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0093",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0093",
 };
 
 /// Emits BSK-E0093 for invalid key or value-type violations on `TypedDict` instances.

@@ -23,7 +23,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0086",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0086",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0086",
 };
 
 /// Emits BSK-E0086 when multiple `TypeVarTuples` are used in a generic.

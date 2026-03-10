@@ -37,7 +37,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0075",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0075",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0075",
 };
 
 /// Emits BSK-E0075 when a parent-class instance is used where a `Self`-typed

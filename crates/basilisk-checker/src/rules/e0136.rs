@@ -32,7 +32,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0136",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0136",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0136",
 };
 
 /// Emits BSK-E0136 for callable-to-callable subtyping violations.

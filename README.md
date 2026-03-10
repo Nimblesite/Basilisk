@@ -1,26 +1,28 @@
-<h1 align="center">
-  <img src="website/src/assets/images/logo.svg" alt="Basilisk" width="72" height="72"><br>
-  Basilisk
-</h1>
+<p align="center">
+  <img src="images/basilisk-logo.png" alt="Basilisk" width="160">
+</p>
+
+<h1 align="center">Basilisk</h1>
 
 <p align="center">
-  <strong>Strict-by-default static type analyzer for Python — TypeScript for Python.</strong><br>
-  Every parameter must be typed. Every return type declared. <code>Any</code> is always explicit. No permissive modes.<br>
-  Implemented in <strong>Rust</strong> — ships as a single binary, no Python runtime required.
+  <strong>Strict-by-default Python type checker. No escape hatches.</strong><br>
+  Every parameter typed. Every return declared. <code>Any</code> is always explicit.<br>
+  Built in <strong>Rust</strong> — ships as a single binary, no runtime required.
 </p>
 
 <p align="center">
-  <a href="https://basilisk-lang.org/docs/installation/">Install</a> &nbsp;&bull;&nbsp;
-  <a href="https://basilisk-lang.org/docs/quick-start/">Quick Start</a> &nbsp;&bull;&nbsp;
-  <a href="https://basilisk-lang.org/docs/rules/">All Rules</a> &nbsp;&bull;&nbsp;
-  <a href="SPEC.md">Specification</a>
+  <a href="https://www.basilisk-python.dev">Website</a> &nbsp;&bull;&nbsp;
+  <a href="https://www.basilisk-python.dev/docs/installation/">Install</a> &nbsp;&bull;&nbsp;
+  <a href="https://www.basilisk-python.dev/docs/quick-start/">Quick Start</a> &nbsp;&bull;&nbsp;
+  <a href="https://www.basilisk-python.dev/docs/rules/">Rules</a> &nbsp;&bull;&nbsp;
+  <a href="SPEC.md">Spec</a>
 </p>
 
 ---
 
-<h2>Try it</h2>
+## Try it
 
-The <code>examples/</code> folder has ready-to-go Python files:
+The `examples/` folder has ready-to-go Python files:
 
 ```sh
 cargo run -- check examples/bad.py    # everything flagged
@@ -31,12 +33,12 @@ cargo run -- check examples/          # all three at once
 
 ---
 
-<h2>Quick example</h2>
+## Quick example
 
 <table>
 <tr>
-<th>Before — Basilisk rejects this</th>
-<th>After — clean</th>
+<th>Basilisk rejects this</th>
+<th>Fixed</th>
 </tr>
 <tr>
 <td>
@@ -66,7 +68,7 @@ error[BSK-E0001]: Missing parameter type annotation for `name`
    |           ^^^^
    |
    = help: Add a type annotation: `name: <type>`
-   = see: https://basilisk-lang.org/errors/BSK-E0001
+   = see: https://www.basilisk-python.dev/errors/BSK-E0001
 
 error[BSK-E0002]: Missing return type annotation
   --> greet.py:1:1
@@ -74,61 +76,51 @@ error[BSK-E0002]: Missing return type annotation
  1 | def greet(name):
    | ^^^^^^^^^^^^^^^^
    |
-   = see: https://basilisk-lang.org/errors/BSK-E0002
+   = see: https://www.basilisk-python.dev/errors/BSK-E0002
 ```
 
 ---
 
-<h2>What gets flagged</h2>
+## Rules
 
 All rules are on by default. There is no way to relax them globally.
 
-<h3>Annotation rules (E0001–E0005)</h3>
+### Annotation rules (E0001-E0005)
 
-<table>
-<thead>
-<tr><th>Code</th><th>What triggers it</th></tr>
-</thead>
-<tbody>
-<tr><td><code>BSK-E0001</code></td><td>Function parameter has no type annotation</td></tr>
-<tr><td><code>BSK-E0002</code></td><td>Function is missing a return type annotation</td></tr>
-<tr><td><code>BSK-E0003</code></td><td>Variable assignment has no type annotation</td></tr>
-<tr><td><code>BSK-E0004</code></td><td><code>*args</code> or <code>**kwargs</code> has no type annotation</td></tr>
-<tr><td><code>BSK-E0005</code></td><td>Class attribute has no type annotation</td></tr>
-</tbody>
-</table>
+| Code | Triggers when |
+|------|---------------|
+| `BSK-E0001` | Function parameter has no type annotation |
+| `BSK-E0002` | Function is missing a return type annotation |
+| `BSK-E0003` | Variable assignment has no type annotation |
+| `BSK-E0004` | `*args` or `**kwargs` has no type annotation |
+| `BSK-E0005` | Class attribute has no type annotation |
 
-<h3>Type correctness (E0010–E0025)</h3>
+### Type correctness (E0010-E0025)
 
-<table>
-<thead>
-<tr><th>Code</th><th>What triggers it</th></tr>
-</thead>
-<tbody>
-<tr><td><code>BSK-E0010</code></td><td>Import from a module with no type stubs</td></tr>
-<tr><td><code>BSK-E0011</code></td><td>Implicit <code>Any</code> — type cannot be inferred</td></tr>
-<tr><td><code>BSK-E0012</code></td><td>Argument type does not match parameter type</td></tr>
-<tr><td><code>BSK-E0013</code></td><td>Return type does not match declared return type</td></tr>
-<tr><td><code>BSK-E0014</code></td><td>Assignment type does not match declared variable type</td></tr>
-<tr><td><code>BSK-E0015</code></td><td>Wrong number of type arguments (e.g. <code>list[int, str]</code>)</td></tr>
-<tr><td><code>BSK-E0016</code></td><td>Method override has incompatible signature</td></tr>
-<tr><td><code>BSK-E0017</code></td><td>Class variable override has incompatible type</td></tr>
-<tr><td><code>BSK-E0018</code></td><td>Reference to an undefined name</td></tr>
-<tr><td><code>BSK-E0019</code></td><td>Variable used before it is assigned</td></tr>
-<tr><td><code>BSK-E0020</code></td><td><code>@overload</code> group has no non-decorated implementation</td></tr>
-<tr><td><code>BSK-E0021</code></td><td>Two <code>@overload</code> signatures overlap</td></tr>
-<tr><td><code>BSK-E0022</code></td><td>Dict key type is not hashable</td></tr>
-<tr><td><code>BSK-E0023</code></td><td><code>match</code> statement is not exhaustive</td></tr>
-<tr><td><code>BSK-E0024</code></td><td>Type expression is not valid (e.g. <code>int | 42</code>)</td></tr>
-<tr><td><code>BSK-E0025</code></td><td>Override method is missing the <code>@override</code> decorator</td></tr>
-</tbody>
-</table>
+| Code | Triggers when |
+|------|---------------|
+| `BSK-E0010` | Import from a module with no type stubs |
+| `BSK-E0011` | Implicit `Any` — type cannot be inferred |
+| `BSK-E0012` | Argument type does not match parameter type |
+| `BSK-E0013` | Return type does not match declared return type |
+| `BSK-E0014` | Assignment type does not match declared variable type |
+| `BSK-E0015` | Wrong number of type arguments (e.g. `list[int, str]`) |
+| `BSK-E0016` | Method override has incompatible signature |
+| `BSK-E0017` | Class variable override has incompatible type |
+| `BSK-E0018` | Reference to an undefined name |
+| `BSK-E0019` | Variable used before it is assigned |
+| `BSK-E0020` | `@overload` group has no non-decorated implementation |
+| `BSK-E0021` | Two `@overload` signatures overlap |
+| `BSK-E0022` | Dict key type is not hashable |
+| `BSK-E0023` | `match` statement is not exhaustive |
+| `BSK-E0024` | Type expression is not valid (e.g. `int | 42`) |
+| `BSK-E0025` | Override method is missing the `@override` decorator |
 
 ---
 
-<h2>Output format</h2>
+## Output format
 
-Diagnostics are printed in rustc style:
+Diagnostics use rustc-style output:
 
 ```
 error[BSK-E0001]: Missing parameter type annotation for `data`
@@ -139,188 +131,40 @@ error[BSK-E0001]: Missing parameter type annotation for `data`
    |
    = help: Add a type annotation: `data: <type>`
    = note: In Basilisk, all function parameters require explicit types
-   = see: https://basilisk-lang.org/errors/BSK-E0001
+   = see: https://www.basilisk-python.dev/errors/BSK-E0001
 ```
 
-<h3>Exit codes</h3>
-
-<table>
-<thead>
-<tr><th>Code</th><th>Meaning</th></tr>
-</thead>
-<tbody>
-<tr><td><code>0</code></td><td>Clean — no errors</td></tr>
-<tr><td><code>1</code></td><td>Type errors found</td></tr>
-<tr><td><code>3</code></td><td>Internal error</td></tr>
-</tbody>
-</table>
+| Exit code | Meaning |
+|-----------|---------|
+| `0` | Clean — no errors |
+| `1` | Type errors found |
+| `3` | Internal error |
 
 ---
 
-<h2>Crate architecture</h2>
+## Architecture
 
 Basilisk is a Cargo workspace. Each crate owns one layer of the analysis pipeline.
 
-<table>
-<thead>
-<tr>
-  <th>Crate</th>
-  <th>Phase</th>
-  <th>What it does</th>
-  <th>Status</th>
-</tr>
-</thead>
-<tbody>
+| Crate | What it does | Status |
+|-------|-------------|--------|
+| [basilisk-parser](crates/basilisk-parser/) | Wraps `ruff_python_parser` to parse `.py` source into a typed AST | Done |
+| [basilisk-resolver](crates/basilisk-resolver/) | Name resolution and scope analysis — catches undefined names (E0018) and use-before-assignment (E0019) | Done |
+| [basilisk-checker](crates/basilisk-checker/) | Core type checker — implements all E0001-E0025 rules | Done |
+| [basilisk-cli](crates/basilisk-cli/) | The `basilisk` binary — wires the full pipeline together | Done |
+| [basilisk-db](crates/basilisk-db/) | Salsa-based incremental computation for <10ms latency | Phase 2 |
+| [basilisk-lsp](crates/basilisk-lsp/) | LSP server via tower-lsp — diagnostics, hover, go-to-def | Phase 2 |
+| [basilisk-mojo](crates/basilisk-mojo/) | Mojo-inspired ownership/immutability analysis (`Borrowed`, `InOut`, `Owned`) | Phase 4 |
+| [basilisk-stubs](crates/basilisk-stubs/) | Bundled type stubs (typeshed + community) — no internet needed | Phase 5 |
+| [basilisk-plugin](crates/basilisk-plugin/) | WASM plugin host for Django, Pydantic, SQLAlchemy type extensions | Phase 5 |
 
-<tr>
-  <td><strong><a href="crates/basilisk-parser/">basilisk-parser</a></strong></td>
-  <td>1</td>
-  <td>
-    Wraps <code>ruff_python_parser</code> (MIT) to parse <code>.py</code> source into a typed
-    AST. Provides a single entry-point — <code>parse_module</code> — that returns structured
-    parse errors as typed <code>ParseError</code> values rather than panics. All downstream
-    crates consume this AST; nothing else reads raw source text.
-  </td>
-  <td>✅ Complete</td>
-</tr>
-
-<tr>
-  <td><strong><a href="crates/basilisk-resolver/">basilisk-resolver</a></strong></td>
-  <td>1</td>
-  <td>
-    Name resolution and scope analysis. Builds a <code>ResolvedModule</code> from the parsed
-    AST: walks every scope (module, class, function, comprehension), resolves identifiers to
-    their binding sites, tracks imports, and records decorators. Catches undefined names
-    (BSK-E0018) and use-before-assignment (BSK-E0019) before the type checker runs.
-  </td>
-  <td>✅ Complete</td>
-</tr>
-
-<tr>
-  <td><strong><a href="crates/basilisk-checker/">basilisk-checker</a></strong></td>
-  <td>1</td>
-  <td>
-    The core type checker. Consumes a <code>ResolvedModule</code> and emits
-    <code>Diagnostic</code> values with BSK error codes, source spans, help text, and
-    see-also links. Implements all E0001–E0025 rules: annotation completeness, type
-    correctness, overload validation, match exhaustiveness, and more. This is the
-    highest-value crate — the thing that actually enforces the type contract.
-  </td>
-  <td>✅ Complete</td>
-</tr>
-
-<tr>
-  <td><strong><a href="crates/basilisk-cli/">basilisk-cli</a></strong></td>
-  <td>1</td>
-  <td>
-    The <code>basilisk</code> binary. Wires parser → resolver → checker into a full
-    pipeline, walks directory trees for <code>.py</code> files, formats diagnostics as
-    rustc-style output, and exits with the correct status code. Also hosts the
-    <code>migrate</code> subcommand for importing <code>pyrightconfig.json</code> and
-    <code>mypy.ini</code> settings.
-  </td>
-  <td>✅ Complete</td>
-</tr>
-
-<tr>
-  <td><strong><a href="crates/basilisk-db/">basilisk-db</a></strong></td>
-  <td>2</td>
-  <td>
-    Incremental computation database built on the
-    <a href="https://github.com/salsa-rs/salsa">Salsa</a> framework — the same engine
-    that powers rust-analyzer. Tracks per-file content hashes so that only changed files
-    are re-parsed and re-checked on each keystroke. Targets &lt;10ms incremental latency
-    on large codebases (PyTorch, Django scale).
-  </td>
-  <td>🚧 Phase 2</td>
-</tr>
-
-<tr>
-  <td><strong><a href="crates/basilisk-lsp/">basilisk-lsp</a></strong></td>
-  <td>2</td>
-  <td>
-    Language Server Protocol implementation using
-    <a href="https://github.com/ebkalderon/tower-lsp">tower-lsp</a>. Serves real-time
-    diagnostics, hover types, go-to-definition, and completion to any LSP-capable editor.
-    Backed by <code>basilisk-db</code> for incremental updates. Powers the VS Code
-    extension.
-  </td>
-  <td>🚧 Phase 2</td>
-</tr>
-
-<tr>
-  <td><strong><a href="crates/basilisk-mojo/">basilisk-mojo</a></strong></td>
-  <td>4</td>
-  <td>
-    Mojo-inspired ownership and immutability analysis. Checks
-    <code>Borrowed</code> / <code>InOut</code> / <code>Owned</code> annotations expressed
-    via <code>typing.Annotated</code>. Raises BSK-E003x for mutation of borrowed
-    parameters, use-after-move, and implicit copy of large structs; BSK-E004x for
-    immutability and reassignment violations. Code that passes these checks is structurally
-    compatible with Mojo's type expectations.
-  </td>
-  <td>⏳ Phase 4</td>
-</tr>
-
-<tr>
-  <td><strong><a href="crates/basilisk-stubs/">basilisk-stubs</a></strong></td>
-  <td>5</td>
-  <td>
-    Bundled type stub library. Ships Tier-1 stubs (typeshed, hand-written) inside the
-    binary so no internet connection or separate install is needed. Stubs are organized
-    into three quality tiers — Tier 1 (typeshed), Tier 2 (community-reviewed
-    auto-generated), Tier 3 (best-effort inference) — with user-supplied stub paths
-    taking precedence over bundled ones.
-  </td>
-  <td>⏳ Phase 5</td>
-</tr>
-
-<tr>
-  <td><strong><a href="crates/basilisk-plugin/">basilisk-plugin</a></strong></td>
-  <td>5</td>
-  <td>
-    Secure WebAssembly plugin host. Loads <code>.wasm</code> plugins that extend
-    Basilisk's type intelligence for framework-specific patterns: Django model fields,
-    Pydantic validators, SQLAlchemy columns. Each plugin runs in a Wasmtime sandbox with
-    no file-system or network access. Plugins are portable across every OS and CPU
-    architecture.
-  </td>
-  <td>⏳ Phase 5</td>
-</tr>
-
-</tbody>
-</table>
-
-> **Pipeline:** source text → `basilisk-parser` → AST → `basilisk-resolver` → scopes
-> → `basilisk-checker` → diagnostics → `basilisk-cli` → terminal output
+> **Pipeline:** source text &rarr; parser &rarr; AST &rarr; resolver &rarr; scopes &rarr; checker &rarr; diagnostics &rarr; CLI output
 >
-> **Incremental path (Phase 2+):** `basilisk-db` sits between the CLI and the pipeline,
-> caching ASTs and resolved modules keyed by content hash so only changed files re-run
-> the pipeline on each save.
+> **Incremental (Phase 2+):** `basilisk-db` caches ASTs and resolved modules by content hash so only changed files re-run the pipeline.
 
 ---
 
-<h2>Run it</h2>
-
-<h3>Without installing (development)</h3>
-
-```sh
-cargo run -- check path/to/file.py
-cargo run -- check src/
-cargo run -- check          # current directory
-```
-
-<h3>Build and install</h3>
-
-```sh
-cargo build --release
-# then put target/release/basilisk on your $PATH
-basilisk check path/to/file.py
-```
-
----
-
-<h2>Development</h2>
+## Development
 
 ```sh
 cargo build          # build all crates
@@ -333,6 +177,8 @@ Rust 1.87+ required.
 
 ---
 
-<h2>License</h2>
+## License
 
-Licensed under either of <a href="LICENSE">Apache-2.0 or MIT</a> at your option.
+MIT or Apache-2.0, at your option.
+
+Built by [NIMBLESITE PTY LTD](https://www.nimblesite.co).

@@ -1007,7 +1007,7 @@ basilisk init                     # Generate starter pyproject.toml config
 
 **GitHub Actions**:
 ```yaml
-- uses: basilisk-lang/setup-basilisk@v1
+- uses: MelbourneDeveloper/setup-basilisk@v1
 - run: basilisk check --output-format sarif > results.sarif
 - uses: github/codeql-action/upload-sarif@v3
   with:
@@ -1016,7 +1016,7 @@ basilisk init                     # Generate starter pyproject.toml config
 
 **pre-commit**:
 ```yaml
-- repo: https://github.com/basilisk-lang/basilisk
+- repo: https://github.com/MelbourneDeveloper/Basilisk
   rev: v0.1.0
   hooks:
     - id: basilisk-check
@@ -1143,7 +1143,7 @@ error[BSK-E0001]: Missing parameter type annotation
    |
    = help: Add a type annotation: `data: <type>`
    = note: In Basilisk, all function parameters require explicit types
-   = see: https://basilisk-lang.org/errors/BSK-E0001
+   = see: https://www.basilisk-python.dev/errors/BSK-E0001
 ```
 
 ### 15.2 Quick Fixes
@@ -1318,7 +1318,7 @@ Basilisk follows the Python Typing Council's governance (PEP 729). We implement 
 
 | Term | Definition |
 |---|---|
-| **Basilisk** | This project -- a Rust-based static type analyzer for Python enforcing complete type safety |
+| **Basilisk** | This project — a strict-by-default Python type checker built in Rust. No escape hatches. |
 | **Borrowed** | Parameter convention: function reads but does not mutate or transfer the value (default) |
 | **Owned** | Parameter convention: function takes exclusive ownership; caller must not use value afterward |
 | **InOut** | Parameter convention: function may mutate the value in place |

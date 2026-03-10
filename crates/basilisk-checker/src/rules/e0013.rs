@@ -14,7 +14,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0013",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0013",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0013",
 };
 
 /// Emits BSK-E0013 for return type mismatches using inference system.

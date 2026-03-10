@@ -28,7 +28,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0072",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0072",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0072",
 };
 
 /// Emits BSK-E0072 for subscript indexing where no overloaded `__getitem__`

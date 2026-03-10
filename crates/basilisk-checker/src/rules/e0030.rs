@@ -20,7 +20,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0030",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0030",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0030",
 };
 
 /// Per-TypeVar metadata looked up from `typevar_calls`.

@@ -47,7 +47,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0092",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0092",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0092",
 };
 
 /// Emits BSK-E0092 when a generic subscript provides too few or too many type arguments.

@@ -29,7 +29,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0041",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0041",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0041",
 };
 
 /// Emits BSK-E0041 for call sites with too few positional arguments.

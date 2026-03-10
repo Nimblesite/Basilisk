@@ -35,7 +35,7 @@ use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0119",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0119",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0119",
 };
 
 /// Emits BSK-E0119 for protocol `isinstance`/`issubclass` violations:

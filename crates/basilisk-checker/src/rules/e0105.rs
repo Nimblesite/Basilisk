@@ -18,7 +18,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0105",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0105",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0105",
 };
 
 /// Emits BSK-E0105 for invalid attribute accesses on bounded type variables.

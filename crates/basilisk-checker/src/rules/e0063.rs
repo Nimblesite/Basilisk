@@ -39,7 +39,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0063",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0063",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0063",
 };
 
 /// Emits BSK-E0063 when a non-hashable dataclass instance is assigned to a

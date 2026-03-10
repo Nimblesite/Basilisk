@@ -20,7 +20,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-W0050",
-    docs_url: "https://basilisk-lang.org/errors/BSK-W0050",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-W0050",
 };
 
 /// Emits BSK-W0050 for redundant type annotations.

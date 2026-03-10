@@ -28,7 +28,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0124",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0124",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0124",
 };
 
 /// Emits BSK-E0124 when a tuple assignment to a protocol attribute has

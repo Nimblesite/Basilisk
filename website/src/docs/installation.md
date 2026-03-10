@@ -22,7 +22,7 @@ Basilisk is a single Rust binary with no runtime dependencies. No Node.js. No Py
 This is the recommended approach during the pre-release phase:
 
 ```bash
-git clone https://github.com/basilisk-lang/basilisk
+git clone https://github.com/MelbourneDeveloper/Basilisk
 cd basilisk
 cargo build --release
 ```
@@ -72,7 +72,7 @@ The Basilisk VS Code extension is in active development (Phase 2). It will provi
 - Ownership overlay in the gutter
 - Type coverage score in the status bar
 
-Track progress at [github.com/basilisk-lang/basilisk](https://github.com/basilisk-lang/basilisk).
+Track progress at [github.com/MelbourneDeveloper/Basilisk](https://github.com/MelbourneDeveloper/Basilisk).
 
 ## CI integration
 

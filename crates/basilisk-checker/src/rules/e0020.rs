@@ -19,7 +19,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0020",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0020",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0020",
 };
 
 /// Emits BSK-E0020 when a set of `@overload` functions has no matching

@@ -21,7 +21,7 @@ use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0098",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0098",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0098",
 };
 
 /// Names that are always allowed as bases alongside `Protocol`.

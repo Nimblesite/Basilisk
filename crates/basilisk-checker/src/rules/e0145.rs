@@ -51,7 +51,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0145",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0145",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0145",
 };
 
 /// Emits BSK-E0145 for invalid `type[X]` usages.

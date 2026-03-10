@@ -36,7 +36,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0078",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0078",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0078",
 };
 
 /// Emits BSK-E0078 for `Self` return type mismatches and `Self` subscript usage.

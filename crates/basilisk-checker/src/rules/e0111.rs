@@ -28,7 +28,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0111",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0111",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0111",
 };
 
 /// Emits BSK-E0111 for constructor call errors involving `__init__`.

@@ -10,7 +10,7 @@
 //!    |
 //!    = help: Add a type annotation: `data: <type>`
 //!    = note: In Basilisk, all function parameters require explicit types
-//!    = see: https://basilisk-lang.org/errors/BSK-E0001
+//!    = see: https://www.basilisk-python.dev/errors/BSK-E0001
 //! ```
 //!
 //! JSON output is a flat array consumed by the VS Code extension:
@@ -202,7 +202,7 @@ mod tests {
         Diagnostic {
             code: ErrorCode {
                 code: "BSK-E0001",
-                docs_url: "https://basilisk-lang.org/errors/BSK-E0001",
+                docs_url: "https://www.basilisk-python.dev/errors/BSK-E0001",
             },
             severity,
             message: "missing annotation for `x`".to_owned(),
@@ -388,7 +388,7 @@ mod tests {
         let d1 = Diagnostic {
             code: ErrorCode {
                 code: "BSK-E0001",
-                docs_url: "https://basilisk-lang.org/errors/BSK-E0001",
+                docs_url: "https://www.basilisk-python.dev/errors/BSK-E0001",
             },
             severity: Severity::Error,
             message: "missing annotation".to_owned(),
@@ -400,7 +400,7 @@ mod tests {
         let d2 = Diagnostic {
             code: ErrorCode {
                 code: "BSK-E0002",
-                docs_url: "https://basilisk-lang.org/errors/BSK-E0002",
+                docs_url: "https://www.basilisk-python.dev/errors/BSK-E0002",
             },
             severity: Severity::Error,
             message: "missing return annotation".to_owned(),
@@ -457,7 +457,7 @@ mod tests {
         let diag = Diagnostic {
             code: ErrorCode {
                 code: "BSK-E0001",
-                docs_url: "https://basilisk-lang.org/errors/BSK-E0001",
+                docs_url: "https://www.basilisk-python.dev/errors/BSK-E0001",
             },
             severity: Severity::Error,
             message: "test".to_owned(),

@@ -25,7 +25,7 @@ use super::{guards::is_enum_class, Rule};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0061",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0061",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0061",
 };
 
 /// Emits BSK-E0061 for `assert_type` with `Literal[Enum.MEMBER]` on enum-typed param.

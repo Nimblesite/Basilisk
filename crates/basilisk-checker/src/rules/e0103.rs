@@ -17,7 +17,7 @@ use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0103",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0103",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0103",
 };
 
 /// Emits BSK-E0103 for out-of-bounds tuple indexing with literal integers.

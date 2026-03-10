@@ -35,7 +35,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0074",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0074",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0074",
 };
 
 /// Emits BSK-E0074 for constructor calls on specialized generic classes where

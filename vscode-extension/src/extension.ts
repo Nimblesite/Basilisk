@@ -528,7 +528,7 @@ function parseDiagnostics(
       diag.code = {
         value: item.code,
         target: vscode.Uri.parse(
-          `https://basilisk-lang.org/errors/${item.code}`
+          `https://www.basilisk-python.dev/errors/${item.code}`
         ),
       };
 

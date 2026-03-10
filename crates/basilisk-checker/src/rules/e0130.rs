@@ -26,7 +26,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0130",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0130",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0130",
 };
 
 /// Emits BSK-E0130 for `TypeVar` scoping violations.

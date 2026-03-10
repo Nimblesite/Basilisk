@@ -29,7 +29,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0073",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0073",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0073",
 };
 
 /// Emits BSK-E0073 when a `NamedTuple` instance is assigned to an incompatible

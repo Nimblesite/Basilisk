@@ -19,7 +19,7 @@ use super::{
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0005",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0005",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0005",
 };
 
 /// Emits BSK-E0005 for every unannotated class attribute.

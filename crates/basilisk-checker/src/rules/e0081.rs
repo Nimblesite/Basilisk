@@ -27,7 +27,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0081",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0081",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0081",
 };
 
 /// Emits BSK-E0081 when a function-body call passes a value whose generic type

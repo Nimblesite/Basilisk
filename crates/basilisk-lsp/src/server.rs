@@ -42,7 +42,7 @@ use crate::{
 };
 
 /// Fallback docs URL used when a diagnostic code URL fails to parse.
-const FALLBACK_DOCS_URL: &str = "https://basilisk-lang.org";
+const FALLBACK_DOCS_URL: &str = "https://www.basilisk-python.dev";
 
 /// State for a single open document.
 struct DocumentState {

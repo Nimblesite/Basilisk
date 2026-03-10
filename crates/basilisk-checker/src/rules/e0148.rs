@@ -39,7 +39,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0148",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0148",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0148",
 };
 
 /// Emits BSK-E0148 for generic type argument violations.

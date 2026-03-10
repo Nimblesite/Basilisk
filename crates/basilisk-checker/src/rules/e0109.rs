@@ -24,7 +24,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0109",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0109",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0109",
 };
 
 /// Emits BSK-E0109 when a call-site argument type violates a `TypeVar`'s bound.

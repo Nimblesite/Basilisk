@@ -31,7 +31,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0089",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0089",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0089",
 };
 
 /// Emits BSK-E0089 when a PEP 695 type parameter has an invalid bound or constraint.

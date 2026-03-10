@@ -32,7 +32,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0118",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0118",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0118",
 };
 
 /// Emits BSK-E0118 when a subclass method calls `super().method()` on a method

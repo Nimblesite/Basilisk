@@ -81,7 +81,7 @@ Lock files before editing. Don't edit locked files. Check messages ROUTINELY
 
 ## What Basilisk Is
 
-A strict-by-default static type analyzer for Python — "TypeScript for Python". It enforces complete type safety with no permissive modes: every parameter must be typed, every return type declared, `Any` is always explicit. Implemented in **Rust**, not Python.
+A strict-by-default Python type checker. No escape hatches. Every parameter typed. Every return declared. `Any` is always explicit. Built in **Rust** — no runtime required.
 
 Basilisk also adds Mojo-inspired ownership semantics (`Borrowed`, `Owned`, `InOut`) as static analysis annotations over standard Python syntax, making code compatible with Mojo's type expectations without requiring a Mojo compiler.
 

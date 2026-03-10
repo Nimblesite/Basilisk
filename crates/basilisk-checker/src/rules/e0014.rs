@@ -25,7 +25,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0014",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0014",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0014",
 };
 
 /// Emits BSK-E0014 for annotated module variables whose annotation and literal

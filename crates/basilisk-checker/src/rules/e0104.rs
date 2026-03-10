@@ -26,7 +26,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0104",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0104",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0104",
 };
 
 /// Emits BSK-E0104 when a `TypeAlias`-annotated assignment's RHS contains a

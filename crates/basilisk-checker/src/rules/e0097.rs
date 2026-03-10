@@ -24,7 +24,7 @@ use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0097",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0097",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0097",
 };
 
 /// Emits BSK-E0097 when a Protocol `__new__`/`__init__` assigns to undeclared self-attributes.

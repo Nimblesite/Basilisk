@@ -28,7 +28,7 @@ use super::{guards::is_enum_class, Rule};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0067",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0067",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0067",
 };
 
 /// Emits BSK-E0067 when a non-member is referenced in `Literal[EnumClass.X]`.

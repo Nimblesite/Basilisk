@@ -17,7 +17,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0018",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0018",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0018",
 };
 
 /// Emits BSK-E0018 for return statements that reference undefined names.

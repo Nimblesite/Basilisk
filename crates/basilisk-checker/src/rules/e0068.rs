@@ -25,7 +25,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0068",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0068",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0068",
 };
 
 /// Emits BSK-E0068 when a `Literal["Class.Member"]` string annotation is used

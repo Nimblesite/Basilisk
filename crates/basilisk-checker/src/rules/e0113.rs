@@ -11,7 +11,7 @@ use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0113",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0113",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0113",
 };
 
 /// Emits BSK-E0113 when a function returns `TypeIs[X]` but `X` is not

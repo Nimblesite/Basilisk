@@ -1,6 +1,6 @@
 /* ============================================================
    BASILISK DESIGN SYSTEM
-   Strict-by-default Python type checker — basilisk-lang.org
+   Strict-by-default Python type checker — www.basilisk-python.dev
    ============================================================ */
 
 /* ── Google Fonts ─────────────────────────────────────────── */
@@ -151,6 +151,12 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   transition: color var(--ease-fast);
   white-space: nowrap;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.logo-icon {
+  display: block;
 }
 .logo:hover { color: var(--color-primary); }
 

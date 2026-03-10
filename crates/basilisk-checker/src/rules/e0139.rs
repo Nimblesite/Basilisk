@@ -40,7 +40,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0139",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0139",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0139",
 };
 
 /// Emits BSK-E0139 for invalid `TypeVarTuple` specializations of generic aliases.

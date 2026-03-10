@@ -25,7 +25,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0112",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0112",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0112",
 };
 
 /// Emits BSK-E0112 when a TypeGuard/TypeIs function is passed to a callable

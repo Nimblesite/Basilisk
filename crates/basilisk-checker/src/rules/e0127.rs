@@ -20,7 +20,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0127",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0127",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0127",
 };
 
 /// Emits BSK-E0127 when a tuple is subscripted with an out-of-range literal index.
