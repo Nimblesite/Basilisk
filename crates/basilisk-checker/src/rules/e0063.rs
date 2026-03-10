@@ -39,7 +39,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0063",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0063",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0063",
 };
 
 /// Emits BSK-E0063 when a non-hashable dataclass instance is assigned to a
@@ -68,13 +68,14 @@ impl Rule for NonHashableDataclassAssignment {
             .map(|cls| (cls.name.as_str(), cls.name_span))
             .collect();
 
-        if non_hashable.is_empty() {
+        if non_hashable.is_empty() && module.unhashable_hash_call_violations.is_empty() {
             return;
         }
 
         let source = &module.source;
         let path = &module.path;
 
+        // Check `v: Hashable = DC(args)` assignments.
         for var in &module.module_vars {
             // Only care about annotated assignments with a RHS.
             let Some(ann_span) = var.annotation_span else {
@@ -85,9 +86,7 @@ impl Rule for NonHashableDataclassAssignment {
             };
 
             // Check whether the annotation is `Hashable` (bare or qualified).
-            let Some(ann_text) =
-                source.get(ann_span.start as usize..ann_span.end as usize)
-            else {
+            let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
                 continue;
             };
             if !is_hashable_annotation(ann_text.trim()) {
@@ -95,9 +94,7 @@ impl Rule for NonHashableDataclassAssignment {
             }
 
             // Extract the callee from the RHS (e.g. `DC1` from `DC1(0)`).
-            let Some(rhs_text) =
-                source.get(rhs_span.start as usize..rhs_span.end as usize)
-            else {
+            let Some(rhs_text) = source.get(rhs_span.start as usize..rhs_span.end as usize) else {
                 continue;
             };
             let callee = rhs_callee(rhs_text);
@@ -117,6 +114,15 @@ impl Rule for NonHashableDataclassAssignment {
                 path,
             ));
         }
+
+        // Check `DC(args).__hash__()` calls on non-hashable dataclasses.
+        for violation in &module.unhashable_hash_call_violations {
+            diagnostics.push(make_hash_call_diagnostic(
+                violation.span,
+                &violation.class_name,
+                path,
+            ));
+        }
     }
 }
 
@@ -124,9 +130,7 @@ impl Rule for NonHashableDataclassAssignment {
 fn is_hashable_annotation(text: &str) -> bool {
     matches!(
         text,
-        "Hashable"
-            | "typing.Hashable"
-            | "collections.abc.Hashable"
+        "Hashable" | "typing.Hashable" | "collections.abc.Hashable"
     )
 }
 
@@ -159,6 +163,32 @@ fn make_diagnostic(
              `{class_name}` is not hashable"
         ),
         span: var_span,
+        path: path.to_owned(),
+        help: Some(format!(
+            "Make `{class_name}` hashable by adding `frozen=True`, `unsafe_hash=True`, \
+             or defining a `__hash__` method"
+        )),
+        note: Some(
+            "PEP 557: a `@dataclass` with `eq=True` (the default) sets `__hash__ = None` \
+             unless the class is frozen or uses `unsafe_hash=True`"
+                .to_owned(),
+        ),
+    }
+}
+
+fn make_hash_call_diagnostic(
+    call_span: basilisk_resolver::Span,
+    class_name: &str,
+    path: &str,
+) -> Diagnostic {
+    Diagnostic {
+        code: CODE.clone(),
+        severity: Severity::Error,
+        message: format!(
+            "Cannot call `.__hash__()` on `{class_name}` instance: \
+             `{class_name}.__hash__` is `None`"
+        ),
+        span: call_span,
         path: path.to_owned(),
         help: Some(format!(
             "Make `{class_name}` hashable by adding `frozen=True`, `unsafe_hash=True`, \

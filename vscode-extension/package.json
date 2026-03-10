@@ -1,32 +1,66 @@
 {
   "name": "basilisk",
   "displayName": "Basilisk",
-  "description": "Strict-by-default Python type checker. Every parameter typed. Every return declared.",
+  "description": "Complete Python language server — the open-source replacement for Pylance. Type checking, completions, go-to-definition, and more. Built in Rust.",
   "version": "0.1.0",
   "publisher": "basilisk-lang",
   "license": "MIT OR Apache-2.0",
+  "icon": "images/basilisk-logo.png",
+  "galleryBanner": {
+    "color": "#0a0c12",
+    "theme": "dark"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/basilisk-lang/basilisk"
+    "url": "https://github.com/MelbourneDeveloper/Basilisk"
+  },
+  "homepage": "https://www.basilisk-python.dev",
+  "bugs": {
+    "url": "https://github.com/MelbourneDeveloper/Basilisk/issues"
   },
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
+    "Programming Languages",
     "Linters",
-    "Programming Languages"
+    "Other"
   ],
   "keywords": [
     "python",
+    "language server",
+    "pylance",
+    "pyright",
     "type checker",
-    "static analysis",
-    "basilisk"
+    "intellisense",
+    "autocomplete",
+    "go to definition",
+    "rust",
+    "basilisk",
+    "lsp"
   ],
   "activationEvents": [
     "onLanguage:python"
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "commands": [
+      {
+        "command": "basilisk.restartServer",
+        "title": "Basilisk: Restart Language Server",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.showOutput",
+        "title": "Basilisk: Show Output",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.organizeImports",
+        "title": "Basilisk: Organize Imports",
+        "category": "Basilisk"
+      }
+    ],
     "configuration": {
       "title": "Basilisk",
       "properties": {
@@ -39,6 +73,41 @@
           "type": "boolean",
           "default": true,
           "description": "Enable or disable the Basilisk type checker."
+        },
+        "basilisk.useLsp": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use the LSP server for real-time diagnostics. Disable to fall back to subprocess mode."
+        },
+        "basilisk.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Trace LSP communication for debugging."
+        },
+        "basilisk.inlayHints.parameterNames": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show parameter name hints at call sites."
+        },
+        "basilisk.inlayHints.variableTypes": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show inferred type hints for unannotated variables."
+        },
+        "basilisk.ruff.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Ruff integration for formatting and import organization."
+        },
+        "basilisk.ruff.executablePath": {
+          "type": "string",
+          "default": "ruff",
+          "description": "Path to the ruff binary."
         }
       }
     }
@@ -46,16 +115,25 @@
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
+    "test": "vscode-test",
     "vscode:prepublish": "npm run compile",
     "package": "vsce package"
   },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
   "devDependencies": {
+    "@types/mocha": "^10.0.10",
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^8.56.1",
     "@typescript-eslint/parser": "^8.56.1",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.0.0",
     "eslint": "^10.0.2",
+    "glob": "^13.0.6",
+    "mocha": "^11.7.5",
     "typescript": "^5.3.0"
   }
 }

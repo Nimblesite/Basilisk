@@ -1,0 +1,550 @@
+//! Type representation for Basilisk's type inference engine.
+
+use std::fmt;
+
+/// Represents an inferred type from Basilisk's type inference engine.
+#[derive(Debug, Clone, PartialEq)]
+pub enum InferredType {
+    /// Integer type (`int`)
+    Int,
+    /// String type (`str`)
+    Str,
+    /// Float type (`float`)
+    Float,
+    /// Boolean type (`bool`)
+    Bool,
+    /// Bytes type (`bytes`)
+    Bytes,
+    /// None type (`None`)
+    None_,
+    /// Literal value type (`Literal[value]`)
+    Literal(LiteralValue),
+    /// List type (`list[T]`)
+    List(Box<InferredType>),
+    /// Dictionary type (`dict[K, V]`)
+    Dict(Box<InferredType>, Box<InferredType>),
+    /// Set type (`set[T]`)
+    Set(Box<InferredType>),
+    /// Tuple type (`tuple[T1, T2, ...]`)
+    Tuple(Vec<InferredType>),
+    /// Union type (`T1 | T2`)
+    Union(Vec<InferredType>),
+    /// Optional type (`Optional[T]` or `T | None`)
+    Optional(Box<InferredType>),
+    /// Callable type (`Callable[[params...], return]` or `Callable[..., return]`)
+    Callable(CallableInfo),
+    /// Any type (`Any`) - explicit escape hatch
+    Any,
+    /// Never type (`Never`) - bottom type, no values
+    Never,
+    /// Unknown type - used when type cannot be determined
+    Unknown,
+    /// `LiteralString` — any string literal or value known to be a literal string
+    LiteralString,
+    /// Named type (`ClassName`) - fallback for named types not yet resolved
+    Named(String),
+}
+
+/// Represents a callable type's parameter and return type information.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CallableInfo {
+    /// Parameter types (empty for `Callable[..., R]`).
+    pub param_types: Vec<InferredType>,
+    /// Return type.
+    pub return_type: Box<InferredType>,
+}
+
+/// Represents a literal value for literal type inference.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LiteralValue {
+    /// Integer literal value
+    Int(i64),
+    /// String literal value
+    Str(String),
+    /// Float literal value
+    Float(f64),
+    /// Boolean literal value
+    Bool(bool),
+    /// Bytes literal value
+    Bytes(Vec<u8>),
+}
+
+impl fmt::Display for InferredType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            InferredType::Int => write!(f, "int"),
+            InferredType::Str => write!(f, "str"),
+            InferredType::Float => write!(f, "float"),
+            InferredType::Bool => write!(f, "bool"),
+            InferredType::Bytes => write!(f, "bytes"),
+            InferredType::None_ => write!(f, "None"),
+            InferredType::Literal(lit) => write!(f, "Literal[{lit}]"),
+            InferredType::List(elem_type) => write!(f, "list[{elem_type}]"),
+            InferredType::Dict(key_type, value_type) => {
+                write!(f, "dict[{key_type}, {value_type}]")
+            }
+            InferredType::Set(elem_type) => write!(f, "set[{elem_type}]"),
+            InferredType::Tuple(elem_types) => {
+                write!(f, "tuple[")?;
+                for (i, elem_type) in elem_types.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{elem_type}")?;
+                }
+                write!(f, "]")
+            }
+            InferredType::Union(types) => {
+                for (i, t) in types.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, " | ")?;
+                    }
+                    write!(f, "{t}")?;
+                }
+                Ok(())
+            }
+            InferredType::Optional(inner) => write!(f, "Optional[{inner}]"),
+            InferredType::Callable(info) => {
+                write!(f, "Callable[[")?;
+                for (i, param) in info.param_types.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{param}")?;
+                }
+                write!(f, "], {}]", info.return_type)
+            }
+            InferredType::Any => write!(f, "Any"),
+            InferredType::Never => write!(f, "Never"),
+            InferredType::Unknown => write!(f, "Unknown"),
+            InferredType::LiteralString => write!(f, "LiteralString"),
+            InferredType::Named(name) => write!(f, "{name}"),
+        }
+    }
+}
+
+impl fmt::Display for LiteralValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LiteralValue::Int(val) => write!(f, "{val}"),
+            LiteralValue::Str(val) => write!(f, "\"{val}\""),
+            LiteralValue::Float(val) => write!(f, "{val}"),
+            LiteralValue::Bool(val) => write!(f, "{val}"),
+            LiteralValue::Bytes(val) => {
+                let lossy = String::from_utf8_lossy(val);
+                write!(f, "b\"{lossy}\"")
+            }
+        }
+    }
+}
+
+impl InferredType {
+    /// Creates a union of two types, flattening nested unions.
+    #[must_use]
+    pub fn union(a: InferredType, b: InferredType) -> InferredType {
+        // Helper to flatten a type into the vector
+        fn flatten_into(ty: InferredType, vec: &mut Vec<InferredType>) {
+            match ty {
+                InferredType::Union(mut inner_types) => {
+                    for inner_ty in inner_types.drain(..) {
+                        flatten_into(inner_ty, vec);
+                    }
+                }
+                other => vec.push(other),
+            }
+        }
+
+        // Handle Never specially: Never ∪ T = T
+        if matches!(a, InferredType::Never) {
+            return b;
+        }
+        if matches!(b, InferredType::Never) {
+            return a;
+        }
+
+        // Flatten both sides into vectors of types
+        let mut types = Vec::new();
+        flatten_into(a, &mut types);
+        flatten_into(b, &mut types);
+
+        // Deduplicate types
+        let mut deduplicated = Vec::new();
+        for ty in types {
+            if !deduplicated.contains(&ty) {
+                deduplicated.push(ty);
+            }
+        }
+
+        // If only one type remains, return it directly (not wrapped in Union)
+        match deduplicated.len() {
+            0 => InferredType::Never, // Should not happen due to Never handling above
+            1 => match deduplicated.into_iter().next() {
+                Some(ty) => ty,
+                None => InferredType::Never, // len()==1 guarantees Some
+            },
+            _ => InferredType::Union(deduplicated),
+        }
+    }
+
+    /// Returns true if this type is assignable to the other type.
+    #[must_use]
+    pub fn is_assignable_to(&self, other: &InferredType) -> bool {
+        match (self, other) {
+            // Any target or Never source is always assignable
+            // Unknown means we cannot determine the type — assume compatible to avoid false positives
+            (_, InferredType::Any | InferredType::Unknown)
+            | (InferredType::Never | InferredType::Unknown, _) => true,
+            // Same types are assignable
+            (a, b) if a == b => true,
+            // Int→float widening, Literal assignable to base type,
+            // string types assignable to LiteralString, LiteralString to str
+            (InferredType::Int, InferredType::Float)
+            | (
+                InferredType::Literal(_),
+                InferredType::Int | InferredType::Str | InferredType::Float | InferredType::Bool,
+            )
+            | (
+                InferredType::Str | InferredType::Literal(LiteralValue::Str(_)),
+                InferredType::LiteralString,
+            )
+            | (InferredType::LiteralString, InferredType::Str) => true,
+            // Optional types are assignable to their non-optional counterparts
+            (InferredType::Optional(inner), other) => inner.is_assignable_to(other),
+            (inner, InferredType::Optional(other)) => inner.is_assignable_to(other),
+            // Union types require all variants to be assignable
+            (InferredType::Union(types), other) => types.iter().all(|t| t.is_assignable_to(other)),
+            (inner, InferredType::Union(types)) => types.iter().any(|t| inner.is_assignable_to(t)),
+            // Container types require element type assignability.
+            // List and Set cannot use or-patterns — that would incorrectly allow cross-matching.
+            (InferredType::List(a), InferredType::List(b))
+            | (InferredType::Set(a), InferredType::Set(b)) => a.is_assignable_to(b),
+            (InferredType::Dict(a_key, a_val), InferredType::Dict(b_key, b_val)) => {
+                a_key.is_assignable_to(b_key) && a_val.is_assignable_to(b_val)
+            }
+            (InferredType::Tuple(a), InferredType::Tuple(b)) => {
+                a.len() == b.len()
+                    && a.iter()
+                        .zip(b.iter())
+                        .all(|(a_elem, b_elem)| a_elem.is_assignable_to(b_elem))
+            }
+            // Callable type assignability
+            (InferredType::Callable(a), InferredType::Callable(b)) => {
+                // Check return type compatibility (covariant - source return must be assignable to target return)
+                // Special case: if source return type is Unknown, we can't verify compatibility
+                // This happens with lambda expressions where we can't infer the return type
+                // We should be conservative and return false unless target return type is Any or Unknown
+                match (&*a.return_type, &*b.return_type) {
+                    (InferredType::Unknown, _)
+                        if !matches!(
+                            &*b.return_type,
+                            InferredType::Any | InferredType::Unknown
+                        ) =>
+                    {
+                        // Source has unknown return type, target has known return type
+                        // This is unsafe - we don't know if they're compatible
+                        return false;
+                    }
+                    _ => {
+                        if !a.return_type.is_assignable_to(&b.return_type) {
+                            return false;
+                        }
+                    }
+                }
+
+                // Handle ellipsis/arbitrary parameters (empty param_types means `...`)
+                if a.param_types.is_empty() || b.param_types.is_empty() {
+                    // If target accepts arbitrary parameters (`...`), any callable is assignable
+                    // If source has arbitrary parameters, it can only be assigned to target with arbitrary parameters
+                    // or if target has specific parameter types that match the source's capabilities
+                    // For now, we allow if either has empty param_types (simplified)
+                    return true;
+                }
+
+                // Check parameter count
+                if a.param_types.len() != b.param_types.len() {
+                    return false;
+                }
+
+                // Check parameter type compatibility (contravariant - target param must be assignable to source param)
+                for (source_param, target_param) in a.param_types.iter().zip(b.param_types.iter()) {
+                    if !target_param.is_assignable_to(source_param) {
+                        return false;
+                    }
+                }
+
+                true
+            }
+            // Any can be assigned to Callable (unsafe but allowed by typing)
+            (_, InferredType::Callable(_)) if matches!(self, InferredType::Any) => true,
+            _ => false,
+        }
+    }
+
+    /// Parses annotation text into an `InferredType`.
+    ///
+    /// This is a simplified parser that handles basic type annotations.
+    /// For complex types, it returns Named(String) as a fallback.
+    #[must_use]
+    pub fn from_annotation(annotation: &str) -> InferredType {
+        let annotation = annotation.trim().to_ascii_lowercase();
+
+        match annotation.as_str() {
+            "int" => InferredType::Int,
+            "str" => InferredType::Str,
+            "float" => InferredType::Float,
+            "bool" => InferredType::Bool,
+            "bytes" => InferredType::Bytes,
+            "none" => InferredType::None_,
+            "any" | "object" | "final" => InferredType::Any,
+            "never" => InferredType::Never,
+            "literalstring" => InferredType::LiteralString,
+            _ => {
+                // Handle Literal[...] annotations
+                if annotation.starts_with("literal[") && annotation.ends_with(']') {
+                    let inner = annotation["literal[".len()..annotation.len() - 1].trim();
+                    return parse_literal_annotation(inner);
+                }
+                // Handle Callable[...] annotations
+                if annotation.starts_with("callable[") && annotation.ends_with(']') {
+                    let inner = annotation["callable[".len()..annotation.len() - 1].trim();
+                    return parse_callable_annotation(inner);
+                }
+                // Handle simple container types
+                if annotation.starts_with("list[") && annotation.ends_with(']') {
+                    let inner = &annotation[5..annotation.len() - 1];
+                    InferredType::List(Box::new(InferredType::from_annotation(inner)))
+                } else if annotation.starts_with("dict[") && annotation.ends_with(']') {
+                    let inner = &annotation[5..annotation.len() - 1];
+                    let parts: Vec<&str> = inner.split(',').collect();
+                    if parts.len() == 2 {
+                        let key_type = InferredType::from_annotation(parts[0].trim());
+                        let value_type = InferredType::from_annotation(parts[1].trim());
+                        InferredType::Dict(Box::new(key_type), Box::new(value_type))
+                    } else {
+                        InferredType::Named(annotation)
+                    }
+                } else if annotation.starts_with("set[") && annotation.ends_with(']') {
+                    let inner = &annotation[4..annotation.len() - 1];
+                    InferredType::Set(Box::new(InferredType::from_annotation(inner)))
+                } else if annotation.starts_with("tuple[") && annotation.ends_with(']') {
+                    let inner = &annotation[6..annotation.len() - 1];
+                    let parts: Vec<&str> = inner.split(',').collect();
+                    let elem_types: Vec<InferredType> = parts
+                        .iter()
+                        .map(|part| InferredType::from_annotation(part.trim()))
+                        .collect();
+                    InferredType::Tuple(elem_types)
+                } else if annotation.starts_with("optional[") && annotation.ends_with(']') {
+                    let inner = &annotation[9..annotation.len() - 1];
+                    InferredType::Optional(Box::new(InferredType::from_annotation(inner)))
+                } else if annotation.contains('|') {
+                    let parts: Vec<&str> = annotation.split('|').collect();
+                    let types: Vec<InferredType> = parts
+                        .iter()
+                        .map(|part| InferredType::from_annotation(part.trim()))
+                        .collect();
+                    InferredType::Union(types)
+                } else {
+                    // Fallback for unknown types
+                    InferredType::Named(annotation)
+                }
+            }
+        }
+    }
+}
+
+/// Parses the inner content of a `Literal[...]` annotation into an `InferredType`.
+///
+/// Handles integer, string, boolean, bytes, and None literals, as well as
+/// multi-valued Literal types (treated as unions).
+fn parse_literal_annotation(inner: &str) -> InferredType {
+    let inner = inner.trim();
+
+    // Multi-valued: Literal[1, 2, "x"] → union
+    if inner.contains(',') {
+        let parts = split_literal_args(inner);
+        if parts.len() > 1 {
+            let types: Vec<InferredType> = parts
+                .iter()
+                .map(|p| parse_single_literal(p.trim()))
+                .collect();
+            return InferredType::Union(types);
+        }
+    }
+
+    parse_single_literal(inner)
+}
+
+/// Parse a single literal value from a Literal annotation argument.
+fn parse_single_literal(val: &str) -> InferredType {
+    let val = val.trim();
+
+    // Boolean literals (must check before int since True/False could be confused)
+    if val == "true" {
+        return InferredType::Literal(LiteralValue::Bool(true));
+    }
+    if val == "false" {
+        return InferredType::Literal(LiteralValue::Bool(false));
+    }
+
+    // None
+    if val == "none" {
+        return InferredType::None_;
+    }
+
+    // Integer literal (possibly negative)
+    if let Some(n) = val.strip_prefix('-') {
+        if let Ok(num) = n.trim().parse::<i64>() {
+            return InferredType::Literal(LiteralValue::Int(-num));
+        }
+    }
+    if let Ok(num) = val.parse::<i64>() {
+        return InferredType::Literal(LiteralValue::Int(num));
+    }
+    // Hex / octal / binary literals
+    if let Some(hex) = val.strip_prefix("0x").or_else(|| val.strip_prefix("0X")) {
+        if let Ok(num) = i64::from_str_radix(hex, 16) {
+            return InferredType::Literal(LiteralValue::Int(num));
+        }
+    }
+
+    // String literal: "..." or '...'
+    if (val.starts_with('"') && val.ends_with('"'))
+        || (val.starts_with('\'') && val.ends_with('\''))
+    {
+        let content = &val[1..val.len() - 1];
+        return InferredType::Literal(LiteralValue::Str(content.to_owned()));
+    }
+
+    // Bytes literal: b"..." or b'...'
+    if (val.starts_with("b\"") || val.starts_with("b'"))
+        && (val.ends_with('"') || val.ends_with('\''))
+    {
+        let content = &val[2..val.len() - 1];
+        return InferredType::Literal(LiteralValue::Bytes(content.as_bytes().to_vec()));
+    }
+
+    // Fallback: treat as a named type within Literal
+    InferredType::Named(val.to_owned())
+}
+
+/// Split `Literal[...]` arguments by top-level commas, respecting nesting.
+fn split_literal_args(inner: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut depth = 0u32;
+    let mut start = 0;
+    for (idx, ch) in inner.char_indices() {
+        match ch {
+            '[' | '(' | '{' => depth = depth.saturating_add(1),
+            ']' | ')' | '}' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                parts.push(&inner[start..idx]);
+                start = idx + 1;
+            }
+            _ => {}
+        }
+    }
+    let remainder = &inner[start..];
+    if !remainder.trim().is_empty() {
+        parts.push(remainder);
+    }
+    parts
+}
+
+/// Parses the inner content of a `Callable[...]` annotation into an `InferredType`.
+///
+/// Handles `Callable[[param_types...], return_type]` and `Callable[..., return_type]`.
+fn parse_callable_annotation(inner: &str) -> InferredType {
+    let inner = inner.trim();
+
+    // Find the top-level comma separating param spec from return type
+    let mut depth = 0u32;
+    let mut comma_pos = None;
+
+    for (idx, ch) in inner.char_indices() {
+        match ch {
+            '[' | '(' | '{' => depth = depth.saturating_add(1),
+            ']' | ')' | '}' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                comma_pos = Some(idx);
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    let Some(comma_idx) = comma_pos else {
+        // No comma found - invalid Callable annotation
+        return InferredType::Named(format!("callable[{inner}]"));
+    };
+
+    let param_spec = inner[..comma_idx].trim();
+    let return_type_str = inner[comma_idx + 1..].trim();
+
+    let return_type = InferredType::from_annotation(return_type_str);
+
+    // Check for ellipsis `...` for arbitrary parameters
+    if param_spec == "..." {
+        return InferredType::Callable(CallableInfo {
+            param_types: Vec::new(), // Empty vec for `...` means arbitrary params
+            return_type: Box::new(return_type),
+        });
+    }
+
+    // Check for list of parameter types `[type1, type2, ...]`
+    if param_spec.starts_with('[') && param_spec.ends_with(']') {
+        let param_list = &param_spec[1..param_spec.len() - 1].trim();
+
+        if param_list.is_empty() {
+            // Empty list `[]` means no parameters
+            return InferredType::Callable(CallableInfo {
+                param_types: Vec::new(),
+                return_type: Box::new(return_type),
+            });
+        }
+
+        // Parse each parameter type
+        let param_types = split_callable_params(param_list)
+            .iter()
+            .map(|param| InferredType::from_annotation(param.trim()))
+            .collect();
+
+        return InferredType::Callable(CallableInfo {
+            param_types,
+            return_type: Box::new(return_type),
+        });
+    }
+
+    // If not ellipsis or list, treat as a single parameter type (simplified)
+    // This handles cases like `Callable[int, str]` as `Callable[[int], str]`
+    let param_type = InferredType::from_annotation(param_spec);
+    InferredType::Callable(CallableInfo {
+        param_types: vec![param_type],
+        return_type: Box::new(return_type),
+    })
+}
+
+/// Split Callable parameter list by top-level commas.
+fn split_callable_params(param_list: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut depth = 0u32;
+    let mut start = 0;
+
+    for (idx, ch) in param_list.char_indices() {
+        match ch {
+            '[' | '(' | '{' => depth = depth.saturating_add(1),
+            ']' | ')' | '}' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                parts.push(&param_list[start..idx]);
+                start = idx + 1;
+            }
+            _ => {}
+        }
+    }
+
+    let remainder = &param_list[start..];
+    if !remainder.trim().is_empty() {
+        parts.push(remainder);
+    }
+    parts
+}

@@ -28,7 +28,7 @@ use super::{guards::is_enum_class, Rule};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0067",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0067",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0067",
 };
 
 /// Emits BSK-E0067 when a non-member is referenced in `Literal[EnumClass.X]`.
@@ -53,10 +53,10 @@ impl Rule for EnumNonMemberInLiteral {
 
         // Check module-level annotated variables for `Literal[ClassName.X]` annotations.
         for var in &module.module_vars {
-            let Some(ann_span) = var.annotation_span else { continue };
-            let Some(ann_text) =
-                source.get(ann_span.start as usize..ann_span.end as usize)
-            else {
+            let Some(ann_span) = var.annotation_span else {
+                continue;
+            };
+            let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
                 continue;
             };
             // Parse `Literal[ClassName.member]` from the annotation text.
@@ -65,12 +65,7 @@ impl Rule for EnumNonMemberInLiteral {
                     continue;
                 };
                 if is_non_member(cls, member_name) {
-                    diagnostics.push(make_diagnostic(
-                        ann_span,
-                        class_name,
-                        member_name,
-                        path,
-                    ));
+                    diagnostics.push(make_diagnostic(ann_span, class_name, member_name, path));
                 }
             }
         }
@@ -80,18 +75,15 @@ impl Rule for EnumNonMemberInLiteral {
             if call.arg_count != 2 {
                 continue;
             }
-            let Some(expected) = &call.expected_type else { continue };
+            let Some(expected) = &call.expected_type else {
+                continue;
+            };
             if let Some((class_name, member_name)) = parse_literal_class_member(expected.trim()) {
                 let Some(cls) = enum_classes.get(class_name) else {
                     continue;
                 };
                 if is_non_member(cls, member_name) {
-                    diagnostics.push(make_diagnostic(
-                        call.span,
-                        class_name,
-                        member_name,
-                        path,
-                    ));
+                    diagnostics.push(make_diagnostic(call.span, class_name, member_name, path));
                 }
             }
         }
@@ -135,26 +127,39 @@ fn parse_literal_class_member(ann: &str) -> Option<(&str, &str)> {
 /// Returns `true` when `member_name` is NOT a real enum member of `cls`.
 ///
 /// A name is considered a non-member when:
-/// - It is a method of the class (defined with `def`).
+/// - It is a method defined with `def` (unless decorated with `@member`).
 /// - It starts with `__` but does not end with `__` (private name-mangled attribute).
 /// - It is declared with `nonmember(...)` as the RHS.
+/// - It is assigned a lambda expression.
+/// - It is assigned via `staticmethod(...)` or `classmethod(...)`.
+/// - It is `_value_` or `value` — these are special attributes that
+///   cannot be accessed directly on enum members.
 fn is_non_member(cls: &ClassInfo, member_name: &str) -> bool {
     // Private names (name-mangling): `__X` where X does not end with `__`.
     if member_name.starts_with("__") && !member_name.ends_with("__") {
         return true;
     }
 
-    // Method names defined with `def` in the class body.
-    if cls.method_names.iter().any(|m| m.as_str() == member_name) {
+    // Special enum member attributes that cannot be accessed directly.
+    if member_name == "_value_" || member_name == "value" {
         return true;
     }
 
-    // Class body attributes explicitly declared with `nonmember(...)`.
-    if cls
-        .attributes
-        .iter()
-        .any(|a| a.name == member_name && a.rhs_is_nonmember_call)
-    {
+    // Method names defined with `def` in the class body — unless decorated with `@member`.
+    if cls.method_names.iter().any(|m| m.as_str() == member_name) {
+        let has_member_decorator = cls.method_decorators.iter().any(|(name, decorators)| {
+            name.as_str() == member_name && decorators.iter().any(|d| d == "member")
+        });
+        if !has_member_decorator {
+            return true;
+        }
+    }
+
+    // Class body attributes explicitly declared with `nonmember(...)`, lambda, or descriptor.
+    if cls.attributes.iter().any(|a| {
+        a.name == member_name
+            && (a.rhs_is_nonmember_call || a.rhs_is_lambda || a.rhs_is_descriptor_call)
+    }) {
         return true;
     }
 

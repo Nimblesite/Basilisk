@@ -1,0 +1,8 @@
+True
+False
+Khoor, Zruog!
+Hello, World!
+3
+HELLO WORLD
+spaces
+a-b-c

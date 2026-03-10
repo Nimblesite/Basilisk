@@ -28,7 +28,9 @@
 
 use std::collections::HashSet;
 
-use basilisk_resolver::{CallSite, ClassInfo, FunctionInfo, ImportInfo, ImportKind, ResolvedModule, Span, VariableInfo};
+use basilisk_resolver::{
+    CallSite, ClassInfo, FunctionInfo, ImportInfo, ImportKind, ResolvedModule, Span, VariableInfo,
+};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
@@ -36,7 +38,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0045",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0045",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0045",
 };
 
 fn span_text(source: &str, span: Option<Span>) -> Option<&str> {
@@ -284,25 +286,108 @@ fn has_top_level_bool_op(s: &str) -> bool {
 
 /// Python built-in type names and common typing constructs that are always valid as types.
 const BUILTIN_TYPE_NAMES: &[&str] = &[
-    "int", "str", "float", "bool", "bytes", "bytearray", "list", "dict", "set", "frozenset",
-    "tuple", "type", "object", "None", "complex", "memoryview", "range", "slice",
-    "Exception", "BaseException", "ValueError", "TypeError", "KeyError", "IndexError",
-    "AttributeError", "RuntimeError", "StopIteration", "NotImplementedError",
-    "OverflowError", "ZeroDivisionError", "NameError", "ImportError", "OSError",
-    "IOError", "FileNotFoundError", "PermissionError", "TimeoutError",
+    "int",
+    "str",
+    "float",
+    "bool",
+    "bytes",
+    "bytearray",
+    "list",
+    "dict",
+    "set",
+    "frozenset",
+    "tuple",
+    "type",
+    "object",
+    "None",
+    "complex",
+    "memoryview",
+    "range",
+    "slice",
+    "Exception",
+    "BaseException",
+    "ValueError",
+    "TypeError",
+    "KeyError",
+    "IndexError",
+    "AttributeError",
+    "RuntimeError",
+    "StopIteration",
+    "NotImplementedError",
+    "OverflowError",
+    "ZeroDivisionError",
+    "NameError",
+    "ImportError",
+    "OSError",
+    "IOError",
+    "FileNotFoundError",
+    "PermissionError",
+    "TimeoutError",
     // typing module names
-    "Any", "Union", "Optional", "Tuple", "List", "Dict", "Set", "FrozenSet",
-    "Callable", "Type", "ClassVar", "Final", "Literal", "Annotated", "TypeVar",
-    "TypeVarTuple", "ParamSpec", "Generic", "Protocol", "TypedDict", "NamedTuple",
-    "NewType", "TypeAlias", "Never", "NoReturn", "Self", "LiteralString", "Unpack",
-    "Required", "NotRequired", "ReadOnly", "TypeGuard", "TypeIs", "Concatenate",
-    "Awaitable", "Coroutine", "AsyncGenerator", "AsyncIterable", "AsyncIterator",
-    "Generator", "Iterable", "Iterator", "Sequence", "MutableSequence", "Mapping",
-    "MutableMapping", "MutableSet", "AbstractSet", "Hashable", "Sized", "Container",
-    "Collection", "Reversible", "SupportsInt", "SupportsFloat", "SupportsComplex",
-    "SupportsBytes", "SupportsAbs", "SupportsRound",
+    "Any",
+    "Union",
+    "Optional",
+    "Tuple",
+    "List",
+    "Dict",
+    "Set",
+    "FrozenSet",
+    "Callable",
+    "Type",
+    "ClassVar",
+    "Final",
+    "Literal",
+    "Annotated",
+    "TypeVar",
+    "TypeVarTuple",
+    "ParamSpec",
+    "Generic",
+    "Protocol",
+    "TypedDict",
+    "NamedTuple",
+    "NewType",
+    "TypeAlias",
+    "Never",
+    "NoReturn",
+    "Self",
+    "LiteralString",
+    "Unpack",
+    "Required",
+    "NotRequired",
+    "ReadOnly",
+    "TypeGuard",
+    "TypeIs",
+    "Concatenate",
+    "Awaitable",
+    "Coroutine",
+    "AsyncGenerator",
+    "AsyncIterable",
+    "AsyncIterator",
+    "Generator",
+    "Iterable",
+    "Iterator",
+    "Sequence",
+    "MutableSequence",
+    "Mapping",
+    "MutableMapping",
+    "MutableSet",
+    "AbstractSet",
+    "Hashable",
+    "Sized",
+    "Container",
+    "Collection",
+    "Reversible",
+    "SupportsInt",
+    "SupportsFloat",
+    "SupportsComplex",
+    "SupportsBytes",
+    "SupportsAbs",
+    "SupportsRound",
     // common builtins
-    "T", "KT", "VT", "AnyStr",
+    "T",
+    "KT",
+    "VT",
+    "AnyStr",
 ];
 
 /// Collect all names that are defined in module scope.
@@ -319,7 +404,10 @@ fn collect_defined_names(
     classes: &[ClassInfo],
     functions: &[FunctionInfo],
 ) -> HashSet<String> {
-    let mut names: HashSet<String> = BUILTIN_TYPE_NAMES.iter().map(|s| (*s).to_string()).collect();
+    let mut names: HashSet<String> = BUILTIN_TYPE_NAMES
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect();
 
     for var in vars {
         names.insert(var.name.clone());
@@ -536,7 +624,13 @@ impl Rule for AnnotatedInvalidFirstArg {
             &module.functions,
         );
 
-        check_annotated_in_vars(&module.module_vars, source, path, &defined_names, diagnostics);
+        check_annotated_in_vars(
+            &module.module_vars,
+            source,
+            path,
+            &defined_names,
+            diagnostics,
+        );
 
         for cls in &module.classes {
             check_annotated_in_attrs(&cls.attributes, source, path, &defined_names, diagnostics);
@@ -573,7 +667,13 @@ impl Rule for AnnotatedInvalidFirstArg {
 
         // Detect `func(Annotated[...])` and `func(TypeAlias)` call arguments.
         // Passing an Annotated expression or TypeAlias where `type[T]` is expected is invalid.
-        check_calls_with_annotated_args(&module.calls, source, path, &type_alias_names, diagnostics);
+        check_calls_with_annotated_args(
+            &module.calls,
+            source,
+            path,
+            &type_alias_names,
+            diagnostics,
+        );
     }
 }
 
@@ -588,7 +688,14 @@ fn check_annotated_in_vars(
         let Some(ann) = span_text(source, var.annotation_span) else {
             continue;
         };
-        check_annotated_annotation(ann.trim(), var.name_span, &var.name, path, defined_names, diagnostics);
+        check_annotated_annotation(
+            ann.trim(),
+            var.name_span,
+            &var.name,
+            path,
+            defined_names,
+            diagnostics,
+        );
     }
 }
 
@@ -603,7 +710,14 @@ fn check_annotated_in_attrs(
         let Some(ann) = span_text(source, attr.annotation_span) else {
             continue;
         };
-        check_annotated_annotation(ann.trim(), attr.name_span, &attr.name, path, defined_names, diagnostics);
+        check_annotated_annotation(
+            ann.trim(),
+            attr.name_span,
+            &attr.name,
+            path,
+            defined_names,
+            diagnostics,
+        );
     }
 }
 
@@ -624,7 +738,14 @@ fn check_annotated_in_functions(
             let Some(ann) = span_text(source, param.annotation_span) else {
                 continue;
             };
-            check_annotated_annotation(ann.trim(), param.name_span, &param.name, path, defined_names, diagnostics);
+            check_annotated_annotation(
+                ann.trim(),
+                param.name_span,
+                &param.name,
+                path,
+                defined_names,
+                diagnostics,
+            );
         }
     }
 }

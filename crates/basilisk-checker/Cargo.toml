@@ -8,6 +8,8 @@ license.workspace    = true
 [dependencies]
 basilisk-parser.workspace   = true
 basilisk-resolver.workspace = true
+ruff_python_ast.workspace   = true
+ruff_text_size.workspace    = true
 
 [lints]
 workspace = true

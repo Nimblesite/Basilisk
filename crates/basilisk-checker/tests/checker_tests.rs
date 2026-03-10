@@ -1422,7 +1422,7 @@ fn e0021_different_param_count_no_overlap() -> Result<(), Box<dyn std::error::Er
     Ok(())
 }
 
-/// `signatures_overlap` — `!` → `` (UnaryOperator remove) mutants at lines 93/94.
+/// `signatures_overlap` — `!` to empty (`UnaryOperator` remove) mutants at lines 93/94.
 /// When all non-self/cls params ARE annotated on both sides, they DON'T overlap.
 #[test]
 fn e0021_both_fully_annotated_no_overlap() -> Result<(), Box<dyn std::error::Error>> {
@@ -1831,7 +1831,7 @@ fn e0032_unknown_keyword_fires() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// E0032 — `!` → `` (UnaryOperator remove) at line 30.
+/// E0032 — `!` to empty (`UnaryOperator` remove) at line 30.
 /// A known keyword (`total`) must NOT fire.
 #[test]
 fn e0032_known_keyword_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
@@ -1900,7 +1900,7 @@ fn e0035_not_required_outside_typed_dict_fires() -> Result<(), Box<dyn std::erro
 
 /// E0035 — `is_in_typed_dict_hierarchy` `FnValue → true` at line 78.
 /// If always true, the rule would only check for NESTED usage even outside `TypedDict`.
-/// A non-TypedDict class with Required must still fire E0035.
+/// A non-`TypedDict` class with Required must still fire E0035.
 #[test]
 fn e0035_non_typed_dict_class_not_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
@@ -2075,12 +2075,20 @@ fn debug_e0047_qualifiers_annotated_fp() -> Result<(), Box<dyn std::error::Error
         env!("CARGO_MANIFEST_DIR"),
         "/../basilisk-cli/tests/conformance/qualifiers_annotated.py"
     );
+    if !std::path::Path::new(path).exists() {
+        eprintln!("Skipping: conformance file not present (local-only)");
+        return Ok(());
+    }
     let parsed = parse_file(path).map_err(|e| format!("{e:?}"))?;
     let resolved = resolve(&parsed)?;
     let diags = basilisk_checker::check(&resolved);
     let src = &resolved.source;
     for d in &diags {
-        let line = src[..d.span.start as usize].chars().filter(|&c| c == '\n').count() + 1;
+        let line = src[..d.span.start as usize]
+            .chars()
+            .filter(|&c| c == '\n')
+            .count()
+            + 1;
         eprintln!("Line {}: {} - {}", line, d.code.code, d.message);
     }
     Ok(())
@@ -2094,13 +2102,272 @@ fn debug_all_diags_qualifiers_annotated() -> Result<(), Box<dyn std::error::Erro
         env!("CARGO_MANIFEST_DIR"),
         "/../basilisk-cli/tests/conformance/qualifiers_annotated.py"
     );
+    if !std::path::Path::new(path).exists() {
+        eprintln!("Skipping: conformance file not present (local-only)");
+        return Ok(());
+    }
     let parsed = parse_file(path).map_err(|e| format!("{e:?}"))?;
     let resolved = resolve(&parsed)?;
     let diags = basilisk_checker::check(&resolved);
     let src = &resolved.source;
     for d in &diags {
-        let line = src[..d.span.start as usize].chars().filter(|&c| c == '\n').count() + 1;
+        let line = src[..d.span.start as usize]
+            .chars()
+            .filter(|&c| c == '\n')
+            .count()
+            + 1;
         eprintln!("Line {}: {} - {}", line, d.code.code, d.message);
     }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// §4.4 — Self/Cls Inference: E0001 does NOT fire for self/cls parameters
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0001_self_param_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "class MyClass:\n    def method(self) -> None:\n        pass\n";
+    let diags = run(src)?;
+    let e1: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0001")
+        .collect();
+    assert!(
+        e1.is_empty(),
+        "self parameter must not trigger E0001, got: {e1:#?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0001_cls_param_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "class MyClass:\n    @classmethod\n    def method(cls) -> None:\n        pass\n";
+    let diags = run(src)?;
+    let e1: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0001")
+        .collect();
+    assert!(
+        e1.is_empty(),
+        "cls parameter must not trigger E0001, got: {e1:#?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0001_regular_params_still_fire() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "class MyClass:\n    def method(self, data) -> None:\n        pass\n";
+    let diags = run(src)?;
+    let e1: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0001")
+        .collect();
+    assert!(
+        !e1.is_empty(),
+        "regular unannotated parameters must still fire E0001"
+    );
+    // Should only fire for 'data', not 'self'
+    let messages: Vec<&str> = e1.iter().map(|d| d.message.as_str()).collect();
+    assert!(
+        messages.iter().any(|m| m.contains("data")),
+        "E0001 should point to 'data' parameter"
+    );
+    assert!(
+        !messages.iter().any(|m| m.contains("self")),
+        "E0001 should NOT point to 'self' parameter"
+    );
+    Ok(())
+}
+
+#[test]
+fn self_and_cls_do_not_fire_e0001() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "class MyClass:\n",
+        "    def instance_method(self) -> None:\n",
+        "        pass\n",
+        "    @classmethod\n",
+        "    def class_method(cls) -> None:\n",
+        "        pass\n",
+        "    def regular_method(self, data) -> None:\n",
+        "        pass\n"
+    );
+    let diags = run(src)?;
+    let e1: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0001")
+        .collect();
+
+    // Should only fire for 'data', not 'self' or 'cls'
+    assert!(!e1.is_empty(), "should have E0001 diagnostics");
+
+    let messages: Vec<&str> = e1.iter().map(|d| d.message.as_str()).collect();
+    assert!(
+        messages.iter().any(|m| m.contains("data")),
+        "E0001 should point to 'data' parameter"
+    );
+    assert!(
+        !messages.iter().any(|m| m.contains("self")),
+        "E0001 should NOT point to 'self' parameter"
+    );
+    assert!(
+        !messages.iter().any(|m| m.contains("cls")),
+        "E0001 should NOT point to 'cls' parameter"
+    );
+
+    // Should have exactly 1 E0001 (for 'data')
+    let data_e1: Vec<_> = e1.iter().filter(|d| d.message.contains("data")).collect();
+    assert_eq!(
+        data_e1.len(),
+        1,
+        "should have exactly 1 E0001 for 'data' parameter"
+    );
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// E0011 — Return type mismatch: branch coverage
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0011_int_return_for_str_annotation_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "def foo() -> str:\n    return 42\n";
+    let diags = run(src)?;
+    let e11: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0011")
+        .collect();
+    assert!(
+        !e11.is_empty(),
+        "int return for str annotation must fire E0011"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0011_str_return_for_int_annotation_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "def foo() -> int:\n    return \"hello\"\n";
+    let diags = run(src)?;
+    let e11: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0011")
+        .collect();
+    assert!(
+        !e11.is_empty(),
+        "str return for int annotation must fire E0011"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0011_compatible_return_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "def foo() -> int:\n    return 42\n";
+    let diags = run(src)?;
+    let e11: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0011")
+        .collect();
+    assert!(
+        e11.is_empty(),
+        "compatible int return for int annotation must not fire E0011"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0011_call_return_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "def helper() -> int: return 42\ndef foo() -> str:\n    return helper()\n";
+    let diags = run(src)?;
+    let e11: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0011")
+        .collect();
+    assert!(
+        e11.is_empty(),
+        "call return without full inference must not fire E0011"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0011_unannotated_return_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "def foo():\n    return 42\n";
+    let diags = run(src)?;
+    let e11: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0011")
+        .collect();
+    assert!(e11.is_empty(), "unannotated return must not fire E0011");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// W0040 — Lambda function missing type annotations
+// ---------------------------------------------------------------------------
+
+#[test]
+fn w0040_lambda_assigned_to_unannotated_var_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "f = lambda x: x + 1\n";
+    let diags = run(src)?;
+    let w40: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-W0040")
+        .collect();
+    assert!(
+        !w40.is_empty(),
+        "lambda assigned to unannotated variable must fire W0040"
+    );
+    assert_eq!(
+        w40[0].severity,
+        Severity::Warning,
+        "W0040 must be a warning, not an error"
+    );
+    Ok(())
+}
+
+#[test]
+fn w0040_lambda_assigned_to_annotated_var_no_diagnostic() -> Result<(), Box<dyn std::error::Error>>
+{
+    let src = "f: Callable[[int], int] = lambda x: x + 1\n";
+    let diags = run(src)?;
+    let w40: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-W0040")
+        .collect();
+    assert!(
+        w40.is_empty(),
+        "lambda assigned to annotated variable must not fire W0040"
+    );
+    Ok(())
+}
+
+#[test]
+fn w0040_lambda_class_attribute_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "class Config:\n    handler = lambda x: x + 1\n";
+    let diags = run(src)?;
+    let w40: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-W0040")
+        .collect();
+    assert!(
+        !w40.is_empty(),
+        "lambda assigned to unannotated class attribute must fire W0040"
+    );
+    Ok(())
+}
+
+#[test]
+fn w0040_annotated_class_attribute_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "class Config:\n    handler: Callable[[int], int] = lambda x: x + 1\n";
+    let diags = run(src)?;
+    let w40: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-W0040")
+        .collect();
+    assert!(
+        w40.is_empty(),
+        "lambda assigned to annotated class attribute must not fire W0040"
+    );
     Ok(())
 }

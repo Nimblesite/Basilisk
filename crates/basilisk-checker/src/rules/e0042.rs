@@ -24,7 +24,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0042",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0042",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0042",
 };
 
 fn make_diagnostic(message: String, span: basilisk_resolver::Span, path: &str) -> Diagnostic {

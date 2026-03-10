@@ -1,87 +1,122 @@
 #!/usr/bin/env bash
-# Benchmark: Basilisk vs Pyright vs mypy vs ty
-# Uses hyperfine for accurate wall-clock timing.
-# Run from the repo root: bash scripts/benchmark.sh
+# Basilisk benchmark
+# Run from repo root: bash scripts/benchmark.sh
 
 set -euo pipefail
 
-BSK="$(dirname "$0")/../target/release/basilisk"
-FX="$(dirname "$0")/../benchmarks/fixtures"
-OUT="$(dirname "$0")/../benchmarks/results"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+BSK="$REPO_ROOT/target/release/basilisk"
+FX="$REPO_ROOT/benchmarks/fixtures"
+OUT="$REPO_ROOT/benchmarks/results"
 mkdir -p "$OUT"
 
-PYRIGHT="python3 -m pyright"
-MYPY="python3 -m mypy --ignore-missing-imports --no-error-summary"
-TY="python3 -m ty"
+# Build
+printf 'Building...'
+BUILD_OUT=$(cargo build --release --manifest-path "$REPO_ROOT/Cargo.toml" 2>&1) \
+  || { printf ' FAILED\n\n%s\n' "$BUILD_OUT" >&2; exit 1; }
+printf ' OK\n\n'
 
-echo "======================================================="
-echo "  Basilisk Benchmark — $(date '+%Y-%m-%d %H:%M')"
-echo "======================================================="
-echo ""
-echo "Tools:"
-echo "  basilisk  : $("$BSK" --version 2>&1)"
-echo "  pyright   : $($PYRIGHT --version 2>&1)"
-echo "  mypy      : $($MYPY --version 2>&1)"
-echo "  ty        : $($TY --version 2>&1)"
-echo ""
-
-# ─── Per-file benchmarks ──────────────────────────────────────────────────────
+[[ -x "$BSK" ]] || { echo "Binary not found: $BSK" >&2; exit 1; }
+command -v hyperfine &>/dev/null || { echo "hyperfine not installed (brew install hyperfine)" >&2; exit 1; }
 
 FIXTURES=(
-  "e0001_missing_param.py:E0001 Missing param annotations (350 errors)"
-  "e0002_missing_return.py:E0002 Missing return annotations (100 errors)"
-  "e0016_incompatible_override.py:E0016 Incompatible override (20 errors)"
-  "e0018_undefined_variable.py:E0018 Undefined variable (100 errors)"
-  "e0023_nonexhaustive_match.py:E0023 Non-exhaustive match (10 errors)"
-  "e0026_typevar_single_constraint.py:E0026 TypeVar single constraint (50 errors)"
-  "e0030_nondefault_after_default.py:E0022 Unhashable dict key (50 errors)"
-  "e0034_final_violation.py:E0034 Final violation (20 errors)"
+  "e0002_missing_return.py:E0002 Missing return annotations"
+  "e0016_incompatible_override.py:E0016 Incompatible override"
+  "e0022_unhashable_dict_key.py:E0022 Unhashable dict key"
+  "e0023_nonexhaustive_match.py:E0023 Non-exhaustive match"
+  "e0026_typevar_single_constraint.py:E0026 TypeVar single constraint"
 )
 
-echo "─── Per-file timing (10 runs each) ─────────────────────────────────────"
-echo ""
+printf 'Running benchmarks (this takes a while)...\n\n'
 
 for entry in "${FIXTURES[@]}"; do
   FILE="${entry%%:*}"
-  DESC="${entry##*:}"
   FPATH="$FX/$FILE"
-
-  echo "┌─ $DESC"
-  echo "│  File: $FILE"
-
+  [[ -f "$FPATH" ]] || continue
   hyperfine \
     --warmup 2 \
     --runs 10 \
     --ignore-failure \
     --export-json "$OUT/${FILE%.py}.json" \
-    --command-name "basilisk" "$BSK check $FPATH" \
-    --command-name "pyright"  "$PYRIGHT $FPATH" \
-    --command-name "mypy"     "$MYPY $FPATH" \
-    --command-name "ty"       "$TY check $FPATH" \
-    2>&1 | grep -E "^  |Time|Benchmark|faster|slower|Summary" | sed 's/^/│  /'
-
-  echo "└──"
-  echo ""
+    --command-name "basilisk" "$BSK check $FPATH >/dev/null 2>&1" \
+    --command-name "pyright"  "python3 -m pyright $FPATH >/dev/null 2>&1" \
+    --command-name "mypy"     "python3 -m mypy --ignore-missing-imports --no-error-summary $FPATH >/dev/null 2>&1" \
+    --command-name "pyrefly"  "pyrefly check $FPATH >/dev/null 2>&1" \
+    --command-name "ty"       "python3 -m ty check $FPATH >/dev/null 2>&1" \
+    > /dev/null 2>&1
+  printf '  ✓ %s\n' "${entry##*:}"
 done
 
-# ─── Coverage comparison ─────────────────────────────────────────────────────
+# Generate report from JSON results
+python3 - "$OUT" <<'PYEOF'
+import json, sys, os, glob
+from pathlib import Path
 
-echo "─── Diagnostic coverage ─────────────────────────────────────────────────"
-echo ""
-printf "%-42s %8s %8s %8s %8s\n" "Rule / File" "basilisk" "pyright" "mypy" "ty"
-printf "%-42s %8s %8s %8s %8s\n" "─────────────────────────────────────────" "────────" "────────" "────────" "────────"
+out = Path(sys.argv[1])
+TOOLS = ["basilisk", "pyright", "mypy", "pyrefly", "ty"]
+COL = 12
 
-for entry in "${FIXTURES[@]}"; do
-  FILE="${entry%%:*}"
-  FPATH="$FX/$FILE"
+FIXTURE_LABELS = {
+    "e0002_missing_return":          "E0002 Missing return",
+    "e0016_incompatible_override":   "E0016 Incompatible override",
+    "e0022_unhashable_dict_key":     "E0022 Unhashable dict key",
+    "e0023_nonexhaustive_match":     "E0023 Non-exhaustive match",
+    "e0026_typevar_single_constraint": "E0026 TypeVar constraint",
+}
 
-  bsk_n=$("$BSK" check "$FPATH" 2>/dev/null | grep -c "^error\[BSK" || true)
-  pyr_n=$($PYRIGHT "$FPATH" 2>/dev/null | grep -cE "^.+ error$|error:" || true)
-  myp_n=$($MYPY "$FPATH" 2>/dev/null | grep -c "^.*: error:" || true)
-  ty_n=$($TY check "$FPATH" 2>/dev/null | grep -c "error\[" || true)
+rows = []
+for stem, label in FIXTURE_LABELS.items():
+    path = out / f"{stem}.json"
+    if not path.exists():
+        continue
+    data = json.loads(path.read_text())
+    by_tool = {r["command"]: r["mean"] * 1000 for r in data["results"]}
+    rows.append((label, by_tool))
 
-  printf "%-42s %8d %8d %8d %8d\n" "${FILE%.py}" "$bsk_n" "$pyr_n" "$myp_n" "$ty_n"
-done
+if not rows:
+    print("No results found.")
+    sys.exit(0)
 
-echo ""
-echo "Done. JSON results saved to $OUT/"
+# Header
+rule_w = max(len(r[0]) for r in rows) + 2
+header = f"{'Rule':<{rule_w}}" + "".join(f"{t:>{COL}}" for t in TOOLS)
+sep    = "─" * len(header)
+
+print()
+print(f"  Basilisk Benchmark Report")
+print(f"  {'─' * (len(header))}")
+print(f"  {header}")
+print(f"  {sep}")
+
+for label, by_tool in rows:
+    timings = []
+    best = min(by_tool.get(t, float("inf")) for t in TOOLS)
+    for t in TOOLS:
+        ms = by_tool.get(t)
+        if ms is None:
+            timings.append(f"{'n/a':>{COL}}")
+        else:
+            val = f"{ms:.0f} ms"
+            marker = " ✓" if ms == best else ""
+            timings.append(f"{val + marker:>{COL}}")
+    print(f"  {label:<{rule_w}}{''.join(timings)}")
+
+print(f"  {sep}")
+
+# Per-tool averages
+print(f"  {'Average':<{rule_w}}", end="")
+for t in TOOLS:
+    vals = [r[1][t] for r in rows if t in r[1]]
+    avg = sum(vals) / len(vals) if vals else None
+    cell = f"{avg:.0f} ms" if avg else "n/a"
+    print(f"{cell:>{COL}}", end="")
+print()
+print()
+
+# Fastest tool per fixture
+print("  Fastest per rule:")
+for label, by_tool in rows:
+    fastest = min(by_tool, key=by_tool.get)
+    print(f"    {label:<{rule_w-2}}→ {fastest}  ({by_tool[fastest]:.0f} ms)")
+print()
+PYEOF

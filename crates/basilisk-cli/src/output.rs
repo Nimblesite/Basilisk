@@ -10,7 +10,7 @@
 //!    |
 //!    = help: Add a type annotation: `data: <type>`
 //!    = note: In Basilisk, all function parameters require explicit types
-//!    = see: https://basilisk-lang.org/errors/BSK-E0001
+//!    = see: https://www.basilisk-python.dev/errors/BSK-E0001
 //! ```
 //!
 //! JSON output is a flat array consumed by the VS Code extension:
@@ -102,6 +102,8 @@ pub fn render_diagnostics_json(diagnostics: &[Diagnostic], sources: &[FileSource
                 severity: match d.severity {
                     basilisk_checker::Severity::Error => "error",
                     basilisk_checker::Severity::Warning => "warning",
+                    basilisk_checker::Severity::Info => "info",
+                    basilisk_checker::Severity::SafetyViolation => "safety violation",
                 },
                 message: &d.message,
                 path: &d.path,
@@ -189,12 +191,20 @@ mod tests {
     use basilisk_resolver::Span;
 
     fn make_diag(help: Option<&str>, note: Option<&str>) -> Diagnostic {
+        make_diag_with_severity(Severity::Error, help, note)
+    }
+
+    fn make_diag_with_severity(
+        severity: Severity,
+        help: Option<&str>,
+        note: Option<&str>,
+    ) -> Diagnostic {
         Diagnostic {
             code: ErrorCode {
                 code: "BSK-E0001",
-                docs_url: "https://basilisk-lang.org/errors/BSK-E0001",
+                docs_url: "https://www.basilisk-python.dev/errors/BSK-E0001",
             },
-            severity: Severity::Error,
+            severity,
             message: "missing annotation for `x`".to_owned(),
             span: Span { start: 8, end: 9 },
             path: "test.py".to_owned(),
@@ -212,6 +222,18 @@ mod tests {
         }];
         let count = render_diagnostics(&[diag], &sources);
         assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn render_diagnostics_does_not_count_warnings_as_errors() {
+        let warning = make_diag_with_severity(Severity::Warning, None, None);
+        let error = make_diag(None, None);
+        let sources = vec![FileSource {
+            path: "test.py".to_owned(),
+            text: "def foo(x): pass".to_owned(),
+        }];
+        let count = render_diagnostics(&[warning, error], &sources);
+        assert_eq!(count, 1, "only errors should be counted, not warnings");
     }
 
     #[test]
@@ -305,6 +327,36 @@ mod tests {
     }
 
     #[test]
+    fn render_diagnostics_json_warning_severity() {
+        let diag = make_diag_with_severity(Severity::Warning, None, None);
+        let sources = vec![FileSource {
+            path: "test.py".to_owned(),
+            text: "def foo(x): pass".to_owned(),
+        }];
+        render_diagnostics_json(&[diag], &sources);
+    }
+
+    #[test]
+    fn render_diagnostics_json_info_severity() {
+        let diag = make_diag_with_severity(Severity::Info, None, None);
+        let sources = vec![FileSource {
+            path: "test.py".to_owned(),
+            text: "def foo(x): pass".to_owned(),
+        }];
+        render_diagnostics_json(&[diag], &sources);
+    }
+
+    #[test]
+    fn render_diagnostics_json_safety_violation_severity() {
+        let diag = make_diag_with_severity(Severity::SafetyViolation, None, None);
+        let sources = vec![FileSource {
+            path: "test.py".to_owned(),
+            text: "def foo(x): pass".to_owned(),
+        }];
+        render_diagnostics_json(&[diag], &sources);
+    }
+
+    #[test]
     fn json_severity_warning() -> Result<(), Box<dyn std::error::Error>> {
         let source = "def foo(x): pass";
         let (line, col) = byte_offset_to_line_col(source, 8);
@@ -330,14 +382,13 @@ mod tests {
     /// The function must actually produce output for non-empty diagnostics.
     /// We verify by checking the JSON serialisation round-trips correctly.
     #[test]
-    fn render_diagnostics_json_produces_correct_item_count(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn render_diagnostics_json_produces_correct_item_count() {
         use basilisk_checker::{ErrorCode, Severity};
         use basilisk_resolver::Span;
         let d1 = Diagnostic {
             code: ErrorCode {
                 code: "BSK-E0001",
-                docs_url: "https://basilisk-lang.org/errors/BSK-E0001",
+                docs_url: "https://www.basilisk-python.dev/errors/BSK-E0001",
             },
             severity: Severity::Error,
             message: "missing annotation".to_owned(),
@@ -349,7 +400,7 @@ mod tests {
         let d2 = Diagnostic {
             code: ErrorCode {
                 code: "BSK-E0002",
-                docs_url: "https://basilisk-lang.org/errors/BSK-E0002",
+                docs_url: "https://www.basilisk-python.dev/errors/BSK-E0002",
             },
             severity: Severity::Error,
             message: "missing return annotation".to_owned(),
@@ -392,7 +443,6 @@ mod tests {
         assert_eq!(items.len(), 2, "must produce one item per diagnostic");
         assert_eq!(items[0].code, "BSK-E0001");
         assert_eq!(items[1].code, "BSK-E0002");
-        Ok(())
     }
 
     // ── render_diagnostics_json: != mutant at output.rs:92 ──────────────────
@@ -401,14 +451,13 @@ mod tests {
     /// If `==` becomes `!=`, wrong source is matched → wrong line/col.
     /// Test that the right source file is used for offset resolution.
     #[test]
-    fn render_diagnostics_json_matches_correct_source_file(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn render_diagnostics_json_matches_correct_source_file() {
         use basilisk_checker::{ErrorCode, Severity};
         use basilisk_resolver::Span;
         let diag = Diagnostic {
             code: ErrorCode {
                 code: "BSK-E0001",
-                docs_url: "https://basilisk-lang.org/errors/BSK-E0001",
+                docs_url: "https://www.basilisk-python.dev/errors/BSK-E0001",
             },
             severity: Severity::Error,
             message: "test".to_owned(),
@@ -417,14 +466,16 @@ mod tests {
             help: None,
             note: None,
         };
-        let sources = [FileSource {
+        let sources = [
+            FileSource {
                 path: "a.py".to_owned(),
                 text: "aaaa\nbbbb".to_owned(),
             },
             FileSource {
                 path: "b.py".to_owned(),
                 text: "x = 1\n".to_owned(),
-            }];
+            },
+        ];
         let source = sources
             .iter()
             .find(|s| s.path == diag.path)
@@ -433,7 +484,6 @@ mod tests {
         // b.py offset 0 → line 1, col 1
         assert_eq!(line, 1);
         assert_eq!(col, 1);
-        Ok(())
     }
 
     // ── render_diagnostics_json: - / * mutants at output.rs:97 ──────────────
@@ -442,8 +492,7 @@ mod tests {
     /// Line 97 computes end position: `byte_offset_to_line_col(src, d.span.end as usize)`.
     /// We verify `end_col` > col for a span that crosses characters.
     #[test]
-    fn render_diagnostics_json_end_position_after_start() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn render_diagnostics_json_end_position_after_start() {
         let source = "def foo(x): pass";
         // span covers "foo" at bytes 4..7
         let (start_line, start_col) = byte_offset_to_line_col(source, 4);
@@ -451,7 +500,6 @@ mod tests {
         assert_eq!(start_line, 1);
         assert_eq!(end_line, 1);
         assert!(end_col > start_col, "end_col must be after start_col");
-        Ok(())
     }
 
     // ── byte_offset_to_line_col: - → / mutant at output.rs:158 ────────────

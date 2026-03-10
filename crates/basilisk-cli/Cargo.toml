@@ -13,10 +13,12 @@ path = "src/main.rs"
 basilisk-parser.workspace   = true
 basilisk-resolver.workspace = true
 basilisk-checker.workspace  = true
+basilisk-lsp.workspace      = true
 clap.workspace              = true
-walkdir                     = "2.5"
+walkdir.workspace           = true
 serde.workspace             = true
 serde_json.workspace        = true
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 
 [lints]
 workspace = true

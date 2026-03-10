@@ -21,7 +21,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0034",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0034",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0034",
 };
 
 /// Returns `true` if the decorator name is `final` or `typing.final`.

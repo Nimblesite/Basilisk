@@ -11,7 +11,7 @@
 
 use std::collections::HashSet;
 
-use basilisk_resolver::{RhsKind, ResolvedModule, Span};
+use basilisk_resolver::{ResolvedModule, RhsKind, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
@@ -19,7 +19,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0057",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0057",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0057",
 };
 
 fn make_diag(name: &str, span: Span, path: &str) -> Diagnostic {
@@ -29,12 +29,9 @@ fn make_diag(name: &str, span: Span, path: &str) -> Diagnostic {
         message: format!("Invalid type expression in `type {name}` alias"),
         span,
         path: path.to_owned(),
-        help: Some(
-            "The RHS of a `type` statement must be a valid type expression".to_owned(),
-        ),
+        help: Some("The RHS of a `type` statement must be a valid type expression".to_owned()),
         note: Some(
-            "PEP 695: `type X = T` requires T to be a type, not a literal or expression"
-                .to_owned(),
+            "PEP 695: `type X = T` requires T to be a type, not a literal or expression".to_owned(),
         ),
     }
 }

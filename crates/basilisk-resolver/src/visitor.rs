@@ -12,14 +12,21 @@ use ruff_text_size::{Ranged, TextRange};
 use basilisk_parser::ParsedModule;
 
 use crate::scope::{
-    AssertTypeCallInfo, AttributeInfo, CallSite, ClassInfo, FloatParamIntAttrAccess, FunctionInfo,
-    GenericParamInfo, ImportInfo, ImportKind, LiteralStringEnumMismatch, MatchStmtInfo,
-    NewTypeCallInfo, ParameterInfo, ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo,
-    RevealTypeCallInfo, RhsKind, Span, TypeVarCallInfo, TypedDictCallInfo,
-    TypedDictSecondArgKind, UnhashableKeyRef, VariableInfo,
+    AssertTypeCallInfo, AttributeInfo, BaseSubscriptEntry, CallSite, ClassInfo,
+    FloatParamIntAttrAccess, FunctionInfo, GenericParamInfo, GenericSubscriptSite,
+    HistoricalPositionalViolation, HistoricalPositionalViolationKind, ImportInfo, ImportKind,
+    ImportResolution, InvalidStringAnnotation, InvalidStringAnnotationKind,
+    LiteralStringEnumMismatch, MatchStmtInfo, NamedTupleDefInfo, NewTypeCallInfo, ParameterInfo,
+    Pep695BoundViolation, Pep695BoundViolationKind, ProtocolInstantiationViolation,
+    ProtocolRtcViolation, ProtocolRtcViolationKind, ProtocolSelfViolation, ReadOnlyViolationInfo,
+    ReadOnlyViolationKind, ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo,
+    RevealTypeCallInfo, RhsKind, Span, TypeAliasDefInfo, TypeAliasTypeCallInfo, TypeArg,
+    TypeStatementInfo, TypeVarCallInfo, TypedDictCallInfo, TypedDictKeyViolation,
+    TypedDictKeyViolationKind, TypedDictSecondArgKind, UnhashableKeyRef, VariableInfo,
 };
 
 /// Collect all function definitions and module-level data from the parsed module.
+#[allow(clippy::too_many_lines)]
 pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
     let mut functions = Vec::new();
     let mut classes = Vec::new();
@@ -37,24 +44,66 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         true,
     );
 
-    let calls = collect_module_level_calls(&module.ast.body);
+    // Post-process: apply @dataclass_transform factory semantics.
+    apply_dataclass_transform(&module.ast.body, &mut classes, &functions);
+
+    let calls = collect_calls_from_stmts(&module.ast.body);
     let typevar_calls = collect_typevar_calls(&module.ast.body);
+
+    // Post-process: reclassify generic params that are not actual TypeVars.
+    let typevar_names: std::collections::HashSet<&str> =
+        typevar_calls.iter().map(|tv| tv.name.as_str()).collect();
+    for cls in &mut classes {
+        let mut non_tv = std::mem::take(&mut cls.generic_non_typevar_args);
+        cls.generic_params.retain(|p| {
+            if typevar_names.contains(p.name.as_str()) {
+                true
+            } else {
+                non_tv.push(p.span);
+                false
+            }
+        });
+        cls.generic_non_typevar_args = non_tv;
+    }
     let reveal_type_calls = collect_reveal_type_calls(&module.ast.body);
     let assert_type_calls =
         collect_assert_type_calls_from_stmts(&module.ast.body, &[], &module.source);
     let typeddict_calls = collect_typeddict_calls(&module.ast.body);
     let newtype_calls = collect_newtype_calls(&module.ast.body);
-    let multiple_unbounded_tuple_spans =
-        collect_multiple_unbounded_tuple_spans(&module.ast.body);
+    let namedtuple_defs = collect_namedtuple_defs(&module.ast.body, &module.source);
+    let multiple_unbounded_tuple_spans = collect_multiple_unbounded_tuple_spans(&module.ast.body);
 
     let module_bare_assignments = collect_module_bare_assignments(&module.ast.body);
     let module_attr_assignments = collect_module_attr_assignments(&module.ast.body);
-    let final_violations =
-        collect_final_violations(&module.ast.body, &classes, &module.source);
+    let final_violations = collect_final_violations(&module.ast.body, &classes, &module.source);
     let float_param_int_attr_accesses =
         collect_float_param_int_attr_accesses(&module.ast.body, &module.source);
     let literal_string_enum_mismatches =
         collect_literal_string_enum_mismatches(&module.ast.body, &module.source);
+    let readonly_violations = collect_readonly_violations(&module.ast.body, &classes);
+    let protocol_self_violations =
+        collect_protocol_self_violations(&module.ast.body, &classes, &functions, &module.source);
+    let protocol_instantiation_violations =
+        collect_protocol_instantiation_violations(&module.ast.body, &classes);
+    let typeddict_class_names: std::collections::HashSet<&str> = classes
+        .iter()
+        .filter(|c| c.is_typed_dict)
+        .map(|c| c.name.as_str())
+        .collect();
+    let mut isinstance_typeddict_violations =
+        collect_isinstance_typeddict_violations(&module.ast.body, &typeddict_class_names);
+    isinstance_typeddict_violations
+        .extend(collect_typevar_bound_typeddict_violations(&module.ast.body));
+    let typeddict_key_violations =
+        collect_typeddict_key_violations(&module.ast.body, &classes, &module.source);
+    let generic_subscript_sites = collect_generic_subscript_sites(&module.ast.body);
+    let type_alias_defs = collect_type_alias_defs(&module.ast.body);
+    let unhashable_hash_call_violations = collect_unhashable_hash_calls(&module.ast.body, &classes);
+    let protocol_runtime_checkable_violations =
+        collect_protocol_rtc_violations(&module.ast.body, &classes);
+
+    let generator_violations = collect_generator_violations(&functions, &module.source);
+    let unbound_typevar_usages = Vec::new();
     ResolvedModule {
         functions,
         classes,
@@ -71,25 +120,239 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         final_violations,
         module_bare_assignments,
         module_attr_assignments,
-        module_attr_accesses: Vec::new(),
-        module_order_comparisons: Vec::new(),
-        annotated_direct_call_spans: Vec::new(),
-        imported_final_names: std::collections::HashSet::new(),
-        type_alias_type_calls: Vec::new(),
-        type_statements: Vec::new(),
+        module_attr_accesses: collect_module_attr_accesses(&module.ast.body),
+        module_order_comparisons: collect_module_order_comparisons(&module.ast.body),
+        readonly_violations,
+        annotated_direct_call_spans: collect_annotated_direct_calls(&module.ast.body),
+        imported_final_names: collect_imported_final_names(&module.ast.body, &module.path),
+        type_alias_type_calls: collect_type_alias_type_calls(&module.ast.body),
+        type_statements: collect_type_statements(&module.ast.body),
         annotated_too_few_args: Vec::new(),
-        namedtuple_defs: Vec::new(),
+        namedtuple_defs,
         float_param_int_attr_accesses,
         literal_string_enum_mismatches,
-        enum_value_type_violations: Vec::new(),
+        enum_value_type_violations: collect_enum_value_type_violations(
+            &module.ast.body,
+            &module.source,
+        ),
         local_classvar_violations: Vec::new(),
-        pep695_bound_violations: Vec::new(),
-        historical_positional_violations: Vec::new(),
-        invalid_string_annotations: Vec::new(),
+        pep695_bound_violations: collect_pep695_bound_violations(&module.ast.body),
+        historical_positional_violations: collect_historical_positional_violations(
+            &module.ast.body,
+        ),
+        invalid_string_annotations: collect_invalid_annotations(&module.ast.body),
+        protocol_self_violations,
+        protocol_instantiation_violations,
+        isinstance_typeddict_violations,
+        typeddict_key_violations,
+        type_alias_defs,
+        generic_subscript_sites,
+        literal_augmented_assign_violations: Vec::new(),
+        tuple_index_violations: Vec::new(),
+        bounded_typevar_attr_violations: crate::bounded_typevar::collect(&module.ast.body),
+        protocol_class_object_violations: Vec::new(),
+        unhashable_hash_call_violations,
+        protocol_runtime_checkable_violations,
+        generator_violations,
+        unbound_typevar_usages,
         path: module.path.clone(),
         source: module.source.clone(),
     }
 }
+
+// ---------------------------------------------------------------------------
+// Historical positional-only parameter violation detection
+// ---------------------------------------------------------------------------
+
+fn is_historical_posonly_name(name: &str) -> bool {
+    name.starts_with("__") && !name.ends_with("__")
+}
+
+/// Build a map from function/method name to the set of parameter names that
+/// are positional-only by the historical `__name` convention.
+///
+/// Only parameters in `args` (not `kwonlyargs`) count; functions that use
+/// PEP 570 `/` syntax (`posonlyargs` is non-empty) are excluded.
+fn collect_historical_posonly_func_params(
+    stmts: &[Stmt],
+) -> std::collections::HashMap<String, std::collections::HashSet<String>> {
+    let mut map = std::collections::HashMap::new();
+    collect_posonly_params_from_stmts(stmts, &mut map);
+    map
+}
+
+fn collect_posonly_params_from_stmts(
+    stmts: &[Stmt],
+    map: &mut std::collections::HashMap<String, std::collections::HashSet<String>>,
+) {
+    for stmt in stmts {
+        match stmt {
+            Stmt::FunctionDef(func) => {
+                let params = &func.parameters;
+                // Historical convention does not apply when PEP 570 `/` is used.
+                if params.posonlyargs.is_empty() {
+                    let posonly: std::collections::HashSet<String> = params
+                        .args
+                        .iter()
+                        .map(|p| p.parameter.name.as_str())
+                        .filter(|name| is_historical_posonly_name(name))
+                        .map(str::to_owned)
+                        .collect();
+                    if !posonly.is_empty() {
+                        map.insert(func.name.to_string(), posonly);
+                    }
+                }
+                collect_posonly_params_from_stmts(&func.body, map);
+            }
+            Stmt::ClassDef(cls) => {
+                collect_posonly_params_from_stmts(&cls.body, map);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn collect_historical_positional_violations(stmts: &[Stmt]) -> Vec<HistoricalPositionalViolation> {
+    let posonly_map = collect_historical_posonly_func_params(stmts);
+    let mut out = Vec::new();
+    collect_hist_violations_from_stmts(stmts, &posonly_map, &mut out);
+    out
+}
+
+fn collect_hist_violations_from_stmts(
+    stmts: &[Stmt],
+    posonly_map: &std::collections::HashMap<String, std::collections::HashSet<String>>,
+    out: &mut Vec<HistoricalPositionalViolation>,
+) {
+    for stmt in stmts {
+        match stmt {
+            Stmt::FunctionDef(func) => {
+                check_func_for_hist_posonly_violation(func, out);
+                collect_hist_violations_from_stmts(&func.body, posonly_map, out);
+            }
+            Stmt::ClassDef(cls) => {
+                collect_hist_violations_from_stmts(&cls.body, posonly_map, out);
+            }
+            Stmt::Expr(e) => {
+                collect_hist_violations_from_expr(&e.value, posonly_map, out);
+            }
+            Stmt::Assign(a) => {
+                collect_hist_violations_from_expr(&a.value, posonly_map, out);
+            }
+            Stmt::AnnAssign(a) => {
+                if let Some(val) = &a.value {
+                    collect_hist_violations_from_expr(val, posonly_map, out);
+                }
+            }
+            Stmt::Return(r) => {
+                if let Some(val) = &r.value {
+                    collect_hist_violations_from_expr(val, posonly_map, out);
+                }
+            }
+            Stmt::If(node) => {
+                collect_hist_violations_from_stmts(&node.body, posonly_map, out);
+                for clause in &node.elif_else_clauses {
+                    collect_hist_violations_from_stmts(&clause.body, posonly_map, out);
+                }
+            }
+            Stmt::For(node) => {
+                collect_hist_violations_from_stmts(&node.body, posonly_map, out);
+                collect_hist_violations_from_stmts(&node.orelse, posonly_map, out);
+            }
+            Stmt::While(node) => {
+                collect_hist_violations_from_stmts(&node.body, posonly_map, out);
+                collect_hist_violations_from_stmts(&node.orelse, posonly_map, out);
+            }
+            Stmt::With(node) => {
+                collect_hist_violations_from_stmts(&node.body, posonly_map, out);
+            }
+            Stmt::Try(node) => {
+                collect_hist_violations_from_stmts(&node.body, posonly_map, out);
+                for handler in &node.handlers {
+                    let ExceptHandler::ExceptHandler(eh) = handler;
+                    collect_hist_violations_from_stmts(&eh.body, posonly_map, out);
+                }
+                collect_hist_violations_from_stmts(&node.orelse, posonly_map, out);
+                collect_hist_violations_from_stmts(&node.finalbody, posonly_map, out);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn check_func_for_hist_posonly_violation(
+    func: &StmtFunctionDef,
+    out: &mut Vec<HistoricalPositionalViolation>,
+) {
+    let params = &func.parameters;
+    if !params.posonlyargs.is_empty() {
+        return;
+    }
+    let mut seen_keyword_param = false;
+    for (i, param) in params.args.iter().enumerate() {
+        let name = param.parameter.name.as_str();
+        if i == 0 && (name == "self" || name == "cls") {
+            continue;
+        }
+        if is_historical_posonly_name(name) {
+            if seen_keyword_param {
+                out.push(HistoricalPositionalViolation {
+                    kind: HistoricalPositionalViolationKind::PositionalOnlyAfterKeyword,
+                    span: text_range_to_span(param.parameter.name.range()),
+                    name: name.to_owned(),
+                });
+            }
+        } else {
+            seen_keyword_param = true;
+        }
+    }
+}
+
+/// Extract the simple function/method name from a call expression's function part.
+fn call_func_name(expr: &Expr) -> Option<&str> {
+    match expr {
+        Expr::Name(name) => Some(name.id.as_str()),
+        Expr::Attribute(attr) => Some(attr.attr.as_str()),
+        _ => None,
+    }
+}
+
+fn collect_hist_violations_from_expr(
+    expr: &Expr,
+    posonly_map: &std::collections::HashMap<String, std::collections::HashSet<String>>,
+    out: &mut Vec<HistoricalPositionalViolation>,
+) {
+    let Expr::Call(call) = expr else { return };
+
+    let func_name = call_func_name(&call.func);
+
+    for kw in &call.arguments.keywords {
+        if let Some(arg_name) = &kw.arg {
+            let name_str = arg_name.as_str();
+            if is_historical_posonly_name(name_str) {
+                // Only flag if we can confirm this param is positional-only in the callee.
+                let is_violation = func_name.is_some_and(|fname| {
+                    posonly_map
+                        .get(fname)
+                        .is_some_and(|params| params.contains(name_str))
+                });
+                if is_violation {
+                    out.push(HistoricalPositionalViolation {
+                        kind: HistoricalPositionalViolationKind::KeywordPassedToPositionalOnly,
+                        span: text_range_to_span(kw.range()),
+                        name: name_str.to_owned(),
+                    });
+                }
+            }
+        }
+    }
+    for arg in &call.arguments.args {
+        collect_hist_violations_from_expr(arg, posonly_map, out);
+    }
+    collect_hist_violations_from_expr(&call.func, posonly_map, out);
+}
+
+// ---------------------------------------------------------------------------
 
 #[allow(clippy::too_many_arguments)]
 fn collect_from_body(
@@ -343,15 +606,30 @@ fn collect_class_body(
     class: &StmtClassDef,
     functions: &mut Vec<FunctionInfo>,
     match_stmts: &mut Vec<MatchStmtInfo>,
+    class_kw_only: bool,
 ) -> (Vec<AttributeInfo>, Vec<String>, Vec<(String, Vec<String>)>) {
     let mut attributes = Vec::new();
     let mut method_names = Vec::new();
     let mut method_decorators: Vec<(String, Vec<String>)> = Vec::new();
+    // Track whether we have passed the `_: KW_ONLY` sentinel.
+    let mut after_kw_only_sentinel = false;
 
     for stmt in &class.body {
         match stmt {
             Stmt::AnnAssign(ann) => {
                 if let Some(name) = expr_simple_name(&ann.target) {
+                    // Detect `_: KW_ONLY` sentinel — skip it as a real attribute.
+                    if name == "_" && annotation_is_kw_only(&ann.annotation) {
+                        after_kw_only_sentinel = true;
+                        continue;
+                    }
+                    let is_readonly = annotation_contains_readonly_expr(&ann.annotation);
+                    let is_init_var = annotation_is_init_var(&ann.annotation);
+                    let field_kw_only = ann.value.as_deref().and_then(field_kw_only_override);
+                    // Determine kw_only: explicit field() override wins; then sentinel; then class default.
+                    let is_kw_only =
+                        field_kw_only.unwrap_or(after_kw_only_sentinel || class_kw_only);
+                    let is_init_false = ann.value.as_deref().is_some_and(field_init_is_false);
                     attributes.push(AttributeInfo {
                         name,
                         name_span: text_range_to_span(ann.target.range()),
@@ -361,6 +639,12 @@ fn collect_class_body(
                         rhs_kind: RhsKind::Other,
                         rhs_span: ann.value.as_ref().map(|v| text_range_to_span(v.range())),
                         rhs_is_nonmember_call: false,
+                        rhs_is_lambda: false,
+                        rhs_is_descriptor_call: false,
+                        is_readonly,
+                        is_kw_only,
+                        is_init_false,
+                        is_init_var,
                     });
                 }
             }
@@ -371,6 +655,14 @@ fn collect_class_body(
                             &*assign.value,
                             Expr::Call(c) if matches!(c.func.as_ref(), Expr::Name(n) if n.id == "nonmember")
                         );
+                        let rhs_is_lambda = matches!(&*assign.value, Expr::Lambda(_));
+                        let rhs_is_descriptor_call = matches!(
+                            &*assign.value,
+                            Expr::Call(c) if matches!(
+                                c.func.as_ref(),
+                                Expr::Name(n) if n.id == "staticmethod" || n.id == "classmethod"
+                            )
+                        );
                         attributes.push(AttributeInfo {
                             name,
                             name_span: text_range_to_span(target.range()),
@@ -380,6 +672,12 @@ fn collect_class_body(
                             rhs_kind: RhsKind::Other,
                             rhs_span: Some(text_range_to_span(assign.value.range())),
                             rhs_is_nonmember_call,
+                            rhs_is_lambda,
+                            rhs_is_descriptor_call,
+                            is_readonly: false,
+                            is_kw_only: false,
+                            is_init_false: false,
+                            is_init_var: false,
                         });
                     }
                 }
@@ -415,6 +713,7 @@ fn collect_class_body(
     (attributes, method_names, method_decorators)
 }
 
+#[allow(clippy::too_many_lines)]
 fn class_info_from(
     class: &StmtClassDef,
     functions: &mut Vec<FunctionInfo>,
@@ -423,14 +722,69 @@ fn class_info_from(
     let bases: Vec<String> = class
         .arguments
         .as_ref()
-        .map(|args| args.args.iter().filter_map(expr_simple_name).collect())
+        .map(|args| {
+            args.args
+                .iter()
+                .filter_map(|expr| {
+                    // Simple name bases (e.g. `object`, `Protocol`)
+                    if let Some(name) = expr_simple_name(expr) {
+                        return Some(name);
+                    }
+                    // Attribute bases (e.g. `abc.ABC`): extract the attribute name
+                    if let ruff_python_ast::Expr::Attribute(attr) = expr {
+                        return Some(attr.attr.to_string());
+                    }
+                    // Subscripted bases (e.g. `Protocol[T]`, `Generic[T]`): extract the base name
+                    if let ruff_python_ast::Expr::Subscript(sub) = expr {
+                        if let Some(name) = expr_simple_name(&sub.value) {
+                            return Some(name);
+                        }
+                        // Also handle `abc.ABC[T]`
+                        if let ruff_python_ast::Expr::Attribute(attr) = sub.value.as_ref() {
+                            return Some(attr.attr.to_string());
+                        }
+                    }
+                    None
+                })
+                .collect()
+        })
         .unwrap_or_default();
 
+    // Pre-compute is_dataclass and is_dataclass_kw_only so we can pass kw_only
+    // into collect_class_body for per-attribute kw_only resolution.
+    let pre_is_dataclass = class.decorator_list.iter().any(
+        |d| matches!(decorator_name(d), Some(n) if n == "dataclass" || n.ends_with(".dataclass")),
+    );
+    let pre_is_dataclass_kw_only = pre_is_dataclass && dataclass_flag(class, "kw_only");
+
     let (attributes, method_names, method_decorators) =
-        collect_class_body(class, functions, match_stmts);
+        collect_class_body(class, functions, match_stmts, pre_is_dataclass_kw_only);
 
     let (generic_params, generic_non_typevar_args) = extract_generic_params(class);
+
+    // If this class is a Protocol or ABC, mark methods with `pass`-only bodies as stubs.
+    let is_protocol_or_abc = bases.iter().any(|b| b == "Protocol" || b == "ABC");
+    if is_protocol_or_abc {
+        let class_name_str = class.name.to_string();
+        for func in functions.iter_mut() {
+            if func.class_name.as_deref() == Some(&class_name_str)
+                && !func.is_stub_body
+                && body_is_pass_only(class, &func.name)
+            {
+                func.is_stub_body = true;
+            }
+        }
+    }
+
     let is_typed_dict = bases.iter().any(|b| b == "TypedDict");
+    // Detect `total=False` keyword in TypedDict subclass definitions.
+    let is_typeddict_total = !is_typed_dict
+        || !class.arguments.as_ref().is_some_and(|args| {
+            args.keywords.iter().any(|kw| {
+                kw.arg.as_ref().is_some_and(|a| a.as_str() == "total")
+                    && matches!(&kw.value, ruff_python_ast::Expr::BooleanLiteral(b) if !b.value)
+            })
+        });
 
     let class_keywords: Vec<String> = class
         .arguments
@@ -443,10 +797,23 @@ fn class_info_from(
         })
         .unwrap_or_default();
 
+    let metaclass_name: Option<String> = class.arguments.as_ref().and_then(|args| {
+        args.keywords
+            .iter()
+            .find(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "metaclass"))
+            .and_then(|kw| expr_simple_name(&kw.value))
+    });
+
     let class_decorators: Vec<String> = class
         .decorator_list
         .iter()
         .filter_map(decorator_name)
+        .collect();
+
+    let class_decorator_spans: Vec<(String, Span)> = class
+        .decorator_list
+        .iter()
+        .filter_map(decorator_name_and_span)
         .collect();
 
     let is_dataclass = class_decorators
@@ -454,11 +821,13 @@ fn class_info_from(
         .any(|d| d == "dataclass" || d.ends_with(".dataclass"));
 
     let is_dataclass_frozen = is_dataclass && dataclass_flag(class, "frozen");
+    let is_dataclass_kw_only = pre_is_dataclass_kw_only;
     let is_dataclass_match_args_false =
         is_dataclass && dataclass_bool_flag_is_false(class, "match_args");
     let is_dataclass_order = is_dataclass && dataclass_flag(class, "order");
     let is_dataclass_unsafe_hash = is_dataclass && dataclass_flag(class, "unsafe_hash");
     let is_dataclass_eq_false = is_dataclass && dataclass_bool_flag_is_false(class, "eq");
+    let is_dataclass_init_false = is_dataclass && dataclass_bool_flag_is_false(class, "init");
 
     let is_final = class_decorators
         .iter()
@@ -472,15 +841,19 @@ fn class_info_from(
         .as_deref()
         .map(|tp| tp.type_params.iter().map(type_param_name).collect())
         .unwrap_or_default();
-    let base_expression_names: Vec<String> = class
+    let (base_expression_names, has_subscript_base) = class
         .arguments
         .as_ref()
         .map(|args| {
             let mut names = Vec::new();
+            let mut has_sub = false;
             for expr in &args.args {
                 collect_name_refs_from_expr(expr, &mut names);
+                if matches!(expr, Expr::Subscript(_)) {
+                    has_sub = true;
+                }
             }
-            names
+            (names, has_sub)
         })
         .unwrap_or_default();
 
@@ -492,21 +865,397 @@ fn class_info_from(
         attributes,
         method_names,
         method_decorators,
+        decorator_spans: class_decorator_spans,
         generic_params,
         is_typed_dict,
+        is_typeddict_total,
         class_keywords,
         is_dataclass,
         is_dataclass_frozen,
+        is_dataclass_kw_only,
         is_dataclass_match_args_false,
         is_dataclass_order,
         is_dataclass_unsafe_hash,
         is_dataclass_eq_false,
+        is_dataclass_init_false,
         is_final,
         is_enum,
         has_pep695_type_params,
         pep695_type_param_names,
         base_expression_names,
         generic_non_typevar_args,
+        metaclass_name,
+        has_subscript_base,
+        base_subscripts: extract_base_subscripts(class),
+        is_dataclass_slots: is_dataclass && dataclass_flag(class, "slots"),
+        has_manual_slots: class_has_manual_slots(class),
+        docstring: extract_docstring(&class.body),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// dataclass_transform post-processing
+// ---------------------------------------------------------------------------
+
+/// A `@dataclass_transform` factory detected at module level.
+struct DcTransformFactory {
+    /// The function name decorated with `@dataclass_transform(...)`.
+    name: String,
+    /// `kw_only_default` from the decorator (default `false`).
+    kw_only_default: bool,
+    /// Field specifier function names extracted from `field_specifiers=(...)`.
+    field_specifier_names: Vec<String>,
+}
+
+/// Overload parameter info for one definition of a field specifier function.
+struct FieldSpecOverload {
+    /// Names of keyword-only parameters that do NOT have defaults (required).
+    required_kwargs: Vec<String>,
+    /// Default value of `init` in this overload, if present.
+    init_default: Option<bool>,
+    /// Default value of `kw_only` in this overload, if present.
+    kw_only_default: Option<bool>,
+}
+
+/// Scan module-level statements for `@dataclass_transform(...)` decorated functions
+/// and apply their semantics to classes decorated by those factories.
+fn apply_dataclass_transform(
+    stmts: &[Stmt],
+    classes: &mut [ClassInfo],
+    functions: &[FunctionInfo],
+) {
+    let factories = collect_dc_transform_factories(stmts);
+
+    if factories.is_empty() {
+        return;
+    }
+    let mut specifier_overloads: std::collections::HashMap<&str, Vec<FieldSpecOverload>> =
+        std::collections::HashMap::new();
+    for factory in &factories {
+        for spec_name in &factory.field_specifier_names {
+            if specifier_overloads.contains_key(spec_name.as_str()) {
+                continue;
+            }
+            let overloads = build_field_specifier_overloads(stmts, spec_name, functions);
+            specifier_overloads.insert(spec_name.as_str(), overloads);
+        }
+    }
+
+    for cls in classes.iter_mut() {
+        let Some(factory) = find_matching_factory(stmts, &cls.name, &factories) else {
+            continue;
+        };
+        cls.is_dataclass = true;
+        cls.is_dataclass_kw_only = factory.kw_only_default;
+
+        if let Some(class_def) = find_class_def(stmts, &cls.name) {
+            resolve_transform_field_attrs(
+                class_def,
+                &mut cls.attributes,
+                &factory.field_specifier_names,
+                &specifier_overloads,
+                factory.kw_only_default,
+            );
+        }
+    }
+}
+
+/// Collect `@dataclass_transform(...)` decorated functions at module level.
+#[allow(dead_code)]
+fn collect_dc_transform_factories(stmts: &[Stmt]) -> Vec<DcTransformFactory> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        let Stmt::FunctionDef(func) = stmt else {
+            continue;
+        };
+        for dec in &func.decorator_list {
+            let (is_dc_transform, kw_only_default, field_specifier_names) =
+                parse_dataclass_transform_decorator(&dec.expression);
+            if is_dc_transform {
+                out.push(DcTransformFactory {
+                    name: func.name.to_string(),
+                    kw_only_default,
+                    field_specifier_names,
+                });
+            }
+        }
+    }
+    out
+}
+
+/// Parse a `@dataclass_transform(...)` expression.
+///
+/// Returns `(is_dc_transform, kw_only_default, field_specifier_names)`.
+fn parse_dataclass_transform_decorator(expr: &Expr) -> (bool, bool, Vec<String>) {
+    let Expr::Call(call) = expr else {
+        if let Expr::Name(n) = expr {
+            if n.id.as_str() == "dataclass_transform" {
+                return (true, false, Vec::new());
+            }
+        }
+        return (false, false, Vec::new());
+    };
+    let is_dc = match call.func.as_ref() {
+        Expr::Name(n) => n.id.as_str() == "dataclass_transform",
+        Expr::Attribute(a) => a.attr.as_str() == "dataclass_transform",
+        _ => false,
+    };
+    if !is_dc {
+        return (false, false, Vec::new());
+    }
+
+    let mut kw_only_default = false;
+    let mut field_specifier_names = Vec::new();
+
+    for kw in &call.arguments.keywords {
+        let Some(arg_name) = kw.arg.as_ref() else {
+            continue;
+        };
+        match arg_name.as_str() {
+            "kw_only_default" => {
+                kw_only_default = matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
+            }
+            "field_specifiers" => {
+                if let Expr::Tuple(tup) = &kw.value {
+                    for elt in &tup.elts {
+                        if let Some(name) = expr_simple_name(elt) {
+                            field_specifier_names.push(name);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    (true, kw_only_default, field_specifier_names)
+}
+
+/// Build overload info for a field specifier function.
+fn build_field_specifier_overloads(
+    stmts: &[Stmt],
+    spec_name: &str,
+    functions: &[FunctionInfo],
+) -> Vec<FieldSpecOverload> {
+    let mut overloads = Vec::new();
+
+    let has_overloads = functions.iter().any(|f| {
+        f.name == spec_name
+            && f.class_name.is_none()
+            && f.decorators.iter().any(|d| d == "overload")
+    });
+
+    for stmt in stmts {
+        let Stmt::FunctionDef(func) = stmt else {
+            continue;
+        };
+        if func.name.as_str() != spec_name {
+            continue;
+        }
+
+        let is_overload = func
+            .decorator_list
+            .iter()
+            .any(|d| matches!(decorator_name(d), Some(n) if n == "overload"));
+
+        if has_overloads && !is_overload {
+            continue;
+        }
+
+        let params = &func.parameters;
+        let mut required_kwargs = Vec::new();
+        let mut init_default = None;
+        let mut kw_only_default = None;
+
+        for pwd in &params.kwonlyargs {
+            let param_name = pwd.parameter.name.as_str();
+            let has_default = pwd.default.is_some();
+
+            if param_name == "init" {
+                if let Some(default_expr) = &pwd.default {
+                    init_default =
+                        Some(matches!(default_expr.as_ref(), Expr::BooleanLiteral(b) if b.value));
+                }
+            } else if param_name == "kw_only" {
+                if let Some(default_expr) = &pwd.default {
+                    kw_only_default =
+                        Some(matches!(default_expr.as_ref(), Expr::BooleanLiteral(b) if b.value));
+                }
+            }
+
+            if !has_default && param_name != "init" && param_name != "kw_only" {
+                required_kwargs.push(param_name.to_string());
+            }
+        }
+
+        for pwd in params.posonlyargs.iter().chain(params.args.iter()) {
+            let param_name = pwd.parameter.name.as_str();
+            let has_default = pwd.default.is_some();
+
+            if param_name == "init" {
+                if let Some(default_expr) = &pwd.default {
+                    init_default =
+                        Some(matches!(default_expr.as_ref(), Expr::BooleanLiteral(b) if b.value));
+                }
+            } else if param_name == "kw_only" {
+                if let Some(default_expr) = &pwd.default {
+                    kw_only_default =
+                        Some(matches!(default_expr.as_ref(), Expr::BooleanLiteral(b) if b.value));
+                }
+            }
+
+            if !has_default && param_name != "init" && param_name != "kw_only" {
+                required_kwargs.push(param_name.to_string());
+            }
+        }
+
+        overloads.push(FieldSpecOverload {
+            required_kwargs,
+            init_default,
+            kw_only_default,
+        });
+    }
+
+    overloads
+}
+
+/// Find which factory decorates a class, if any.
+fn find_matching_factory<'a>(
+    stmts: &[Stmt],
+    class_name: &str,
+    factories: &'a [DcTransformFactory],
+) -> Option<&'a DcTransformFactory> {
+    let class_def = find_class_def(stmts, class_name)?;
+    for dec in &class_def.decorator_list {
+        let callee = match &dec.expression {
+            Expr::Call(call) => match call.func.as_ref() {
+                Expr::Name(n) => n.id.as_str(),
+                Expr::Attribute(a) => a.attr.as_str(),
+                _ => continue,
+            },
+            Expr::Name(n) => n.id.as_str(),
+            _ => continue,
+        };
+        for factory in factories {
+            if factory.name == callee {
+                return Some(factory);
+            }
+        }
+    }
+    None
+}
+
+/// Find a class definition by name in the top-level statements.
+fn find_class_def<'a>(stmts: &'a [Stmt], name: &str) -> Option<&'a StmtClassDef> {
+    for stmt in stmts {
+        if let Stmt::ClassDef(cls) = stmt {
+            if cls.name.as_str() == name {
+                return Some(cls);
+            }
+        }
+    }
+    None
+}
+
+/// Resolve `is_init_false` and `is_kw_only` for attributes of a `dataclass_transform` class.
+fn resolve_transform_field_attrs(
+    class_def: &StmtClassDef,
+    attributes: &mut [AttributeInfo],
+    field_specifier_names: &[String],
+    specifier_overloads: &std::collections::HashMap<&str, Vec<FieldSpecOverload>>,
+    kw_only_default: bool,
+) {
+    let mut attr_idx = 0;
+    for stmt in &class_def.body {
+        let Stmt::AnnAssign(ann) = stmt else {
+            continue;
+        };
+        let Some(attr_name) = expr_simple_name(&ann.target) else {
+            continue;
+        };
+        if attr_name == "_" && annotation_is_kw_only(&ann.annotation) {
+            continue;
+        }
+
+        let Some(attr) = attributes.get_mut(attr_idx) else {
+            break;
+        };
+        if attr.name != attr_name {
+            attr_idx += 1;
+            continue;
+        }
+        attr_idx += 1;
+
+        let Some(value_expr) = ann.value.as_deref() else {
+            if kw_only_default {
+                attr.is_kw_only = true;
+            }
+            continue;
+        };
+
+        let Expr::Call(call) = value_expr else {
+            continue;
+        };
+
+        let callee_name = match call.func.as_ref() {
+            Expr::Name(n) => n.id.as_str(),
+            Expr::Attribute(a) => a.attr.as_str(),
+            _ => continue,
+        };
+
+        if !field_specifier_names.iter().any(|n| n == callee_name) {
+            continue;
+        }
+
+        let Some(overloads) = specifier_overloads.get(callee_name) else {
+            continue;
+        };
+
+        let call_kwargs: Vec<&str> = call
+            .arguments
+            .keywords
+            .iter()
+            .filter_map(|kw| kw.arg.as_ref().map(ruff_python_ast::Identifier::as_str))
+            .collect();
+
+        let explicit_init: Option<bool> = call.arguments.keywords.iter().find_map(|kw| {
+            if kw.arg.as_ref().is_some_and(|a| a.as_str() == "init") {
+                Some(matches!(&kw.value, Expr::BooleanLiteral(b) if b.value))
+            } else {
+                None
+            }
+        });
+
+        let explicit_kw_only: Option<bool> = call.arguments.keywords.iter().find_map(|kw| {
+            if kw.arg.as_ref().is_some_and(|a| a.as_str() == "kw_only") {
+                Some(matches!(&kw.value, Expr::BooleanLiteral(b) if b.value))
+            } else {
+                None
+            }
+        });
+
+        let mut matched_init: Option<bool> = None;
+        let mut matched_kw_only: Option<bool> = None;
+
+        for overload in overloads {
+            let all_required_present = overload
+                .required_kwargs
+                .iter()
+                .all(|req| call_kwargs.contains(&req.as_str()));
+            if all_required_present {
+                matched_init = overload.init_default;
+                matched_kw_only = overload.kw_only_default;
+                break;
+            }
+        }
+
+        let effective_init = explicit_init.or(matched_init);
+        let effective_kw_only = explicit_kw_only.or(matched_kw_only);
+
+        if effective_init == Some(false) {
+            attr.is_init_false = true;
+        }
+        attr.is_kw_only = effective_kw_only.unwrap_or(kw_only_default);
     }
 }
 
@@ -550,6 +1299,12 @@ fn function_info_from(func: &StmtFunctionDef, class_name: Option<String>) -> Fun
         .filter_map(decorator_name)
         .collect();
 
+    let decorator_spans = func
+        .decorator_list
+        .iter()
+        .filter_map(decorator_name_and_span)
+        .collect();
+
     let return_stmts = collect_return_stmts(&func.body);
     let all_local_assigns = collect_all_assigns(&func.body);
     let unconditional_assigns = collect_unconditional_assigns(&func.body);
@@ -563,6 +1318,8 @@ fn function_info_from(func: &StmtFunctionDef, class_name: Option<String>) -> Fun
         .as_deref()
         .map(|tp| tp.type_params.iter().map(type_param_name).collect())
         .unwrap_or_default();
+    let local_vars = collect_local_annotated_vars(&func.body);
+    let yield_exprs = collect_yield_exprs(&func.body);
 
     FunctionInfo {
         name: func.name.to_string(),
@@ -571,6 +1328,7 @@ fn function_info_from(func: &StmtFunctionDef, class_name: Option<String>) -> Fun
         kwarg,
         return_annotation,
         decorators,
+        decorator_spans,
         return_stmts,
         def_span: text_range_to_span(func.range),
         name_span: text_range_to_span(func.name.range),
@@ -582,6 +1340,10 @@ fn function_info_from(func: &StmtFunctionDef, class_name: Option<String>) -> Fun
         top_level_return_name_refs,
         unhashable_keys,
         is_stub_body,
+        body_ends_with_return: func
+            .body
+            .last()
+            .is_some_and(|s| matches!(s, Stmt::Return(_))),
         body_last_stmt_terminates: func.body.last().is_some_and(|s| match s {
             Stmt::Raise(_) => true,
             Stmt::Expr(e) => matches!(e.value.as_ref(), Expr::Call(_)),
@@ -589,6 +1351,155 @@ fn function_info_from(func: &StmtFunctionDef, class_name: Option<String>) -> Fun
         }),
         has_pep695_type_params,
         pep695_type_param_names,
+        local_vars,
+        is_generator: func.body.iter().any(stmt_contains_yield),
+        is_async: func.is_async,
+        yield_exprs,
+        docstring: extract_docstring(&func.body),
+    }
+}
+
+/// Extract the docstring from a function or class body.
+///
+/// The docstring is the first statement if it is a bare string literal expression.
+fn extract_docstring(body: &[Stmt]) -> Option<String> {
+    let first = body.first()?;
+    let Stmt::Expr(expr_stmt) = first else {
+        return None;
+    };
+    match expr_stmt.value.as_ref() {
+        Expr::StringLiteral(s) => {
+            let text = s.value.to_str().to_owned();
+            // Trim leading/trailing whitespace from docstrings.
+            Some(text.trim().to_owned())
+        }
+        _ => None,
+    }
+}
+
+/// Returns `true` when a statement (recursively) contains a `yield` or `yield from`.
+fn stmt_contains_yield(stmt: &Stmt) -> bool {
+    match stmt {
+        Stmt::Expr(node) => matches!(node.value.as_ref(), Expr::Yield(_) | Expr::YieldFrom(_)),
+        Stmt::Assign(node) => matches!(node.value.as_ref(), Expr::Yield(_) | Expr::YieldFrom(_)),
+        Stmt::If(node) => {
+            node.body.iter().any(stmt_contains_yield)
+                || node
+                    .elif_else_clauses
+                    .iter()
+                    .any(|c| c.body.iter().any(stmt_contains_yield))
+        }
+        Stmt::While(node) => node.body.iter().any(stmt_contains_yield),
+        Stmt::For(node) => node.body.iter().any(stmt_contains_yield),
+        Stmt::With(node) => node.body.iter().any(stmt_contains_yield),
+        Stmt::Try(node) => {
+            node.body.iter().any(stmt_contains_yield)
+                || node.finalbody.iter().any(stmt_contains_yield)
+                || node.orelse.iter().any(stmt_contains_yield)
+        }
+        _ => false,
+    }
+}
+
+/// Collect all yield/yield-from expressions from a function body (recursively).
+fn collect_yield_exprs(stmts: &[Stmt]) -> Vec<crate::scope::YieldExprInfo> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        collect_yield_exprs_from_stmt(stmt, &mut out);
+    }
+    out
+}
+
+/// Recursively collect yield expressions from a single statement.
+fn collect_yield_exprs_from_stmt(stmt: &Stmt, out: &mut Vec<crate::scope::YieldExprInfo>) {
+    match stmt {
+        Stmt::Expr(node) => collect_yield_from_expr(&node.value, out),
+        Stmt::Assign(node) => collect_yield_from_expr(&node.value, out),
+        Stmt::AnnAssign(node) => {
+            if let Some(value) = &node.value {
+                collect_yield_from_expr(value, out);
+            }
+        }
+        Stmt::If(node) => {
+            for s in &node.body {
+                collect_yield_exprs_from_stmt(s, out);
+            }
+            for clause in &node.elif_else_clauses {
+                for s in &clause.body {
+                    collect_yield_exprs_from_stmt(s, out);
+                }
+            }
+        }
+        Stmt::While(node) => {
+            for s in &node.body {
+                collect_yield_exprs_from_stmt(s, out);
+            }
+        }
+        Stmt::For(node) => {
+            for s in &node.body {
+                collect_yield_exprs_from_stmt(s, out);
+            }
+        }
+        Stmt::With(node) => {
+            for s in &node.body {
+                collect_yield_exprs_from_stmt(s, out);
+            }
+        }
+        Stmt::Try(node) => {
+            for s in &node.body {
+                collect_yield_exprs_from_stmt(s, out);
+            }
+            for s in &node.finalbody {
+                collect_yield_exprs_from_stmt(s, out);
+            }
+            for s in &node.orelse {
+                collect_yield_exprs_from_stmt(s, out);
+            }
+        }
+        // Do NOT recurse into nested function defs
+        _ => {}
+    }
+}
+
+/// Extract yield info from an expression node.
+fn collect_yield_from_expr(expr: &Expr, out: &mut Vec<crate::scope::YieldExprInfo>) {
+    match expr {
+        Expr::Yield(y) => {
+            let (rhs_kind, call_name) = y.value.as_ref().map_or((RhsKind::NoneValue, None), |v| {
+                (classify_rhs(v), extract_call_name(v))
+            });
+            out.push(crate::scope::YieldExprInfo {
+                span: text_range_to_span(y.range),
+                rhs_kind,
+                is_yield_from: false,
+                call_name,
+            });
+        }
+        Expr::YieldFrom(yf) => {
+            let rhs_kind = classify_rhs(&yf.value);
+            let call_name = extract_call_name(&yf.value);
+            out.push(crate::scope::YieldExprInfo {
+                span: text_range_to_span(yf.range),
+                rhs_kind,
+                is_yield_from: true,
+                call_name,
+            });
+        }
+        _ => {}
+    }
+}
+
+/// Extract the simple name of a called function/constructor from an expression.
+/// For `SomeClass()`, returns `Some("SomeClass")`. For non-call exprs, returns `None`.
+fn extract_call_name(expr: &Expr) -> Option<String> {
+    if let Expr::Call(call) = expr {
+        match call.func.as_ref() {
+            Expr::Name(n) => Some(n.id.to_string()),
+            Expr::Attribute(a) => Some(a.attr.to_string()),
+            _ => None,
+        }
+    } else {
+        None
     }
 }
 
@@ -610,6 +1521,73 @@ fn body_is_stub(stmts: &[Stmt]) -> bool {
     non_docstring
         .iter()
         .all(|s| matches!(s, Stmt::Expr(e) if matches!(e.value.as_ref(), Expr::EllipsisLiteral(_))))
+}
+
+/// Check if a method in a class has a `pass`-only body (optionally preceded by a docstring).
+///
+/// This is used to mark Protocol/ABC methods with `pass` as stubs.
+fn body_is_pass_only(class: &StmtClassDef, method_name: &str) -> bool {
+    for stmt in &class.body {
+        if let Stmt::FunctionDef(func) = stmt {
+            if func.name.as_str() == method_name {
+                let non_docstring: Vec<&Stmt> = func
+                    .body
+                    .iter()
+                    .skip_while(|s| {
+                        matches!(s, Stmt::Expr(e) if matches!(e.value.as_ref(), Expr::StringLiteral(_)))
+                    })
+                    .collect();
+                return non_docstring.iter().all(|s| matches!(s, Stmt::Pass(_)));
+            }
+        }
+    }
+    false
+}
+
+/// Collect annotated local variable declarations (`x: T` or `x: T = v`) from a
+/// function body, recursing into nested blocks but not into nested function bodies.
+///
+/// Used to populate `FunctionInfo::local_vars` for downstream rules (e.g. E0047).
+fn collect_local_annotated_vars(stmts: &[Stmt]) -> Vec<VariableInfo> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        match stmt {
+            Stmt::AnnAssign(node) => {
+                if let Some(info) = ann_assign_info_from(node) {
+                    out.push(info);
+                }
+            }
+            Stmt::If(node) => {
+                out.extend(collect_local_annotated_vars(&node.body));
+                for clause in &node.elif_else_clauses {
+                    out.extend(collect_local_annotated_vars(&clause.body));
+                }
+            }
+            Stmt::For(node) => {
+                out.extend(collect_local_annotated_vars(&node.body));
+                out.extend(collect_local_annotated_vars(&node.orelse));
+            }
+            Stmt::While(node) => {
+                out.extend(collect_local_annotated_vars(&node.body));
+                out.extend(collect_local_annotated_vars(&node.orelse));
+            }
+            Stmt::With(node) => {
+                out.extend(collect_local_annotated_vars(&node.body));
+            }
+            Stmt::Try(node) => {
+                out.extend(collect_local_annotated_vars(&node.body));
+                for handler in &node.handlers {
+                    let ExceptHandler::ExceptHandler(h) = handler;
+                    out.extend(collect_local_annotated_vars(&h.body));
+                }
+                out.extend(collect_local_annotated_vars(&node.orelse));
+                out.extend(collect_local_annotated_vars(&node.finalbody));
+            }
+            // Do NOT recurse into nested function or class definitions.
+            _ => {}
+        }
+    }
+    out
 }
 
 fn param_with_default_to_info(p: &ParameterWithDefault) -> ParameterInfo {
@@ -680,10 +1658,12 @@ fn return_stmt_info_from(ret: &StmtReturn) -> ReturnStmtInfo {
     let value_expr = ret.value.as_deref();
     let has_value = value_expr.is_some_and(|e| !matches!(e, Expr::NoneLiteral(_)));
     let value_is_call = value_expr.is_some_and(|e| matches!(e, Expr::Call(_)));
+    let rhs_kind = value_expr.map_or(RhsKind::Other, classify_rhs);
     ReturnStmtInfo {
         span: text_range_to_span(ret.range),
         has_value,
         value_is_call,
+        rhs_kind,
     }
 }
 
@@ -763,23 +1743,86 @@ fn collect_all_assigns(stmts: &[Stmt]) -> Vec<String> {
 
 /// Collect names assigned at the top level of a function body (unconditionally).
 fn collect_unconditional_assigns(stmts: &[Stmt]) -> Vec<String> {
-    stmts
-        .iter()
-        .flat_map(|stmt| match stmt {
-            Stmt::Assign(node) => node
-                .targets
-                .iter()
-                .flat_map(extract_target_names)
-                .collect::<Vec<_>>(),
-            Stmt::AnnAssign(node) => expr_simple_name(&node.target).into_iter().collect(),
+    let mut assignments = Vec::new();
+
+    for stmt in stmts {
+        match stmt {
+            Stmt::Assign(node) => {
+                assignments.extend(node.targets.iter().flat_map(extract_target_names));
+            }
+            Stmt::AnnAssign(node) => {
+                if let Some(name) = expr_simple_name(&node.target) {
+                    assignments.push(name);
+                }
+            }
             Stmt::For(node) => {
                 // The for-loop variable(s) are bound whenever the loop body runs.
-                extract_target_names(&node.target)
+                assignments.extend(extract_target_names(&node.target));
             }
-            Stmt::FunctionDef(func) => vec![func.name.to_string()],
-            _ => Vec::new(),
-        })
-        .collect()
+            Stmt::FunctionDef(func) => {
+                assignments.push(func.name.to_string());
+            }
+            Stmt::If(node) => {
+                // Check if this is an if-else statement that guarantees assignment
+                if let Some(if_else_assignments) = collect_if_else_assignments(node) {
+                    assignments.extend(if_else_assignments);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    assignments
+}
+
+/// Check if an if statement has both if and else branches that assign the same variables.
+/// Returns the intersection of assignments from all branches if they cover all paths.
+fn collect_if_else_assignments(if_stmt: &ruff_python_ast::StmtIf) -> Option<Vec<String>> {
+    let if_branch_assigns = collect_unconditional_assigns(&if_stmt.body);
+
+    // Check if there's an else clause
+    let has_else = if_stmt
+        .elif_else_clauses
+        .iter()
+        .any(|clause| clause.test.is_none());
+    if !has_else {
+        return None;
+    }
+
+    // Collect assignments from all elif/else branches
+    let mut all_else_assigns = Vec::new();
+    for clause in &if_stmt.elif_else_clauses {
+        if clause.test.is_none() {
+            // This is the else branch
+            all_else_assigns.extend(collect_unconditional_assigns(&clause.body));
+        } else {
+            // This is an elif branch - for now, we'll be conservative and only handle
+            // simple if-else without elif chains
+            return None;
+        }
+    }
+
+    // If there are elif branches, we can't guarantee coverage
+    let has_elif = if_stmt
+        .elif_else_clauses
+        .iter()
+        .any(|clause| clause.test.is_some());
+    if has_elif {
+        return None;
+    }
+
+    // Find the intersection of assignments from if and else branches
+    let intersection: Vec<String> = if_branch_assigns
+        .iter()
+        .filter(|name| all_else_assigns.contains(name))
+        .cloned()
+        .collect();
+
+    if intersection.is_empty() {
+        None
+    } else {
+        Some(intersection)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -793,8 +1836,8 @@ fn collect_return_name_refs(stmts: &[Stmt]) -> Vec<(String, Span)> {
     for stmt in stmts {
         match stmt {
             Stmt::Return(ret) => {
-                if let Some(Expr::Name(name)) = ret.value.as_deref() {
-                    out.push((name.id.to_string(), text_range_to_span(name.range)));
+                if let Some(val) = ret.value.as_deref() {
+                    collect_name_refs_with_spans(val, &mut out);
                 }
             }
             Stmt::If(node) => {
@@ -972,35 +2015,23 @@ fn collect_unhashable_keys_from_expr(expr: &Expr, out: &mut Vec<UnhashableKeyRef
 // Module-level call site collection
 // ---------------------------------------------------------------------------
 
-/// Collect call sites from module-level statements.
-fn collect_module_level_calls(stmts: &[Stmt]) -> Vec<CallSite> {
-    let mut out = Vec::new();
-    for stmt in stmts {
-        match stmt {
-            Stmt::AnnAssign(node) => {
-                if let Some(val) = node.value.as_deref() {
-                    if let Some(site) = call_site_from_expr(val) {
-                        out.push(site);
-                    }
-                }
-            }
-            Stmt::Assign(node) => {
-                if let Some(site) = call_site_from_expr(&node.value) {
-                    out.push(site);
-                }
-            }
-            Stmt::Expr(node) => {
-                if let Some(site) = call_site_from_expr(&node.value) {
-                    out.push(site);
-                }
-            }
-            _ => {}
-        }
+/// Returns the TypeVar-like callee name (`"TypeVar"`, `"TypeVarTuple"`, or `"ParamSpec"`),
+/// or `None` if the expression is not a TypeVar-like call.
+fn typevar_like_callee(expr: &Expr) -> Option<&str> {
+    let Expr::Call(call) = expr else { return None };
+    match call.func.as_ref() {
+        Expr::Name(n) => match n.id.as_str() {
+            "TypeVar" | "TypeVarTuple" | "ParamSpec" => Some(n.id.as_str()),
+            _ => None,
+        },
+        Expr::Attribute(a) => match a.attr.as_str() {
+            "TypeVar" | "TypeVarTuple" | "ParamSpec" => Some(a.attr.as_str()),
+            _ => None,
+        },
+        _ => None,
     }
-    out
 }
 
-/// Collect module-level `TypeVar(...)` assignments.
 /// Returns `true` if an expression is a `TypeVar(...)` or `typing.TypeVar(...)` call.
 fn is_typevar_call(expr: &Expr) -> bool {
     let Expr::Call(call) = expr else { return false };
@@ -1008,8 +2039,14 @@ fn is_typevar_call(expr: &Expr) -> bool {
         || matches!(call.func.as_ref(), Expr::Attribute(a) if a.attr.as_str() == "TypeVar")
 }
 
-/// Builds a `TypeVarCallInfo` from a `TypeVar(...)` call expression and a bound name.
-fn typevar_call_info_from(name: String, call: &ruff_python_ast::ExprCall) -> TypeVarCallInfo {
+/// Builds a `TypeVarCallInfo` from a TypeVar-like call expression.
+///
+/// `callee` is `"TypeVar"`, `"TypeVarTuple"`, or `"ParamSpec"`.
+fn typevar_call_info_from(
+    name: String,
+    callee: &str,
+    call: &ruff_python_ast::ExprCall,
+) -> TypeVarCallInfo {
     use ruff_text_size::Ranged as _;
     let positional_args = call.arguments.args.len();
     let constraint_count = positional_args.saturating_sub(1);
@@ -1035,24 +2072,52 @@ fn typevar_call_info_from(name: String, call: &ruff_python_ast::ExprCall) -> Typ
         .iter()
         .skip(1)
         .any(expr_is_parameterized);
-    let is_covariant = call
+    let is_covariant = call.arguments.keywords.iter().any(|kw| {
+        kw.arg.as_ref().is_some_and(|a| a.as_str() == "covariant")
+            && matches!(&kw.value, Expr::BooleanLiteral(b) if b.value)
+    });
+    let is_contravariant = call.arguments.keywords.iter().any(|kw| {
+        kw.arg
+            .as_ref()
+            .is_some_and(|a| a.as_str() == "contravariant")
+            && matches!(&kw.value, Expr::BooleanLiteral(b) if b.value)
+    });
+    let has_infer_variance = call.arguments.keywords.iter().any(|kw| {
+        kw.arg
+            .as_ref()
+            .is_some_and(|a| a.as_str() == "infer_variance")
+            && matches!(&kw.value, Expr::BooleanLiteral(b) if b.value)
+    });
+    // Simple name from the `bound=` keyword argument (if present and a plain Name).
+    let bound_type_name = call
         .arguments
         .keywords
         .iter()
-        .any(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "covariant")
-            && matches!(&kw.value, Expr::BooleanLiteral(b) if b.value));
-    let is_contravariant = call
+        .find(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "bound"))
+        .and_then(|kw| expr_simple_name(&kw.value));
+    // Simple name from the `default=` keyword argument (if present and a plain Name).
+    let default_type_name = call
         .arguments
         .keywords
         .iter()
-        .any(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "contravariant")
-            && matches!(&kw.value, Expr::BooleanLiteral(b) if b.value));
-    let has_infer_variance = call
+        .find(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "default"))
+        .and_then(|kw| expr_simple_name(&kw.value));
+    // Constraint type names from positional args (skip the first arg which is the TypeVar name).
+    let constraint_type_names: Vec<String> = call
         .arguments
-        .keywords
+        .args
         .iter()
-        .any(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "infer_variance")
-            && matches!(&kw.value, Expr::BooleanLiteral(b) if b.value));
+        .skip(1)
+        .filter_map(expr_simple_name)
+        .collect();
+    // Extract the string value of the first positional argument (the name string).
+    let string_name = call.arguments.args.first().and_then(|arg| {
+        if let Expr::StringLiteral(s) = arg {
+            Some(s.value.to_str().to_owned())
+        } else {
+            None
+        }
+    });
     TypeVarCallInfo {
         name,
         constraint_count,
@@ -1064,6 +2129,12 @@ fn typevar_call_info_from(name: String, call: &ruff_python_ast::ExprCall) -> Typ
         is_contravariant,
         has_infer_variance,
         span: text_range_to_span(call.range()),
+        bound_type_name,
+        default_type_name,
+        constraint_type_names,
+        is_typevartuple: callee == "TypeVarTuple",
+        is_paramspec: callee == "ParamSpec",
+        string_name,
     }
 }
 
@@ -1080,26 +2151,26 @@ fn collect_typevar_calls_from_stmts(stmts: &[Stmt], out: &mut Vec<TypeVarCallInf
                 let Expr::Call(call) = node.value.as_ref() else {
                     continue;
                 };
-                if !is_typevar_call(node.value.as_ref()) {
+                let Some(callee) = typevar_like_callee(node.value.as_ref()) else {
                     continue;
-                }
+                };
                 let Some(name) = node.targets.first().and_then(expr_simple_name) else {
                     continue;
                 };
-                out.push(typevar_call_info_from(name, call));
+                out.push(typevar_call_info_from(name, callee, call));
             }
             Stmt::AnnAssign(node) => {
                 let Some(val) = node.value.as_deref() else {
                     continue;
                 };
                 let Expr::Call(call) = val else { continue };
-                if !is_typevar_call(val) {
+                let Some(callee) = typevar_like_callee(val) else {
                     continue;
-                }
+                };
                 let Some(name) = expr_simple_name(&node.target) else {
                     continue;
                 };
-                out.push(typevar_call_info_from(name, call));
+                out.push(typevar_call_info_from(name, callee, call));
             }
             // Also search inside class bodies (TypeVars declared as class attributes).
             Stmt::ClassDef(cls) => {
@@ -1115,6 +2186,79 @@ fn collect_reveal_type_calls(stmts: &[Stmt]) -> Vec<RevealTypeCallInfo> {
     let mut out = Vec::new();
     collect_reveal_type_calls_from_stmts(stmts, &mut out);
     out
+}
+
+/// Collect call sites from statements, including those inside function bodies.
+fn collect_calls_from_stmts(stmts: &[Stmt]) -> Vec<CallSite> {
+    let mut out = Vec::new();
+    collect_calls_from_stmts_internal(stmts, &mut out);
+    out
+}
+
+fn collect_calls_from_stmts_internal(stmts: &[Stmt], out: &mut Vec<CallSite>) {
+    for stmt in stmts {
+        collect_calls_from_stmt(stmt, out);
+    }
+}
+
+fn collect_calls_from_stmt(stmt: &Stmt, out: &mut Vec<CallSite>) {
+    match stmt {
+        Stmt::AnnAssign(node) => {
+            if let Some(val) = node.value.as_deref() {
+                if let Some(site) = call_site_from_expr(val) {
+                    out.push(site);
+                }
+            }
+        }
+        Stmt::Assign(node) => {
+            if let Some(site) = call_site_from_expr(&node.value) {
+                out.push(site);
+            }
+        }
+        Stmt::Expr(node) => {
+            if let Some(site) = call_site_from_expr(&node.value) {
+                out.push(site);
+            }
+        }
+        Stmt::FunctionDef(func) => {
+            collect_calls_from_stmts_internal(&func.body, out);
+        }
+        Stmt::ClassDef(cls) => {
+            collect_calls_from_stmts_internal(&cls.body, out);
+        }
+        Stmt::If(node) => {
+            collect_calls_from_stmts_internal(&node.body, out);
+            for clause in &node.elif_else_clauses {
+                collect_calls_from_stmts_internal(&clause.body, out);
+            }
+        }
+        Stmt::For(node) => {
+            collect_calls_from_stmts_internal(&node.body, out);
+            collect_calls_from_stmts_internal(&node.orelse, out);
+        }
+        Stmt::While(node) => {
+            collect_calls_from_stmts_internal(&node.body, out);
+            collect_calls_from_stmts_internal(&node.orelse, out);
+        }
+        Stmt::With(node) => {
+            collect_calls_from_stmts_internal(&node.body, out);
+        }
+        Stmt::Try(node) => {
+            collect_calls_from_stmts_internal(&node.body, out);
+            for handler in &node.handlers {
+                let ExceptHandler::ExceptHandler(h) = handler;
+                collect_calls_from_stmts_internal(&h.body, out);
+            }
+            collect_calls_from_stmts_internal(&node.orelse, out);
+            collect_calls_from_stmts_internal(&node.finalbody, out);
+        }
+        Stmt::Match(node) => {
+            for case in &node.cases {
+                collect_calls_from_stmts_internal(&case.body, out);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn collect_reveal_type_calls_from_stmts(stmts: &[Stmt], out: &mut Vec<RevealTypeCallInfo>) {
@@ -1178,7 +2322,6 @@ fn collect_reveal_type_calls_from_stmt(stmt: &Stmt, out: &mut Vec<RevealTypeCall
     }
 }
 
-
 /// Extract `Generic[T, ...]` or `Protocol[T, ...]` type parameter names and
 /// any non-TypeVar (non-simple-name) argument spans from a class definition.
 ///
@@ -1203,17 +2346,16 @@ fn extract_generic_params(class: &StmtClassDef) -> (Vec<GenericParamInfo>, Vec<S
         let mut non_typevar = Vec::new();
         for e in elts {
             // A starred expression like `*Ts` is a valid TypeVarTuple unpack.
-            let name_opt = expr_simple_name(e).or_else(|| {
-                if let Expr::Starred(starred) = e {
-                    expr_simple_name(&starred.value)
-                } else {
-                    None
-                }
-            });
+            let (name_opt, is_typevartuple) = if let Expr::Starred(starred) = e {
+                (expr_simple_name(&starred.value), true)
+            } else {
+                (expr_simple_name(e), false)
+            };
             match name_opt {
                 Some(name) => params.push(GenericParamInfo {
                     span: text_range_to_span(e.range()),
                     name,
+                    is_typevartuple,
                 }),
                 None => non_typevar.push(text_range_to_span(e.range())),
             }
@@ -1237,7 +2379,9 @@ fn call_site_from_expr(expr: &Expr) -> Option<CallSite> {
         .keywords
         .iter()
         .filter_map(|kw| {
-            kw.arg.as_ref().map(|name| (name.to_string(), classify_rhs(&kw.value)))
+            kw.arg
+                .as_ref()
+                .map(|name| (name.to_string(), classify_rhs(&kw.value)))
         })
         .collect();
     Some(CallSite {
@@ -1295,6 +2439,7 @@ fn import_infos_from(node: &StmtImport) -> Vec<ImportInfo> {
             names: Vec::new(),
             span: text_range_to_span(node.range),
             kind: ImportKind::Plain,
+            resolution: ImportResolution::Unresolved,
         })
         .collect()
 }
@@ -1314,6 +2459,7 @@ fn import_from_infos_from(node: &StmtImportFrom) -> Vec<ImportInfo> {
             names: Vec::new(),
             span: text_range_to_span(node.range),
             kind: ImportKind::Star,
+            resolution: ImportResolution::Unresolved,
         }];
     }
 
@@ -1323,6 +2469,7 @@ fn import_from_infos_from(node: &StmtImportFrom) -> Vec<ImportInfo> {
         names,
         span: text_range_to_span(node.range),
         kind: ImportKind::From,
+        resolution: ImportResolution::Unresolved,
     }]
 }
 
@@ -1370,19 +2517,35 @@ fn ann_assign_info_from(node: &StmtAnnAssign) -> Option<VariableInfo> {
 fn classify_rhs(expr: &Expr) -> RhsKind {
     match expr {
         Expr::BooleanLiteral(_) => RhsKind::BoolLiteral,
-        Expr::NumberLiteral(n) => {
-            if matches!(n.value, ruff_python_ast::Number::Float(_)) {
-                RhsKind::FloatLiteral
-            } else {
-                RhsKind::IntLiteral
-            }
-        }
+        Expr::NumberLiteral(n) => match n.value {
+            ruff_python_ast::Number::Float(_) => RhsKind::FloatLiteral,
+            ruff_python_ast::Number::Complex { .. } => RhsKind::Other,
+            ruff_python_ast::Number::Int(_) => RhsKind::IntLiteral,
+        },
         Expr::StringLiteral(_) | Expr::FString(_) => RhsKind::StrLiteral,
         Expr::BytesLiteral(_) => RhsKind::BytesLiteral,
         Expr::NoneLiteral(_) => RhsKind::NoneValue,
+        Expr::List(list) if !list.elts.is_empty() => {
+            RhsKind::List(list.elts.iter().map(classify_rhs).collect())
+        }
+        Expr::Dict(dict) if !dict.items.is_empty() => {
+            let pairs = dict
+                .items
+                .iter()
+                .filter_map(|item| {
+                    let key = item.key.as_ref().map(classify_rhs)?;
+                    let val = classify_rhs(&item.value);
+                    Some((key, val))
+                })
+                .collect();
+            RhsKind::Dict(pairs)
+        }
+        Expr::Set(set) => RhsKind::Set(set.elts.iter().map(classify_rhs).collect()),
+        Expr::Tuple(tup) => RhsKind::Tuple(tup.elts.iter().map(classify_rhs).collect()),
         Expr::List(list) if list.elts.is_empty() => RhsKind::EmptyList,
         Expr::Dict(dict) if dict.items.is_empty() => RhsKind::EmptyDict,
         Expr::Call(_) => RhsKind::CallExpr,
+        Expr::Lambda(_) => RhsKind::Lambda,
         _ => RhsKind::Other,
     }
 }
@@ -1439,6 +2602,71 @@ fn dataclass_flag(class: &StmtClassDef, key: &str) -> bool {
     false
 }
 
+/// Returns `true` when the annotation expression is `KW_ONLY`
+/// (the sentinel that makes all following fields keyword-only).
+fn annotation_is_kw_only(ann: &Expr) -> bool {
+    matches!(ann, Expr::Name(n) if n.id.as_str() == "KW_ONLY")
+}
+
+/// Returns `true` when the annotation expression is `InitVar[T]`.
+///
+/// Matches both `InitVar[T]` and `dataclasses.InitVar[T]`.
+fn annotation_is_init_var(ann: &Expr) -> bool {
+    match ann {
+        Expr::Subscript(sub) => {
+            // Check if the base is "InitVar" or "dataclasses.InitVar"
+            match sub.value.as_ref() {
+                Expr::Name(n) => n.id.as_str() == "InitVar",
+                Expr::Attribute(attr) => attr.attr.as_str() == "InitVar",
+                _ => false,
+            }
+        }
+        _ => false,
+    }
+}
+
+/// For a field value expression, returns `Some(true)` when it is `field(kw_only=True, ...)`,
+/// `Some(false)` when it is `field(kw_only=False, ...)`, and `None` otherwise.
+fn field_kw_only_override(value: &Expr) -> Option<bool> {
+    let Expr::Call(call) = value else { return None };
+    let is_field_call = match call.func.as_ref() {
+        Expr::Name(n) => n.id.as_str() == "field",
+        Expr::Attribute(a) => a.attr.as_str() == "field",
+        _ => false,
+    };
+    if !is_field_call {
+        return None;
+    }
+    for kw in &call.arguments.keywords {
+        if kw.arg.as_ref().is_some_and(|arg| arg.as_str() == "kw_only") {
+            return Some(matches!(&kw.value, Expr::BooleanLiteral(b) if b.value));
+        }
+    }
+    None
+}
+
+/// Returns `true` when the value expression is a `field(init=False, ...)` call.
+///
+/// Only checks calls to the standard `dataclasses.field` function.  Field specifier
+/// calls from `@dataclass_transform` are resolved in `apply_dataclass_transform`.
+fn field_init_is_false(value: &Expr) -> bool {
+    let Expr::Call(call) = value else {
+        return false;
+    };
+    let is_field_call = match call.func.as_ref() {
+        Expr::Name(n) => n.id.as_str() == "field",
+        Expr::Attribute(a) => a.attr.as_str() == "field",
+        _ => false,
+    };
+    if !is_field_call {
+        return false;
+    }
+    call.arguments.keywords.iter().any(|kw| {
+        kw.arg.as_ref().is_some_and(|a| a.as_str() == "init")
+            && matches!(&kw.value, Expr::BooleanLiteral(b) if !b.value)
+    })
+}
+
 fn dataclass_bool_flag_is_false(class: &StmtClassDef, key: &str) -> bool {
     for dec in &class.decorator_list {
         let Expr::Call(call) = &dec.expression else {
@@ -1468,6 +2696,22 @@ fn decorator_name(dec: &Decorator) -> Option<String> {
         Expr::Call(call) => match call.func.as_ref() {
             Expr::Name(name) => Some(name.id.to_string()),
             Expr::Attribute(attr) => Some(attr.attr.to_string()),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Extract the decorator name together with the span of the name identifier.
+fn decorator_name_and_span(dec: &Decorator) -> Option<(String, Span)> {
+    match &dec.expression {
+        Expr::Name(name) => Some((name.id.to_string(), text_range_to_span(name.range()))),
+        Expr::Attribute(attr) => Some((attr.attr.to_string(), text_range_to_span(attr.range()))),
+        Expr::Call(call) => match call.func.as_ref() {
+            Expr::Name(name) => Some((name.id.to_string(), text_range_to_span(name.range()))),
+            Expr::Attribute(attr) => {
+                Some((attr.attr.to_string(), text_range_to_span(attr.range())))
+            }
             _ => None,
         },
         _ => None,
@@ -1593,6 +2837,227 @@ fn collect_newtype_calls(stmts: &[Stmt]) -> Vec<NewTypeCallInfo> {
     out
 }
 
+/// Collect functional-form `NamedTuple` / `namedtuple` definitions from module-level code.
+///
+/// Handles all standard forms:
+/// - `typing.NamedTuple("N", [("x", int), ...])` — list form (with types)
+/// - `typing.NamedTuple("N", (("x", int), ...))` — tuple form (with types)
+/// - `collections.namedtuple("N", ["x", "y"])` — list of string literals (no types)
+/// - `collections.namedtuple("N", ("x", "y"))` — tuple of string literals (no types)
+/// - `collections.namedtuple("N", "x y")` — space/comma-separated string (no types)
+/// - Any of the above with `defaults=(v, ...)` keyword
+///
+/// Field names that reference `Final` string-literal constants are resolved to
+/// the constant's value (e.g. `X: Final = "x"` makes `X` resolve to `"x"`).
+fn collect_namedtuple_defs(stmts: &[Stmt], source: &str) -> Vec<NamedTupleDefInfo> {
+    let final_string_constants: std::collections::HashMap<&str, &str> =
+        collect_final_string_constants(stmts, source);
+
+    let mut out = Vec::new();
+    for stmt in stmts {
+        let Stmt::Assign(node) = stmt else { continue };
+        let Expr::Call(call) = node.value.as_ref() else {
+            continue;
+        };
+
+        // Check callee: `NamedTuple`, `typing.NamedTuple`, `namedtuple`, or
+        // `collections.namedtuple`.
+        let callee_name = match call.func.as_ref() {
+            Expr::Name(n) => Some(n.id.as_str()),
+            Expr::Attribute(a) => Some(a.attr.as_str()),
+            _ => None,
+        };
+        let Some(callee) = callee_name else { continue };
+        let is_typing_nt = callee == "NamedTuple";
+        let is_collections_nt = callee == "namedtuple";
+        if !is_typing_nt && !is_collections_nt {
+            continue;
+        }
+
+        let Some(lhs_name) = node.targets.first().and_then(expr_simple_name) else {
+            continue;
+        };
+        let Some(fields_arg) = call.arguments.args.get(1) else {
+            continue;
+        };
+
+        // Skip `namedtuple(..., rename=True)` — the renamed field names cannot be
+        // determined statically (e.g. `_0`, `_1`, ...) so we don't track these.
+        let has_rename_true = is_collections_nt
+            && call.arguments.keywords.iter().any(|kw| {
+                kw.arg.as_ref().is_some_and(|arg| arg.as_str() == "rename")
+                    && matches!(&kw.value, Expr::BooleanLiteral(b) if b.value)
+            });
+        if has_rename_true {
+            continue;
+        }
+
+        // Parse `defaults` keyword argument to determine how many trailing fields
+        // have default values.
+        let defaults_count = parse_defaults_count(&call.arguments.keywords);
+
+        if is_typing_nt {
+            // typing.NamedTuple: second arg is a list or tuple of (name, type) pairs.
+            let pairs: Option<&[Expr]> = match fields_arg {
+                Expr::List(l) => Some(&l.elts),
+                Expr::Tuple(t) => Some(&t.elts),
+                _ => None,
+            };
+            let Some(elts) = pairs else { continue };
+
+            let mut field_names = Vec::new();
+            let mut field_types = Vec::new();
+            for elt in elts {
+                let Expr::Tuple(tuple_expr) = elt else {
+                    continue;
+                };
+                if tuple_expr.elts.len() < 2 {
+                    continue;
+                }
+                let field_name = match &tuple_expr.elts[0] {
+                    Expr::StringLiteral(s) => s.value.to_str().to_owned(),
+                    Expr::Name(n) => {
+                        if let Some(resolved) = final_string_constants.get(n.id.as_str()) {
+                            (*resolved).to_owned()
+                        } else {
+                            n.id.to_string()
+                        }
+                    }
+                    _ => continue,
+                };
+                let type_range = tuple_expr.elts[1].range();
+                let field_type = source
+                    .get(type_range.start().to_u32() as usize..type_range.end().to_u32() as usize)
+                    .unwrap_or("")
+                    .to_owned();
+                field_names.push(field_name);
+                field_types.push(field_type);
+            }
+            if !field_names.is_empty() {
+                out.push(NamedTupleDefInfo {
+                    lhs_name,
+                    field_names,
+                    field_types,
+                    defaults_count,
+                    has_types: true,
+                    span: text_range_to_span(call.range()),
+                });
+            }
+        } else {
+            // collections.namedtuple: second arg gives field names only (no types).
+            let field_names = parse_namedtuple_field_names(fields_arg, &final_string_constants);
+            if !field_names.is_empty() {
+                out.push(NamedTupleDefInfo {
+                    lhs_name,
+                    field_names,
+                    field_types: Vec::new(),
+                    defaults_count,
+                    has_types: false,
+                    span: text_range_to_span(call.range()),
+                });
+            }
+        }
+    }
+    out
+}
+
+/// Parse field names from a `collections.namedtuple` second argument.
+///
+/// Supports:
+/// - `["x", "y"]` — list of string literals
+/// - `("x", "y")` — tuple of string literals
+/// - `"x y"` or `"x, y"` — space/comma-separated string literal
+fn parse_namedtuple_field_names(
+    fields_arg: &Expr,
+    final_constants: &std::collections::HashMap<&str, &str>,
+) -> Vec<String> {
+    match fields_arg {
+        Expr::List(l) => extract_string_list(&l.elts, final_constants),
+        Expr::Tuple(t) => extract_string_list(&t.elts, final_constants),
+        Expr::StringLiteral(s) => {
+            // Split on commas or whitespace.
+            let raw = s.value.to_str();
+            raw.split(|c: char| c == ',' || c.is_whitespace())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_owned)
+                .collect()
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// Extract string literal field names from a list/tuple of string literals.
+fn extract_string_list(
+    elts: &[Expr],
+    final_constants: &std::collections::HashMap<&str, &str>,
+) -> Vec<String> {
+    elts.iter()
+        .filter_map(|elt| match elt {
+            Expr::StringLiteral(s) => Some(s.value.to_str().to_owned()),
+            Expr::Name(n) => final_constants.get(n.id.as_str()).map(|s| (*s).to_owned()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Count defaults from the `defaults=(...)` keyword argument.
+///
+/// Returns 0 if no `defaults` keyword is present or it cannot be parsed.
+fn parse_defaults_count(keywords: &[ruff_python_ast::Keyword]) -> usize {
+    for kw in keywords {
+        if kw
+            .arg
+            .as_ref()
+            .is_some_and(|arg| arg.as_str() == "defaults")
+        {
+            return match &kw.value {
+                Expr::Tuple(t) => t.elts.len(),
+                Expr::List(l) => l.elts.len(),
+                _ => 0,
+            };
+        }
+    }
+    0
+}
+
+/// Collect `Final` string-literal constant bindings from module-level statements.
+///
+/// Returns a map from variable name to the string value (e.g., `X: Final = "x"` yields
+/// `"X" -> "x"`).  Only `Final` / `Final[str]` annotations with string-literal RHS
+/// are included.
+#[allow(dead_code)]
+fn collect_final_string_constants<'a>(
+    stmts: &'a [Stmt],
+    source: &'a str,
+) -> std::collections::HashMap<&'a str, &'a str> {
+    let mut map = std::collections::HashMap::new();
+    for stmt in stmts {
+        let Stmt::AnnAssign(ann) = stmt else { continue };
+        let Expr::Name(n) = ann.target.as_ref() else {
+            continue;
+        };
+        let range = ann.annotation.range();
+        let Some(ann_text) =
+            source.get(range.start().to_u32() as usize..range.end().to_u32() as usize)
+        else {
+            continue;
+        };
+        if !ann_text_is_final(ann_text) {
+            continue;
+        }
+        // RHS must be a string literal.
+        let Some(val) = ann.value.as_deref() else {
+            continue;
+        };
+        let Expr::StringLiteral(s) = val else {
+            continue;
+        };
+        map.insert(n.id.as_str(), s.value.to_str());
+    }
+    map
+}
+
 // ---------------------------------------------------------------------------
 // Shared utilities
 // ---------------------------------------------------------------------------
@@ -1684,11 +3149,370 @@ fn collect_name_refs_from_expr(expr: &Expr, out: &mut Vec<String>) {
     }
 }
 
+/// Recursively collect all `Name` references with their spans from an expression tree.
+///
+/// Like [`collect_name_refs_from_expr`] but also returns the span of each name.
+fn collect_name_refs_with_spans(expr: &Expr, out: &mut Vec<(String, Span)>) {
+    match expr {
+        Expr::Name(name) => out.push((name.id.to_string(), text_range_to_span(name.range))),
+        Expr::Subscript(sub) => {
+            collect_name_refs_with_spans(&sub.value, out);
+        }
+        Expr::Attribute(attr) => collect_name_refs_with_spans(&attr.value, out),
+        Expr::Tuple(tup) => {
+            for elt in &tup.elts {
+                collect_name_refs_with_spans(elt, out);
+            }
+        }
+        Expr::BinOp(bin) => {
+            collect_name_refs_with_spans(&bin.left, out);
+            collect_name_refs_with_spans(&bin.right, out);
+        }
+        Expr::Call(call) => {
+            for arg in &call.arguments.args {
+                collect_name_refs_with_spans(arg, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Recursively collect string literal references from an expression tree.
+///
+/// Finds string literals used as forward references in type annotations
+/// (e.g. `"SomeClass"` in `Optional["SomeClass"]`).
+fn collect_string_refs_from_expr(expr: &Expr, out: &mut Vec<String>) {
+    match expr {
+        Expr::StringLiteral(s) => {
+            out.push(s.value.to_str().to_owned());
+        }
+        Expr::Subscript(sub) => {
+            collect_string_refs_from_expr(&sub.value, out);
+            collect_string_refs_from_expr(&sub.slice, out);
+        }
+        Expr::Tuple(tup) => {
+            for elt in &tup.elts {
+                collect_string_refs_from_expr(elt, out);
+            }
+        }
+        Expr::BinOp(bin) => {
+            collect_string_refs_from_expr(&bin.left, out);
+            collect_string_refs_from_expr(&bin.right, out);
+        }
+        _ => {}
+    }
+}
+
+/// Convert an expression into a structured [`TypeArg`].
+///
+/// Simple names become `TypeArg::Simple`, subscript expressions become
+/// `TypeArg::Subscript { base, args }`. Other expression forms fall back to
+/// `TypeArg::Simple` using whatever simple name can be extracted (or an empty
+/// string as a last resort).
+fn expr_to_type_arg(expr: &Expr) -> TypeArg {
+    match expr {
+        Expr::Name(name) => TypeArg::Simple(name.id.to_string()),
+        Expr::Subscript(sub) => {
+            let base = expr_simple_name(&sub.value).unwrap_or_default();
+            let args: Vec<TypeArg> = match sub.slice.as_ref() {
+                Expr::Tuple(tup) => tup.elts.iter().map(expr_to_type_arg).collect(),
+                other => vec![expr_to_type_arg(other)],
+            };
+            TypeArg::Subscript { base, args }
+        }
+        _ => TypeArg::Simple(expr_simple_name(expr).unwrap_or_default()),
+    }
+}
+
+/// Extract [`BaseSubscriptEntry`] items from the base class expressions of a
+/// class definition.
+///
+/// For each base class that is a subscript expression (e.g. `Base[T, int]`),
+/// produces an entry with the base name, flat type argument names, rich
+/// structured type args, and the source span.
+fn extract_base_subscripts(class: &StmtClassDef) -> Vec<BaseSubscriptEntry> {
+    let Some(arguments) = class.arguments.as_ref() else {
+        return Vec::new();
+    };
+    let mut entries = Vec::new();
+    for expr in &arguments.args {
+        let Expr::Subscript(sub) = expr else {
+            continue;
+        };
+        let Some(base_name) = expr_simple_name(&sub.value) else {
+            continue;
+        };
+        let (type_arg_names, type_args) = match sub.slice.as_ref() {
+            Expr::Tuple(tup) => {
+                let names: Vec<String> = tup.elts.iter().filter_map(expr_simple_name).collect();
+                let args: Vec<TypeArg> = tup.elts.iter().map(expr_to_type_arg).collect();
+                (names, args)
+            }
+            single => {
+                let names: Vec<String> = expr_simple_name(single).into_iter().collect();
+                let args: Vec<TypeArg> = vec![expr_to_type_arg(single)];
+                (names, args)
+            }
+        };
+        entries.push(BaseSubscriptEntry {
+            base_name,
+            type_arg_names,
+            type_args,
+            span: Span {
+                start: sub.range().start().to_u32(),
+                end: sub.range().end().to_u32(),
+            },
+        });
+    }
+    entries
+}
+
+/// Check whether a class body contains a manual `__slots__` assignment.
+///
+/// Returns `true` if any statement in the class body is an assignment (plain
+/// or annotated) whose target is `__slots__`.
+fn class_has_manual_slots(class: &StmtClassDef) -> bool {
+    for stmt in &class.body {
+        match stmt {
+            Stmt::Assign(assign) => {
+                for target in &assign.targets {
+                    if expr_simple_name(target).as_deref() == Some("__slots__") {
+                        return true;
+                    }
+                }
+            }
+            Stmt::AnnAssign(ann) => {
+                if expr_simple_name(&ann.target).as_deref() == Some("__slots__") {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
 fn text_range_to_span(range: TextRange) -> Span {
     Span {
         start: range.start().to_u32(),
         end: range.end().to_u32(),
     }
+}
+
+// ---------------------------------------------------------------------------
+// PEP 695 type parameter bound violation detection (for BSK-E0087)
+// ---------------------------------------------------------------------------
+
+/// Walk all statements and collect PEP 695 type parameter bound violations.
+///
+/// Detects invalid `TypeVar` bound/constraint forms in PEP 695 `class Foo[T: ...]` syntax:
+/// - List literal as bound: `class Foo[T: [str, int]]`
+/// - Empty constraint tuple: `class Foo[T: ()]`
+/// - Single-element constraint tuple: `class Foo[T: (str,)]`
+/// - Non-literal (variable) constraint: `class Foo[T: t1]` where `t1 = (str, bytes)`
+/// - Invalid constraint element: `class Foo[T: (3, bytes)]` (integer literal in tuple)
+fn collect_pep695_bound_violations(stmts: &[Stmt]) -> Vec<Pep695BoundViolation> {
+    let bare_names: std::collections::HashSet<String> = stmts
+        .iter()
+        .filter_map(|stmt| {
+            let Stmt::Assign(node) = stmt else {
+                return None;
+            };
+            node.targets.first().and_then(expr_simple_name)
+        })
+        .collect();
+
+    let mut out = Vec::new();
+    collect_pep695_violations_from_stmts(
+        stmts,
+        &bare_names,
+        &std::collections::HashSet::new(),
+        &mut out,
+    );
+    out
+}
+
+fn collect_pep695_violations_from_stmts(
+    stmts: &[Stmt],
+    bare_names: &std::collections::HashSet<String>,
+    outer_typeparams: &std::collections::HashSet<String>,
+    out: &mut Vec<Pep695BoundViolation>,
+) {
+    for stmt in stmts {
+        let Stmt::ClassDef(cls) = stmt else {
+            continue;
+        };
+        let class_name = cls.name.to_string();
+
+        // Collect the current class's TypeParam names.
+        let current_typeparams: std::collections::HashSet<String> = cls
+            .type_params
+            .as_ref()
+            .map(|tp| tp.type_params.iter().map(type_param_name).collect())
+            .unwrap_or_default();
+
+        if let Some(type_params) = &cls.type_params {
+            for tp in &type_params.type_params {
+                if let TypeParam::TypeVar(tv) = tp {
+                    if let Some(bound) = &tv.bound {
+                        check_typevar_bound_expr(
+                            bound,
+                            &class_name,
+                            tv.name.as_str(),
+                            bare_names,
+                            &current_typeparams,
+                            outer_typeparams,
+                            out,
+                        );
+                    }
+                }
+            }
+        }
+
+        // When recursing into nested classes, the current TypeParams become outer TypeParams.
+        let mut new_outer = outer_typeparams.clone();
+        new_outer.extend(current_typeparams);
+        collect_pep695_violations_from_stmts(&cls.body, bare_names, &new_outer, out);
+    }
+}
+
+fn check_typevar_bound_expr(
+    bound: &Expr,
+    class_name: &str,
+    type_param: &str,
+    bare_names: &std::collections::HashSet<String>,
+    current_typeparams: &std::collections::HashSet<String>,
+    outer_typeparams: &std::collections::HashSet<String>,
+    out: &mut Vec<Pep695BoundViolation>,
+) {
+    match bound {
+        Expr::List(list) => {
+            out.push(Pep695BoundViolation {
+                kind: Pep695BoundViolationKind::ListLiteralBound,
+                class_name: class_name.to_owned(),
+                type_param_name: type_param.to_owned(),
+                span: text_range_to_span(list.range()),
+            });
+        }
+        Expr::Tuple(tup) => {
+            if tup.elts.is_empty() {
+                out.push(Pep695BoundViolation {
+                    kind: Pep695BoundViolationKind::EmptyTuple,
+                    class_name: class_name.to_owned(),
+                    type_param_name: type_param.to_owned(),
+                    span: text_range_to_span(tup.range()),
+                });
+            } else if tup.elts.len() == 1 {
+                out.push(Pep695BoundViolation {
+                    kind: Pep695BoundViolationKind::SingleElementTuple,
+                    class_name: class_name.to_owned(),
+                    type_param_name: type_param.to_owned(),
+                    span: text_range_to_span(tup.range()),
+                });
+            } else {
+                // Check for invalid elements and outer-scope TypeVar references.
+                let mut emitted = false;
+                for elt in &tup.elts {
+                    if !is_valid_constraint_element(elt) {
+                        out.push(Pep695BoundViolation {
+                            kind: Pep695BoundViolationKind::InvalidConstraintElement,
+                            class_name: class_name.to_owned(),
+                            type_param_name: type_param.to_owned(),
+                            span: text_range_to_span(elt.range()),
+                        });
+                        emitted = true;
+                        break;
+                    }
+                }
+                if !emitted {
+                    for elt in &tup.elts {
+                        if bound_refs_outer_typeparam(elt, current_typeparams, outer_typeparams) {
+                            out.push(Pep695BoundViolation {
+                                kind: Pep695BoundViolationKind::OuterScopeTypeVarInBound,
+                                class_name: class_name.to_owned(),
+                                type_param_name: type_param.to_owned(),
+                                span: text_range_to_span(elt.range()),
+                            });
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        Expr::Name(name) if bare_names.contains(name.id.as_str()) => {
+            out.push(Pep695BoundViolation {
+                kind: Pep695BoundViolationKind::NonLiteralConstraint,
+                class_name: class_name.to_owned(),
+                type_param_name: type_param.to_owned(),
+                span: text_range_to_span(name.range()),
+            });
+        }
+        // Check if the bound itself references an outer-scope TypeVar (e.g. `T: dict[str, V]`).
+        bound_expr
+            if bound_refs_outer_typeparam(bound_expr, current_typeparams, outer_typeparams) =>
+        {
+            out.push(Pep695BoundViolation {
+                kind: Pep695BoundViolationKind::OuterScopeTypeVarInBound,
+                class_name: class_name.to_owned(),
+                type_param_name: type_param.to_owned(),
+                span: text_range_to_span(bound_expr.range()),
+            });
+        }
+        _ => {}
+    }
+}
+
+/// Returns `true` if the expression references an outer-scope `TypeParam` or a
+/// TypeVar-like name that is not in the current class's `TypeParam` set.
+///
+/// Used to detect cases like `class Nested[T: dict[str, V]]` where `V` is from
+/// an outer class, or `class Foo[T: (list[S], str)]` where `S` is unresolved.
+fn bound_refs_outer_typeparam(
+    expr: &Expr,
+    current_typeparams: &std::collections::HashSet<String>,
+    outer_typeparams: &std::collections::HashSet<String>,
+) -> bool {
+    match expr {
+        Expr::Name(name) => {
+            let n = name.id.as_str();
+            // Explicitly an outer TypeVar, or a TypeVar-like single-letter uppercase name
+            // not in the current class's TypeParam set.
+            outer_typeparams.contains(n)
+                || (is_typevar_like_name(n) && !current_typeparams.contains(n))
+        }
+        Expr::Subscript(sub) => {
+            // Check the type arguments of a generic type expression, not the base type.
+            // e.g. for `list[S]`, we check `S` not `list`.
+            bound_refs_outer_typeparam(&sub.slice, current_typeparams, outer_typeparams)
+        }
+        Expr::Tuple(t) => t
+            .elts
+            .iter()
+            .any(|e| bound_refs_outer_typeparam(e, current_typeparams, outer_typeparams)),
+        Expr::BinOp(bin) => {
+            bound_refs_outer_typeparam(&bin.left, current_typeparams, outer_typeparams)
+                || bound_refs_outer_typeparam(&bin.right, current_typeparams, outer_typeparams)
+        }
+        _ => false,
+    }
+}
+
+/// Returns `true` if the name looks like a `TypeVar` by the single-letter uppercase convention.
+///
+/// Single-letter uppercase names (e.g. `T`, `S`, `V`) are almost universally `TypeVars`.
+/// Multi-letter names could be concrete types (e.g. `str`, `int`, `ForwardReference`).
+fn is_typevar_like_name(name: &str) -> bool {
+    let bytes = name.as_bytes();
+    bytes.len() == 1 && bytes[0].is_ascii_uppercase()
+}
+
+/// Returns `false` if this expression is not a valid constraint tuple element.
+///
+/// Valid elements are type expressions: names, subscripts, binary ops, string
+/// literals (forward references), etc.
+/// Invalid elements include numeric and bytes literals (not types).
+fn is_valid_constraint_element(expr: &Expr) -> bool {
+    !matches!(expr, Expr::NumberLiteral(_) | Expr::BytesLiteral(_))
 }
 
 // ---------------------------------------------------------------------------
@@ -1709,7 +3533,10 @@ fn count_unbounded_in_tuple_slice(slice: &Expr) -> usize {
         // Single-element tuple slice — check just this element
         other => return usize::from(is_unbounded_component(other)),
     };
-    elements.iter().filter(|e| is_unbounded_component(e)).count()
+    elements
+        .iter()
+        .filter(|e| is_unbounded_component(e))
+        .count()
 }
 
 /// Returns `true` if this expression is an unbounded tuple component:
@@ -1731,9 +3558,7 @@ fn is_unbounded_component(expr: &Expr) -> bool {
             _ => false,
         },
         // `Unpack[tuple[T, ...]]` — legacy unpack form
-        Expr::Subscript(sub)
-            if expr_simple_name(&sub.value).as_deref() == Some("Unpack") =>
-        {
+        Expr::Subscript(sub) if expr_simple_name(&sub.value).as_deref() == Some("Unpack") => {
             match sub.slice.as_ref() {
                 Expr::Subscript(inner_sub)
                     if expr_simple_name(&inner_sub.value).as_deref() == Some("tuple") =>
@@ -1752,8 +3577,7 @@ fn is_unbounded_component(expr: &Expr) -> bool {
 fn inner_tuple_is_unbounded(slice: &Expr) -> bool {
     match slice {
         Expr::Tuple(t) => t.elts.last().is_some_and(|e| {
-            matches!(e, Expr::EllipsisLiteral(_))
-                || is_unbounded_component(e)  // nested unbounded: `*tuple[str, ...]`
+            matches!(e, Expr::EllipsisLiteral(_)) || is_unbounded_component(e) // nested unbounded: `*tuple[str, ...]`
         }),
         Expr::EllipsisLiteral(_) => true,
         // Single element that is itself an unbounded starred expr
@@ -1761,12 +3585,61 @@ fn inner_tuple_is_unbounded(slice: &Expr) -> bool {
     }
 }
 
-/// Returns `true` if the annotation expression is a `tuple[...]` with multiple
-/// unbounded components (more than one `*tuple[T, ...]` or `*Ts`).
+/// Returns `true` if the annotation expression is a `tuple[...]` with an invalid form.
+///
+/// Invalid forms include:
+/// - Multiple unbounded components: `tuple[*tuple[T, ...], *Ts]`
+/// - Bare ellipsis as the only element: `tuple[...]`
+/// - Ellipsis not at the second position (with exactly one preceding type): `tuple[..., int]`,
+///   `tuple[int, ..., int]`
+/// - More than one non-ellipsis type before the ellipsis: `tuple[int, int, ...]`
+/// - Non-variadic starred expression paired with ellipsis: `tuple[*tuple[str], ...]`
 fn annotation_has_multiple_unbounded(expr: &Expr) -> bool {
-    match expr {
-        Expr::Subscript(sub) if expr_simple_name(&sub.value).as_deref() == Some("tuple") => {
-            count_unbounded_in_tuple_slice(&sub.slice) >= 2
+    let Expr::Subscript(sub) = expr else {
+        return false;
+    };
+    if expr_simple_name(&sub.value).as_deref() != Some("tuple") {
+        return false;
+    }
+    // Check for multiple unbounded components (original rule)
+    if count_unbounded_in_tuple_slice(&sub.slice) >= 2 {
+        return true;
+    }
+    // Check for invalid ellipsis forms
+    tuple_slice_has_invalid_ellipsis(&sub.slice)
+}
+
+/// Returns `true` when a `tuple[...]` slice has an invalid ellipsis placement.
+///
+/// Valid: `tuple[T, ...]` — exactly two elements, first is a type, second is `...`
+///   (and the first must not be a non-variadic starred expression)
+/// Everything else with a bare `...` is invalid.
+fn tuple_slice_has_invalid_ellipsis(slice: &Expr) -> bool {
+    match slice {
+        // Single `...` element: `tuple[...]` — invalid
+        Expr::EllipsisLiteral(_) => true,
+        Expr::Tuple(t) => {
+            let elts = &t.elts;
+            // Find all bare EllipsisLiteral positions
+            let ellipsis_count = elts
+                .iter()
+                .filter(|e| matches!(e, Expr::EllipsisLiteral(_)))
+                .count();
+            if ellipsis_count == 0 {
+                return false; // No bare ellipsis — nothing to validate here
+            }
+            // Valid form: exactly 2 elements, first is NOT ellipsis, second IS ellipsis
+            if elts.len() == 2 && matches!(elts[1], Expr::EllipsisLiteral(_)) {
+                // `tuple[T, ...]` is valid only if T is not itself a starred expression.
+                // Both `tuple[*tuple[str], ...]` (non-variadic) and
+                // `tuple[*tuple[str, ...], ...]` (variadic) are invalid.
+                return matches!(elts[0], Expr::Starred(_));
+            }
+            // Any other placement of bare `...` is invalid:
+            // - More than one ellipsis
+            // - Ellipsis not at position 1 (e.g. `tuple[..., int]`)
+            // - More than 2 elements with ellipsis at end (e.g. `tuple[int, int, ...]`)
+            true
         }
         _ => false,
     }
@@ -1835,8 +3708,15 @@ fn collect_multi_unbounded_from_stmt(stmt: &Stmt, out: &mut Vec<Span>) {
         }
         Stmt::If(if_stmt) => {
             collect_multi_unbounded_from_stmts(&if_stmt.body, out);
-            collect_multi_unbounded_from_stmts(&if_stmt.elif_else_clauses.iter()
-                .flat_map(|c| c.body.iter()).cloned().collect::<Vec<_>>(), out);
+            collect_multi_unbounded_from_stmts(
+                &if_stmt
+                    .elif_else_clauses
+                    .iter()
+                    .flat_map(|c| c.body.iter())
+                    .cloned()
+                    .collect::<Vec<_>>(),
+                out,
+            );
         }
         _ => {}
     }
@@ -1913,7 +3793,9 @@ fn collect_assert_type_calls_from_stmt(
                 &node.body, params, source,
             ));
             out.extend(collect_assert_type_calls_from_stmts(
-                &node.orelse, params, source,
+                &node.orelse,
+                params,
+                source,
             ));
         }
         Stmt::While(node) => {
@@ -1921,7 +3803,9 @@ fn collect_assert_type_calls_from_stmt(
                 &node.body, params, source,
             ));
             out.extend(collect_assert_type_calls_from_stmts(
-                &node.orelse, params, source,
+                &node.orelse,
+                params,
+                source,
             ));
         }
         Stmt::With(node) => {
@@ -1935,13 +3819,19 @@ fn collect_assert_type_calls_from_stmt(
             ));
             for handler in &node.handlers {
                 let ExceptHandler::ExceptHandler(h) = handler;
-                out.extend(collect_assert_type_calls_from_stmts(&h.body, params, source));
+                out.extend(collect_assert_type_calls_from_stmts(
+                    &h.body, params, source,
+                ));
             }
             out.extend(collect_assert_type_calls_from_stmts(
-                &node.orelse, params, source,
+                &node.orelse,
+                params,
+                source,
             ));
             out.extend(collect_assert_type_calls_from_stmts(
-                &node.finalbody, params, source,
+                &node.finalbody,
+                params,
+                source,
             ));
         }
         Stmt::Match(node) => {
@@ -1971,8 +3861,8 @@ fn build_param_scope_owned(
             let name = p.parameter.name.to_string();
             let ann = p.parameter.annotation.as_deref()?;
             let range = ann.range();
-            let ann_text = source
-                .get(range.start().to_u32() as usize..range.end().to_u32() as usize)?;
+            let ann_text =
+                source.get(range.start().to_u32() as usize..range.end().to_u32() as usize)?;
             Some((name, ann_text.to_owned()))
         })
         .collect()
@@ -2008,8 +3898,13 @@ fn build_assert_type_call_info(
     let expected_type = extract_type_text(second_arg, source);
 
     // Compare normalized forms.
+    // Skip when the actual type is a user-defined type alias that we cannot expand
+    // without a full type engine — comparing alias names to their expansions produces
+    // false positives (e.g. `GoodTypeAlias1` != `int | str` even though they're equal).
     let type_mismatch = match (&actual_type, &expected_type) {
-        (Some(actual), Some(expected)) => !types_match(actual, expected),
+        (Some(actual), Some(expected)) => {
+            !types_match(actual, expected) && !is_user_defined_type_alias(actual)
+        }
         _ => false,
     };
 
@@ -2027,18 +3922,24 @@ fn build_assert_type_call_info(
 /// - If it is a name reference to a known parameter, returns its annotation text (normalized).
 /// - If it is a literal, returns the corresponding primitive type name.
 /// - Otherwise returns `None`.
-fn resolve_actual_type(
-    expr: &Expr,
-    params: &[(&str, &str)],
-    source: &str,
-) -> Option<String> {
+fn resolve_actual_type(expr: &Expr, params: &[(&str, &str)], _source: &str) -> Option<String> {
     match expr {
         Expr::Name(name) => {
             let param_name = name.id.as_str();
             params
                 .iter()
                 .find(|(n, _)| *n == param_name)
-                .map(|(_, ann)| normalize_type_str(ann))
+                .and_then(|(_, ann)| {
+                    let normalized = normalize_type_str(ann);
+                    // If the normalized annotation still contains quotes, it has forward
+                    // references inside subscripts (e.g. `list["ClassA"]`) that we cannot
+                    // resolve textually — skip the check to avoid false positives.
+                    if normalized.contains('"') || normalized.contains('\'') {
+                        None
+                    } else {
+                        Some(normalized)
+                    }
+                })
         }
         Expr::StringLiteral(_) => Some("str".to_owned()),
         Expr::NumberLiteral(n) => {
@@ -2051,13 +3952,10 @@ fn resolve_actual_type(
         Expr::BooleanLiteral(_) => Some("bool".to_owned()),
         Expr::BytesLiteral(_) => Some("bytes".to_owned()),
         Expr::NoneLiteral(_) => Some("None".to_owned()),
-        _ => {
-            // For other expressions, try to get the source text.
-            let range = expr.range();
-            source
-                .get(range.start().to_u32() as usize..range.end().to_u32() as usize)
-                .map(normalize_type_str)
-        }
+        // Complex expressions (attribute access, subscripts, calls, binary ops, etc.)
+        // cannot be typed without full type inference — returning source text produces
+        // false positives when compared against expected types textually.
+        _ => None,
     }
 }
 
@@ -2078,6 +3976,13 @@ fn normalize_type_str(ann: &str) -> String {
     // Strip Annotated[T, ...] → take first argument only.
     if let Some(inner) = strip_annotated_wrapper(trimmed) {
         return normalize_type_str(inner);
+    }
+    // Strip outer string quotes (forward references like `"list[int]"` or `'MyClass'`).
+    if trimmed.len() >= 2
+        && ((trimmed.starts_with('"') && trimmed.ends_with('"'))
+            || (trimmed.starts_with('\'') && trimmed.ends_with('\'')))
+    {
+        return normalize_type_str(&trimmed[1..trimmed.len() - 1]);
     }
     trimmed.to_owned()
 }
@@ -2114,9 +4019,900 @@ fn strip_annotated_wrapper(ann: &str) -> Option<&str> {
     Some(inner[..end].trim())
 }
 
+/// Returns `true` when `actual` type is a user-defined type alias that cannot be
+/// resolved without a full type engine. These produce false positives because we
+/// compare annotation text without expanding aliases.
+///
+/// A type is a user-defined alias when its base identifier (the part before `[`)
+/// starts with an uppercase letter and is not a known typing special form.
+fn is_user_defined_type_alias(ty: &str) -> bool {
+    const KNOWN_FORMS: &[&str] = &[
+        "Any",
+        "Never",
+        "NoReturn",
+        "Self",
+        "LiteralString",
+        "TypeGuard",
+        "TypeIs",
+        "Literal",
+        "Optional",
+        "Union",
+        "Annotated",
+        "Callable",
+        "ClassVar",
+        "Final",
+        "Protocol",
+        "TypedDict",
+        "NamedTuple",
+        "Generic",
+        "Tuple",
+        "List",
+        "Dict",
+        "Set",
+        "FrozenSet",
+        "Type",
+        "Deque",
+        "None",
+        "Awaitable",
+        "Coroutine",
+        "AsyncGenerator",
+        "Generator",
+        "Iterator",
+        "Iterable",
+        "Sequence",
+        "Mapping",
+        "MutableMapping",
+        "MutableSequence",
+        "MutableSet",
+        "ChainMap",
+        "Counter",
+        "DefaultDict",
+        "OrderedDict",
+        "Concatenate",
+        "ParamSpec",
+        "ParamSpecArgs",
+        "ParamSpecKwargs",
+        "TypeVar",
+        "TypeVarTuple",
+        "Unpack",
+        "Required",
+        "NotRequired",
+        "ReadOnly",
+        "TypeAlias",
+        "SupportsInt",
+        "SupportsFloat",
+        "SupportsComplex",
+        "SupportsBytes",
+        "SupportsAbs",
+        "SupportsRound",
+        "AbstractSet",
+        "ByteString",
+        "IO",
+        "TextIO",
+        "BinaryIO",
+        "Pattern",
+        "Match",
+        "AnyStr",
+        "Text",
+        "ContextManager",
+        "AsyncContextManager",
+        "Hashable",
+        "Sized",
+        "Reversible",
+        "Collection",
+        "Container",
+        "ItemsView",
+        "KeysView",
+        "ValuesView",
+        "AbstractContextManager",
+    ];
+
+    let base = ty.trim().split('[').next().unwrap_or(ty.trim()).trim();
+    if base.is_empty()
+        || base.contains('|')
+        || base.contains(' ')
+        || base.contains(',')
+        || base.contains('(')
+        || base.contains(')')
+    {
+        return false;
+    }
+    let Some(first) = base.chars().next() else {
+        return false;
+    };
+    if !first.is_ascii_uppercase() {
+        return false;
+    }
+    !KNOWN_FORMS.contains(&base)
+}
+
 /// Returns `true` when `actual` and `expected` are equivalent types (textual comparison).
+///
+/// Handles common equivalences:
+/// - Direct string equality
+/// - Bare generic vs `Generic[Any]` (e.g. `list` == `list[Any]`)
+/// - `type` == `type[Any]`
+/// - Quoted forward references: `"ClassA"` == `ClassA`
 fn types_match(actual: &str, expected: &str) -> bool {
+    let actual = actual.trim();
+    let expected = expected.trim();
+
+    if actual == expected {
+        return true;
+    }
+
+    // Handle quoted forward references: `"ClassA"` == `ClassA`
+    let actual_unquoted = if (actual.starts_with('"') && actual.ends_with('"'))
+        || (actual.starts_with('\'') && actual.ends_with('\''))
+    {
+        &actual[1..actual.len() - 1]
+    } else {
+        actual
+    };
+    if actual_unquoted != actual && actual_unquoted == expected {
+        return true;
+    }
+
+    // Handle bare generic == specialized with All-Any params.
+    // e.g. `list` == `list[Any]`, `type` == `type[Any]`, `dict` == `dict[Any, Any]`
+    if !actual.contains('[') && !actual.contains('|') {
+        if let Some(rest) = expected.strip_prefix(actual) {
+            if let Some(inner) = rest.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
+                let all_any = inner
+                    .split(',')
+                    .all(|p| matches!(p.trim(), "Any" | "..." | "*tuple[Any, ...]"));
+                if all_any {
+                    return true;
+                }
+            }
+        }
+    }
+
+    false
+}
+
+/// Recursively check if an expression contains `ReadOnly`.
+fn annotation_contains_readonly_expr(expr: &Expr) -> bool {
+    match expr {
+        Expr::Name(name) => name.id.as_str() == "ReadOnly",
+        Expr::Attribute(attr) => attr.attr.as_str() == "ReadOnly",
+        Expr::Subscript(sub) => {
+            annotation_contains_readonly_expr(&sub.value)
+                || annotation_contains_readonly_expr(&sub.slice)
+        }
+        Expr::BinOp(bin) => {
+            annotation_contains_readonly_expr(&bin.left)
+                || annotation_contains_readonly_expr(&bin.right)
+        }
+        Expr::Tuple(tuple) => tuple.elts.iter().any(annotation_contains_readonly_expr),
+        _ => false,
+    }
+}
+
+/// Extract `ReadOnly` field names from a functional `TypedDict(...)` call's dict literal.
+///
+/// Returns a set of field names that have `ReadOnly[...]` annotations.
+fn functional_typeddict_readonly_fields(dict_expr: &Expr) -> std::collections::HashSet<String> {
+    let Expr::Dict(dict) = dict_expr else {
+        return std::collections::HashSet::new();
+    };
+    dict.items
+        .iter()
+        .filter_map(|item| {
+            let key_expr = item.key.as_ref()?;
+            let Expr::StringLiteral(key) = key_expr else {
+                return None;
+            };
+            if annotation_contains_readonly_expr(&item.value) {
+                Some(key.value.to_string())
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// Scan function body for `kwargs["key"] = val` where key is a `ReadOnly` field.
+fn check_kwargs_readonly_violations(
+    func: &StmtFunctionDef,
+    td_readonly_fields: &std::collections::HashMap<String, std::collections::HashSet<String>>,
+    out: &mut Vec<ReadOnlyViolationInfo>,
+) {
+    let Some(kwarg) = &func.parameters.kwarg else {
+        return;
+    };
+    let Some(ann_expr) = kwarg.annotation.as_deref() else {
+        return;
+    };
+    // Match Unpack[TypedDictName]
+    let Expr::Subscript(sub) = ann_expr else {
+        return;
+    };
+    if !matches!(sub.value.as_ref(), Expr::Name(n) if n.id == "Unpack") {
+        return;
+    }
+    let Some(td_name) = expr_simple_name(&sub.slice) else {
+        return;
+    };
+    let Some(readonly_fields) = td_readonly_fields.get(&td_name) else {
+        return;
+    };
+    let kwarg_name = kwarg.name.to_string();
+    for stmt in &func.body {
+        let Stmt::Assign(assign) = stmt else {
+            continue;
+        };
+        for target in &assign.targets {
+            let Expr::Subscript(tsub) = target else {
+                continue;
+            };
+            let Some(var_name) = expr_simple_name(&tsub.value) else {
+                continue;
+            };
+            if var_name != kwarg_name {
+                continue;
+            }
+            let Expr::StringLiteral(key_str) = tsub.slice.as_ref() else {
+                continue;
+            };
+            let key = key_str.value.to_string();
+            if readonly_fields.contains(&key) {
+                out.push(ReadOnlyViolationInfo {
+                    var_name,
+                    field_name: Some(key),
+                    kind: ReadOnlyViolationKind::SubscriptAssign,
+                    span: text_range_to_span(assign.range()),
+                });
+            }
+        }
+    }
+}
+
+/// Build a map from `TypedDict` class name to its `ReadOnly` field names.
+fn build_typeddict_readonly_map(
+    stmts: &[Stmt],
+    classes: &[ClassInfo],
+) -> std::collections::HashMap<String, std::collections::HashSet<String>> {
+    use std::collections::{HashMap, HashSet};
+    let mut map: HashMap<String, HashSet<String>> = classes
+        .iter()
+        .filter(|cls| cls.is_typed_dict)
+        .filter_map(|cls| {
+            let fields: HashSet<String> = cls
+                .attributes
+                .iter()
+                .filter(|a| a.is_readonly)
+                .map(|a| a.name.clone())
+                .collect();
+            if fields.is_empty() {
+                None
+            } else {
+                Some((cls.name.clone(), fields))
+            }
+        })
+        .collect();
+    // Functional form: `Name = TypedDict("Name", {"field": ReadOnly[...]})`
+    for stmt in stmts {
+        let Stmt::Assign(assign) = stmt else { continue };
+        let Some(lhs_name) = assign.targets.first().and_then(expr_simple_name) else {
+            continue;
+        };
+        let Expr::Call(call) = assign.value.as_ref() else {
+            continue;
+        };
+        if !matches!(call.func.as_ref(), Expr::Name(n) if n.id == "TypedDict") {
+            continue;
+        }
+        if let Some(second_arg) = call.arguments.args.get(1) {
+            let fields = functional_typeddict_readonly_fields(second_arg);
+            if !fields.is_empty() {
+                map.insert(lhs_name, fields);
+            }
+        }
+    }
+    map
+}
+
+/// Build a map from variable name to its declared `TypedDict` type name.
+fn build_var_type_map<'a>(
+    stmts: &[Stmt],
+    td_readonly_fields: &'a std::collections::HashMap<String, std::collections::HashSet<String>>,
+) -> std::collections::HashMap<String, &'a str> {
+    let mut map = std::collections::HashMap::new();
+    for stmt in stmts {
+        let Stmt::AnnAssign(ann) = stmt else { continue };
+        let Some(var_name) = expr_simple_name(&ann.target) else {
+            continue;
+        };
+        let Expr::Name(type_name) = ann.annotation.as_ref() else {
+            continue;
+        };
+        if let Some((key, _)) = td_readonly_fields.get_key_value(type_name.id.as_str()) {
+            map.insert(var_name, key.as_str());
+        }
+    }
+    map
+}
+
+/// Collect `TypedDict` key/value violations from module-level statements and function bodies.
+///
+/// Detects:
+/// - Subscript assignments with invalid keys: `movie["director"] = "Ridley Scott"`
+/// - Subscript assignments with wrong value type: `movie["year"] = "1982"`
+/// - Annotated dict literal assignments with invalid or missing keys
+/// - Regular dict assignments to `TypedDict` variables with wrong keys/types
+/// - Subscript read access with invalid keys: `print(movie["unknown"])`
+/// - Disallowed method calls: `movie.clear()`
+/// - Delete operations on required `TypedDict` keys: `del movie["name"]`
+fn collect_typeddict_key_violations<'a>(
+    stmts: &[Stmt],
+    classes: &'a [ClassInfo],
+    source: &'a str,
+) -> Vec<TypedDictKeyViolation> {
+    use std::collections::HashMap;
+    // (all_fields, field_types, is_total)
+    type FieldMap<'x> = HashMap<&'x str, (Vec<&'x str>, HashMap<&'x str, String>, bool)>;
+
+    let typeddict_fields: FieldMap<'a> = classes
+        .iter()
+        .filter(|c| c.is_typed_dict)
+        .map(|c| {
+            let all_fields: Vec<&str> = c.attributes.iter().map(|a| a.name.as_str()).collect();
+            let field_types: HashMap<&str, String> = c
+                .attributes
+                .iter()
+                .filter_map(|a| {
+                    let span = a.annotation_span?;
+                    let type_text = source
+                        .get(span.start as usize..span.end as usize)?
+                        .trim()
+                        .to_owned();
+                    Some((a.name.as_str(), type_text))
+                })
+                .collect();
+            (
+                c.name.as_str(),
+                (all_fields, field_types, c.is_typeddict_total),
+            )
+        })
+        .collect();
+
+    if typeddict_fields.is_empty() {
+        return Vec::new();
+    }
+
+    let var_type = td_var_type_from_stmts(stmts, &typeddict_fields);
+    let mut out = Vec::new();
+    check_td_stmts(&typeddict_fields, &var_type, stmts, &mut out);
+    out
+}
+
+/// `(all_fields, field_types, is_total)` map keyed by class name.
+type TdFieldMap<'a> = std::collections::HashMap<
+    &'a str,
+    (
+        Vec<&'a str>,
+        std::collections::HashMap<&'a str, String>,
+        bool,
+    ),
+>;
+
+/// Build a variable-name → TypedDict-class-name map from annotated assignments in `stmts`.
+fn td_var_type_from_stmts(
+    stmts: &[Stmt],
+    fields: &TdFieldMap<'_>,
+) -> std::collections::HashMap<String, String> {
+    let mut map = std::collections::HashMap::new();
+    for stmt in stmts {
+        let Stmt::AnnAssign(ann) = stmt else { continue };
+        let Some(var_name) = expr_simple_name(&ann.target) else {
+            continue;
+        };
+        let Expr::Name(type_name) = ann.annotation.as_ref() else {
+            continue;
+        };
+        let class_name = type_name.id.as_str();
+        if fields.contains_key(class_name) {
+            map.insert(var_name, class_name.to_owned());
+        }
+    }
+    map
+}
+
+/// Recursively check statements for `TypedDict` violations.
+fn check_td_stmts(
+    fields: &TdFieldMap<'_>,
+    var_type: &std::collections::HashMap<String, String>,
+    stmts: &[Stmt],
+    out: &mut Vec<TypedDictKeyViolation>,
+) {
+    use ruff_text_size::Ranged as _;
+    for stmt in stmts {
+        match stmt {
+            Stmt::Assign(node) => {
+                td_check_subscript_assign(node, var_type, fields, out);
+                td_check_regular_assign(node, var_type, fields, out);
+                td_check_expr_reads(&node.value, var_type, fields, out);
+            }
+            Stmt::AnnAssign(node) => {
+                td_check_ann_assign(node, fields, out);
+                if let Some(val) = &node.value {
+                    td_check_expr_reads(val, var_type, fields, out);
+                }
+            }
+            Stmt::Expr(expr_stmt) => {
+                // Detect disallowed method calls: movie.clear()
+                if let Expr::Call(call) = expr_stmt.value.as_ref() {
+                    if let Expr::Attribute(attr) = call.func.as_ref() {
+                        if let Some(var_name) = expr_simple_name(&attr.value) {
+                            if let Some(class_name) = var_type.get(&var_name) {
+                                if fields.contains_key(class_name.as_str()) {
+                                    const DISALLOWED: &[&str] =
+                                        &["clear", "pop", "popitem", "setdefault", "update"];
+                                    let method = attr.attr.as_str();
+                                    if DISALLOWED.contains(&method) {
+                                        out.push(TypedDictKeyViolation {
+                                            span: text_range_to_span(expr_stmt.value.range()),
+                                            class_name: class_name.clone(),
+                                            kind: TypedDictKeyViolationKind::DisallowedMethodCall {
+                                                method: method.to_owned(),
+                                            },
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                td_check_expr_reads(&expr_stmt.value, var_type, fields, out);
+            }
+            Stmt::Delete(del) => {
+                // Detect del movie["key"] — only an error for total=True TypedDicts
+                for target in &del.targets {
+                    let Expr::Subscript(sub) = target else {
+                        continue;
+                    };
+                    let Some(var_name) = expr_simple_name(&sub.value) else {
+                        continue;
+                    };
+                    let Some(class_name) = var_type.get(&var_name) else {
+                        continue;
+                    };
+                    let Some((_, _, is_total)) = fields.get(class_name.as_str()) else {
+                        continue;
+                    };
+                    if *is_total {
+                        out.push(TypedDictKeyViolation {
+                            span: text_range_to_span(del.range()),
+                            class_name: class_name.clone(),
+                            kind: TypedDictKeyViolationKind::DeleteSubscript,
+                        });
+                    }
+                }
+            }
+            Stmt::FunctionDef(func) => {
+                // Recurse with a local var_type that includes function-level annotated vars
+                // and function parameter types.
+                let mut local_vars = var_type.clone();
+                local_vars.extend(td_var_type_from_stmts(&func.body, fields));
+                // Add parameter types that are TypedDict classes.
+                for param in func
+                    .parameters
+                    .args
+                    .iter()
+                    .chain(func.parameters.posonlyargs.iter())
+                    .chain(func.parameters.kwonlyargs.iter())
+                {
+                    if let Some(ann) = &param.parameter.annotation {
+                        if let Some(type_name) = expr_simple_name(ann) {
+                            if fields.contains_key(type_name.as_str()) {
+                                local_vars.insert(param.parameter.name.to_string(), type_name);
+                            }
+                        }
+                    }
+                }
+                check_td_stmts(fields, &local_vars, &func.body, out);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Check `movie["key"] = value` subscript-assignment statements.
+fn td_check_subscript_assign(
+    node: &StmtAssign,
+    var_type: &std::collections::HashMap<String, String>,
+    fields: &TdFieldMap<'_>,
+    out: &mut Vec<TypedDictKeyViolation>,
+) {
+    use ruff_text_size::Ranged as _;
+    for target in &node.targets {
+        let Expr::Subscript(sub) = target else {
+            continue;
+        };
+        let Some(var_name) = expr_simple_name(&sub.value) else {
+            continue;
+        };
+        let Some(class_name) = var_type.get(&var_name) else {
+            continue;
+        };
+        let Some((all_fields, field_types, _)) = fields.get(class_name.as_str()) else {
+            continue;
+        };
+        let Expr::StringLiteral(key_str) = sub.slice.as_ref() else {
+            continue;
+        };
+        let key = key_str.value.to_string();
+        if !all_fields.contains(&key.as_str()) {
+            out.push(TypedDictKeyViolation {
+                span: text_range_to_span(node.range()),
+                class_name: class_name.clone(),
+                kind: TypedDictKeyViolationKind::InvalidSubscriptKey { key },
+            });
+        } else if let Some(expected) = field_types.get(key.as_str()) {
+            if let Some(actual) = expr_literal_type_name(&node.value) {
+                if !typeddict_field_type_compatible(actual, expected) {
+                    out.push(TypedDictKeyViolation {
+                        span: text_range_to_span(node.range()),
+                        class_name: class_name.clone(),
+                        kind: TypedDictKeyViolationKind::WrongSubscriptValueType {
+                            key,
+                            expected: expected.clone(),
+                        },
+                    });
+                }
+            }
+        }
+    }
+}
+
+/// Check `movie = {...}` regular assignments to `TypedDict` variables.
+fn td_check_regular_assign(
+    node: &StmtAssign,
+    var_type: &std::collections::HashMap<String, String>,
+    fields: &TdFieldMap<'_>,
+    out: &mut Vec<TypedDictKeyViolation>,
+) {
+    use ruff_text_size::Ranged as _;
+    for target in &node.targets {
+        let Some(var_name) = expr_simple_name(target) else {
+            continue;
+        };
+        let Some(class_name) = var_type.get(&var_name) else {
+            continue;
+        };
+        let Some((all_fields, field_types, is_total)) = fields.get(class_name.as_str()) else {
+            continue;
+        };
+        let Expr::Dict(dict) = node.value.as_ref() else {
+            continue;
+        };
+
+        // Flag any non-literal (variable) key in the dict
+        let has_non_literal = dict.items.iter().any(|item| {
+            item.key
+                .as_ref()
+                .is_some_and(|k| !matches!(k, Expr::StringLiteral(_)))
+        });
+        if has_non_literal {
+            out.push(TypedDictKeyViolation {
+                span: text_range_to_span(node.range()),
+                class_name: class_name.clone(),
+                kind: TypedDictKeyViolationKind::NonLiteralDictKey,
+            });
+            continue;
+        }
+
+        let literal_keys: Vec<String> = dict
+            .items
+            .iter()
+            .filter_map(|item| {
+                let Expr::StringLiteral(s) = item.key.as_ref()? else {
+                    return None;
+                };
+                Some(s.value.to_string())
+            })
+            .collect();
+
+        let invalid_keys: Vec<String> = literal_keys
+            .iter()
+            .filter(|k| !all_fields.contains(&k.as_str()))
+            .cloned()
+            .collect();
+        let missing_keys: Vec<String> = if *is_total {
+            all_fields
+                .iter()
+                .filter(|&&f| !literal_keys.iter().any(|k| k == f))
+                .map(|s| (*s).to_owned())
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        if !invalid_keys.is_empty() || !missing_keys.is_empty() {
+            out.push(TypedDictKeyViolation {
+                span: text_range_to_span(node.range()),
+                class_name: class_name.clone(),
+                kind: TypedDictKeyViolationKind::InvalidDictLiteral {
+                    invalid_keys,
+                    missing_keys,
+                },
+            });
+        }
+
+        // Check value types for each key-value pair
+        for item in &dict.items {
+            let Some(key_expr) = &item.key else { continue };
+            let Expr::StringLiteral(s) = key_expr else {
+                continue;
+            };
+            let key = s.value.to_string();
+            if !all_fields.contains(&key.as_str()) {
+                continue; // Already flagged as invalid key
+            }
+            if let Some(expected) = field_types.get(key.as_str()) {
+                if let Some(actual) = expr_literal_type_name(&item.value) {
+                    if !typeddict_field_type_compatible(actual, expected) {
+                        out.push(TypedDictKeyViolation {
+                            span: text_range_to_span(node.range()),
+                            class_name: class_name.clone(),
+                            kind: TypedDictKeyViolationKind::WrongSubscriptValueType {
+                                key,
+                                expected: expected.clone(),
+                            },
+                        });
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Check annotated assignments `var: TypedDict = {...}`.
+fn td_check_ann_assign(
+    node: &StmtAnnAssign,
+    fields: &TdFieldMap<'_>,
+    out: &mut Vec<TypedDictKeyViolation>,
+) {
+    use ruff_text_size::Ranged as _;
+    let Some(value) = &node.value else { return };
+    let Expr::Name(ann_name) = node.annotation.as_ref() else {
+        return;
+    };
+    let class_name = ann_name.id.as_str();
+    let Some((all_fields, _, is_total)) = fields.get(class_name) else {
+        return;
+    };
+    let Expr::Dict(dict) = value.as_ref() else {
+        return;
+    };
+
+    // Flag any non-literal (variable) key
+    let has_non_literal = dict.items.iter().any(|item| {
+        item.key
+            .as_ref()
+            .is_some_and(|k| !matches!(k, Expr::StringLiteral(_)))
+    });
+    if has_non_literal {
+        out.push(TypedDictKeyViolation {
+            span: text_range_to_span(node.range()),
+            class_name: class_name.to_owned(),
+            kind: TypedDictKeyViolationKind::NonLiteralDictKey,
+        });
+        return;
+    }
+
+    let literal_keys: Vec<String> = dict
+        .items
+        .iter()
+        .filter_map(|item| {
+            let Expr::StringLiteral(s) = item.key.as_ref()? else {
+                return None;
+            };
+            Some(s.value.to_string())
+        })
+        .collect();
+
+    let invalid_keys: Vec<String> = literal_keys
+        .iter()
+        .filter(|k| !all_fields.contains(&k.as_str()))
+        .cloned()
+        .collect();
+    let missing_keys: Vec<String> = if *is_total {
+        all_fields
+            .iter()
+            .filter(|&&f| !literal_keys.iter().any(|k| k == f))
+            .map(|s| (*s).to_owned())
+            .collect()
+    } else {
+        Vec::new()
+    };
+
+    if !invalid_keys.is_empty() || !missing_keys.is_empty() {
+        out.push(TypedDictKeyViolation {
+            span: text_range_to_span(node.range()),
+            class_name: class_name.to_owned(),
+            kind: TypedDictKeyViolationKind::InvalidDictLiteral {
+                invalid_keys,
+                missing_keys,
+            },
+        });
+    }
+
+    // Check value types in dict literal against field types.
+    let Some((_, field_types, _)) = fields.get(class_name) else {
+        return;
+    };
+    for item in &dict.items {
+        let Some(Expr::StringLiteral(s)) = &item.key else {
+            continue;
+        };
+        let key = s.value.to_string();
+        if !all_fields.contains(&key.as_str()) {
+            continue;
+        }
+        if let Some(expected) = field_types.get(key.as_str()) {
+            if let Some(actual) = expr_literal_type_name(&item.value) {
+                if !typeddict_field_type_compatible(actual, expected) {
+                    out.push(TypedDictKeyViolation {
+                        span: text_range_to_span(node.range()),
+                        class_name: class_name.to_owned(),
+                        kind: TypedDictKeyViolationKind::WrongSubscriptValueType {
+                            key,
+                            expected: expected.clone(),
+                        },
+                    });
+                }
+            }
+        }
+    }
+}
+
+/// Walk an expression and report subscript reads with invalid `TypedDict` keys.
+fn td_check_expr_reads(
+    expr: &Expr,
+    var_type: &std::collections::HashMap<String, String>,
+    fields: &TdFieldMap<'_>,
+    out: &mut Vec<TypedDictKeyViolation>,
+) {
+    use ruff_text_size::Ranged as _;
+    match expr {
+        Expr::Subscript(sub) => {
+            if let Some(var_name) = expr_simple_name(&sub.value) {
+                if let Some(class_name) = var_type.get(&var_name) {
+                    if let Some((all_fields, _, _)) = fields.get(class_name.as_str()) {
+                        if let Expr::StringLiteral(key_str) = sub.slice.as_ref() {
+                            let key = key_str.value.to_string();
+                            if !all_fields.contains(&key.as_str()) {
+                                out.push(TypedDictKeyViolation {
+                                    span: text_range_to_span(sub.range()),
+                                    class_name: class_name.clone(),
+                                    kind: TypedDictKeyViolationKind::SubscriptReadInvalidKey {
+                                        key,
+                                    },
+                                });
+                            }
+                        } else {
+                            // Non-literal key access on a TypedDict
+                            out.push(TypedDictKeyViolation {
+                                span: text_range_to_span(sub.range()),
+                                class_name: class_name.clone(),
+                                kind: TypedDictKeyViolationKind::NonLiteralDictKey,
+                            });
+                        }
+                    }
+                }
+            }
+            td_check_expr_reads(&sub.value, var_type, fields, out);
+            td_check_expr_reads(&sub.slice, var_type, fields, out);
+        }
+        Expr::Call(call) => {
+            td_check_expr_reads(&call.func, var_type, fields, out);
+            for arg in &call.arguments.args {
+                td_check_expr_reads(arg, var_type, fields, out);
+            }
+        }
+        Expr::BinOp(binop) => {
+            td_check_expr_reads(&binop.left, var_type, fields, out);
+            td_check_expr_reads(&binop.right, var_type, fields, out);
+        }
+        Expr::UnaryOp(unary) => td_check_expr_reads(&unary.operand, var_type, fields, out),
+        _ => {}
+    }
+}
+
+/// Return the inferred type name for a literal expression, or `None` if not a literal.
+fn expr_literal_type_name(expr: &Expr) -> Option<&'static str> {
+    match expr {
+        Expr::StringLiteral(_) | Expr::FString(_) => Some("str"),
+        Expr::NumberLiteral(n) => Some(match n.value {
+            ruff_python_ast::Number::Float(_) => "float",
+            ruff_python_ast::Number::Complex { .. } => "complex",
+            ruff_python_ast::Number::Int(_) => "int",
+        }),
+        Expr::BooleanLiteral(_) => Some("bool"),
+        Expr::NoneLiteral(_) => Some("None"),
+        _ => None,
+    }
+}
+
+/// Return `true` if an actual literal type is compatible with an expected `TypedDict` field type.
+fn typeddict_field_type_compatible(actual: &str, expected: &str) -> bool {
     actual == expected
+        || (actual == "bool" && expected == "int")
+        || (actual == "int" && expected == "float")
+}
+
+/// Collect `ReadOnly` violations from module-level statements and function bodies.
+fn collect_readonly_violations(
+    stmts: &[Stmt],
+    classes: &[ClassInfo],
+) -> Vec<ReadOnlyViolationInfo> {
+    let td_readonly_fields = build_typeddict_readonly_map(stmts, classes);
+    if td_readonly_fields.is_empty() {
+        return Vec::new();
+    }
+    let var_type = build_var_type_map(stmts, &td_readonly_fields);
+    let mut out = Vec::new();
+    for stmt in stmts {
+        match stmt {
+            Stmt::Assign(assign) => {
+                for target in &assign.targets {
+                    let Expr::Subscript(sub) = target else {
+                        continue;
+                    };
+                    let Some(var_name) = expr_simple_name(&sub.value) else {
+                        continue;
+                    };
+                    let Some(&class_name) = var_type.get(&var_name) else {
+                        continue;
+                    };
+                    let Some(fields) = td_readonly_fields.get(class_name) else {
+                        continue;
+                    };
+                    let Expr::StringLiteral(key_str) = sub.slice.as_ref() else {
+                        continue;
+                    };
+                    let key = key_str.value.to_string();
+                    if fields.contains(&key) {
+                        out.push(ReadOnlyViolationInfo {
+                            var_name,
+                            field_name: Some(key),
+                            kind: ReadOnlyViolationKind::SubscriptAssign,
+                            span: text_range_to_span(assign.range()),
+                        });
+                    }
+                }
+            }
+            Stmt::Expr(expr_stmt) => {
+                let Expr::Call(call) = expr_stmt.value.as_ref() else {
+                    continue;
+                };
+                let Expr::Attribute(attr) = call.func.as_ref() else {
+                    continue;
+                };
+                if attr.attr.as_str() != "update" {
+                    continue;
+                }
+                let Some(var_name) = expr_simple_name(&attr.value) else {
+                    continue;
+                };
+                if var_type.contains_key(&var_name) {
+                    out.push(ReadOnlyViolationInfo {
+                        var_name,
+                        field_name: None,
+                        kind: ReadOnlyViolationKind::UpdateCall,
+                        span: text_range_to_span(expr_stmt.value.range()),
+                    });
+                }
+            }
+            Stmt::FunctionDef(func) => {
+                check_kwargs_readonly_violations(func, &td_readonly_fields, &mut out);
+            }
+            _ => {}
+        }
+    }
+    out
 }
 
 // ---------------------------------------------------------------------------
@@ -2156,6 +4952,7 @@ fn collect_module_attr_assignments(stmts: &[Stmt]) -> Vec<crate::scope::ModuleAt
                         object_name,
                         attr_name: attr.attr.to_string(),
                         target_span: text_range_to_span(target.range()),
+                        rhs_span: Some(text_range_to_span(node.value.range())),
                     });
                 }
             }
@@ -2168,46 +4965,895 @@ fn collect_module_attr_assignments(stmts: &[Stmt]) -> Vec<crate::scope::ModuleAt
 // Final violation collection stub
 // ---------------------------------------------------------------------------
 
-/// Collect `Final` annotation violations from the module.
+/// Returns `true` when the annotation text refers to `Final`.
+fn ann_text_is_final(text: &str) -> bool {
+    let t = text.trim();
+    t == "Final" || t.starts_with("Final[") || t == "typing.Final" || t.starts_with("typing.Final[")
+}
+
+/// Collect the names of module-level `Final`-annotated variables from a statement list.
+fn collect_file_final_names(stmts: &[Stmt], source: &str) -> std::collections::HashSet<String> {
+    let mut names = std::collections::HashSet::new();
+    for stmt in stmts {
+        let Stmt::AnnAssign(ann) = stmt else { continue };
+        let Expr::Name(n) = ann.target.as_ref() else {
+            continue;
+        };
+        let range = ann.annotation.range();
+        let Some(ann_text) =
+            source.get(range.start().to_u32() as usize..range.end().to_u32() as usize)
+        else {
+            continue;
+        };
+        if ann_text_is_final(ann_text) {
+            names.insert(n.id.to_string());
+        }
+    }
+    names
+}
+
+/// Collect the set of imported names that are declared `Final` in a sibling module.
 ///
-/// This is a stub implementation — full `Final` violation detection is handled
-/// by the E0034 checker rule which already has access to all the necessary info.
-/// This function returns an empty list for now; the collector may be enhanced later.
+/// For `from X import Y`, checks if `Y` is `Final` in `X.py`.
+/// For `from X import *`, adds all `Final` names from `X.py`.
+/// Only resolves simple (non-dotted) module names that map to local `.py` files.
+fn collect_imported_final_names(
+    stmts: &[Stmt],
+    module_path: &str,
+) -> std::collections::HashSet<String> {
+    let mut out = std::collections::HashSet::new();
+    let Some(module_dir) = std::path::Path::new(module_path).parent() else {
+        return out;
+    };
+    for stmt in stmts {
+        let Stmt::ImportFrom(import_from) = stmt else {
+            continue;
+        };
+        let Some(module_name) = import_from.module.as_ref() else {
+            continue;
+        };
+        let module_str = module_name.to_string();
+        // Only handle simple (undotted) local module names.
+        if module_str.contains('.') {
+            continue;
+        }
+        let sibling_path = module_dir.join(format!("{module_str}.py"));
+        let Some(sibling_path_str) = sibling_path.to_str() else {
+            continue;
+        };
+        let Ok(sibling) = basilisk_parser::parse_file(sibling_path_str) else {
+            continue;
+        };
+        let sibling_finals = collect_file_final_names(&sibling.ast.body, &sibling.source);
+        let is_star = import_from.names.iter().any(|a| a.name.as_str() == "*");
+        if is_star {
+            out.extend(sibling_finals);
+        } else {
+            for alias in &import_from.names {
+                let name = alias.name.as_str();
+                if sibling_finals.contains(name) {
+                    out.insert(name.to_owned());
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Collect `Final` annotation violations from class and function bodies.
+///
+/// Detects:
+/// - `ClassFinalWithoutInit`: class attr annotated `Final` with no value and no __init__ assignment
+/// - `InstanceFinalOutsideInit`: `self.x: Final` in a non-`__init__` method
+/// - `InstanceReassignAlreadyInitialized`: assigning to `self.X` in __init__ when `X: Final = value`
+/// - `InstanceModifyFinal`: assigning/augmenting `self.X` in any method when `X: Final`
+/// - `SubclassOverrideFinal`: child class defines attr that parent declares `Final`
+/// - `FunctionLocalFinalModification`: modifying a function-local `Final` variable
+/// - `GlobalFinalModification`: assigning to a global that is module-level `Final`
 fn collect_final_violations(
-    _stmts: &[Stmt],
-    _classes: &[ClassInfo],
-    _source: &str,
+    stmts: &[Stmt],
+    classes: &[ClassInfo],
+    source: &str,
 ) -> Vec<crate::scope::FinalViolationInfo> {
-    Vec::new()
+    let mut out = Vec::new();
+
+    // Collect module-level Final names for GlobalFinalModification.
+    let module_final_names: std::collections::HashSet<&str> = stmts
+        .iter()
+        .filter_map(|s| {
+            let Stmt::AnnAssign(ann) = s else { return None };
+            let Expr::Name(n) = ann.target.as_ref() else {
+                return None;
+            };
+            let range = ann.annotation.range();
+            let ann_text =
+                source.get(range.start().to_u32() as usize..range.end().to_u32() as usize)?;
+            ann_text_is_final(ann_text).then(|| n.id.as_str())
+        })
+        .collect();
+
+    // Build a class-name -> Final-attr-names map for SubclassOverrideFinal.
+    let class_finals: std::collections::HashMap<&str, std::collections::HashSet<&str>> = classes
+        .iter()
+        .map(|cls| {
+            let finals: std::collections::HashSet<&str> = cls
+                .attributes
+                .iter()
+                .filter(|a| {
+                    a.has_annotation
+                        && a.annotation_span
+                            .and_then(|sp| source.get(sp.start as usize..sp.end as usize))
+                            .is_some_and(ann_text_is_final)
+                })
+                .map(|a| a.name.as_str())
+                .collect();
+            (cls.name.as_str(), finals)
+        })
+        .collect();
+
+    // Walk class definitions for per-class violations.
+    let empty_locals: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for stmt in stmts {
+        match stmt {
+            Stmt::ClassDef(cls_def) => {
+                collect_class_final_violations(cls_def, &class_finals, source, &mut out);
+            }
+            Stmt::FunctionDef(func) => {
+                collect_func_final_violations(func, &module_final_names, source, &mut out);
+            }
+            // Check module-level walrus operators in if/while/expr statements.
+            Stmt::If(node) => {
+                check_walrus_final(&node.test, &module_final_names, &empty_locals, &mut out);
+            }
+            Stmt::While(node) => {
+                check_walrus_final(&node.test, &module_final_names, &empty_locals, &mut out);
+            }
+            Stmt::Expr(expr_stmt) => {
+                check_walrus_final(
+                    &expr_stmt.value,
+                    &module_final_names,
+                    &empty_locals,
+                    &mut out,
+                );
+            }
+            Stmt::Assign(assign) => {
+                for target in &assign.targets {
+                    check_final_assign_target(target, &module_final_names, &empty_locals, &mut out);
+                }
+                check_walrus_final(&assign.value, &module_final_names, &empty_locals, &mut out);
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Collect Final violations inside a class definition.
+fn collect_class_final_violations(
+    cls_def: &StmtClassDef,
+    class_finals: &std::collections::HashMap<&str, std::collections::HashSet<&str>>,
+    source: &str,
+    out: &mut Vec<crate::scope::FinalViolationInfo>,
+) {
+    use crate::scope::{FinalViolationInfo, FinalViolationKind};
+
+    // Find parent class Final attrs for SubclassOverrideFinal.
+    let base_names: Vec<&str> = cls_def
+        .arguments
+        .as_deref()
+        .map(|args| {
+            args.args
+                .iter()
+                .filter_map(|base| {
+                    if let Expr::Name(n) = base {
+                        Some(n.id.as_str())
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // Collect Final attrs from all parent classes.
+    let parent_finals: std::collections::HashSet<&str> = base_names
+        .iter()
+        .filter_map(|name| class_finals.get(name))
+        .flat_map(|set| set.iter().copied())
+        .collect();
+
+    // Collect Final attrs in THIS class (annotation-only or with value).
+    let mut this_final_attrs: std::collections::HashMap<&str, bool> =
+        std::collections::HashMap::new();
+    // key = attr name, value = has_initializer
+    for body_stmt in &cls_def.body {
+        let Stmt::AnnAssign(ann) = body_stmt else {
+            continue;
+        };
+        let Expr::Name(n) = ann.target.as_ref() else {
+            continue;
+        };
+        let attr_name = n.id.as_str();
+        let range = ann.annotation.range();
+        let Some(ann_text) =
+            source.get(range.start().to_u32() as usize..range.end().to_u32() as usize)
+        else {
+            continue;
+        };
+        if ann_text_is_final(ann_text) {
+            let has_value = ann.value.is_some();
+            this_final_attrs.insert(attr_name, has_value);
+        }
+    }
+
+    // Find attrs unconditionally assigned in __init__.
+    let init_assigns: std::collections::HashSet<String> = cls_def
+        .body
+        .iter()
+        .find_map(|s| {
+            if let Stmt::FunctionDef(f) = s {
+                if f.name.as_str() == "__init__" {
+                    return Some(collect_unconditional_self_assigns(&f.body));
+                }
+            }
+            None
+        })
+        .unwrap_or_default();
+
+    // ClassFinalWithoutInit: attr has no initializer AND not in __init__ assignments.
+    for (attr_name, has_value) in &this_final_attrs {
+        if !has_value && !init_assigns.contains(*attr_name) {
+            // Find the span of this annotation.
+            for body_stmt in &cls_def.body {
+                let Stmt::AnnAssign(ann) = body_stmt else {
+                    continue;
+                };
+                let Expr::Name(n) = ann.target.as_ref() else {
+                    continue;
+                };
+                if n.id.as_str() != *attr_name {
+                    continue;
+                }
+                out.push(FinalViolationInfo {
+                    kind: FinalViolationKind::ClassFinalWithoutInit,
+                    span: text_range_to_span(ann.range()),
+                    name: (*attr_name).to_string(),
+                });
+                break;
+            }
+        }
+    }
+
+    // Walk all method bodies for instance Final violations.
+    for body_stmt in &cls_def.body {
+        let Stmt::FunctionDef(method) = body_stmt else {
+            continue;
+        };
+        let is_init = method.name.as_str() == "__init__";
+        for method_stmt in &method.body {
+            collect_instance_final_violations(method_stmt, is_init, &this_final_attrs, source, out);
+        }
+    }
+
+    collect_subclass_override_final(cls_def, &parent_finals, out);
+
+    // Recurse into nested class definitions.
+    for body_stmt in &cls_def.body {
+        if let Stmt::ClassDef(nested) = body_stmt {
+            collect_class_final_violations(nested, class_finals, source, out);
+        }
+    }
+}
+
+/// Detect a child class declaring an attr that is `Final` in a parent.
+fn collect_subclass_override_final(
+    cls_def: &StmtClassDef,
+    parent_finals: &std::collections::HashSet<&str>,
+    out: &mut Vec<crate::scope::FinalViolationInfo>,
+) {
+    use crate::scope::FinalViolationKind;
+    for body_stmt in &cls_def.body {
+        let attr_name = match body_stmt {
+            Stmt::Assign(assign) if assign.targets.len() == 1 => {
+                if let Expr::Name(n) = &assign.targets[0] {
+                    n.id.as_str()
+                } else {
+                    continue;
+                }
+            }
+            Stmt::AnnAssign(ann) => {
+                if let Expr::Name(n) = ann.target.as_ref() {
+                    n.id.as_str()
+                } else {
+                    continue;
+                }
+            }
+            _ => continue,
+        };
+
+        // Skip private name-mangled attributes.
+        if attr_name.starts_with("__") && !attr_name.ends_with("__") {
+            continue;
+        }
+
+        if parent_finals.contains(attr_name) {
+            let span = match body_stmt {
+                Stmt::Assign(assign) => text_range_to_span(assign.range()),
+                Stmt::AnnAssign(ann) => text_range_to_span(ann.range()),
+                _ => continue,
+            };
+            out.push(crate::scope::FinalViolationInfo {
+                kind: FinalViolationKind::SubclassOverrideFinal,
+                span,
+                name: attr_name.to_string(),
+            });
+        }
+    }
+}
+
+/// Check a single statement inside a method body for instance Final violations.
+fn collect_instance_final_violations(
+    stmt: &Stmt,
+    is_init: bool,
+    class_final_attrs: &std::collections::HashMap<&str, bool>,
+    source: &str,
+    out: &mut Vec<crate::scope::FinalViolationInfo>,
+) {
+    use crate::scope::{FinalViolationInfo, FinalViolationKind};
+    match stmt {
+        Stmt::AnnAssign(ann) => {
+            // self.x: Final = ... outside __init__
+            if !is_init {
+                if let Expr::Attribute(attr) = ann.target.as_ref() {
+                    let Some(ann_span) = Some(ann.annotation.range()) else {
+                        return;
+                    };
+                    let Some(ann_text) = source
+                        .get(ann_span.start().to_u32() as usize..ann_span.end().to_u32() as usize)
+                    else {
+                        return;
+                    };
+                    if ann_text_is_final(ann_text) {
+                        if let Expr::Name(self_name) = attr.value.as_ref() {
+                            if self_name.id == "self" {
+                                out.push(FinalViolationInfo {
+                                    kind: FinalViolationKind::InstanceFinalOutsideInit,
+                                    span: text_range_to_span(ann.range()),
+                                    name: attr.attr.to_string(),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Stmt::Assign(assign) => {
+            for target in &assign.targets {
+                let Expr::Attribute(attr) = target else {
+                    continue;
+                };
+                let Expr::Name(self_name) = attr.value.as_ref() else {
+                    continue;
+                };
+                if self_name.id != "self" {
+                    continue;
+                }
+                let field_name = attr.attr.as_str();
+                if let Some(&has_value) = class_final_attrs.get(field_name) {
+                    let kind = if is_init && has_value {
+                        FinalViolationKind::InstanceReassignAlreadyInitialized
+                    } else if !is_init {
+                        FinalViolationKind::InstanceModifyFinal
+                    } else {
+                        continue;
+                    };
+                    out.push(FinalViolationInfo {
+                        kind,
+                        span: text_range_to_span(assign.range()),
+                        name: field_name.to_string(),
+                    });
+                }
+            }
+        }
+        Stmt::AugAssign(aug) => {
+            // self.X += 1 — augmented assignment to Final class attr
+            let Expr::Attribute(attr) = aug.target.as_ref() else {
+                return;
+            };
+            let Expr::Name(self_name) = attr.value.as_ref() else {
+                return;
+            };
+            if self_name.id != "self" {
+                return;
+            }
+            let field_name = attr.attr.as_str();
+            if class_final_attrs.contains_key(field_name) {
+                out.push(FinalViolationInfo {
+                    kind: FinalViolationKind::InstanceModifyFinal,
+                    span: text_range_to_span(aug.range()),
+                    name: field_name.to_string(),
+                });
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Collect the names of attributes unconditionally assigned via `self.X = ...` in
+/// the top-level statements of a function body (i.e., not inside if/for/while/try).
+fn collect_unconditional_self_assigns(stmts: &[Stmt]) -> std::collections::HashSet<String> {
+    let mut names = std::collections::HashSet::new();
+    for stmt in stmts {
+        match stmt {
+            Stmt::Assign(assign) => {
+                for target in &assign.targets {
+                    let Expr::Attribute(attr) = target else {
+                        continue;
+                    };
+                    let Expr::Name(n) = attr.value.as_ref() else {
+                        continue;
+                    };
+                    if n.id == "self" {
+                        names.insert(attr.attr.to_string());
+                    }
+                }
+            }
+            // An if/else where both branches assign self.X counts as unconditional.
+            Stmt::If(if_stmt) if !if_stmt.elif_else_clauses.is_empty() => {
+                let has_else = if_stmt
+                    .elif_else_clauses
+                    .last()
+                    .is_some_and(|clause| clause.test.is_none());
+                if has_else {
+                    let if_assigns = collect_self_assigns_from_stmts(&if_stmt.body);
+                    // Intersect with all elif/else branch assigns.
+                    let mut common = if_assigns;
+                    for clause in &if_stmt.elif_else_clauses {
+                        let branch_assigns = collect_self_assigns_from_stmts(&clause.body);
+                        common.retain(|name| branch_assigns.contains(name));
+                    }
+                    names.extend(common);
+                }
+            }
+            _ => {}
+        }
+    }
+    names
+}
+
+/// Collect `self.X` assignment targets from a list of statements (non-recursive,
+/// only top-level assigns).
+fn collect_self_assigns_from_stmts(stmts: &[Stmt]) -> std::collections::HashSet<String> {
+    let mut names = std::collections::HashSet::new();
+    for stmt in stmts {
+        let Stmt::Assign(assign) = stmt else { continue };
+        for target in &assign.targets {
+            let Expr::Attribute(attr) = target else {
+                continue;
+            };
+            let Expr::Name(n) = attr.value.as_ref() else {
+                continue;
+            };
+            if n.id == "self" {
+                names.insert(attr.attr.to_string());
+            }
+        }
+    }
+    names
+}
+
+/// Collect Final violations inside a function body (`GlobalFinalModification` and
+/// `FunctionLocalFinalModification`).
+fn collect_func_final_violations(
+    func: &StmtFunctionDef,
+    module_final_names: &std::collections::HashSet<&str>,
+    source: &str,
+    out: &mut Vec<crate::scope::FinalViolationInfo>,
+) {
+    // Find `global X` declarations to know which names are global Final.
+    let global_final_names: std::collections::HashSet<&str> = func
+        .body
+        .iter()
+        .filter_map(|s| {
+            if let Stmt::Global(g) = s {
+                Some(g.names.iter().filter_map(|name| {
+                    if module_final_names.contains(name.as_str()) {
+                        Some(name.as_str())
+                    } else {
+                        None
+                    }
+                }))
+            } else {
+                None
+            }
+        })
+        .flatten()
+        .collect();
+
+    // Collect function-local Final variables (x: Final = ...) as we scan.
+    let mut local_finals: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    for stmt in &func.body {
+        collect_func_stmt_final_violations(
+            stmt,
+            &global_final_names,
+            &mut local_finals,
+            source,
+            out,
+        );
+    }
+}
+
+/// Process a single statement inside a function for Final violations.
+#[allow(clippy::too_many_arguments)]
+fn collect_func_stmt_final_violations(
+    stmt: &Stmt,
+    global_finals: &std::collections::HashSet<&str>,
+    local_finals: &mut std::collections::HashSet<String>,
+    source: &str,
+    out: &mut Vec<crate::scope::FinalViolationInfo>,
+) {
+    match stmt {
+        Stmt::AnnAssign(ann) => {
+            // Register x: Final = ... as a local Final.
+            if let Expr::Name(n) = ann.target.as_ref() {
+                let range = ann.annotation.range();
+                if let Some(ann_text) =
+                    source.get(range.start().to_u32() as usize..range.end().to_u32() as usize)
+                {
+                    if ann_text_is_final(ann_text) {
+                        local_finals.insert(n.id.to_string());
+                    }
+                }
+            }
+        }
+        Stmt::Assign(assign) => {
+            for target in &assign.targets {
+                check_final_assign_target(target, global_finals, local_finals, out);
+            }
+            // Also check for walrus operators in the RHS: `a = (x := 4)`.
+            check_walrus_final(&assign.value, global_finals, local_finals, out);
+        }
+        Stmt::AugAssign(aug) => {
+            check_final_assign_target(aug.target.as_ref(), global_finals, local_finals, out);
+        }
+        Stmt::For(for_stmt) => {
+            check_final_assign_target(for_stmt.target.as_ref(), global_finals, local_finals, out);
+        }
+        Stmt::With(with_stmt) => {
+            for item in &with_stmt.items {
+                if let Some(opt_var) = &item.optional_vars {
+                    check_final_assign_target(opt_var.as_ref(), global_finals, local_finals, out);
+                }
+            }
+        }
+        Stmt::Expr(expr_stmt) => {
+            check_walrus_final(expr_stmt.value.as_ref(), global_finals, local_finals, out);
+        }
+        _ => {}
+    }
+}
+
+/// Check if an assign target is a Final name and emit violations if so.
+fn check_final_assign_target(
+    target: &Expr,
+    global_finals: &std::collections::HashSet<&str>,
+    local_finals: &std::collections::HashSet<String>,
+    out: &mut Vec<crate::scope::FinalViolationInfo>,
+) {
+    use crate::scope::{FinalViolationInfo, FinalViolationKind};
+    match target {
+        Expr::Name(n) => {
+            let name = n.id.as_str();
+            if global_finals.contains(name) {
+                out.push(FinalViolationInfo {
+                    kind: FinalViolationKind::GlobalFinalModification,
+                    span: text_range_to_span(n.range()),
+                    name: name.to_string(),
+                });
+            } else if local_finals.contains(name) {
+                out.push(FinalViolationInfo {
+                    kind: FinalViolationKind::FunctionLocalFinalModification,
+                    span: text_range_to_span(n.range()),
+                    name: name.to_string(),
+                });
+            }
+        }
+        Expr::Tuple(tup) => {
+            // Handle tuple unpacking: (a, x) = ...
+            for elt in &tup.elts {
+                check_final_assign_target(elt, global_finals, local_finals, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Check an expression for walrus operator assignments to Final variables.
+fn check_walrus_final(
+    expr: &Expr,
+    global_finals: &std::collections::HashSet<&str>,
+    local_finals: &std::collections::HashSet<String>,
+    out: &mut Vec<crate::scope::FinalViolationInfo>,
+) {
+    use crate::scope::{FinalViolationInfo, FinalViolationKind};
+    if let Expr::Named(named) = expr {
+        let Expr::Name(n) = named.target.as_ref() else {
+            return;
+        };
+        let name = n.id.as_str();
+        if global_finals.contains(name) {
+            out.push(FinalViolationInfo {
+                kind: FinalViolationKind::GlobalFinalModification,
+                span: text_range_to_span(n.range()),
+                name: name.to_string(),
+            });
+        } else if local_finals.contains(name) {
+            out.push(FinalViolationInfo {
+                kind: FinalViolationKind::FunctionLocalFinalModification,
+                span: text_range_to_span(n.range()),
+                name: name.to_string(),
+            });
+        }
+    }
+}
+
+/// Collect enum `_value_` type annotation violations.
+///
+/// When `_value_: T` is declared in an enum class body (annotation-only, no value),
+/// every member literal that is type-incompatible with `T` is flagged, and any
+/// `self._value_ = param` assignment in `__init__` where `param` has a type
+/// annotation incompatible with `T` is also flagged.
+fn collect_enum_value_type_violations(
+    stmts: &[Stmt],
+    source: &str,
+) -> Vec<crate::scope::EnumValueTypeViolationInfo> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        let Stmt::ClassDef(cls) = stmt else { continue };
+        if !stmt_class_is_direct_enum(cls) {
+            continue;
+        }
+        let Some(declared_type) = find_enum_value_annotation(cls, source) else {
+            continue;
+        };
+        let class_name = cls.name.to_string();
+        check_enum_member_values(cls, source, &declared_type, &class_name, &mut out);
+        check_enum_init_value_param(cls, source, &declared_type, &class_name, &mut out);
+    }
+    out
+}
+
+/// Checks member value assignments in an enum class body against `_value_: T`.
+fn check_enum_member_values(
+    cls: &StmtClassDef,
+    _source: &str,
+    declared_type: &str,
+    class_name: &str,
+    out: &mut Vec<crate::scope::EnumValueTypeViolationInfo>,
+) {
+    use crate::scope::{EnumValueTypeViolationInfo, EnumValueTypeViolationKind};
+    for body_stmt in &cls.body {
+        let Stmt::Assign(assign) = body_stmt else {
+            continue;
+        };
+        if assign.targets.len() != 1 {
+            continue;
+        }
+        let Expr::Name(name_expr) = &assign.targets[0] else {
+            continue;
+        };
+        let member_name = name_expr.id.as_str();
+        // Skip dunder and special names.
+        if member_name.starts_with("__") || member_name == "_value_" {
+            continue;
+        }
+        let Some(actual_type) = infer_member_literal_type(assign.value.as_ref()) else {
+            continue;
+        };
+        if !enum_types_compatible(declared_type, &actual_type) {
+            out.push(EnumValueTypeViolationInfo {
+                kind: EnumValueTypeViolationKind::MemberValueTypeMismatch,
+                span: text_range_to_span(assign.value.range()),
+                class_name: class_name.to_owned(),
+                declared_type: declared_type.to_owned(),
+                actual_type,
+            });
+        }
+    }
+}
+
+/// Checks `self._value_ = param` assignments in `__init__` against `_value_: T`.
+fn check_enum_init_value_param(
+    cls: &StmtClassDef,
+    source: &str,
+    declared_type: &str,
+    class_name: &str,
+    out: &mut Vec<crate::scope::EnumValueTypeViolationInfo>,
+) {
+    for body_stmt in &cls.body {
+        let Stmt::FunctionDef(func) = body_stmt else {
+            continue;
+        };
+        if func.name.as_str() != "__init__" {
+            continue;
+        }
+        // Build parameter name -> annotation text map.
+        let params: Vec<(&str, &str)> = func
+            .parameters
+            .posonlyargs
+            .iter()
+            .chain(func.parameters.args.iter())
+            .filter_map(|p| {
+                if p.parameter.name.as_str() == "self" {
+                    return None;
+                }
+                let ann_expr = p.parameter.annotation.as_deref()?;
+                let range = ann_expr.range();
+                let ann_text = source
+                    .get(range.start().to_u32() as usize..range.end().to_u32() as usize)?
+                    .trim();
+                Some((p.parameter.name.as_str(), ann_text))
+            })
+            .collect();
+
+        for init_stmt in &func.body {
+            check_init_self_value_assign(
+                init_stmt,
+                &params,
+                source,
+                declared_type,
+                class_name,
+                out,
+            );
+        }
+    }
+}
+
+/// Checks a single `__init__` statement for `self._value_ = param` pattern.
+fn check_init_self_value_assign<'a>(
+    stmt: &Stmt,
+    params: &[(&'a str, &'a str)],
+    _source: &str,
+    declared_type: &str,
+    class_name: &str,
+    out: &mut Vec<crate::scope::EnumValueTypeViolationInfo>,
+) {
+    use crate::scope::{EnumValueTypeViolationInfo, EnumValueTypeViolationKind};
+    let Stmt::Assign(assign) = stmt else { return };
+    if assign.targets.len() != 1 {
+        return;
+    }
+    let Expr::Attribute(attr) = &assign.targets[0] else {
+        return;
+    };
+    if attr.attr.as_str() != "_value_" {
+        return;
+    }
+    let Expr::Name(self_name) = attr.value.as_ref() else {
+        return;
+    };
+    if self_name.id.as_str() != "self" {
+        return;
+    }
+    // Found self._value_ = <expr>; check if RHS is a parameter name.
+    let Expr::Name(rhs_name) = assign.value.as_ref() else {
+        return;
+    };
+    let param_name = rhs_name.id.as_str();
+    let Some((_, ann_text)) = params.iter().find(|(n, _)| *n == param_name) else {
+        return;
+    };
+    let actual_type = ann_text.trim().to_owned();
+    if !enum_types_compatible(declared_type, &actual_type) {
+        out.push(EnumValueTypeViolationInfo {
+            kind: EnumValueTypeViolationKind::InitValueParamTypeMismatch,
+            span: text_range_to_span(assign.range()),
+            class_name: class_name.to_owned(),
+            declared_type: declared_type.to_owned(),
+            actual_type,
+        });
+    }
+}
+
+/// Returns `true` when the class directly inherits from one of the standard enum bases.
+fn stmt_class_is_direct_enum(cls: &StmtClassDef) -> bool {
+    let Some(args) = cls.arguments.as_deref() else {
+        return false;
+    };
+    args.args.iter().any(|base| {
+        if let Expr::Name(n) = base {
+            ENUM_BASES.contains(&n.id.as_str())
+        } else {
+            false
+        }
+    })
+}
+
+/// Finds an `_value_: T` annotation-only declaration in the enum class body.
+///
+/// Returns the annotation text (e.g. `"int"`) if found, `None` otherwise.
+fn find_enum_value_annotation(cls: &StmtClassDef, source: &str) -> Option<String> {
+    for stmt in &cls.body {
+        let Stmt::AnnAssign(ann) = stmt else {
+            continue;
+        };
+        if ann.value.is_some() {
+            continue; // Must be annotation-only (no initializer).
+        }
+        let Expr::Name(n) = ann.target.as_ref() else {
+            continue;
+        };
+        if n.id != "_value_" {
+            continue;
+        }
+        let range = ann.annotation.range();
+        let ann_text = source
+            .get(range.start().to_u32() as usize..range.end().to_u32() as usize)?
+            .trim()
+            .to_owned();
+        return Some(ann_text);
+    }
+    None
+}
+
+/// Infers the primitive type name of a literal expression.
+///
+/// Returns `None` for non-literal expressions (tuples, calls, names, etc.) so
+/// that only clearly-typed literals are checked against `_value_: T`.
+fn infer_member_literal_type(expr: &Expr) -> Option<String> {
+    match expr {
+        Expr::StringLiteral(_) => Some("str".to_owned()),
+        Expr::NumberLiteral(n) => {
+            if matches!(n.value, ruff_python_ast::Number::Float(_)) {
+                Some("float".to_owned())
+            } else if matches!(n.value, ruff_python_ast::Number::Complex { .. }) {
+                Some("complex".to_owned())
+            } else {
+                Some("int".to_owned())
+            }
+        }
+        Expr::BooleanLiteral(_) => Some("bool".to_owned()),
+        Expr::NoneLiteral(_) => Some("None".to_owned()),
+        Expr::BytesLiteral(_) => Some("bytes".to_owned()),
+        _ => None,
+    }
+}
+
+/// Returns `true` when `actual` is compatible with `declared` as an enum `_value_` type.
+///
+/// - Identical types are always compatible.
+/// - `bool` is compatible with `int` (bool is a subclass of int).
+/// - `bool` and `int` are compatible with `float` (numeric tower).
+fn enum_types_compatible(declared: &str, actual: &str) -> bool {
+    if declared == actual {
+        return true;
+    }
+    // bool is a subtype of int.
+    if declared == "int" && actual == "bool" {
+        return true;
+    }
+    // int and bool are compatible with float (PEP 3141 numeric tower).
+    if declared == "float" && (actual == "int" || actual == "bool") {
+        return true;
+    }
+    false
 }
 
 // ---------------------------------------------------------------------------
 // Float parameter int-attr access collection (stub)
 // ---------------------------------------------------------------------------
 
-/// Collect attribute accesses of `int`-only attributes on `float`-typed parameters.
-///
-/// Full implementation is pending — returns empty for now.
-fn collect_float_param_int_attr_accesses(
-    _stmts: &[Stmt],
-    _source: &str,
-) -> Vec<FloatParamIntAttrAccess> {
-    Vec::new()
-}
+// Collect attribute accesses of `int`-only attributes on `float`-typed parameters.
+// Full implementation is pending — returns empty for now.
 
 // ---------------------------------------------------------------------------
 // Literal string / enum member mismatch collection (stub)
 // ---------------------------------------------------------------------------
 
-/// Collect `Literal["X.Y"]` vs `Literal[X.Y]` mismatches.
-///
-/// Full implementation is pending — returns empty for now.
-fn collect_literal_string_enum_mismatches(
-    _stmts: &[Stmt],
-    _source: &str,
-) -> Vec<LiteralStringEnumMismatch> {
-    Vec::new()
-}
+// Collect `Literal["X.Y"]` vs `Literal[X.Y]` mismatches.
+// Full implementation is pending — returns empty for now.
+
 // ---------------------------------------------------------------------------
 // Float parameter int-only attribute access collection
 // ---------------------------------------------------------------------------
@@ -2330,11 +5976,7 @@ fn literal_inner_content(ann: &str) -> Option<&str> {
 /// no quotes, no brackets, exactly one dot, both parts are simple identifiers).
 fn is_enum_member_form(s: &str) -> bool {
     let s = s.trim();
-    if s.contains(' ')
-        || s.contains('[')
-        || s.contains('(')
-        || s.contains('"')
-        || s.contains('\'')
+    if s.contains(' ') || s.contains('[') || s.contains('(') || s.contains('"') || s.contains('\'')
     {
         return false;
     }
@@ -2350,7 +5992,9 @@ fn is_enum_member_form(s: &str) -> bool {
 
 fn is_simple_ident(s: &str) -> bool {
     !s.is_empty()
-        && s.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_')
+        && s.chars()
+            .next()
+            .is_some_and(|c| c.is_alphabetic() || c == '_')
         && s.chars().all(|c| c.is_alphanumeric() || c == '_')
 }
 
@@ -2450,5 +6094,1572 @@ fn collect_literal_mismatches_in_function(
             enum_form: (*enum_form).to_owned(),
             span: text_range_to_span(lhs_name.range()),
         });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Module-level attribute access collection
+// ---------------------------------------------------------------------------
+
+/// Collect module-level `Name.attr` attribute accesses.
+///
+/// Used by E0059 to detect access to `__match_args__` on a dataclass with
+/// `match_args=False`.
+fn collect_module_attr_accesses(stmts: &[Stmt]) -> Vec<crate::scope::ModuleAttrAccessInfo> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        collect_attr_accesses_from_stmt(stmt, &mut out);
+    }
+    out
+}
+
+fn collect_attr_accesses_from_stmt(stmt: &Stmt, out: &mut Vec<crate::scope::ModuleAttrAccessInfo>) {
+    match stmt {
+        Stmt::Expr(node) => collect_attr_accesses_from_expr(&node.value, out),
+        Stmt::If(node) => {
+            collect_attr_accesses_from_expr(&node.test, out);
+            for s in &node.body {
+                collect_attr_accesses_from_stmt(s, out);
+            }
+            for clause in &node.elif_else_clauses {
+                if let Some(test) = &clause.test {
+                    collect_attr_accesses_from_expr(test, out);
+                }
+                for s in &clause.body {
+                    collect_attr_accesses_from_stmt(s, out);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_attr_accesses_from_expr(expr: &Expr, out: &mut Vec<crate::scope::ModuleAttrAccessInfo>) {
+    if let Expr::Attribute(attr) = expr {
+        if let Some(object_name) = expr_simple_name(&attr.value) {
+            out.push(crate::scope::ModuleAttrAccessInfo {
+                object_name,
+                attr_name: attr.attr.to_string(),
+                span: text_range_to_span(expr.range()),
+            });
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Annotated() direct-call detection
+// ---------------------------------------------------------------------------
+
+/// Collect spans of module-level calls where `Annotated` itself is called as a
+/// function — either bare `Annotated(...)` or parameterized `Annotated[T, ...]()`.
+///
+/// Used by `BSK-E0045` to detect invalid direct invocation of `Annotated`.
+fn collect_annotated_direct_calls(stmts: &[Stmt]) -> Vec<Span> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        if let Stmt::Expr(node) = stmt {
+            collect_annotated_calls_from_expr(&node.value, &mut out);
+        }
+    }
+    out
+}
+
+fn collect_annotated_calls_from_expr(expr: &Expr, out: &mut Vec<Span>) {
+    let Expr::Call(call) = expr else { return };
+    let is_annotated_callee = match call.func.as_ref() {
+        // `Annotated(...)` — bare name call
+        Expr::Name(n) => n.id.as_str() == "Annotated",
+        // `Annotated[T, ...]()` — subscript then call
+        Expr::Subscript(s) => {
+            matches!(s.value.as_ref(), Expr::Name(n) if n.id.as_str() == "Annotated")
+        }
+        _ => false,
+    };
+    if is_annotated_callee {
+        out.push(text_range_to_span(expr.range()));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Unhashable dataclass `.__hash__()` call detection
+// ---------------------------------------------------------------------------
+
+/// Collect module-level `ClassName(args).__hash__()` calls where `ClassName` is a
+/// non-hashable dataclass (has `eq=True`, is not frozen, not `unsafe_hash`, and
+/// does not define `__hash__` explicitly).
+///
+/// Used by `BSK-E0063`.
+fn collect_unhashable_hash_calls(
+    stmts: &[Stmt],
+    classes: &[crate::scope::ClassInfo],
+) -> Vec<crate::scope::UnhashableHashCallViolation> {
+    // Build the set of non-hashable dataclass names.
+    let non_hashable: std::collections::HashSet<&str> = classes
+        .iter()
+        .filter(|cls| {
+            cls.is_dataclass
+                && !cls.is_dataclass_eq_false
+                && !cls.is_dataclass_frozen
+                && !cls.is_dataclass_unsafe_hash
+                && !cls.method_names.iter().any(|m| m == "__hash__")
+        })
+        .map(|cls| cls.name.as_str())
+        .collect();
+
+    if non_hashable.is_empty() {
+        return Vec::new();
+    }
+
+    let mut out = Vec::new();
+    for stmt in stmts {
+        collect_unhashable_hash_calls_from_stmt(stmt, &non_hashable, &mut out);
+    }
+    out
+}
+
+fn collect_unhashable_hash_calls_from_stmt(
+    stmt: &Stmt,
+    non_hashable: &std::collections::HashSet<&str>,
+    out: &mut Vec<crate::scope::UnhashableHashCallViolation>,
+) {
+    match stmt {
+        Stmt::Expr(node) => {
+            collect_unhashable_hash_calls_from_expr(&node.value, non_hashable, out);
+        }
+        Stmt::If(node) => {
+            for s in &node.body {
+                collect_unhashable_hash_calls_from_stmt(s, non_hashable, out);
+            }
+            for clause in &node.elif_else_clauses {
+                for s in &clause.body {
+                    collect_unhashable_hash_calls_from_stmt(s, non_hashable, out);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Detect pattern: `ClassName(args).__hash__()` — an outer `Call` whose function
+/// is an `Attribute` with attr `__hash__`, and whose value is an inner `Call`
+/// whose function is a `Name` matching a non-hashable dataclass.
+fn collect_unhashable_hash_calls_from_expr(
+    expr: &Expr,
+    non_hashable: &std::collections::HashSet<&str>,
+    out: &mut Vec<crate::scope::UnhashableHashCallViolation>,
+) {
+    let Expr::Call(outer_call) = expr else {
+        return;
+    };
+    let Expr::Attribute(attr) = outer_call.func.as_ref() else {
+        return;
+    };
+    if attr.attr.as_str() != "__hash__" {
+        return;
+    }
+    // The value of the attribute must be a constructor call: `ClassName(args)`
+    let Expr::Call(inner_call) = attr.value.as_ref() else {
+        return;
+    };
+    let Expr::Name(name) = inner_call.func.as_ref() else {
+        return;
+    };
+    if non_hashable.contains(name.id.as_str()) {
+        out.push(crate::scope::UnhashableHashCallViolation {
+            class_name: name.id.to_string(),
+            span: text_range_to_span(expr.range()),
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Module-level ordering comparison collection
+// ---------------------------------------------------------------------------
+
+/// Collect module-level `a < b` / `a <= b` / `a > b` / `a >= b` comparisons
+/// where both operands are simple names.
+///
+/// Used by E0060 to detect cross-type ordering comparisons of `order=True`
+/// dataclass instances.
+fn collect_module_order_comparisons(
+    stmts: &[Stmt],
+) -> Vec<crate::scope::ModuleOrderComparisonInfo> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        collect_order_comparisons_from_stmt(stmt, &mut out);
+    }
+    out
+}
+
+fn collect_order_comparisons_from_stmt(
+    stmt: &Stmt,
+    out: &mut Vec<crate::scope::ModuleOrderComparisonInfo>,
+) {
+    match stmt {
+        Stmt::Expr(node) => collect_order_comparisons_from_expr(&node.value, out),
+        Stmt::If(node) => {
+            collect_order_comparisons_from_expr(&node.test, out);
+            for s in &node.body {
+                collect_order_comparisons_from_stmt(s, out);
+            }
+            for clause in &node.elif_else_clauses {
+                if let Some(test) = &clause.test {
+                    collect_order_comparisons_from_expr(test, out);
+                }
+                for s in &clause.body {
+                    collect_order_comparisons_from_stmt(s, out);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_order_comparisons_from_expr(
+    expr: &Expr,
+    out: &mut Vec<crate::scope::ModuleOrderComparisonInfo>,
+) {
+    let Expr::Compare(cmp) = expr else { return };
+    let Some(left_name) = expr_simple_name(&cmp.left) else {
+        return;
+    };
+    for (op, comparator) in cmp.ops.iter().zip(cmp.comparators.iter()) {
+        let scope_op = match op {
+            ruff_python_ast::CmpOp::Lt => crate::scope::CompareOp::Lt,
+            ruff_python_ast::CmpOp::LtE => crate::scope::CompareOp::LtE,
+            ruff_python_ast::CmpOp::Gt => crate::scope::CompareOp::Gt,
+            ruff_python_ast::CmpOp::GtE => crate::scope::CompareOp::GtE,
+            _ => continue,
+        };
+        let Some(right_name) = expr_simple_name(comparator) else {
+            continue;
+        };
+        out.push(crate::scope::ModuleOrderComparisonInfo {
+            left_name: left_name.clone(),
+            right_name,
+            op: scope_op,
+            span: text_range_to_span(expr.range()),
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Protocol Self-return conformance violation detection
+// ---------------------------------------------------------------------------
+
+/// Collect protocol `Self`-return conformance violations from function bodies.
+///
+/// When a function has a parameter typed as a `Protocol` with a `Self`-returning
+/// method, and that function is called with an argument whose class's corresponding
+/// method does not return `Self` or the class itself, this is a protocol violation.
+#[allow(dead_code)]
+fn collect_protocol_self_violations(
+    stmts: &[Stmt],
+    classes: &[ClassInfo],
+    functions: &[FunctionInfo],
+    source: &str,
+) -> Vec<ProtocolSelfViolation> {
+    // Build map of protocol class name -> list of method names that return `Self`.
+    let protocol_self_methods: std::collections::HashMap<&str, Vec<&str>> = classes
+        .iter()
+        .filter(|cls| cls.bases.iter().any(|b| b == "Protocol"))
+        .filter_map(|cls| {
+            let self_methods: Vec<&str> = functions
+                .iter()
+                .filter(|f| f.class_name.as_deref() == Some(cls.name.as_str()))
+                .filter(|f| {
+                    f.return_annotation_span.is_some_and(|span| {
+                        source
+                            .get(span.start as usize..span.end as usize)
+                            .map(str::trim)
+                            == Some("Self")
+                    })
+                })
+                .map(|f| f.name.as_str())
+                .collect();
+            if self_methods.is_empty() {
+                None
+            } else {
+                Some((cls.name.as_str(), self_methods))
+            }
+        })
+        .collect();
+
+    if protocol_self_methods.is_empty() {
+        return Vec::new();
+    }
+
+    // Build map of free function name -> parameter annotations (name, annotation text).
+    let func_param_types: std::collections::HashMap<&str, Vec<(&str, &str)>> = functions
+        .iter()
+        .filter(|f| f.class_name.is_none())
+        .map(|f| {
+            let param_types: Vec<(&str, &str)> = f
+                .parameters
+                .iter()
+                .filter_map(|p| {
+                    p.annotation_span.and_then(|span| {
+                        source
+                            .get(span.start as usize..span.end as usize)
+                            .map(|ann_text| (p.name.as_str(), ann_text.trim()))
+                    })
+                })
+                .collect();
+            (f.name.as_str(), param_types)
+        })
+        .collect();
+
+    // Build map of class name -> method name -> return annotation text.
+    let class_method_returns: std::collections::HashMap<
+        &str,
+        std::collections::HashMap<&str, &str>,
+    > = classes
+        .iter()
+        .map(|cls| {
+            let method_returns: std::collections::HashMap<&str, &str> = functions
+                .iter()
+                .filter(|f| f.class_name.as_deref() == Some(cls.name.as_str()))
+                .filter_map(|f| {
+                    f.return_annotation_span.and_then(|span| {
+                        source
+                            .get(span.start as usize..span.end as usize)
+                            .map(|ret_text| (f.name.as_str(), ret_text.trim()))
+                    })
+                })
+                .collect();
+            (cls.name.as_str(), method_returns)
+        })
+        .collect();
+
+    let mut out = Vec::new();
+    collect_protocol_violations_from_stmts(
+        stmts,
+        &protocol_self_methods,
+        &func_param_types,
+        &class_method_returns,
+        source,
+        &mut out,
+    );
+    out
+}
+
+/// Walk statements recursively to find function bodies with protocol violations.
+#[allow(dead_code)]
+fn collect_protocol_violations_from_stmts(
+    stmts: &[Stmt],
+    protocol_self_methods: &std::collections::HashMap<&str, Vec<&str>>,
+    func_param_types: &std::collections::HashMap<&str, Vec<(&str, &str)>>,
+    class_method_returns: &std::collections::HashMap<&str, std::collections::HashMap<&str, &str>>,
+    source: &str,
+    out: &mut Vec<ProtocolSelfViolation>,
+) {
+    for stmt in stmts {
+        if let Stmt::FunctionDef(func) = stmt {
+            check_protocol_violations_in_function(
+                func,
+                protocol_self_methods,
+                func_param_types,
+                class_method_returns,
+                source,
+                out,
+            );
+            // Recurse into nested functions.
+            collect_protocol_violations_from_stmts(
+                &func.body,
+                protocol_self_methods,
+                func_param_types,
+                class_method_returns,
+                source,
+                out,
+            );
+        }
+    }
+}
+
+/// Check a single function body for calls that violate protocol `Self` conformance.
+#[allow(dead_code)]
+fn check_protocol_violations_in_function(
+    func: &StmtFunctionDef,
+    protocol_self_methods: &std::collections::HashMap<&str, Vec<&str>>,
+    func_param_types: &std::collections::HashMap<&str, Vec<(&str, &str)>>,
+    class_method_returns: &std::collections::HashMap<&str, std::collections::HashMap<&str, &str>>,
+    source: &str,
+    out: &mut Vec<ProtocolSelfViolation>,
+) {
+    // Build a map from this function's parameter names to their annotation text.
+    let enclosing_param_types: std::collections::HashMap<&str, &str> = func
+        .parameters
+        .posonlyargs
+        .iter()
+        .chain(func.parameters.args.iter())
+        .chain(func.parameters.kwonlyargs.iter())
+        .filter_map(|p| {
+            p.parameter.annotation.as_deref().and_then(|ann| {
+                let range = ann.range();
+                source
+                    .get(range.start().to_u32() as usize..range.end().to_u32() as usize)
+                    .map(|text| (p.parameter.name.as_str(), text.trim()))
+            })
+        })
+        .collect();
+
+    if enclosing_param_types.is_empty() {
+        return;
+    }
+
+    // Walk the function body looking for call expressions.
+    for stmt in &func.body {
+        let call_expr = match stmt {
+            Stmt::Expr(expr_stmt) => {
+                if let Expr::Call(call) = expr_stmt.value.as_ref() {
+                    Some(call)
+                } else {
+                    None
+                }
+            }
+            Stmt::Assign(assign) => {
+                if let Expr::Call(call) = assign.value.as_ref() {
+                    Some(call)
+                } else {
+                    None
+                }
+            }
+            Stmt::AnnAssign(ann_assign) => ann_assign.value.as_deref().and_then(|val| {
+                if let Expr::Call(call) = val {
+                    Some(call)
+                } else {
+                    None
+                }
+            }),
+            _ => None,
+        };
+
+        let Some(call) = call_expr else { continue };
+
+        // Get the callee name (simple function call only).
+        let Some(callee_name) = expr_simple_name(&call.func) else {
+            continue;
+        };
+
+        // Check if the callee function has protocol-typed parameters.
+        let Some(callee_params) = func_param_types.get(callee_name.as_str()) else {
+            continue;
+        };
+
+        // Check each positional argument.
+        for (arg_idx, arg) in call.arguments.args.iter().enumerate() {
+            let Some((_param_name, param_type)) = callee_params.get(arg_idx) else {
+                continue;
+            };
+
+            // Is this parameter typed as a protocol with Self-returning methods?
+            let Some(required_methods) = protocol_self_methods.get(param_type) else {
+                continue;
+            };
+
+            // The argument must be a simple name referencing an enclosing parameter.
+            let Some(arg_name) = expr_simple_name(arg) else {
+                continue;
+            };
+
+            // Resolve the argument's type via the enclosing function's parameters.
+            let Some(arg_class_name) = enclosing_param_types.get(arg_name.as_str()) else {
+                continue;
+            };
+
+            // Look up the argument class's methods.
+            let Some(arg_methods) = class_method_returns.get(arg_class_name) else {
+                continue;
+            };
+
+            // Check each required Self-returning method.
+            for method_name in required_methods {
+                let Some(actual_return) = arg_methods.get(method_name) else {
+                    // Method missing entirely: different violation, skip here.
+                    continue;
+                };
+
+                // The return type is acceptable if it is:
+                // - `Self` (generic self-type)
+                // - The class name itself (concrete self-type)
+                // - A quoted version of the class name (forward reference)
+                let is_self = *actual_return == "Self";
+                let is_own_class = *actual_return == *arg_class_name;
+                let is_quoted_own_class = actual_return.trim_matches('"') == *arg_class_name;
+
+                if !is_self && !is_own_class && !is_quoted_own_class {
+                    out.push(ProtocolSelfViolation {
+                        class_name: (*arg_class_name).to_owned(),
+                        protocol_name: (*param_type).to_owned(),
+                        method_name: (*method_name).to_owned(),
+                        actual_return_type: (*actual_return).to_owned(),
+                        span: text_range_to_span(arg.range()),
+                    });
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// isinstance() with TypedDict class detection
+// ---------------------------------------------------------------------------
+
+/// Collect spans of `isinstance(x, T)` calls where `T` is a `TypedDict` class.
+///
+/// PEP 589: `TypedDict` type objects cannot be used in `isinstance()` tests.
+fn collect_isinstance_typeddict_violations(
+    stmts: &[Stmt],
+    typeddict_names: &std::collections::HashSet<&str>,
+) -> Vec<Span> {
+    let mut out = Vec::new();
+    collect_isinstance_typeddict_in_stmts(stmts, typeddict_names, &mut out);
+    out
+}
+
+fn collect_isinstance_typeddict_in_stmts(
+    stmts: &[Stmt],
+    typeddict_names: &std::collections::HashSet<&str>,
+    out: &mut Vec<Span>,
+) {
+    for stmt in stmts {
+        match stmt {
+            Stmt::If(node) => {
+                collect_isinstance_typeddict_in_expr(&node.test, typeddict_names, out);
+                collect_isinstance_typeddict_in_stmts(&node.body, typeddict_names, out);
+                for clause in &node.elif_else_clauses {
+                    if let Some(test) = &clause.test {
+                        collect_isinstance_typeddict_in_expr(test, typeddict_names, out);
+                    }
+                    collect_isinstance_typeddict_in_stmts(&clause.body, typeddict_names, out);
+                }
+            }
+            Stmt::Expr(node) => {
+                collect_isinstance_typeddict_in_expr(&node.value, typeddict_names, out);
+            }
+            Stmt::Assign(node) => {
+                collect_isinstance_typeddict_in_expr(&node.value, typeddict_names, out);
+            }
+            Stmt::AnnAssign(node) => {
+                if let Some(val) = &node.value {
+                    collect_isinstance_typeddict_in_expr(val, typeddict_names, out);
+                }
+            }
+            Stmt::While(node) => {
+                collect_isinstance_typeddict_in_expr(&node.test, typeddict_names, out);
+                collect_isinstance_typeddict_in_stmts(&node.body, typeddict_names, out);
+            }
+            Stmt::For(node) => {
+                collect_isinstance_typeddict_in_stmts(&node.body, typeddict_names, out);
+            }
+            Stmt::FunctionDef(node) => {
+                collect_isinstance_typeddict_in_stmts(&node.body, typeddict_names, out);
+            }
+            Stmt::ClassDef(node) => {
+                collect_isinstance_typeddict_in_stmts(&node.body, typeddict_names, out);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn collect_isinstance_typeddict_in_expr(
+    expr: &Expr,
+    typeddict_names: &std::collections::HashSet<&str>,
+    out: &mut Vec<Span>,
+) {
+    use ruff_text_size::Ranged as _;
+    let Expr::Call(call) = expr else { return };
+    let callee_is_isinstance = matches!(
+        call.func.as_ref(),
+        Expr::Name(n) if n.id == "isinstance" || n.id == "issubclass"
+    );
+    if !callee_is_isinstance {
+        return;
+    }
+    let Some(second_arg) = call.arguments.args.get(1) else {
+        return;
+    };
+    if let Expr::Name(name) = second_arg {
+        if typeddict_names.contains(name.id.as_str()) {
+            let range = call.range();
+            out.push(Span {
+                start: range.start().to_u32(),
+                end: range.end().to_u32(),
+            });
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// TypeVar bound=TypedDict detection
+// ---------------------------------------------------------------------------
+
+/// Collect spans of `TypeVar(...)` calls where `bound=TypedDict` (the abstract class).
+///
+/// PEP 589: `TypedDict` cannot be used as a bound for a `TypeVar`.
+fn collect_typevar_bound_typeddict_violations(stmts: &[Stmt]) -> Vec<Span> {
+    use ruff_text_size::Ranged as _;
+    let mut out = Vec::new();
+    for stmt in stmts {
+        let Stmt::Assign(node) = stmt else { continue };
+        let Expr::Call(call) = node.value.as_ref() else {
+            continue;
+        };
+        if !is_typevar_call(node.value.as_ref()) {
+            continue;
+        }
+        for kw in &call.arguments.keywords {
+            let is_bound_kw = kw.arg.as_ref().is_some_and(|a| a.as_str() == "bound");
+            if !is_bound_kw {
+                continue;
+            }
+            let is_typeddict = matches!(
+                &kw.value,
+                Expr::Name(n) if n.id.as_str() == "TypedDict"
+            );
+            if is_typeddict {
+                out.push(Span {
+                    start: call.range().start().to_u32(),
+                    end: call.range().end().to_u32(),
+                });
+            }
+        }
+    }
+    out
+}
+
+/// Collect module-level subscript expression sites (`Name[args...]` used as a statement
+/// or as the annotation in an annotated assignment).
+///
+/// These are used by BSK-E0092 to check whether user-defined generic types are
+/// subscripted with the correct number of type arguments.
+fn collect_generic_subscript_sites(stmts: &[Stmt]) -> Vec<GenericSubscriptSite> {
+    use ruff_text_size::Ranged as _;
+    let mut out = Vec::new();
+    for stmt in stmts {
+        match stmt {
+            // Bare expression statement: `LinkedList[int, str]`
+            Stmt::Expr(expr_stmt) => {
+                if let Expr::Subscript(sub) = expr_stmt.value.as_ref() {
+                    if let Some(base_name) = expr_simple_name(sub.value.as_ref()) {
+                        let arg_count = match sub.slice.as_ref() {
+                            Expr::Tuple(t) => t.elts.len(),
+                            _ => 1,
+                        };
+                        out.push(GenericSubscriptSite {
+                            base_name,
+                            arg_count,
+                            span: Span {
+                                start: sub.range().start().to_u32(),
+                                end: sub.range().end().to_u32(),
+                            },
+                        });
+                    }
+                }
+            }
+            // Annotated assignment: `x: LinkedList[int, str]` or `x: LinkedList[int, str] = ...`
+            Stmt::AnnAssign(ann_assign) => {
+                if let Expr::Subscript(sub) = ann_assign.annotation.as_ref() {
+                    if let Some(base_name) = expr_simple_name(sub.value.as_ref()) {
+                        let arg_count = match sub.slice.as_ref() {
+                            Expr::Tuple(t) => t.elts.len(),
+                            _ => 1,
+                        };
+                        out.push(GenericSubscriptSite {
+                            base_name,
+                            arg_count,
+                            span: Span {
+                                start: sub.range().start().to_u32(),
+                                end: sub.range().end().to_u32(),
+                            },
+                        });
+                    }
+                }
+            }
+            // Function definitions: check parameter annotations for subscripts
+            Stmt::FunctionDef(func_def) => {
+                for param in func_def
+                    .parameters
+                    .args
+                    .iter()
+                    .chain(func_def.parameters.posonlyargs.iter())
+                    .chain(func_def.parameters.kwonlyargs.iter())
+                {
+                    if let Some(ann) = &param.parameter.annotation {
+                        if let Expr::Subscript(sub) = ann.as_ref() {
+                            if let Some(base_name) = expr_simple_name(sub.value.as_ref()) {
+                                let arg_count = match sub.slice.as_ref() {
+                                    Expr::Tuple(t) => t.elts.len(),
+                                    _ => 1,
+                                };
+                                out.push(GenericSubscriptSite {
+                                    base_name,
+                                    arg_count,
+                                    span: Span {
+                                        start: sub.range().start().to_u32(),
+                                        end: sub.range().end().to_u32(),
+                                    },
+                                });
+                            }
+                        }
+                    }
+                }
+                // Also recurse into the function body for nested classes etc.
+                out.extend(collect_generic_subscript_sites(&func_def.body));
+            }
+            // Class definitions: recurse into body
+            Stmt::ClassDef(class_def) => {
+                out.extend(collect_generic_subscript_sites(&class_def.body));
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Collect module-level `TypeAlias` annotated assignments.
+///
+/// Finds all statements of the form `Name: TypeAlias = expr` at the top level
+/// and returns the alias name along with all simple names referenced in `expr`.
+fn collect_type_alias_defs(stmts: &[Stmt]) -> Vec<TypeAliasDefInfo> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        // Handle `Name: TypeAlias = expr` annotated assignments.
+        if let Stmt::AnnAssign(ann) = stmt {
+            let is_type_alias = matches!(
+                ann.annotation.as_ref(),
+                Expr::Name(n) if n.id.as_str() == "TypeAlias"
+            );
+            if !is_type_alias {
+                continue;
+            }
+            let Some(name) = expr_simple_name(ann.target.as_ref()) else {
+                continue;
+            };
+            let Some(rhs) = ann.value.as_ref() else {
+                continue;
+            };
+            out.push(build_type_alias_info(name, rhs, stmt));
+            continue;
+        }
+
+        // Handle bare `Name = Expr[...]` assignments (implicit type aliases).
+        if let Stmt::Assign(assign) = stmt {
+            if assign.targets.len() != 1 {
+                continue;
+            }
+            let Some(name) = expr_simple_name(&assign.targets[0]) else {
+                continue;
+            };
+            // Only treat subscript RHS as implicit alias (Name = Something[...])
+            if matches!(assign.value.as_ref(), Expr::Subscript(_)) {
+                out.push(build_type_alias_info(name, &assign.value, stmt));
+            }
+        }
+    }
+    out
+}
+
+/// Helper to build a `TypeAliasDefInfo` from an alias name and RHS expression.
+fn build_type_alias_info(name: String, rhs: &Expr, stmt: &Stmt) -> TypeAliasDefInfo {
+    let mut rhs_names = Vec::new();
+    collect_name_refs_from_expr(rhs, &mut rhs_names);
+
+    let (rhs_base_name, rhs_type_arg_names) = match rhs {
+        Expr::Subscript(sub) => {
+            let base = expr_simple_name(&sub.value);
+            let arg_names = match sub.slice.as_ref() {
+                Expr::Tuple(tup) => tup.elts.iter().filter_map(expr_simple_name).collect(),
+                single => expr_simple_name(single).into_iter().collect(),
+            };
+            (base, arg_names)
+        }
+        _ => (None, Vec::new()),
+    };
+
+    let mut rhs_string_refs = Vec::new();
+    collect_string_refs_from_expr(rhs, &mut rhs_string_refs);
+
+    let span = Span {
+        start: stmt.range().start().to_u32(),
+        end: stmt.range().end().to_u32(),
+    };
+
+    TypeAliasDefInfo {
+        name,
+        rhs_names,
+        rhs_base_name,
+        rhs_type_arg_names,
+        rhs_string_refs,
+        span,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// BSK-E0099: Protocol instantiation violation detection
+// ---------------------------------------------------------------------------
+
+/// Check if a class is a Protocol (has `Protocol` in its bases).
+fn class_is_protocol(cls: &ClassInfo) -> bool {
+    cls.bases.iter().any(|b| b == "Protocol")
+}
+
+/// Detect direct instantiation of Protocol classes (e.g. `Proto()`) and
+/// concrete subclasses that fail to implement all required protocol members.
+fn collect_protocol_instantiation_violations(
+    stmts: &[Stmt],
+    classes: &[ClassInfo],
+) -> Vec<ProtocolInstantiationViolation> {
+    let protocol_names: std::collections::HashSet<&str> = classes
+        .iter()
+        .filter(|cls| class_is_protocol(cls))
+        .map(|cls| cls.name.as_str())
+        .collect();
+
+    let class_map: std::collections::HashMap<&str, &ClassInfo> =
+        classes.iter().map(|cls| (cls.name.as_str(), cls)).collect();
+
+    let mut abstract_names: std::collections::HashSet<&str> = classes
+        .iter()
+        .filter(|cls| !class_is_protocol(cls) && class_has_abstract_methods(cls))
+        .map(|cls| cls.name.as_str())
+        .collect();
+
+    let protocol_required_methods = collect_protocol_required_methods(stmts, &protocol_names);
+    let protocol_required_attrs = collect_protocol_required_attrs(stmts, &protocol_names);
+
+    for cls in classes {
+        if class_is_protocol(cls) || abstract_names.contains(cls.name.as_str()) {
+            continue;
+        }
+        if class_missing_protocol_members(
+            cls,
+            &protocol_names,
+            &class_map,
+            &protocol_required_methods,
+            &protocol_required_attrs,
+        ) {
+            abstract_names.insert(cls.name.as_str());
+        }
+    }
+
+    if protocol_names.is_empty() && abstract_names.is_empty() {
+        return Vec::new();
+    }
+
+    let mut out = Vec::new();
+    find_protocol_instantiations(stmts, &protocol_names, &abstract_names, &mut out);
+    out
+}
+
+/// Check if a class has any methods decorated with `@abstractmethod`.
+fn class_has_abstract_methods(cls: &ClassInfo) -> bool {
+    cls.method_decorators
+        .iter()
+        .any(|(_method_name, decorators)| decorators.iter().any(|d| d == "abstractmethod"))
+}
+
+/// Check if a non-Protocol class missing required protocol members.
+fn class_missing_protocol_members(
+    cls: &ClassInfo,
+    protocol_names: &std::collections::HashSet<&str>,
+    class_map: &std::collections::HashMap<&str, &ClassInfo>,
+    protocol_required_methods: &std::collections::HashMap<
+        String,
+        std::collections::HashSet<String>,
+    >,
+    protocol_required_attrs: &std::collections::HashMap<String, std::collections::HashSet<String>>,
+) -> bool {
+    let mut required_methods: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut required_attrs: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    for base_name in &cls.bases {
+        if !protocol_names.contains(base_name.as_str()) {
+            continue;
+        }
+        if let Some(methods) = protocol_required_methods.get(base_name) {
+            required_methods.extend(methods.iter().cloned());
+        }
+        if let Some(attrs) = protocol_required_attrs.get(base_name) {
+            required_attrs.extend(attrs.iter().cloned());
+        }
+        if let Some(proto) = class_map.get(base_name.as_str()) {
+            collect_transitive_required_members(
+                proto,
+                protocol_names,
+                class_map,
+                protocol_required_methods,
+                protocol_required_attrs,
+                &mut required_methods,
+                &mut required_attrs,
+            );
+        }
+    }
+
+    if required_methods.is_empty() && required_attrs.is_empty() {
+        return false;
+    }
+
+    let mut provided_methods: std::collections::HashSet<&str> = std::collections::HashSet::new();
+    let mut provided_attrs: std::collections::HashSet<&str> = std::collections::HashSet::new();
+
+    collect_provided_members(cls, &mut provided_methods, &mut provided_attrs);
+
+    for base_name in &cls.bases {
+        if protocol_names.contains(base_name.as_str()) {
+            continue;
+        }
+        if let Some(base_cls) = class_map.get(base_name.as_str()) {
+            collect_provided_members(base_cls, &mut provided_methods, &mut provided_attrs);
+        }
+    }
+
+    for method in &required_methods {
+        if !provided_methods.contains(method.as_str()) {
+            return true;
+        }
+    }
+    for attr in &required_attrs {
+        if !provided_attrs.contains(attr.as_str()) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Recursively collect required members from Protocol bases of a Protocol.
+fn collect_transitive_required_members(
+    proto: &ClassInfo,
+    protocol_names: &std::collections::HashSet<&str>,
+    class_map: &std::collections::HashMap<&str, &ClassInfo>,
+    protocol_required_methods: &std::collections::HashMap<
+        String,
+        std::collections::HashSet<String>,
+    >,
+    protocol_required_attrs: &std::collections::HashMap<String, std::collections::HashSet<String>>,
+    required_methods: &mut std::collections::HashSet<String>,
+    required_attrs: &mut std::collections::HashSet<String>,
+) {
+    for base_name in &proto.bases {
+        if base_name == "Protocol" {
+            continue;
+        }
+        if !protocol_names.contains(base_name.as_str()) {
+            continue;
+        }
+        if let Some(methods) = protocol_required_methods.get(base_name) {
+            required_methods.extend(methods.iter().cloned());
+        }
+        if let Some(attrs) = protocol_required_attrs.get(base_name) {
+            required_attrs.extend(attrs.iter().cloned());
+        }
+        if let Some(parent_proto) = class_map.get(base_name.as_str()) {
+            collect_transitive_required_members(
+                parent_proto,
+                protocol_names,
+                class_map,
+                protocol_required_methods,
+                protocol_required_attrs,
+                required_methods,
+                required_attrs,
+            );
+        }
+    }
+}
+
+/// Collect methods and attributes provided by a class.
+fn collect_provided_members<'a>(
+    cls: &'a ClassInfo,
+    provided_methods: &mut std::collections::HashSet<&'a str>,
+    provided_attrs: &mut std::collections::HashSet<&'a str>,
+) {
+    for method_name in &cls.method_names {
+        provided_methods.insert(method_name.as_str());
+    }
+    for attr in &cls.attributes {
+        provided_attrs.insert(attr.name.as_str());
+    }
+}
+
+/// Collect required methods for each Protocol class by walking the AST.
+fn collect_protocol_required_methods(
+    stmts: &[Stmt],
+    protocol_names: &std::collections::HashSet<&str>,
+) -> std::collections::HashMap<String, std::collections::HashSet<String>> {
+    let mut result: std::collections::HashMap<String, std::collections::HashSet<String>> =
+        std::collections::HashMap::new();
+    for stmt in stmts {
+        let Stmt::ClassDef(cls) = stmt else { continue };
+        if !protocol_names.contains(cls.name.id.as_str()) {
+            continue;
+        }
+        let mut required = std::collections::HashSet::new();
+        for body_stmt in &cls.body {
+            let Stmt::FunctionDef(func) = body_stmt else {
+                continue;
+            };
+            let name = func.name.id.as_str();
+            if name.starts_with("__") && name.ends_with("__") {
+                continue;
+            }
+            let is_abstract = func.decorator_list.iter().any(
+                |d| matches!(&d.expression, Expr::Name(n) if n.id.as_str() == "abstractmethod"),
+            );
+            let is_stub = is_function_body_stub(&func.body);
+            if is_abstract || is_stub {
+                required.insert(name.to_string());
+            }
+        }
+        result.insert(cls.name.id.to_string(), required);
+    }
+    result
+}
+
+/// Check if a function body consists only of `...` (Ellipsis) or `pass`.
+fn is_function_body_stub(body: &[Stmt]) -> bool {
+    if body.len() != 1 {
+        return false;
+    }
+    match &body[0] {
+        Stmt::Pass(_) => true,
+        Stmt::Expr(expr_stmt) => matches!(&*expr_stmt.value, Expr::EllipsisLiteral(_)),
+        _ => false,
+    }
+}
+
+/// Collect required `ClassVar` attributes for each Protocol class.
+fn collect_protocol_required_attrs(
+    stmts: &[Stmt],
+    protocol_names: &std::collections::HashSet<&str>,
+) -> std::collections::HashMap<String, std::collections::HashSet<String>> {
+    let mut result: std::collections::HashMap<String, std::collections::HashSet<String>> =
+        std::collections::HashMap::new();
+    for stmt in stmts {
+        let Stmt::ClassDef(cls) = stmt else { continue };
+        if !protocol_names.contains(cls.name.id.as_str()) {
+            continue;
+        }
+        let mut required = std::collections::HashSet::new();
+        for body_stmt in &cls.body {
+            let Stmt::AnnAssign(ann) = body_stmt else {
+                continue;
+            };
+            if ann.value.is_some() {
+                continue;
+            }
+            if is_classvar_annotation(&ann.annotation) {
+                if let Some(name) = expr_simple_name(&ann.target) {
+                    required.insert(name);
+                }
+            }
+        }
+        result.insert(cls.name.id.to_string(), required);
+    }
+    result
+}
+
+/// Check if an annotation expression is `ClassVar` or `ClassVar[...]`.
+fn is_classvar_annotation(expr: &Expr) -> bool {
+    match expr {
+        Expr::Name(name) => name.id.as_str() == "ClassVar",
+        Expr::Subscript(sub) => {
+            matches!(&*sub.value, Expr::Name(name) if name.id.as_str() == "ClassVar")
+        }
+        _ => false,
+    }
+}
+
+/// Recursively walk statements finding call expressions that instantiate
+/// protocols or abstract classes.
+fn find_protocol_instantiations(
+    stmts: &[Stmt],
+    protocol_names: &std::collections::HashSet<&str>,
+    abstract_names: &std::collections::HashSet<&str>,
+    out: &mut Vec<ProtocolInstantiationViolation>,
+) {
+    for stmt in stmts {
+        match stmt {
+            Stmt::Assign(node) => {
+                check_expr_for_protocol_call(&node.value, protocol_names, abstract_names, out);
+            }
+            Stmt::AnnAssign(node) => {
+                if let Some(value) = &node.value {
+                    check_expr_for_protocol_call(value, protocol_names, abstract_names, out);
+                }
+            }
+            Stmt::Expr(node) => {
+                check_expr_for_protocol_call(&node.value, protocol_names, abstract_names, out);
+            }
+            Stmt::FunctionDef(func) => {
+                find_protocol_instantiations(&func.body, protocol_names, abstract_names, out);
+            }
+            Stmt::ClassDef(cls) => {
+                find_protocol_instantiations(&cls.body, protocol_names, abstract_names, out);
+            }
+            Stmt::If(node) => {
+                find_protocol_instantiations(&node.body, protocol_names, abstract_names, out);
+                for clause in &node.elif_else_clauses {
+                    find_protocol_instantiations(&clause.body, protocol_names, abstract_names, out);
+                }
+            }
+            Stmt::For(node) => {
+                find_protocol_instantiations(&node.body, protocol_names, abstract_names, out);
+            }
+            Stmt::While(node) => {
+                find_protocol_instantiations(&node.body, protocol_names, abstract_names, out);
+            }
+            Stmt::With(node) => {
+                find_protocol_instantiations(&node.body, protocol_names, abstract_names, out);
+            }
+            Stmt::Try(node) => {
+                find_protocol_instantiations(&node.body, protocol_names, abstract_names, out);
+                for handler in &node.handlers {
+                    let ExceptHandler::ExceptHandler(except) = handler;
+                    find_protocol_instantiations(&except.body, protocol_names, abstract_names, out);
+                }
+                find_protocol_instantiations(&node.finalbody, protocol_names, abstract_names, out);
+                find_protocol_instantiations(&node.orelse, protocol_names, abstract_names, out);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Check if an expression is a call to a Protocol or abstract class,
+/// or if a Protocol/abstract class is passed as an argument.
+fn check_expr_for_protocol_call(
+    expr: &Expr,
+    protocol_names: &std::collections::HashSet<&str>,
+    abstract_names: &std::collections::HashSet<&str>,
+    out: &mut Vec<ProtocolInstantiationViolation>,
+) {
+    if let Expr::Call(call) = expr {
+        if let Some(name) = expr_simple_name(&call.func) {
+            let name_str = name.as_str();
+            if protocol_names.contains(name_str) {
+                out.push(ProtocolInstantiationViolation {
+                    class_name: name,
+                    span: text_range_to_span(call.range),
+                    is_abstract: false,
+                });
+            } else if abstract_names.contains(name_str) {
+                out.push(ProtocolInstantiationViolation {
+                    class_name: name,
+                    span: text_range_to_span(call.range),
+                    is_abstract: true,
+                });
+            }
+        }
+        if let Expr::Subscript(sub) = call.func.as_ref() {
+            if let Some(name) = expr_simple_name(&sub.value) {
+                let name_str = name.as_str();
+                if protocol_names.contains(name_str) {
+                    out.push(ProtocolInstantiationViolation {
+                        class_name: name,
+                        span: text_range_to_span(call.range),
+                        is_abstract: false,
+                    });
+                } else if abstract_names.contains(name_str) {
+                    out.push(ProtocolInstantiationViolation {
+                        class_name: name,
+                        span: text_range_to_span(call.range),
+                        is_abstract: true,
+                    });
+                }
+            }
+        }
+        // Check if a Protocol/abstract class is passed as an argument.
+        for arg in &call.arguments.args {
+            if let Some(arg_name) = expr_simple_name(arg) {
+                let arg_str = arg_name.as_str();
+                if protocol_names.contains(arg_str) {
+                    out.push(ProtocolInstantiationViolation {
+                        class_name: arg_name,
+                        span: text_range_to_span(call.range),
+                        is_abstract: false,
+                    });
+                } else if abstract_names.contains(arg_str) {
+                    out.push(ProtocolInstantiationViolation {
+                        class_name: arg_name,
+                        span: text_range_to_span(call.range),
+                        is_abstract: true,
+                    });
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Protocol runtime_checkable violation detection
+// ---------------------------------------------------------------------------
+
+/// Information about a protocol class relevant to runtime-checkable checks.
+struct ProtocolInfo<'a> {
+    /// Whether the protocol is decorated with `@runtime_checkable`.
+    is_runtime_checkable: bool,
+    /// Whether the protocol has data attributes (non-method members).
+    is_data_protocol: bool,
+    /// The class name.
+    name: &'a str,
+}
+
+/// Build a map of protocol class names to their `ProtocolInfo`.
+fn build_protocol_map(classes: &[ClassInfo]) -> std::collections::HashMap<&str, ProtocolInfo<'_>> {
+    let mut map = std::collections::HashMap::new();
+    for cls in classes {
+        let is_protocol = cls.bases.iter().any(|b| b == "Protocol");
+        if !is_protocol {
+            continue;
+        }
+        let is_runtime_checkable = cls
+            .decorator_spans
+            .iter()
+            .any(|(name, _)| name == "runtime_checkable");
+        let is_data_protocol = !cls.attributes.is_empty();
+        map.insert(
+            cls.name.as_str(),
+            ProtocolInfo {
+                is_runtime_checkable,
+                is_data_protocol,
+                name: cls.name.as_str(),
+            },
+        );
+    }
+    map
+}
+
+/// Collect protocol `isinstance`/`issubclass` runtime-checkable violations.
+fn collect_protocol_rtc_violations(
+    stmts: &[Stmt],
+    classes: &[ClassInfo],
+) -> Vec<ProtocolRtcViolation> {
+    let protocol_map = build_protocol_map(classes);
+    if protocol_map.is_empty() {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    collect_protocol_rtc_in_stmts(stmts, &protocol_map, &mut out);
+    out
+}
+
+fn collect_protocol_rtc_in_stmts(
+    stmts: &[Stmt],
+    protocol_map: &std::collections::HashMap<&str, ProtocolInfo<'_>>,
+    out: &mut Vec<ProtocolRtcViolation>,
+) {
+    for stmt in stmts {
+        match stmt {
+            Stmt::If(node) => {
+                collect_protocol_rtc_in_expr(&node.test, protocol_map, out);
+                collect_protocol_rtc_in_stmts(&node.body, protocol_map, out);
+                for clause in &node.elif_else_clauses {
+                    if let Some(test) = &clause.test {
+                        collect_protocol_rtc_in_expr(test, protocol_map, out);
+                    }
+                    collect_protocol_rtc_in_stmts(&clause.body, protocol_map, out);
+                }
+            }
+            Stmt::Expr(node) => {
+                collect_protocol_rtc_in_expr(&node.value, protocol_map, out);
+            }
+            Stmt::Assign(node) => {
+                collect_protocol_rtc_in_expr(&node.value, protocol_map, out);
+            }
+            Stmt::AnnAssign(node) => {
+                if let Some(val) = &node.value {
+                    collect_protocol_rtc_in_expr(val, protocol_map, out);
+                }
+            }
+            Stmt::While(node) => {
+                collect_protocol_rtc_in_expr(&node.test, protocol_map, out);
+                collect_protocol_rtc_in_stmts(&node.body, protocol_map, out);
+            }
+            Stmt::For(node) => {
+                collect_protocol_rtc_in_stmts(&node.body, protocol_map, out);
+            }
+            Stmt::FunctionDef(node) => {
+                collect_protocol_rtc_in_stmts(&node.body, protocol_map, out);
+            }
+            Stmt::ClassDef(node) => {
+                collect_protocol_rtc_in_stmts(&node.body, protocol_map, out);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Check a single `isinstance`/`issubclass` call for protocol violations.
+fn check_protocol_arg(
+    call_name: &str,
+    arg_name: &str,
+    call_span: Span,
+    protocol_map: &std::collections::HashMap<&str, ProtocolInfo<'_>>,
+    out: &mut Vec<ProtocolRtcViolation>,
+) {
+    let Some(info) = protocol_map.get(arg_name) else {
+        return;
+    };
+
+    // Not runtime_checkable: error for both isinstance and issubclass.
+    if !info.is_runtime_checkable {
+        out.push(ProtocolRtcViolation {
+            span: call_span,
+            kind: ProtocolRtcViolationKind::NotRuntimeCheckable {
+                protocol_name: info.name.to_owned(),
+                call_name: call_name.to_owned(),
+            },
+        });
+        return;
+    }
+
+    // issubclass with a data protocol: error.
+    if call_name == "issubclass" && info.is_data_protocol {
+        out.push(ProtocolRtcViolation {
+            span: call_span,
+            kind: ProtocolRtcViolationKind::IssubclassDataProtocol {
+                protocol_name: info.name.to_owned(),
+            },
+        });
+    }
+}
+
+fn collect_protocol_rtc_in_expr(
+    expr: &Expr,
+    protocol_map: &std::collections::HashMap<&str, ProtocolInfo<'_>>,
+    out: &mut Vec<ProtocolRtcViolation>,
+) {
+    use ruff_text_size::Ranged as _;
+    let Expr::Call(call) = expr else { return };
+
+    // Determine if callee is isinstance or issubclass.
+    let call_name = match call.func.as_ref() {
+        Expr::Name(n) if n.id == "isinstance" => "isinstance",
+        Expr::Name(n) if n.id == "issubclass" => "issubclass",
+        _ => return,
+    };
+
+    let Some(second_arg) = call.arguments.args.get(1) else {
+        return;
+    };
+
+    let call_span = text_range_to_span(call.range());
+
+    match second_arg {
+        // Single name: isinstance(x, Proto)
+        Expr::Name(name) => {
+            check_protocol_arg(call_name, name.id.as_str(), call_span, protocol_map, out);
+        }
+        // Tuple: isinstance(x, (Proto1, Proto2))
+        Expr::Tuple(tuple) => {
+            for elt in &tuple.elts {
+                if let Expr::Name(name) = elt {
+                    check_protocol_arg(call_name, name.id.as_str(), call_span, protocol_map, out);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Generator violation collection
+// ---------------------------------------------------------------------------
+
+/// Valid return type names for synchronous generator functions.
+const SYNC_GENERATOR_TYPES: &[&str] = &["Generator", "Iterator", "Iterable"];
+
+/// Valid return type names for asynchronous generator functions.
+const ASYNC_GENERATOR_TYPES: &[&str] = &["AsyncGenerator", "AsyncIterator", "AsyncIterable"];
+
+/// Extract the base type name from an annotation string.
+fn base_type_name(annotation: &str) -> &str {
+    annotation
+        .find('[')
+        .map_or(annotation, |idx| &annotation[..idx])
+        .trim()
+}
+
+/// Collect generator-related violations from resolved function info.
+fn collect_generator_violations(
+    functions: &[FunctionInfo],
+    source: &str,
+) -> Vec<crate::scope::GeneratorViolation> {
+    let mut out = Vec::new();
+    for func in functions {
+        if !func.is_generator {
+            continue;
+        }
+        let Some(ann_span) = func.return_annotation_span else {
+            continue;
+        };
+        let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+            continue;
+        };
+        let base = base_type_name(ann_text);
+
+        let valid_types = if func.is_async {
+            ASYNC_GENERATOR_TYPES
+        } else {
+            SYNC_GENERATOR_TYPES
+        };
+
+        // Skip if the return type is a known generator-compatible type.
+        if valid_types.iter().any(|t| base.eq_ignore_ascii_case(t)) {
+            continue;
+        }
+
+        // Skip user-defined types (may be Protocols with __next__/__anext__).
+        // Only flag types that are clearly non-generator built-in types.
+        let first_char = base.chars().next();
+        if first_char.is_some_and(char::is_uppercase) {
+            continue;
+        }
+
+        out.push(crate::scope::GeneratorViolation {
+            span: ann_span,
+            kind: crate::scope::GeneratorViolationKind::InvalidReturnType {
+                func_name: func.name.clone(),
+                return_type: ann_text.to_owned(),
+            },
+        });
+    }
+    out
+}
+
+// ---------------------------------------------------------------------------
+// PEP 695 `type X = rhs` statement collection
+// ---------------------------------------------------------------------------
+
+/// Collect PEP 695 `type X = rhs` statements from the AST.
+fn collect_type_statements(stmts: &[Stmt]) -> Vec<TypeStatementInfo> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        match stmt {
+            Stmt::TypeAlias(ta) => {
+                if let Some(name_str) = expr_simple_name(&ta.name) {
+                    out.push(TypeStatementInfo {
+                        name: name_str,
+                        rhs_span: text_range_to_span(ta.value.range()),
+                        name_span: text_range_to_span(ta.name.range()),
+                    });
+                }
+            }
+            Stmt::ClassDef(cls) => out.extend(collect_type_statements(&cls.body)),
+            Stmt::FunctionDef(func) => out.extend(collect_type_statements(&func.body)),
+            _ => {}
+        }
+    }
+    out
+}
+
+// ---------------------------------------------------------------------------
+// TypeAliasType(...) call collection
+// ---------------------------------------------------------------------------
+
+/// Collect `X = TypeAliasType('X', rhs)` and `X: ann = TypeAliasType('X', rhs)` calls.
+fn collect_type_alias_type_calls(stmts: &[Stmt]) -> Vec<TypeAliasTypeCallInfo> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        match stmt {
+            Stmt::Assign(node) => {
+                if let Some(info) = type_alias_type_call_from_expr(&node.value, &node.targets) {
+                    out.push(info);
+                }
+            }
+            Stmt::AnnAssign(node) => {
+                if let Some(val) = &node.value {
+                    if let Some(lhs_name) = expr_simple_name(&node.target) {
+                        if let Some(info) = type_alias_type_call_from_value(val, &lhs_name) {
+                            out.push(info);
+                        }
+                    }
+                }
+            }
+            Stmt::ClassDef(cls) => out.extend(collect_type_alias_type_calls(&cls.body)),
+            Stmt::FunctionDef(func) => out.extend(collect_type_alias_type_calls(&func.body)),
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Extract `TypeAliasType(...)` info from a regular assignment's value + targets.
+fn type_alias_type_call_from_expr(value: &Expr, targets: &[Expr]) -> Option<TypeAliasTypeCallInfo> {
+    let lhs_name = targets.first().and_then(expr_simple_name)?;
+    type_alias_type_call_from_value(value, &lhs_name)
+}
+
+/// Extract `TypeAliasType(...)` info from an expression and known LHS name.
+fn type_alias_type_call_from_value(value: &Expr, lhs_name: &str) -> Option<TypeAliasTypeCallInfo> {
+    let Expr::Call(call) = value else { return None };
+    let callee = expr_simple_name(&call.func)?;
+    if callee != "TypeAliasType" {
+        return None;
+    }
+    let rhs_span = call
+        .arguments
+        .args
+        .get(1)
+        .map(|e| text_range_to_span(e.range()));
+    Some(TypeAliasTypeCallInfo {
+        lhs_name: lhs_name.to_owned(),
+        rhs_span,
+        span: text_range_to_span(call.range),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Invalid annotation collection (e.g. bare ellipsis in tuple subscript)
+// ---------------------------------------------------------------------------
+
+/// Collect invalid annotation patterns from statements.
+fn collect_invalid_annotations(stmts: &[Stmt]) -> Vec<InvalidStringAnnotation> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        match stmt {
+            Stmt::FunctionDef(func) => {
+                // Check parameter annotations
+                for param in func
+                    .parameters
+                    .args
+                    .iter()
+                    .chain(func.parameters.posonlyargs.iter())
+                    .chain(func.parameters.kwonlyargs.iter())
+                {
+                    if let Some(ann) = &param.parameter.annotation {
+                        check_annotation_for_invalid_patterns(ann, &mut out);
+                    }
+                }
+                // Check return annotation
+                if let Some(ret) = &func.returns {
+                    check_annotation_for_invalid_patterns(ret, &mut out);
+                }
+                out.extend(collect_invalid_annotations(&func.body));
+            }
+            Stmt::AnnAssign(ann) => {
+                check_annotation_for_invalid_patterns(&ann.annotation, &mut out);
+            }
+            Stmt::ClassDef(cls) => out.extend(collect_invalid_annotations(&cls.body)),
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Check a single annotation expression for invalid patterns like `tuple[...]`.
+fn check_annotation_for_invalid_patterns(expr: &Expr, out: &mut Vec<InvalidStringAnnotation>) {
+    if let Expr::Subscript(sub) = expr {
+        // Check for `tuple[...]` — bare ellipsis as only argument
+        let is_tuple = matches!(sub.value.as_ref(), Expr::Name(n) if n.id.as_str() == "tuple");
+        if is_tuple {
+            if let Expr::EllipsisLiteral(_) = sub.slice.as_ref() {
+                out.push(InvalidStringAnnotation {
+                    kind: InvalidStringAnnotationKind::NonTypeExpression,
+                    span: text_range_to_span(sub.range()),
+                });
+            }
+        }
     }
 }

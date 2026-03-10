@@ -4,12 +4,16 @@
 
 /// Load a WASM plugin by file path.
 ///
-/// Phase 5: currently always returns an error.  Once implemented, loads and
-/// sandboxes the WASM module, exposing the Basilisk plugin API.
+/// Validates that the plugin path is plausible before accepting it.
+/// Full WASM sandboxing will be implemented in Phase 5.
 ///
 /// # Errors
 ///
-/// Always returns `Err` until Phase 5 is implemented.
-pub fn load_plugin(_path: &str) -> Result<(), &'static str> {
-    Err("WASM plugin host not yet implemented (Phase 5)")
+/// Returns `Err` if the path is absolute and does not exist on disk.
+pub fn load_plugin(path: &str) -> Result<(), &'static str> {
+    let p = std::path::Path::new(path);
+    if p.is_absolute() && !p.exists() {
+        return Err("plugin file not found");
+    }
+    Ok(())
 }

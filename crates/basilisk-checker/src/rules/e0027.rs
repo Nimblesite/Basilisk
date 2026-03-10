@@ -11,7 +11,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0027",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0027",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0027",
 };
 
 /// Emits BSK-E0027 when the same `TypeVar` appears more than once in `Generic[...]`.

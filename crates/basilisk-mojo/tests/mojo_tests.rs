@@ -1,7 +1,6 @@
 //! Integration tests for basilisk-mojo.
 
 #[test]
-#[ignore = "Phase 4 not yet implemented — ownership checker is a stub"]
 fn ownership_checker_detects_mutation_of_borrowed() {
     // Phase 4: mutation of a `Borrowed` parameter must be flagged as BSK-E0031.
     // Currently returns no violations (placeholder).

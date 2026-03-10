@@ -13,13 +13,13 @@ use basilisk_resolver::{AttributeInfo, ClassInfo, ResolvedModule};
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
 use super::{
-    guards::{is_enum_class, is_protocol_class},
+    guards::{is_enum_class, is_namedtuple_class, is_protocol_class},
     Rule,
 };
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0005",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0005",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0005",
 };
 
 /// Emits BSK-E0005 for every unannotated class attribute.
@@ -38,7 +38,9 @@ impl Rule for MissingAttributeAnnotation {
         module
             .classes
             .iter()
-            .filter(|class| !is_enum_class(class) && !is_protocol_class(class))
+            .filter(|class| {
+                !is_enum_class(class) && !is_protocol_class(class) && !is_namedtuple_class(class)
+            })
             .for_each(|class| check_class(class, &module.path, &typevar_names, diagnostics));
     }
 }

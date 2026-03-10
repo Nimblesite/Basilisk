@@ -1,8 +1,8 @@
 ---
 layout: layouts/docs.njk
 title: Quick Start
-description: Your first Basilisk type check in under 5 minutes.
-keywords: basilisk, quick start, python type checking, tutorial
+description: Replace Pylance in 5 minutes. Install Basilisk's VS Code extension and get full Python language support — open source.
+keywords: basilisk, quick start, pylance replacement, python language server, type checking, tutorial, vs code
 eleventyNavigation:
   key: Quick Start
   order: 3
@@ -47,7 +47,7 @@ error[BSK-E0001]: Missing parameter type annotation
    |
    = help: add type annotation: `data: str`
    = note: all parameters must be explicitly typed
-   = see: https://basilisk-lang.org/docs/rules/#BSK-E0001
+   = see: https://www.basilisk-python.dev/docs/rules/#BSK-E0001
 
 error[BSK-E0002]: Missing return type annotation
   --> bad.py:1:1
@@ -131,7 +131,7 @@ error[BSK-E0001]: Missing parameter type annotation
    |
    = help: add type annotation: `data: str`         ← actionable fix
    = note: all parameters must be explicitly typed  ← explanation
-   = see: https://basilisk-lang.org/docs/rules/#BSK-E0001  ← documentation link
+   = see: https://www.basilisk-python.dev/docs/rules/#BSK-E0001  ← documentation link
 ```
 
 - **`error[BSK-EXXXX]`** — error with its unique code (orange)

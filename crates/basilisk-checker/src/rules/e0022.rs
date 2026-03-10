@@ -16,7 +16,7 @@ use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0022",
-    docs_url: "https://basilisk-lang.org/errors/BSK-E0022",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0022",
 };
 
 /// Emits BSK-E0022 for unhashable types used as dictionary keys.
