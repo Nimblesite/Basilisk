@@ -6050,12 +6050,21 @@ fn return_name_refs_simple_name() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn return_name_refs_not_collected_for_complex() -> Result<(), Box<dyn std::error::Error>> {
-    // return_name_refs only tracks simple `return name`, not complex expressions
+fn return_name_refs_collected_for_complex() -> Result<(), Box<dyn std::error::Error>> {
+    // return_name_refs tracks all name references in return expressions,
+    // including those inside complex expressions (binop, call, subscript, etc.)
+    // per Python LEGB scoping: names must be resolved in ALL expressions.
     let src = "def foo(x: int, y: int) -> int:\n    return x + y\n".to_owned();
     let parsed = parse_source(src, "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    assert!(resolved.functions[0].return_name_refs.is_empty());
+    assert!(resolved.functions[0]
+        .return_name_refs
+        .iter()
+        .any(|(n, _)| n == "x"));
+    assert!(resolved.functions[0]
+        .return_name_refs
+        .iter()
+        .any(|(n, _)| n == "y"));
     Ok(())
 }
 

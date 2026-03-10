@@ -10,7 +10,7 @@ mutants.out.old/
 
 .playwright-mcp/
 
-*.png
+
 
 
 node_modules/

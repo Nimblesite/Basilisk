@@ -15,13 +15,14 @@ use crate::scope::{
     AssertTypeCallInfo, AttributeInfo, BaseSubscriptEntry, CallSite, ClassInfo,
     FloatParamIntAttrAccess, FunctionInfo, GenericParamInfo, GenericSubscriptSite,
     HistoricalPositionalViolation, HistoricalPositionalViolationKind, ImportInfo, ImportKind,
-    ImportResolution, LiteralStringEnumMismatch, MatchStmtInfo, NamedTupleDefInfo, NewTypeCallInfo,
-    ParameterInfo, Pep695BoundViolation, Pep695BoundViolationKind, ProtocolInstantiationViolation,
+    ImportResolution, InvalidStringAnnotation, InvalidStringAnnotationKind,
+    LiteralStringEnumMismatch, MatchStmtInfo, NamedTupleDefInfo, NewTypeCallInfo, ParameterInfo,
+    Pep695BoundViolation, Pep695BoundViolationKind, ProtocolInstantiationViolation,
     ProtocolRtcViolation, ProtocolRtcViolationKind, ProtocolSelfViolation, ReadOnlyViolationInfo,
     ReadOnlyViolationKind, ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo,
-    RevealTypeCallInfo, RhsKind, Span, TypeAliasDefInfo, TypeArg, TypeVarCallInfo,
-    TypedDictCallInfo, TypedDictKeyViolation, TypedDictKeyViolationKind, TypedDictSecondArgKind,
-    UnhashableKeyRef, VariableInfo,
+    RevealTypeCallInfo, RhsKind, Span, TypeAliasDefInfo, TypeAliasTypeCallInfo, TypeArg,
+    TypeStatementInfo, TypeVarCallInfo, TypedDictCallInfo, TypedDictKeyViolation,
+    TypedDictKeyViolationKind, TypedDictSecondArgKind, UnhashableKeyRef, VariableInfo,
 };
 
 /// Collect all function definitions and module-level data from the parsed module.
@@ -48,6 +49,22 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
 
     let calls = collect_calls_from_stmts(&module.ast.body);
     let typevar_calls = collect_typevar_calls(&module.ast.body);
+
+    // Post-process: reclassify generic params that are not actual TypeVars.
+    let typevar_names: std::collections::HashSet<&str> =
+        typevar_calls.iter().map(|tv| tv.name.as_str()).collect();
+    for cls in &mut classes {
+        let mut non_tv = std::mem::take(&mut cls.generic_non_typevar_args);
+        cls.generic_params.retain(|p| {
+            if typevar_names.contains(p.name.as_str()) {
+                true
+            } else {
+                non_tv.push(p.span);
+                false
+            }
+        });
+        cls.generic_non_typevar_args = non_tv;
+    }
     let reveal_type_calls = collect_reveal_type_calls(&module.ast.body);
     let assert_type_calls =
         collect_assert_type_calls_from_stmts(&module.ast.body, &[], &module.source);
@@ -108,8 +125,8 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         readonly_violations,
         annotated_direct_call_spans: collect_annotated_direct_calls(&module.ast.body),
         imported_final_names: collect_imported_final_names(&module.ast.body, &module.path),
-        type_alias_type_calls: Vec::new(),
-        type_statements: Vec::new(),
+        type_alias_type_calls: collect_type_alias_type_calls(&module.ast.body),
+        type_statements: collect_type_statements(&module.ast.body),
         annotated_too_few_args: Vec::new(),
         namedtuple_defs,
         float_param_int_attr_accesses,
@@ -123,7 +140,7 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         historical_positional_violations: collect_historical_positional_violations(
             &module.ast.body,
         ),
-        invalid_string_annotations: Vec::new(),
+        invalid_string_annotations: collect_invalid_annotations(&module.ast.body),
         protocol_self_violations,
         protocol_instantiation_violations,
         isinstance_typeddict_violations,
@@ -713,9 +730,19 @@ fn class_info_from(
                     if let Some(name) = expr_simple_name(expr) {
                         return Some(name);
                     }
+                    // Attribute bases (e.g. `abc.ABC`): extract the attribute name
+                    if let ruff_python_ast::Expr::Attribute(attr) = expr {
+                        return Some(attr.attr.to_string());
+                    }
                     // Subscripted bases (e.g. `Protocol[T]`, `Generic[T]`): extract the base name
                     if let ruff_python_ast::Expr::Subscript(sub) = expr {
-                        return expr_simple_name(&sub.value);
+                        if let Some(name) = expr_simple_name(&sub.value) {
+                            return Some(name);
+                        }
+                        // Also handle `abc.ABC[T]`
+                        if let ruff_python_ast::Expr::Attribute(attr) = sub.value.as_ref() {
+                            return Some(attr.attr.to_string());
+                        }
                     }
                     None
                 })
@@ -734,6 +761,21 @@ fn class_info_from(
         collect_class_body(class, functions, match_stmts, pre_is_dataclass_kw_only);
 
     let (generic_params, generic_non_typevar_args) = extract_generic_params(class);
+
+    // If this class is a Protocol or ABC, mark methods with `pass`-only bodies as stubs.
+    let is_protocol_or_abc = bases.iter().any(|b| b == "Protocol" || b == "ABC");
+    if is_protocol_or_abc {
+        let class_name_str = class.name.to_string();
+        for func in functions.iter_mut() {
+            if func.class_name.as_deref() == Some(&class_name_str)
+                && !func.is_stub_body
+                && body_is_pass_only(class, &func.name)
+            {
+                func.is_stub_body = true;
+            }
+        }
+    }
+
     let is_typed_dict = bases.iter().any(|b| b == "TypedDict");
     // Detect `total=False` keyword in TypedDict subclass definitions.
     let is_typeddict_total = !is_typed_dict
@@ -1481,6 +1523,27 @@ fn body_is_stub(stmts: &[Stmt]) -> bool {
         .all(|s| matches!(s, Stmt::Expr(e) if matches!(e.value.as_ref(), Expr::EllipsisLiteral(_))))
 }
 
+/// Check if a method in a class has a `pass`-only body (optionally preceded by a docstring).
+///
+/// This is used to mark Protocol/ABC methods with `pass` as stubs.
+fn body_is_pass_only(class: &StmtClassDef, method_name: &str) -> bool {
+    for stmt in &class.body {
+        if let Stmt::FunctionDef(func) = stmt {
+            if func.name.as_str() == method_name {
+                let non_docstring: Vec<&Stmt> = func
+                    .body
+                    .iter()
+                    .skip_while(|s| {
+                        matches!(s, Stmt::Expr(e) if matches!(e.value.as_ref(), Expr::StringLiteral(_)))
+                    })
+                    .collect();
+                return non_docstring.iter().all(|s| matches!(s, Stmt::Pass(_)));
+            }
+        }
+    }
+    false
+}
+
 /// Collect annotated local variable declarations (`x: T` or `x: T = v`) from a
 /// function body, recursing into nested blocks but not into nested function bodies.
 ///
@@ -1773,8 +1836,8 @@ fn collect_return_name_refs(stmts: &[Stmt]) -> Vec<(String, Span)> {
     for stmt in stmts {
         match stmt {
             Stmt::Return(ret) => {
-                if let Some(Expr::Name(name)) = ret.value.as_deref() {
-                    out.push((name.id.to_string(), text_range_to_span(name.range)));
+                if let Some(val) = ret.value.as_deref() {
+                    collect_name_refs_with_spans(val, &mut out);
                 }
             }
             Stmt::If(node) => {
@@ -3080,6 +3143,34 @@ fn collect_name_refs_from_expr(expr: &Expr, out: &mut Vec<String>) {
             collect_name_refs_from_expr(&call.func, out);
             for arg in &call.arguments.args {
                 collect_name_refs_from_expr(arg, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Recursively collect all `Name` references with their spans from an expression tree.
+///
+/// Like [`collect_name_refs_from_expr`] but also returns the span of each name.
+fn collect_name_refs_with_spans(expr: &Expr, out: &mut Vec<(String, Span)>) {
+    match expr {
+        Expr::Name(name) => out.push((name.id.to_string(), text_range_to_span(name.range))),
+        Expr::Subscript(sub) => {
+            collect_name_refs_with_spans(&sub.value, out);
+        }
+        Expr::Attribute(attr) => collect_name_refs_with_spans(&attr.value, out),
+        Expr::Tuple(tup) => {
+            for elt in &tup.elts {
+                collect_name_refs_with_spans(elt, out);
+            }
+        }
+        Expr::BinOp(bin) => {
+            collect_name_refs_with_spans(&bin.left, out);
+            collect_name_refs_with_spans(&bin.right, out);
+        }
+        Expr::Call(call) => {
+            for arg in &call.arguments.args {
+                collect_name_refs_with_spans(arg, out);
             }
         }
         _ => {}
@@ -4401,8 +4492,25 @@ fn check_td_stmts(
             }
             Stmt::FunctionDef(func) => {
                 // Recurse with a local var_type that includes function-level annotated vars
+                // and function parameter types.
                 let mut local_vars = var_type.clone();
                 local_vars.extend(td_var_type_from_stmts(&func.body, fields));
+                // Add parameter types that are TypedDict classes.
+                for param in func
+                    .parameters
+                    .args
+                    .iter()
+                    .chain(func.parameters.posonlyargs.iter())
+                    .chain(func.parameters.kwonlyargs.iter())
+                {
+                    if let Some(ann) = &param.parameter.annotation {
+                        if let Some(type_name) = expr_simple_name(ann) {
+                            if fields.contains_key(type_name.as_str()) {
+                                local_vars.insert(param.parameter.name.to_string(), type_name);
+                            }
+                        }
+                    }
+                }
                 check_td_stmts(fields, &local_vars, &func.body, out);
             }
             _ => {}
@@ -4630,6 +4738,34 @@ fn td_check_ann_assign(
             },
         });
     }
+
+    // Check value types in dict literal against field types.
+    let Some((_, field_types, _)) = fields.get(class_name) else {
+        return;
+    };
+    for item in &dict.items {
+        let Some(Expr::StringLiteral(s)) = &item.key else {
+            continue;
+        };
+        let key = s.value.to_string();
+        if !all_fields.contains(&key.as_str()) {
+            continue;
+        }
+        if let Some(expected) = field_types.get(key.as_str()) {
+            if let Some(actual) = expr_literal_type_name(&item.value) {
+                if !typeddict_field_type_compatible(actual, expected) {
+                    out.push(TypedDictKeyViolation {
+                        span: text_range_to_span(node.range()),
+                        class_name: class_name.to_owned(),
+                        kind: TypedDictKeyViolationKind::WrongSubscriptValueType {
+                            key,
+                            expected: expected.clone(),
+                        },
+                    });
+                }
+            }
+        }
+    }
 }
 
 /// Walk an expression and report subscript reads with invalid `TypedDict` keys.
@@ -4656,6 +4792,13 @@ fn td_check_expr_reads(
                                     },
                                 });
                             }
+                        } else {
+                            // Non-literal key access on a TypedDict
+                            out.push(TypedDictKeyViolation {
+                                span: text_range_to_span(sub.range()),
+                                class_name: class_name.clone(),
+                                kind: TypedDictKeyViolationKind::NonLiteralDictKey,
+                            });
                         }
                     }
                 }
@@ -4949,15 +5092,38 @@ fn collect_final_violations(
         .collect();
 
     // Walk class definitions for per-class violations.
+    let empty_locals: std::collections::HashSet<String> = std::collections::HashSet::new();
     for stmt in stmts {
-        let Stmt::ClassDef(cls_def) = stmt else {
-            // Walk function bodies for Global/Local Final violations.
-            if let Stmt::FunctionDef(func) = stmt {
+        match stmt {
+            Stmt::ClassDef(cls_def) => {
+                collect_class_final_violations(cls_def, &class_finals, source, &mut out);
+            }
+            Stmt::FunctionDef(func) => {
                 collect_func_final_violations(func, &module_final_names, source, &mut out);
             }
-            continue;
-        };
-        collect_class_final_violations(cls_def, &class_finals, source, &mut out);
+            // Check module-level walrus operators in if/while/expr statements.
+            Stmt::If(node) => {
+                check_walrus_final(&node.test, &module_final_names, &empty_locals, &mut out);
+            }
+            Stmt::While(node) => {
+                check_walrus_final(&node.test, &module_final_names, &empty_locals, &mut out);
+            }
+            Stmt::Expr(expr_stmt) => {
+                check_walrus_final(
+                    &expr_stmt.value,
+                    &module_final_names,
+                    &empty_locals,
+                    &mut out,
+                );
+            }
+            Stmt::Assign(assign) => {
+                for target in &assign.targets {
+                    check_final_assign_target(target, &module_final_names, &empty_locals, &mut out);
+                }
+                check_walrus_final(&assign.value, &module_final_names, &empty_locals, &mut out);
+            }
+            _ => {}
+        }
     }
     out
 }
@@ -7060,7 +7226,8 @@ fn find_protocol_instantiations(
     }
 }
 
-/// Check if an expression is a call to a Protocol or abstract class.
+/// Check if an expression is a call to a Protocol or abstract class,
+/// or if a Protocol/abstract class is passed as an argument.
 fn check_expr_for_protocol_call(
     expr: &Expr,
     protocol_names: &std::collections::HashSet<&str>,
@@ -7096,6 +7263,25 @@ fn check_expr_for_protocol_call(
                 } else if abstract_names.contains(name_str) {
                     out.push(ProtocolInstantiationViolation {
                         class_name: name,
+                        span: text_range_to_span(call.range),
+                        is_abstract: true,
+                    });
+                }
+            }
+        }
+        // Check if a Protocol/abstract class is passed as an argument.
+        for arg in &call.arguments.args {
+            if let Some(arg_name) = expr_simple_name(arg) {
+                let arg_str = arg_name.as_str();
+                if protocol_names.contains(arg_str) {
+                    out.push(ProtocolInstantiationViolation {
+                        class_name: arg_name,
+                        span: text_range_to_span(call.range),
+                        is_abstract: false,
+                    });
+                } else if abstract_names.contains(arg_str) {
+                    out.push(ProtocolInstantiationViolation {
+                        class_name: arg_name,
                         span: text_range_to_span(call.range),
                         is_abstract: true,
                     });
@@ -7340,4 +7526,140 @@ fn collect_generator_violations(
         });
     }
     out
+}
+
+// ---------------------------------------------------------------------------
+// PEP 695 `type X = rhs` statement collection
+// ---------------------------------------------------------------------------
+
+/// Collect PEP 695 `type X = rhs` statements from the AST.
+fn collect_type_statements(stmts: &[Stmt]) -> Vec<TypeStatementInfo> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        match stmt {
+            Stmt::TypeAlias(ta) => {
+                if let Some(name_str) = expr_simple_name(&ta.name) {
+                    out.push(TypeStatementInfo {
+                        name: name_str,
+                        rhs_span: text_range_to_span(ta.value.range()),
+                        name_span: text_range_to_span(ta.name.range()),
+                    });
+                }
+            }
+            Stmt::ClassDef(cls) => out.extend(collect_type_statements(&cls.body)),
+            Stmt::FunctionDef(func) => out.extend(collect_type_statements(&func.body)),
+            _ => {}
+        }
+    }
+    out
+}
+
+// ---------------------------------------------------------------------------
+// TypeAliasType(...) call collection
+// ---------------------------------------------------------------------------
+
+/// Collect `X = TypeAliasType('X', rhs)` and `X: ann = TypeAliasType('X', rhs)` calls.
+fn collect_type_alias_type_calls(stmts: &[Stmt]) -> Vec<TypeAliasTypeCallInfo> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        match stmt {
+            Stmt::Assign(node) => {
+                if let Some(info) = type_alias_type_call_from_expr(&node.value, &node.targets) {
+                    out.push(info);
+                }
+            }
+            Stmt::AnnAssign(node) => {
+                if let Some(val) = &node.value {
+                    if let Some(lhs_name) = expr_simple_name(&node.target) {
+                        if let Some(info) = type_alias_type_call_from_value(val, &lhs_name) {
+                            out.push(info);
+                        }
+                    }
+                }
+            }
+            Stmt::ClassDef(cls) => out.extend(collect_type_alias_type_calls(&cls.body)),
+            Stmt::FunctionDef(func) => out.extend(collect_type_alias_type_calls(&func.body)),
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Extract `TypeAliasType(...)` info from a regular assignment's value + targets.
+fn type_alias_type_call_from_expr(value: &Expr, targets: &[Expr]) -> Option<TypeAliasTypeCallInfo> {
+    let lhs_name = targets.first().and_then(expr_simple_name)?;
+    type_alias_type_call_from_value(value, &lhs_name)
+}
+
+/// Extract `TypeAliasType(...)` info from an expression and known LHS name.
+fn type_alias_type_call_from_value(value: &Expr, lhs_name: &str) -> Option<TypeAliasTypeCallInfo> {
+    let Expr::Call(call) = value else { return None };
+    let callee = expr_simple_name(&call.func)?;
+    if callee != "TypeAliasType" {
+        return None;
+    }
+    let rhs_span = call
+        .arguments
+        .args
+        .get(1)
+        .map(|e| text_range_to_span(e.range()));
+    Some(TypeAliasTypeCallInfo {
+        lhs_name: lhs_name.to_owned(),
+        rhs_span,
+        span: text_range_to_span(call.range),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Invalid annotation collection (e.g. bare ellipsis in tuple subscript)
+// ---------------------------------------------------------------------------
+
+/// Collect invalid annotation patterns from statements.
+fn collect_invalid_annotations(stmts: &[Stmt]) -> Vec<InvalidStringAnnotation> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        match stmt {
+            Stmt::FunctionDef(func) => {
+                // Check parameter annotations
+                for param in func
+                    .parameters
+                    .args
+                    .iter()
+                    .chain(func.parameters.posonlyargs.iter())
+                    .chain(func.parameters.kwonlyargs.iter())
+                {
+                    if let Some(ann) = &param.parameter.annotation {
+                        check_annotation_for_invalid_patterns(ann, &mut out);
+                    }
+                }
+                // Check return annotation
+                if let Some(ret) = &func.returns {
+                    check_annotation_for_invalid_patterns(ret, &mut out);
+                }
+                out.extend(collect_invalid_annotations(&func.body));
+            }
+            Stmt::AnnAssign(ann) => {
+                check_annotation_for_invalid_patterns(&ann.annotation, &mut out);
+            }
+            Stmt::ClassDef(cls) => out.extend(collect_invalid_annotations(&cls.body)),
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Check a single annotation expression for invalid patterns like `tuple[...]`.
+fn check_annotation_for_invalid_patterns(expr: &Expr, out: &mut Vec<InvalidStringAnnotation>) {
+    if let Expr::Subscript(sub) = expr {
+        // Check for `tuple[...]` — bare ellipsis as only argument
+        let is_tuple = matches!(sub.value.as_ref(), Expr::Name(n) if n.id.as_str() == "tuple");
+        if is_tuple {
+            if let Expr::EllipsisLiteral(_) = sub.slice.as_ref() {
+                out.push(InvalidStringAnnotation {
+                    kind: InvalidStringAnnotationKind::NonTypeExpression,
+                    span: text_range_to_span(sub.range()),
+                });
+            }
+        }
+    }
 }
