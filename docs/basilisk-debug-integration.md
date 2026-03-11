@@ -74,17 +74,16 @@ Add two custom requests to the LSP server and a Python resolver module.
 
 ### `basilisk/startDebugSession`
 
+The LSP only needs to know which Python to use. All DAP config (program, args, justMyCode, etc.) goes directly from the editor to debugpy after the TCP connection is established.
+
 **Request:**
 ```json
 {
-    "program": "/path/to/script.py",
-    "args": ["--verbose"],
-    "cwd": "/path/to/project",
-    "python": null,
-    "justMyCode": true,
-    "stopOnEntry": false
+    "python": null
 }
 ```
+
+`python` is optional — if omitted, the LSP resolves it from the workspace venv or system PATH.
 
 **Response:**
 ```json
@@ -94,6 +93,8 @@ Add two custom requests to the LSP server and a Python resolver module.
     "sessionId": "a1b2c3"
 }
 ```
+
+The LSP waits until debugpy is actually accepting TCP connections before returning. This avoids a race where the editor tries to connect before debugpy is ready.
 
 ### `basilisk/stopDebugSession`
 
@@ -118,8 +119,10 @@ Add a `debug.rs` module to `basilisk-lsp`:
 ```rust
 use std::collections::HashMap;
 use std::net::TcpListener;
-use std::process::{Child, Command};
+use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
+use tokio::net::TcpStream;
+use tokio::time::{sleep, Duration};
 
 /// Tracks active debug sessions spawned by the LSP.
 pub struct DebugSessionManager {
@@ -134,17 +137,17 @@ impl DebugSessionManager {
     }
 
     /// Spawn debugpy on a free TCP port. Returns (host, port, session_id).
+    /// Waits until debugpy is accepting connections before returning.
     pub async fn start_session(
         &self,
         python_path: &str,
-        config: &DebugConfig,
     ) -> Result<(String, u16, String), DebugError> {
-        // Find a free port by binding to :0 and reading the assigned port.
         let port = find_free_port()?;
         let session_id = generate_session_id();
 
         let child = Command::new(python_path)
             .args(["-m", "debugpy.adapter", "--port", &port.to_string()])
+            .kill_on_drop(true)
             .spawn()
             .map_err(DebugError::SpawnFailed)?;
 
@@ -153,6 +156,9 @@ impl DebugSessionManager {
             .await
             .insert(session_id.clone(), child);
 
+        // Wait for debugpy to start accepting connections (up to 5s).
+        wait_for_port(port, Duration::from_secs(5)).await?;
+
         Ok(("localhost".to_owned(), port, session_id))
     }
 
@@ -160,8 +166,7 @@ impl DebugSessionManager {
     pub async fn stop_session(&self, session_id: &str) -> bool {
         let mut sessions = self.sessions.lock().await;
         if let Some(mut child) = sessions.remove(session_id) {
-            let _ = child.kill();
-            let _ = child.wait();
+            let _ = child.kill().await;
             return true;
         }
         false
@@ -174,8 +179,21 @@ fn find_free_port() -> Result<u16, DebugError> {
     let port = listener.local_addr()
         .map_err(DebugError::PortAllocation)?
         .port();
-    // Dropping listener frees the port for debugpy to bind.
     Ok(port)
+}
+
+/// Poll until a TCP connection succeeds on the given port.
+async fn wait_for_port(port: u16, timeout: Duration) -> Result<(), DebugError> {
+    let start = tokio::time::Instant::now();
+    loop {
+        if TcpStream::connect(("127.0.0.1", port)).await.is_ok() {
+            return Ok(());
+        }
+        if start.elapsed() > timeout {
+            return Err(DebugError::Timeout(port));
+        }
+        sleep(Duration::from_millis(50)).await;
+    }
 }
 ```
 
@@ -208,10 +226,11 @@ pub fn resolve_python(workspace_root: &Path) -> String {
 }
 
 /// Check if debugpy is importable by the given interpreter.
-pub fn check_debugpy(python: &str) -> Result<(), DebugError> {
-    let output = Command::new(python)
+pub async fn check_debugpy(python: &str) -> Result<(), DebugError> {
+    let output = tokio::process::Command::new(python)
         .args(["-c", "import debugpy; print(debugpy.__version__)"])
         .output()
+        .await
         .map_err(DebugError::SpawnFailed)?;
 
     if output.status.success() {
@@ -236,15 +255,19 @@ pub struct LspServer {
 
 // In execute_command handler, add:
 "basilisk.startDebugSession" => {
-    let config: DebugConfig = serde_json::from_value(args)?;
+    let python_override = args.first()
+        .and_then(|v| v.get("python"))
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
     let workspace = self.workspace_roots.read().await;
     let root = workspace.first().map(|p| p.as_path()).unwrap_or(Path::new("."));
-    let python = config.python.unwrap_or_else(|| resolve_python(root));
+    let python = python_override.unwrap_or_else(|| resolve_python(root));
 
-    check_debugpy(&python)?;
+    check_debugpy(&python).await?;
 
     let (host, port, session_id) = self.debug_manager
-        .start_session(&python, &config)
+        .start_session(&python)
         .await?;
 
     Ok(Some(serde_json::json!({
@@ -398,7 +421,7 @@ class BasiliskDebugAdapterFactory implements vscode.DebugAdapterDescriptorFactor
       'workspace/executeCommand',
       {
         command: 'basilisk.startDebugSession',
-        arguments: [config],
+        arguments: [{ python: config.python ?? null }],
       }
     ) as { host: string; port: number; sessionId: string };
 
@@ -416,22 +439,9 @@ context.subscriptions.push(
 
 That's it. The factory sends one LSP request and gets back a port. No process spawning in TypeScript.
 
-## Part 3: Zed
+## Zed Compatibility
 
-Zed connects to `basilisk lsp` for language features. For debugging, the same LSP handles the `basilisk.startDebugSession` command. Zed's DAP client connects to the returned TCP port.
-
-```json
-// ~/.config/zed/settings.json
-{
-  "lsp": {
-    "basilisk": {
-      "binary": { "path": "basilisk", "arguments": ["lsp"] }
-    }
-  }
-}
-```
-
-Debug sessions are initiated through the LSP — no separate debug adapter binary or configuration needed.
+The debug integration is editor-agnostic by design. All logic lives in the LSP — the editor just sends `basilisk.startDebugSession` and connects to the returned TCP port. Nothing in this design is VS Code-specific. When Zed's debug adapter support matures to allow LSP-initiated DAP connections, it will work without changes to the Rust side.
 
 ## Data Flow: Attach Session
 
@@ -465,8 +475,8 @@ graph LR
         LSPCLIENT["LSP Client<br/>(existing)"]
     end
 
-    subgraph "Zed"
-        ZED_LSP["LSP client"]
+    subgraph "Any LSP-compatible Editor (Zed, etc.)"
+        OTHER["LSP client<br/>(same commands work)"]
     end
 
     subgraph "User's Python Environment"
@@ -475,8 +485,8 @@ graph LR
 
     LSPCLIENT --> LANG
     FACTORY -->|"basilisk.startDebugSession"| DEBUG
-    ZED_LSP --> LANG
-    ZED_LSP -->|"basilisk.startDebugSession"| DEBUG
+    OTHER --> LANG
+    OTHER -->|"basilisk.startDebugSession"| DEBUG
     DEBUG --> PYRES
     LANG --> PYRES
     DEBUG -->|"spawns"| DEBUGPY
