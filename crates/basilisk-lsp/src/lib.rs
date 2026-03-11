@@ -48,6 +48,7 @@ pub mod type_definition;
 pub mod type_hierarchy;
 pub mod util;
 pub mod websocket;
+pub mod workspace;
 
 /// Run the Basilisk checker on a Python source string.
 ///

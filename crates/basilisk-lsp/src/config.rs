@@ -6,6 +6,32 @@
 
 use std::path::{Path, PathBuf};
 
+/// Controls which files the LSP server analyses.
+///
+/// See `docs/WHOLE-MODULE-ANALYSIS-SPEC.md` for the full specification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AnalysisMode {
+    /// Analyse only files currently open in the editor.
+    OpenFilesOnly,
+    /// Analyse all workspace Python files (default, strict-by-default).
+    #[default]
+    WholeModule,
+    /// Cross-file import graph analysis (reserved for future use).
+    CrossModule,
+}
+
+impl AnalysisMode {
+    /// Parse from the string values used in config files and VS Code settings.
+    #[must_use]
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "openFilesOnly" => Self::OpenFilesOnly,
+            "crossModule" => Self::CrossModule,
+            _ => Self::WholeModule,
+        }
+    }
+}
+
 /// Workspace configuration derived from config files.
 #[derive(Debug, Clone)]
 pub struct WorkspaceConfig {
@@ -25,6 +51,8 @@ pub struct WorkspaceConfig {
     pub venv_path: Option<PathBuf>,
     /// The venv name within `venv_path`.
     pub venv: Option<String>,
+    /// Which files to analyse. Defaults to `WholeModule`.
+    pub analysis_mode: AnalysisMode,
 }
 
 impl Default for WorkspaceConfig {
@@ -38,6 +66,7 @@ impl Default for WorkspaceConfig {
             strict: true, // Basilisk is strict-by-default
             venv_path: None,
             venv: None,
+            analysis_mode: AnalysisMode::WholeModule,
         }
     }
 }
@@ -120,6 +149,9 @@ fn load_json_config(path: &Path) -> Option<WorkspaceConfig> {
     if let Some(v) = obj.get("venv").and_then(|v| v.as_str()) {
         cfg.venv = Some(v.to_owned());
     }
+    if let Some(v) = obj.get("analysisMode").and_then(|v| v.as_str()) {
+        cfg.analysis_mode = AnalysisMode::from_str(v);
+    }
 
     Some(cfg)
 }
@@ -174,6 +206,9 @@ fn load_pyproject_config(path: &Path) -> Option<WorkspaceConfig> {
                 }
                 "venv" => {
                     cfg.venv = Some(value.to_owned());
+                }
+                "analysisMode" | "analysis_mode" => {
+                    cfg.analysis_mode = AnalysisMode::from_str(value);
                 }
                 _ => {}
             }
