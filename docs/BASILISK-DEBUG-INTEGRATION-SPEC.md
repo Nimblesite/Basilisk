@@ -518,29 +518,9 @@ When the Python interpreter can't be found, the error tells the user exactly wha
 }
 ```
 
-## Implementation Plan
+## Design Decisions
 
-### Day 1: LSP debug module
-- Add `debug.rs` to `basilisk-lsp` with `DebugSessionManager`
-- Add `resolve_python()` and `check_debugpy()`
-- Wire `basilisk.startDebugSession` and `basilisk.stopDebugSession` into `execute_command`
-- Register the new commands in `initialize` capabilities
-- Test: send raw LSP request, verify debugpy spawns on the returned port
-
-### Day 2: VS Code integration
-- Add `debuggers` contribution to `vscode-extension/package.json`
-- Add `BasiliskDebugAdapterFactory` to `extension.ts` (~20 lines)
-- Test: open a `.py` file, F5, verify breakpoints work
-
-### Day 3: Polish
-- Error handling: missing debugpy, missing Python, port conflicts
-- Session cleanup: kill debugpy when debug session ends or LSP shuts down
-- Test attach mode
-- Verify Zed can use the same LSP command
-
-## Key Design Decisions
-
-**The LSP is the debug adapter.** No separate `basilisk dap` subcommand. No proxy process. The LSP spawns debugpy and tells the editor where to connect. One process does everything.
+**The LSP is the debug adapter.** No separate binary or proxy process. The LSP spawns debugpy and tells the editor where to connect. One process does everything.
 
 **TCP, not stdin/stdout.** The LSP already owns stdin/stdout for LSP traffic. debugpy listens on a TCP port. The editor's DAP client connects directly — zero proxying overhead.
 
