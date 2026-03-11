@@ -38,21 +38,24 @@
 
 ## TODO
 
-- [ ] Add `AnalysisMode` enum (`OpenFilesOnly`, `WholeModule`, `CrossModule`) to `config.rs`
-- [ ] Add `analysis_mode: AnalysisMode` field to `BasiliskConfig` with default `WholeModule`
-- [ ] Deserialise `analysisMode` from `basilisk.json`, `[tool.basilisk]` in `pyproject.toml`, and `InitializationOptions`
-- [ ] Create `crates/basilisk-lsp/src/workspace.rs` with `WorkspaceIndex` and `FileEntry` structs
-- [ ] Implement `WorkspaceIndex::scan()` — parallel Rayon walk, returns `Vec<(Url, Vec<Diagnostic>)>`
-- [ ] Implement `WorkspaceIndex::invalidate(path)` — re-parse → re-resolve → re-check one file
-- [ ] Implement `WorkspaceIndex::set_open(path, text, version)` and `set_closed(path)`
-- [ ] Move `collect_python_files()` and `is_excluded()` from `server.rs` into `workspace.rs`
-- [ ] Replace `DashMap<Url, DocumentState>` in `server.rs` with `WorkspaceIndex`
-- [ ] In `initialized()`: branch on `analysis_mode` — skip scan for `openFilesOnly`, run `workspace.scan()` for `wholeModule`/`crossModule`
-- [ ] Update `did_open` / `did_change` / `did_save` to call `workspace.set_open()` / `workspace.invalidate()`
-- [ ] Update `did_close` to call `workspace.set_closed()` then `workspace.invalidate()`
-- [ ] Update `did_change_watched_files` to skip open files; call `workspace.invalidate()` for closed ones
+- [x] Add `AnalysisMode` enum (`OpenFilesOnly`, `WholeModule`, `CrossModule`) to `config.rs`
+- [x] Add `analysis_mode: AnalysisMode` field to `BasiliskConfig` with default `WholeModule`
+- [x] Deserialise `analysisMode` from `basilisk.json`, `[tool.basilisk]` in `pyproject.toml`, and `InitializationOptions`
+- [x] Create `crates/basilisk-lsp/src/workspace.rs` with `WorkspaceIndex` and `FileEntry` structs
+- [x] Implement `WorkspaceIndex::scan()` — returns `Vec<(Url, Vec<Diagnostic>)>`
+- [x] Implement `WorkspaceIndex::set_open(path, text, version)` and `set_closed(path)`
+- [x] Implement `WorkspaceIndex::reload_from_disk(uri)` — hash-gated invalidation
+- [x] Move `collect_python_files()` and `is_excluded()` from `server.rs` into `workspace.rs`
+- [x] Replace `DashMap<Url, DocumentState>` in `server.rs` with `WorkspaceIndex`
+- [x] In `initialized()`: branch on `analysis_mode` — skip scan for `openFilesOnly`, run `workspace.scan()` for `wholeModule`/`crossModule`
+- [x] Update `did_open` / `did_change` / `did_save` to call `workspace.set_open()`
+- [x] Update `did_close` to call `workspace.set_closed()` (wholeModule) or clear diagnostics (openFilesOnly)
+- [x] Update `did_change_watched_files` to skip open files; call `workspace.reload_from_disk()` for closed ones
+- [x] Update all feature handlers to look up `FileEntry` from `WorkspaceIndex` instead of `DocumentState`
+- [ ] `cargo build` clean — fix any remaining compile errors
+- [ ] `cargo clippy` passes
+- [ ] `cargo test -p basilisk-lsp` all existing tests pass
 - [ ] Add 150 ms debounce to file-watcher events
-- [ ] Update all feature handlers to look up `FileEntry` from `WorkspaceIndex` instead of `DocumentState`
 - [ ] Advertise `workspace.fileOperations` capabilities in `initialize` response when mode is not `openFilesOnly`
 - [ ] Register `basilisk.analysisMode` setting in `vscode-extension/package.json`
 - [ ] Pass `analysisMode` via `initializationOptions` in `vscode-extension/src/extension.ts`
