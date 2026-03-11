@@ -2,267 +2,283 @@
 
 ## Goal
 
-One `basilisk` binary serves both VS Code and Zed. When a user installs the Basilisk extension in either editor, they get Python debugging out of the box — no Microsoft Python extension, no separate debugpy extension. The `basilisk dap` subcommand acts as the debug adapter, wrapping debugpy behind a standard DAP interface.
+The Basilisk LSP **is** the debug adapter. When the editor needs to debug Python, it sends a custom LSP request. The LSP spawns debugpy on a TCP port and tells the editor where to connect. No separate binary, no separate process, no bundling. One LSP, both editors.
 
-## Architecture Overview
+## Architecture
 
 ```mermaid
 graph TB
     subgraph "Editor (VS Code / Zed)"
         UI[Debug UI — breakpoints, variables, call stack]
         DAP_CLIENT[Built-in DAP Client]
+        LSP_CLIENT[LSP Client]
     end
 
-    subgraph "Basilisk Binary"
-        CLI["basilisk dap (stdin/stdout)"]
-        LSP["basilisk lsp"]
-        RESOLVE[Python Interpreter Resolution]
+    subgraph "basilisk lsp (Rust)"
+        LSP_CORE[Language Server — diagnostics, completions, hover, ...]
+        DEBUG_MGR[Debug Session Manager]
+        PYRES[Python Resolver]
     end
 
     subgraph "Python Runtime"
-        DEBUGPY["debugpy.adapter (DAP server)"]
+        DEBUGPY["debugpy.adapter (TCP DAP server)"]
         TARGET[User's Python Program]
     end
 
-    UI --> DAP_CLIENT
-    DAP_CLIENT -->|"DAP over stdin/stdout"| CLI
-    CLI -->|"Spawns with PYTHONPATH"| DEBUGPY
+    LSP_CLIENT -->|"LSP over stdin/stdout"| LSP_CORE
+    LSP_CLIENT -->|"basilisk/startDebugSession"| DEBUG_MGR
+    DEBUG_MGR --> PYRES
+    DEBUG_MGR -->|"Spawns on free TCP port"| DEBUGPY
+    DEBUG_MGR -->|"Returns host:port"| DAP_CLIENT
+    DAP_CLIENT -->|"DAP over TCP"| DEBUGPY
     DEBUGPY -->|"Launches & controls"| TARGET
-    LSP -->|"basilisk/pythonPath response"| DAP_CLIENT
-    CLI --> RESOLVE
-    LSP --> RESOLVE
 ```
 
-The `basilisk dap` command is a transparent DAP proxy. It:
+The LSP already runs as a long-lived process. It already knows the workspace roots and can resolve the Python interpreter. Adding debug session management is a natural extension — not a separate system.
 
-1. Resolves the Python interpreter (same logic the LSP uses)
-2. Locates the bundled debugpy
-3. Spawns `python <bundled-debugpy/adapter>` with `PYTHONPATH` set
-4. Pipes DAP messages between the editor and debugpy over stdin/stdout
-
-The editor handles all debugging UI. Basilisk just sets up the plumbing.
-
-## How Editors Connect
+## How It Works
 
 ```mermaid
 sequenceDiagram
     participant Editor
-    participant basilisk_dap as basilisk dap
+    participant LSP as basilisk lsp
     participant debugpy as debugpy.adapter
     participant program as User Program
 
-    Editor->>basilisk_dap: Spawn process (stdin/stdout)
-    basilisk_dap->>basilisk_dap: Resolve Python path
-    basilisk_dap->>basilisk_dap: Locate bundled debugpy
-    basilisk_dap->>debugpy: Spawn python debugpy/adapter
-    Editor->>debugpy: Initialize (DAP)
+    Note over Editor,LSP: LSP already running (language features active)
+    Editor->>LSP: basilisk/startDebugSession { config }
+    LSP->>LSP: Resolve Python interpreter
+    LSP->>LSP: Verify debugpy installed
+    LSP->>LSP: Find free TCP port
+    LSP->>debugpy: Spawn "python -m debugpy.adapter --port 54321"
+    LSP-->>Editor: { host: "localhost", port: 54321 }
+    Editor->>debugpy: DAP Initialize (TCP)
     debugpy-->>Editor: Capabilities
-    Editor->>debugpy: Launch request (program, args, cwd)
+    Editor->>debugpy: Launch (program, args, cwd)
     debugpy->>program: Start with debug hooks
     program-->>debugpy: Hit breakpoint
     debugpy-->>Editor: Stopped event
-    Editor->>debugpy: Variables / Stack requests
+    Editor->>debugpy: Variables / Stack / Step requests
     debugpy-->>Editor: Responses
     Editor->>debugpy: Disconnect
     debugpy->>program: Terminate
-    basilisk_dap->>basilisk_dap: Exit
+    Editor->>LSP: basilisk/stopDebugSession
+    LSP->>LSP: Clean up child process
 ```
 
-Both VS Code and Zed follow this exact flow. The only difference is how each editor registers the debug adapter — VS Code uses `package.json` contributions, Zed uses its extension API.
+The editor's DAP client connects directly to debugpy over TCP. The LSP just brokers the connection — it doesn't proxy any DAP traffic.
 
-## Part 1: Bundling debugpy
+## Part 1: LSP Custom Requests (Rust)
 
-At build time, download the pure Python debugpy wheel from PyPI and extract it into the extension:
+Add two custom requests to the LSP server and a Python resolver module.
 
-```
-basilisk/
-├── bundled/
-│   └── libs/
-│       └── debugpy/
-│           ├── __init__.py
-│           ├── adapter/
-│           │   ├── __main__.py
-│           │   └── ...
-│           ├── launcher/
-│           ├── server/
-│           └── _vendored/
-│               └── pydevd/
-├── crates/
-│   ├── basilisk-cli/
-│   └── basilisk-lsp/
-├── vscode-extension/
-│   ├── package.json
-│   └── src/extension.ts
-└── ...
-```
+### `basilisk/startDebugSession`
 
-A wheel is just a zip file. Use the pure Python wheel (`debugpy-X.Y.Z-py2.py3-none-any.whl`) for a universal build. Platform-specific wheels add Cython speedups but aren't required for correctness.
-
-Build script (add to `scripts/bundle-debugpy.sh`):
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-DEBUGPY_VERSION="1.8.20"
-BUNDLE_DIR="bundled/libs"
-
-mkdir -p "$BUNDLE_DIR"
-pip download "debugpy==$DEBUGPY_VERSION" \
-    --no-deps --only-binary=:none: -d /tmp/debugpy-wheels
-unzip -o /tmp/debugpy-wheels/debugpy-*.whl -d "$BUNDLE_DIR"
-rm -rf /tmp/debugpy-wheels
-echo "Bundled debugpy $DEBUGPY_VERSION into $BUNDLE_DIR"
-```
-
-## Part 2: `basilisk dap` Subcommand (Rust)
-
-Add a `Dap` variant to the CLI. This is the core of the integration — a thin Rust process that spawns debugpy and proxies stdin/stdout.
-
-### CLI addition in `basilisk-cli/src/main.rs`
-
-```rust
-#[derive(Subcommand)]
-enum Command {
-    Check { /* ... */ },
-    Lsp { /* ... */ },
-    /// Start the Debug Adapter Protocol proxy (wraps debugpy).
-    Dap {
-        /// Path to Python interpreter. Auto-detected if omitted.
-        #[arg(long)]
-        python: Option<String>,
-        /// Path to bundled debugpy libs directory.
-        #[arg(long)]
-        debugpy_path: Option<String>,
-        /// Enable debugpy internal logging to this directory.
-        #[arg(long)]
-        log_dir: Option<String>,
-    },
+**Request:**
+```json
+{
+    "program": "/path/to/script.py",
+    "args": ["--verbose"],
+    "cwd": "/path/to/project",
+    "python": null,
+    "justMyCode": true,
+    "stopOnEntry": false
 }
 ```
 
-### DAP proxy implementation
+**Response:**
+```json
+{
+    "host": "localhost",
+    "port": 54321,
+    "sessionId": "a1b2c3"
+}
+```
 
-The proxy is intentionally minimal — no DAP parsing needed. It spawns debugpy's adapter and copies bytes between the editor and the subprocess.
+### `basilisk/stopDebugSession`
+
+**Request:**
+```json
+{
+    "sessionId": "a1b2c3"
+}
+```
+
+**Response:**
+```json
+{
+    "stopped": true
+}
+```
+
+### Rust implementation sketch
+
+Add a `debug.rs` module to `basilisk-lsp`:
 
 ```rust
-fn run_dap(
-    python: Option<String>,
-    debugpy_path: Option<String>,
-    log_dir: Option<String>,
-) -> i32 {
-    let python_bin = python
-        .unwrap_or_else(|| resolve_python_interpreter());
+use std::collections::HashMap;
+use std::net::TcpListener;
+use std::process::{Child, Command};
+use tokio::sync::Mutex;
 
-    let bundled = debugpy_path
-        .unwrap_or_else(|| default_bundled_path());
+/// Tracks active debug sessions spawned by the LSP.
+pub struct DebugSessionManager {
+    sessions: Mutex<HashMap<String, Child>>,
+}
 
-    let adapter_path = PathBuf::from(&bundled)
-        .join("debugpy")
-        .join("adapter");
-
-    let mut args = vec![adapter_path.to_string_lossy().into_owned()];
-    if let Some(dir) = log_dir {
-        args.push("--log-dir".to_owned());
-        args.push(dir);
+impl DebugSessionManager {
+    pub fn new() -> Self {
+        Self {
+            sessions: Mutex::new(HashMap::new()),
+        }
     }
 
-    let mut child = match std::process::Command::new(&python_bin)
-        .args(&args)
-        .env("PYTHONPATH", &bundled)
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::inherit())
-        .spawn()
-    {
-        Ok(c) => c,
-        Err(err) => {
-            eprintln!("basilisk dap: failed to spawn debugpy: {err}");
-            eprintln!("  python: {python_bin}");
-            eprintln!("  adapter: {}", adapter_path.display());
-            return 1;
+    /// Spawn debugpy on a free TCP port. Returns (host, port, session_id).
+    pub async fn start_session(
+        &self,
+        python_path: &str,
+        config: &DebugConfig,
+    ) -> Result<(String, u16, String), DebugError> {
+        // Find a free port by binding to :0 and reading the assigned port.
+        let port = find_free_port()?;
+        let session_id = generate_session_id();
+
+        let child = Command::new(python_path)
+            .args(["-m", "debugpy.adapter", "--port", &port.to_string()])
+            .spawn()
+            .map_err(DebugError::SpawnFailed)?;
+
+        self.sessions
+            .lock()
+            .await
+            .insert(session_id.clone(), child);
+
+        Ok(("localhost".to_owned(), port, session_id))
+    }
+
+    /// Kill a debug session and clean up.
+    pub async fn stop_session(&self, session_id: &str) -> bool {
+        let mut sessions = self.sessions.lock().await;
+        if let Some(mut child) = sessions.remove(session_id) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return true;
         }
-    };
+        false
+    }
+}
 
-    // Pipe stdin → child stdin and child stdout → stdout.
-    // Two threads, blocking I/O. Simple and correct.
-    let mut child_stdin = child.stdin.take().expect("piped stdin");
-    let mut child_stdout = child.stdout.take().expect("piped stdout");
-
-    let stdin_thread = std::thread::spawn(move || {
-        let _ = std::io::copy(&mut std::io::stdin().lock(), &mut child_stdin);
-    });
-
-    let stdout_thread = std::thread::spawn(move || {
-        let _ = std::io::copy(&mut child_stdout, &mut std::io::stdout().lock());
-    });
-
-    let status = child.wait().unwrap_or_else(|e| {
-        eprintln!("basilisk dap: wait failed: {e}");
-        std::process::exit(1);
-    });
-
-    let _ = stdin_thread.join();
-    let _ = stdout_thread.join();
-
-    status.code().unwrap_or(1)
+fn find_free_port() -> Result<u16, DebugError> {
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .map_err(DebugError::PortAllocation)?;
+    let port = listener.local_addr()
+        .map_err(DebugError::PortAllocation)?
+        .port();
+    // Dropping listener frees the port for debugpy to bind.
+    Ok(port)
 }
 ```
 
-### Python interpreter resolution
+### Python resolver
 
-Reuse the same logic the LSP uses. Fallback chain:
+The LSP already has workspace roots. The resolver checks them:
 
 ```rust
-fn resolve_python_interpreter() -> String {
-    // 1. BASILISK_PYTHON env var (explicit override)
+/// Resolve the Python interpreter for a workspace.
+pub fn resolve_python(workspace_root: &Path) -> String {
+    // 1. BASILISK_PYTHON env var
     if let Ok(p) = std::env::var("BASILISK_PYTHON") {
         return p;
     }
 
-    // 2. Workspace venv: .venv/bin/python, venv/bin/python
-    for venv in &[".venv", "venv"] {
+    // 2. Workspace venv
+    for venv_dir in &[".venv", "venv"] {
         let bin = if cfg!(windows) {
-            PathBuf::from(venv).join("Scripts").join("python.exe")
+            workspace_root.join(venv_dir).join("Scripts").join("python.exe")
         } else {
-            PathBuf::from(venv).join("bin").join("python")
+            workspace_root.join(venv_dir).join("bin").join("python")
         };
         if bin.exists() {
             return bin.to_string_lossy().into_owned();
         }
     }
 
-    // 3. System Python
+    // 3. System fallback
     if cfg!(windows) { "python".into() } else { "python3".into() }
 }
 
-fn default_bundled_path() -> String {
-    // Relative to the basilisk binary
-    let exe = std::env::current_exe().unwrap_or_default();
-    let exe_dir = exe.parent().unwrap_or(Path::new("."));
-    exe_dir.join("bundled").join("libs")
-        .to_string_lossy().into_owned()
+/// Check if debugpy is importable by the given interpreter.
+pub fn check_debugpy(python: &str) -> Result<(), DebugError> {
+    let output = Command::new(python)
+        .args(["-c", "import debugpy; print(debugpy.__version__)"])
+        .output()
+        .map_err(DebugError::SpawnFailed)?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(DebugError::DebugpyNotFound(python.to_owned()))
+    }
 }
 ```
 
-## Part 3: LSP Custom Request — `basilisk/pythonPath`
+### Wire into the LSP server
 
-The LSP already knows the workspace. Expose the resolved Python path so editor extensions can use it in debug configurations.
-
-Add to `basilisk-lsp/src/server.rs`:
+In `server.rs`, add the `DebugSessionManager` to `LspServer` and handle the custom requests via `execute_command`:
 
 ```rust
-// In the LanguageServer impl, handle custom request:
-// Method: "basilisk/pythonPath"
-// Params: { "workspaceFolder": "file:///path/to/project" }  (optional)
-// Result: { "pythonPath": "/path/to/.venv/bin/python" }
+pub struct LspServer {
+    client: Client,
+    documents: DashMap<Url, DocumentState>,
+    workspace_roots: tokio::sync::RwLock<Vec<std::path::PathBuf>>,
+    debug_manager: DebugSessionManager,  // NEW
+}
+
+// In execute_command handler, add:
+"basilisk.startDebugSession" => {
+    let config: DebugConfig = serde_json::from_value(args)?;
+    let workspace = self.workspace_roots.read().await;
+    let root = workspace.first().map(|p| p.as_path()).unwrap_or(Path::new("."));
+    let python = config.python.unwrap_or_else(|| resolve_python(root));
+
+    check_debugpy(&python)?;
+
+    let (host, port, session_id) = self.debug_manager
+        .start_session(&python, &config)
+        .await?;
+
+    Ok(Some(serde_json::json!({
+        "host": host,
+        "port": port,
+        "sessionId": session_id
+    })))
+}
+
+"basilisk.stopDebugSession" => {
+    let session_id = args.first()
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+    let stopped = self.debug_manager.stop_session(session_id).await;
+    Ok(Some(serde_json::json!({ "stopped": stopped })))
+}
 ```
 
-This is a `workspace/executeCommand` with command `basilisk.pythonPath`, or a custom request. The extension calls it when building debug configurations.
+Register the commands in `initialize`:
 
-## Part 4: VS Code Extension
+```rust
+execute_command_provider: Some(ExecuteCommandOptions {
+    commands: vec![
+        "basilisk.organizeImports".to_owned(),
+        "basilisk.startDebugSession".to_owned(),  // NEW
+        "basilisk.stopDebugSession".to_owned(),    // NEW
+    ],
+    ..Default::default()
+}),
+```
 
-Minimal additions to the existing extension. No `DebugAdapterDescriptorFactory` class needed — VS Code can invoke `basilisk dap` directly as an executable debug adapter.
+## Part 2: VS Code Extension
+
+The extension registers a debug type and a factory. When VS Code starts a debug session, the factory asks the LSP to spawn debugpy and returns the TCP port.
 
 ### package.json additions
 
@@ -358,20 +374,18 @@ Minimal additions to the existing extension. No `DebugAdapterDescriptorFactory` 
 
 ### extension.ts additions
 
-Add a `DebugAdapterDescriptorFactory` that points to `basilisk dap`. This goes in the existing `activate()` function:
-
 ```typescript
-// In activate(), after LSP client setup:
+// In activate(), after LSP client starts:
 
 class BasiliskDebugAdapterFactory implements vscode.DebugAdapterDescriptorFactory {
-  constructor(private executablePath: string) {}
+  constructor(private lspClient: LanguageClient) {}
 
-  createDebugAdapterDescriptor(
+  async createDebugAdapterDescriptor(
     session: vscode.DebugSession,
-  ): vscode.ProviderResult<vscode.DebugAdapterDescriptor> {
+  ): Promise<vscode.DebugAdapterDescriptor> {
     const config = session.configuration;
 
-    // Attach mode: connect directly to an already-running debugpy server
+    // Attach mode: connect directly to user-specified host:port
     if (config.request === 'attach' && config.connect) {
       return new vscode.DebugAdapterServer(
         config.connect.port,
@@ -379,157 +393,161 @@ class BasiliskDebugAdapterFactory implements vscode.DebugAdapterDescriptorFactor
       );
     }
 
-    // Launch mode: use `basilisk dap` as the debug adapter executable
-    const args = ['dap'];
-    if (config.python) {
-      args.push('--python', config.python);
-    }
-    return new vscode.DebugAdapterExecutable(this.executablePath, args);
+    // Launch mode: ask the LSP to spawn debugpy
+    const result = await this.lspClient.sendRequest(
+      'workspace/executeCommand',
+      {
+        command: 'basilisk.startDebugSession',
+        arguments: [config],
+      }
+    ) as { host: string; port: number; sessionId: string };
+
+    return new vscode.DebugAdapterServer(result.port, result.host);
   }
 }
 
-// Register
 context.subscriptions.push(
   vscode.debug.registerDebugAdapterDescriptorFactory(
     'basilisk-debug',
-    new BasiliskDebugAdapterFactory(executablePath)
+    new BasiliskDebugAdapterFactory(client!)
   )
 );
 ```
 
-That's it for VS Code. The existing `resolveExecutablePath()` already handles finding the `basilisk` binary. The same binary that runs `basilisk lsp` now also runs `basilisk dap`.
+That's it. The factory sends one LSP request and gets back a port. No process spawning in TypeScript.
 
-## Part 5: Zed Extension
+## Part 3: Zed
 
-Zed's debug adapter support uses a similar model. The Zed extension declares the adapter in its `extension.toml` and provides the binary path:
+Zed connects to `basilisk lsp` for language features. For debugging, the same LSP handles the `basilisk.startDebugSession` command. Zed's DAP client connects to the returned TCP port.
 
-```toml
-[debug_adapters.basilisk-debug]
-name = "Python (Basilisk)"
-languages = ["Python"]
-adapter_type = "executable"
-command = "basilisk"
-args = ["dap"]
+```json
+// ~/.config/zed/settings.json
+{
+  "lsp": {
+    "basilisk": {
+      "binary": { "path": "basilisk", "arguments": ["lsp"] }
+    }
+  }
+}
 ```
 
-Zed handles DAP communication identically to VS Code — stdin/stdout with the spawned process. No additional code needed beyond the extension manifest.
-
-## Data Flow: Launch Session
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant Editor as Editor UI
-    participant Ext as Basilisk Extension
-    participant CLI as basilisk dap
-    participant Py as Python + debugpy
-    participant Prog as User Program
-
-    User->>Editor: F5 (or "Run and Debug")
-    Editor->>Ext: resolveDebugConfiguration
-    Ext->>Ext: Fill defaults (python path, cwd)
-    Editor->>CLI: Spawn "basilisk dap" (stdin/stdout)
-    CLI->>CLI: Resolve Python, locate bundled debugpy
-    CLI->>Py: Spawn "python debugpy/adapter"
-    Editor->>Py: DAP Initialize →
-    Py-->>Editor: ← Capabilities
-    Editor->>Py: DAP Launch (program, args, cwd) →
-    Py->>Prog: Start program with debug hooks
-    Prog-->>Py: Breakpoint hit
-    Py-->>Editor: ← Stopped event
-    User->>Editor: Inspect variables, step
-    Editor->>Py: DAP requests →
-    Py-->>Editor: ← Responses
-    User->>Editor: Stop
-    Editor->>Py: DAP Disconnect →
-    Py->>Prog: Terminate
-    CLI->>CLI: Exit
-```
+Debug sessions are initiated through the LSP — no separate debug adapter binary or configuration needed.
 
 ## Data Flow: Attach Session
 
 ```mermaid
 sequenceDiagram
-    participant User
-    participant Editor as Editor UI
-    participant RemotePy as Remote Python + debugpy.listen()
+    participant Editor
+    participant debugpy as Remote debugpy.listen()
 
-    User->>Editor: Start "Attach" debug config
-    Note over Editor: Attach bypasses "basilisk dap" entirely
-    Editor->>RemotePy: TCP connect (host:port)
-    Editor->>RemotePy: DAP Initialize →
-    RemotePy-->>Editor: ← Capabilities
-    Editor->>RemotePy: DAP Attach →
-    RemotePy-->>Editor: ← Stopped events, variables, etc.
+    Note over Editor: Attach bypasses the LSP entirely
+    Editor->>debugpy: TCP connect (host:port)
+    Editor->>debugpy: DAP Initialize
+    debugpy-->>Editor: Capabilities
+    Editor->>debugpy: DAP Attach
+    debugpy-->>Editor: Stopped events, variables, etc.
 ```
 
-For attach, the editor connects directly over TCP to the remote debugpy server. The `basilisk dap` proxy is not involved.
+For attach, the editor connects directly to the remote debugpy server. The LSP is not involved.
 
-## Component Ownership
+## Component Diagram
 
 ```mermaid
 graph LR
-    subgraph "Rust (basilisk binary)"
-        DAP["basilisk dap<br/>(DAP proxy)"]
-        LSP["basilisk lsp<br/>(language server)"]
-        PYRES["Python resolver<br/>(shared module)"]
+    subgraph "basilisk lsp (single Rust process)"
+        LANG[Language Features<br/>diagnostics, completions, hover, ...]
+        DEBUG[Debug Session Manager<br/>spawn debugpy, track sessions]
+        PYRES[Python Resolver<br/>venv detection, interpreter lookup]
     end
 
     subgraph "VS Code Extension (TypeScript)"
-        FACTORY["DebugAdapterFactory<br/>(~30 lines)"]
+        FACTORY["DebugAdapterFactory<br/>(asks LSP for port)"]
         LSPCLIENT["LSP Client<br/>(existing)"]
     end
 
-    subgraph "Zed Extension"
-        TOML["extension.toml<br/>(adapter config)"]
+    subgraph "Zed"
+        ZED_LSP["LSP client"]
     end
 
-    subgraph "Bundled"
-        DEBUGPY["debugpy wheel<br/>(MIT licensed)"]
+    subgraph "User's Python Environment"
+        DEBUGPY["debugpy<br/>(pip install debugpy)"]
     end
 
-    FACTORY --> DAP
-    TOML --> DAP
-    LSPCLIENT --> LSP
-    DAP --> PYRES
-    LSP --> PYRES
-    DAP --> DEBUGPY
+    LSPCLIENT --> LANG
+    FACTORY -->|"basilisk.startDebugSession"| DEBUG
+    ZED_LSP --> LANG
+    ZED_LSP -->|"basilisk.startDebugSession"| DEBUG
+    DEBUG --> PYRES
+    LANG --> PYRES
+    DEBUG -->|"spawns"| DEBUGPY
 ```
 
-## Implementation Plan (Priority Order)
+## Error Handling
 
-### Day 1: `basilisk dap` subcommand
-- Add `Dap` variant to CLI
-- Implement the stdin/stdout proxy (spawn debugpy, copy bytes)
-- Implement `resolve_python_interpreter()` and `default_bundled_path()`
-- Test manually: `echo '...' | basilisk dap` and verify debugpy spawns
+When debugpy is not installed, the LSP returns a clear error:
 
-### Day 2: Bundle debugpy + VS Code integration
-- Write `scripts/bundle-debugpy.sh`, run it
+```json
+{
+    "error": {
+        "code": -32001,
+        "message": "debugpy not found. Install it: pip install debugpy"
+    }
+}
+```
+
+The editor extension surfaces this as a notification with an action button to run `pip install debugpy` in the terminal.
+
+When the Python interpreter can't be found, the error tells the user exactly what was tried:
+
+```json
+{
+    "error": {
+        "code": -32002,
+        "message": "No Python interpreter found. Checked: .venv/bin/python, venv/bin/python, python3. Set BASILISK_PYTHON or create a virtualenv."
+    }
+}
+```
+
+## Implementation Plan
+
+### Day 1: LSP debug module
+- Add `debug.rs` to `basilisk-lsp` with `DebugSessionManager`
+- Add `resolve_python()` and `check_debugpy()`
+- Wire `basilisk.startDebugSession` and `basilisk.stopDebugSession` into `execute_command`
+- Register the new commands in `initialize` capabilities
+- Test: send raw LSP request, verify debugpy spawns on the returned port
+
+### Day 2: VS Code integration
 - Add `debuggers` contribution to `vscode-extension/package.json`
-- Add `BasiliskDebugAdapterFactory` to `extension.ts` (~30 lines)
+- Add `BasiliskDebugAdapterFactory` to `extension.ts` (~20 lines)
 - Test: open a `.py` file, F5, verify breakpoints work
 
-### Day 3: Polish + Zed
-- Add `basilisk/pythonPath` custom LSP request
-- Add Zed extension manifest for debug adapter
-- Error handling: missing Python, missing debugpy, spawn failures
+### Day 3: Polish
+- Error handling: missing debugpy, missing Python, port conflicts
+- Session cleanup: kill debugpy when debug session ends or LSP shuts down
 - Test attach mode
+- Verify Zed can use the same LSP command
 
 ## Key Design Decisions
 
-**`basilisk dap` as a transparent proxy, not a DAP implementation.** The Rust binary doesn't parse or understand DAP messages. It just spawns debugpy and copies bytes. This means zero DAP maintenance burden — debugpy handles all protocol evolution.
+**The LSP is the debug adapter.** No separate `basilisk dap` subcommand. No proxy process. The LSP spawns debugpy and tells the editor where to connect. One process does everything.
 
-**Same binary for LSP and DAP.** Users install one thing. The extension already knows where the binary is. No second executable to find or configure.
+**TCP, not stdin/stdout.** The LSP already owns stdin/stdout for LSP traffic. debugpy listens on a TCP port. The editor's DAP client connects directly — zero proxying overhead.
 
-**Shared Python resolution.** Both `basilisk lsp` and `basilisk dap` use the same interpreter discovery logic. The interpreter the LSP type-checks against is the same one the debugger runs.
+**debugpy from the user's environment.** No bundling. The user's Python has debugpy installed (`pip install debugpy`). If it's missing, the LSP returns a clear error. This avoids platform-specific wheel builds entirely.
 
-**Editor-agnostic core.** All debugger logic lives in Rust. Editor-specific code is minimal — ~30 lines of TypeScript for VS Code, ~5 lines of TOML for Zed.
+**Session lifecycle managed by the LSP.** The LSP tracks spawned debugpy processes and cleans them up on stop requests or shutdown. No orphaned processes.
 
-**Use `basilisk-debug` as the debug type.** Avoids conflicts with Microsoft's `debugpy` and `python` types. Users can have both extensions installed.
+## Prerequisite
+
+Users need debugpy installed in their Python environment:
+
+```bash
+pip install debugpy
+```
+
+The LSP checks for this on the first debug request and returns an actionable error if it's missing.
 
 ## Licensing
 
-debugpy is MIT-licensed. It vendors pydevd (EPL-2.0). Both are OSI-approved. Bundling is permitted. Include license texts in `THIRD_PARTY_LICENSES`.
-
-Basilisk invokes debugpy as a subprocess and communicates via standard DAP — no copyleft obligations on Basilisk's code from the EPL.
+debugpy is MIT-licensed. Basilisk invokes it as a subprocess — no bundling, no licensing concerns.
