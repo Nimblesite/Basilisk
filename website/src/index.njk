@@ -1,7 +1,7 @@
 ---
 layout: layouts/base.njk
-title: "Basilisk — The Open-Source Pylance Replacement"
-description: "A complete Python language server and VS Code extension that replaces Pylance and Pyright. Everything Pylance does — and more. Strict by default. Built in Rust."
+title: "Basilisk — Python Language Server, Built in Rust"
+description: "A complete Python language server and VS Code extension. Type checking, completions, go-to-definition, hover, refactoring — strict by default. Open source. Built in Rust."
 permalink: /
 ---
 
@@ -18,15 +18,14 @@ permalink: /
         <span class="hero__kicker">// basilisk — v0.1 alpha</span>
 
         <h1 class="hero__headline">
-          The open-source<br>
-          Pylance replacement.
+          A complete Python<br>
+          language server.
         </h1>
 
         <p class="hero__subheadline">
-          Basilisk is a complete Python language server and VS Code extension
-          that replaces Pylance and Pyright. Autocomplete, go-to-definition,
-          hover info, refactoring, diagnostics &mdash; everything you rely on, fully open source.
-          Strict by default. Built in Rust.
+          Basilisk is a full-featured LSP and VS Code extension &mdash;
+          type checking, autocomplete, go-to-definition, hover, refactoring,
+          and diagnostics. Strict by default. Fully open source. Built in Rust.
         </p>
 
         <div class="hero__cta-group">
@@ -50,7 +49,7 @@ permalink: /
           <span>Built in <strong>Rust</strong></span>
           <span><strong><10ms</strong> incremental</span>
           <span>No <strong>Node.js</strong></span>
-          <span><strong>MIT</strong> / Apache-2.0</span>
+          <span><strong>MIT</strong> License</span>
         </div>
       </div>
 
@@ -143,13 +142,13 @@ permalink: /
     <div class="problem__grid">
 
       <div class="problem__statement">
-        Pylance is proprietary. Pyright is just a type checker. Python deserves a fully open-source language server that does <em>everything</em>.
+        Python deserves a fully open-source language server that does <em>everything</em> &mdash; not just type checking.
       </div>
 
       <ul class="problem__bullets">
         <li>
           <span class="problem__num">01</span>
-          <span><strong>Pylance is closed source.</strong> The most-used Python VS Code extension is proprietary. You can&rsquo;t inspect, modify, or redistribute it. Basilisk is MIT/Apache-2.0 &mdash; fully open.</span>
+          <span><strong>Pylance is closed source.</strong> The most-used Python VS Code extension is proprietary. You can&rsquo;t inspect, modify, or redistribute it. Basilisk is MIT licensed &mdash; fully open.</span>
         </li>
         <li>
           <span class="problem__num">02</span>
@@ -244,18 +243,18 @@ permalink: /
   <div class="feature-row">
     <div class="feature-row__visual">
       <div class="stat-block">
-        <span class="stat-block__number">83.4<span class="stat-block__unit">%</span></span>
-        <span class="stat-block__label">PEP conformance score</span>
+        <span class="stat-block__number">59.3<span class="stat-block__unit">%</span></span>
+        <span class="stat-block__label">PEP conformance &mdash; and climbing</span>
       </div>
     </div>
     <div class="feature-row__text">
-      <p class="feature-row__num">04 &mdash; Complete PEP conformance</p>
-      <h2 class="feature-row__title">Not ~95%.<br>Not ~58%.<br>All of it.</h2>
+      <p class="feature-row__num">04 &mdash; PEP conformance</p>
+      <h2 class="feature-row__title">86 of 145 tests passing.<br>Target: 100%.</h2>
       <p class="feature-row__body">
-        Every PEP from 484 to 742 &mdash; Protocols, ParamSpec, TypeVarTuple,
-        <code>Self</code>, <code>Never</code> &mdash; implemented and tested
-        against the official Python typing conformance suite.
-        If the spec says it, Basilisk enforces it.
+        Tested against the official Python typing conformance suite &mdash;
+        the same suite used to measure Pyright (~99%), mypy (~58%), and Pyrefly (~86%).
+        Enums, overloads, qualifiers, and directives already at 90&ndash;100%.
+        Generics, protocols, and aliases are next.
       </p>
     </div>
   </div>
@@ -300,9 +299,9 @@ permalink: /
 <section class="comparison-section">
   <div class="container">
     <p class="section-label">How it compares</p>
-    <h2 class="section-heading">Pylance features.<br>Open source.</h2>
+    <h2 class="section-heading">Full-featured LSP.<br>Fully open source.</h2>
     <p class="section-subhead">
-      A feature-complete language server that replaces Pylance &mdash;
+      Everything you expect from a Python language server &mdash;
       with stricter type checking and no proprietary lock-in.
     </p>
 
@@ -329,7 +328,7 @@ permalink: /
           </tr>
           <tr>
             <td>PEP conformance <a href="/docs/comparison/#footnotes" style="color:var(--color-text-muted);font-size:0.75rem">¹</a></td>
-            <td class="col-basilisk">100% <em style="font-size:0.75rem;color:var(--color-text-muted)">(target)</em></td>
+            <td class="col-basilisk">59.3% <em style="font-size:0.75rem;color:var(--color-text-muted)">(86/145)</em></td>
             <td>~99%</td>
             <td>~58% full-pass</td>
             <td>alpha</td>
@@ -353,7 +352,7 @@ permalink: /
           </tr>
           <tr>
             <td>Incremental speed <a href="/docs/comparison/#footnotes" style="color:var(--color-text-muted);font-size:0.75rem">²</a></td>
-            <td class="col-basilisk"><10ms</td>
+            <td class="col-basilisk"><10ms <em style="font-size:0.75rem;color:var(--color-text-muted)">(target)</em></td>
             <td>~386ms</td>
             <td>slower</td>
             <td>4.7ms</td>
@@ -400,7 +399,7 @@ permalink: /
           </tr>
           <tr>
             <td>License</td>
-            <td class="col-basilisk">MIT / Apache-2.0</td>
+            <td class="col-basilisk">MIT</td>
             <td>MIT</td>
             <td>MIT</td>
             <td>MIT</td>
@@ -418,10 +417,10 @@ permalink: /
 <section class="benchmark-section">
   <div class="container">
     <p class="section-label">Performance benchmarks</p>
-    <h2 class="section-heading">Sub-100ms on every rule.<br>Fastest in class.</h2>
+    <h2 class="section-heading">Honest numbers.<br>Real measurements.</h2>
     <p class="section-subhead">
-      Basilisk outperforms Pyright and mypy on every core type checking rule.
-      Measured on real-world codebases with the official Python typing conformance suite.
+      Measured with <a href="https://github.com/sharkdp/hyperfine" target="_blank" rel="noopener">hyperfine</a> (10 runs, 2 warmup).
+      Basilisk is faster than Pyright on every rule. ty and Pyrefly are faster &mdash; for now.
     </p>
 
     <div class="table-wrapper">
@@ -439,43 +438,43 @@ permalink: /
         <tbody>
           <tr>
             <td>E0002 Missing return</td>
-            <td class="col-basilisk">255 ms</td>
-            <td>779 ms</td>
-            <td>147 ms</td>
-            <td>113 ms</td>
-            <td>52 ms ✓</td>
+            <td class="col-basilisk">358 ms</td>
+            <td>652 ms</td>
+            <td>159 ms</td>
+            <td>115 ms</td>
+            <td>55 ms</td>
           </tr>
           <tr>
             <td>E0016 Incompatible override</td>
-            <td class="col-basilisk">107 ms</td>
-            <td>824 ms</td>
-            <td>151 ms</td>
-            <td>119 ms</td>
-            <td>73 ms ✓</td>
+            <td class="col-basilisk">143 ms</td>
+            <td>757 ms</td>
+            <td>152 ms</td>
+            <td>125 ms</td>
+            <td>71 ms</td>
           </tr>
           <tr>
             <td>E0022 Unhashable dict key</td>
-            <td class="col-basilisk">105 ms</td>
-            <td>681 ms</td>
-            <td>148 ms</td>
-            <td>104 ms</td>
-            <td>55 ms ✓</td>
+            <td class="col-basilisk">212 ms</td>
+            <td>626 ms</td>
+            <td>150 ms</td>
+            <td>105 ms</td>
+            <td>55 ms</td>
           </tr>
           <tr>
             <td>E0023 Non-exhaustive match</td>
-            <td class="col-basilisk">81 ms</td>
-            <td>664 ms</td>
-            <td>151 ms</td>
+            <td class="col-basilisk">123 ms</td>
+            <td>622 ms</td>
+            <td>147 ms</td>
             <td>109 ms</td>
-            <td>39 ms ✓</td>
+            <td>41 ms</td>
           </tr>
           <tr>
             <td>E0026 TypeVar constraint</td>
-            <td class="col-basilisk">73 ms</td>
-            <td>869 ms</td>
-            <td>151 ms</td>
-            <td>115 ms</td>
-            <td>60 ms ✓</td>
+            <td class="col-basilisk">325 ms</td>
+            <td>796 ms</td>
+            <td>147 ms</td>
+            <td>111 ms</td>
+            <td>60 ms</td>
           </tr>
         </tbody>
       </table>
@@ -611,12 +610,12 @@ permalink: /
 <section class="cta-section">
   <div class="container">
     <div class="cta-inner">
-      <h2>Drop Pylance.<br>Pick up Basilisk.</h2>
+      <h2>Your Python deserves<br>a real language server.</h2>
       <div>
         <p>
           Basilisk is in alpha. The type checker, LSP, and VS Code extension are working.
           Autocomplete, go-to-definition, hover info, diagnostics &mdash; all shipping today.
-          Open source. No proprietary lock-in. Early adopters shape the roadmap.
+          Open source. Early adopters shape the roadmap.
         </p>
         <div class="cta-inner__actions">
           <a href="/docs/" class="btn btn--primary">Read the Docs</a>

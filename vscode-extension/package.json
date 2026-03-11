@@ -1,10 +1,10 @@
 {
   "name": "basilisk",
   "displayName": "Basilisk",
-  "description": "Complete Python language server — the open-source replacement for Pylance. Type checking, completions, go-to-definition, and more. Built in Rust.",
+  "description": "The open-source Pylance replacement. Strict-by-default Python type checking, completions, go-to-definition, hover, diagnostics — everything Pylance does, fully open source. Built in Rust.",
   "version": "0.1.0",
   "publisher": "basilisk-lang",
-  "license": "MIT OR Apache-2.0",
+  "license": "MIT",
   "icon": "images/basilisk-logo.png",
   "galleryBanner": {
     "color": "#0a0c12",
@@ -120,10 +120,12 @@
     "package": "vsce package"
   },
   "dependencies": {
+    "tar": "^7.5.11",
     "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
+    "@types/tar": "^6.1.13",
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^8.56.1",

@@ -2,7 +2,7 @@
 
 **Version**: 0.1.0-draft
 **Status**: Specification Draft
-**License**: Apache-2.0 OR MIT (dual-license)
+**License**: MIT
 
 ---
 
@@ -190,7 +190,7 @@ Yet every single tool -- new and old -- defaults to gradual typing. None enforce
 | Capability | Pyright | mypy | ty | Pyrefly | Zuban | Ruff | **Basilisk** |
 |---|---|---|---|---|---|---|---|
 | Implementation | TypeScript | Python/C | Rust | Rust | Rust | Rust | **Rust** |
-| License | MIT | MIT | MIT | MIT | AGPL | MIT | **Apache-2.0/MIT** |
+| License | MIT | MIT | MIT | MIT | AGPL | MIT | **MIT** |
 | Default strictness | Gradual | Gradual | Gradual | Gradual | Gradual | N/A | **Strict only** |
 | PEP conformance target | ~95% | ~85% | ~15% | ~58% | ~69% | N/A | **100%** |
 | LSP server | Yes | No | Yes | Yes | Yes | No | **Yes** |
@@ -1227,7 +1227,7 @@ Comparison baselines: Pyright, ty, Pyrefly, Zuban.
 
 ### 19.1 License
 
-Apache-2.0 OR MIT dual-license for maximum corporate adoption. No CLA required. No proprietary layers.
+MIT License. Copyright (c) 2026 NIMBLESITE PTY LTD. No CLA required. No proprietary layers.
 
 ### 19.2 Contribution Model
 

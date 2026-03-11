@@ -179,6 +179,4 @@ Rust 1.87+ required.
 
 ## License
 
-MIT or Apache-2.0, at your option.
-
-Built by [NIMBLESITE PTY LTD](https://www.nimblesite.co).
+MIT License. Copyright (c) 2026 NIMBLESITE PTY LTD.

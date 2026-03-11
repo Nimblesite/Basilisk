@@ -48,7 +48,7 @@ Basilisk removes the choice. There is no permissive mode to fall back to.
 | VS Code extension | Open source | Proprietary (Pylance) | None | Open source | Open source |
 | Mojo compatibility | ✅ | ❌ | ❌ | ❌ | ❌ |
 | SARIF output | ✅ (Phase 3) | ✅ | ❌ | ❌ | ✅ |
-| License | MIT / Apache-2.0 | MIT | MIT | MIT | MIT |
+| License | MIT | MIT | MIT | MIT | MIT |
 
 <a name="footnotes"></a>
 

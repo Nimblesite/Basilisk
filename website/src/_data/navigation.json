@@ -71,7 +71,7 @@
     {
       "title": "Legal",
       "items": [
-        { "text": "MIT / Apache-2.0", "url": "https://github.com/MelbourneDeveloper/Basilisk/blob/main/LICENSE" }
+        { "text": "MIT License", "url": "https://github.com/MelbourneDeveloper/Basilisk/blob/main/LICENSE" }
       ]
     }
   ]

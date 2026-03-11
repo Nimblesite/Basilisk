@@ -1,0 +1,14 @@
+.vscode/**
+.vscode-test/**
+.vscode-test.mjs
+.ruff_cache/**
+src/**
+node_modules/**
+out/test/**
+tsconfig.json
+.eslintrc*
+**/*.ts
+**/*.map
+.gitignore
+package-lock.json
+*.vsix

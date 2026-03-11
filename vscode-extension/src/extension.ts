@@ -10,6 +10,9 @@ import { execFile } from "child_process";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
+import * as https from "https";
+import { pipeline } from "stream/promises";
+import { createGunzip } from "zlib";
 import {
   LanguageClient,
   LanguageClientOptions,
@@ -83,6 +86,158 @@ function resolveExecutablePath(configured: string): string {
   return configured;
 }
 
+const GITHUB_REPO = "MelbourneDeveloper/Basilisk";
+
+/** Platform-to-archive-name mapping for GitHub release downloads. */
+function releaseArchiveName(): string | undefined {
+  const arch = os.arch(); // "x64" | "arm64" | ...
+  const plat = os.platform(); // "darwin" | "linux" | "win32"
+
+  if (plat === "darwin" && arch === "arm64") return "basilisk-darwin-aarch64.tar.gz";
+  if (plat === "darwin" && arch === "x64") return "basilisk-darwin-x86_64.tar.gz";
+  if (plat === "linux" && arch === "x64") return "basilisk-linux-x86_64.tar.gz";
+  if (plat === "linux" && arch === "arm64") return "basilisk-linux-aarch64.tar.gz";
+  if (plat === "win32" && arch === "x64") return "basilisk-windows-x86_64.zip";
+  return undefined;
+}
+
+/** Directory where the extension stores the downloaded binary. */
+function binaryInstallDir(context: vscode.ExtensionContext): string {
+  return path.join(context.globalStorageUri.fsPath, "bin");
+}
+
+/** Full path to the installed binary. */
+function installedBinaryPath(context: vscode.ExtensionContext): string {
+  const name = os.platform() === "win32" ? "basilisk.exe" : "basilisk";
+  return path.join(binaryInstallDir(context), name);
+}
+
+/** Follow redirects and return the final response stream. */
+function httpsGet(url: string): Promise<import("http").IncomingMessage> {
+  return new Promise((resolve, reject) => {
+    https.get(url, { headers: { "User-Agent": "basilisk-vscode" } }, (res) => {
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        httpsGet(res.headers.location).then(resolve, reject);
+        return;
+      }
+      if (res.statusCode && res.statusCode >= 400) {
+        reject(new Error(`HTTP ${res.statusCode} fetching ${url}`));
+        return;
+      }
+      resolve(res);
+    }).on("error", reject);
+  });
+}
+
+/**
+ * Download the basilisk binary from GitHub Releases and install it into
+ * the extension's global storage. Returns the path to the installed binary.
+ */
+async function downloadBinary(
+  context: vscode.ExtensionContext,
+  version: string,
+): Promise<string> {
+  const archive = releaseArchiveName();
+  if (!archive) {
+    throw new Error(`Unsupported platform: ${os.platform()}-${os.arch()}`);
+  }
+
+  const tag = version.startsWith("v") ? version : `v${version}`;
+  const url = `https://github.com/${GITHUB_REPO}/releases/download/${tag}/${archive}`;
+
+  const destDir = binaryInstallDir(context);
+  fs.mkdirSync(destDir, { recursive: true });
+
+  const destPath = installedBinaryPath(context);
+
+  outputChannel?.appendLine(`Downloading Basilisk ${tag} from ${url}...`);
+
+  const res = await httpsGet(url);
+
+  if (archive.endsWith(".tar.gz")) {
+    // tar.gz: the archive contains a single file "basilisk" at root
+    const { extract } = await import("tar");
+    await pipeline(res, createGunzip(), extract({ cwd: destDir }));
+  } else {
+    // .zip (Windows): download to temp, extract with Node
+    const tmpZip = path.join(destDir, "basilisk.zip");
+    const tmpStream = fs.createWriteStream(tmpZip);
+    await pipeline(res, tmpStream);
+
+    // Use PowerShell to extract on Windows
+    const { execFileSync } = await import("child_process");
+    execFileSync("powershell", [
+      "-Command",
+      `Expand-Archive -Force -Path '${tmpZip}' -DestinationPath '${destDir}'`,
+    ]);
+    fs.unlinkSync(tmpZip);
+  }
+
+  // Ensure the binary is executable on unix
+  if (os.platform() !== "win32") {
+    fs.chmodSync(destPath, 0o755);
+  }
+
+  outputChannel?.appendLine(`Basilisk installed to ${destPath}`);
+  return destPath;
+}
+
+/**
+ * Check if the binary exists and is executable. If not, offer to download it.
+ * Returns the resolved executable path.
+ */
+async function ensureBinary(
+  context: vscode.ExtensionContext,
+  configuredPath: string,
+): Promise<string> {
+  const resolved = resolveExecutablePath(configuredPath);
+
+  // Check if the resolved path exists
+  try {
+    fs.accessSync(resolved, fs.constants.X_OK);
+    return resolved;
+  } catch {
+    // Not found via config — check our installed copy
+  }
+
+  const installed = installedBinaryPath(context);
+  try {
+    fs.accessSync(installed, fs.constants.X_OK);
+    return installed;
+  } catch {
+    // Not installed yet
+  }
+
+  // Prompt the user to download
+  const version = context.extension.packageJSON.version as string;
+  const choice = await vscode.window.showInformationMessage(
+    `Basilisk binary not found. Download v${version} from GitHub?`,
+    "Download",
+    "Configure Path",
+    "Cancel",
+  );
+
+  if (choice === "Download") {
+    return vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: "Downloading Basilisk...",
+        cancellable: false,
+      },
+      async () => downloadBinary(context, version),
+    );
+  }
+
+  if (choice === "Configure Path") {
+    await vscode.commands.executeCommand(
+      "workbench.action.openSettings",
+      "basilisk.executablePath",
+    );
+  }
+
+  throw new Error("Basilisk binary not available.");
+}
+
 /** Shape of a single diagnostic emitted by `basilisk check --output json`. */
 interface BasiliskDiagnostic {
   code: string;
@@ -113,13 +268,6 @@ export function activate(context: vscode.ExtensionContext): void {
   statusBarItem.command = "basilisk.showOutput";
   context.subscriptions.push(statusBarItem);
 
-  const cfg = vscode.workspace.getConfiguration("basilisk");
-  const configuredPath = cfg.get<string>("executablePath") ?? "basilisk";
-  const executablePath = resolveExecutablePath(configuredPath);
-  const useLsp = cfg.get<boolean>("useLsp") ?? true;
-
-  outputChannel.appendLine(`Basilisk executable: ${executablePath}`);
-
   // Register commands safely — avoids "command already exists" errors when
   // the extension re-activates after an LSP crash/restart cycle.
   safeRegisterCommand(context, "basilisk.restartServer", async () => {
@@ -143,19 +291,33 @@ export function activate(context: vscode.ExtensionContext): void {
     outputChannel?.show();
   });
 
-  if (useLsp) {
-    // In LSP mode, the LanguageClient automatically registers
-    // basilisk.organizeImports via the server's executeCommandProvider.
-    // Do NOT register it manually — that would conflict.
-    startLspClient(context, executablePath);
-  } else {
-    // In subprocess mode, register organizeImports client-side.
-    safeRegisterCommand(context, "basilisk.organizeImports", () => {
-      organizeImports();
-    });
-    startSubprocessMode(context, executablePath);
-    updateStatusBar("ready");
-  }
+  // Resolve the binary — download from GitHub Releases if not found.
+  const cfg = vscode.workspace.getConfiguration("basilisk");
+  const configuredPath = cfg.get<string>("executablePath") ?? "basilisk";
+  const useLsp = cfg.get<boolean>("useLsp") ?? true;
+
+  updateStatusBar("starting");
+
+  ensureBinary(context, configuredPath).then(
+    (executablePath) => {
+      outputChannel?.appendLine(`Basilisk executable: ${executablePath}`);
+
+      if (useLsp) {
+        startLspClient(context, executablePath);
+      } else {
+        safeRegisterCommand(context, "basilisk.organizeImports", () => {
+          organizeImports();
+        });
+        startSubprocessMode(context, executablePath);
+        updateStatusBar("ready");
+      }
+    },
+    (err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      outputChannel?.appendLine(`Binary resolution failed: ${msg}`);
+      updateStatusBar("error");
+    },
+  );
 
   // Update status bar when diagnostics change.
   context.subscriptions.push(
