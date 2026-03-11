@@ -1,0 +1,59 @@
+# Whole-Module Analysis — Implementation Plan
+
+> **Spec**: [WHOLE-MODULE-ANALYSIS-SPEC.md](WHOLE-MODULE-ANALYSIS-SPEC.md) — read before touching any code.
+
+---
+
+## Affected Components
+
+| Component | Change |
+|-----------|--------|
+| `crates/basilisk-lsp/src/config.rs` | Add `AnalysisMode` enum + `analysis_mode` field to `BasiliskConfig` |
+| `crates/basilisk-lsp/src/server.rs` | Replace `DashMap<Url, DocumentState>` with `WorkspaceIndex`; gate startup scan on mode |
+| `crates/basilisk-lsp/src/workspace.rs` (new) | `WorkspaceIndex`, `FileEntry`, scan, invalidation, open/close logic |
+| `vscode-extension/package.json` | Register `basilisk.analysisMode` setting |
+| `vscode-extension/src/extension.ts` | Pass `analysisMode` via `InitializationOptions` |
+
+## Reuse
+
+- `collect_python_files()` (`server.rs:1024`) — move into `workspace.rs`
+- `is_excluded()` (`server.rs:1064`) — move into `workspace.rs`
+- `check_and_publish()` body — extract into `FileEntry::recheck()`
+- `load_config()` in `config.rs` — extend, do not replace
+- Rayon (`par_iter()`) for parallel startup scan — already in `Cargo.toml`
+
+## Verification
+
+1. `cargo build` — clean, no warnings
+2. `cargo clippy` — passes
+3. `cargo test -p basilisk-lsp` — all existing E2E and WS tests pass
+4. Manual: open VS Code on a multi-file Python workspace; confirm diagnostics appear for **closed** files in the Problems panel (`wholeModule` mode)
+5. Manual: set `basilisk.analysisMode` to `openFilesOnly`; confirm closed-file diagnostics disappear
+6. New E2E test in `crates/basilisk-lsp/tests/lsp_ws_tests.rs`:
+   - Start server with `wholeModule` mode
+   - Send no `didOpen` notifications
+   - Assert diagnostics are published for fixture files from the startup scan
+
+---
+
+## TODO
+
+- [ ] Add `AnalysisMode` enum (`OpenFilesOnly`, `WholeModule`, `CrossModule`) to `config.rs`
+- [ ] Add `analysis_mode: AnalysisMode` field to `BasiliskConfig` with default `WholeModule`
+- [ ] Deserialise `analysisMode` from `basilisk.json`, `[tool.basilisk]` in `pyproject.toml`, and `InitializationOptions`
+- [ ] Create `crates/basilisk-lsp/src/workspace.rs` with `WorkspaceIndex` and `FileEntry` structs
+- [ ] Implement `WorkspaceIndex::scan()` — parallel Rayon walk, returns `Vec<(Url, Vec<Diagnostic>)>`
+- [ ] Implement `WorkspaceIndex::invalidate(path)` — re-parse → re-resolve → re-check one file
+- [ ] Implement `WorkspaceIndex::set_open(path, text, version)` and `set_closed(path)`
+- [ ] Move `collect_python_files()` and `is_excluded()` from `server.rs` into `workspace.rs`
+- [ ] Replace `DashMap<Url, DocumentState>` in `server.rs` with `WorkspaceIndex`
+- [ ] In `initialized()`: branch on `analysis_mode` — skip scan for `openFilesOnly`, run `workspace.scan()` for `wholeModule`/`crossModule`
+- [ ] Update `did_open` / `did_change` / `did_save` to call `workspace.set_open()` / `workspace.invalidate()`
+- [ ] Update `did_close` to call `workspace.set_closed()` then `workspace.invalidate()`
+- [ ] Update `did_change_watched_files` to skip open files; call `workspace.invalidate()` for closed ones
+- [ ] Add 150 ms debounce to file-watcher events
+- [ ] Update all feature handlers to look up `FileEntry` from `WorkspaceIndex` instead of `DocumentState`
+- [ ] Advertise `workspace.fileOperations` capabilities in `initialize` response when mode is not `openFilesOnly`
+- [ ] Register `basilisk.analysisMode` setting in `vscode-extension/package.json`
+- [ ] Pass `analysisMode` via `initializationOptions` in `vscode-extension/src/extension.ts`
+- [ ] Write new E2E test: startup scan publishes diagnostics without any `didOpen`
