@@ -23,7 +23,7 @@ pub enum AnalysisMode {
 impl AnalysisMode {
     /// Parse from the string values used in config files and VS Code settings.
     #[must_use]
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse(s: &str) -> Self {
         match s {
             "openFilesOnly" => Self::OpenFilesOnly,
             "crossModule" => Self::CrossModule,
@@ -150,7 +150,7 @@ fn load_json_config(path: &Path) -> Option<WorkspaceConfig> {
         cfg.venv = Some(v.to_owned());
     }
     if let Some(v) = obj.get("analysisMode").and_then(|v| v.as_str()) {
-        cfg.analysis_mode = AnalysisMode::from_str(v);
+        cfg.analysis_mode = AnalysisMode::parse(v);
     }
 
     Some(cfg)
@@ -208,7 +208,7 @@ fn load_pyproject_config(path: &Path) -> Option<WorkspaceConfig> {
                     cfg.venv = Some(value.to_owned());
                 }
                 "analysisMode" | "analysis_mode" => {
-                    cfg.analysis_mode = AnalysisMode::from_str(value);
+                    cfg.analysis_mode = AnalysisMode::parse(value);
                 }
                 _ => {}
             }

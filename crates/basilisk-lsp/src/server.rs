@@ -300,12 +300,9 @@ impl tower_lsp::LanguageServer for LspServer {
                 self.client.publish_diagnostics(uri, vec![], None).await;
             }
             AnalysisMode::WholeModule | AnalysisMode::CrossModule => {
-                if let Some((uri, diags)) = index.set_closed(&uri) {
-                    drop(guard);
-                    self.client.publish_diagnostics(uri, diags, None).await;
-                } else {
-                    drop(guard);
-                }
+                let (publish_uri, diags) = index.set_closed(&uri);
+                drop(guard);
+                self.client.publish_diagnostics(publish_uri, diags, None).await;
             }
         }
     }
@@ -692,7 +689,6 @@ impl tower_lsp::LanguageServer for LspServer {
                 })
             })
             .await
-            .flatten()
             .unwrap_or_default();
 
         Ok(completion::resolve_completion_item(item, &text, &path_str))

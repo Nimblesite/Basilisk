@@ -687,3 +687,43 @@ fn add_builtin_group(
         }
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+
+    fn resolve_patched(code: &str, line: u32) -> basilisk_resolver::ResolvedModule {
+        let patched = patch_cursor_line(code, line);
+        let parsed = basilisk_parser::parse_source(patched, "/test.py".to_owned()).unwrap();
+        basilisk_resolver::resolve(&parsed).unwrap()
+    }
+
+    #[test]
+    fn test_dot_completion_dog_class() {
+        let code = "class Dog:\n    name: str\n    breed: str\n    def bark(self) -> str:\n        return \"woof\"\n    def fetch(self, item: str) -> str:\n        return item\n\nDog.";
+        // cursor at line 8, character 4 (after "Dog.")
+        let byte_offset = code.len(); // end of text
+        let resolved = resolve_patched(code, 8);
+        let items = complete(&resolved, code, byte_offset);
+        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+        assert!(labels.contains(&"name"), "missing 'name': {labels:?}");
+        assert!(labels.contains(&"breed"), "missing 'breed': {labels:?}");
+        assert!(labels.contains(&"bark"), "missing 'bark': {labels:?}");
+        assert!(labels.contains(&"fetch"), "missing 'fetch': {labels:?}");
+    }
+
+    #[test]
+    fn test_dot_completion_self() {
+        let code = "class Cat:\n    color: str\n    age: int\n    def meow(self) -> str:\n        return \"meow\"\n    def describe(self) -> str:\n        return self.";
+        // cursor at end of text (after "self.")
+        let byte_offset = code.len();
+        let resolved = resolve_patched(code, 6);
+        let items = complete(&resolved, code, byte_offset);
+        let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+        assert!(labels.contains(&"color"), "missing 'color': {labels:?}");
+        assert!(labels.contains(&"age"), "missing 'age': {labels:?}");
+        assert!(labels.contains(&"meow"), "missing 'meow': {labels:?}");
+        assert!(labels.contains(&"describe"), "missing 'describe': {labels:?}");
+    }
+}

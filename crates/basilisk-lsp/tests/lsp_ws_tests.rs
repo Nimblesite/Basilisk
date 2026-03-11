@@ -6221,3 +6221,199 @@ hel
     );
     Ok(())
 }
+
+// ── Analysis mode and startup scan tests ────────────────────────────────────
+
+/// Initialize the server with a rootUri pointing at a temp directory.
+async fn initialize_with_root(
+    fixture: &mut WsTestFixture,
+    root_uri: &str,
+    analysis_mode: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    fixture
+        .send_json(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "processId": null,
+                "rootUri": root_uri,
+                "capabilities": {},
+                "trace": "off",
+                "initializationOptions": {
+                    "analysisMode": analysis_mode
+                }
+            }
+        }))
+        .await?;
+
+    let response = fixture.recv().await.ok_or("no response to initialize")?;
+
+    fixture
+        .send_json(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "initialized",
+            "params": {}
+        }))
+        .await?;
+
+    Ok(response)
+}
+
+#[tokio::test]
+async fn test_ws_whole_module_startup_scan_publishes_diagnostics() -> TestResult<()> {
+    // Create a temp workspace with a Python file that has type errors.
+    let dir = std::env::temp_dir().join("bsk_ws_startup_scan");
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(
+        dir.join("check_me.py"),
+        "def greet(name):\n    return f\"Hello, {name}!\"\n",
+    )?;
+
+    let root_uri = format!("file://{}", dir.display());
+
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = initialize_with_root(&mut fixture, &root_uri, "wholeModule").await?;
+
+    // The startup scan should publish diagnostics for check_me.py without any didOpen.
+    let mut found_diag = false;
+    for _ in 0..15 {
+        let Some(msg) = fixture.recv().await else {
+            break;
+        };
+        if msg.contains("\"method\":\"textDocument/publishDiagnostics\"")
+            && msg.contains("check_me.py")
+        {
+            found_diag = true;
+            // The file has a missing type annotation — expect at least one diagnostic.
+            assert!(
+                msg.contains("\"diagnostics\":[{"),
+                "expected non-empty diagnostics from startup scan: {msg}"
+            );
+            break;
+        }
+    }
+
+    assert!(
+        found_diag,
+        "startup scan should publish diagnostics for check_me.py without didOpen"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_open_files_only_mode_no_startup_scan() -> TestResult<()> {
+    // In openFilesOnly mode, no startup scan should occur.
+    let dir = std::env::temp_dir().join("bsk_ws_no_scan");
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(
+        dir.join("closed.py"),
+        "def greet(name):\n    return f\"Hello, {name}!\"\n",
+    )?;
+
+    let root_uri = format!("file://{}", dir.display());
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = initialize_with_root(&mut fixture, &root_uri, "openFilesOnly").await?;
+
+    // Drain messages for 500ms — should not see any publishDiagnostics for closed.py.
+    let mut saw_scan_diag = false;
+    for _ in 0..5 {
+        let msg = tokio::time::timeout(
+            Duration::from_millis(200),
+            fixture.ws_read.next(),
+        )
+        .await;
+        if let Ok(Some(Ok(tokio_tungstenite::tungstenite::Message::Text(text)))) = msg {
+            if text.contains("\"method\":\"textDocument/publishDiagnostics\"")
+                && text.contains("closed.py")
+            {
+                saw_scan_diag = true;
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    assert!(
+        !saw_scan_diag,
+        "openFilesOnly mode should NOT publish diagnostics for closed files at startup"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_whole_module_did_close_keeps_diagnostics() -> TestResult<()> {
+    // In wholeModule mode, closing a file should keep diagnostics (re-analyse from disk).
+    let dir = std::env::temp_dir().join("bsk_ws_close_keep");
+    std::fs::create_dir_all(&dir)?;
+    let file_path = dir.join("keep.py");
+    std::fs::write(&file_path, "def greet(name):\n    return f\"Hello, {name}!\"\n")?;
+
+    let file_uri = format!("file://{}", file_path.display());
+    let root_uri = format!("file://{}", dir.display());
+
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = initialize_with_root(&mut fixture, &root_uri, "wholeModule").await?;
+
+    // Open the file.
+    fixture.did_open(&file_uri, "def greet(name):\n    return f\"Hello, {name}!\"\n").await?;
+    // Drain open diagnostics.
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Close the file.
+    fixture
+        .send_json(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didClose",
+            "params": {
+                "textDocument": { "uri": file_uri }
+            }
+        }))
+        .await?;
+
+    // Should receive a publishDiagnostics after close (re-analysis from disk).
+    let diag = fixture.wait_for_diagnostics().await;
+    assert!(diag.is_some(), "wholeModule mode should re-publish diagnostics after didClose");
+
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_open_files_only_did_close_clears_diagnostics() -> TestResult<()> {
+    // In openFilesOnly mode, closing a file should clear its diagnostics.
+    let mut fixture = WsTestFixture::new().await?;
+    fixture.initialize().await?;
+
+    let uri = "file:///memory_only.py";
+    fixture
+        .did_open(uri, "def greet(name):\n    return f\"Hello, {name}!\"\n")
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    fixture
+        .send_json(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didClose",
+            "params": {
+                "textDocument": { "uri": uri }
+            }
+        }))
+        .await?;
+
+    // Default mode is wholeModule; file doesn't exist on disk → empty diagnostics.
+    let diag = fixture.wait_for_diagnostics().await;
+    assert!(diag.is_some(), "should publish diagnostics on close");
+    let diag_msg = diag.unwrap();
+    assert!(
+        diag_msg.contains("\"diagnostics\":[]"),
+        "non-disk file close should produce empty diagnostics: {diag_msg}"
+    );
+
+    Ok(())
+}

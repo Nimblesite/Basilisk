@@ -52,11 +52,14 @@
 - [x] Update `did_close` to call `workspace.set_closed()` (wholeModule) or clear diagnostics (openFilesOnly)
 - [x] Update `did_change_watched_files` to skip open files; call `workspace.reload_from_disk()` for closed ones
 - [x] Update all feature handlers to look up `FileEntry` from `WorkspaceIndex` instead of `DocumentState`
-- [ ] `cargo build` clean — fix any remaining compile errors
-- [ ] `cargo clippy` passes
-- [ ] `cargo test -p basilisk-lsp` all existing tests pass
+- [x] `cargo build` clean — fix any remaining compile errors
+- [x] `cargo clippy` passes
+- [x] `cargo test -p basilisk-lsp` all existing tests pass (133 total)
+- [x] Write new WS E2E tests: startup scan, openFilesOnly no-scan, did_close behavior per mode
+- [x] Write unit tests for `WorkspaceIndex` (24 tests covering set_open, get_text, set_closed, reload_from_disk, scan, all_resolved)
+- [x] Fix `FileEntry.text` field — store raw source always, even when parse fails (enables completion on partial expressions)
 - [ ] Add 150 ms debounce to file-watcher events
 - [ ] Advertise `workspace.fileOperations` capabilities in `initialize` response when mode is not `openFilesOnly`
 - [ ] Register `basilisk.analysisMode` setting in `vscode-extension/package.json`
 - [ ] Pass `analysisMode` via `initializationOptions` in `vscode-extension/src/extension.ts`
-- [ ] Write new E2E test: startup scan publishes diagnostics without any `didOpen`
+- [ ] VSIX integration tests: prove wholeModule publishes diagnostics for closed files; prove openFilesOnly does not scan at startup
