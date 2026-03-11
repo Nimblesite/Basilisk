@@ -1,7 +1,7 @@
 {
   "name": "Basilisk",
-  "title": "Basilisk — Python Language Server, Built in Rust",
-  "description": "A complete Python language server and VS Code extension. Type checking, completions, go-to-definition, hover, refactoring — strict by default. Open source. Built in Rust.",
+  "title": "Basilisk — The Open-Source Pylance Replacement",
+  "description": "A complete Python language server and VS Code extension that replaces Pylance and Pyright. Everything Pylance does — and more. Strict by default. Built in Rust.",
   "url": "https://www.basilisk-python.dev",
   "themeColor": "#e8500a",
   "stylesheet": "/assets/css/styles.css",

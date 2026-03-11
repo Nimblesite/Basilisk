@@ -2,7 +2,7 @@
 
 **Version**: 0.1.0-draft
 **Status**: Specification Draft
-**License**: MIT
+**License**: Apache-2.0 OR MIT (dual-license)
 
 ---
 

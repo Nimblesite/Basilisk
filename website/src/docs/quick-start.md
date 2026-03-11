@@ -1,8 +1,8 @@
 ---
 layout: layouts/docs.njk
 title: Quick Start
-description: Get started with Basilisk in 5 minutes. Install the VS Code extension and get full Python language support — type checking, completions, and more.
-keywords: basilisk, quick start, python language server, type checking, tutorial, vs code
+description: Replace Pylance in 5 minutes. Install Basilisk's VS Code extension and get full Python language support — open source.
+keywords: basilisk, quick start, pylance replacement, python language server, type checking, tutorial, vs code
 eleventyNavigation:
   key: Quick Start
   order: 3

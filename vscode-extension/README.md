@@ -149,38 +149,20 @@ All rules are **on by default**. There is no way to relax them globally.
 
 ---
 
-## Installation
+## Requirements
 
-**No manual setup required.** When you first activate the extension, it detects whether the `basilisk` binary is on your PATH. If not, it offers to download the correct pre-built binary for your platform directly from [GitHub Releases](https://github.com/MelbourneDeveloper/Basilisk/releases).
-
-The downloaded binary is stored in the extension's global storage directory — no system paths are modified.
-
-### Supported platforms
-
-| OS | Architecture |
-|----|-------------|
-| macOS | Apple Silicon (aarch64) |
-| macOS | Intel (x86_64) |
-| Linux | x86_64 |
-| Linux | aarch64 |
-| Windows | x86_64 |
-
-### Manual install (optional)
-
-If you prefer to manage the binary yourself:
+Install the Basilisk binary:
 
 ```sh
-# Download from GitHub Releases
-# https://github.com/MelbourneDeveloper/Basilisk/releases
-
-# Or build from source (Rust 1.87+)
 cargo install basilisk
 ```
 
-Then set `basilisk.executablePath` in your VS Code settings if it's not on PATH.
+Rust 1.87+ required for building from source.
 
 ---
 
 ## License
 
-MIT License. Copyright (c) 2026 NIMBLESITE PTY LTD.
+MIT or Apache-2.0, at your option.
+
+Built by [NIMBLESITE PTY LTD](https://www.nimblesite.co).

@@ -23,7 +23,11 @@ The fastest way to get started. Install the **Basilisk** extension from the VS C
 
 **The extension automatically downloads the correct Basilisk binary for your platform** on first activation. No manual setup required. The binary is downloaded from [GitHub Releases](https://github.com/MelbourneDeveloper/Basilisk/releases) and stored in the extension's global storage directory.
 
-### Supported platforms
+```bash
+git clone https://github.com/MelbourneDeveloper/Basilisk
+cd basilisk
+cargo build --release
+```
 
 | OS | Architecture |
 |----|-------------|
@@ -84,6 +88,8 @@ cp target/release/basilisk /usr/local/bin/
 ```
 
 Rust 1.87+ required.
+
+Track progress at [github.com/MelbourneDeveloper/Basilisk](https://github.com/MelbourneDeveloper/Basilisk).
 
 ## CI integration
 

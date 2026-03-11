@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: Introduction
-description: What Basilisk is, why it exists, and how it compares to Pylance, Pyright, and other Python type checkers.
+description: What Basilisk is, why it exists, and how it replaces Pylance and Pyright as a fully open-source Python language server.
 keywords: basilisk, python, language server, pylance replacement, pyright, type checker, lsp, vs code, strict, rust
 eleventyNavigation:
   key: Introduction
@@ -10,9 +10,9 @@ eleventyNavigation:
 
 # Introduction
 
-Basilisk is a **complete Python language server and VS Code extension** — type checking, autocomplete, go-to-definition, hover, refactoring, and diagnostics, all in one tool. Strict by default. Fully open source. Built in Rust.
+Basilisk is a **complete Python language server and VS Code extension** that replaces Pylance and Pyright. Everything Pylance does — autocomplete, go-to-definition, hover information, refactoring, diagnostics — Basilisk does too, fully open source and strict by default.
 
-It is not just a type checker. It is a feature-complete LSP that works in VS Code, Neovim, Emacs, and any editor that speaks the Language Server Protocol. No proprietary dependencies. No Node.js. A single binary.
+It is not just a type checker. It is a feature-complete LSP that works in VS Code, Neovim, Emacs, and any editor that speaks the Language Server Protocol. No proprietary extensions. No Node.js. A single Rust binary.
 
 ## The problem Basilisk solves
 
@@ -20,12 +20,12 @@ Pylance is the most-used Python extension in VS Code. It is also **proprietary**
 
 Every other Python type checker (mypy, ty, Pyrefly) defaults to *gradual typing*. Untyped code passes silently. `Any` spreads through type inference without warning. Strictness is something you must deliberately opt into, configure, remember to enforce in CI, and re-explain to every new team member.
 
-Basilisk takes a different position. It provides the full language server experience — type checking, completions, navigation, refactoring — in a single open-source tool that is strict by default. Type annotations are contracts, not documentation.
+Basilisk takes a different position. **It replaces the entire Pylance stack** — type checking, language features, and VS Code integration — with an open-source alternative that is strict by default. Type annotations are contracts, not documentation.
 
 ## What Basilisk is
 
 - A **full-featured language server** (LSP) — autocomplete, go-to-definition, hover, find references, rename, code actions, inlay hints
-- A **VS Code extension** with full language support — install it and go
+- A **VS Code extension** that replaces Pylance — install it, disable Pylance, and everything works
 - A **strict-by-default type checker** — no `--strict` flag, no gradual mode, no opt-in
 - A **CLI tool** for CI integration — exits with code 1 when errors are found
 - A **migration assistant** that reads your existing `pyrightconfig.json` or `mypy.ini`
