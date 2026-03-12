@@ -169,3 +169,44 @@ fi
 
 echo ""
 ok "All projects meet their coverage thresholds."
+
+# ── LSP integration tests ─────────────────────────────────────────────────────
+header "Running LSP tests"
+cargo test -p basilisk-lsp --test lsp_tests
+ok "lsp_tests done"
+
+header "Running LSP E2E tests"
+cargo test -p basilisk-lsp --test lsp_e2e_tests
+ok "lsp_e2e_tests done"
+
+# ── VS Code extension ─────────────────────────────────────────────────────────
+if command -v node &>/dev/null && command -v npm &>/dev/null; then
+    header "VS Code extension — install deps + compile"
+    cd "$REPO_ROOT/vscode-extension"
+    npm ci
+    npm run compile
+    ok "TypeScript compiled"
+
+    if command -v xvfb-run &>/dev/null || [[ "$(uname)" == "Darwin" ]]; then
+        header "VS Code E2E tests"
+        if command -v xvfb-run &>/dev/null; then
+            BASILISK_EXECUTABLE_PATH="$REPO_ROOT/target/debug/basilisk" \
+            MOCHA_TIMEOUT="120000" \
+            xvfb-run -a npm test
+        else
+            BASILISK_EXECUTABLE_PATH="$REPO_ROOT/target/debug/basilisk" \
+            MOCHA_TIMEOUT="120000" \
+            npm test
+        fi
+        ok "VS Code E2E tests done"
+    else
+        warn "xvfb not found — skipping VS Code E2E tests (run on Linux with xvfb or macOS)"
+    fi
+
+    cd "$REPO_ROOT"
+else
+    warn "node/npm not found — skipping VS Code extension tests"
+fi
+
+echo ""
+ok "All tests passed."

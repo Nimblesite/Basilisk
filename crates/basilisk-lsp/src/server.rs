@@ -293,9 +293,7 @@ impl LspServer {
                 self.client
                     .log_message(
                         MessageType::INFO,
-                        format!(
-                            "Basilisk: debug session {session_id} started on {host}:{port}"
-                        ),
+                        format!("Basilisk: debug session {session_id} started on {host}:{port}"),
                     )
                     .await;
                 Ok(Some(serde_json::json!({

@@ -311,11 +311,7 @@ fn test_zed_required_capabilities() -> TestResult<()> {
     );
     let commands_list: Vec<&str> = execute_commands
         .as_array()
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str())
-                .collect()
-        })
+        .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
         .unwrap_or_default();
 
     for cmd in commands::ALL {
@@ -853,9 +849,7 @@ fn test_zed_diagnostic_docs_url() -> TestResult<()> {
     let code = "def foo(x):\n    return x\n";
     fixture.did_open("file:///docs_url.py", code)?;
 
-    let diag = fixture
-        .wait_for_diagnostics()
-        .ok_or("no diagnostics")?;
+    let diag = fixture.wait_for_diagnostics().ok_or("no diagnostics")?;
 
     // Diagnostics should reference the Basilisk docs URL from basilisk_common.
     assert!(

@@ -98,10 +98,7 @@ impl DebugSessionManager {
             .spawn()
             .map_err(DebugError::SpawnFailed)?;
 
-        self.sessions
-            .lock()
-            .await
-            .insert(session_id.clone(), child);
+        self.sessions.lock().await.insert(session_id.clone(), child);
 
         // Wait for debugpy to start accepting connections (up to 5s).
         wait_for_port(port, Duration::from_secs(5)).await?;
@@ -130,8 +127,7 @@ impl DebugSessionManager {
 
 /// Find a free TCP port by binding to port 0.
 fn find_free_port() -> Result<u16, DebugError> {
-    let listener =
-        TcpListener::bind("127.0.0.1:0").map_err(DebugError::PortAllocation)?;
+    let listener = TcpListener::bind("127.0.0.1:0").map_err(DebugError::PortAllocation)?;
     let port = listener
         .local_addr()
         .map_err(DebugError::PortAllocation)?
@@ -314,8 +310,7 @@ mod tests {
         use std::io::Read as _;
 
         // Start a TCP listener simulating debugpy.adapter in debugServer mode.
-        let listener =
-            std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
         let port = listener.local_addr().expect("addr").port();
 
         // Simulate debugpy: accept ONE connection, start a "DAP session".
@@ -329,7 +324,7 @@ mod tests {
             // debugpy waiting for DAP messages from its single client.
             let mut buf = [0u8; 1];
             let _ = conn.read(&mut buf); // returns Ok(0) on EOF
-            // Adapter "exits" — drop the connection too.
+                                         // Adapter "exits" — drop the connection too.
             drop(conn);
         });
 
