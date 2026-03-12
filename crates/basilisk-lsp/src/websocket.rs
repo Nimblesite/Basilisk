@@ -13,6 +13,7 @@ use std::io;
 
 use futures_util::stream::{self, StreamExt as _};
 use futures_util::SinkExt as _;
+use tracing::{error, info};
 use tokio::io::{
     AsyncBufReadExt as _, AsyncReadExt as _, AsyncWriteExt as _, BufReader, DuplexStream,
 };
@@ -186,12 +187,12 @@ pub async fn handle_connection(
         () = lsp_server => {}
         result = inbound => {
             if let Err(err) = result {
-                eprintln!("ws inbound bridge error: {err}");
+                error!(%err, "ws inbound bridge error");
             }
         }
         result = outbound => {
             if let Err(err) = result {
-                eprintln!("ws outbound bridge error: {err}");
+                error!(%err, "ws outbound bridge error");
             }
         }
     }
@@ -207,7 +208,7 @@ pub async fn handle_connection(
 /// Returns an `io::Error` if the TCP listener fails to bind or accept.
 pub async fn run_server_ws(port: u16) -> io::Result<()> {
     let listener = TcpListener::bind(format!("127.0.0.1:{port}")).await?;
-    eprintln!("Basilisk LSP WebSocket server listening on ws://127.0.0.1:{port}");
+    info!(port, "Basilisk LSP WebSocket server listening");
 
     loop {
         let (tcp_stream, _addr) = listener.accept().await?;

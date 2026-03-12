@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::net::TcpListener;
 use std::path::Path;
+use tracing::{debug, error, info, warn};
 
 use tokio::process::Child;
 use tokio::sync::Mutex;
@@ -89,6 +90,8 @@ impl DebugSessionManager {
         let port = find_free_port()?;
         let session_id = generate_session_id();
 
+        info!(python = python_path, port, session_id = %session_id, "spawning debugpy adapter");
+
         let child = tokio::process::Command::new(python_path)
             .args(["-m", "debugpy.adapter", "--port", &port.to_string()])
             .stdin(std::process::Stdio::null())
@@ -96,13 +99,18 @@ impl DebugSessionManager {
             .stderr(std::process::Stdio::piped())
             .kill_on_drop(true)
             .spawn()
-            .map_err(DebugError::SpawnFailed)?;
+            .map_err(|err| {
+                error!(python = python_path, %err, "failed to spawn debugpy");
+                DebugError::SpawnFailed(err)
+            })?;
 
         self.sessions.lock().await.insert(session_id.clone(), child);
 
         // Wait for debugpy to start accepting connections (up to 5s).
+        debug!(port, "waiting for debugpy to accept connections");
         wait_for_port(port, Duration::from_secs(5)).await?;
 
+        info!(port, session_id = %session_id, "debugpy ready on localhost:{port}");
         Ok(("localhost".to_owned(), port, session_id))
     }
 
@@ -110,16 +118,23 @@ impl DebugSessionManager {
     pub async fn stop_session(&self, session_id: &str) -> bool {
         let mut sessions = self.sessions.lock().await;
         if let Some(mut child) = sessions.remove(session_id) {
+            info!(session_id, "stopping debug session");
             let _ = child.kill().await;
             return true;
         }
+        warn!(session_id, "stop_session called for unknown session");
         false
     }
 
     /// Kill all active debug sessions. Called on LSP shutdown.
     pub async fn stop_all(&self) {
         let mut sessions = self.sessions.lock().await;
-        for (_, mut child) in sessions.drain() {
+        let count = sessions.len();
+        if count > 0 {
+            info!(count, "stopping all debug sessions");
+        }
+        for (id, mut child) in sessions.drain() {
+            debug!(session_id = %id, "killing debug session");
             let _ = child.kill().await;
         }
     }
@@ -148,18 +163,19 @@ async fn wait_for_port(port: u16, timeout: Duration) -> Result<(), DebugError> {
     loop {
         match TcpListener::bind(("127.0.0.1", port)) {
             Err(ref err) if err.kind() == std::io::ErrorKind::AddrInUse => {
-                // Port occupied → debugpy is listening. Ready!
+                debug!(port, elapsed_ms = start.elapsed().as_millis(), "port occupied — debugpy ready");
                 return Ok(());
             }
             Ok(_listener) => {
                 // We could bind → port is free → debugpy hasn't started yet.
                 // Dropping the listener frees it again; retry after a short sleep.
             }
-            Err(_) => {
-                // Some other bind error — retry.
+            Err(err) => {
+                warn!(port, %err, "unexpected bind error during port check");
             }
         }
         if start.elapsed() > timeout {
+            error!(port, "debugpy did not bind within timeout");
             return Err(DebugError::Timeout(port));
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -188,6 +204,7 @@ fn generate_session_id() -> String {
 pub fn resolve_python(workspace_root: &Path) -> String {
     // 1. Explicit override via env var.
     if let Ok(p) = std::env::var("BASILISK_PYTHON") {
+        info!(python = %p, "using BASILISK_PYTHON env var");
         return p;
     }
 
@@ -202,16 +219,16 @@ pub fn resolve_python(workspace_root: &Path) -> String {
             workspace_root.join(venv_dir).join("bin").join("python")
         };
         if bin.exists() {
-            return bin.to_string_lossy().into_owned();
+            let resolved = bin.to_string_lossy().into_owned();
+            info!(python = %resolved, "found workspace venv");
+            return resolved;
         }
     }
 
     // 3. System fallback.
-    if cfg!(windows) {
-        "python".into()
-    } else {
-        "python3".into()
-    }
+    let fallback = if cfg!(windows) { "python" } else { "python3" };
+    info!(python = fallback, "falling back to system python");
+    fallback.into()
 }
 
 /// Check if debugpy is importable by the given Python interpreter.
@@ -221,6 +238,7 @@ pub fn resolve_python(workspace_root: &Path) -> String {
 /// Returns `DebugError::SpawnFailed` if the Python process cannot be started,
 /// or `DebugError::DebugpyNotFound` if the import fails.
 pub async fn check_debugpy(python: &str) -> Result<(), DebugError> {
+    debug!(python, "checking if debugpy is installed");
     let output = tokio::process::Command::new(python)
         .args(["-c", "import debugpy; print(debugpy.__version__)"])
         .stdout(std::process::Stdio::null())
@@ -230,8 +248,10 @@ pub async fn check_debugpy(python: &str) -> Result<(), DebugError> {
         .map_err(DebugError::SpawnFailed)?;
 
     if output.status.success() {
+        info!(python, "debugpy is available");
         Ok(())
     } else {
+        warn!(python, "debugpy not found");
         Err(DebugError::DebugpyNotFound(python.to_owned()))
     }
 }

@@ -33,6 +33,7 @@ use tower_lsp::lsp_types::{
     WorkspaceEdit, WorkspaceSymbolParams,
 };
 use tower_lsp::{Client, LspService, Server};
+use tracing::{debug, error, info, warn};
 
 use crate::util::{byte_offset_to_position, position_to_byte_offset};
 use crate::{
@@ -261,6 +262,7 @@ impl LspServer {
         &self,
         args: &[serde_json::Value],
     ) -> LspResult<Option<serde_json::Value>> {
+        info!("execute_start_debug_session called");
         // Extract optional python interpreter override from args.
         let python_override = args
             .first()
@@ -275,8 +277,11 @@ impl LspServer {
         let python = python_override.unwrap_or_else(|| crate::debug::resolve_python(root));
         drop(workspace);
 
+        debug!(python = %python, "resolved python interpreter");
+
         // Verify debugpy is installed.
         if let Err(err) = crate::debug::check_debugpy(&python).await {
+            error!(python = %python, %err, "debugpy check failed");
             self.client
                 .log_message(MessageType::ERROR, err.to_string())
                 .await;
@@ -290,6 +295,7 @@ impl LspServer {
         // Spawn debugpy and wait for it to accept connections.
         match self.debug_manager.start_session(&python).await {
             Ok((host, port, session_id)) => {
+                info!(host = %host, port, session_id = %session_id, "debug session started");
                 self.client
                     .log_message(
                         MessageType::INFO,
@@ -303,6 +309,7 @@ impl LspServer {
                 })))
             }
             Err(err) => {
+                error!(%err, "failed to start debug session");
                 self.client
                     .log_message(MessageType::ERROR, err.to_string())
                     .await;
@@ -326,15 +333,19 @@ impl LspServer {
             .and_then(|v| v.as_str())
             .unwrap_or_default();
 
+        info!(session_id, "execute_stop_debug_session called");
         let stopped = self.debug_manager.stop_session(session_id).await;
 
         if stopped {
+            info!(session_id, "debug session stopped successfully");
             self.client
                 .log_message(
                     MessageType::INFO,
                     format!("Basilisk: debug session {session_id} stopped"),
                 )
                 .await;
+        } else {
+            warn!(session_id, "stop_session: no such session");
         }
 
         Ok(Some(serde_json::json!({ "stopped": stopped })))
