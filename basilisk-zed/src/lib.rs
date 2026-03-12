@@ -25,7 +25,7 @@ impl BasiliskExtension {
         }
 
         // 1. Check user-configured binary path from Zed LSP settings.
-        if let Some(settings) = zed::settings::LspSettings::for_worktree("basilisk", worktree).ok()
+        if let Ok(settings) = zed::settings::LspSettings::for_worktree("basilisk", worktree)
         {
             if let Some(binary) = settings.binary.as_ref() {
                 if let Some(ref path) = binary.path {
@@ -168,7 +168,7 @@ impl zed::Extension for BasiliskExtension {
                     format!("Querying retention paths for `{type_name}`..."),
                 ))
             }
-            _ => Err(format!("Unknown slash command: {}", command.name).into()),
+            _ => Err(format!("Unknown slash command: {}", command.name)),
         }
     }
 

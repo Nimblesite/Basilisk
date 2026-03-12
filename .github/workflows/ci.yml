@@ -55,6 +55,12 @@ jobs:
       - name: cargo fmt --check
         run: cargo fmt --all --check
 
+      - name: clippy (all targets)
+        run: cargo clippy --all-targets
+
+      - name: clippy (zed extension)
+        run: cargo clippy --all-targets --manifest-path basilisk-zed/Cargo.toml
+
       - name: Run all tests
         run: ./scripts/test.sh
 

@@ -39,10 +39,6 @@ ok "setup done"
 
 # ── Build ────────────────────────────────────────────────────────────────────
 
-header "Running clippy (all targets)"
-cargo clippy --all-targets
-ok "clippy clean"
-
 header "Building basilisk binary"
 cargo build -p basilisk-cli
 ok "basilisk binary ready"
@@ -202,9 +198,8 @@ cd "$REPO_ROOT"
 
 # ── Zed extension ────────────────────────────────────────────────────────────
 
-header "Zed extension — clippy + tests"
+header "Zed extension — tests"
 cd "$REPO_ROOT/basilisk-zed"
-cargo clippy --all-targets
 cargo test --all-targets
 ok "Zed extension done"
 cd "$REPO_ROOT"
