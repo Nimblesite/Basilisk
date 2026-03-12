@@ -704,14 +704,20 @@ suite('Debug Integration E2E Tests', () => {
             let data = '';
             socket.on('data', (chunk) => {
                 data += chunk.toString();
-                if (data.includes('\r\n\r\n')) {
-                    const bodyStart = data.indexOf('\r\n\r\n') + 4;
-                    const body = data.slice(bodyStart);
-                    if (body.length > 0) {
-                        clearTimeout(timer);
-                        socket.destroy();
-                        resolve(body);
-                    }
+                // Parse the Content-Length header so we extract exactly one
+                // DAP message, even if multiple arrive back-to-back.
+                const headerEnd = data.indexOf('\r\n\r\n');
+                if (headerEnd === -1) return;
+                const header = data.slice(0, headerEnd);
+                const match = header.match(/Content-Length:\s*(\d+)/i);
+                if (!match) return;
+                const contentLength = parseInt(match[1], 10);
+                const bodyStart = headerEnd + 4;
+                if (data.length >= bodyStart + contentLength) {
+                    const body = data.slice(bodyStart, bodyStart + contentLength);
+                    clearTimeout(timer);
+                    socket.destroy();
+                    resolve(body);
                 }
             });
 
