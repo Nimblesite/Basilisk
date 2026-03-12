@@ -237,6 +237,7 @@ pub async fn check_debugpy(python: &str) -> Result<(), DebugError> {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used)]
 mod tests {
     use super::*;
     use tokio::net::TcpStream;

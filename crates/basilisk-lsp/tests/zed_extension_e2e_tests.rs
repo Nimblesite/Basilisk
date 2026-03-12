@@ -217,7 +217,7 @@ impl ZedLspFixture {
     fn request(
         &mut self,
         method: &str,
-        params: serde_json::Value,
+        params: &serde_json::Value,
     ) -> TestResult<serde_json::Value> {
         let id = self.next_id();
         self.send_json(&serde_json::json!({
@@ -475,7 +475,7 @@ fn test_zed_hover() -> TestResult<()> {
 
     let hover = fixture.request(
         "textDocument/hover",
-        serde_json::json!({
+        &serde_json::json!({
             "textDocument": { "uri": "file:///hover.py" },
             "position": { "line": 0, "character": 11 }
         }),
@@ -502,7 +502,7 @@ fn test_zed_completions() -> TestResult<()> {
 
     let completions = fixture.request(
         "textDocument/completion",
-        serde_json::json!({
+        &serde_json::json!({
             "textDocument": { "uri": "file:///completion.py" },
             "position": { "line": 1, "character": 2 }
         }),
@@ -530,7 +530,7 @@ fn test_zed_code_actions() -> TestResult<()> {
 
     let actions = fixture.request(
         "textDocument/codeAction",
-        serde_json::json!({
+        &serde_json::json!({
             "textDocument": { "uri": "file:///actions.py" },
             "range": {
                 "start": { "line": 0, "character": 10 },
@@ -563,7 +563,7 @@ fn test_zed_document_symbols() -> TestResult<()> {
 
     let symbols = fixture.request(
         "textDocument/documentSymbol",
-        serde_json::json!({
+        &serde_json::json!({
             "textDocument": { "uri": "file:///symbols.py" }
         }),
     )?;
@@ -590,7 +590,7 @@ fn test_zed_execute_organize_imports() -> TestResult<()> {
 
     let result = fixture.request(
         "workspace/executeCommand",
-        serde_json::json!({
+        &serde_json::json!({
             "command": commands::ORGANIZE_IMPORTS,
             "arguments": [{ "uri": "file:///imports.py" }]
         }),
@@ -614,7 +614,7 @@ fn test_zed_execute_start_debug_session() -> TestResult<()> {
 
     let result = fixture.request(
         "workspace/executeCommand",
-        serde_json::json!({
+        &serde_json::json!({
             "command": commands::START_DEBUG_SESSION,
             "arguments": []
         }),
@@ -652,7 +652,7 @@ fn test_zed_execute_stop_debug_session() -> TestResult<()> {
 
     let result = fixture.request(
         "workspace/executeCommand",
-        serde_json::json!({
+        &serde_json::json!({
             "command": commands::STOP_DEBUG_SESSION,
             "arguments": [{ "sessionId": "nonexistent-session-id" }]
         }),
@@ -679,7 +679,7 @@ fn test_zed_inlay_hints() -> TestResult<()> {
 
     let hints = fixture.request(
         "textDocument/inlayHint",
-        serde_json::json!({
+        &serde_json::json!({
             "textDocument": { "uri": "file:///hints.py" },
             "range": {
                 "start": { "line": 0, "character": 0 },
@@ -709,7 +709,7 @@ fn test_zed_semantic_tokens() -> TestResult<()> {
 
     let tokens = fixture.request(
         "textDocument/semanticTokens/full",
-        serde_json::json!({
+        &serde_json::json!({
             "textDocument": { "uri": "file:///tokens.py" }
         }),
     )?;
@@ -734,7 +734,7 @@ fn test_zed_go_to_definition() -> TestResult<()> {
 
     let definition = fixture.request(
         "textDocument/definition",
-        serde_json::json!({
+        &serde_json::json!({
             "textDocument": { "uri": "file:///definition.py" },
             "position": { "line": 3, "character": 1 }
         }),
@@ -760,7 +760,7 @@ fn test_zed_find_references() -> TestResult<()> {
 
     let refs = fixture.request(
         "textDocument/references",
-        serde_json::json!({
+        &serde_json::json!({
             "textDocument": { "uri": "file:///refs.py" },
             "position": { "line": 0, "character": 5 },
             "context": { "includeDeclaration": true }
@@ -787,7 +787,7 @@ fn test_zed_formatting() -> TestResult<()> {
 
     let format_result = fixture.request(
         "textDocument/formatting",
-        serde_json::json!({
+        &serde_json::json!({
             "textDocument": { "uri": "file:///format.py" },
             "options": {
                 "tabSize": 4,
