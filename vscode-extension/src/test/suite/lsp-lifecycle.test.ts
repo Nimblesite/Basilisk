@@ -212,8 +212,9 @@ suite('LSP Lifecycle Tests', () => {
         }
         assert.strictEqual(didThrow, false, 'basilisk.restartServer should not throw');
 
-        // Wait for the server to restart.
-        await new Promise<void>((resolve) => setTimeout(resolve, 3_000));
+        // Brief pause for the server to restart — diagnostics polling below
+        // will wait for the server to actually respond.
+        await new Promise<void>((resolve) => setTimeout(resolve, 500));
 
         // Verify the extension is still active after restart.
         const ext = vscode.extensions.getExtension(EXTENSION_ID);

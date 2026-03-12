@@ -33,10 +33,13 @@ npm install
 npm run package
 
 VSIX=$(ls "$EXTENSION_DIR"/*.vsix | head -1)
+
+echo "==> Installing VSIX into VS Code..."
+code --install-extension "$VSIX" --force
+
 echo ""
 echo "==> Done."
 echo "    Binary : $(which basilisk)"
 echo "    VSIX   : $VSIX"
 echo ""
-echo "Install extension:"
-echo "  code --install-extension $VSIX"
+echo "Reload VS Code (Cmd+Shift+P → Developer: Reload Window) to activate."

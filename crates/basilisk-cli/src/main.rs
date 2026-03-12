@@ -9,6 +9,7 @@
 use std::process;
 
 use clap::{Parser, Subcommand};
+use tracing::{error, warn};
 
 use crate::output::{render_diagnostics, render_diagnostics_json, FileSource, OutputFormat};
 
@@ -56,6 +57,16 @@ enum Command {
 }
 
 fn main() {
+    // Initialize tracing. Controlled via BASILISK_LOG env var (defaults to info).
+    // Examples: BASILISK_LOG=debug, BASILISK_LOG=basilisk_lsp::debug=trace
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_env("BASILISK_LOG")
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn")),
+        )
+        .with_writer(std::io::stderr)
+        .init();
+
     let cli = Cli::parse();
 
     let exit_code = match cli.command {
@@ -64,14 +75,14 @@ fn main() {
             Transport::Stdio => match basilisk_lsp::run_server() {
                 Ok(()) => 0,
                 Err(err) => {
-                    eprintln!("error: failed to start LSP server (stdio): {err}");
+                    error!(%err, "failed to start LSP server (stdio)");
                     1
                 }
             },
             Transport::Ws => match basilisk_lsp::run_server_ws_blocking(port) {
                 Ok(()) => 0,
                 Err(err) => {
-                    eprintln!("error: failed to start LSP server (ws): {err}");
+                    error!(%err, "failed to start LSP server (ws)");
                     1
                 }
             },
@@ -117,7 +128,7 @@ fn run_check(paths: &[String], format: OutputFormat) -> i32 {
             }
         },
         Err(err) => {
-            eprintln!("basilisk: internal error: {err}");
+            error!(%err, "internal error");
             3
         }
     }
@@ -138,7 +149,7 @@ fn collect_and_check(
                 sources.push(FileSource { path, text: source });
             }
             Err(err) => {
-                eprintln!("basilisk: error processing {path}: {err}");
+                warn!(path, %err, "error processing file");
             }
         }
     }
@@ -164,7 +175,7 @@ fn collect_python_files(paths: &[String]) -> Result<Vec<String>, String> {
                 return Err(format!("cannot access {root}: {e}"));
             }
             Err(e) => {
-                eprintln!("basilisk: cannot access {root}: {e}");
+                warn!(root, %e, "cannot access path");
                 continue;
             }
         };

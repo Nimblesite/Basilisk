@@ -33,6 +33,7 @@ use tower_lsp::lsp_types::{
     WorkspaceFileOperationsServerCapabilities, WorkspaceSymbolParams,
 };
 use tower_lsp::{Client, LspService, Server};
+use tracing::{debug, error, info, warn};
 
 use crate::config::AnalysisMode;
 use crate::util::position_to_byte_offset;
@@ -43,20 +44,19 @@ use crate::{
     type_definition, type_hierarchy,
 };
 
-/// Debounce delay for file-watcher events (milliseconds).
-const FILE_WATCHER_DEBOUNCE_MS: u64 = 150;
+/// Fallback docs URL used when a diagnostic code URL fails to parse.
+const FALLBACK_DOCS_URL: &str = basilisk_common::diagnostics::DOCS_URL;
 
 /// The Basilisk LSP server.
 pub struct LspServer {
     /// LSP client for sending notifications back to the editor.
     client: Client,
-    /// Workspace index — the single source of truth for all file analysis state.
-    ///
-    /// Wrapped in `Arc` so the debounce task can share ownership without
-    /// holding a reference into `self`.
-    index: Arc<tokio::sync::RwLock<Option<WorkspaceIndex>>>,
-    /// Abort handle for the pending file-watcher debounce task (if any).
-    watcher_debounce: tokio::sync::Mutex<Option<tokio::task::AbortHandle>>,
+    /// Map from document URI to its current state.
+    documents: DashMap<Url, DocumentState>,
+    /// Workspace root folders discovered during initialization.
+    workspace_roots: tokio::sync::RwLock<Vec<std::path::PathBuf>>,
+    /// Debug session manager — spawns debugpy and tracks active sessions.
+    debug_manager: crate::debug::DebugSessionManager,
 }
 
 impl LspServer {
@@ -65,8 +65,9 @@ impl LspServer {
     pub fn new(client: Client) -> Self {
         Self {
             client,
-            index: Arc::new(tokio::sync::RwLock::new(None)),
-            watcher_debounce: tokio::sync::Mutex::new(None),
+            documents: DashMap::new(),
+            workspace_roots: tokio::sync::RwLock::new(Vec::new()),
+            debug_manager: crate::debug::DebugSessionManager::new(),
         }
     }
 
@@ -91,6 +92,142 @@ impl LspServer {
     )> {
         self.with_index(|idx| idx.get_by_uri(uri)).await
     }
+
+    // ── Execute command handlers ─────────────────────────────────────────────
+
+    /// Handle `basilisk.organizeImports`.
+    async fn execute_organize_imports(
+        &self,
+        args: &[serde_json::Value],
+    ) -> LspResult<Option<serde_json::Value>> {
+        let Some(uri_value) = args.first() else {
+            return Ok(None);
+        };
+        let Some(uri_str) = uri_value.as_str() else {
+            return Ok(None);
+        };
+        let Ok(uri) = Url::parse(uri_str) else {
+            return Ok(None);
+        };
+
+        let source = self
+            .documents
+            .get(&uri)
+            .map(|d| d.text.clone())
+            .unwrap_or_default();
+
+        if source.is_empty() {
+            return Ok(None);
+        }
+
+        let Some(action) = code_actions::organize_imports(&uri, &source) else {
+            return Ok(None);
+        };
+
+        if let Some(edit) = action.edit {
+            let _ = self.client.apply_edit(edit).await;
+        }
+
+        Ok(None)
+    }
+
+    /// Handle `basilisk.startDebugSession`.
+    ///
+    /// Spawns debugpy on a free TCP port and returns the connection details.
+    /// The editor connects its DAP client directly to that port.
+    async fn execute_start_debug_session(
+        &self,
+        args: &[serde_json::Value],
+    ) -> LspResult<Option<serde_json::Value>> {
+        info!("execute_start_debug_session called");
+        // Extract optional python interpreter override from args.
+        let python_override = args
+            .first()
+            .and_then(|v| v.get("python"))
+            .and_then(|v| v.as_str())
+            .map(String::from);
+
+        let workspace = self.workspace_roots.read().await;
+        let root = workspace
+            .first()
+            .map_or_else(|| std::path::Path::new("."), std::path::PathBuf::as_path);
+        let python = python_override.unwrap_or_else(|| crate::debug::resolve_python(root));
+        drop(workspace);
+
+        debug!(python = %python, "resolved python interpreter");
+
+        // Verify debugpy is installed.
+        if let Err(err) = crate::debug::check_debugpy(&python).await {
+            error!(python = %python, %err, "debugpy check failed");
+            self.client
+                .log_message(MessageType::ERROR, err.to_string())
+                .await;
+            return Err(tower_lsp::jsonrpc::Error {
+                code: tower_lsp::jsonrpc::ErrorCode::ServerError(-32001),
+                message: err.to_string().into(),
+                data: None,
+            });
+        }
+
+        // Spawn debugpy and wait for it to accept connections.
+        match self.debug_manager.start_session(&python).await {
+            Ok((host, port, session_id)) => {
+                info!(host = %host, port, session_id = %session_id, "debug session started");
+                self.client
+                    .log_message(
+                        MessageType::INFO,
+                        format!("Basilisk: debug session {session_id} started on {host}:{port}"),
+                    )
+                    .await;
+                Ok(Some(serde_json::json!({
+                    "host": host,
+                    "port": port,
+                    "sessionId": session_id
+                })))
+            }
+            Err(err) => {
+                error!(%err, "failed to start debug session");
+                self.client
+                    .log_message(MessageType::ERROR, err.to_string())
+                    .await;
+                Err(tower_lsp::jsonrpc::Error {
+                    code: tower_lsp::jsonrpc::ErrorCode::ServerError(-32002),
+                    message: err.to_string().into(),
+                    data: None,
+                })
+            }
+        }
+    }
+
+    /// Handle `basilisk.stopDebugSession`.
+    async fn execute_stop_debug_session(
+        &self,
+        args: &[serde_json::Value],
+    ) -> LspResult<Option<serde_json::Value>> {
+        let session_id = args
+            .first()
+            .and_then(|v| v.get("sessionId"))
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
+
+        info!(session_id, "execute_stop_debug_session called");
+        let stopped = self.debug_manager.stop_session(session_id).await;
+
+        if stopped {
+            info!(session_id, "debug session stopped successfully");
+            self.client
+                .log_message(
+                    MessageType::INFO,
+                    format!("Basilisk: debug session {session_id} stopped"),
+                )
+                .await;
+        } else {
+            warn!(session_id, "stop_session: no such session");
+        }
+
+        Ok(Some(serde_json::json!({ "stopped": stopped })))
+    }
+}
 
     /// Run a position-based handler: extract document data, compute byte offset,
     /// call `handler`, and wrap the result in `LspResult`.
@@ -148,7 +285,75 @@ impl tower_lsp::LanguageServer for LspServer {
                 name: "basilisk".to_owned(),
                 version: Some(env!("CARGO_PKG_VERSION").to_owned()),
             }),
-            capabilities: build_server_capabilities(mode),
+            capabilities: ServerCapabilities {
+                text_document_sync: Some(TextDocumentSyncCapability::Kind(
+                    TextDocumentSyncKind::INCREMENTAL,
+                )),
+                hover_provider: Some(HoverProviderCapability::Simple(true)),
+                call_hierarchy_provider: Some(CallHierarchyServerCapability::Simple(true)),
+                // type_hierarchy_provider is not in lsp-types 0.94's ServerCapabilities;
+                // it is injected at the JSON level by websocket::inject_missing_capabilities.
+                code_lens_provider: Some(CodeLensOptions {
+                    resolve_provider: Some(false),
+                }),
+                code_action_provider: Some(CodeActionProviderCapability::Options(
+                    CodeActionOptions {
+                        code_action_kinds: Some(vec![
+                            CodeActionKind::QUICKFIX,
+                            CodeActionKind::SOURCE_ORGANIZE_IMPORTS,
+                            CodeActionKind::REFACTOR,
+                        ]),
+                        ..Default::default()
+                    },
+                )),
+                completion_provider: Some(CompletionOptions {
+                    trigger_characters: Some(vec![".".to_owned()]),
+                    resolve_provider: Some(true),
+                    ..Default::default()
+                }),
+                declaration_provider: Some(DeclarationCapability::Simple(true)),
+                definition_provider: Some(OneOf::Left(true)),
+                type_definition_provider: Some(TypeDefinitionProviderCapability::Simple(true)),
+                document_formatting_provider: Some(OneOf::Left(true)),
+                document_highlight_provider: Some(OneOf::Left(true)),
+                document_symbol_provider: Some(OneOf::Left(true)),
+                folding_range_provider: Some(FoldingRangeProviderCapability::Simple(true)),
+                selection_range_provider: Some(SelectionRangeProviderCapability::Simple(true)),
+                workspace_symbol_provider: Some(OneOf::Left(true)),
+                signature_help_provider: Some(SignatureHelpOptions {
+                    trigger_characters: Some(vec!["(".to_owned(), ",".to_owned()]),
+                    retrigger_characters: None,
+                    work_done_progress_options: WorkDoneProgressOptions::default(),
+                }),
+                references_provider: Some(OneOf::Left(true)),
+                rename_provider: Some(OneOf::Right(RenameOptions {
+                    prepare_provider: Some(true),
+                    work_done_progress_options: WorkDoneProgressOptions::default(),
+                })),
+                execute_command_provider: Some(ExecuteCommandOptions {
+                    commands: basilisk_common::commands::ALL
+                        .iter()
+                        .map(|s| (*s).to_owned())
+                        .collect(),
+                    work_done_progress_options: WorkDoneProgressOptions::default(),
+                }),
+                inlay_hint_provider: Some(OneOf::Left(true)),
+                semantic_tokens_provider: Some(
+                    SemanticTokensServerCapabilities::SemanticTokensOptions(
+                        SemanticTokensOptions {
+                            legend: SemanticTokensLegend {
+                                token_types: crate::semantic_tokens::TOKEN_TYPES.to_vec(),
+                                token_modifiers: crate::semantic_tokens::TOKEN_MODIFIERS.to_vec(),
+                            },
+                            full: Some(SemanticTokensFullOptions::Bool(true)),
+                            range: None,
+                            work_done_progress_options: WorkDoneProgressOptions::default(),
+                        },
+                    ),
+                ),
+                color_provider: Some(ColorProviderCapability::Simple(true)),
+                ..Default::default()
+            },
         })
     }
 
@@ -196,6 +401,8 @@ impl tower_lsp::LanguageServer for LspServer {
     }
 
     async fn shutdown(&self) -> LspResult<()> {
+        // Kill any active debug sessions so we don't leave orphaned processes.
+        self.debug_manager.stop_all().await;
         Ok(())
     }
 
@@ -545,38 +752,37 @@ impl tower_lsp::LanguageServer for LspServer {
         &self,
         params: ExecuteCommandParams,
     ) -> LspResult<Option<serde_json::Value>> {
-        if params.command != "basilisk.organizeImports" {
-            return Ok(None);
+        self.client
+            .log_message(
+                MessageType::INFO,
+                format!(
+                    "Basilisk: execute_command '{}' with {} arg(s)",
+                    params.command,
+                    params.arguments.len()
+                ),
+            )
+            .await;
+
+        match params.command.as_str() {
+            basilisk_common::commands::ORGANIZE_IMPORTS => {
+                self.execute_organize_imports(&params.arguments).await
+            }
+            basilisk_common::commands::START_DEBUG_SESSION => {
+                self.execute_start_debug_session(&params.arguments).await
+            }
+            basilisk_common::commands::STOP_DEBUG_SESSION => {
+                self.execute_stop_debug_session(&params.arguments).await
+            }
+            unknown => {
+                self.client
+                    .log_message(
+                        MessageType::WARNING,
+                        format!("Basilisk: unknown command '{unknown}'"),
+                    )
+                    .await;
+                Ok(None)
+            }
         }
-
-        let Some(uri_value) = params.arguments.first() else {
-            return Ok(None);
-        };
-        let Some(uri_str) = uri_value.as_str() else {
-            return Ok(None);
-        };
-        let Ok(uri) = Url::parse(uri_str) else {
-            return Ok(None);
-        };
-
-        let source = self
-            .with_index(|idx| idx.get_text(&uri))
-            .await
-            .unwrap_or_default();
-
-        if source.is_empty() {
-            return Ok(None);
-        }
-
-        let Some(action) = code_actions::organize_imports(&uri, &source) else {
-            return Ok(None);
-        };
-
-        if let Some(edit) = action.edit {
-            let _ = self.client.apply_edit(edit).await;
-        }
-
-        Ok(None)
     }
 
     // ── Completion ───────────────────────────────────────────────────────────
