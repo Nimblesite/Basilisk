@@ -2,12 +2,8 @@
 # Run the full Basilisk test suite with coverage.
 #
 # Usage:
-#   ./scripts/test.sh                  # run everything
-#   ./scripts/test.sh rust             # Rust only
-#   ./scripts/test.sh vsix             # VS Code extension only
-#   ./scripts/test.sh zed              # Zed extension only
-#   ./scripts/test.sh rust vsix        # combine any subset
-#   ./scripts/test.sh --open           # open HTML report (with rust)
+#   ./scripts/test.sh          # run everything
+#   ./scripts/test.sh --open   # open HTML report after
 
 set -euo pipefail
 
@@ -25,53 +21,33 @@ header() { echo -e "\n${BOLD}${CYAN}▶ $*${RESET}"; }
 ok()     { echo -e "${GREEN}✓ $*${RESET}"; }
 warn()   { echo -e "${YELLOW}⚠ $*${RESET}"; }
 
-LCOV_FILE="$REPO_ROOT/lcov.info"
-HTML_DIR="$REPO_ROOT/target/llvm-cov/html"
-
-RUN_RUST=0 RUN_VSIX=0 RUN_ZED=0 OPEN_REPORT=0
+OPEN_REPORT=0
 for arg in "$@"; do
     case "$arg" in
-        rust)   RUN_RUST=1 ;;
-        vsix)   RUN_VSIX=1 ;;
-        zed)    RUN_ZED=1  ;;
         --open) OPEN_REPORT=1 ;;
     esac
 done
-[[ "$RUN_RUST" -eq 0 && "$RUN_VSIX" -eq 0 && "$RUN_ZED" -eq 0 ]] && RUN_RUST=1 RUN_VSIX=1 RUN_ZED=1
 
-# ── Prerequisites check ───────────────────────────────────────────────────────
-if [[ "$RUN_VSIX" -eq 1 ]]; then
-    if ! command -v python3 &>/dev/null; then
-        echo -e "${RED}✗ python3 not found${RESET}"; exit 1
-    fi
-    if [[ ! -f "$REPO_ROOT/target/debug/basilisk" ]]; then
-        echo -e "${RED}✗ basilisk binary missing — run: cargo build -p basilisk-cli${RESET}"; exit 1
-    fi
-    if ! python3 -c 'import debugpy' &>/dev/null; then
-        warn "debugpy not installed — installing now"
-        python3 -m pip install --quiet --break-system-packages debugpy
-    fi
-    ok "vsix prerequisites met"
-fi
+LCOV_FILE="$REPO_ROOT/lcov.info"
+HTML_DIR="$REPO_ROOT/target/llvm-cov/html"
 
-# ── Rust ──────────────────────────────────────────────────────────────────────
-if [[ "$RUN_RUST" -eq 1 ]]; then
+# ── Setup ────────────────────────────────────────────────────────────────────
 
-header "Checking prerequisites"
-if ! rustup component list --installed | grep -q llvm-tools; then
-    warn "llvm-tools not installed — installing now"
-    rustup component add llvm-tools
-fi
-ok "llvm-tools present"
-if ! cargo llvm-cov --version &>/dev/null; then
-    warn "cargo-llvm-cov not found — installing now"
-    cargo install cargo-llvm-cov --locked
-fi
-ok "cargo-llvm-cov present"
+header "Setup"
+"$REPO_ROOT/scripts/setup.sh"
+ok "setup done"
+
+# ── Build ────────────────────────────────────────────────────────────────────
 
 header "Running clippy (all targets)"
 cargo clippy --all-targets
 ok "clippy clean"
+
+header "Building basilisk binary"
+cargo build -p basilisk-cli
+ok "basilisk binary ready"
+
+# ── Rust tests with coverage ─────────────────────────────────────────────────
 
 header "Running tests with coverage instrumentation"
 set +e
@@ -194,69 +170,44 @@ fi
 echo ""
 ok "All projects meet their coverage thresholds."
 
+# ── LSP tests ────────────────────────────────────────────────────────────────
+
 header "Running LSP tests"
 cargo test -p basilisk-lsp --test lsp_tests
 ok "lsp_tests done"
-
-# cargo llvm-cov puts binaries in target/llvm-cov-target/; the e2e tests
-# spawn `basilisk lsp` and look for it in target/debug/, so build it first.
-header "Building basilisk binary for LSP E2E tests"
-cargo build -p basilisk-cli
-ok "basilisk binary ready"
 
 header "Running LSP E2E tests"
 cargo test -p basilisk-lsp --test lsp_e2e_tests
 ok "lsp_e2e_tests done"
 
-fi  # rust
+# ── VS Code extension ────────────────────────────────────────────────────────
 
-# ── VS Code extension ─────────────────────────────────────────────────────────
-if [[ "$RUN_VSIX" -eq 1 ]]; then
+header "VS Code extension — compile + test"
+cd "$REPO_ROOT/vscode-extension"
+npm run compile
+ok "TypeScript compiled"
 
-if command -v node &>/dev/null && command -v npm &>/dev/null; then
-
-    header "VS Code extension — install deps + compile"
-    cd "$REPO_ROOT/vscode-extension"
-    npm ci
-    npm run compile
-    ok "TypeScript compiled"
-    if command -v xvfb-run &>/dev/null || [[ "$(uname)" == "Darwin" ]]; then
-        header "VS Code E2E tests"
-        if command -v xvfb-run &>/dev/null; then
-            BASILISK_EXECUTABLE_PATH="$REPO_ROOT/target/debug/basilisk" \
-            MOCHA_TIMEOUT="120000" \
-            xvfb-run -a npm test
-        else
-            BASILISK_EXECUTABLE_PATH="$REPO_ROOT/target/debug/basilisk" \
-            MOCHA_TIMEOUT="120000" \
-            npm test
-        fi
-        ok "VS Code E2E tests done"
-    else
-        warn "xvfb not found — skipping VS Code E2E tests (run on Linux with xvfb or macOS)"
-    fi
-    cd "$REPO_ROOT"
+header "VS Code E2E tests"
+if command -v xvfb-run &>/dev/null; then
+    BASILISK_EXECUTABLE_PATH="$REPO_ROOT/target/debug/basilisk" \
+    MOCHA_TIMEOUT="120000" \
+    xvfb-run -a npm test
 else
-    warn "node/npm not found — skipping VS Code extension tests"
+    BASILISK_EXECUTABLE_PATH="$REPO_ROOT/target/debug/basilisk" \
+    MOCHA_TIMEOUT="120000" \
+    npm test
 fi
+ok "VS Code E2E tests done"
+cd "$REPO_ROOT"
 
-fi  # vsix
+# ── Zed extension ────────────────────────────────────────────────────────────
 
-# ── Zed extension ─────────────────────────────────────────────────────────────
-if [[ "$RUN_ZED" -eq 1 ]]; then
-
-if [[ -d "$REPO_ROOT/basilisk-zed" ]]; then
-    header "Zed extension — clippy + tests"
-    cd "$REPO_ROOT/basilisk-zed"
-    cargo clippy --all-targets
-    cargo test --all-targets
-    ok "Zed extension tests done"
-    cd "$REPO_ROOT"
-else
-    warn "basilisk-zed not found — skipping Zed extension tests"
-fi
-
-fi  # zed
+header "Zed extension — clippy + tests"
+cd "$REPO_ROOT/basilisk-zed"
+cargo clippy --all-targets
+cargo test --all-targets
+ok "Zed extension done"
+cd "$REPO_ROOT"
 
 echo ""
 ok "All tests passed."

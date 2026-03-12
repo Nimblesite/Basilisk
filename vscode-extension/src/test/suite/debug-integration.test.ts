@@ -1440,6 +1440,12 @@ suite('Debug Integration E2E Tests', () => {
 
         await endPromise;
 
+        // VS Code may not clear activeDebugSession synchronously with the
+        // terminate event — poll briefly to let the runtime settle.
+        for (let i = 0; i < 20 && vscode.debug.activeDebugSession; i++) {
+            await new Promise<void>((r) => setTimeout(r, 100));
+        }
+
         assert.strictEqual(
             vscode.debug.activeDebugSession,
             undefined,
