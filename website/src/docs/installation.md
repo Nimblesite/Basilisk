@@ -1,8 +1,8 @@
 ---
 layout: layouts/docs.njk
 title: Installation
-description: How to install Basilisk — build from source with Cargo, or install the pre-built binary.
-keywords: basilisk, install, cargo, rust, python type checker
+description: How to install Basilisk — pre-built binaries, VS Code extension, or build from source.
+keywords: basilisk, install, cargo, rust, python type checker, vs code
 eleventyNavigation:
   key: Installation
   order: 2
@@ -12,14 +12,16 @@ eleventyNavigation:
 
 Basilisk is a single Rust binary with no runtime dependencies. No Node.js. No Python interpreter. No package manager required after installation.
 
-## Requirements
+## VS Code extension (recommended)
 
-- **Rust 1.87 or later** — [rustup.rs](https://rustup.rs)
-- Any operating system: macOS, Linux, Windows
+The fastest way to get started. Install the **Basilisk** extension from the VS Code Marketplace:
 
-## Build from source
+1. Open VS Code
+2. Go to Extensions (`Ctrl+Shift+X` / `Cmd+Shift+X`)
+3. Search for **Basilisk**
+4. Click **Install**
 
-This is the recommended approach during the pre-release phase:
+**The extension automatically downloads the correct Basilisk binary for your platform** on first activation. No manual setup required. The binary is downloaded from [GitHub Releases](https://github.com/MelbourneDeveloper/Basilisk/releases) and stored in the extension's global storage directory.
 
 ```bash
 git clone https://github.com/MelbourneDeveloper/Basilisk
@@ -27,14 +29,32 @@ cd basilisk
 cargo build --release
 ```
 
-The binary is built at `target/release/basilisk`. Add it to your PATH:
+| OS | Architecture |
+|----|-------------|
+| macOS | Apple Silicon (aarch64) |
+| macOS | Intel (x86_64) |
+| Linux | x86_64 |
+| Linux | aarch64 |
+| Windows | x86_64 |
+
+If the binary is already on your PATH (e.g. from `cargo install`), the extension uses that instead of downloading.
+
+## Pre-built binaries
+
+Download the latest release for your platform from [GitHub Releases](https://github.com/MelbourneDeveloper/Basilisk/releases):
 
 ```bash
-# macOS / Linux
-export PATH="$PATH:$(pwd)/target/release"
+# macOS (Apple Silicon)
+curl -sSfL https://github.com/MelbourneDeveloper/Basilisk/releases/latest/download/basilisk-darwin-aarch64.tar.gz | tar xz
+sudo mv basilisk /usr/local/bin/
 
-# Or copy to a system path
-cp target/release/basilisk /usr/local/bin/
+# macOS (Intel)
+curl -sSfL https://github.com/MelbourneDeveloper/Basilisk/releases/latest/download/basilisk-darwin-x86_64.tar.gz | tar xz
+sudo mv basilisk /usr/local/bin/
+
+# Linux (x86_64)
+curl -sSfL https://github.com/MelbourneDeveloper/Basilisk/releases/latest/download/basilisk-linux-x86_64.tar.gz | tar xz
+sudo mv basilisk /usr/local/bin/
 ```
 
 Verify the installation:
@@ -45,7 +65,7 @@ basilisk --version
 
 ## Install via Cargo
 
-Once Basilisk is published to crates.io:
+If you have Rust installed:
 
 ```bash
 cargo install basilisk
@@ -53,33 +73,35 @@ cargo install basilisk
 
 This installs the binary to `~/.cargo/bin/`, which is typically already on your PATH if you installed Rust via rustup.
 
-## Run without installing
-
-You can run Basilisk directly from the repository without adding it to PATH:
+## Build from source
 
 ```bash
-cargo run -- check path/to/file.py
-cargo run -- check src/
+git clone https://github.com/MelbourneDeveloper/Basilisk
+cd Basilisk
+cargo build --release
 ```
 
-## VS Code extension
+The binary is built at `target/release/basilisk`. Add it to your PATH:
 
-The Basilisk VS Code extension is in active development (Phase 2). It will provide:
+```bash
+cp target/release/basilisk /usr/local/bin/
+```
 
-- Real-time diagnostics as you type
-- Inline type information on hover
-- Quick fixes for every BSK-E and BSK-W code
-- Ownership overlay in the gutter
-- Type coverage score in the status bar
+Rust 1.87+ required.
 
 Track progress at [github.com/MelbourneDeveloper/Basilisk](https://github.com/MelbourneDeveloper/Basilisk).
 
 ## CI integration
 
-Once installed, Basilisk integrates naturally into any CI pipeline:
+Basilisk integrates naturally into any CI pipeline. Download the binary in your workflow:
 
 ```yaml
 # GitHub Actions example
+- name: Install Basilisk
+  run: |
+    curl -sSfL https://github.com/MelbourneDeveloper/Basilisk/releases/latest/download/basilisk-linux-x86_64.tar.gz | tar xz
+    sudo mv basilisk /usr/local/bin/
+
 - name: Type check
   run: basilisk check src/
 ```
@@ -92,20 +114,19 @@ Exit codes:
 
 ## Editor support (LSP)
 
-Basilisk implements the Language Server Protocol. Once the LSP server is complete (Phase 2), any editor with LSP support can use it:
+Basilisk implements the Language Server Protocol. Any editor with LSP support can use it:
 
-- **VS Code** — via the official Basilisk extension
+- **VS Code** — via the official Basilisk extension (auto-downloads the binary)
 - **Neovim** — via nvim-lspconfig
 - **Helix** — native LSP support
 - **Zed** — via LSP extension
 - **Emacs** — via eglot or lsp-mode
 
-## Updating
+## How the VS Code extension finds the binary
 
-To update from source:
+The extension resolves the Basilisk binary in this order:
 
-```bash
-cd basilisk
-git pull
-cargo build --release
-```
+1. **`basilisk.executablePath` setting** — if you set an explicit path, it's used directly
+2. **System PATH** — checks `~/.cargo/bin/`, `/usr/local/bin/`, `/opt/homebrew/bin/`
+3. **Extension storage** — checks for a previously downloaded binary
+4. **Download prompt** — offers to download the matching version from GitHub Releases

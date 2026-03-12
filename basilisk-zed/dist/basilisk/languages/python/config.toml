@@ -1,0 +1,6 @@
+name = "Python"
+grammar = "python"
+path_suffixes = ["py", "pyi", "pyw"]
+line_comments = ["# "]
+tab_size = 4
+soft_wrap = "preferred_line_length"

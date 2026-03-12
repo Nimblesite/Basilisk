@@ -1,6 +1,7 @@
 //! Code Actions handler: quick fixes for diagnostics.
 
 use std::collections::HashMap;
+use std::process::Stdio;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use tower_lsp::lsp_types::{
@@ -93,6 +94,8 @@ pub(crate) fn expand_wildcard_imports(uri: &Url, source: &str) -> Option<CodeAct
     let status = std::process::Command::new("ruff")
         .args(["check", "--select", "F403", "--fix", "--quiet"])
         .arg(&tmp_path)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .status()
         .ok()?;
 
@@ -149,6 +152,8 @@ pub(crate) fn convert_import_style(uri: &Url, source: &str) -> Option<CodeAction
     let status = std::process::Command::new("ruff")
         .args(["check", "--select", "E401", "--fix", "--quiet"])
         .arg(&tmp_path)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .status()
         .ok()?;
 
@@ -547,6 +552,8 @@ pub(crate) fn organize_imports(uri: &Url, source: &str) -> Option<CodeAction> {
     let status = std::process::Command::new("ruff")
         .args(["check", "--select", "I", "--fix", "--quiet"])
         .arg(&tmp_path)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .status()
         .ok()?;
 
