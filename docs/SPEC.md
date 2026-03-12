@@ -2,7 +2,7 @@
 
 **Version**: 0.1.0-draft
 **Status**: Specification Draft
-**License**: Apache-2.0 OR MIT (dual-license)
+**License**: MIT
 
 ---
 
@@ -190,7 +190,7 @@ Yet every single tool -- new and old -- defaults to gradual typing. None enforce
 | Capability | Pyright | mypy | ty | Pyrefly | Zuban | Ruff | **Basilisk** |
 |---|---|---|---|---|---|---|---|
 | Implementation | TypeScript | Python/C | Rust | Rust | Rust | Rust | **Rust** |
-| License | MIT | MIT | MIT | MIT | AGPL | MIT | **Apache-2.0/MIT** |
+| License | MIT | MIT | MIT | MIT | AGPL | MIT | **MIT** |
 | Default strictness | Gradual | Gradual | Gradual | Gradual | Gradual | N/A | **Strict only** |
 | PEP conformance target | ~95% | ~85% | ~15% | ~58% | ~69% | N/A | **100%** |
 | LSP server | Yes | No | Yes | Yes | Yes | No | **Yes** |
@@ -935,6 +935,8 @@ Basilisk is an LSP server first, CLI tool second. The LSP server is the primary 
 | `basilisk/ownershipOverlay` | Visual ownership annotations (borrowed/owned/inout) in gutter |
 | `basilisk/typeCompleteness` | Per-file/module type completeness score (% typed) |
 | `basilisk/migrationProgress` | Project-wide migration dashboard |
+| `basilisk.startDebugSession` | Spawn `debugpy.adapter` on a free TCP port; returns `{host, port, sessionId}` |
+| `basilisk.stopDebugSession` | Kill a debugpy session by `sessionId`; returns `{stopped: boolean}` |
 
 ---
 
@@ -958,6 +960,43 @@ The primary integration. Open source. No Microsoft proprietary dependencies.
 - Migration dashboard (sidebar panel)
 - Integrated Ruff linting/formatting (delegates to Ruff extension or bundled Ruff)
 - Code actions for every diagnostic (add annotation, add return type, fix coercion, etc.)
+- Integrated Python debugging via debugpy (see §10.1.1)
+
+### 10.1.1 Debug Adapter Proxy
+
+Basilisk provides integrated Python debugging through a DAP (Debug Adapter Protocol) proxy that sits between VS Code and `debugpy.adapter`.
+
+**Why a proxy, not a direct connection**:
+
+`debugpy.adapter --port` accepts exactly **one** TCP connection. The proxy owns that single connection — VS Code talks to the proxy via `DebugAdapterInlineImplementation`, never directly to debugpy. This solves three classes of debugpy quirk that cannot be fixed via `DebugAdapterTracker` (which can only observe, not modify or suppress DAP messages):
+
+**Architecture**:
+
+```
+VS Code  ←→  DAP Proxy (TypeScript, in-process)  ←→  debugpy.adapter (TCP)
+                  ↕
+         DebugAdapterInlineImplementation
+```
+
+The LSP server (`basilisk lsp`) spawns `debugpy.adapter --port <free-port>` via the `basilisk.startDebugSession` custom command. The proxy connects to that port and relays DAP messages bidirectionally, intercepting specific message patterns:
+
+**Quirk 1 — stepOut lands before assignment**:
+
+After `stepOut` from a called function, debugpy stops at the call-site line *before* the return value is assigned to the variable. The proxy detects the `stepOut` response → first `stopped` event sequence and injects an automatic `next` request, swallowing the intermediate stop. The user sees the cursor land on the line *after* the assignment completes.
+
+**Quirk 2 — Structural line stops during stepOver**:
+
+debugpy stops on `try:` lines during `next` (stepOver), even though no user code executes on these lines (the bytecode is a `NOP`). The proxy inspects each post-step stop by requesting a `stackTrace`, reading the source file, and checking if the stopped line matches the pattern `/^\s*(try\s*:)\s*(#.*)?$/`. If so, it injects another `next` and swallows the structural stop. `except:` and `finally:` lines are NOT skipped because they represent meaningful flow-control transitions that debugpy tests rely on.
+
+**Quirk 3 — Single-connection slot protection**:
+
+Any TCP connection to `debugpy.adapter --port` consumes the adapter's only slot. Port-readiness checks (e.g. a test's `checkPortListening()`) that make real TCP connections will kill the adapter. The proxy's bind-based `isPortAlive` check (attempt to bind, `EADDRINUSE` = alive) is non-destructive. In attach mode, if the port is dead, the factory respawns debugpy via the LSP and connects the proxy to the new instance.
+
+**Quirk 4 — Session termination timing**:
+
+VS Code's `activeDebugSession` may not be cleared when `onDidTerminateDebugSession` fires. The proxy ensures the `exited` event is sent before `terminated`, and introduces a minimal delay on the `terminated` event to allow VS Code's internal state to settle.
+
+**Implementation**: [`vscode-extension/src/dap-proxy.ts`](../vscode-extension/src/dap-proxy.ts) — `DebugAdapterProxy` class implementing `vscode.DebugAdapter`.
 
 ### 10.2 Other Editors
 
@@ -1227,7 +1266,7 @@ Comparison baselines: Pyright, ty, Pyrefly, Zuban.
 
 ### 19.1 License
 
-Apache-2.0 OR MIT dual-license for maximum corporate adoption. No CLA required. No proprietary layers.
+MIT License. Copyright (c) 2026 NIMBLESITE PTY LTD. No CLA required. No proprietary layers.
 
 ### 19.2 Contribution Model
 
@@ -1253,6 +1292,7 @@ Basilisk follows the Python Typing Council's governance (PEP 729). We implement 
 ### Phase 2: LSP and Editors
 - Language server (diagnostics, hover, completions)
 - VS Code extension (VSIX)
+- Integrated Python debugging via DAP proxy over debugpy (§10.1.1)
 - Neovim / Helix configuration
 
 ### Phase 3: Strict-by-Default

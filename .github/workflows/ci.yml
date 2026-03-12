@@ -12,7 +12,7 @@ env:
 
 jobs:
   ci:
-    name: Format → Clippy → Test
+    name: CI
     runs-on: ubuntu-latest
     env:
       TEST_COVERAGE_BASILISK_CHECKER: ${{ vars.TEST_COVERAGE_BASILISK_CHECKER || '89' }}
@@ -26,18 +26,44 @@ jobs:
       TEST_COVERAGE_BASILISK_STUBS: ${{ vars.TEST_COVERAGE_BASILISK_STUBS || '100' }}
     steps:
       - uses: actions/checkout@v4
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+
       - uses: Swatinem/rust-cache@v2
-      - name: cargo fmt --check
-        run: cargo fmt --all --check
-      - name: cargo clippy --all-targets
-        run: cargo clippy --all-targets
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: vscode-extension/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install debugpy
+        run: pip install debugpy
+
+      - name: Install xvfb
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
-      - name: Run test.sh (tests + coverage + threshold enforcement)
+
+      - name: cargo fmt --check
+        run: cargo fmt --all --check
+
+      - name: clippy (all targets)
+        run: cargo clippy --all-targets
+
+      - name: clippy (zed extension)
+        run: cargo clippy --all-targets --manifest-path basilisk-zed/Cargo.toml
+
+      - name: Run all tests
         run: ./scripts/test.sh
+
       - name: Upload to Codecov
         uses: codecov/codecov-action@v4
         with:

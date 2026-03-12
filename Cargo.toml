@@ -11,6 +11,10 @@ members = [
     "crates/basilisk-lsp",
     "crates/basilisk-mojo",
     "crates/basilisk-compiler",
+    "crates/basilisk-common",
+]
+exclude = [
+    "basilisk-zed",
 ]
 
 [workspace.package]
@@ -27,6 +31,10 @@ ruff_python_parser = { git = "https://github.com/astral-sh/ruff", tag = "0.12.12
 ruff_python_ast    = { git = "https://github.com/astral-sh/ruff", tag = "0.12.12" }
 ruff_text_size     = { git = "https://github.com/astral-sh/ruff", tag = "0.12.12" }
 
+# Logging
+tracing            = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
 # CLI and utilities
 clap      = { version = "4.5", features = ["derive"] }
 thiserror = "2.0"
@@ -41,6 +49,7 @@ basilisk-resolver = { path = "crates/basilisk-resolver" }
 basilisk-checker  = { path = "crates/basilisk-checker" }
 basilisk-lsp      = { path = "crates/basilisk-lsp" }
 basilisk-compiler = { path = "crates/basilisk-compiler" }
+basilisk-common   = { path = "crates/basilisk-common" }
 
 [workspace.lints.rust]
 unsafe_code  = "deny"

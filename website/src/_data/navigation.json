@@ -23,6 +23,12 @@
       ]
     },
     {
+      "title": "Features",
+      "items": [
+        { "title": "Debugging", "url": "/docs/debugging/" }
+      ]
+    },
+    {
       "title": "Diagnostics",
       "items": [
         { "title": "Rules Overview", "url": "/docs/rules/" },

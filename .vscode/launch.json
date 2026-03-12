@@ -1,0 +1,14 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: Current File (Basilisk)",
+      "type": "basilisk-debug",
+      "request": "launch",
+      "program": "${file}",
+      "console": "internalConsole",
+      "redirectOutput": true,
+      "justMyCode": true
+    }
+  ]
+}

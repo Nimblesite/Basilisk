@@ -26,6 +26,7 @@ Basilisk takes a different position. **It replaces the entire Pylance stack** �
 
 - A **full-featured language server** (LSP) — autocomplete, go-to-definition, hover, find references, rename, code actions, inlay hints
 - A **VS Code extension** that replaces Pylance — install it, disable Pylance, and everything works
+- An **integrated debugger** — press F5 to debug Python with breakpoints, stepping, variable inspection, and watch expressions, all brokered through the Basilisk LSP
 - A **strict-by-default type checker** — no `--strict` flag, no gradual mode, no opt-in
 - A **CLI tool** for CI integration — exits with code 1 when errors are found
 - A **migration assistant** that reads your existing `pyrightconfig.json` or `mypy.ini`
@@ -81,4 +82,5 @@ Basilisk is currently at **v0.1.0** — the core checker, LSP server, and VS Cod
 
 - [Install Basilisk](/docs/installation/) — build from source or install via cargo
 - [Quick Start](/docs/quick-start/) — your first type check in under 5 minutes
+- [Debugging](/docs/debugging/) — set breakpoints, step through code, inspect variables
 - [All Rules](/docs/rules/) — browse every BSK-E and BSK-W diagnostic code

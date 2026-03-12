@@ -24,6 +24,7 @@
   "categories": [
     "Programming Languages",
     "Linters",
+    "Debuggers",
     "Other"
   ],
   "keywords": [
@@ -61,9 +62,127 @@
         "category": "Basilisk"
       }
     ],
+    "breakpoints": [
+      {
+        "language": "python"
+      }
+    ],
+    "debuggers": [
+      {
+        "type": "basilisk-debug",
+        "label": "Python (Basilisk)",
+        "languages": [
+          "python"
+        ],
+        "configurationAttributes": {
+          "launch": {
+            "required": [
+              "program"
+            ],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "Absolute path to the Python file to debug.",
+                "default": "${file}"
+              },
+              "args": {
+                "type": "array",
+                "description": "Command-line arguments passed to the program.",
+                "items": {
+                  "type": "string"
+                },
+                "default": []
+              },
+              "cwd": {
+                "type": "string",
+                "description": "Working directory for the program.",
+                "default": "${workspaceFolder}"
+              },
+              "console": {
+                "type": "string",
+                "enum": [
+                  "internalConsole",
+                  "integratedTerminal",
+                  "externalTerminal"
+                ],
+                "description": "Where to show program output. 'internalConsole' sends stdout/stderr to the Debug Console.",
+                "default": "internalConsole"
+              },
+              "redirectOutput": {
+                "type": "boolean",
+                "description": "Redirect stdout/stderr to the Debug Console.",
+                "default": true
+              },
+              "justMyCode": {
+                "type": "boolean",
+                "default": true
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "default": false
+              },
+              "python": {
+                "type": "string",
+                "description": "Path to the Python interpreter. Auto-detected if omitted."
+              }
+            }
+          },
+          "attach": {
+            "properties": {
+              "connect": {
+                "type": "object",
+                "description": "Connect to a running debugpy server.",
+                "properties": {
+                  "host": {
+                    "type": "string",
+                    "default": "localhost"
+                  },
+                  "port": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "port"
+                ]
+              }
+            }
+          }
+        },
+        "configurationSnippets": [
+          {
+            "label": "Basilisk: Launch Current File",
+            "description": "Debug the currently open Python file",
+            "body": {
+              "name": "Python: Current File (Basilisk)",
+              "type": "basilisk-debug",
+              "request": "launch",
+              "program": "^\"\\${file}\"",
+              "console": "internalConsole",
+              "redirectOutput": true,
+              "justMyCode": true
+            }
+          }
+        ],
+        "initialConfigurations": [
+          {
+            "name": "Python: Current File (Basilisk)",
+            "type": "basilisk-debug",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+          }
+        ]
+      }
+    ],
     "configuration": {
       "title": "Basilisk",
       "properties": {
+        "basilisk.python": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the Python interpreter (e.g. .venv/bin/python). If empty, auto-detected from workspace venv or BASILISK_PYTHON env var. Target: Python 3.12."
+        },
         "basilisk.executablePath": {
           "type": "string",
           "default": "basilisk",
@@ -113,7 +232,7 @@
     }
   },
   "scripts": {
-    "compile": "tsc -p ./",
+    "compile": "tsc -p ./ && node -e \"const fs=require('fs');fs.mkdirSync('out/src/test/fixtures',{recursive:true});fs.readdirSync('src/test/fixtures').forEach(f=>fs.copyFileSync('src/test/fixtures/'+f,'out/src/test/fixtures/'+f));\"",
     "watch": "tsc -watch -p ./",
     "test": "vscode-test",
     "vscode:prepublish": "npm run compile",

@@ -25,8 +25,8 @@ permalink: /
         <p class="hero__subheadline">
           Basilisk is a complete Python language server and VS Code extension
           that replaces Pylance and Pyright. Autocomplete, go-to-definition,
-          hover info, refactoring, diagnostics &mdash; everything you rely on, fully open source.
-          Strict by default. Built in Rust.
+          hover info, refactoring, diagnostics, integrated debugging &mdash;
+          everything you rely on, fully open source. Strict by default. Built in Rust.
         </p>
 
         <div class="hero__cta-group">
@@ -50,7 +50,7 @@ permalink: /
           <span>Built in <strong>Rust</strong></span>
           <span><strong><10ms</strong> incremental</span>
           <span>No <strong>Node.js</strong></span>
-          <span><strong>MIT</strong> / Apache-2.0</span>
+          <span><strong>MIT</strong> License</span>
         </div>
       </div>
 
@@ -249,20 +249,54 @@ permalink: /
       </div>
     </div>
     <div class="feature-row__text">
-      <p class="feature-row__num">04 &mdash; Complete PEP conformance</p>
-      <h2 class="feature-row__title">Not ~95%.<br>Not ~58%.<br>All of it.</h2>
+      <p class="feature-row__num">04 &mdash; PEP conformance</p>
+      <h2 class="feature-row__title">86 of 145 tests passing.<br>Target: 100%.</h2>
       <p class="feature-row__body">
-        Every PEP from 484 to 742 &mdash; Protocols, ParamSpec, TypeVarTuple,
-        <code>Self</code>, <code>Never</code> &mdash; implemented and tested
-        against the official Python typing conformance suite.
-        If the spec says it, Basilisk enforces it.
+        Tested against the official Python typing conformance suite &mdash;
+        the same suite used to measure Pyright (~99%), mypy (~58%), and Pyrefly (~86%).
+        Enums, overloads, qualifiers, and directives already at 90&ndash;100%.
+        Generics, protocols, and aliases are next.
+      </p>
+    </div>
+  </div>
+
+  <div class="feature-row">
+    <div class="feature-row__visual">
+      <div class="code-window" style="width:100%;max-width:400px">
+        <div class="code-window__chrome">
+          <span class="code-window__dot code-window__dot--close"></span>
+          <span class="code-window__dot code-window__dot--min"></span>
+          <span class="code-window__dot code-window__dot--expand"></span>
+          <span class="code-window__filename">Basilisk Output</span>
+        </div>
+        <div class="code-window__body">
+<pre><span class="tok-cmt">[Basilisk Debug]</span> createDebugAdapterDescriptor
+  type=<span class="tok-type">basilisk-debug</span>, request=<span class="tok-str">launch</span>
+
+<span class="tok-cmt">[Basilisk Debug]</span> Requesting LSP to spawn
+  debugpy (python: <span class="tok-fn">auto-detect</span>)...
+
+<span class="tok-cmt">[Basilisk Debug]</span> LSP spawned debugpy &rarr;
+  connecting DAP client to
+  <span class="tok-type">localhost</span>:<span class="tok-num">57356</span></pre>
+        </div>
+      </div>
+    </div>
+    <div class="feature-row__text">
+      <p class="feature-row__num">05 &mdash; Integrated debugging</p>
+      <h2 class="feature-row__title">F5 to debug.<br>Basilisk handles the rest.</h2>
+      <p class="feature-row__body">
+        Set breakpoints, step through code, inspect variables &mdash; all
+        brokered through the Basilisk LSP. The Rust server spawns debugpy on a free
+        TCP port and connects VS Code&rsquo;s DAP client automatically. No manual
+        configuration. No separate debug extension. Just press F5.
       </p>
     </div>
   </div>
 
   <div class="feature-row">
     <div class="feature-row__text">
-      <p class="feature-row__num">05 &mdash; Single binary</p>
+      <p class="feature-row__num">06 &mdash; Single binary</p>
       <h2 class="feature-row__title">Drop it in PATH.<br>That&rsquo;s the whole install.</h2>
       <p class="feature-row__body">
         Compiled to a standalone Rust binary. No Node.js. No Python interpreter.
@@ -329,7 +363,7 @@ permalink: /
           </tr>
           <tr>
             <td>PEP conformance <a href="/docs/comparison/#footnotes" style="color:var(--color-text-muted);font-size:0.75rem">¹</a></td>
-            <td class="col-basilisk">100% <em style="font-size:0.75rem;color:var(--color-text-muted)">(target)</em></td>
+            <td class="col-basilisk">59.3% <em style="font-size:0.75rem;color:var(--color-text-muted)">(86/145)</em></td>
             <td>~99%</td>
             <td>~58% full-pass</td>
             <td>alpha</td>
@@ -391,6 +425,14 @@ permalink: /
             <td><span class="check-partial">Basic</span></td>
           </tr>
           <tr>
+            <td>Integrated debugger</td>
+            <td class="col-basilisk check-yes">&#10003;</td>
+            <td class="check-no">&mdash;</td>
+            <td class="check-no">&mdash;</td>
+            <td class="check-no">&mdash;</td>
+            <td class="check-no">&mdash;</td>
+          </tr>
+          <tr>
             <td>VS Code extension</td>
             <td class="col-basilisk">Open source</td>
             <td><span class="cell-warn">Proprietary (Pylance)</span></td>
@@ -400,7 +442,7 @@ permalink: /
           </tr>
           <tr>
             <td>License</td>
-            <td class="col-basilisk">MIT / Apache-2.0</td>
+            <td class="col-basilisk">MIT</td>
             <td>MIT</td>
             <td>MIT</td>
             <td>MIT</td>
@@ -614,8 +656,8 @@ permalink: /
       <h2>Drop Pylance.<br>Pick up Basilisk.</h2>
       <div>
         <p>
-          Basilisk is in alpha. The type checker, LSP, and VS Code extension are working.
-          Autocomplete, go-to-definition, hover info, diagnostics &mdash; all shipping today.
+          Basilisk is in alpha. The type checker, LSP, VS Code extension, and integrated debugger are working.
+          Autocomplete, go-to-definition, hover info, diagnostics, F5 debugging &mdash; all shipping today.
           Open source. No proprietary lock-in. Early adopters shape the roadmap.
         </p>
         <div class="cta-inner__actions">

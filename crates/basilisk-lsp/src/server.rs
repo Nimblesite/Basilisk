@@ -33,6 +33,7 @@ use tower_lsp::lsp_types::{
     WorkspaceEdit, WorkspaceSymbolParams,
 };
 use tower_lsp::{Client, LspService, Server};
+use tracing::{debug, error, info, warn};
 
 use crate::util::{byte_offset_to_position, position_to_byte_offset};
 use crate::{
@@ -42,7 +43,7 @@ use crate::{
 };
 
 /// Fallback docs URL used when a diagnostic code URL fails to parse.
-const FALLBACK_DOCS_URL: &str = "https://www.basilisk-python.dev";
+const FALLBACK_DOCS_URL: &str = basilisk_common::diagnostics::DOCS_URL;
 
 /// State for a single open document.
 struct DocumentState {
@@ -62,6 +63,8 @@ pub struct LspServer {
     documents: DashMap<Url, DocumentState>,
     /// Workspace root folders discovered during initialization.
     workspace_roots: tokio::sync::RwLock<Vec<std::path::PathBuf>>,
+    /// Debug session manager — spawns debugpy and tracks active sessions.
+    debug_manager: crate::debug::DebugSessionManager,
 }
 
 impl LspServer {
@@ -72,6 +75,7 @@ impl LspServer {
             client,
             documents: DashMap::new(),
             workspace_roots: tokio::sync::RwLock::new(Vec::new()),
+            debug_manager: crate::debug::DebugSessionManager::new(),
         }
     }
 
@@ -211,6 +215,141 @@ impl LspServer {
         let diagnostics = entry.diagnostics.clone();
         Some((text, resolved, diagnostics))
     }
+
+    // ── Execute command handlers ─────────────────────────────────────────────
+
+    /// Handle `basilisk.organizeImports`.
+    async fn execute_organize_imports(
+        &self,
+        args: &[serde_json::Value],
+    ) -> LspResult<Option<serde_json::Value>> {
+        let Some(uri_value) = args.first() else {
+            return Ok(None);
+        };
+        let Some(uri_str) = uri_value.as_str() else {
+            return Ok(None);
+        };
+        let Ok(uri) = Url::parse(uri_str) else {
+            return Ok(None);
+        };
+
+        let source = self
+            .documents
+            .get(&uri)
+            .map(|d| d.text.clone())
+            .unwrap_or_default();
+
+        if source.is_empty() {
+            return Ok(None);
+        }
+
+        let Some(action) = code_actions::organize_imports(&uri, &source) else {
+            return Ok(None);
+        };
+
+        if let Some(edit) = action.edit {
+            let _ = self.client.apply_edit(edit).await;
+        }
+
+        Ok(None)
+    }
+
+    /// Handle `basilisk.startDebugSession`.
+    ///
+    /// Spawns debugpy on a free TCP port and returns the connection details.
+    /// The editor connects its DAP client directly to that port.
+    async fn execute_start_debug_session(
+        &self,
+        args: &[serde_json::Value],
+    ) -> LspResult<Option<serde_json::Value>> {
+        info!("execute_start_debug_session called");
+        // Extract optional python interpreter override from args.
+        let python_override = args
+            .first()
+            .and_then(|v| v.get("python"))
+            .and_then(|v| v.as_str())
+            .map(String::from);
+
+        let workspace = self.workspace_roots.read().await;
+        let root = workspace
+            .first()
+            .map_or_else(|| std::path::Path::new("."), std::path::PathBuf::as_path);
+        let python = python_override.unwrap_or_else(|| crate::debug::resolve_python(root));
+        drop(workspace);
+
+        debug!(python = %python, "resolved python interpreter");
+
+        // Verify debugpy is installed.
+        if let Err(err) = crate::debug::check_debugpy(&python).await {
+            error!(python = %python, %err, "debugpy check failed");
+            self.client
+                .log_message(MessageType::ERROR, err.to_string())
+                .await;
+            return Err(tower_lsp::jsonrpc::Error {
+                code: tower_lsp::jsonrpc::ErrorCode::ServerError(-32001),
+                message: err.to_string().into(),
+                data: None,
+            });
+        }
+
+        // Spawn debugpy and wait for it to accept connections.
+        match self.debug_manager.start_session(&python).await {
+            Ok((host, port, session_id)) => {
+                info!(host = %host, port, session_id = %session_id, "debug session started");
+                self.client
+                    .log_message(
+                        MessageType::INFO,
+                        format!("Basilisk: debug session {session_id} started on {host}:{port}"),
+                    )
+                    .await;
+                Ok(Some(serde_json::json!({
+                    "host": host,
+                    "port": port,
+                    "sessionId": session_id
+                })))
+            }
+            Err(err) => {
+                error!(%err, "failed to start debug session");
+                self.client
+                    .log_message(MessageType::ERROR, err.to_string())
+                    .await;
+                Err(tower_lsp::jsonrpc::Error {
+                    code: tower_lsp::jsonrpc::ErrorCode::ServerError(-32002),
+                    message: err.to_string().into(),
+                    data: None,
+                })
+            }
+        }
+    }
+
+    /// Handle `basilisk.stopDebugSession`.
+    async fn execute_stop_debug_session(
+        &self,
+        args: &[serde_json::Value],
+    ) -> LspResult<Option<serde_json::Value>> {
+        let session_id = args
+            .first()
+            .and_then(|v| v.get("sessionId"))
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
+
+        info!(session_id, "execute_stop_debug_session called");
+        let stopped = self.debug_manager.stop_session(session_id).await;
+
+        if stopped {
+            info!(session_id, "debug session stopped successfully");
+            self.client
+                .log_message(
+                    MessageType::INFO,
+                    format!("Basilisk: debug session {session_id} stopped"),
+                )
+                .await;
+        } else {
+            warn!(session_id, "stop_session: no such session");
+        }
+
+        Ok(Some(serde_json::json!({ "stopped": stopped })))
+    }
 }
 
 // ── Diagnostic conversion ────────────────────────────────────────────────────
@@ -340,7 +479,10 @@ impl tower_lsp::LanguageServer for LspServer {
                     work_done_progress_options: WorkDoneProgressOptions::default(),
                 })),
                 execute_command_provider: Some(ExecuteCommandOptions {
-                    commands: vec!["basilisk.organizeImports".to_owned()],
+                    commands: basilisk_common::commands::ALL
+                        .iter()
+                        .map(|s| (*s).to_owned())
+                        .collect(),
                     work_done_progress_options: WorkDoneProgressOptions::default(),
                 }),
                 inlay_hint_provider: Some(OneOf::Left(true)),
@@ -373,6 +515,8 @@ impl tower_lsp::LanguageServer for LspServer {
     }
 
     async fn shutdown(&self) -> LspResult<()> {
+        // Kill any active debug sessions so we don't leave orphaned processes.
+        self.debug_manager.stop_all().await;
         Ok(())
     }
 
@@ -713,39 +857,37 @@ impl tower_lsp::LanguageServer for LspServer {
         &self,
         params: ExecuteCommandParams,
     ) -> LspResult<Option<serde_json::Value>> {
-        if params.command != "basilisk.organizeImports" {
-            return Ok(None);
+        self.client
+            .log_message(
+                MessageType::INFO,
+                format!(
+                    "Basilisk: execute_command '{}' with {} arg(s)",
+                    params.command,
+                    params.arguments.len()
+                ),
+            )
+            .await;
+
+        match params.command.as_str() {
+            basilisk_common::commands::ORGANIZE_IMPORTS => {
+                self.execute_organize_imports(&params.arguments).await
+            }
+            basilisk_common::commands::START_DEBUG_SESSION => {
+                self.execute_start_debug_session(&params.arguments).await
+            }
+            basilisk_common::commands::STOP_DEBUG_SESSION => {
+                self.execute_stop_debug_session(&params.arguments).await
+            }
+            unknown => {
+                self.client
+                    .log_message(
+                        MessageType::WARNING,
+                        format!("Basilisk: unknown command '{unknown}'"),
+                    )
+                    .await;
+                Ok(None)
+            }
         }
-
-        let Some(uri_value) = params.arguments.first() else {
-            return Ok(None);
-        };
-        let Some(uri_str) = uri_value.as_str() else {
-            return Ok(None);
-        };
-        let Ok(uri) = Url::parse(uri_str) else {
-            return Ok(None);
-        };
-
-        let source = self
-            .documents
-            .get(&uri)
-            .map(|d| d.text.clone())
-            .unwrap_or_default();
-
-        if source.is_empty() {
-            return Ok(None);
-        }
-
-        let Some(action) = code_actions::organize_imports(&uri, &source) else {
-            return Ok(None);
-        };
-
-        if let Some(edit) = action.edit {
-            let _ = self.client.apply_edit(edit).await;
-        }
-
-        Ok(None)
     }
 
     // ── Completion ───────────────────────────────────────────────────────────
