@@ -163,7 +163,11 @@ async fn wait_for_port(port: u16, timeout: Duration) -> Result<(), DebugError> {
     loop {
         match TcpListener::bind(("127.0.0.1", port)) {
             Err(ref err) if err.kind() == std::io::ErrorKind::AddrInUse => {
-                debug!(port, elapsed_ms = start.elapsed().as_millis(), "port occupied — debugpy ready");
+                debug!(
+                    port,
+                    elapsed_ms = start.elapsed().as_millis(),
+                    "port occupied — debugpy ready"
+                );
                 return Ok(());
             }
             Ok(_listener) => {

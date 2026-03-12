@@ -13,7 +13,6 @@ use std::io;
 
 use futures_util::stream::{self, StreamExt as _};
 use futures_util::SinkExt as _;
-use tracing::{error, info};
 use tokio::io::{
     AsyncBufReadExt as _, AsyncReadExt as _, AsyncWriteExt as _, BufReader, DuplexStream,
 };
@@ -21,6 +20,7 @@ use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
 use tower_lsp::{LspService, Server};
+use tracing::{error, info};
 
 use crate::server::LspServer;
 
