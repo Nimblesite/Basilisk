@@ -25,6 +25,9 @@ const DIAGNOSTIC_TIMEOUT_MS = 15_000;
 /** Time (ms) to wait for the LSP server to fully start. */
 const SERVER_START_WAIT_MS = 5_000;
 
+/** Time (ms) to wait for the LSP server to index a document. */
+const INDEX_WAIT_MS = 2_000;
+
 /**
  * Poll an async function until it returns a truthy, non-empty result.
  * Avoids fixed sleeps by retrying at short intervals.
