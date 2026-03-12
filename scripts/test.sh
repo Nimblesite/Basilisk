@@ -183,6 +183,12 @@ header "Running LSP tests"
 cargo test -p basilisk-lsp --test lsp_tests
 ok "lsp_tests done"
 
+# cargo llvm-cov puts binaries in target/llvm-cov-target/; the e2e tests
+# spawn `basilisk lsp` and look for it in target/debug/, so build it first.
+header "Building basilisk binary for LSP E2E tests"
+cargo build -p basilisk-cli
+ok "basilisk binary ready"
+
 header "Running LSP E2E tests"
 cargo test -p basilisk-lsp --test lsp_e2e_tests
 ok "lsp_e2e_tests done"
