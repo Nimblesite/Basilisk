@@ -108,6 +108,21 @@
           "type": "string",
           "default": "ruff",
           "description": "Path to the ruff binary."
+        },
+        "basilisk.analysisMode": {
+          "type": "string",
+          "enum": [
+            "openFilesOnly",
+            "wholeModule",
+            "crossModule"
+          ],
+          "enumDescriptions": [
+            "Analyse only files currently open in the editor. Use for large projects where whole-workspace analysis is too slow.",
+            "Analyse all Python files in the workspace at startup and on file changes. Diagnostics appear in the Problems panel even for closed files. (default)",
+            "Cross-file import graph analysis. Reserved for future use; currently behaves like wholeModule."
+          ],
+          "default": "wholeModule",
+          "description": "Controls which files Basilisk analyses. 'wholeModule' (default) analyses all workspace files; 'openFilesOnly' analyses only open editors; 'crossModule' is reserved for future cross-file import graph analysis."
         }
       }
     }

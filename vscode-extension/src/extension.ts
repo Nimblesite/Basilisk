@@ -252,6 +252,7 @@ function startLspClient(
     synchronize: {
       configurationSection: "basilisk",
     },
+    initializationOptions: readBasiliskSettings(),
     traceOutputChannel: traceChannel,
     outputChannel: outputChannel,
     errorHandler: {
@@ -277,20 +278,12 @@ function startLspClient(
           if (!Array.isArray(results)) {
             return results;
           }
-          const cfg = vscode.workspace.getConfiguration("basilisk");
           return results.map((item, idx) => {
             const section = params.items[idx]?.section;
             if (section === "basilisk" || section?.startsWith("basilisk.")) {
               return {
                 ...(typeof item === "object" && item !== null ? item : {}),
-                inlayHints: {
-                  parameterNames: cfg.get<boolean>("inlayHints.parameterNames") ?? true,
-                  variableTypes: cfg.get<boolean>("inlayHints.variableTypes") ?? true,
-                },
-                ruff: {
-                  enabled: cfg.get<boolean>("ruff.enabled") ?? true,
-                  executablePath: cfg.get<string>("ruff.executablePath") ?? "ruff",
-                },
+                ...readBasiliskSettings(),
               };
             }
             return item;
@@ -345,21 +338,25 @@ function startLspClient(
   context.subscriptions.push(client);
 }
 
-/** Build the settings object forwarded to the LSP server. */
-function buildServerSettings(): Record<string, unknown> {
+/** Read all Basilisk settings from the VS Code configuration. */
+function readBasiliskSettings(): Record<string, unknown> {
   const cfg = vscode.workspace.getConfiguration("basilisk");
   return {
-    basilisk: {
-      inlayHints: {
-        parameterNames: cfg.get<boolean>("inlayHints.parameterNames") ?? true,
-        variableTypes: cfg.get<boolean>("inlayHints.variableTypes") ?? true,
-      },
-      ruff: {
-        enabled: cfg.get<boolean>("ruff.enabled") ?? true,
-        executablePath: cfg.get<string>("ruff.executablePath") ?? "ruff",
-      },
+    analysisMode: cfg.get<string>("analysisMode") ?? "wholeModule",
+    inlayHints: {
+      parameterNames: cfg.get<boolean>("inlayHints.parameterNames") ?? true,
+      variableTypes: cfg.get<boolean>("inlayHints.variableTypes") ?? true,
+    },
+    ruff: {
+      enabled: cfg.get<boolean>("ruff.enabled") ?? true,
+      executablePath: cfg.get<string>("ruff.executablePath") ?? "ruff",
     },
   };
+}
+
+/** Build the settings object forwarded to the LSP server. */
+function buildServerSettings(): Record<string, unknown> {
+  return { basilisk: readBasiliskSettings() };
 }
 
 /** Run `ruff check --select I --fix` on the active file to organize imports. */
@@ -370,14 +367,13 @@ function organizeImports(): void {
     return;
   }
 
-  const cfg = vscode.workspace.getConfiguration("basilisk");
-  const ruffEnabled = cfg.get<boolean>("ruff.enabled") ?? true;
-  if (!ruffEnabled) {
+  const settings = readBasiliskSettings() as { ruff?: { enabled?: boolean; executablePath?: string } };
+  if (!settings.ruff?.enabled) {
     vscode.window.showWarningMessage("Basilisk: Ruff integration is disabled. Enable basilisk.ruff.enabled to organize imports.");
     return;
   }
 
-  const ruffPath = cfg.get<string>("ruff.executablePath") ?? "ruff";
+  const ruffPath = settings.ruff?.executablePath ?? "ruff";
   const filePath = editor.document.uri.fsPath;
 
   execFile(

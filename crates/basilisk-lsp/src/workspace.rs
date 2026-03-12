@@ -246,6 +246,23 @@ impl WorkspaceIndex {
 
 // ── Analysis helpers ─────────────────────────────────────────────────────────
 
+/// Build a `FileEntry` with the given analysis results.
+fn make_entry(
+    hash: u64,
+    text: &str,
+    resolved: Option<Arc<basilisk_resolver::ResolvedModule>>,
+    checker_diags: Vec<basilisk_checker::Diagnostic>,
+) -> FileEntry {
+    FileEntry {
+        source_hash: hash,
+        text: text.to_owned(),
+        resolved,
+        diagnostics: checker_diags,
+        version: 0,
+        is_open: false,
+    }
+}
+
 /// Run the full parse → resolve → check pipeline on `text`.
 ///
 /// Always returns a `FileEntry` (resolved may be `None` on failure) and the
@@ -261,32 +278,12 @@ fn analyse(
         Ok(p) => p,
         Err(e) => {
             let lsp_diag = parse_error_diagnostic(&e.to_string());
-            return (
-                FileEntry {
-                    source_hash: hash,
-                    text: text.to_owned(),
-                    resolved: None,
-                    diagnostics: vec![],
-                    version: 0,
-                    is_open: false,
-                },
-                vec![lsp_diag],
-            );
+            return (make_entry(hash, text, None, vec![]), vec![lsp_diag]);
         }
     };
 
     let Ok(resolved) = basilisk_resolver::resolve(&parsed) else {
-        return (
-            FileEntry {
-                source_hash: hash,
-                text: text.to_owned(),
-                resolved: None,
-                diagnostics: vec![],
-                version: 0,
-                is_open: false,
-            },
-            vec![],
-        );
+        return (make_entry(hash, text, None, vec![]), vec![]);
     };
 
     let checker_diags = basilisk_checker::check(&resolved);
@@ -296,14 +293,7 @@ fn analyse(
         .collect();
 
     (
-        FileEntry {
-            source_hash: hash,
-            text: text.to_owned(),
-            resolved: Some(Arc::new(resolved)),
-            diagnostics: checker_diags,
-            version: 0,
-            is_open: false,
-        },
+        make_entry(hash, text, Some(Arc::new(resolved)), checker_diags),
         lsp_diags,
     )
 }

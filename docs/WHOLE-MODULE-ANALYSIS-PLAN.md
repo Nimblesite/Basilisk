@@ -58,8 +58,13 @@
 - [x] Write new WS E2E tests: startup scan, openFilesOnly no-scan, did_close behavior per mode
 - [x] Write unit tests for `WorkspaceIndex` (24 tests covering set_open, get_text, set_closed, reload_from_disk, scan, all_resolved)
 - [x] Fix `FileEntry.text` field — store raw source always, even when parse fails (enables completion on partial expressions)
-- [ ] Add 150 ms debounce to file-watcher events
-- [ ] Advertise `workspace.fileOperations` capabilities in `initialize` response when mode is not `openFilesOnly`
-- [ ] Register `basilisk.analysisMode` setting in `vscode-extension/package.json`
-- [ ] Pass `analysisMode` via `initializationOptions` in `vscode-extension/src/extension.ts`
-- [ ] VSIX integration tests: prove wholeModule publishes diagnostics for closed files; prove openFilesOnly does not scan at startup
+- [x] Register `basilisk.analysisMode` setting in `vscode-extension/package.json`
+- [x] Pass `analysisMode` via `initializationOptions` in `vscode-extension/src/extension.ts`
+- [x] VSIX integration tests: configuration schema tests + whole-module startup scan proof + openFilesOnly no-scan proof
+- [x] Configure `.vscode-test.mjs` with `workspaceFolder: test-fixtures/workspace` so VSIX tests have a real rootUri
+- [x] Fix buggy `test_ws_open_files_only_did_close_clears_diagnostics` — now actually uses openFilesOnly mode via `initialize_with_root`
+- [x] Add `test_ws_whole_module_did_close_disk_file_keeps_diagnostics` — prove wholeModule keeps diagnostics after close
+- [x] Add `test_ws_file_watcher_events_ignored_in_open_files_only` — prove watcher no-op in openFilesOnly
+- [x] Add `test_ws_file_watcher_triggers_reanalysis_in_whole_module` — prove watcher re-analyses in wholeModule
+- [x] Add 150 ms debounce to file-watcher events
+- [x] Advertise `workspace.fileOperations` capabilities in `initialize` response when mode is not `openFilesOnly`

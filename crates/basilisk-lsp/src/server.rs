@@ -16,18 +16,21 @@ use tower_lsp::lsp_types::{
     DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentColorParams,
     DocumentFormattingParams, DocumentHighlight, DocumentHighlightParams, DocumentSymbolParams,
     DocumentSymbolResponse, ExecuteCommandOptions, ExecuteCommandParams, FileChangeType,
-    FoldingRange, FoldingRangeParams, FoldingRangeProviderCapability, GotoDefinitionParams,
-    GotoDefinitionResponse, Hover, HoverParams, HoverProviderCapability, InitializeParams,
-    InitializeResult, InitializedParams, InlayHint, InlayHintParams, Location, MessageType,
-    OneOf, PrepareRenameResponse, ReferenceParams, RenameOptions, RenameParams, SelectionRange,
-    SelectionRangeParams, SelectionRangeProviderCapability, SemanticTokens,
-    SemanticTokensFullOptions, SemanticTokensLegend, SemanticTokensOptions, SemanticTokensParams,
-    SemanticTokensResult, SemanticTokensServerCapabilities, ServerCapabilities, ServerInfo,
-    SignatureHelpOptions, SignatureHelpParams, SymbolInformation, TextDocumentPositionParams,
+    FileOperationFilter, FileOperationPattern, FileOperationPatternKind,
+    FileOperationRegistrationOptions, FoldingRange, FoldingRangeParams,
+    FoldingRangeProviderCapability, GotoDefinitionParams, GotoDefinitionResponse, Hover,
+    HoverParams, HoverProviderCapability, InitializeParams, InitializeResult, InitializedParams,
+    InlayHint, InlayHintParams, Location, MessageType, OneOf, Position, PrepareRenameResponse,
+    ReferenceParams, RenameOptions, RenameParams, SelectionRange, SelectionRangeParams,
+    SelectionRangeProviderCapability, SemanticTokens, SemanticTokensFullOptions,
+    SemanticTokensLegend, SemanticTokensOptions, SemanticTokensParams, SemanticTokensResult,
+    SemanticTokensServerCapabilities, ServerCapabilities, ServerInfo, SignatureHelpOptions,
+    SignatureHelpParams, SymbolInformation, TextDocumentPositionParams,
     TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, TypeDefinitionProviderCapability,
     TypeHierarchyItem, TypeHierarchyPrepareParams, TypeHierarchySubtypesParams,
     TypeHierarchySupertypesParams, Url, WorkDoneProgressOptions, WorkspaceEdit,
-    WorkspaceSymbolParams,
+    WorkspaceFoldersServerCapabilities, WorkspaceServerCapabilities,
+    WorkspaceFileOperationsServerCapabilities, WorkspaceSymbolParams,
 };
 use tower_lsp::{Client, LspService, Server};
 
@@ -40,12 +43,20 @@ use crate::{
     type_definition, type_hierarchy,
 };
 
+/// Debounce delay for file-watcher events (milliseconds).
+const FILE_WATCHER_DEBOUNCE_MS: u64 = 150;
+
 /// The Basilisk LSP server.
 pub struct LspServer {
     /// LSP client for sending notifications back to the editor.
     client: Client,
     /// Workspace index — the single source of truth for all file analysis state.
-    index: tokio::sync::RwLock<Option<WorkspaceIndex>>,
+    ///
+    /// Wrapped in `Arc` so the debounce task can share ownership without
+    /// holding a reference into `self`.
+    index: Arc<tokio::sync::RwLock<Option<WorkspaceIndex>>>,
+    /// Abort handle for the pending file-watcher debounce task (if any).
+    watcher_debounce: tokio::sync::Mutex<Option<tokio::task::AbortHandle>>,
 }
 
 impl LspServer {
@@ -54,7 +65,8 @@ impl LspServer {
     pub fn new(client: Client) -> Self {
         Self {
             client,
-            index: tokio::sync::RwLock::new(None),
+            index: Arc::new(tokio::sync::RwLock::new(None)),
+            watcher_debounce: tokio::sync::Mutex::new(None),
         }
     }
 
@@ -78,6 +90,27 @@ impl LspServer {
         Vec<basilisk_checker::Diagnostic>,
     )> {
         self.with_index(|idx| idx.get_by_uri(uri)).await
+    }
+
+    /// Run a position-based handler: extract document data, compute byte offset,
+    /// call `handler`, and wrap the result in `LspResult`.
+    async fn at_position<T>(
+        &self,
+        uri: Url,
+        pos: Position,
+        handler: impl FnOnce(
+            &Arc<basilisk_resolver::ResolvedModule>,
+            &str,
+            usize,
+            &Url,
+            &[basilisk_checker::Diagnostic],
+        ) -> Option<T>,
+    ) -> LspResult<Option<T>> {
+        let Some((text, resolved, diags)) = self.get_document_data(&uri).await else {
+            return Ok(None);
+        };
+        let byte_offset = position_to_byte_offset(&text, pos);
+        Ok(handler(&resolved, &text, byte_offset, &uri, &diags))
     }
 }
 
@@ -115,72 +148,7 @@ impl tower_lsp::LanguageServer for LspServer {
                 name: "basilisk".to_owned(),
                 version: Some(env!("CARGO_PKG_VERSION").to_owned()),
             }),
-            capabilities: ServerCapabilities {
-                text_document_sync: Some(TextDocumentSyncCapability::Kind(
-                    TextDocumentSyncKind::INCREMENTAL,
-                )),
-                hover_provider: Some(HoverProviderCapability::Simple(true)),
-                call_hierarchy_provider: Some(CallHierarchyServerCapability::Simple(true)),
-                // type_hierarchy_provider is not in lsp-types 0.94's ServerCapabilities;
-                // it is injected at the JSON level by websocket::inject_missing_capabilities.
-                code_lens_provider: Some(CodeLensOptions {
-                    resolve_provider: Some(false),
-                }),
-                code_action_provider: Some(CodeActionProviderCapability::Options(
-                    CodeActionOptions {
-                        code_action_kinds: Some(vec![
-                            CodeActionKind::QUICKFIX,
-                            CodeActionKind::SOURCE_ORGANIZE_IMPORTS,
-                            CodeActionKind::REFACTOR,
-                        ]),
-                        ..Default::default()
-                    },
-                )),
-                completion_provider: Some(CompletionOptions {
-                    trigger_characters: Some(vec![".".to_owned()]),
-                    resolve_provider: Some(true),
-                    ..Default::default()
-                }),
-                declaration_provider: Some(DeclarationCapability::Simple(true)),
-                definition_provider: Some(OneOf::Left(true)),
-                type_definition_provider: Some(TypeDefinitionProviderCapability::Simple(true)),
-                document_formatting_provider: Some(OneOf::Left(true)),
-                document_highlight_provider: Some(OneOf::Left(true)),
-                document_symbol_provider: Some(OneOf::Left(true)),
-                folding_range_provider: Some(FoldingRangeProviderCapability::Simple(true)),
-                selection_range_provider: Some(SelectionRangeProviderCapability::Simple(true)),
-                workspace_symbol_provider: Some(OneOf::Left(true)),
-                signature_help_provider: Some(SignatureHelpOptions {
-                    trigger_characters: Some(vec!["(".to_owned(), ",".to_owned()]),
-                    retrigger_characters: None,
-                    work_done_progress_options: WorkDoneProgressOptions::default(),
-                }),
-                references_provider: Some(OneOf::Left(true)),
-                rename_provider: Some(OneOf::Right(RenameOptions {
-                    prepare_provider: Some(true),
-                    work_done_progress_options: WorkDoneProgressOptions::default(),
-                })),
-                execute_command_provider: Some(ExecuteCommandOptions {
-                    commands: vec!["basilisk.organizeImports".to_owned()],
-                    work_done_progress_options: WorkDoneProgressOptions::default(),
-                }),
-                inlay_hint_provider: Some(OneOf::Left(true)),
-                semantic_tokens_provider: Some(
-                    SemanticTokensServerCapabilities::SemanticTokensOptions(
-                        SemanticTokensOptions {
-                            legend: SemanticTokensLegend {
-                                token_types: crate::semantic_tokens::TOKEN_TYPES.to_vec(),
-                                token_modifiers: crate::semantic_tokens::TOKEN_MODIFIERS.to_vec(),
-                            },
-                            full: Some(SemanticTokensFullOptions::Bool(true)),
-                            range: None,
-                            work_done_progress_options: WorkDoneProgressOptions::default(),
-                        },
-                    ),
-                ),
-                color_provider: Some(ColorProviderCapability::Simple(true)),
-                ..Default::default()
-            },
+            capabilities: build_server_capabilities(mode),
         })
     }
 
@@ -308,12 +276,16 @@ impl tower_lsp::LanguageServer for LspServer {
     }
 
     async fn did_change_watched_files(&self, params: DidChangeWatchedFilesParams) {
-        let guard = self.index.read().await;
-        let Some(index) = guard.as_ref() else { return };
-        if index.mode == AnalysisMode::OpenFilesOnly {
-            return; // File-watcher events are irrelevant in openFilesOnly mode.
+        // Quick mode check — bail early for openFilesOnly without taking the write lock.
+        {
+            let guard = self.index.read().await;
+            let Some(index) = guard.as_ref() else { return };
+            if index.mode == AnalysisMode::OpenFilesOnly {
+                return; // File-watcher events are irrelevant in openFilesOnly mode.
+            }
         }
 
+        // Classify the incoming changes, filtering to Python files only.
         let mut reload_targets: Vec<Url> = Vec::new();
         let mut delete_targets: Vec<Url> = Vec::new();
 
@@ -337,19 +309,42 @@ impl tower_lsp::LanguageServer for LspServer {
             }
         }
 
-        let reload_results: Vec<_> = reload_targets
-            .iter()
-            .filter_map(|uri| index.reload_from_disk(uri))
-            .collect();
-
-        drop(guard);
-
-        for (uri, diags) in reload_results {
-            self.client.publish_diagnostics(uri, diags, None).await;
+        if reload_targets.is_empty() && delete_targets.is_empty() {
+            return;
         }
-        for uri in delete_targets {
-            self.client.publish_diagnostics(uri, vec![], None).await;
+
+        // Debounce: abort any pending watcher task and replace with a new one
+        // that fires after FILE_WATCHER_DEBOUNCE_MS milliseconds.
+        let index_lock = Arc::clone(&self.index);
+        let client = self.client.clone();
+
+        let task = tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(FILE_WATCHER_DEBOUNCE_MS)).await;
+
+            let guard = index_lock.read().await;
+            let Some(index) = guard.as_ref() else { return };
+
+            let reload_results: Vec<_> = reload_targets
+                .iter()
+                .filter_map(|uri| index.reload_from_disk(uri))
+                .collect();
+
+            drop(guard);
+
+            for (uri, diags) in reload_results {
+                client.publish_diagnostics(uri, diags, None).await;
+            }
+            for uri in delete_targets {
+                client.publish_diagnostics(uri, vec![], None).await;
+            }
+        });
+
+        let abort_handle = task.abort_handle();
+        let mut debounce = self.watcher_debounce.lock().await;
+        if let Some(old) = debounce.take() {
+            old.abort();
         }
+        *debounce = Some(abort_handle);
     }
 
     // ── Hover ────────────────────────────────────────────────────────────────
@@ -357,11 +352,10 @@ impl tower_lsp::LanguageServer for LspServer {
     async fn hover(&self, params: HoverParams) -> LspResult<Option<Hover>> {
         let uri = params.text_document_position_params.text_document.uri;
         let pos = params.text_document_position_params.position;
-        let Some((text, resolved, diags)) = self.get_document_data(&uri).await else {
-            return Ok(None);
-        };
-        let byte_offset = position_to_byte_offset(&text, pos);
-        Ok(hover::hover_at(&resolved, &text, byte_offset, &diags))
+        self.at_position(uri, pos, |resolved, text, offset, _, diags| {
+            hover::hover_at(resolved, text, offset, diags)
+        })
+        .await
     }
 
     // ── Go to Definition ─────────────────────────────────────────────────────
@@ -372,16 +366,10 @@ impl tower_lsp::LanguageServer for LspServer {
     ) -> LspResult<Option<GotoDefinitionResponse>> {
         let uri = params.text_document_position_params.text_document.uri;
         let pos = params.text_document_position_params.position;
-        let Some((text, resolved, _)) = self.get_document_data(&uri).await else {
-            return Ok(None);
-        };
-        let byte_offset = position_to_byte_offset(&text, pos);
-        Ok(definition::goto_definition(
-            &resolved,
-            &text,
-            byte_offset,
-            &uri,
-        ))
+        self.at_position(uri, pos, |resolved, text, offset, uri, _| {
+            definition::goto_definition(resolved, text, offset, uri)
+        })
+        .await
     }
 
     // ── Go to Declaration ────────────────────────────────────────────────────
@@ -392,16 +380,10 @@ impl tower_lsp::LanguageServer for LspServer {
     ) -> LspResult<Option<GotoDefinitionResponse>> {
         let uri = params.text_document_position_params.text_document.uri;
         let pos = params.text_document_position_params.position;
-        let Some((text, resolved, _)) = self.get_document_data(&uri).await else {
-            return Ok(None);
-        };
-        let byte_offset = position_to_byte_offset(&text, pos);
-        Ok(declaration::goto_declaration(
-            &resolved,
-            &text,
-            byte_offset,
-            &uri,
-        ))
+        self.at_position(uri, pos, |resolved, text, offset, uri, _| {
+            declaration::goto_declaration(resolved, text, offset, uri)
+        })
+        .await
     }
 
     // ── Go to Type Definition ───────────────────────────────────────────────
@@ -412,16 +394,10 @@ impl tower_lsp::LanguageServer for LspServer {
     ) -> LspResult<Option<GotoDefinitionResponse>> {
         let uri = params.text_document_position_params.text_document.uri;
         let pos = params.text_document_position_params.position;
-        let Some((text, resolved, _)) = self.get_document_data(&uri).await else {
-            return Ok(None);
-        };
-        let byte_offset = position_to_byte_offset(&text, pos);
-        Ok(type_definition::goto_type_definition(
-            &resolved,
-            &text,
-            byte_offset,
-            &uri,
-        ))
+        self.at_position(uri, pos, |resolved, text, offset, uri, _| {
+            type_definition::goto_type_definition(resolved, text, offset, uri)
+        })
+        .await
     }
 
     // ── Document Symbols ─────────────────────────────────────────────────────
@@ -454,12 +430,7 @@ impl tower_lsp::LanguageServer for LspServer {
             .with_index(|idx| Some(idx.all_resolved()))
             .await
             .unwrap_or_default();
-        let syms = symbols::workspace_symbols(&docs, query);
-        if syms.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(syms))
-        }
+        Ok(none_if_empty(symbols::workspace_symbols(&docs, query)))
     }
 
     // ── Signature Help ───────────────────────────────────────────────────────
@@ -470,11 +441,10 @@ impl tower_lsp::LanguageServer for LspServer {
     ) -> LspResult<Option<tower_lsp::lsp_types::SignatureHelp>> {
         let uri = params.text_document_position_params.text_document.uri;
         let pos = params.text_document_position_params.position;
-        let Some((text, resolved, _)) = self.get_document_data(&uri).await else {
-            return Ok(None);
-        };
-        let byte_offset = position_to_byte_offset(&text, pos);
-        Ok(signature::signature_help_at(&resolved, &text, byte_offset))
+        self.at_position(uri, pos, |resolved, text, offset, _, _| {
+            signature::signature_help_at(resolved, text, offset)
+        })
+        .await
     }
 
     // ── Find All References ──────────────────────────────────────────────────
@@ -483,16 +453,10 @@ impl tower_lsp::LanguageServer for LspServer {
         let uri = params.text_document_position.text_document.uri;
         let pos = params.text_document_position.position;
         let include_decl = params.context.include_declaration;
-        let Some((text, resolved, _)) = self.get_document_data(&uri).await else {
-            return Ok(None);
-        };
-        let byte_offset = position_to_byte_offset(&text, pos);
-        let locs = references::find_references(&resolved, &text, byte_offset, &uri, include_decl);
-        if locs.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(locs))
-        }
+        self.at_position(uri, pos, |resolved, text, offset, uri, _| {
+            none_if_empty(references::find_references(resolved, text, offset, uri, include_decl))
+        })
+        .await
     }
 
     // ── Document Highlight ────────────────────────────────────────────────
@@ -503,16 +467,10 @@ impl tower_lsp::LanguageServer for LspServer {
     ) -> LspResult<Option<Vec<DocumentHighlight>>> {
         let uri = params.text_document_position_params.text_document.uri;
         let pos = params.text_document_position_params.position;
-        let Some((text, resolved, _)) = self.get_document_data(&uri).await else {
-            return Ok(None);
-        };
-        let byte_offset = position_to_byte_offset(&text, pos);
-        let highlights = highlight::document_highlights(&resolved, &text, byte_offset);
-        if highlights.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(highlights))
-        }
+        self.at_position(uri, pos, |resolved, text, offset, _, _| {
+            none_if_empty(highlight::document_highlights(resolved, text, offset))
+        })
+        .await
     }
 
     // ── Rename ───────────────────────────────────────────────────────────────
@@ -523,28 +481,20 @@ impl tower_lsp::LanguageServer for LspServer {
     ) -> LspResult<Option<PrepareRenameResponse>> {
         let uri = params.text_document.uri;
         let pos = params.position;
-        let Some((text, resolved, _)) = self.get_document_data(&uri).await else {
-            return Ok(None);
-        };
-        let byte_offset = position_to_byte_offset(&text, pos);
-        Ok(references::prepare_rename(&resolved, &text, byte_offset))
+        self.at_position(uri, pos, |resolved, text, offset, _, _| {
+            references::prepare_rename(resolved, text, offset)
+        })
+        .await
     }
 
     async fn rename(&self, params: RenameParams) -> LspResult<Option<WorkspaceEdit>> {
         let uri = params.text_document_position.text_document.uri;
         let pos = params.text_document_position.position;
         let new_name = params.new_name;
-        let Some((text, resolved, _)) = self.get_document_data(&uri).await else {
-            return Ok(None);
-        };
-        let byte_offset = position_to_byte_offset(&text, pos);
-        Ok(references::rename_symbol(
-            &resolved,
-            &text,
-            byte_offset,
-            &uri,
-            &new_name,
-        ))
+        self.at_position(uri, pos, |resolved, text, offset, uri, _| {
+            references::rename_symbol(resolved, text, offset, uri, &new_name)
+        })
+        .await
     }
 
     // ── Inlay Hints ──────────────────────────────────────────────────────────
@@ -554,12 +504,7 @@ impl tower_lsp::LanguageServer for LspServer {
         let Some((text, resolved, _)) = self.get_document_data(&uri).await else {
             return Ok(None);
         };
-        let hints = inlay_hints::inlay_hints(&resolved, &text);
-        if hints.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(hints))
-        }
+        Ok(none_if_empty(inlay_hints::inlay_hints(&resolved, &text)))
     }
 
     // ── Semantic Tokens ──────────────────────────────────────────────────────
@@ -587,12 +532,11 @@ impl tower_lsp::LanguageServer for LspServer {
             .with_index(|idx| idx.get_text(&uri))
             .await
             .unwrap_or_default();
-        let actions = code_actions::code_actions(&uri, &params.context.diagnostics, &source);
-        if actions.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(actions))
-        }
+        Ok(none_if_empty(code_actions::code_actions(
+            &uri,
+            &params.context.diagnostics,
+            &source,
+        )))
     }
 
     // ── Execute Command ──────────────────────────────────────────────────────
@@ -719,12 +663,7 @@ impl tower_lsp::LanguageServer for LspServer {
         let Some((text, resolved, _)) = self.get_document_data(&uri).await else {
             return Ok(None);
         };
-        let ranges = folding::folding_ranges(&resolved, &text);
-        if ranges.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(ranges))
-        }
+        Ok(none_if_empty(folding::folding_ranges(&resolved, &text)))
     }
 
     // ── Selection Ranges ─────────────────────────────────────────────────
@@ -737,12 +676,11 @@ impl tower_lsp::LanguageServer for LspServer {
         let Some((text, resolved, _)) = self.get_document_data(&uri).await else {
             return Ok(None);
         };
-        let ranges = selection::selection_ranges(&resolved, &text, &params.positions);
-        if ranges.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(ranges))
-        }
+        Ok(none_if_empty(selection::selection_ranges(
+            &resolved,
+            &text,
+            &params.positions,
+        )))
     }
 
     // ── Call Hierarchy ──────────────────────────────────────────────────
@@ -753,16 +691,10 @@ impl tower_lsp::LanguageServer for LspServer {
     ) -> LspResult<Option<Vec<CallHierarchyItem>>> {
         let uri = params.text_document_position_params.text_document.uri;
         let pos = params.text_document_position_params.position;
-        let Some((text, resolved, _)) = self.get_document_data(&uri).await else {
-            return Ok(None);
-        };
-        let byte_offset = position_to_byte_offset(&text, pos);
-        let items = call_hierarchy::prepare(&resolved, &text, byte_offset, &uri);
-        if items.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(items))
-        }
+        self.at_position(uri, pos, |resolved, text, offset, uri, _| {
+            none_if_empty(call_hierarchy::prepare(resolved, text, offset, uri))
+        })
+        .await
     }
 
     async fn incoming_calls(
@@ -774,12 +706,9 @@ impl tower_lsp::LanguageServer for LspServer {
         let Some((text, resolved, _)) = self.get_document_data(&uri).await else {
             return Ok(None);
         };
-        let calls = call_hierarchy::incoming_calls(&resolved, &text, &item_name, &uri);
-        if calls.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(calls))
-        }
+        Ok(none_if_empty(call_hierarchy::incoming_calls(
+            &resolved, &text, &item_name, &uri,
+        )))
     }
 
     async fn outgoing_calls(
@@ -791,12 +720,9 @@ impl tower_lsp::LanguageServer for LspServer {
         let Some((text, resolved, _)) = self.get_document_data(&uri).await else {
             return Ok(None);
         };
-        let calls = call_hierarchy::outgoing_calls(&resolved, &text, &item_name, &uri);
-        if calls.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(calls))
-        }
+        Ok(none_if_empty(call_hierarchy::outgoing_calls(
+            &resolved, &text, &item_name, &uri,
+        )))
     }
 
     // ── Code Lens ─────────────────────────────────────────────────────────
@@ -806,12 +732,7 @@ impl tower_lsp::LanguageServer for LspServer {
         let Some((text, resolved, _)) = self.get_document_data(&uri).await else {
             return Ok(None);
         };
-        let lenses = code_lens::code_lenses(&resolved, &text);
-        if lenses.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(lenses))
-        }
+        Ok(none_if_empty(code_lens::code_lenses(&resolved, &text)))
     }
 
     // ── Type Hierarchy ──────────────────────────────────────────────────
@@ -822,16 +743,10 @@ impl tower_lsp::LanguageServer for LspServer {
     ) -> LspResult<Option<Vec<TypeHierarchyItem>>> {
         let uri = params.text_document_position_params.text_document.uri;
         let pos = params.text_document_position_params.position;
-        let Some((text, resolved, _)) = self.get_document_data(&uri).await else {
-            return Ok(None);
-        };
-        let byte_offset = position_to_byte_offset(&text, pos);
-        let items = type_hierarchy::prepare(&resolved, &text, byte_offset, &uri);
-        if items.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(items))
-        }
+        self.at_position(uri, pos, |resolved, text, offset, uri, _| {
+            none_if_empty(type_hierarchy::prepare(resolved, text, offset, uri))
+        })
+        .await
     }
 
     async fn supertypes(
@@ -848,12 +763,9 @@ impl tower_lsp::LanguageServer for LspServer {
         let Some((text, resolved, _)) = self.get_document_data(&uri).await else {
             return Ok(None);
         };
-        let items = type_hierarchy::supertypes(&resolved, &text, class_name, &uri);
-        if items.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(items))
-        }
+        Ok(none_if_empty(type_hierarchy::supertypes(
+            &resolved, &text, class_name, &uri,
+        )))
     }
 
     async fn subtypes(
@@ -870,12 +782,9 @@ impl tower_lsp::LanguageServer for LspServer {
         let Some((text, resolved, _)) = self.get_document_data(&uri).await else {
             return Ok(None);
         };
-        let items = type_hierarchy::subtypes(&resolved, &text, class_name, &uri);
-        if items.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(items))
-        }
+        Ok(none_if_empty(type_hierarchy::subtypes(
+            &resolved, &text, class_name, &uri,
+        )))
     }
 
     // ── Document Color ──────────────────────────────────────────────────
@@ -903,7 +812,119 @@ impl tower_lsp::LanguageServer for LspServer {
     }
 }
 
+/// Return `None` if the collection is empty, `Some(v)` otherwise.
+fn none_if_empty<T>(items: Vec<T>) -> Option<Vec<T>> {
+    if items.is_empty() { None } else { Some(items) }
+}
+
 // ── Server entry point ───────────────────────────────────────────────────────
+
+/// Build the full `ServerCapabilities` for the `initialize` response.
+///
+/// Extracted to keep `initialize` under the 100-line limit.
+fn build_server_capabilities(mode: AnalysisMode) -> ServerCapabilities {
+    // Advertise workspace.fileOperations when the server tracks closed files.
+    // openFilesOnly mode ignores file-system events, so skip those capabilities.
+    let workspace_capabilities = if mode == AnalysisMode::OpenFilesOnly {
+        None
+    } else {
+        let py_filter = python_file_operation_filter();
+        Some(WorkspaceServerCapabilities {
+            workspace_folders: Some(WorkspaceFoldersServerCapabilities {
+                supported: Some(true),
+                change_notifications: Some(OneOf::Left(true)),
+            }),
+            file_operations: Some(WorkspaceFileOperationsServerCapabilities {
+                did_create: Some(py_filter.clone()),
+                did_rename: Some(py_filter.clone()),
+                did_delete: Some(py_filter),
+                ..Default::default()
+            }),
+        })
+    };
+
+    ServerCapabilities {
+        text_document_sync: Some(TextDocumentSyncCapability::Kind(
+            TextDocumentSyncKind::INCREMENTAL,
+        )),
+        hover_provider: Some(HoverProviderCapability::Simple(true)),
+        call_hierarchy_provider: Some(CallHierarchyServerCapability::Simple(true)),
+        // type_hierarchy_provider is not in lsp-types 0.94's ServerCapabilities;
+        // it is injected at the JSON level by websocket::inject_missing_capabilities.
+        code_lens_provider: Some(CodeLensOptions {
+            resolve_provider: Some(false),
+        }),
+        code_action_provider: Some(CodeActionProviderCapability::Options(CodeActionOptions {
+            code_action_kinds: Some(vec![
+                CodeActionKind::QUICKFIX,
+                CodeActionKind::SOURCE_ORGANIZE_IMPORTS,
+                CodeActionKind::REFACTOR,
+            ]),
+            ..Default::default()
+        })),
+        completion_provider: Some(CompletionOptions {
+            trigger_characters: Some(vec![".".to_owned()]),
+            resolve_provider: Some(true),
+            ..Default::default()
+        }),
+        declaration_provider: Some(DeclarationCapability::Simple(true)),
+        definition_provider: Some(OneOf::Left(true)),
+        type_definition_provider: Some(TypeDefinitionProviderCapability::Simple(true)),
+        document_formatting_provider: Some(OneOf::Left(true)),
+        document_highlight_provider: Some(OneOf::Left(true)),
+        document_symbol_provider: Some(OneOf::Left(true)),
+        folding_range_provider: Some(FoldingRangeProviderCapability::Simple(true)),
+        selection_range_provider: Some(SelectionRangeProviderCapability::Simple(true)),
+        workspace_symbol_provider: Some(OneOf::Left(true)),
+        signature_help_provider: Some(SignatureHelpOptions {
+            trigger_characters: Some(vec!["(".to_owned(), ",".to_owned()]),
+            retrigger_characters: None,
+            work_done_progress_options: WorkDoneProgressOptions::default(),
+        }),
+        references_provider: Some(OneOf::Left(true)),
+        rename_provider: Some(OneOf::Right(RenameOptions {
+            prepare_provider: Some(true),
+            work_done_progress_options: WorkDoneProgressOptions::default(),
+        })),
+        execute_command_provider: Some(ExecuteCommandOptions {
+            commands: vec!["basilisk.organizeImports".to_owned()],
+            work_done_progress_options: WorkDoneProgressOptions::default(),
+        }),
+        inlay_hint_provider: Some(OneOf::Left(true)),
+        semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
+            SemanticTokensOptions {
+                legend: SemanticTokensLegend {
+                    token_types: crate::semantic_tokens::TOKEN_TYPES.to_vec(),
+                    token_modifiers: crate::semantic_tokens::TOKEN_MODIFIERS.to_vec(),
+                },
+                full: Some(SemanticTokensFullOptions::Bool(true)),
+                range: None,
+                work_done_progress_options: WorkDoneProgressOptions::default(),
+            },
+        )),
+        color_provider: Some(ColorProviderCapability::Simple(true)),
+        workspace: workspace_capabilities,
+        ..Default::default()
+    }
+}
+
+/// Build a `FileOperationRegistrationOptions` that matches `.py` and `.pyi` files.
+///
+/// Used in `build_server_capabilities` to tell the client which file operations
+/// the server cares about (only in wholeModule / crossModule modes).
+fn python_file_operation_filter() -> FileOperationRegistrationOptions {
+    let make_filter = |glob: &str| FileOperationFilter {
+        scheme: Some("file".to_owned()),
+        pattern: FileOperationPattern {
+            glob: glob.to_owned(),
+            matches: Some(FileOperationPatternKind::File),
+            options: None,
+        },
+    };
+    FileOperationRegistrationOptions {
+        filters: vec![make_filter("**/*.py"), make_filter("**/*.pyi")],
+    }
+}
 
 /// Start the LSP server.
 ///
