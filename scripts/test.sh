@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Run the full Basilisk test suite with coverage.
 #
-# Outputs:
-#   lcov.info              — picked up by VSCode Coverage Gutters extension
-#   target/llvm-cov/html/  — human-readable HTML report
-#
 # Usage:
-#   ./scripts/test.sh           # run tests + coverage
-#   ./scripts/test.sh --open    # also open HTML report in browser
+#   ./scripts/test.sh                  # run everything
+#   ./scripts/test.sh rust             # Rust only
+#   ./scripts/test.sh vsix             # VS Code extension only
+#   ./scripts/test.sh zed              # Zed extension only
+#   ./scripts/test.sh rust vsix        # combine any subset
+#   ./scripts/test.sh --open           # open HTML report (with rust)
 
 set -euo pipefail
 
@@ -28,32 +28,37 @@ warn()   { echo -e "${YELLOW}⚠ $*${RESET}"; }
 LCOV_FILE="$REPO_ROOT/lcov.info"
 HTML_DIR="$REPO_ROOT/target/llvm-cov/html"
 
-# ── Prerequisites ────────────────────────────────────────────────────────────
-header "Checking prerequisites"
+RUN_RUST=0 RUN_VSIX=0 RUN_ZED=0 OPEN_REPORT=0
+for arg in "$@"; do
+    case "$arg" in
+        rust)   RUN_RUST=1 ;;
+        vsix)   RUN_VSIX=1 ;;
+        zed)    RUN_ZED=1  ;;
+        --open) OPEN_REPORT=1 ;;
+    esac
+done
+[[ "$RUN_RUST" -eq 0 && "$RUN_VSIX" -eq 0 && "$RUN_ZED" -eq 0 ]] && RUN_RUST=1 RUN_VSIX=1 RUN_ZED=1
 
+# ── Rust ──────────────────────────────────────────────────────────────────────
+if [[ "$RUN_RUST" -eq 1 ]]; then
+
+header "Checking prerequisites"
 if ! rustup component list --installed | grep -q llvm-tools; then
     warn "llvm-tools not installed — installing now"
     rustup component add llvm-tools
 fi
 ok "llvm-tools present"
-
 if ! cargo llvm-cov --version &>/dev/null; then
     warn "cargo-llvm-cov not found — installing now"
     cargo install cargo-llvm-cov --locked
 fi
 ok "cargo-llvm-cov present"
 
-# ── Clippy ───────────────────────────────────────────────────────────────────
 header "Running clippy (all targets)"
 cargo clippy --all-targets
-
 ok "clippy clean"
 
-# ── Tests + coverage ─────────────────────────────────────────────────────────
 header "Running tests with coverage instrumentation"
-
-# We need coverage data even when tests fail (panics kill profraw otherwise).
-# Capture exit code, collect coverage, THEN fail immediately if tests failed.
 set +e
 cargo llvm-cov \
     --workspace \
@@ -63,10 +68,7 @@ cargo llvm-cov \
     --output-path "$LCOV_FILE"
 TESTS_EXIT=$?
 set -e
-
 ok "lcov.info → $LCOV_FILE"
-
-# FAIL IMMEDIATELY if tests failed — no more processing, no excuses.
 if [[ "$TESTS_EXIT" -ne 0 ]]; then
     echo ""
     echo -e "${RED}${BOLD}TESTS FAILED (exit $TESTS_EXIT).${RESET}"
@@ -74,43 +76,25 @@ if [[ "$TESTS_EXIT" -ne 0 ]]; then
     echo -e "${RED}No coverage analysis, no thresholds — NOTHING runs until tests pass.${RESET}"
     exit "$TESTS_EXIT"
 fi
-
 ok "All workspace tests passed"
 
-# HTML report (uses cached coverage data — no re-run)
-cargo llvm-cov report \
-    --html \
-    --output-dir "$HTML_DIR"
-
+cargo llvm-cov report --html --output-dir "$HTML_DIR"
 ok "HTML report → $HTML_DIR/index.html"
 
-# ── Compiler E2E (passing tests only) ────────────────────────────────────────
 header "Running passing compiler E2E tests (hello, arithmetic)"
-
 BASILISK_COMPILER_FILTER="hello,arithmetic" \
     cargo test -p basilisk-compiler --test e2e_tests -- --nocapture
-
 ok "Compiler E2E tests passed"
 
-# ── Summary ──────────────────────────────────────────────────────────────────
 header "Coverage summary"
-
 REPORT=$(cargo llvm-cov report 2>&1)
 echo "$REPORT"
-
 echo ""
 echo -e "${BOLD}VSCode:${RESET} install 'Coverage Gutters' (ryanluker.vscode-coverage-gutters),"
 echo -e "then ${CYAN}Coverage Gutters: Watch${RESET} via Ctrl+Shift+P to see gutter highlights.\n"
+[[ "$OPEN_REPORT" -eq 1 ]] && { open "$HTML_DIR/index.html" 2>/dev/null || xdg-open "$HTML_DIR/index.html" 2>/dev/null || true; }
 
-if [[ "${1:-}" == "--open" ]]; then
-    open "$HTML_DIR/index.html" 2>/dev/null || xdg-open "$HTML_DIR/index.html" 2>/dev/null || true
-fi
-
-# ── Per-project coverage thresholds ─────────────────────────────────────────
-# Minimum allowed is 85%. Each is set to its current level so coverage never
-# regresses. Override via environment variables if needed.
 header "Enforcing per-project coverage thresholds"
-
 TEST_COVERAGE_BASILISK_CHECKER="${TEST_COVERAGE_BASILISK_CHECKER:-89}"
 TEST_COVERAGE_BASILISK_CLI="${TEST_COVERAGE_BASILISK_CLI:-96}"
 TEST_COVERAGE_BASILISK_DB="${TEST_COVERAGE_BASILISK_DB:-100}"
@@ -120,36 +104,30 @@ TEST_COVERAGE_BASILISK_PARSER="${TEST_COVERAGE_BASILISK_PARSER:-100}"
 TEST_COVERAGE_BASILISK_PLUGIN="${TEST_COVERAGE_BASILISK_PLUGIN:-100}"
 TEST_COVERAGE_BASILISK_RESOLVER="${TEST_COVERAGE_BASILISK_RESOLVER:-94}"
 TEST_COVERAGE_BASILISK_STUBS="${TEST_COVERAGE_BASILISK_STUBS:-100}"
-
 COV_FAILED=0
-
+HTML_ROWS=""
 check_crate() {
-    local crate="$1"
-    local threshold="$2"
-
-    local totals
+    local crate="$1" threshold="$2" totals total_lines missed_lines covered pct
     totals=$(echo "$REPORT" | grep "^${crate}/" | awk '{total+=$8; missed+=$9} END {print total, missed}')
-    local total_lines missed_lines
     total_lines=$(echo "$totals" | awk '{print $1}')
     missed_lines=$(echo "$totals" | awk '{print $2}')
-
     if [ -z "$total_lines" ] || [ "$total_lines" -eq 0 ]; then
         echo -e "  ${RED}✗ ${crate}: NO COVERAGE DATA — tests likely panicked before coverage could flush. FAIL${RESET}"
         COV_FAILED=1
+        HTML_ROWS+="<tr class='fail'><td>${crate}</td><td>NO DATA</td><td>${threshold}%</td><td>FAIL</td></tr>"
         return
     fi
-
-    local covered=$((total_lines - missed_lines))
-    local pct=$((covered * 100 / total_lines))
-
+    covered=$((total_lines - missed_lines))
+    pct=$((covered * 100 / total_lines))
     if [ "$pct" -lt "$threshold" ]; then
         echo -e "  ${RED}✗ ${crate}: ${pct}% < ${threshold}% threshold — FAIL${RESET}"
         COV_FAILED=1
+        HTML_ROWS+="<tr class='fail'><td>${crate}</td><td>${pct}% (${covered}/${total_lines})</td><td>${threshold}%</td><td>FAIL</td></tr>"
     else
         echo -e "  ${GREEN}✓ ${crate}: ${pct}% ≥ ${threshold}% threshold${RESET}"
+        HTML_ROWS+="<tr class='pass'><td>${crate}</td><td>${pct}% (${covered}/${total_lines})</td><td>${threshold}%</td><td>PASS</td></tr>"
     fi
 }
-
 check_crate basilisk-checker  "$TEST_COVERAGE_BASILISK_CHECKER"
 check_crate basilisk-cli      "$TEST_COVERAGE_BASILISK_CLI"
 check_crate basilisk-db       "$TEST_COVERAGE_BASILISK_DB"
@@ -160,17 +138,47 @@ check_crate basilisk-plugin   "$TEST_COVERAGE_BASILISK_PLUGIN"
 check_crate basilisk-resolver "$TEST_COVERAGE_BASILISK_RESOLVER"
 check_crate basilisk-stubs    "$TEST_COVERAGE_BASILISK_STUBS"
 
-# ── Final status ─────────────────────────────────────────────────────────────
+CRATES_HTML="$HTML_DIR/html/crates.html"
+cat > "$CRATES_HTML" <<HTML
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Basilisk — Crate Coverage Summary</title>
+  <style>
+    body { font-family: monospace; background: #1e1e1e; color: #d4d4d4; padding: 2rem; }
+    h1 { color: #fff; }
+    p  { color: #888; }
+    a  { color: #4ec9b0; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+    th { background: #2d2d2d; color: #9cdcfe; padding: 0.5rem 1rem; text-align: left; border-bottom: 2px solid #444; }
+    td { padding: 0.4rem 1rem; border-bottom: 1px solid #333; }
+    tr.pass td:last-child { color: #4ec9b0; font-weight: bold; }
+    tr.fail td:last-child { color: #f44747; font-weight: bold; }
+    tr.pass td:nth-child(2) { color: #4ec9b0; }
+    tr.fail td:nth-child(2) { color: #f44747; }
+  </style>
+</head>
+<body>
+  <h1>Crate Coverage Summary</h1>
+  <p>Generated: $(date '+%Y-%m-%d %H:%M') &nbsp;|&nbsp; <a href="index.html">Full file report →</a></p>
+  <table>
+    <thead><tr><th>Crate</th><th>Line Coverage</th><th>Threshold</th><th>Status</th></tr></thead>
+    <tbody>${HTML_ROWS}</tbody>
+  </table>
+</body>
+</html>
+HTML
+ok "Crate summary → $CRATES_HTML"
+
 if [[ "$COV_FAILED" -ne 0 ]]; then
     echo ""
     echo -e "${RED}Coverage regression detected — one or more projects fell below their threshold.${RESET}"
     exit 1
 fi
-
 echo ""
 ok "All projects meet their coverage thresholds."
 
-# ── LSP integration tests ─────────────────────────────────────────────────────
 header "Running LSP tests"
 cargo test -p basilisk-lsp --test lsp_tests
 ok "lsp_tests done"
@@ -179,14 +187,17 @@ header "Running LSP E2E tests"
 cargo test -p basilisk-lsp --test lsp_e2e_tests
 ok "lsp_e2e_tests done"
 
+fi  # rust
+
 # ── VS Code extension ─────────────────────────────────────────────────────────
+if [[ "$RUN_VSIX" -eq 1 ]]; then
+
 if command -v node &>/dev/null && command -v npm &>/dev/null; then
     header "VS Code extension — install deps + compile"
     cd "$REPO_ROOT/vscode-extension"
     npm ci
     npm run compile
     ok "TypeScript compiled"
-
     if command -v xvfb-run &>/dev/null || [[ "$(uname)" == "Darwin" ]]; then
         header "VS Code E2E tests"
         if command -v xvfb-run &>/dev/null; then
@@ -202,11 +213,28 @@ if command -v node &>/dev/null && command -v npm &>/dev/null; then
     else
         warn "xvfb not found — skipping VS Code E2E tests (run on Linux with xvfb or macOS)"
     fi
-
     cd "$REPO_ROOT"
 else
     warn "node/npm not found — skipping VS Code extension tests"
 fi
+
+fi  # vsix
+
+# ── Zed extension ─────────────────────────────────────────────────────────────
+if [[ "$RUN_ZED" -eq 1 ]]; then
+
+if [[ -d "$REPO_ROOT/basilisk-zed" ]]; then
+    header "Zed extension — clippy + tests"
+    cd "$REPO_ROOT/basilisk-zed"
+    cargo clippy --all-targets
+    cargo test --all-targets
+    ok "Zed extension tests done"
+    cd "$REPO_ROOT"
+else
+    warn "basilisk-zed not found — skipping Zed extension tests"
+fi
+
+fi  # zed
 
 echo ""
 ok "All tests passed."

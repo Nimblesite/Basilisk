@@ -347,7 +347,9 @@ mod tests {
             "VS Code's connection must succeed after wait_for_port, \
              but got ECONNREFUSED — wait_for_port consumed the only slot"
         );
-
+        // Drop real_client first — this sends EOF to accept_handle's conn.read(),
+        // allowing the simulated debugpy thread to unblock and finish.
+        drop(real_client);
         let _ = accept_handle.await;
     }
 }

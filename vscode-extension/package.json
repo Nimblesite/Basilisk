@@ -232,7 +232,7 @@
     }
   },
   "scripts": {
-    "compile": "tsc -p ./",
+    "compile": "tsc -p ./ && node -e \"const fs=require('fs');fs.mkdirSync('out/src/test/fixtures',{recursive:true});fs.readdirSync('src/test/fixtures').forEach(f=>fs.copyFileSync('src/test/fixtures/'+f,'out/src/test/fixtures/'+f));\"",
     "watch": "tsc -watch -p ./",
     "test": "vscode-test",
     "vscode:prepublish": "npm run compile",
