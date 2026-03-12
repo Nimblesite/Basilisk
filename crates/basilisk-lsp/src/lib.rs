@@ -30,6 +30,7 @@ pub mod code_lens;
 pub mod color;
 pub mod completion;
 pub mod config;
+pub mod debug;
 pub mod declaration;
 pub mod definition;
 pub mod folding;

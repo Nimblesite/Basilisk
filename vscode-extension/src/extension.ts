@@ -148,6 +148,15 @@ export function activate(context: vscode.ExtensionContext): void {
     // basilisk.organizeImports via the server's executeCommandProvider.
     // Do NOT register it manually — that would conflict.
     startLspClient(context, executablePath);
+
+    // Register the debug adapter factory — it asks the LSP to spawn debugpy
+    // and returns a TCP port for the editor's DAP client to connect to.
+    context.subscriptions.push(
+      vscode.debug.registerDebugAdapterDescriptorFactory(
+        "basilisk-debug",
+        new BasiliskDebugAdapterFactory()
+      )
+    );
   } else {
     // In subprocess mode, register organizeImports client-side.
     safeRegisterCommand(context, "basilisk.organizeImports", () => {
@@ -350,6 +359,7 @@ function buildServerSettings(): Record<string, unknown> {
   const cfg = vscode.workspace.getConfiguration("basilisk");
   return {
     basilisk: {
+      python: cfg.get<string>("python") ?? "",
       inlayHints: {
         parameterNames: cfg.get<boolean>("inlayHints.parameterNames") ?? true,
         variableTypes: cfg.get<boolean>("inlayHints.variableTypes") ?? true,
@@ -538,4 +548,104 @@ function parseDiagnostics(
 
 function workspaceRoot(): string | undefined {
   return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+}
+
+// ── Debug adapter factory ─────────────────────────────────────────────────
+
+/**
+ * Asks the Basilisk LSP to spawn debugpy on a free TCP port, then tells
+ * VS Code to connect its DAP client to that port. No process spawning in
+ * TypeScript — the LSP handles everything.
+ */
+class BasiliskDebugAdapterFactory
+  implements vscode.DebugAdapterDescriptorFactory
+{
+  async createDebugAdapterDescriptor(
+    session: vscode.DebugSession
+  ): Promise<vscode.DebugAdapterDescriptor> {
+    const config = session.configuration;
+
+    outputChannel?.appendLine(
+      `[Basilisk Debug] createDebugAdapterDescriptor called — ` +
+      `type=${config.type}, request=${config.request}, ` +
+      `program=${config.program ?? "(none)"}`
+    );
+
+    // Attach mode: connect directly to a user-specified host:port.
+    if (config.request === "attach" && config.connect) {
+      outputChannel?.appendLine(
+        `[Basilisk Debug] Attach mode → ${config.connect.host || "localhost"}:${config.connect.port}`
+      );
+      return new vscode.DebugAdapterServer(
+        config.connect.port,
+        config.connect.host || "localhost"
+      );
+    }
+
+    // Launch mode: ask the running LSP to spawn debugpy.
+    if (!client) {
+      throw new Error(
+        "Basilisk: LSP client is not running. Cannot start debug session."
+      );
+    }
+
+    // Resolve Python: launch config > basilisk.python setting > auto-detect (LSP side)
+    const configuredPython =
+      config.python ||
+      vscode.workspace.getConfiguration("basilisk").get<string>("python") ||
+      null;
+
+    outputChannel?.appendLine(
+      `[Basilisk Debug] Requesting LSP to spawn debugpy ` +
+      `(python: ${configuredPython ?? "auto-detect"})...`
+    );
+
+    let result: { host: string; port: number; sessionId: string } | null;
+    try {
+      // Use vscode.commands.executeCommand which the vscode-languageclient
+      // bridges to workspace/executeCommand on the LSP server automatically.
+      result = (await vscode.commands.executeCommand(
+        "basilisk.startDebugSession",
+        { python: configuredPython }
+      )) as { host: string; port: number; sessionId: string } | null;
+
+      if (!result || typeof result.port !== "number") {
+        throw new Error(
+          "LSP returned null for basilisk.startDebugSession. " +
+          "Check the Basilisk output channel for details."
+        );
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      outputChannel?.appendLine(`[Basilisk Debug] ERROR: ${msg}`);
+      // Surface actionable errors to the user.
+      if (msg.includes("debugpy not found") || msg.includes("pip install debugpy")) {
+        vscode.window.showErrorMessage(
+          `Basilisk Debug: debugpy is not installed. Run: pip install debugpy`,
+          "Install debugpy"
+        ).then((choice) => {
+          if (choice === "Install debugpy") {
+            const terminal = vscode.window.createTerminal("Basilisk");
+            terminal.show();
+            terminal.sendText("pip install debugpy");
+          }
+        });
+      } else if (msg.includes("No Python interpreter") || msg.includes("python")) {
+        vscode.window.showErrorMessage(
+          `Basilisk Debug: No Python interpreter found. Set basilisk.python or create a virtualenv.`
+        );
+      } else {
+        vscode.window.showErrorMessage(`Basilisk Debug: Failed to start debug session: ${msg}`);
+      }
+      throw new Error(`Basilisk: ${msg}`);
+    }
+
+    outputChannel?.appendLine(
+      `[Basilisk Debug] LSP spawned debugpy → ` +
+      `connecting VS Code DAP client to ${result.host}:${result.port} ` +
+      `(session: ${result.sessionId})`
+    );
+
+    return new vscode.DebugAdapterServer(result.port, result.host);
+  }
 }

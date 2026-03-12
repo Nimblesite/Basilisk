@@ -4,6 +4,8 @@
 
 The Basilisk LSP **is** the debug adapter. When the editor needs to debug Python, it sends a custom LSP request. The LSP spawns debugpy on a TCP port and tells the editor where to connect. No separate binary, no separate process, no bundling. One LSP, both editors.
 
+MAX CODE SHARING BETWEEN RUST COMPONENTS!!!
+
 ## Architecture
 
 ```mermaid
@@ -528,9 +530,27 @@ When the Python interpreter can't be found, the error tells the user exactly wha
 
 **Session lifecycle managed by the LSP.** The LSP tracks spawned debugpy processes and cleans them up on stop requests or shutdown. No orphaned processes.
 
+## Python Version Targeting
+
+**Primary target: Python 3.12** — this is the canonical version for the entire Basilisk project.
+
+debugpy uses `sys.settrace` (via pydevd internally) on Python 3.12. This is the traditional debugging mechanism and is fully supported.
+
+### Python 3.14 and the Future of Debugging
+
+Python 3.14 introduces two significant debugging enhancements that do **not** affect our current implementation but are worth tracking:
+
+1. **PEP 768 — Safe External Debugger Interface** (`sys.remote_exec`): Allows attaching a debugger to a running process by PID without requiring the process to have been started with debugpy. This is a new *attach mechanism*, not a replacement for DAP. debugpy still handles the protocol layer.
+
+2. **`sys.monitoring` backend for pdb/bdb** (built on PEP 669): Near-zero overhead breakpoints compared to `sys.settrace`'s 4-5x slowdown. The `sys.monitoring` API itself exists in 3.12 (PEP 669), but the pdb/bdb backend that uses it is 3.14-only. debugpy/pydevd has not yet adopted `sys.monitoring` internally.
+
+**Neither change breaks debugpy.** debugpy 1.8.20+ has full Python 3.14 support with platform-specific wheels. Our architecture (LSP spawns debugpy, editor connects via DAP over TCP) works identically on 3.12 and 3.14.
+
+**Future opportunity:** When debugpy adopts `sys.monitoring` internally, breakpoint performance will improve dramatically for 3.14+ users with no changes needed on our side. If we later want to support PEP 768's attach-by-PID, that would be an additive feature behind a version check — not a rewrite.
+
 ## Prerequisite
 
-Users need debugpy installed in their Python environment:
+Users need debugpy installed in their Python 3.12 environment:
 
 ```bash
 pip install debugpy

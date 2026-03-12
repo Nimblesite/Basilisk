@@ -3,7 +3,7 @@
 .vscode-test.mjs
 .ruff_cache/**
 src/**
-node_modules/**
+node_modules/.package-lock.json
 out/test/**
 tsconfig.json
 .eslintrc*

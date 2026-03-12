@@ -63,7 +63,7 @@ async function main(): Promise<void> {
         const vscodeDir = path.join(tmpWorkspace, '.vscode');
         fs.mkdirSync(vscodeDir, { recursive: true });
 
-        const debugBinary = findDebugBinary();
+        const debugBinary = process.env.BASILISK_EXECUTABLE_PATH ?? findDebugBinary();
         const settings: Record<string, unknown> = {};
         if (debugBinary) {
             settings['basilisk.executablePath'] = debugBinary;
