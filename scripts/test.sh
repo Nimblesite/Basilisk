@@ -39,6 +39,21 @@ for arg in "$@"; do
 done
 [[ "$RUN_RUST" -eq 0 && "$RUN_VSIX" -eq 0 && "$RUN_ZED" -eq 0 ]] && RUN_RUST=1 RUN_VSIX=1 RUN_ZED=1
 
+# ── Prerequisites check ───────────────────────────────────────────────────────
+if [[ "$RUN_VSIX" -eq 1 ]]; then
+    if ! command -v python3 &>/dev/null; then
+        echo -e "${RED}✗ python3 not found${RESET}"; exit 1
+    fi
+    if [[ ! -f "$REPO_ROOT/target/debug/basilisk" ]]; then
+        echo -e "${RED}✗ basilisk binary missing — run: cargo build -p basilisk-cli${RESET}"; exit 1
+    fi
+    if ! python3 -c 'import debugpy' &>/dev/null; then
+        warn "debugpy not installed — installing now"
+        python3 -m pip install --quiet --break-system-packages debugpy
+    fi
+    ok "vsix prerequisites met"
+fi
+
 # ── Rust ──────────────────────────────────────────────────────────────────────
 if [[ "$RUN_RUST" -eq 1 ]]; then
 
@@ -199,6 +214,7 @@ fi  # rust
 if [[ "$RUN_VSIX" -eq 1 ]]; then
 
 if command -v node &>/dev/null && command -v npm &>/dev/null; then
+
     header "VS Code extension — install deps + compile"
     cd "$REPO_ROOT/vscode-extension"
     npm ci
