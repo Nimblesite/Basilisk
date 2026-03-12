@@ -8,9 +8,8 @@
  *    value is assigned. This proxy injects an automatic `next` to
  *    complete the statement.
  *
- * 2. **Structural line stops**: debugpy stops on `try:`, `except:`,
- *    `finally:`, and `else:` lines during stepOver. This proxy detects
- *    these stops and auto-steps past them.
+ * 2. **Structural line stops**: debugpy stops on `try:` lines during
+ *    stepOver. This proxy detects these stops and auto-steps past them.
  *
  * 3. **Single-connection adapter**: `debugpy.adapter --port` accepts
  *    exactly ONE TCP connection. The proxy owns that connection —
@@ -19,9 +18,13 @@
  * 4. **Attach mode resilience**: In attach mode, if debugpy doesn't
  *    respond to the `attach` request (e.g. no target process), the
  *    proxy synthesizes a success response so the session starts.
+ *
+ * Architecture: The proxy is a TCP server. VS Code connects to the proxy
+ * via DebugAdapterServer, and the proxy connects to debugpy. This ensures
+ * VS Code manages its own TCP lifecycle, giving it clean session teardown
+ * (activeDebugSession is cleared before onDidTerminateDebugSession fires).
  */
 
-import * as vscode from "vscode";
 import * as net from "net";
 import * as fs from "fs";
 import { logger } from "./logger";
@@ -38,19 +41,29 @@ interface DapMessage {
   arguments?: Record<string, unknown>;
 }
 
-/** Lines matching these patterns are structural — debugpy stops on them but no work happens. */
-const STRUCTURAL_LINE_RE = /^\s*(try\s*:|except(\s.*)?:|finally\s*:|else\s*:)\s*(#.*)?$/;
+/**
+ * Lines matching this pattern are structural — debugpy stops on them but
+ * no meaningful user code executes. Only `try:` is skipped; `except` lines
+ * ARE useful stops because they indicate exception handling flow and the
+ * test suite counts them as part of the stepping sequence.
+ */
+const STRUCTURAL_LINE_RE = /^\s*(try\s*:)\s*(#.*)?$/;
 
 /**
- * Message-based DAP proxy. Connects to a debugpy TCP server and relays
- * messages bidirectionally, with the ability to inject extra requests.
+ * TCP-based DAP proxy. Listens on a local port for VS Code to connect,
+ * and relays messages to/from a debugpy TCP server with quirk fixes.
+ *
+ * Usage:
+ *   const proxy = new DapTcpProxy(debugpyHost, debugpyPort);
+ *   const proxyPort = await proxy.start();
+ *   return new vscode.DebugAdapterServer(proxyPort);
  */
-export class DebugAdapterProxy implements vscode.DebugAdapter {
-  private readonly emitter = new vscode.EventEmitter<vscode.DebugProtocolMessage>();
-  readonly onDidSendMessage = this.emitter.event;
-
-  private socket: net.Socket | undefined;
-  private buffer = Buffer.alloc(0);
+export class DapTcpProxy {
+  private server: net.Server | undefined;
+  private clientSocket: net.Socket | undefined;
+  private debugpySocket: net.Socket | undefined;
+  private clientBuffer = Buffer.alloc(0);
+  private debugpyBuffer = Buffer.alloc(0);
 
   private pendingStepOutSeq: number | undefined;
   private awaitingStepOutStop = false;
@@ -78,14 +91,177 @@ export class DebugAdapterProxy implements vscode.DebugAdapter {
   /** Track pending injected stackTrace requests. */
   private pendingStackTraceSeq: number | undefined;
   private pendingStoppedMsg: DapMessage | undefined;
+  private sawTerminatedEvent = false;
+
+  /** Track whether we forwarded disconnect to debugpy after already responding to VS Code. */
+  private sawDisconnectForwarded = false;
 
   constructor(
-    private readonly host: string,
-    private readonly port: number,
+    private readonly debugpyHost: string,
+    private readonly debugpyPort: number,
   ) {}
 
-  handleMessage(message: vscode.DebugProtocolMessage): void {
-    const msg = message as unknown as DapMessage;
+  /**
+   * Start the proxy: connect to debugpy and listen on a random local port.
+   * Returns the port number VS Code should connect to.
+   */
+  async start(): Promise<number> {
+    // First connect to debugpy
+    await this.connectToDebugpy();
+
+    // Then start our server for VS Code to connect to
+    return this.startServer();
+  }
+
+  private connectToDebugpy(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.debugpySocket = net.createConnection(this.debugpyPort, this.debugpyHost, () => {
+        logger.info(`[DAP Proxy] connected to debugpy at ${this.debugpyHost}:${this.debugpyPort}`);
+        resolve();
+      });
+      this.debugpySocket.on("data", (chunk) => this.onDebugpyData(chunk));
+      this.debugpySocket.on("error", (err) => {
+        logger.error(`[DAP Proxy] debugpy socket error: ${err.message}`);
+        reject(err);
+      });
+      this.debugpySocket.on("close", () => {
+        logger.info("[DAP Proxy] debugpy socket closed");
+      });
+    });
+  }
+
+  private startServer(): Promise<number> {
+    return new Promise((resolve, reject) => {
+      this.server = net.createServer((socket) => {
+        logger.info("[DAP Proxy] VS Code connected to proxy");
+        this.clientSocket = socket;
+        socket.on("data", (chunk) => this.onClientData(chunk));
+        socket.on("error", (err) => {
+          logger.error(`[DAP Proxy] client socket error: ${err.message}`);
+        });
+        socket.on("close", () => {
+          logger.info("[DAP Proxy] client socket closed");
+        });
+      });
+      this.server.listen(0, "127.0.0.1", () => {
+        const addr = this.server?.address();
+        if (addr && typeof addr !== "string") {
+          logger.info(`[DAP Proxy] listening on port ${addr.port}`);
+          resolve(addr.port);
+        } else {
+          reject(new Error("Failed to get proxy server address"));
+        }
+      });
+      this.server.on("error", (err) => {
+        logger.error(`[DAP Proxy] server error: ${err.message}`);
+        reject(err);
+      });
+    });
+  }
+
+  dispose(): void {
+    logger.info("[DAP Proxy] disposing");
+    if (this.attachResponseTimer) {
+      clearTimeout(this.attachResponseTimer);
+    }
+    this.clientSocket?.destroy();
+    this.debugpySocket?.destroy();
+    this.server?.close();
+  }
+
+  // ── Message framing: client → proxy ──────────────────────────────────
+
+  private onClientData(chunk: Buffer): void {
+    this.clientBuffer = Buffer.concat([this.clientBuffer, chunk]);
+    for (;;) {
+      const headerEnd = this.clientBuffer.indexOf("\r\n\r\n");
+      if (headerEnd < 0) break;
+      const headerStr = this.clientBuffer.subarray(0, headerEnd).toString("utf-8");
+      const match = headerStr.match(/Content-Length:\s*(\d+)/i);
+      if (!match) {
+        this.clientBuffer = this.clientBuffer.subarray(1);
+        continue;
+      }
+      const bodyLen = parseInt(match[1], 10);
+      const bodyStart = headerEnd + 4;
+      if (this.clientBuffer.length < bodyStart + bodyLen) break;
+      const body = this.clientBuffer.subarray(bodyStart, bodyStart + bodyLen).toString("utf-8");
+      this.clientBuffer = this.clientBuffer.subarray(bodyStart + bodyLen);
+
+      let msg: DapMessage;
+      try { msg = JSON.parse(body) as DapMessage; } catch { continue; }
+      this.processFromClient(msg);
+    }
+  }
+
+  // ── Message framing: debugpy → proxy ─────────────────────────────────
+
+  private onDebugpyData(chunk: Buffer): void {
+    this.debugpyBuffer = Buffer.concat([this.debugpyBuffer, chunk]);
+    for (;;) {
+      const headerEnd = this.debugpyBuffer.indexOf("\r\n\r\n");
+      if (headerEnd < 0) break;
+      const headerStr = this.debugpyBuffer.subarray(0, headerEnd).toString("utf-8");
+      const match = headerStr.match(/Content-Length:\s*(\d+)/i);
+      if (!match) {
+        this.debugpyBuffer = this.debugpyBuffer.subarray(1);
+        continue;
+      }
+      const bodyLen = parseInt(match[1], 10);
+      const bodyStart = headerEnd + 4;
+      if (this.debugpyBuffer.length < bodyStart + bodyLen) break;
+      const body = this.debugpyBuffer.subarray(bodyStart, bodyStart + bodyLen).toString("utf-8");
+      this.debugpyBuffer = this.debugpyBuffer.subarray(bodyStart + bodyLen);
+
+      let msg: DapMessage;
+      try { msg = JSON.parse(body) as DapMessage; } catch { continue; }
+      this.processFromDebugpy(msg);
+    }
+  }
+
+  // ── Send helpers ─────────────────────────────────────────────────────
+
+  private sendToDebugpy(msg: DapMessage): void {
+    if (!this.debugpySocket || this.debugpySocket.destroyed) return;
+    const json = JSON.stringify(msg);
+    const header = `Content-Length: ${Buffer.byteLength(json, "utf-8")}\r\n\r\n`;
+    this.debugpySocket.write(header + json);
+  }
+
+  private sendToClient(msg: DapMessage): void {
+    if (!this.clientSocket || this.clientSocket.destroyed) return;
+    const json = JSON.stringify(msg);
+    const header = `Content-Length: ${Buffer.byteLength(json, "utf-8")}\r\n\r\n`;
+    this.clientSocket.write(header + json);
+  }
+
+  // ── Process messages from VS Code (client → debugpy) ─────────────────
+
+  private processFromClient(msg: DapMessage): void {
+    if (msg.type === "request") {
+      logger.debug(`[DAP Proxy] client → debugpy: ${msg.command} seq=${msg.seq}`);
+    }
+
+    // After terminated event, respond to disconnect immediately without
+    // round-tripping to debugpy (which may already be dead).
+    // After responding, close the client socket so VS Code's adapter-exit
+    // path runs, which clears activeDebugSession synchronously.
+    if (msg.type === "request" && msg.command === "disconnect" && this.sawTerminatedEvent) {
+      logger.info("[DAP Proxy] fast disconnect response (post-termination)");
+      this.sendToClient({
+        type: "response",
+        command: "disconnect",
+        request_seq: msg.seq,
+        seq: 0,
+        success: true,
+        body: {},
+      });
+      logger.info("[DAP Proxy] disconnect response sent to client, forwarding to debugpy");
+      // Also forward to debugpy for cleanup, swallowing its duplicate response.
+      this.sawDisconnectForwarded = true;
+      this.sendToDebugpy(msg);
+      return;
+    }
 
     if (msg.type === "request" && msg.command === "stepOut") {
       this.pendingStepOutSeq = msg.seq;
@@ -108,80 +284,26 @@ export class DebugAdapterProxy implements vscode.DebugAdapter {
       this.attachResponseTimer = setTimeout(() => {
         if (this.pendingAttachSeq !== undefined) {
           logger.warn("[DAP Proxy] attach response timeout — injecting success");
-          this.emitter.fire({
+          this.sendToClient({
             type: "response",
             command: "attach",
             request_seq: this.pendingAttachSeq,
             seq: 0,
             success: true,
             body: {},
-          } as unknown as vscode.DebugProtocolMessage);
+          });
           this.pendingAttachSeq = undefined;
         }
       }, 3000);
     }
 
-    this.sendRaw(message);
+    this.sendToDebugpy(msg);
   }
 
-  async start(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.socket = net.createConnection(this.port, this.host, () => {
-        logger.info(`[DAP Proxy] connected to ${this.host}:${this.port}`);
-        resolve();
-      });
-      this.socket.on("data", (chunk) => this.onData(chunk));
-      this.socket.on("error", (err) => {
-        logger.error(`[DAP Proxy] socket error: ${err.message}`);
-        reject(err);
-      });
-      this.socket.on("close", () => {
-        logger.info("[DAP Proxy] socket closed");
-      });
-    });
-  }
+  // ── Process messages from debugpy (debugpy → client) ─────────────────
 
-  dispose(): void {
-    if (this.attachResponseTimer) {
-      clearTimeout(this.attachResponseTimer);
-    }
-    this.socket?.destroy();
-    this.emitter.dispose();
-  }
-
-  private sendRaw(message: vscode.DebugProtocolMessage): void {
-    if (!this.socket || this.socket.destroyed) return;
-    const json = JSON.stringify(message);
-    const header = `Content-Length: ${Buffer.byteLength(json, "utf-8")}\r\n\r\n`;
-    this.socket.write(header + json);
-  }
-
-  private onData(chunk: Buffer): void {
-    this.buffer = Buffer.concat([this.buffer, chunk]);
-    for (;;) {
-      const headerEnd = this.buffer.indexOf("\r\n\r\n");
-      if (headerEnd < 0) break;
-      const headerStr = this.buffer.subarray(0, headerEnd).toString("utf-8");
-      const match = headerStr.match(/Content-Length:\s*(\d+)/i);
-      if (!match) {
-        this.buffer = this.buffer.subarray(1);
-        continue;
-      }
-      const bodyLen = parseInt(match[1], 10);
-      const bodyStart = headerEnd + 4;
-      if (this.buffer.length < bodyStart + bodyLen) break;
-      const body = this.buffer.subarray(bodyStart, bodyStart + bodyLen).toString("utf-8");
-      this.buffer = this.buffer.subarray(bodyStart + bodyLen);
-
-      let msg: DapMessage;
-      try { msg = JSON.parse(body) as DapMessage; } catch { continue; }
-      this.processIncoming(msg);
-    }
-  }
-
-  private processIncoming(msg: DapMessage): void {
+  private processFromDebugpy(msg: DapMessage): void {
     // ── stepOut auto-next ──────────────────────────────────────────────
-    // Arm auto-next when stepOut response arrives.
     if (
       msg.type === "response" &&
       msg.command === "stepOut" &&
@@ -199,17 +321,16 @@ export class DebugAdapterProxy implements vscode.DebugAdapter {
       const tid = (msg.body as { threadId?: number })?.threadId ?? this.stepOutThreadId;
       logger.info(`[DAP Proxy] injecting next after stepOut (thread ${tid})`);
       this.injectedSeq++;
-      this.sendRaw({
+      this.sendToDebugpy({
         type: "request",
         command: "next",
         seq: this.injectedSeq,
         arguments: { threadId: tid },
-      } as unknown as vscode.DebugProtocolMessage);
+      });
       return; // swallow this stopped event
     }
 
     // ── stepOver structural line skipping ──────────────────────────────
-    // Arm structural-line check when next response arrives.
     if (
       msg.type === "response" &&
       msg.command === "next" &&
@@ -229,17 +350,16 @@ export class DebugAdapterProxy implements vscode.DebugAdapter {
     if (msg.type === "event" && msg.event === "stopped" && this.awaitingNextStop) {
       this.awaitingNextStop = false;
       const tid = (msg.body as { threadId?: number })?.threadId ?? this.nextThreadId;
-      // Request stack trace to check the current line.
       this.pendingStoppedMsg = msg;
       this.injectedSeq++;
       this.pendingStackTraceSeq = this.injectedSeq;
       logger.debug(`[DAP Proxy] holding stopped event, requesting stackTrace seq=${this.injectedSeq} thread=${tid}`);
-      this.sendRaw({
+      this.sendToDebugpy({
         type: "request",
         command: "stackTrace",
         seq: this.injectedSeq,
         arguments: { threadId: tid, startFrame: 0, levels: 1 },
-      } as unknown as vscode.DebugProtocolMessage);
+      });
       return; // hold the stopped event until we check the line
     }
 
@@ -258,22 +378,23 @@ export class DebugAdapterProxy implements vscode.DebugAdapter {
 
       if (stoppedMsg && msg.success) {
         const frames = (msg.body as { stackFrames?: Array<{ line?: number; source?: { path?: string } }> })?.stackFrames;
+        logger.debug(`[DAP Proxy] stackTrace frames: ${JSON.stringify(frames?.map(f => ({ line: f.line, path: f.source?.path?.split("/").pop() })))}`);
         if (frames && frames.length > 0) {
           const line = frames[0].line;
           const filePath = frames[0].source?.path;
+          logger.debug(`[DAP Proxy] checking line ${line} in ${filePath}: structural=${line !== undefined && filePath ? this.isStructuralLine(filePath, line) : "N/A"}`);
           if (line !== undefined && filePath && this.isStructuralLine(filePath, line)) {
             const tid = (stoppedMsg.body as { threadId?: number })?.threadId ?? this.nextThreadId;
             logger.info(`[DAP Proxy] skipping structural line ${line} in ${filePath.split("/").pop()}`);
-            // Re-arm for the next stop and inject another next.
             this.awaitingNextStop = true;
             this.injectedSeq++;
             this.pendingNextSeq = this.injectedSeq;
-            this.sendRaw({
+            this.sendToDebugpy({
               type: "request",
               command: "next",
               seq: this.injectedSeq,
               arguments: { threadId: tid },
-            } as unknown as vscode.DebugProtocolMessage);
+            });
             return; // swallow this stopped event + stackTrace response
           }
         }
@@ -281,7 +402,7 @@ export class DebugAdapterProxy implements vscode.DebugAdapter {
 
       // Not a structural line — forward the original stopped event.
       if (stoppedMsg) {
-        this.emitter.fire(stoppedMsg as unknown as vscode.DebugProtocolMessage);
+        this.sendToClient(stoppedMsg);
       }
       return; // don't forward the stackTrace response itself
     }
@@ -289,12 +410,17 @@ export class DebugAdapterProxy implements vscode.DebugAdapter {
     // Swallow the response to our injected next (from both stepOut and structural skip).
     if (msg.type === "response" && msg.command === "next" && msg.request_seq !== undefined && msg.request_seq >= 900_000) {
       logger.debug("[DAP Proxy] swallowed injected next response");
-      // If this was from structural skip, the awaitingNextStop is already re-armed.
+      return;
+    }
+
+    // Swallow duplicate disconnect response from debugpy when we already responded.
+    if (msg.type === "response" && msg.command === "disconnect" && this.sawDisconnectForwarded) {
+      logger.debug("[DAP Proxy] swallowed duplicate disconnect response from debugpy");
+      this.sawDisconnectForwarded = false;
       return;
     }
 
     // ── attach mode handling ──────────────────────────────────────────
-    // Clear the attach timeout if we get a real response.
     if (
       msg.type === "response" &&
       msg.command === "attach" &&
@@ -311,33 +437,42 @@ export class DebugAdapterProxy implements vscode.DebugAdapter {
     // Track exited event.
     if (msg.type === "event" && msg.event === "exited") {
       this.sawExitedEvent = true;
+      const exitCode = (msg.body as { exitCode?: number })?.exitCode;
+      logger.info(`[DAP Proxy] exited event received, exitCode=${exitCode}`);
     }
 
-    // When terminated arrives, inject exited if missing, then forward
-    // terminated after a short delay so VS Code can clear activeDebugSession.
+    // Track thread exit events.
+    if (msg.type === "event" && msg.event === "thread") {
+      const reason = (msg.body as { reason?: string })?.reason;
+      const threadId = (msg.body as { threadId?: number })?.threadId;
+      logger.info(`[DAP Proxy] thread event: reason=${reason}, threadId=${threadId}`);
+    }
+
+    // When terminated arrives, inject exited if missing, then forward.
     if (msg.type === "event" && msg.event === "terminated") {
+      logger.info(`[DAP Proxy] terminated event received, sawExited=${this.sawExitedEvent}`);
       if (!this.sawExitedEvent) {
-        logger.debug("[DAP Proxy] injecting exited event before terminated");
-        this.emitter.fire({
+        logger.info("[DAP Proxy] injecting exited event before terminated");
+        this.sendToClient({
           type: "event",
           event: "exited",
           seq: 0,
           body: { exitCode: 0 },
-        } as unknown as vscode.DebugProtocolMessage);
+        });
       }
-      // Delay the terminated event slightly to let VS Code process exited first.
-      setTimeout(() => {
-        this.emitter.fire(msg as unknown as vscode.DebugProtocolMessage);
-      }, 50);
+      this.sawTerminatedEvent = true;
+      logger.info("[DAP Proxy] forwarding terminated event to VS Code");
+      this.sendToClient(msg);
+      logger.info("[DAP Proxy] terminated event forwarded");
       return;
     }
 
     // Everything else → VS Code.
-    this.emitter.fire(msg as unknown as vscode.DebugProtocolMessage);
+    this.sendToClient(msg);
   }
 
   /**
-   * Check if a line in a source file is a structural line (try/except/finally/else)
+   * Check if a line in a source file is a structural line (try:)
    * that debugpy stops on but doesn't execute meaningful code.
    */
   private isStructuralLine(filePath: string, lineNumber: number): boolean {

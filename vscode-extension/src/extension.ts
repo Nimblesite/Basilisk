@@ -20,7 +20,7 @@ import {
 } from "vscode-languageclient/node";
 import { logger, setLogBackend, FileLogSink } from "./logger";
 import type { LogSink } from "./logger";
-import { DebugAdapterProxy } from "./dap-proxy";
+import { DapTcpProxy } from "./dap-proxy";
 
 let client: LanguageClient | undefined;
 let statusBarItem: vscode.StatusBarItem | undefined;
@@ -200,18 +200,24 @@ export function activate(context: vscode.ExtensionContext): void {
     );
     context.subscriptions.push(
       vscode.debug.onDidTerminateDebugSession((session) => {
+        const activeId = vscode.debug.activeDebugSession?.id ?? "undefined";
+        const sameSession = activeId === session.id;
         logger.info(
-          `Debug session terminated: id=${session.id}, name=${session.name}`
+          `[Lifecycle] onDidTerminateDebugSession fired: ` +
+          `terminated=${session.id.slice(0, 8)}, name="${session.name}", ` +
+          `activeDebugSession=${activeId.slice(0, 8)}, ` +
+          `sameSession=${sameSession}`
         );
-        logger.debug(
-          `activeDebugSession after terminate: ${vscode.debug.activeDebugSession?.id ?? "undefined"}`
+        logger.info(
+          `[Lifecycle] This is the VS Code API race: activeDebugSession ` +
+          `should be undefined here but is ${activeId === "undefined" ? "correctly undefined" : "STILL SET (id=" + activeId.slice(0, 8) + ")"}`
         );
       })
     );
     context.subscriptions.push(
       vscode.debug.onDidChangeActiveDebugSession((session) => {
         logger.info(
-          `Active debug session changed: ${session ? `id=${session.id}, name=${session.name}` : "none"}`
+          `[Lifecycle] onDidChangeActiveDebugSession: ${session ? `id=${session.id.slice(0, 8)}, name="${session.name}"` : "→ NONE (session cleared)"}`
         );
       })
     );
@@ -797,9 +803,10 @@ class BasiliskDebugAdapterFactory
         }
       }
 
-      const proxy = new DebugAdapterProxy(host, port);
-      await proxy.start();
-      return new vscode.DebugAdapterInlineImplementation(proxy);
+      const proxy = new DapTcpProxy(host, port);
+      const proxyPort = await proxy.start();
+      logger.info(`[Basilisk Debug] attach proxy listening on port ${proxyPort}`);
+      return new vscode.DebugAdapterServer(proxyPort);
     }
 
     // Launch mode: ask the running LSP to spawn debugpy.
@@ -863,11 +870,15 @@ class BasiliskDebugAdapterFactory
       `LSP spawned debugpy on ${result.host}:${result.port} (session: ${result.sessionId})`
     );
 
-    // Use a DAP proxy so we can fix debugpy stepping quirks
-    // (e.g. auto-next after stepOut to complete return-value assignment).
-    const proxy = new DebugAdapterProxy(result.host, result.port);
-    await proxy.start();
-    return new vscode.DebugAdapterInlineImplementation(proxy);
+    // Use a TCP DAP proxy so we can fix debugpy stepping quirks
+    // (e.g. auto-next after stepOut to complete return-value assignment,
+    // structural line skipping for try: statements).
+    // TCP-based proxy ensures VS Code manages its own session lifecycle,
+    // giving clean activeDebugSession teardown.
+    const proxy = new DapTcpProxy(result.host, result.port);
+    const proxyPort = await proxy.start();
+    logger.info(`[Basilisk Debug] launch proxy listening on port ${proxyPort}`);
+    return new vscode.DebugAdapterServer(proxyPort);
   }
 
   /**
