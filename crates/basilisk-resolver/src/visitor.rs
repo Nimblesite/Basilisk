@@ -2482,6 +2482,7 @@ fn import_infos_from(node: &StmtImport) -> Vec<ImportInfo> {
             span: text_range_to_span(node.range),
             kind: ImportKind::Plain,
             resolution: ImportResolution::Unresolved,
+            resolved_path: None,
         })
         .collect()
 }
@@ -2502,6 +2503,7 @@ fn import_from_infos_from(node: &StmtImportFrom) -> Vec<ImportInfo> {
             span: text_range_to_span(node.range),
             kind: ImportKind::Star,
             resolution: ImportResolution::Unresolved,
+            resolved_path: None,
         }];
     }
 
@@ -2512,6 +2514,7 @@ fn import_from_infos_from(node: &StmtImportFrom) -> Vec<ImportInfo> {
         span: text_range_to_span(node.range),
         kind: ImportKind::From,
         resolution: ImportResolution::Unresolved,
+        resolved_path: None,
     }]
 }
 

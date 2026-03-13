@@ -324,6 +324,7 @@ function startLspClient(
     documentSelector: [{ scheme: "file", language: "python" }],
     synchronize: {
       configurationSection: "basilisk",
+      fileEvents: vscode.workspace.createFileSystemWatcher("**/*.{py,pyi}"),
     },
     initializationOptions: readBasiliskSettings(),
     traceOutputChannel: traceChannel,

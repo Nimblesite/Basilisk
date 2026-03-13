@@ -379,6 +379,18 @@ impl tower_lsp::LanguageServer for LspServer {
                     .log_message(MessageType::INFO, "Basilisk: scanning workspace files...")
                     .await;
                 let (results, file_count, error_count) = index.scan();
+
+                // Resolve imports for all scanned files.
+                let roots = self.workspace_roots.read().await;
+                let config = roots
+                    .first()
+                    .map(|r| crate::config::load_config(r))
+                    .unwrap_or_default();
+                let search_paths =
+                    crate::import_resolver::ImportSearchPaths::from_config(&roots, &config);
+                crate::import_resolver::resolve_workspace_imports(index, &search_paths);
+                drop(roots);
+
                 drop(guard);
                 for (uri, diags) in results {
                     self.client.publish_diagnostics(uri, diags, None).await;
@@ -432,6 +444,18 @@ impl tower_lsp::LanguageServer for LspServer {
                 let guard = self.index.read().await;
                 let Some(index) = guard.as_ref() else { return };
                 let (results, file_count, error_count) = index.scan();
+
+                // Resolve imports for all scanned files.
+                let roots = self.workspace_roots.read().await;
+                let config = roots
+                    .first()
+                    .map(|r| crate::config::load_config(r))
+                    .unwrap_or_default();
+                let search_paths =
+                    crate::import_resolver::ImportSearchPaths::from_config(&roots, &config);
+                crate::import_resolver::resolve_workspace_imports(index, &search_paths);
+                drop(roots);
+
                 drop(guard);
                 for (uri, diags) in results {
                     self.client.publish_diagnostics(uri, diags, None).await;
@@ -513,30 +537,38 @@ impl tower_lsp::LanguageServer for LspServer {
         let uri = params.text_document.uri;
         let guard = self.index.read().await;
         let Some(index) = guard.as_ref() else {
+            info!(uri = %uri, "did_close: no index, clearing diagnostics");
             self.client.publish_diagnostics(uri, vec![], None).await;
             return;
         };
+        let mode = index.mode;
+        info!(uri = %uri, ?mode, "did_close: processing");
         // In wholeModule/crossModule: re-analyse from disk and keep diagnostics,
         // but only for files under a workspace root (those that the scan would
         // discover). Files outside workspace roots are transient — clear them.
         // In openFilesOnly: always clear diagnostics (file is no longer open).
-        match index.mode {
+        match mode {
             AnalysisMode::OpenFilesOnly => {
                 drop(guard);
+                info!(uri = %uri, "did_close: openFilesOnly — clearing diagnostics");
                 self.client.publish_diagnostics(uri, vec![], None).await;
             }
             AnalysisMode::WholeModule | AnalysisMode::CrossModule => {
-                let in_workspace = uri.to_file_path().ok().is_some_and(|path| {
-                    index.roots.iter().any(|root| path.starts_with(root))
-                });
+                let in_workspace = uri
+                    .to_file_path()
+                    .ok()
+                    .is_some_and(|path| index.roots.iter().any(|root| path.starts_with(root)));
                 if in_workspace {
                     let (publish_uri, diags) = index.set_closed(&uri);
+                    let diag_count = diags.len();
                     drop(guard);
+                    info!(uri = %uri, diag_count, "did_close: wholeModule in-workspace — republishing");
                     self.client
                         .publish_diagnostics(publish_uri, diags, None)
                         .await;
                 } else {
                     drop(guard);
+                    info!(uri = %uri, "did_close: wholeModule out-of-workspace — clearing");
                     self.client.publish_diagnostics(uri, vec![], None).await;
                 }
             }

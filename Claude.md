@@ -12,7 +12,7 @@ One IDE extension = COMPLETE PYTHON DEVELOPMENT EXPERIENCE. Seamless, fast, comp
 
 # Too Many Cooks - MANDATORY
 
-COORDINATOR: dictate the orders to others through plans and messages
+COORDINATOR: dictate the orders to others through plans and messages. DELEGATE!!!
 OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK YOUR MESSAGES AND DO WHAT THE COORDINATOR SAYS!!!
 
 - Lock files before editing. Don't edit locked files.
