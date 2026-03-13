@@ -379,6 +379,18 @@ impl tower_lsp::LanguageServer for LspServer {
                     .log_message(MessageType::INFO, "Basilisk: scanning workspace files...")
                     .await;
                 let (results, file_count, error_count) = index.scan();
+
+                // Resolve imports for all scanned files.
+                let roots = self.workspace_roots.read().await;
+                let config = roots
+                    .first()
+                    .map(|r| crate::config::load_config(r))
+                    .unwrap_or_default();
+                let search_paths =
+                    crate::import_resolver::ImportSearchPaths::from_config(&roots, &config);
+                crate::import_resolver::resolve_workspace_imports(index, &search_paths);
+                drop(roots);
+
                 drop(guard);
                 for (uri, diags) in results {
                     self.client.publish_diagnostics(uri, diags, None).await;

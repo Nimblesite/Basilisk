@@ -37,6 +37,7 @@ pub mod folding;
 pub mod formatting;
 pub mod highlight;
 pub mod hover;
+pub mod import_resolver;
 pub mod inlay_hints;
 pub mod references;
 pub mod selection;

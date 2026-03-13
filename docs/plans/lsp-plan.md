@@ -17,12 +17,12 @@ Phases 0–6 are COMPLETE. Remaining work is cross-module infrastructure, advanc
 
 | Task | Description | Difficulty | Status |
 |------|-------------|------------|--------|
-| 7.1 | Workspace module resolver — scan workspace, resolve `import X` to file paths | Hard | PARTIAL — file scanner + `collect_python_files()` done in `workspace.rs`; `ImportInfo` struct exists with `ImportResolution` enum; actual import→file resolution NOT implemented (`Unresolved` always) |
+| 7.1 | Workspace module resolver — scan workspace, resolve `import X` to file paths | Hard | DONE — `import_resolver.rs` resolves absolute/relative imports to `.py`/`.pyi` files via workspace roots, extraPaths, venv site-packages; wired into `server.rs` `initialized()` after workspace scan; 17 tests |
 | 7.2 | Multi-file `ResolvedModule` graph — resolve across files, cache per-file | Hard | TODO — `ResolvedModule` is per-file only, no cross-file symbol sharing |
 | 7.4 | Salsa integration — memoized incremental computation (like rust-analyzer) | Hard | TODO — no `salsa` dependency, full re-parse on every change |
-| 7.5 | Stub file (`.pyi`) support — resolve type info from `.pyi` alongside `.py` | Medium | PARTIAL — dedup logic prefers `.pyi` over `.py`, both collected; `ImportResolution::StubPyi` variant exists but never set; no cross-file type extraction from stubs |
+| 7.5 | Stub file (`.pyi`) support — resolve type info from `.pyi` alongside `.py` | Medium | PARTIAL — dedup logic prefers `.pyi` over `.py`, both collected; `import_resolver.rs` sets `StubPyi` resolution when `.pyi` found; no cross-file type extraction from stubs yet |
 | 7.6 | Third-party type stubs — typeshed bundling, `py.typed` marker detection (PEP 561) | Medium | MINIMAL — `basilisk-stubs` crate is skeleton with basic `lookup_builtin()` only; no typeshed bundle, no `py.typed` detection |
-| 7.7 | Config file reading — `pyrightconfig.json`, `pyproject.toml`, `basilisk.json` | Medium | DONE — reads `pythonVersion`, `pythonPlatform`, `include`, `exclude`, `extraPaths`, `typeCheckingMode`, `venvPath`, `venv`; `extraPaths`/`venv` stored but not used by import resolver yet |
+| 7.7 | Config file reading — `pyrightconfig.json`, `pyproject.toml`, `basilisk.json` | Medium | DONE — reads `pythonVersion`, `pythonPlatform`, `include`, `exclude`, `extraPaths`, `typeCheckingMode`, `venvPath`, `venv`; `extraPaths` and `venv` now fed to `ImportSearchPaths` in import resolver |
 
 ## Phase 8 — Cross-Module Features (requires Phase 7)
 
