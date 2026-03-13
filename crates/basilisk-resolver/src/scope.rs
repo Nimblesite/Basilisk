@@ -27,6 +27,8 @@ pub struct ParameterInfo {
     pub name_span: Span,
     /// The source span of the annotation expression, if present.
     pub annotation_span: Option<Span>,
+    /// The raw annotation text (e.g. `"int"`, `"str | None"`), if annotated.
+    pub annotation_text: Option<String>,
 }
 
 /// How a return annotation is classified.
