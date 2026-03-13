@@ -577,7 +577,11 @@ impl tower_lsp::LanguageServer for LspServer {
             return;
         };
         let mode = index.mode;
-        let roots_debug: Vec<_> = index.roots.iter().map(|r| r.display().to_string()).collect();
+        let roots_debug: Vec<_> = index
+            .roots
+            .iter()
+            .map(|r| r.display().to_string())
+            .collect();
         diaglog!("[DIAG] did_close: mode={mode:?} roots={roots_debug:?} uri={uri}");
         info!(uri = %uri, ?mode, "did_close: processing");
         // In wholeModule/crossModule: re-analyse from disk and keep diagnostics,
@@ -615,7 +619,9 @@ impl tower_lsp::LanguageServer for LspServer {
                         let _ = index.files.remove(&path);
                     }
                     drop(guard);
-                    diaglog!("[DIAG] did_close: WholeModule out-of-workspace -> clearing uri={uri}");
+                    diaglog!(
+                        "[DIAG] did_close: WholeModule out-of-workspace -> clearing uri={uri}"
+                    );
                     info!(uri = %uri, "did_close: wholeModule out-of-workspace — clearing");
                     self.client.publish_diagnostics(uri, vec![], None).await;
                 }
