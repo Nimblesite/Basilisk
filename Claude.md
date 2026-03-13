@@ -39,6 +39,7 @@ OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK MESSAGES AND COMPLY
 - Do not use Git unless asked
 - NEVER DELETE FAILING TESTS
 - NEVER REMOVE ASSERTIONS THAT CAUSE TEST FAILURES
+- Regex = ⛔️ ILLEGAL. Use the proper parsing mechanism - usually ruff
 - ADD more failing tests for broken/missing functionality — NEVER remove them
 - Keep files under 500 LOC. Break up larger files.
 - REDUCING TEST ASSERTIVENESS = DATA CENTER DISMANTLED

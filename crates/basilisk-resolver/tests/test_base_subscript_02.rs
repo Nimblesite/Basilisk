@@ -1,8 +1,6 @@
 mod common;
 
 use common::{resolve_src};
-use basilisk_resolver::RhsKind;
-use basilisk_resolver::ViolationKind;
 
 #[test]
 fn typeddict_bool_compatible_with_int() -> Result<(), Box<dyn std::error::Error>> {

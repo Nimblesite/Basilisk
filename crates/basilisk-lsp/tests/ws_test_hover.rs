@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 mod ws_test_common;
 use ws_test_common::*;
 

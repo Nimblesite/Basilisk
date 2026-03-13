@@ -1,7 +1,6 @@
 mod common;
 
 use common::{resolve_src};
-use basilisk_resolver::ViolationKind;
 
 #[test]
 fn abstract_class_via_abc_attribute() -> Result<(), Box<dyn std::error::Error>> {

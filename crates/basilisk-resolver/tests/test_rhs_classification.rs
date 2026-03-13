@@ -1,7 +1,6 @@
 mod common;
 
 use common::{resolve_src};
-use basilisk_resolver::RhsKind;
 
 #[test]
 fn classifies_various_literal_rhs_at_module_level() -> Result<(), Box<dyn std::error::Error>> {
