@@ -179,10 +179,10 @@ npm run compile
 ok "TypeScript compiled"
 
 header "VS Code E2E tests"
-VSCODE_TEST_CMD="npm test"
+VSCODE_TEST_CMD="npm test -- --coverage"
 # On headless CI (no DISPLAY), wrap with xvfb-run so VS Code can start.
 if [[ -z "${DISPLAY:-}" ]] && command -v xvfb-run &>/dev/null; then
-    VSCODE_TEST_CMD="xvfb-run -a npm test"
+    VSCODE_TEST_CMD="xvfb-run -a npm test -- --coverage"
 fi
 BASILISK_EXECUTABLE_PATH="$REPO_ROOT/target/debug/basilisk" \
 MOCHA_TIMEOUT="120000" \
