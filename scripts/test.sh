@@ -89,7 +89,7 @@ COV_FAILED=0
 HTML_ROWS=""
 check_crate() {
     local crate="$1" threshold="$2" totals total_lines missed_lines covered pct
-    totals=$(echo "$REPORT" | grep "^${crate}/" | awk '{total+=$8; missed+=$9} END {print total, missed}')
+    totals=$(echo "$REPORT" | grep "/${crate}/" | awk '{total+=$8; missed+=$9} END {print total, missed}')
     total_lines=$(echo "$totals" | awk '{print $1}')
     missed_lines=$(echo "$totals" | awk '{print $2}')
     if [ -z "$total_lines" ] || [ "$total_lines" -eq 0 ]; then
@@ -178,9 +178,14 @@ npm run compile
 ok "TypeScript compiled"
 
 header "VS Code E2E tests"
+VSCODE_TEST_CMD="npm test"
+# On headless CI (no DISPLAY), wrap with xvfb-run so VS Code can start.
+if [[ -z "${DISPLAY:-}" ]] && command -v xvfb-run &>/dev/null; then
+    VSCODE_TEST_CMD="xvfb-run -a npm test"
+fi
 BASILISK_EXECUTABLE_PATH="$REPO_ROOT/target/debug/basilisk" \
 MOCHA_TIMEOUT="120000" \
-npm test
+$VSCODE_TEST_CMD
 ok "VS Code E2E tests done"
 
 header "VS Code extension — coverage threshold"
