@@ -14,4 +14,11 @@ export default defineConfig({
     mocha: {
         timeout: 60000,
     },
+    coverage: {
+        includeAll: true,
+        include: ['out/src/**/*.js'],
+        exclude: ['out/src/test/**'],
+        reporter: ['text', 'lcov'],
+        reportsDirectory: path.join(__dirname, 'coverage'),
+    },
 });

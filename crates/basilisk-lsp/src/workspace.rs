@@ -103,7 +103,7 @@ impl WorkspaceIndex {
         let mut entry = entry;
         entry.is_open = true;
         entry.version = version;
-        self.files.insert(path, entry);
+        let _ = self.files.insert(path, entry);
         lsp_diags
     }
 
@@ -137,17 +137,14 @@ impl WorkspaceIndex {
         }
 
         let (entry, lsp_diags) = analyse(&text, &path);
-        self.files.insert(path, entry);
+        let _ = self.files.insert(path, entry);
         Some((uri.clone(), lsp_diags))
     }
 
     /// Mark a file as closed. After this call, file-watcher events for the
     /// path will cause a disk re-read. Returns the disk-based diagnostics.
     #[must_use]
-    pub fn set_closed(
-        &self,
-        uri: &Url,
-    ) -> (Url, Vec<tower_lsp::lsp_types::Diagnostic>) {
+    pub fn set_closed(&self, uri: &Url) -> (Url, Vec<tower_lsp::lsp_types::Diagnostic>) {
         let Some(path) = uri.to_file_path().ok() else {
             return (uri.clone(), vec![]);
         };
@@ -159,11 +156,11 @@ impl WorkspaceIndex {
         // If the file no longer exists on disk, remove it from the index and
         // clear its diagnostics (e.g. an in-memory-only test file).
         let Ok(text) = std::fs::read_to_string(&path) else {
-            self.files.remove(&path);
+            let _ = self.files.remove(&path);
             return (uri.clone(), vec![]);
         };
         let (entry, lsp_diags) = analyse(&text, &path);
-        self.files.insert(path, entry);
+        let _ = self.files.insert(path, entry);
         (uri.clone(), lsp_diags)
     }
 
@@ -200,7 +197,7 @@ impl WorkspaceIndex {
                 let text = std::fs::read_to_string(&path).ok()?;
                 let uri = path_to_uri(&path)?;
                 let (entry, lsp_diags) = analyse(&text, &path);
-                self.files.insert(path, entry);
+                let _ = self.files.insert(path, entry);
                 Some((uri, lsp_diags))
             })
             .collect();
@@ -210,10 +207,7 @@ impl WorkspaceIndex {
             .map(|(_, diags)| {
                 diags
                     .iter()
-                    .filter(|d| {
-                        d.severity
-                            == Some(tower_lsp::lsp_types::DiagnosticSeverity::ERROR)
-                    })
+                    .filter(|d| d.severity == Some(tower_lsp::lsp_types::DiagnosticSeverity::ERROR))
                     .count()
             })
             .sum();
@@ -224,13 +218,7 @@ impl WorkspaceIndex {
     /// Collect all `(uri, resolved, text)` triples currently in the index,
     /// used by workspace symbol search.
     #[must_use]
-    pub fn all_resolved(
-        &self,
-    ) -> Vec<(
-        Url,
-        Arc<basilisk_resolver::ResolvedModule>,
-        String,
-    )> {
+    pub fn all_resolved(&self) -> Vec<(Url, Arc<basilisk_resolver::ResolvedModule>, String)> {
         self.files
             .iter()
             .filter_map(|entry| {
@@ -267,10 +255,7 @@ fn make_entry(
 ///
 /// Always returns a `FileEntry` (resolved may be `None` on failure) and the
 /// corresponding LSP diagnostics.
-fn analyse(
-    text: &str,
-    path: &Path,
-) -> (FileEntry, Vec<tower_lsp::lsp_types::Diagnostic>) {
+fn analyse(text: &str, path: &Path) -> (FileEntry, Vec<tower_lsp::lsp_types::Diagnostic>) {
     let path_str = path.to_string_lossy().into_owned();
     let hash = fnv1a(text);
 
@@ -287,10 +272,7 @@ fn analyse(
     };
 
     let checker_diags = basilisk_checker::check(&resolved);
-    let lsp_diags = checker_diags
-        .iter()
-        .map(|d| bsk_to_lsp(d, text))
-        .collect();
+    let lsp_diags = checker_diags.iter().map(|d| bsk_to_lsp(d, text)).collect();
 
     (
         make_entry(hash, text, Some(Arc::new(resolved)), checker_diags),
@@ -357,14 +339,13 @@ fn deduplicate_by_stem(files: Vec<PathBuf>) -> Vec<PathBuf> {
         let key = stem.to_owned();
         match by_stem.get(&key) {
             Some(existing) => {
-                if existing.extension().and_then(|s| s.to_str()) == Some("py")
-                    && ext == Some("pyi")
+                if existing.extension().and_then(|s| s.to_str()) == Some("py") && ext == Some("pyi")
                 {
-                    by_stem.insert(key, path);
+                    let _ = by_stem.insert(key, path);
                 }
             }
             None => {
-                by_stem.insert(key, path);
+                let _ = by_stem.insert(key, path);
             }
         }
     }
@@ -420,9 +401,7 @@ fn bsk_to_lsp(d: &basilisk_checker::Diagnostic, text: &str) -> tower_lsp::lsp_ty
 }
 
 fn parse_error_diagnostic(message: &str) -> tower_lsp::lsp_types::Diagnostic {
-    use tower_lsp::lsp_types::{
-        Diagnostic, DiagnosticSeverity, NumberOrString, Position, Range,
-    };
+    use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, NumberOrString, Position, Range};
     Diagnostic {
         range: Range {
             start: Position::new(0, 0),
@@ -614,7 +593,10 @@ mod tests {
         // Missing return type annotation — should trigger BSK-E0001.
         let src = "def foo(x: int):\n    return x\n";
         let diags = idx.set_open(&uri, src, 1);
-        assert!(!diags.is_empty(), "expected diagnostics for missing return annotation");
+        assert!(
+            !diags.is_empty(),
+            "expected diagnostics for missing return annotation"
+        );
     }
 
     #[test]
@@ -644,7 +626,10 @@ mod tests {
         let src = "x: int = 1\n";
         idx.set_open(&uri, src, 1);
         let result = idx.get_by_uri(&uri);
-        assert!(result.is_some(), "expected Some from get_by_uri on valid source");
+        assert!(
+            result.is_some(),
+            "expected Some from get_by_uri on valid source"
+        );
         let (text, _resolved, _diags) = result.unwrap();
         assert_eq!(text, src);
     }
@@ -672,8 +657,6 @@ mod tests {
 
     #[test]
     fn test_set_closed_existing_file_re_analyses() {
-        use std::io::Write as _;
-
         let idx = make_index();
         // Write a real temp file.
         let dir = std::env::temp_dir().join("bsk_set_closed_test");
@@ -765,7 +748,11 @@ mod tests {
         let (results, file_count, _) = idx.scan();
         // File is open, so scan should skip it.
         assert_eq!(file_count, 1, "file_count should count the file");
-        assert_eq!(results.len(), 0, "open file should be excluded from scan results");
+        assert_eq!(
+            results.len(),
+            0,
+            "open file should be excluded from scan results"
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }

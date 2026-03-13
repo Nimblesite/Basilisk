@@ -3,6 +3,8 @@
 //! Thin dispatcher that delegates to feature modules for each LSP request.
 
 use std::sync::Arc;
+use tokio::sync::{Mutex, RwLock};
+use tokio::task::AbortHandle;
 
 use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::{
@@ -12,51 +14,50 @@ use tower_lsp::lsp_types::{
     CodeActionProviderCapability, CodeActionResponse, CodeLens, CodeLensOptions, CodeLensParams,
     ColorInformation, ColorPresentation, ColorPresentationParams, ColorProviderCapability,
     CompletionItem, CompletionOptions, CompletionParams, CompletionResponse, DeclarationCapability,
-    DidChangeTextDocumentParams, DidChangeWatchedFilesParams, DidCloseTextDocumentParams,
-    DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentColorParams,
-    DocumentFormattingParams, DocumentHighlight, DocumentHighlightParams, DocumentSymbolParams,
-    DocumentSymbolResponse, ExecuteCommandOptions, ExecuteCommandParams, FileChangeType,
-    FileOperationFilter, FileOperationPattern, FileOperationPatternKind,
-    FileOperationRegistrationOptions, FoldingRange, FoldingRangeParams,
-    FoldingRangeProviderCapability, GotoDefinitionParams, GotoDefinitionResponse, Hover,
-    HoverParams, HoverProviderCapability, InitializeParams, InitializeResult, InitializedParams,
-    InlayHint, InlayHintParams, Location, MessageType, OneOf, Position, PrepareRenameResponse,
-    ReferenceParams, RenameOptions, RenameParams, SelectionRange, SelectionRangeParams,
-    SelectionRangeProviderCapability, SemanticTokens, SemanticTokensFullOptions,
-    SemanticTokensLegend, SemanticTokensOptions, SemanticTokensParams, SemanticTokensResult,
-    SemanticTokensServerCapabilities, ServerCapabilities, ServerInfo, SignatureHelpOptions,
-    SignatureHelpParams, SymbolInformation, TextDocumentPositionParams,
-    TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, TypeDefinitionProviderCapability,
-    TypeHierarchyItem, TypeHierarchyPrepareParams, TypeHierarchySubtypesParams,
-    TypeHierarchySupertypesParams, Url, WorkDoneProgressOptions, WorkspaceEdit,
-    WorkspaceFoldersServerCapabilities, WorkspaceServerCapabilities,
-    WorkspaceFileOperationsServerCapabilities, WorkspaceSymbolParams,
+    DidChangeConfigurationParams, DidChangeTextDocumentParams, DidChangeWatchedFilesParams,
+    DidCloseTextDocumentParams, DidOpenTextDocumentParams, DidSaveTextDocumentParams,
+    DocumentColorParams, DocumentFormattingParams, DocumentHighlight, DocumentHighlightParams,
+    DocumentSymbolParams, DocumentSymbolResponse, ExecuteCommandOptions, ExecuteCommandParams,
+    FileChangeType, FoldingRange, FoldingRangeParams, FoldingRangeProviderCapability,
+    GotoDefinitionParams, GotoDefinitionResponse, Hover, HoverParams, HoverProviderCapability,
+    InitializeParams, InitializeResult, InitializedParams, InlayHint, InlayHintParams, Location,
+    MessageType, OneOf, Position, PrepareRenameResponse, ReferenceParams, RenameOptions,
+    RenameParams, SelectionRange, SelectionRangeParams, SelectionRangeProviderCapability,
+    SemanticTokens, SemanticTokensFullOptions, SemanticTokensLegend, SemanticTokensOptions,
+    SemanticTokensParams, SemanticTokensResult, SemanticTokensServerCapabilities,
+    ServerCapabilities, ServerInfo, SignatureHelpOptions, SignatureHelpParams, SymbolInformation,
+    TextDocumentPositionParams, TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit,
+    TypeDefinitionProviderCapability, TypeHierarchyItem, TypeHierarchyPrepareParams,
+    TypeHierarchySubtypesParams, TypeHierarchySupertypesParams, Url, WorkDoneProgressOptions,
+    WorkspaceEdit, WorkspaceSymbolParams,
 };
 use tower_lsp::{Client, LspService, Server};
 use tracing::{debug, error, info, warn};
 
 use crate::config::AnalysisMode;
 use crate::util::position_to_byte_offset;
-use crate::workspace::{WorkspaceIndex, resolve_analysis_mode};
+use crate::workspace::{resolve_analysis_mode, WorkspaceIndex};
 use crate::{
     call_hierarchy, code_actions, code_lens, completion, declaration, definition, folding,
     formatting, highlight, hover, inlay_hints, references, selection, signature, symbols,
     type_definition, type_hierarchy,
 };
 
-/// Fallback docs URL used when a diagnostic code URL fails to parse.
-const FALLBACK_DOCS_URL: &str = basilisk_common::diagnostics::DOCS_URL;
+/// Debounce interval for file‑watcher notifications (milliseconds).
+const FILE_WATCHER_DEBOUNCE_MS: u64 = 200;
 
 /// The Basilisk LSP server.
 pub struct LspServer {
     /// LSP client for sending notifications back to the editor.
     client: Client,
-    /// Map from document URI to its current state.
-    documents: DashMap<Url, DocumentState>,
+    /// Workspace index (None until initialized).
+    index: Arc<RwLock<Option<WorkspaceIndex>>>,
     /// Workspace root folders discovered during initialization.
-    workspace_roots: tokio::sync::RwLock<Vec<std::path::PathBuf>>,
+    workspace_roots: RwLock<Vec<std::path::PathBuf>>,
     /// Debug session manager — spawns debugpy and tracks active sessions.
     debug_manager: crate::debug::DebugSessionManager,
+    /// Debounced file‑watcher task.
+    watcher_debounce: Mutex<Option<AbortHandle>>,
 }
 
 impl LspServer {
@@ -65,9 +66,10 @@ impl LspServer {
     pub fn new(client: Client) -> Self {
         Self {
             client,
-            documents: DashMap::new(),
-            workspace_roots: tokio::sync::RwLock::new(Vec::new()),
+            index: Arc::new(RwLock::new(None)),
+            workspace_roots: RwLock::new(Vec::new()),
             debug_manager: crate::debug::DebugSessionManager::new(),
+            watcher_debounce: Mutex::new(None),
         }
     }
 
@@ -111,9 +113,8 @@ impl LspServer {
         };
 
         let source = self
-            .documents
-            .get(&uri)
-            .map(|d| d.text.clone())
+            .with_index(|idx| idx.get_text(&uri))
+            .await
             .unwrap_or_default();
 
         if source.is_empty() {
@@ -227,7 +228,6 @@ impl LspServer {
 
         Ok(Some(serde_json::json!({ "stopped": stopped })))
     }
-}
 
     /// Run a position-based handler: extract document data, compute byte offset,
     /// call `handler`, and wrap the result in `LspResult`.
@@ -376,10 +376,7 @@ impl tower_lsp::LanguageServer for LspServer {
             }
             AnalysisMode::WholeModule | AnalysisMode::CrossModule => {
                 self.client
-                    .log_message(
-                        MessageType::INFO,
-                        "Basilisk: scanning workspace files...",
-                    )
+                    .log_message(MessageType::INFO, "Basilisk: scanning workspace files...")
                     .await;
                 let (results, file_count, error_count) = index.scan();
                 drop(guard);
@@ -398,6 +395,31 @@ impl tower_lsp::LanguageServer for LspServer {
             }
         }
         drop(guard);
+    }
+
+    async fn did_change_configuration(&self, params: DidChangeConfigurationParams) {
+        // Extract analysisMode from the settings.
+        let settings = params.settings;
+        let mut mode = None;
+        if let Some(mode_str) = settings
+            .get("analysisMode")
+            .or_else(|| settings.get("basilisk").and_then(|b| b.get("analysisMode")))
+            .and_then(|v| v.as_str())
+        {
+            mode = Some(AnalysisMode::parse(mode_str));
+        }
+        if let Some(new_mode) = mode {
+            let mut guard = self.index.write().await;
+            if let Some(index) = guard.as_mut() {
+                index.mode = new_mode;
+            }
+            self.client
+                .log_message(
+                    MessageType::INFO,
+                    format!("Basilisk: analysis mode changed to {new_mode:?}"),
+                )
+                .await;
+        }
     }
 
     async fn shutdown(&self) -> LspResult<()> {
@@ -477,7 +499,9 @@ impl tower_lsp::LanguageServer for LspServer {
             AnalysisMode::WholeModule | AnalysisMode::CrossModule => {
                 let (publish_uri, diags) = index.set_closed(&uri);
                 drop(guard);
-                self.client.publish_diagnostics(publish_uri, diags, None).await;
+                self.client
+                    .publish_diagnostics(publish_uri, diags, None)
+                    .await;
             }
         }
     }
@@ -661,7 +685,13 @@ impl tower_lsp::LanguageServer for LspServer {
         let pos = params.text_document_position.position;
         let include_decl = params.context.include_declaration;
         self.at_position(uri, pos, |resolved, text, offset, uri, _| {
-            none_if_empty(references::find_references(resolved, text, offset, uri, include_decl))
+            none_if_empty(references::find_references(
+                resolved,
+                text,
+                offset,
+                uri,
+                include_decl,
+            ))
         })
         .await
     }
@@ -1020,117 +1050,17 @@ impl tower_lsp::LanguageServer for LspServer {
 
 /// Return `None` if the collection is empty, `Some(v)` otherwise.
 fn none_if_empty<T>(items: Vec<T>) -> Option<Vec<T>> {
-    if items.is_empty() { None } else { Some(items) }
+    if items.is_empty() {
+        None
+    } else {
+        Some(items)
+    }
 }
 
 // ── Server entry point ───────────────────────────────────────────────────────
 
-/// Build the full `ServerCapabilities` for the `initialize` response.
-///
-/// Extracted to keep `initialize` under the 100-line limit.
-fn build_server_capabilities(mode: AnalysisMode) -> ServerCapabilities {
-    // Advertise workspace.fileOperations when the server tracks closed files.
-    // openFilesOnly mode ignores file-system events, so skip those capabilities.
-    let workspace_capabilities = if mode == AnalysisMode::OpenFilesOnly {
-        None
-    } else {
-        let py_filter = python_file_operation_filter();
-        Some(WorkspaceServerCapabilities {
-            workspace_folders: Some(WorkspaceFoldersServerCapabilities {
-                supported: Some(true),
-                change_notifications: Some(OneOf::Left(true)),
-            }),
-            file_operations: Some(WorkspaceFileOperationsServerCapabilities {
-                did_create: Some(py_filter.clone()),
-                did_rename: Some(py_filter.clone()),
-                did_delete: Some(py_filter),
-                ..Default::default()
-            }),
-        })
-    };
-
-    ServerCapabilities {
-        text_document_sync: Some(TextDocumentSyncCapability::Kind(
-            TextDocumentSyncKind::INCREMENTAL,
-        )),
-        hover_provider: Some(HoverProviderCapability::Simple(true)),
-        call_hierarchy_provider: Some(CallHierarchyServerCapability::Simple(true)),
-        // type_hierarchy_provider is not in lsp-types 0.94's ServerCapabilities;
-        // it is injected at the JSON level by websocket::inject_missing_capabilities.
-        code_lens_provider: Some(CodeLensOptions {
-            resolve_provider: Some(false),
-        }),
-        code_action_provider: Some(CodeActionProviderCapability::Options(CodeActionOptions {
-            code_action_kinds: Some(vec![
-                CodeActionKind::QUICKFIX,
-                CodeActionKind::SOURCE_ORGANIZE_IMPORTS,
-                CodeActionKind::REFACTOR,
-            ]),
-            ..Default::default()
-        })),
-        completion_provider: Some(CompletionOptions {
-            trigger_characters: Some(vec![".".to_owned()]),
-            resolve_provider: Some(true),
-            ..Default::default()
-        }),
-        declaration_provider: Some(DeclarationCapability::Simple(true)),
-        definition_provider: Some(OneOf::Left(true)),
-        type_definition_provider: Some(TypeDefinitionProviderCapability::Simple(true)),
-        document_formatting_provider: Some(OneOf::Left(true)),
-        document_highlight_provider: Some(OneOf::Left(true)),
-        document_symbol_provider: Some(OneOf::Left(true)),
-        folding_range_provider: Some(FoldingRangeProviderCapability::Simple(true)),
-        selection_range_provider: Some(SelectionRangeProviderCapability::Simple(true)),
-        workspace_symbol_provider: Some(OneOf::Left(true)),
-        signature_help_provider: Some(SignatureHelpOptions {
-            trigger_characters: Some(vec!["(".to_owned(), ",".to_owned()]),
-            retrigger_characters: None,
-            work_done_progress_options: WorkDoneProgressOptions::default(),
-        }),
-        references_provider: Some(OneOf::Left(true)),
-        rename_provider: Some(OneOf::Right(RenameOptions {
-            prepare_provider: Some(true),
-            work_done_progress_options: WorkDoneProgressOptions::default(),
-        })),
-        execute_command_provider: Some(ExecuteCommandOptions {
-            commands: vec!["basilisk.organizeImports".to_owned()],
-            work_done_progress_options: WorkDoneProgressOptions::default(),
-        }),
-        inlay_hint_provider: Some(OneOf::Left(true)),
-        semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
-            SemanticTokensOptions {
-                legend: SemanticTokensLegend {
-                    token_types: crate::semantic_tokens::TOKEN_TYPES.to_vec(),
-                    token_modifiers: crate::semantic_tokens::TOKEN_MODIFIERS.to_vec(),
-                },
-                full: Some(SemanticTokensFullOptions::Bool(true)),
-                range: None,
-                work_done_progress_options: WorkDoneProgressOptions::default(),
-            },
-        )),
-        color_provider: Some(ColorProviderCapability::Simple(true)),
-        workspace: workspace_capabilities,
-        ..Default::default()
-    }
-}
-
-/// Build a `FileOperationRegistrationOptions` that matches `.py` and `.pyi` files.
-///
-/// Used in `build_server_capabilities` to tell the client which file operations
-/// the server cares about (only in wholeModule / crossModule modes).
-fn python_file_operation_filter() -> FileOperationRegistrationOptions {
-    let make_filter = |glob: &str| FileOperationFilter {
-        scheme: Some("file".to_owned()),
-        pattern: FileOperationPattern {
-            glob: glob.to_owned(),
-            matches: Some(FileOperationPatternKind::File),
-            options: None,
-        },
-    };
-    FileOperationRegistrationOptions {
-        filters: vec![make_filter("**/*.py"), make_filter("**/*.pyi")],
-    }
-}
+// Build the full `ServerCapabilities` for the `initialize` response.
+// Extracted to keep `initialize` under the 100-line limit.
 
 /// Start the LSP server.
 ///

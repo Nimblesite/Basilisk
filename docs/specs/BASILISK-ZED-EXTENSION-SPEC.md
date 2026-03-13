@@ -2,12 +2,19 @@
 
 ## Goal
 
-A first-class Zed extension that connects to the same `basilisk lsp` binary as the VS Code extension. One LSP, two editors. The Zed extension provides language intelligence, debugging, and profiling — reusing 100% of the Rust backend.
+A first-class Zed extension that connects to the same `basilisk lsp` binary as the VS Code and Neovim extensions. One LSP, three editors. The Zed extension provides language intelligence, debugging, and profiling — reusing 100% of the Rust backend.
 
 MAX CODE SHARING BETWEEN RUST COMPONENTS!!!
 Share code between the Zed extension and the other crates AMAP - even if just sharing at file level!
 
-⚠️ CRITICAL: AIMING FOR FEATURE PARITY BETWEEN ZED AND VSCODE EXTENSIONS
+**CRITICAL: AIMING FOR FEATURE PARITY BETWEEN ZED, VS CODE, AND NEOVIM EXTENSIONS**
+
+All LSP features, DAP integration, custom commands, configuration settings, and binary resolution are defined in **`LSP-SPEC.md`** — the single source of truth. This spec only documents **Zed-specific implementation details**.
+
+## Critical Docs
+
+- [Zed Extension Development](https://zed.dev/docs/extensions/developing-extensions)
+- [Zed Python Language Support](https://zed.dev/docs/languages/python)
 
 ## What Zed Extensions Can Do
 
@@ -214,39 +221,19 @@ impl zed::Extension for BasiliskExtension {
 zed::register_extension!(BasiliskExtension);
 ```
 
-## Features — Parity with VS Code
+## Features
 
 ### Language Intelligence (via LSP)
 
-All of these come from the same `basilisk lsp` binary. Zero work needed in the Zed extension — the LSP protocol handles everything:
+> All 21 LSP features are defined in `LSP-SPEC.md` § LSP Features. Zed supports all of them natively via its built-in LSP client. Zero work needed in the Zed extension — the LSP protocol handles everything.
 
-| Feature | LSP Method | Zed Support |
-|---|---|---|
-| Diagnostics | `textDocument/publishDiagnostics` | Yes — inline squiggles, Problems panel |
-| Go to Definition | `textDocument/definition` | Yes |
-| Go to Declaration | `textDocument/declaration` | Yes |
-| Go to Type Definition | `textDocument/typeDefinition` | Yes |
-| Find References | `textDocument/references` | Yes |
-| Hover | `textDocument/hover` | Yes |
-| Completions | `textDocument/completion` | Yes |
-| Signature Help | `textDocument/signatureHelp` | Yes |
-| Rename | `textDocument/rename` | Yes |
-| Code Actions | `textDocument/codeAction` | Yes |
-| Document Symbols | `textDocument/documentSymbol` | Yes — outline panel |
-| Workspace Symbols | `workspace/symbol` | Yes |
-| Inlay Hints | `textDocument/inlayHint` | Yes — parameter names, variable types |
-| Semantic Tokens | `textDocument/semanticTokens` | Yes — requires `"semantic_tokens": "combined"` in settings |
-| Formatting | `textDocument/formatting` | Yes (via Ruff delegation) |
-| Code Lens | `textDocument/codeLens` | Yes |
-| Call Hierarchy | `textDocument/prepareCallHierarchy` | Yes |
-| Type Hierarchy | `textDocument/prepareTypeHierarchy` | Yes |
-| Document Highlights | `textDocument/documentHighlight` | Yes |
-| Folding Ranges | `textDocument/foldingRange` | Yes |
-| Selection Ranges | `textDocument/selectionRange` | Yes |
+**Zed-specific note**: Semantic tokens require `"semantic_tokens": "combined"` in Zed settings.
 
 ### Debugging (via DAP)
 
-Zed has native DAP support. The debug flow is identical to VS Code:
+> See `LSP-SPEC.md` § Custom LSP Commands for `basilisk/startDebugSession` and § DapTcpProxy for the shared proxy specification.
+
+Zed has native DAP support. The debug flow:
 
 1. User triggers debug (F5 or debug button)
 2. Zed extension's `get_dap_binary()` returns the basilisk binary
@@ -254,7 +241,7 @@ Zed has native DAP support. The debug flow is identical to VS Code:
 4. Zed's DAP client connects directly to debugpy over TCP
 5. Full debugging: breakpoints, stepping, variables, call stack, watch expressions
 
-The `debug_adapter_schemas/basilisk-debug.json` schema defines the launch/attach configuration:
+The `debug_adapter_schemas/basilisk-debug.json` schema defines the Zed-specific launch/attach configuration:
 
 ```json
 {
@@ -279,24 +266,22 @@ The `debug_adapter_schemas/basilisk-debug.json` schema defines the launch/attach
 
 ### Profiling
 
-See [BASILISK-PROFILING-SPEC.md](BASILISK-PROFILING-SPEC.md) for the full profiling specification.
+> See `LSP-SPEC.md` § Custom LSP Commands for the profiling and memory command specifications shared across all editors.
 
 Zed has no webview support, so profiling visualization works differently than VS Code:
 
 | Visualization | VS Code | Zed |
 |---|---|---|
-| Flamegraph | Webview panel | External browser (speedscope.app) or Zed opens the HTML file |
+| Flamegraph | Webview panel | External browser (speedscope.app) |
 | Inline heat map | Text decorations API | LSP diagnostics with severity hints |
 | Hot function list | TreeView panel | Slash command output in AI panel |
 | Live updates | Custom notifications | LSP diagnostics refresh |
 
 **Profiling in Zed uses three mechanisms:**
 
-1. **LSP Diagnostics** — The profiler emits hotspot diagnostics (hint severity) with per-line timing data. These appear as inline hints in the editor. Not as pretty as VS Code decorations, but functional.
-
-2. **Slash Commands** — `/profile` and `/profstop` trigger profiling via the AI assistant panel. Results appear as formatted text with hot functions, timing data, and file:line references.
-
-3. **External Viewer** — The LSP generates a speedscope JSON file and opens it in the browser. Full interactive flamegraph with click-to-source.
+1. **LSP Diagnostics** — The profiler emits hotspot diagnostics (hint severity) with per-line timing data.
+2. **Slash Commands** — `/profile` and `/profstop` trigger profiling via the AI assistant panel.
+3. **External Viewer** — The LSP generates a speedscope JSON file and opens it in the browser.
 
 ### Tree-sitter Queries
 
@@ -343,7 +328,7 @@ Target assets:
 
 ## Zed Settings
 
-Users configure Basilisk in their `settings.json`:
+> Shared configuration settings are defined in `LSP-SPEC.md` § Shared Configuration Settings. Below shows how to map them into Zed's `settings.json` structure.
 
 ```json
 {
@@ -356,6 +341,8 @@ Users configure Basilisk in their `settings.json`:
         "python": "/path/to/python3"
       },
       "settings": {
+        // All keys from LSP-SPEC.md "Shared Configuration Settings"
+        // nested under the "basilisk" key
         "inlayHints": {
           "parameterNames": true,
           "variableTypes": true
@@ -411,7 +398,7 @@ The entire backend is shared. Only thin editor-specific glue differs.
 
 ## TODO List
 
-See [BASILISK-ZED-EXTENSION-PLAN.md](BASILISK-ZED-EXTENSION-PLAN.md) for the full implementation plan with phasing.
+See [BASILISK-ZED-EXTENSION-PLAN.md](../plans/BASILISK-ZED-EXTENSION-PLAN.md) for the full implementation plan with phasing.
 
 ### Extension Scaffolding
 - [ ] Create `basilisk-zed/` directory with `extension.toml`, `Cargo.toml`, `src/lib.rs`

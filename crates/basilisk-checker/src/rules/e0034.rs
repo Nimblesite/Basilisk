@@ -105,7 +105,7 @@ impl Rule for FinalViolation {
                 if let Some(base_cls) = class_map.get(base_name.as_str()) {
                     for (method_name, decs) in &base_cls.method_decorators {
                         if decs.iter().any(|d| is_final_decorator(d)) {
-                            final_base_methods.insert(method_name.as_str());
+                            let _ = final_base_methods.insert(method_name.as_str());
                         }
                     }
                 }

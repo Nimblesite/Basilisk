@@ -143,6 +143,8 @@ struct FileResult {
     tagged_exact_satisfied: usize,
     /// `# E[tag]` groups missed.
     tagged_exact_missed: usize,
+    /// Distinct Basilisk rule codes fired on this file (conformance-relevant only).
+    rules_fired: Vec<String>,
 }
 
 impl FileResult {
@@ -193,22 +195,23 @@ fn run_file(path: &Path) -> FileResult {
         let lineno = idx + 1;
         match parse_annotation(line) {
             Some(Annotation::Required) => {
-                required.insert(lineno);
+                let _ = required.insert(lineno);
             }
             Some(Annotation::Optional) => {
-                optional.insert(lineno);
+                let _ = optional.insert(lineno);
             }
             Some(Annotation::TaggedExact(tag)) => {
-                tagged_exact.entry(tag).or_default().insert(lineno);
+                let _ = tagged_exact.entry(tag).or_default().insert(lineno);
             }
             Some(Annotation::TaggedMulti(tag)) => {
-                tagged_multi.entry(tag).or_default().insert(lineno);
+                let _ = tagged_multi.entry(tag).or_default().insert(lineno);
             }
             None => {}
         }
     }
 
     // Run the pipeline.
+    let mut rules_seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     let diag_lines: HashSet<usize> = match parse_file(path.to_string_lossy().as_ref()) {
         Ok(parsed) => match resolve(&parsed) {
             Ok(resolved) => {
@@ -217,7 +220,10 @@ fn run_file(path: &Path) -> FileResult {
                     .iter()
                     .filter(|d| d.severity == basilisk_checker::Severity::Error)
                     .filter(|d| !STRICTNESS_ONLY.contains(&d.code.code))
-                    .map(|d| byte_offset_to_line(&source, d.span.start))
+                    .map(|d| {
+                        let _ = rules_seen.insert(d.code.code.to_owned());
+                        byte_offset_to_line(&source, d.span.start)
+                    })
                     .collect()
             }
             Err(_) => HashSet::new(),
@@ -277,6 +283,7 @@ fn run_file(path: &Path) -> FileResult {
         optional_caught,
         tagged_exact_satisfied,
         tagged_exact_missed,
+        rules_fired: rules_seen.into_iter().collect(),
     }
 }
 
@@ -324,6 +331,7 @@ fn conformance_score() {
 
     let (totals, by_category, detail_lines) = collect_results(&files);
     print_scorecard(&totals, &by_category, &detail_lines);
+    write_csv(&detail_lines);
 
     assert!(
         totals.files > 0,
@@ -343,6 +351,43 @@ struct Totals {
     fp: usize,
     tag_ok: usize,
     tag_missed: usize,
+}
+
+/// Write a CSV snapshot of per-file conformance results.
+///
+/// Output path: `benchmarks/conformance_status.csv` (repo root).
+/// Columns: file, category, status, caught, missed, false_positives
+///
+/// This file is the rolling log — commit it after each run to track regressions.
+fn write_csv(detail_lines: &DetailLines) {
+    // Walk up from the manifest dir to find the workspace root (contains both
+    // Cargo.toml and a `crates/` subdirectory — distinguishes it from crate-level Cargo.toml).
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let Some(repo_root) = manifest
+        .ancestors()
+        .find(|p| p.join("Cargo.toml").exists() && p.join("crates").exists())
+    else {
+        eprintln!("  [conformance csv] could not locate repo root");
+        return;
+    };
+    let csv_path = repo_root.join("benchmarks/conformance_status.csv");
+    let _ = fs::create_dir_all(csv_path.parent().unwrap_or(Path::new(".")));
+
+    let mut out = String::from("basilisk_rules,file,category,status,caught,missed,false_positives\n");
+    for (name, result) in detail_lines {
+        let cat = category(name);
+        let status = if result.passes() { "PASS" } else { "FAIL" };
+        let rules = result.rules_fired.join("|");
+        out.push_str(&format!(
+            "{rules},{name},{cat},{status},{},{},{}\n",
+            result.caught, result.missed, result.false_positives
+        ));
+    }
+
+    match fs::write(&csv_path, &out) {
+        Ok(()) => println!("  Conformance CSV: {}", csv_path.display()),
+        Err(e) => eprintln!("  [conformance csv] write failed: {e}"),
+    }
 }
 
 fn collect_results(files: &[std::fs::DirEntry]) -> (Totals, CategoryMap, DetailLines) {

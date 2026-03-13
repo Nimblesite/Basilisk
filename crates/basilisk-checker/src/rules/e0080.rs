@@ -72,7 +72,7 @@ fn build_typevar_bounds<'a>(
             continue;
         }
         if let Some(bound_text) = extract_bound_text(source, tv.span) {
-            typevar_bounds.insert(tv.name.as_str(), bound_text);
+            let _ = typevar_bounds.insert(tv.name.as_str(), bound_text);
         }
     }
     typevar_bounds
@@ -100,7 +100,7 @@ fn build_func_param_bounds<'a>(
             }
         }
         if !param_bounds.is_empty() {
-            func_param_bounds.insert(func.name.as_str(), param_bounds);
+            let _ = func_param_bounds.insert(func.name.as_str(), param_bounds);
         }
     }
     func_param_bounds

@@ -108,7 +108,7 @@ fn collect_literal_params(func_def: &ruff_python_ast::StmtFunctionDef) -> HashSe
     {
         if let Some(ann) = &param.parameter.annotation {
             if is_literal_annotation(ann) {
-                literal_params.insert(param.parameter.name.to_string());
+                let _ = literal_params.insert(param.parameter.name.to_string());
             }
         }
     }
@@ -116,7 +116,7 @@ fn collect_literal_params(func_def: &ruff_python_ast::StmtFunctionDef) -> HashSe
     if let Some(vararg) = &params.vararg {
         if let Some(ann) = &vararg.annotation {
             if is_literal_annotation(ann) {
-                literal_params.insert(vararg.name.to_string());
+                let _ = literal_params.insert(vararg.name.to_string());
             }
         }
     }
@@ -124,7 +124,7 @@ fn collect_literal_params(func_def: &ruff_python_ast::StmtFunctionDef) -> HashSe
     if let Some(kwarg) = &params.kwarg {
         if let Some(ann) = &kwarg.annotation {
             if is_literal_annotation(ann) {
-                literal_params.insert(kwarg.name.to_string());
+                let _ = literal_params.insert(kwarg.name.to_string());
             }
         }
     }

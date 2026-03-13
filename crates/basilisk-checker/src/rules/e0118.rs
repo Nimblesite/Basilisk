@@ -107,11 +107,11 @@ fn collect_abstract_stub_methods(stmts: &[Stmt]) -> HashMap<String, HashSet<Stri
                 |d| matches!(&d.expression, Expr::Name(n) if n.id.as_str() == "abstractmethod"),
             );
             if is_abstract && is_stub_body(&func.body) {
-                stubs.insert(func.name.id.to_string());
+                let _ = stubs.insert(func.name.id.to_string());
             }
         }
         if !stubs.is_empty() {
-            result.insert(cls.name.id.to_string(), stubs);
+            let _ = result.insert(cls.name.id.to_string(), stubs);
         }
     }
     result
@@ -125,7 +125,7 @@ fn collect_class_bases(stmts: &[Stmt]) -> HashMap<String, Vec<String>> {
         let bases: Vec<String> = cls.arguments.as_ref().map_or_else(Vec::new, |args| {
             args.args.iter().filter_map(expr_simple_name).collect()
         });
-        result.insert(cls.name.id.to_string(), bases);
+        let _ = result.insert(cls.name.id.to_string(), bases);
     }
     result
 }

@@ -161,7 +161,7 @@ pub(crate) fn collect_transform_functions(
             }
         }
 
-        result.insert(func.name.clone(), defaults);
+        let _ = result.insert(func.name.clone(), defaults);
     }
 
     result
@@ -236,7 +236,7 @@ pub(crate) fn collect_transform_classes(
                 }
             }
 
-            result.insert(cls.name.clone(), info);
+            let _ = result.insert(cls.name.clone(), info);
             break;
         }
     }

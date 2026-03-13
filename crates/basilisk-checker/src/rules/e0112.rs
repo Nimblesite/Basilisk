@@ -156,7 +156,7 @@ fn build_typeguard_func_map(module: &ResolvedModule) -> HashMap<&str, &str> {
             continue;
         };
         if is_typeguard_or_typeis(ann_text) {
-            typeguard_funcs.insert(func.name.as_str(), ann_text.trim());
+            let _ = typeguard_funcs.insert(func.name.as_str(), ann_text.trim());
         }
     }
     typeguard_funcs
@@ -239,7 +239,7 @@ impl Rule for TypeGuardCallableReturnMismatch {
         let mut func_map: HashMap<&str, &basilisk_resolver::FunctionInfo> = HashMap::new();
         for func in &module.functions {
             if func.class_name.is_none() {
-                func_map.insert(func.name.as_str(), func);
+                let _ = func_map.insert(func.name.as_str(), func);
             }
         }
 

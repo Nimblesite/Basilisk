@@ -1,5 +1,7 @@
 # Build
 target/
+basilisk-zed/extension.wasm
+basilisk-zed/dist/
 
 # Coverage & mutation testing
 lcov.info

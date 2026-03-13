@@ -74,7 +74,7 @@ impl Rule for DeprecatedUsage {
         // Merge all deprecated names.
         let mut all_deprecated = local_deprecated;
         for (name, info) in imported_deprecated {
-            all_deprecated.insert(name, info);
+            let _ = all_deprecated.insert(name, info);
         }
 
         if all_deprecated.is_empty() && module_aliases.is_empty() {
@@ -222,7 +222,7 @@ fn collect_deprecated_definitions(
                             func.name.to_string()
                         };
 
-                        out.insert(
+                        let _ = out.insert(
                             name,
                             DeprecatedInfo {
                                 kind,
@@ -240,7 +240,7 @@ fn collect_deprecated_definitions(
             Stmt::ClassDef(cls) => {
                 for dec in &cls.decorator_list {
                     if let Some(message) = is_deprecated_decorator(&dec.expression) {
-                        out.insert(
+                        let _ = out.insert(
                             cls.name.to_string(),
                             DeprecatedInfo {
                                 kind: "class".to_owned(),
@@ -306,7 +306,7 @@ fn collect_imported_deprecated(
                         // Record the import site span so we can emit a diagnostic there.
                         let import_span = text_range_to_span(import_from.range());
                         from_import_deprecated.push((local_name.clone(), import_span));
-                        out.insert(local_name, info.clone());
+                        let _ = out.insert(local_name, info.clone());
                     }
                 }
             }
@@ -314,9 +314,9 @@ fn collect_imported_deprecated(
                 for alias in &import_stmt.names {
                     let module_str = alias.name.to_string();
                     if let Some(asname) = alias.asname.as_ref() {
-                        module_aliases.insert(asname.to_string(), module_str);
+                        let _ = module_aliases.insert(asname.to_string(), module_str);
                     } else {
-                        module_aliases.insert(module_str.clone(), module_str);
+                        let _ = module_aliases.insert(module_str.clone(), module_str);
                     }
                 }
             }
@@ -359,7 +359,7 @@ fn collect_imported_deprecated_members(
                 let mut sibling_deprecated: HashMap<String, DeprecatedInfo> = HashMap::new();
                 collect_deprecated_definitions(&sibling.ast.body, &mut sibling_deprecated, None);
                 if !sibling_deprecated.is_empty() {
-                    result.insert(alias_name, sibling_deprecated);
+                    let _ = result.insert(alias_name, sibling_deprecated);
                 }
             }
         }
@@ -385,7 +385,7 @@ fn collect_var_types_from_stmts(stmts: &[Stmt], var_types: &mut HashMap<String, 
                 if let Some(var_type) = infer_call_type(&assign.value) {
                     for target in &assign.targets {
                         if let Expr::Name(name) = target {
-                            var_types.insert(name.id.to_string(), var_type.clone());
+                            let _ = var_types.insert(name.id.to_string(), var_type.clone());
                         }
                     }
                 }

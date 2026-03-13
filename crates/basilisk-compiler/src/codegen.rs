@@ -267,7 +267,7 @@ impl Interpreter {
                 _ => {
                     // Sync env back to globals after each top-level statement
                     for (k, v) in &env {
-                        self.globals.insert(k.clone(), v.clone());
+                        let _ = self.globals.insert(k.clone(), v.clone());
                     }
                 }
             }
@@ -289,7 +289,7 @@ impl Interpreter {
     fn exec_stmt(&mut self, stmt: &Stmt, env: &mut Env) -> Result<Signal, CompileError> {
         match stmt {
             Stmt::Expr(expr_stmt) => {
-                self.eval_expr(&expr_stmt.value, env)?;
+                let _ = self.eval_expr(&expr_stmt.value, env)?;
                 Ok(Signal::Ok)
             }
             Stmt::Return(ret) => {
@@ -376,8 +376,9 @@ impl Interpreter {
                     body: func_def.body.clone(),
                     closure: env.clone(),
                 };
-                env.insert(name.clone(), Value::Func(fd));
-                self.globals
+                let _ = env.insert(name.clone(), Value::Func(fd));
+                let _ = self
+                    .globals
                     .insert(name.clone(), env.get(&name).cloned().unwrap_or(Value::None));
                 Ok(Signal::Ok)
             }
@@ -393,7 +394,7 @@ impl Interpreter {
                             .iter()
                             .map(|p| p.parameter.name.to_string())
                             .collect();
-                        methods.insert(
+                        let _ = methods.insert(
                             mname.clone(),
                             FuncDef {
                                 name: mname,
@@ -408,8 +409,9 @@ impl Interpreter {
                     name: name.clone(),
                     methods,
                 };
-                env.insert(name.clone(), Value::Class(cd));
-                self.globals
+                let _ = env.insert(name.clone(), Value::Class(cd));
+                let _ = self
+                    .globals
                     .insert(name.clone(), env.get(&name).cloned().unwrap_or(Value::None));
                 Ok(Signal::Ok)
             }
@@ -447,7 +449,7 @@ impl Interpreter {
     ) -> Result<(), CompileError> {
         match target {
             Expr::Name(name) => {
-                env.insert(name.id.to_string(), val);
+                let _ = env.insert(name.id.to_string(), val);
                 Ok(())
             }
             Expr::Tuple(tuple) => {
@@ -474,7 +476,7 @@ impl Interpreter {
             Expr::Attribute(attr) => {
                 let obj = self.eval_expr(&attr.value, env)?;
                 if let Value::Instance(mut inst) = obj {
-                    inst.attrs.insert(attr.attr.to_string(), val);
+                    let _ = inst.attrs.insert(attr.attr.to_string(), val);
                     let inst_val = Value::Instance(inst);
                     self.assign_target(&attr.value, inst_val, env)?;
                     Ok(())
@@ -759,10 +761,10 @@ impl Interpreter {
         let mut local_env = fd.closure.clone();
         // Merge globals so functions can see each other
         for (k, v) in &self.globals {
-            local_env.entry(k.clone()).or_insert_with(|| v.clone());
+            let _ = local_env.entry(k.clone()).or_insert_with(|| v.clone());
         }
         for (param, arg) in fd.params.iter().zip(args.iter()) {
-            local_env.insert(param.clone(), arg.clone());
+            let _ = local_env.insert(param.clone(), arg.clone());
         }
         match self.exec_body(&fd.body, &mut local_env)? {
             Signal::Return(val) => Ok(val),
@@ -773,10 +775,10 @@ impl Interpreter {
     fn call_lambda(&mut self, ld: &LambdaDef, args: &[Value]) -> Result<Value, CompileError> {
         let mut local_env = ld.closure.clone();
         for (k, v) in &self.globals {
-            local_env.entry(k.clone()).or_insert_with(|| v.clone());
+            let _ = local_env.entry(k.clone()).or_insert_with(|| v.clone());
         }
         for (param, arg) in ld.params.iter().zip(args.iter()) {
-            local_env.insert(param.clone(), arg.clone());
+            let _ = local_env.insert(param.clone(), arg.clone());
         }
         self.eval_expr(&ld.body, &mut local_env)
     }
@@ -799,13 +801,13 @@ impl Interpreter {
             full_args.extend_from_slice(args);
             let mut local_env = init_method.closure.clone();
             for (k, v) in &self.globals {
-                local_env.entry(k.clone()).or_insert_with(|| v.clone());
+                let _ = local_env.entry(k.clone()).or_insert_with(|| v.clone());
             }
             for (param, arg) in init_method.params.iter().zip(full_args.iter()) {
-                local_env.insert(param.clone(), arg.clone());
+                let _ = local_env.insert(param.clone(), arg.clone());
             }
 
-            self.exec_body(&init_method.body, &mut local_env)?;
+            let _ = self.exec_body(&init_method.body, &mut local_env)?;
 
             if let Some(self_val) = local_env.get("self") {
                 inst_val = self_val.clone();
@@ -815,7 +817,8 @@ impl Interpreter {
         // Ensure instance retains class methods
         if let Value::Instance(ref mut inst) = inst_val {
             for (name, method) in &cd.methods {
-                inst.methods
+                let _ = inst
+                    .methods
                     .entry(name.clone())
                     .or_insert_with(|| method.clone());
             }
@@ -1223,7 +1226,7 @@ impl Interpreter {
             "remove" => {
                 let mut new_items = items.to_vec();
                 if let Some(pos) = new_items.iter().position(|v| values_equal(v, &args[0])) {
-                    new_items.remove(pos);
+                    let _ = new_items.remove(pos);
                 }
                 Ok((Value::None, Some(Value::List(new_items))))
             }

@@ -1,10 +1,14 @@
 # Mass Autofix & Gradual Adoption — Implementation Plan
 
-## Prerequisites
+## Status
 
-- Basilisk diagnostic pipeline is functional and producing `BSK-E####` codes.
-- LSP server is serving diagnostics to the VS Code extension.
-- VS Code extension can display diagnostics and handle code actions.
+**Prerequisites met:** Diagnostic pipeline produces `BSK-E####` codes, LSP serves diagnostics, VS Code extension displays them and handles code actions.
+
+**What exists already:**
+- Per-diagnostic code actions in `code_actions.rs` for E0001, E0002, E0003, W0050
+- Suppress actions (`# type: ignore`, demote to warning, disable for file)
+- Import organization (via Ruff), expand wildcard imports, convert import styles, add `__all__`
+- **Missing:** `Fix` metadata on diagnostics, `MassFixEngine`, `AdoptionStore`, `basilisk fix` CLI
 
 ---
 

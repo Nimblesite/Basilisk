@@ -199,7 +199,7 @@ fn collect_posonly_params_from_stmts(
                         .map(str::to_owned)
                         .collect();
                     if !posonly.is_empty() {
-                        map.insert(func.name.to_string(), posonly);
+                        let _ = map.insert(func.name.to_string(), posonly);
                     }
                 }
                 collect_posonly_params_from_stmts(&func.body, map);
@@ -669,7 +669,7 @@ fn collect_class_body(
                             has_annotation: false,
                             annotation_span: None,
                             has_value: true,
-                            rhs_kind: RhsKind::Other,
+                            rhs_kind: classify_rhs(&assign.value),
                             rhs_span: Some(text_range_to_span(assign.value.range())),
                             rhs_is_nonmember_call,
                             rhs_is_lambda,
@@ -937,7 +937,7 @@ fn apply_dataclass_transform(
                 continue;
             }
             let overloads = build_field_specifier_overloads(stmts, spec_name, functions);
-            specifier_overloads.insert(spec_name.as_str(), overloads);
+            let _ = specifier_overloads.insert(spec_name.as_str(), overloads);
         }
     }
 
@@ -3053,7 +3053,7 @@ fn collect_final_string_constants<'a>(
         let Expr::StringLiteral(s) = val else {
             continue;
         };
-        map.insert(n.id.as_str(), s.value.to_str());
+        let _ = map.insert(n.id.as_str(), s.value.to_str());
     }
     map
 }
@@ -4306,7 +4306,7 @@ fn build_typeddict_readonly_map(
         if let Some(second_arg) = call.arguments.args.get(1) {
             let fields = functional_typeddict_readonly_fields(second_arg);
             if !fields.is_empty() {
-                map.insert(lhs_name, fields);
+                let _ = map.insert(lhs_name, fields);
             }
         }
     }
@@ -4328,7 +4328,7 @@ fn build_var_type_map<'a>(
             continue;
         };
         if let Some((key, _)) = td_readonly_fields.get_key_value(type_name.id.as_str()) {
-            map.insert(var_name, key.as_str());
+            let _ = map.insert(var_name, key.as_str());
         }
     }
     map
@@ -4413,7 +4413,7 @@ fn td_var_type_from_stmts(
         };
         let class_name = type_name.id.as_str();
         if fields.contains_key(class_name) {
-            map.insert(var_name, class_name.to_owned());
+            let _ = map.insert(var_name, class_name.to_owned());
         }
     }
     map
@@ -4506,7 +4506,8 @@ fn check_td_stmts(
                     if let Some(ann) = &param.parameter.annotation {
                         if let Some(type_name) = expr_simple_name(ann) {
                             if fields.contains_key(type_name.as_str()) {
-                                local_vars.insert(param.parameter.name.to_string(), type_name);
+                                let _ =
+                                    local_vars.insert(param.parameter.name.to_string(), type_name);
                             }
                         }
                     }
@@ -4986,7 +4987,7 @@ fn collect_file_final_names(stmts: &[Stmt], source: &str) -> std::collections::H
             continue;
         };
         if ann_text_is_final(ann_text) {
-            names.insert(n.id.to_string());
+            let _ = names.insert(n.id.to_string());
         }
     }
     names
@@ -5032,7 +5033,7 @@ fn collect_imported_final_names(
             for alias in &import_from.names {
                 let name = alias.name.as_str();
                 if sibling_finals.contains(name) {
-                    out.insert(name.to_owned());
+                    let _ = out.insert(name.to_owned());
                 }
             }
         }
@@ -5182,7 +5183,7 @@ fn collect_class_final_violations(
         };
         if ann_text_is_final(ann_text) {
             let has_value = ann.value.is_some();
-            this_final_attrs.insert(attr_name, has_value);
+            let _ = this_final_attrs.insert(attr_name, has_value);
         }
     }
 
@@ -5394,7 +5395,7 @@ fn collect_unconditional_self_assigns(stmts: &[Stmt]) -> std::collections::HashS
                         continue;
                     };
                     if n.id == "self" {
-                        names.insert(attr.attr.to_string());
+                        let _ = names.insert(attr.attr.to_string());
                     }
                 }
             }
@@ -5435,7 +5436,7 @@ fn collect_self_assigns_from_stmts(stmts: &[Stmt]) -> std::collections::HashSet<
                 continue;
             };
             if n.id == "self" {
-                names.insert(attr.attr.to_string());
+                let _ = names.insert(attr.attr.to_string());
             }
         }
     }
@@ -5502,7 +5503,7 @@ fn collect_func_stmt_final_violations(
                     source.get(range.start().to_u32() as usize..range.end().to_u32() as usize)
                 {
                     if ann_text_is_final(ann_text) {
-                        local_finals.insert(n.id.to_string());
+                        let _ = local_finals.insert(n.id.to_string());
                     }
                 }
             }
@@ -6940,7 +6941,7 @@ fn collect_protocol_instantiation_violations(
             &protocol_required_methods,
             &protocol_required_attrs,
         ) {
-            abstract_names.insert(cls.name.as_str());
+            let _ = abstract_names.insert(cls.name.as_str());
         }
     }
 
@@ -7075,10 +7076,10 @@ fn collect_provided_members<'a>(
     provided_attrs: &mut std::collections::HashSet<&'a str>,
 ) {
     for method_name in &cls.method_names {
-        provided_methods.insert(method_name.as_str());
+        let _ = provided_methods.insert(method_name.as_str());
     }
     for attr in &cls.attributes {
-        provided_attrs.insert(attr.name.as_str());
+        let _ = provided_attrs.insert(attr.name.as_str());
     }
 }
 
@@ -7108,10 +7109,10 @@ fn collect_protocol_required_methods(
             );
             let is_stub = is_function_body_stub(&func.body);
             if is_abstract || is_stub {
-                required.insert(name.to_string());
+                let _ = required.insert(name.to_string());
             }
         }
-        result.insert(cls.name.id.to_string(), required);
+        let _ = result.insert(cls.name.id.to_string(), required);
     }
     result
 }
@@ -7150,11 +7151,11 @@ fn collect_protocol_required_attrs(
             }
             if is_classvar_annotation(&ann.annotation) {
                 if let Some(name) = expr_simple_name(&ann.target) {
-                    required.insert(name);
+                    let _ = required.insert(name);
                 }
             }
         }
-        result.insert(cls.name.id.to_string(), required);
+        let _ = result.insert(cls.name.id.to_string(), required);
     }
     result
 }
@@ -7318,7 +7319,7 @@ fn build_protocol_map(classes: &[ClassInfo]) -> std::collections::HashMap<&str, 
             .iter()
             .any(|(name, _)| name == "runtime_checkable");
         let is_data_protocol = !cls.attributes.is_empty();
-        map.insert(
+        let _ = map.insert(
             cls.name.as_str(),
             ProtocolInfo {
                 is_runtime_checkable,

@@ -92,9 +92,9 @@ fn collect_dc_classes<'a>(
     let mut result: HashMap<&str, bool> = HashMap::new();
     for cls in &module.classes {
         if cls.is_dataclass {
-            result.insert(cls.name.as_str(), cls.is_dataclass_order);
+            let _ = result.insert(cls.name.as_str(), cls.is_dataclass_order);
         } else if let Some(info) = transform_classes.get(cls.name.as_str()) {
-            result.insert(cls.name.as_str(), info.order);
+            let _ = result.insert(cls.name.as_str(), info.order);
         }
     }
     result

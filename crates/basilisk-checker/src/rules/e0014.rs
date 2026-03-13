@@ -247,7 +247,7 @@ fn build_param_type_map(
             continue;
         };
         let inferred = InferredType::from_annotation(ann_text.trim());
-        map.insert(param.name.clone(), inferred);
+        let _ = map.insert(param.name.clone(), inferred);
     }
     map
 }
@@ -337,7 +337,7 @@ fn check_tuple_reassignments(module: &ResolvedModule, diagnostics: &mut Vec<Diag
         };
         let ann_trimmed = ann_text.trim();
         if is_tuple_annotation(ann_trimmed) {
-            tuple_annotations.insert(var.name.as_str(), ann_trimmed);
+            let _ = tuple_annotations.insert(var.name.as_str(), ann_trimmed);
         }
     }
 
@@ -595,11 +595,11 @@ fn check_dataclass_attr_assignments(module: &ResolvedModule, diagnostics: &mut V
                     .source
                     .get(ann_span.start as usize..ann_span.end as usize)
                 {
-                    fields.insert(attr.name.as_str(), ann_text.trim());
+                    let _ = fields.insert(attr.name.as_str(), ann_text.trim());
                 }
             }
         }
-        class_field_types.insert(cls.name.as_str(), fields);
+        let _ = class_field_types.insert(cls.name.as_str(), fields);
     }
 
     if class_field_types.is_empty() {

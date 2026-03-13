@@ -160,16 +160,16 @@ pub fn run_tests(
     extra_args: &[String],
 ) -> Result<TestRunResult, String> {
     let mut cmd = std::process::Command::new(pytest_path);
-    cmd.current_dir(root);
-    cmd.args(["--tb=short", "-q"]);
+    let _ = cmd.current_dir(root);
+    let _ = cmd.args(["--tb=short", "-q"]);
 
     for arg in extra_args {
-        cmd.arg(arg);
+        let _ = cmd.arg(arg);
     }
 
     // If specific tests requested, pass them as node IDs.
     for test_id in test_ids {
-        cmd.arg(test_id);
+        let _ = cmd.arg(test_id);
     }
 
     let output = cmd

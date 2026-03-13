@@ -343,7 +343,7 @@ pub(crate) fn collect(stmts: &[Stmt]) -> Vec<BoundedTypeVarAttrViolation> {
             if let TypeParam::TypeVar(tv) = tp {
                 if let Some(bound) = &tv.bound {
                     if let Expr::Name(name) = bound.as_ref() {
-                        typevar_bounds.insert(tv.name.to_string(), name.id.to_string());
+                        let _ = typevar_bounds.insert(tv.name.to_string(), name.id.to_string());
                     }
                 }
             }
@@ -369,7 +369,7 @@ pub(crate) fn collect(stmts: &[Stmt]) -> Vec<BoundedTypeVarAttrViolation> {
                     if let Expr::Name(name) = ann.as_ref() {
                         let ann_name = name.id.to_string();
                         if typevar_bounds.contains_key(&ann_name) {
-                            param_typevar.insert(param_name, ann_name);
+                            let _ = param_typevar.insert(param_name, ann_name);
                         }
                     }
                 }

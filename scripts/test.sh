@@ -31,12 +31,6 @@ done
 LCOV_FILE="$REPO_ROOT/lcov.info"
 HTML_DIR="$REPO_ROOT/target/llvm-cov/html"
 
-# ── Setup ────────────────────────────────────────────────────────────────────
-
-header "Setup"
-"$REPO_ROOT/scripts/setup.sh"
-ok "setup done"
-
 # ── Build ────────────────────────────────────────────────────────────────────
 
 header "Building basilisk binary"
@@ -85,7 +79,7 @@ header "Enforcing per-project coverage thresholds"
 TEST_COVERAGE_BASILISK_CHECKER="${TEST_COVERAGE_BASILISK_CHECKER:-89}"
 TEST_COVERAGE_BASILISK_CLI="${TEST_COVERAGE_BASILISK_CLI:-96}"
 TEST_COVERAGE_BASILISK_DB="${TEST_COVERAGE_BASILISK_DB:-100}"
-TEST_COVERAGE_BASILISK_LSP="${TEST_COVERAGE_BASILISK_LSP:-50}"
+TEST_COVERAGE_BASILISK_LSP="${TEST_COVERAGE_BASILISK_LSP:-75}"
 TEST_COVERAGE_BASILISK_MOJO="${TEST_COVERAGE_BASILISK_MOJO:-90}"
 TEST_COVERAGE_BASILISK_PARSER="${TEST_COVERAGE_BASILISK_PARSER:-100}"
 TEST_COVERAGE_BASILISK_PLUGIN="${TEST_COVERAGE_BASILISK_PLUGIN:-100}"
@@ -184,16 +178,22 @@ npm run compile
 ok "TypeScript compiled"
 
 header "VS Code E2E tests"
-if command -v xvfb-run &>/dev/null; then
-    BASILISK_EXECUTABLE_PATH="$REPO_ROOT/target/debug/basilisk" \
-    MOCHA_TIMEOUT="120000" \
-    xvfb-run -a npm test
-else
-    BASILISK_EXECUTABLE_PATH="$REPO_ROOT/target/debug/basilisk" \
-    MOCHA_TIMEOUT="120000" \
-    npm test
-fi
+BASILISK_EXECUTABLE_PATH="$REPO_ROOT/target/debug/basilisk" \
+MOCHA_TIMEOUT="120000" \
+npm test
 ok "VS Code E2E tests done"
+
+header "VS Code extension — coverage threshold"
+VSIX_LCOV="$REPO_ROOT/vscode-extension/coverage/lcov.info"
+TEST_COVERAGE_VSIX="${TEST_COVERAGE_VSIX:-60}"
+vsix_total=$(grep -c "^DA:" "$VSIX_LCOV")
+vsix_covered=$(grep -c "^DA:[^,]*,[^0]" "$VSIX_LCOV")
+vsix_pct=$((vsix_covered * 100 / vsix_total))
+if [[ "$vsix_pct" -lt "$TEST_COVERAGE_VSIX" ]]; then
+    echo -e "  ${RED}✗ vscode-extension: ${vsix_pct}% < ${TEST_COVERAGE_VSIX}% threshold — FAIL${RESET}"
+    exit 1
+fi
+echo -e "  ${GREEN}✓ vscode-extension: ${vsix_pct}% ≥ ${TEST_COVERAGE_VSIX}% threshold${RESET}"
 cd "$REPO_ROOT"
 
 # ── Zed extension ────────────────────────────────────────────────────────────

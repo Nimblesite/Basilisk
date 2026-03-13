@@ -394,7 +394,7 @@ fn already_provided_kwargs(text: &str, byte_offset: usize) -> HashSet<String> {
             let ident: String = chars[start_idx..idx].iter().collect();
             // Check if followed by `=` but not `==`
             if idx < len && chars[idx] == '=' && (idx + 1 >= len || chars[idx + 1] != '=') {
-                result.insert(ident);
+                let _ = result.insert(ident);
             }
         } else {
             idx += 1;
@@ -724,6 +724,9 @@ mod tests {
         assert!(labels.contains(&"color"), "missing 'color': {labels:?}");
         assert!(labels.contains(&"age"), "missing 'age': {labels:?}");
         assert!(labels.contains(&"meow"), "missing 'meow': {labels:?}");
-        assert!(labels.contains(&"describe"), "missing 'describe': {labels:?}");
+        assert!(
+            labels.contains(&"describe"),
+            "missing 'describe': {labels:?}"
+        );
     }
 }

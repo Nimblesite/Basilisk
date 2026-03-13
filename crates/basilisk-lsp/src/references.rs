@@ -89,7 +89,7 @@ pub fn rename_symbol(
     }
 
     let mut changes = std::collections::HashMap::new();
-    changes.insert(uri.clone(), edits);
+    let _ = changes.insert(uri.clone(), edits);
     Some(WorkspaceEdit {
         changes: Some(changes),
         ..Default::default()

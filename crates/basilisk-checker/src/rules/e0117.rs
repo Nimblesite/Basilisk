@@ -190,7 +190,7 @@ fn check_function_locals(
 
         // Add PEP 695 type params.
         for name in &func.pep695_type_param_names {
-            in_scope.insert(name.as_str());
+            let _ = in_scope.insert(name.as_str());
         }
 
         // Add TypeVars from parameter annotations.
@@ -204,7 +204,7 @@ fn check_function_locals(
                 if let Some(text) = annotation_text(&module.source, *ann_span) {
                     for name in extract_names_from_annotation(text) {
                         if typevar_names.contains(name) {
-                            in_scope.insert(name);
+                            let _ = in_scope.insert(name);
                         }
                     }
                 }
@@ -216,7 +216,7 @@ fn check_function_locals(
             if let Some(text) = annotation_text(&module.source, *ret_span) {
                 for name in extract_names_from_annotation(text) {
                     if typevar_names.contains(name) {
-                        in_scope.insert(name);
+                        let _ = in_scope.insert(name);
                     }
                 }
             }
@@ -227,7 +227,7 @@ fn check_function_locals(
             for (cls_name, params) in class_generic_params {
                 if *cls_name == class_name.as_str() {
                     for param in params {
-                        in_scope.insert(param);
+                        let _ = in_scope.insert(param);
                     }
                     break;
                 }

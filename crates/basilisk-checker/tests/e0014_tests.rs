@@ -144,6 +144,42 @@ fn e0014_float_annotated_int_no_diagnostic() -> Result<(), Box<dyn std::error::E
 }
 
 #[test]
+fn e0014_optional_none_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    // None is a valid value for Optional[int]
+    let source = "from typing import Optional\nmaybe_int: Optional[int] = None\n";
+    let msgs = e0014_messages(&run(source)?);
+    assert!(
+        msgs.is_empty(),
+        "Optional[int] = None should NOT fire E0014, got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0014_union_member_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    // 42 (int) is a valid member of Union[int, str]
+    let source = "from typing import Union\neither: Union[int, str] = 42\n";
+    let msgs = e0014_messages(&run(source)?);
+    assert!(
+        msgs.is_empty(),
+        "Union[int, str] = 42 should NOT fire E0014, got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0014_final_with_type_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    // Final[int] = 100 — int matches int
+    let source = "from typing import Final\nMAX_SIZE: Final[int] = 100\n";
+    let msgs = e0014_messages(&run(source)?);
+    assert!(
+        msgs.is_empty(),
+        "Final[int] = 100 should NOT fire E0014, got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn e0014_tuple_reassignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 x: int = 1

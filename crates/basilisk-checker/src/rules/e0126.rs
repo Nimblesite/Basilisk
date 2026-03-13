@@ -61,7 +61,7 @@ fn param_annotations<'a>(func: &'a FunctionInfo, source: &'a str) -> HashMap<&'a
     {
         if let Some(ann_span) = param.annotation_span {
             if let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) {
-                map.insert(param.name.as_str(), ann_text.trim());
+                let _ = map.insert(param.name.as_str(), ann_text.trim());
             }
         }
     }

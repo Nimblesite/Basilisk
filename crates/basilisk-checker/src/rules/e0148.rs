@@ -135,7 +135,7 @@ impl ModuleContext {
                 if assign.targets.len() == 1 {
                     if let Some(lhs_name) = expr_name(&assign.targets[0]) {
                         if let Some(ctv) = try_parse_constrained_typevar(lhs_name, &assign.value) {
-                            constrained_tvars.insert(lhs_name.to_owned(), ctv);
+                            let _ = constrained_tvars.insert(lhs_name.to_owned(), ctv);
                         }
                     }
                 }
@@ -154,10 +154,10 @@ impl ModuleContext {
                     if let Some(var_name) = expr_name(&ann.target) {
                         let ann_text = ann_str(&ann.annotation);
                         // Record type annotation for all variables.
-                        var_types.insert(var_name.to_owned(), ann_text.clone());
+                        let _ = var_types.insert(var_name.to_owned(), ann_text.clone());
                         // Also check for Mapping subscripts.
                         if let Some((key_ty, val_ty)) = parse_mapping_annotation(&ann_text) {
-                            mapping_vars.insert(var_name.to_owned(), (key_ty, val_ty));
+                            let _ = mapping_vars.insert(var_name.to_owned(), (key_ty, val_ty));
                         }
                     }
                 }
@@ -314,9 +314,10 @@ fn check_func_body(
     {
         if let Some(ann) = &param.parameter.annotation {
             let ann_text = ann_str(ann);
-            local_types.insert(param.parameter.name.to_string(), ann_text.clone());
+            let _ = local_types.insert(param.parameter.name.to_string(), ann_text.clone());
             if let Some((key_ty, val_ty)) = parse_mapping_annotation(&ann_text) {
-                local_mapping_vars.insert(param.parameter.name.to_string(), (key_ty, val_ty));
+                let _ =
+                    local_mapping_vars.insert(param.parameter.name.to_string(), (key_ty, val_ty));
             }
         }
     }
@@ -409,7 +410,7 @@ fn check_call(call: &ast::ExprCall, ctx: &ModuleContext, path: &str, diag: &mut 
 
         match tv_group.get(tv_name) {
             None => {
-                tv_group.insert(tv_name, (group, arg_type_str));
+                let _ = tv_group.insert(tv_name, (group, arg_type_str));
             }
             Some(&(existing_group, ref _existing_type)) => {
                 if existing_group != group {

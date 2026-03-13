@@ -79,7 +79,7 @@ impl ModuleContext {
             if let Stmt::ClassDef(cls) = stmt {
                 if is_namedtuple_class(cls) {
                     let field_count = count_annotated_fields(cls);
-                    namedtuple_classes.insert(cls.name.to_string(), field_count);
+                    let _ = namedtuple_classes.insert(cls.name.to_string(), field_count);
                 }
             }
         }
@@ -90,7 +90,8 @@ impl ModuleContext {
                 if !namedtuple_classes.contains_key(cls.name.as_str()) {
                     if let Some(base_count) = namedtuple_base_count(cls, &namedtuple_classes) {
                         let own_fields = count_annotated_fields(cls);
-                        namedtuple_classes.insert(cls.name.to_string(), base_count + own_fields);
+                        let _ = namedtuple_classes
+                            .insert(cls.name.to_string(), base_count + own_fields);
                     }
                 }
             }
@@ -103,7 +104,8 @@ impl ModuleContext {
                     if let Some(var_name) = expr_simple_name(&assign.targets[0]) {
                         if let Some(class_name) = call_class_name(&assign.value) {
                             if namedtuple_classes.contains_key(class_name) {
-                                var_to_nt_class.insert(var_name.to_owned(), class_name.to_owned());
+                                let _ = var_to_nt_class
+                                    .insert(var_name.to_owned(), class_name.to_owned());
                             }
                         }
                     }

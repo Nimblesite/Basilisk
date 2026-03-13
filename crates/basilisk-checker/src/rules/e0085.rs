@@ -85,7 +85,7 @@ impl Rule for TypeVarTupleArgCountMismatch {
                         false
                     }
                 });
-                tvt_init_info.insert(class_name.as_str(), has_tvt_param);
+                let _ = tvt_init_info.insert(class_name.as_str(), has_tvt_param);
             }
         }
 

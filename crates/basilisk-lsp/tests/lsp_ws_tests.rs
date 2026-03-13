@@ -198,7 +198,7 @@ async fn test_ws_initialize() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_did_open_with_type_errors() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let python_code = "def greet(name):\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///test.py", python_code).await?;
@@ -218,7 +218,7 @@ async fn test_ws_did_open_with_type_errors() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_did_open_with_clean_code() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let python_code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///test.py", python_code).await?;
@@ -235,7 +235,7 @@ async fn test_ws_did_open_with_clean_code() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_did_open_with_syntax_error() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // Missing colon after return type.
     let python_code = "def greet(name: str) -> str\n    return f\"Hello, {name}!\"";
@@ -255,7 +255,7 @@ async fn test_ws_did_open_with_syntax_error() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_did_change_updates_diagnostics() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let initial_code = "def greet(name):\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///test.py", initial_code).await?;
@@ -290,7 +290,7 @@ async fn test_ws_did_change_updates_diagnostics() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_did_close_clears_diagnostics() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let python_code = "def greet(name):\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///test.py", python_code).await?;
@@ -310,7 +310,7 @@ async fn test_ws_did_close_clears_diagnostics() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_hover_on_error_location() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let python_code = "def greet(name):\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///test.py", python_code).await?;
@@ -337,7 +337,7 @@ async fn test_ws_hover_on_error_location() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_malformed_json_handling() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // Send raw malformed JSON as a text frame.
     fixture
@@ -368,7 +368,7 @@ async fn test_ws_malformed_json_handling() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_unknown_method_handling() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let resp = fixture
         .request(99, "textDocument/unknownMethod", serde_json::json!({}))
@@ -383,7 +383,7 @@ async fn test_ws_unknown_method_handling() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_concurrent_document_handling() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     fixture
         .did_open("file:///doc1.py", "def func1(x): pass")
@@ -409,7 +409,7 @@ async fn test_ws_concurrent_document_handling() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_large_file_handling() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let mut large_code = String::new();
     for i in 0..50 {
@@ -445,7 +445,7 @@ async fn test_ws_initialize_advertises_completion() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_completion_returns_functions_and_classes() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 class Animal:
@@ -535,7 +535,7 @@ x: int = 42
 #[tokio::test]
 async fn test_ws_completion_prefix_filtering() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 def greet(name: str) -> str:
@@ -581,7 +581,7 @@ gr";
 #[tokio::test]
 async fn test_ws_completion_imports() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 from typing import Optional, List
@@ -621,7 +621,7 @@ import os
 #[tokio::test]
 async fn test_ws_completion_dot_on_class() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 class Dog:
@@ -670,7 +670,7 @@ Dog.";
 #[tokio::test]
 async fn test_ws_completion_self_dot() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 class Cat:
@@ -717,7 +717,7 @@ class Cat:
 #[tokio::test]
 async fn test_ws_completion_builtins() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "pri";
     fixture.did_open("file:///builtins.py", code).await?;
@@ -753,7 +753,7 @@ async fn test_ws_completion_builtins() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_completion_function_detail_shows_params() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 def calculate(x: int, y: int, op: str) -> int:
@@ -789,7 +789,7 @@ cal";
 #[tokio::test]
 async fn test_ws_completion_on_empty_file() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     fixture.did_open("file:///empty.py", "").await?;
     let _ = fixture.wait_for_diagnostics().await;
@@ -871,7 +871,7 @@ async fn code_action_for(
 #[tokio::test]
 async fn test_ws_code_action_missing_param_annotation() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "def greet(name):\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///ca_e0001.py", code).await?;
@@ -946,7 +946,7 @@ async fn test_ws_code_action_missing_param_annotation() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_code_action_missing_return_annotation() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "def greet(name: str):\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///ca_e0002.py", code).await?;
@@ -967,7 +967,7 @@ async fn test_ws_code_action_missing_return_annotation() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_code_action_missing_variable_annotation_empty_list() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "items = []\n";
     fixture.did_open("file:///ca_e0003_list.py", code).await?;
@@ -988,7 +988,7 @@ async fn test_ws_code_action_missing_variable_annotation_empty_list() -> TestRes
 #[tokio::test]
 async fn test_ws_code_action_missing_variable_annotation_empty_dict() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "mapping = {}\n";
     fixture.did_open("file:///ca_e0003_dict.py", code).await?;
@@ -1009,7 +1009,7 @@ async fn test_ws_code_action_missing_variable_annotation_empty_dict() -> TestRes
 #[tokio::test]
 async fn test_ws_code_action_missing_variable_annotation_none() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "value = None\n";
     fixture.did_open("file:///ca_e0003_none.py", code).await?;
@@ -1030,7 +1030,7 @@ async fn test_ws_code_action_missing_variable_annotation_none() -> TestResult<()
 #[tokio::test]
 async fn test_ws_code_action_suppress_with_type_ignore() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "def greet(name):\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///ca_suppress.py", code).await?;
@@ -1051,7 +1051,7 @@ async fn test_ws_code_action_suppress_with_type_ignore() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_code_action_suppress_inserts_at_end_of_line() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // The suppress action must target the diagnostic's line (line 0 here).
     let code = "def greet(name):\n    return f\"Hello, {name}!\"";
@@ -1102,7 +1102,7 @@ async fn test_ws_code_action_organize_imports() -> TestResult<()> {
     }
 
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // Deliberately unsorted imports — ruff should reorder them.
     let code = "import os\nimport sys\nfrom typing import Optional\nimport json\n\nx: int = 1\n";
@@ -1147,7 +1147,7 @@ async fn test_ws_code_action_organize_imports_fixes_order() -> TestResult<()> {
     }
 
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // sys must come before os alphabetically; ruff will sort to: import os / import sys
     // (actually ruff keeps stdlib imports in the order they appear unless --fix-only is used)
@@ -1189,7 +1189,7 @@ async fn test_ws_code_action_organize_imports_fixes_order() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_hover_function_exact_signature() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///ws_hover_exact.py", code).await?;
@@ -1252,7 +1252,7 @@ async fn test_ws_hover_function_exact_signature() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_hover_from_call_site() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n\nresult: str = greet(\"world\")\n";
     fixture.did_open("file:///ws_hover_call.py", code).await?;
@@ -1290,7 +1290,7 @@ async fn test_ws_hover_from_call_site() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_hover_parameter_shows_type() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///ws_hover_param.py", code).await?;
@@ -1327,7 +1327,7 @@ async fn test_ws_hover_parameter_shows_type() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_hover_class_attribute() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "class Animal:\n    name: str\n    age: int\n";
     fixture.did_open("file:///ws_hover_attr.py", code).await?;
@@ -1366,7 +1366,7 @@ async fn test_ws_hover_class_attribute() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_goto_definition_function() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n";
     fixture.did_open("file:///ws_gotodef.py", code).await?;
@@ -1438,7 +1438,7 @@ async fn test_ws_goto_definition_function() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_goto_definition_class() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "class Dog:\n    name: str\n    def bark(self) -> str:\n        return \"woof\"\n";
     fixture.did_open("file:///ws_gotoclass.py", code).await?;
@@ -1466,7 +1466,7 @@ async fn test_ws_goto_definition_class() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_goto_definition_from_call_site() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n\nresult: str = greet(\"world\")\n";
     fixture.did_open("file:///ws_goto_call.py", code).await?;
@@ -1507,7 +1507,7 @@ async fn test_ws_goto_definition_from_call_site() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_document_symbols() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 class Animal:
@@ -1599,7 +1599,7 @@ x: int = 42
 #[tokio::test]
 async fn test_ws_document_symbols_nested_methods() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 class Calculator:
@@ -1641,7 +1641,7 @@ class Calculator:
 #[tokio::test]
 async fn test_ws_signature_help() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 def greet(name: str, greeting: str) -> str:
@@ -1731,7 +1731,7 @@ result: str = greet(\"world\", \"Hi\")
 #[tokio::test]
 async fn test_ws_find_references() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 def greet(name: str) -> str:
@@ -1813,7 +1813,7 @@ result: str = greet(\"world\")
 #[tokio::test]
 async fn test_ws_prepare_rename() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n";
     fixture.did_open("file:///ws_rename.py", code).await?;
@@ -1842,7 +1842,7 @@ async fn test_ws_prepare_rename() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_rename_symbol() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 def greet(name: str) -> str:
@@ -1928,7 +1928,7 @@ result: str = greet(\"world\")
 #[tokio::test]
 async fn test_ws_inlay_hints_variable_types() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "x = 42\ny = \"hello\"\nz = True\n";
     fixture.did_open("file:///ws_inlay.py", code).await?;
@@ -2015,7 +2015,7 @@ async fn test_ws_inlay_hints_variable_types() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_semantic_tokens_full() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 class Animal:
@@ -2149,7 +2149,7 @@ async fn test_ws_initialize_advertises_all_phase2_capabilities() -> TestResult<(
 #[tokio::test]
 async fn test_ws_hover_unknown_position_returns_null() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "x: int = 42\n";
     fixture.did_open("file:///ws_edge_hover.py", code).await?;
@@ -2179,7 +2179,7 @@ async fn test_ws_hover_unknown_position_returns_null() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_goto_def_no_symbol_returns_null() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "x: int = 42\n";
     fixture.did_open("file:///ws_edge_gotodef.py", code).await?;
@@ -2209,7 +2209,7 @@ async fn test_ws_goto_def_no_symbol_returns_null() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_document_symbols_empty_file_returns_empty() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     fixture.did_open("file:///ws_edge_symbols.py", "").await?;
     let _ = fixture.wait_for_diagnostics().await;
@@ -2237,7 +2237,7 @@ async fn test_ws_document_symbols_empty_file_returns_empty() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_signature_help_outside_call_returns_null() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n\nx: int = 42\n";
     fixture.did_open("file:///ws_edge_sighelp.py", code).await?;
@@ -2267,7 +2267,7 @@ async fn test_ws_signature_help_outside_call_returns_null() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_find_references_unknown_symbol_returns_null() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "x: int = 42\n";
     fixture.did_open("file:///ws_edge_refs.py", code).await?;
@@ -2299,7 +2299,7 @@ async fn test_ws_find_references_unknown_symbol_returns_null() -> TestResult<()>
 #[tokio::test]
 async fn test_ws_rename_non_symbol_position_returns_null() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "x: int = 42\n";
     fixture.did_open("file:///ws_edge_rename.py", code).await?;
@@ -2330,7 +2330,7 @@ async fn test_ws_rename_non_symbol_position_returns_null() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_inlay_hints_fully_annotated_returns_empty() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // Every variable has explicit type annotations — no inlay hints needed.
     let code = "x: int = 42\ny: str = \"hello\"\nz: bool = True\n";
@@ -2364,7 +2364,7 @@ async fn test_ws_inlay_hints_fully_annotated_returns_empty() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_hover_method_shows_class_prefix() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 class Animal:
@@ -2404,7 +2404,7 @@ class Animal:
 #[tokio::test]
 async fn test_ws_signature_help_active_parameter_index() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 def add(a: int, b: int) -> int:
@@ -2447,7 +2447,7 @@ result: int = add(1, 2)
 #[tokio::test]
 async fn test_ws_code_action_e0003_all_variants() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // All three E0003 variants in one file: empty list, empty dict, None
     let code = "items = []\nmapping = {}\nvalue = None\n";
@@ -2521,7 +2521,7 @@ async fn test_ws_initialize_advertises_execute_command_provider() -> TestResult<
 #[tokio::test]
 async fn test_ws_execute_command_organize_imports_returns_success() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // Open a document with unsorted imports so the command has something to work with.
     let code = "import os\nimport sys\n\nx: int = 42\n";
@@ -2560,7 +2560,7 @@ async fn test_ws_execute_command_organize_imports_returns_success() -> TestResul
 #[tokio::test]
 async fn test_ws_inlay_hint_return_type_inferred() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // Function without return annotation — should get a `-> int` inlay hint.
     let code = "def add(a: int, b: int):\n    return 42\n";
@@ -2592,7 +2592,7 @@ async fn test_ws_inlay_hint_return_type_inferred() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_inlay_hint_return_type_not_shown_when_annotated() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // Function WITH explicit return annotation — no return-type inlay hint.
     let code = "def greet(name: str) -> str:\n    return \"hi\"\n";
@@ -2635,7 +2635,7 @@ async fn test_ws_inlay_hint_return_type_not_shown_when_annotated() -> TestResult
 #[tokio::test]
 async fn test_ws_completion_kwarg_suggests_param_names() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 def greet(name: str, greeting: str) -> str:
@@ -2678,7 +2678,7 @@ result: str = greet()
 #[tokio::test]
 async fn test_ws_completion_kwarg_skips_already_provided() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 def greet(name: str, greeting: str) -> str:
@@ -2719,7 +2719,7 @@ result: str = greet(name=\"world\", )
 #[tokio::test]
 async fn test_ws_format_document() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // Badly formatted Python: inconsistent spacing, missing trailing newline.
     let code =
@@ -2779,7 +2779,7 @@ async fn test_ws_format_document() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_workspace_symbols() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // Open two documents with distinct symbols.
     let doc1 = "class Greeter:\n    name: str\n\ndef greet(name: str) -> str:\n    return f\"Hello, {name}!\"";
@@ -2851,7 +2851,7 @@ async fn test_ws_workspace_symbols() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_folding_ranges() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // Document with a multi-line class containing a multi-line function.
     let code = "\
@@ -2925,7 +2925,7 @@ def greet(name: str) -> str:
 #[tokio::test]
 async fn test_ws_selection_ranges() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // Class with a method that has a typed parameter — cursor on the parameter name
     // should yield nested ranges: param name → function def → class def → whole doc.
@@ -2995,7 +2995,7 @@ class Greeter:
 #[tokio::test]
 async fn test_ws_document_highlight() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 def greet(name: str) -> str:
@@ -3050,7 +3050,7 @@ greet(\"hi\")
 #[tokio::test]
 async fn test_ws_shutdown_gracefully() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // Send shutdown request — server must respond with result: null.
     // tower-lsp requires an empty object (not null) for shutdown params.
@@ -3108,7 +3108,7 @@ async fn test_ws_shutdown_gracefully() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_hover_class_name_shows_class_info() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "class Animal:\n    name: str\n    age: int\n";
     fixture.did_open("file:///ws_hover_class.py", code).await?;
@@ -3143,7 +3143,7 @@ async fn test_ws_hover_class_name_shows_class_info() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_hover_variable_shows_type() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "x: int = 42\ny: str = \"hello\"\n";
     fixture.did_open("file:///ws_hover_var.py", code).await?;
@@ -3178,7 +3178,7 @@ async fn test_ws_hover_variable_shows_type() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_goto_definition_class_usage() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // "Animal" is defined on line 0, used as a type annotation on line 3.
     let code = "\
@@ -3232,7 +3232,7 @@ def greet(pet: Animal) -> str:
 #[tokio::test]
 async fn test_ws_inlay_hint_parameter_names_at_call_site() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 def greet(name: str, greeting: str) -> str:
@@ -3272,7 +3272,7 @@ result: str = greet(\"world\", \"Hi\")
 #[tokio::test]
 async fn test_ws_call_hierarchy() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let source = "def foo():\n    pass\n\ndef bar():\n    foo()\n    foo()\n";
     fixture
@@ -3333,7 +3333,7 @@ async fn test_ws_call_hierarchy() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_type_hierarchy() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let source = "\
 class Animal:
@@ -3436,7 +3436,7 @@ class Puppy(Dog):
 #[tokio::test]
 async fn test_ws_hover_class_with_bases() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 class Animal:
@@ -3479,7 +3479,7 @@ class Dog(Animal):
 #[tokio::test]
 async fn test_ws_rename_multiple_occurrences() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 def helper(x: int) -> int:
@@ -3532,7 +3532,7 @@ c: int = helper(3)
 #[tokio::test]
 async fn test_ws_goto_definition_variable() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "x: int = 42\n";
     fixture.did_open("file:///ws_goto_var.py", code).await?;
@@ -3571,7 +3571,7 @@ async fn test_ws_goto_definition_variable() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_hover_import_shows_module() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "import os\n\nx: int = 42\n";
     fixture.did_open("file:///ws_hover_import.py", code).await?;
@@ -3604,7 +3604,7 @@ async fn test_ws_hover_import_shows_module() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_find_references_class() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 class Dog:
@@ -3642,7 +3642,7 @@ def adopt(pet: Dog) -> Dog:
 #[tokio::test]
 async fn test_ws_completion_kind_values() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 class Widget:
@@ -3714,7 +3714,7 @@ count: int = 0
 #[tokio::test]
 async fn test_ws_code_lens() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 def greet(name: str) -> str:
@@ -3749,7 +3749,7 @@ y = greet(\"world\")
 #[tokio::test]
 async fn test_ws_code_lens_class_references() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 class Animal:
@@ -3801,7 +3801,7 @@ x: Animal = make_animal()
 #[tokio::test]
 async fn test_ws_code_lens_single_reference() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 def helper(x: int) -> int:
@@ -3842,7 +3842,7 @@ result: int = helper(42)
 #[tokio::test]
 async fn test_ws_code_lens_no_references() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 def unused_func(x: int) -> int:
@@ -3876,7 +3876,7 @@ def unused_func(x: int) -> int:
 #[tokio::test]
 async fn test_ws_code_lens_methods_excluded() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 class MyClass:
@@ -3930,7 +3930,7 @@ class MyClass:
 #[tokio::test]
 async fn test_ws_code_lens_multiple_functions() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 def alpha(x: int) -> int:
@@ -4000,7 +4000,7 @@ def gamma(z: int) -> int:
 #[tokio::test]
 async fn test_ws_semantic_tokens_decorator() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 from typing import Generic, TypeVar
@@ -4064,7 +4064,7 @@ def greet(name: str) -> str:
 #[tokio::test]
 async fn test_ws_workspace_symbols_empty_query() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // Open a document with known symbols.
     let code = "class Dog:\n    breed: str\n\ndef bark(volume: int) -> str:\n    return \"woof\"";
@@ -4106,7 +4106,7 @@ async fn test_ws_workspace_symbols_empty_query() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_workspace_symbols_no_match() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // Open a document with known symbols.
     let code = "class Apple:\n    color: str\n\ndef eat(fruit: str) -> str:\n    return fruit";
@@ -4149,7 +4149,7 @@ async fn test_ws_workspace_symbols_no_match() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_format_document_already_formatted() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // Well-formatted Python code (PEP 8 compliant, trailing newline).
     let code = "x: int = 1\ny: str = \"hello\"\n\n\ndef greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n";
@@ -4196,7 +4196,7 @@ async fn test_ws_format_document_already_formatted() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_format_document_empty_file() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // Empty file — formatting should not crash.
     let code = "";
@@ -4247,7 +4247,7 @@ async fn test_ws_format_document_empty_file() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_folding_ranges_import_block() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // Document with consecutive imports that should fold as one block.
     let code = "\
@@ -4308,7 +4308,7 @@ def main() -> None:
 #[tokio::test]
 async fn test_ws_folding_ranges_nested_class_and_function() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // Nested structures: class containing two methods.
     let code = "\
@@ -4395,7 +4395,7 @@ def standalone(val: int) -> int:
 #[tokio::test]
 async fn test_ws_selection_ranges_has_parent_chain() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // Deeply nested structure to ensure parent chain hierarchy.
     let code = "\
@@ -4489,7 +4489,7 @@ class Container:
 #[tokio::test]
 async fn test_ws_document_symbols_module_variables() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // File with ONLY top-level variables (no classes or functions).
     let code = "\
@@ -4549,7 +4549,7 @@ enabled: bool = True
 #[tokio::test]
 async fn test_ws_document_symbols_multiple_classes() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 class Cat:
@@ -4630,7 +4630,7 @@ class Bird:
 #[tokio::test]
 async fn test_ws_signature_help_method_skips_self() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 class Greeter:
@@ -4690,7 +4690,7 @@ result: str = g.greet(\"world\", True)
 #[tokio::test]
 async fn test_ws_signature_help_class_constructor() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 class Point:
@@ -4754,7 +4754,7 @@ p: Point = Point(1, 2)
 #[tokio::test]
 async fn test_ws_find_references_include_declaration() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 def helper(x: int) -> int:
@@ -4794,7 +4794,7 @@ b: int = helper(20)
 #[tokio::test]
 async fn test_ws_find_references_word_boundary() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // "greet" and "greeting" are different identifiers — searching for "greet"
     // should NOT match "greeting" due to word boundary checking.
@@ -4854,7 +4854,7 @@ b: str = greeting(\"world\")
 #[tokio::test]
 async fn test_ws_code_action_no_actions_for_clean_code() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // Fully annotated code with no redundant annotations — no diagnostics expected.
     let code = "def add(a: int, b: int) -> int:\n    return a + b\n";
@@ -4914,7 +4914,7 @@ async fn test_ws_code_action_no_actions_for_clean_code() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_inlay_hint_no_hints_for_annotated_vars() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // Mix of annotated and unannotated variables — only unannotated should get hints.
     let code = "\
@@ -4980,7 +4980,7 @@ w = 3.14
 #[tokio::test]
 async fn test_ws_inlay_hint_return_type_multiple_returns() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // Function with multiple return statements all returning the same type — should infer.
     let code = "\
@@ -5020,7 +5020,7 @@ def pick(flag: bool):
 #[tokio::test]
 async fn test_ws_inlay_hint_method_return_type() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // Method inside a class without return annotation — should get return type hint.
     let code = "\
@@ -5060,7 +5060,7 @@ class Calculator:
 #[tokio::test]
 async fn test_ws_semantic_tokens_class_token() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 class Animal:
@@ -5111,7 +5111,7 @@ class Animal:
 #[tokio::test]
 async fn test_ws_semantic_tokens_parameter_token() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 def greet(name: str) -> str:
@@ -5159,7 +5159,7 @@ def greet(name: str) -> str:
 #[tokio::test]
 async fn test_ws_semantic_tokens_variable_token() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 x: int = 42
@@ -5207,7 +5207,7 @@ y: str = \"hello\"
 #[tokio::test]
 async fn test_ws_semantic_tokens_method_vs_function() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 class Dog:
@@ -5270,7 +5270,7 @@ def greet(name: str) -> str:
 #[tokio::test]
 async fn test_ws_semantic_tokens_decorator_token() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 def my_decorator(func):
@@ -5325,7 +5325,7 @@ def hello() -> None:
 #[tokio::test]
 async fn test_ws_semantic_tokens_type_annotation() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 def process(data: str) -> int:
@@ -5377,7 +5377,7 @@ def process(data: str) -> int:
 #[tokio::test]
 async fn test_ws_semantic_tokens_type_parameter() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 from typing import Generic, TypeVar
@@ -5432,7 +5432,7 @@ class Box(Generic[T]):
 #[tokio::test]
 async fn test_ws_semantic_tokens_static_modifier() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 class MathUtils:
@@ -5487,7 +5487,7 @@ class MathUtils:
 #[tokio::test]
 async fn test_ws_semantic_tokens_declaration_modifier() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 class Animal:
@@ -5548,7 +5548,7 @@ def greet(name: str) -> str:
 #[tokio::test]
 async fn test_ws_semantic_tokens_property_token() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 class Person:
@@ -5600,7 +5600,7 @@ class Person:
 #[tokio::test]
 async fn test_ws_semantic_tokens_namespace_token() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 import os
@@ -5659,7 +5659,7 @@ async fn test_ws_reinitialize_after_shutdown() -> TestResult<()> {
     // First lifecycle: initialize, shutdown, exit.
     {
         let mut fixture = WsTestFixture::new().await?;
-        fixture.initialize().await?;
+        let _ = fixture.initialize().await?;
 
         fixture
             .send_json(&serde_json::json!({
@@ -5713,7 +5713,7 @@ async fn test_ws_reinitialize_after_shutdown() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_requests_after_shutdown_return_error() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // Open a file so we have a valid URI for the hover request.
     fixture
@@ -5788,7 +5788,7 @@ async fn test_ws_requests_after_shutdown_return_error() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_invalid_params_returns_error() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     // Send textDocument/hover with completely wrong params — missing
     // the required `textDocument` and `position` fields.
@@ -5932,7 +5932,7 @@ async fn test_ws_initialize_advertises_type_hierarchy_provider() -> TestResult<(
 #[tokio::test]
 async fn test_ws_goto_declaration() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 def compute(x: int) -> int:
@@ -5979,7 +5979,7 @@ async fn test_ws_initialize_advertises_declaration_provider() -> TestResult<()> 
 #[tokio::test]
 async fn test_ws_goto_type_definition_variable() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 class MyData:
@@ -6012,7 +6012,7 @@ instance: MyData = MyData()
 #[tokio::test]
 async fn test_ws_goto_type_definition_parameter() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 class Config:
@@ -6046,7 +6046,7 @@ def process(cfg: Config) -> None:
 #[tokio::test]
 async fn test_ws_goto_type_definition_optional() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 class Widget:
@@ -6079,7 +6079,7 @@ item: Optional[Widget] = None
 #[tokio::test]
 async fn test_ws_goto_type_definition_no_annotation_returns_null() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 x = 42
@@ -6123,7 +6123,7 @@ async fn test_ws_initialize_advertises_type_definition_provider() -> TestResult<
 #[tokio::test]
 async fn test_ws_hover_shows_docstring() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 def calculate(x: int) -> int:
@@ -6155,7 +6155,7 @@ def calculate(x: int) -> int:
 #[tokio::test]
 async fn test_ws_hover_class_docstring() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 class Animal:
@@ -6187,7 +6187,7 @@ class Animal:
 #[tokio::test]
 async fn test_ws_completion_includes_docstring() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?;
+    let _ = fixture.initialize().await?;
 
     let code = "\
 def helper(x: int) -> int:
@@ -6334,11 +6334,7 @@ async fn test_ws_open_files_only_mode_no_startup_scan() -> TestResult<()> {
     // Drain messages for 500ms — should not see any publishDiagnostics for closed.py.
     let mut saw_scan_diag = false;
     for _ in 0..5 {
-        let msg = tokio::time::timeout(
-            Duration::from_millis(200),
-            fixture.ws_read.next(),
-        )
-        .await;
+        let msg = tokio::time::timeout(Duration::from_millis(200), fixture.ws_read.next()).await;
         if let Ok(Some(Ok(tokio_tungstenite::tungstenite::Message::Text(text)))) = msg {
             if text.contains("\"method\":\"textDocument/publishDiagnostics\"")
                 && text.contains("closed.py")
@@ -6366,7 +6362,10 @@ async fn test_ws_whole_module_did_close_keeps_diagnostics() -> TestResult<()> {
     let dir = unique_temp_dir("bsk_ws_close_keep");
     std::fs::create_dir_all(&dir)?;
     let file_path = dir.join("keep.py");
-    std::fs::write(&file_path, "def greet(name):\n    return f\"Hello, {name}!\"\n")?;
+    std::fs::write(
+        &file_path,
+        "def greet(name):\n    return f\"Hello, {name}!\"\n",
+    )?;
 
     let file_uri = format!("file://{}", file_path.display());
     let root_uri = format!("file://{}", dir.display());
@@ -6375,7 +6374,12 @@ async fn test_ws_whole_module_did_close_keeps_diagnostics() -> TestResult<()> {
     let _ = initialize_with_root(&mut fixture, &root_uri, "wholeModule").await?;
 
     // Open the file.
-    fixture.did_open(&file_uri, "def greet(name):\n    return f\"Hello, {name}!\"\n").await?;
+    fixture
+        .did_open(
+            &file_uri,
+            "def greet(name):\n    return f\"Hello, {name}!\"\n",
+        )
+        .await?;
     // Drain open diagnostics.
     let _ = fixture.wait_for_diagnostics().await;
 
@@ -6384,7 +6388,10 @@ async fn test_ws_whole_module_did_close_keeps_diagnostics() -> TestResult<()> {
 
     // Should receive a publishDiagnostics after close (re-analysis from disk).
     let diag = fixture.wait_for_diagnostics().await;
-    assert!(diag.is_some(), "wholeModule mode should re-publish diagnostics after didClose");
+    assert!(
+        diag.is_some(),
+        "wholeModule mode should re-publish diagnostics after didClose"
+    );
 
     let _ = std::fs::remove_dir_all(&dir);
     Ok(())
@@ -6396,7 +6403,7 @@ async fn test_ws_whole_module_did_close_non_disk_file_returns_empty_diagnostics(
     // In wholeModule mode, closing a file that only exists in memory (not on disk)
     // should publish empty diagnostics (file is removed from index).
     let mut fixture = WsTestFixture::new().await?;
-    fixture.initialize().await?; // default mode = wholeModule
+    let _ = fixture.initialize().await?; // default mode = wholeModule
 
     let uri = "file:///memory_only_close_test.py";
     fixture
@@ -6404,8 +6411,7 @@ async fn test_ws_whole_module_did_close_non_disk_file_returns_empty_diagnostics(
         .await?;
     let _ = fixture.wait_for_diagnostics().await;
 
-    fixture
-        .did_close(uri).await?;
+    fixture.did_close(uri).await?;
 
     // File doesn't exist on disk → set_closed() removes it and returns empty diagnostics.
     let diag = fixture.wait_for_diagnostics().await;
@@ -6427,7 +6433,10 @@ async fn test_ws_open_files_only_did_close_clears_diagnostics() -> TestResult<()
     std::fs::create_dir_all(&dir)?;
     let file_path = dir.join("ofo_close.py");
     // File has type errors — should produce diagnostics when open.
-    std::fs::write(&file_path, "def greet(name):\n    return f\"Hello, {name}!\"\n")?;
+    std::fs::write(
+        &file_path,
+        "def greet(name):\n    return f\"Hello, {name}!\"\n",
+    )?;
 
     let file_uri = format!("file://{}", file_path.display());
     let root_uri = format!("file://{}", dir.display());
@@ -6452,7 +6461,10 @@ async fn test_ws_open_files_only_did_close_clears_diagnostics() -> TestResult<()
     fixture.did_close(&file_uri).await?;
 
     let close_diag = fixture.wait_for_diagnostics().await;
-    assert!(close_diag.is_some(), "should receive publishDiagnostics after didClose");
+    assert!(
+        close_diag.is_some(),
+        "should receive publishDiagnostics after didClose"
+    );
     let close_msg = close_diag.unwrap();
     assert!(
         close_msg.contains("\"diagnostics\":[]"),
@@ -6470,7 +6482,10 @@ async fn test_ws_whole_module_did_close_disk_file_keeps_diagnostics() -> TestRes
     let dir = unique_temp_dir("bsk_ws_wm_close_disk");
     std::fs::create_dir_all(&dir)?;
     let file_path = dir.join("wm_close_disk.py");
-    std::fs::write(&file_path, "def greet(name):\n    return f\"Hello, {name}!\"\n")?;
+    std::fs::write(
+        &file_path,
+        "def greet(name):\n    return f\"Hello, {name}!\"\n",
+    )?;
 
     let file_uri = format!("file://{}", file_path.display());
     let root_uri = format!("file://{}", dir.display());
@@ -6513,7 +6528,10 @@ async fn test_ws_file_watcher_events_ignored_in_open_files_only() -> TestResult<
     let dir = unique_temp_dir("bsk_ws_watcher_ofo");
     std::fs::create_dir_all(&dir)?;
     let file_path = dir.join("watched.py");
-    std::fs::write(&file_path, "def greet(name):\n    return f\"Hello, {name}!\"\n")?;
+    std::fs::write(
+        &file_path,
+        "def greet(name):\n    return f\"Hello, {name}!\"\n",
+    )?;
 
     let file_uri = format!("file://{}", file_path.display());
     let root_uri = format!("file://{}", dir.display());
@@ -6539,11 +6557,7 @@ async fn test_ws_file_watcher_events_ignored_in_open_files_only() -> TestResult<
     // Drain messages — should NOT receive publishDiagnostics for this file.
     let mut saw_diag = false;
     for _ in 0..5 {
-        let msg = tokio::time::timeout(
-            Duration::from_millis(300),
-            fixture.ws_read.next(),
-        )
-        .await;
+        let msg = tokio::time::timeout(Duration::from_millis(300), fixture.ws_read.next()).await;
         if let Ok(Some(Ok(tokio_tungstenite::tungstenite::Message::Text(text)))) = msg {
             if text.contains("\"method\":\"textDocument/publishDiagnostics\"")
                 && text.contains("watched.py")
@@ -6582,18 +6596,17 @@ async fn test_ws_file_watcher_triggers_reanalysis_in_whole_module() -> TestResul
 
     // Drain startup scan messages.
     for _ in 0..5 {
-        let msg = tokio::time::timeout(
-            Duration::from_millis(200),
-            fixture.ws_read.next(),
-        )
-        .await;
+        let msg = tokio::time::timeout(Duration::from_millis(200), fixture.ws_read.next()).await;
         if msg.is_err() {
             break;
         }
     }
 
     // Now write type errors to the file on disk (external change).
-    std::fs::write(&file_path, "def greet(name):\n    return f\"Hello, {name}!\"\n")?;
+    std::fs::write(
+        &file_path,
+        "def greet(name):\n    return f\"Hello, {name}!\"\n",
+    )?;
 
     // Send a file-watcher changed event.
     fixture
@@ -6617,5 +6630,1210 @@ async fn test_ws_file_watcher_triggers_reanalysis_in_whole_module() -> TestResul
     );
 
     let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
+}
+
+// ── Rule-specific diagnostic tests ──────────────────────────────────────────
+//
+// Each test opens a Python snippet that triggers exactly one rule, then asserts:
+//   1. The correct BSK-E#### code appears in publishDiagnostics
+//   2. A meaningful message fragment is present
+//   3. The diagnostic has a non-null range
+//   4. The clean version of the same code produces no diagnostic
+
+/// Parse the first diagnostic with the given code from a publishDiagnostics message.
+fn extract_diagnostic<'a>(
+    diag_json: &'a serde_json::Value,
+    code: &str,
+) -> Option<&'a serde_json::Value> {
+    diag_json["params"]["diagnostics"]
+        .as_array()?
+        .iter()
+        .find(|d| d["code"].as_str() == Some(code))
+}
+
+/// Assert that a diagnostic has a valid LSP range (all four fields present and ≥ 0).
+fn assert_valid_range(diag: &serde_json::Value, label: &str) {
+    let range = &diag["range"];
+    assert!(
+        !range.is_null(),
+        "{label}: diagnostic must have a range: {diag}"
+    );
+    let sl = range["start"]["line"].as_u64();
+    let sc = range["start"]["character"].as_u64();
+    let el = range["end"]["line"].as_u64();
+    let ec = range["end"]["character"].as_u64();
+    assert!(
+        sl.is_some() && sc.is_some() && el.is_some() && ec.is_some(),
+        "{label}: range must have start/end line+character: {range}"
+    );
+}
+
+// ── E0003: Missing variable type ─────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_e0003_missing_variable_type_fires() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "items = []\n";
+    fixture.did_open("file:///e0003.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    let diag = extract_diagnostic(&json, "BSK-E0003").ok_or("BSK-E0003 not fired")?;
+    assert_valid_range(diag, "E0003");
+    assert!(
+        diag["message"]
+            .as_str()
+            .unwrap_or("")
+            .to_lowercase()
+            .contains("type"),
+        "message should mention type: {diag}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_e0003_annotated_empty_list_is_clean() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "items: list[int] = []\n";
+    fixture.did_open("file:///e0003_clean.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    assert!(
+        extract_diagnostic(&json, "BSK-E0003").is_none(),
+        "annotated empty list should not fire E0003: {raw}"
+    );
+    Ok(())
+}
+
+// ── E0011: Return type mismatch ───────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_e0011_return_type_mismatch_fires() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "def count() -> str:\n    return 42\n";
+    fixture.did_open("file:///e0011.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    let diag = extract_diagnostic(&json, "BSK-E0011").ok_or("BSK-E0011 not fired")?;
+    assert_valid_range(diag, "E0011");
+    let msg = diag["message"].as_str().unwrap_or("").to_lowercase();
+    assert!(
+        msg.contains("return") || msg.contains("type") || msg.contains("mismatch"),
+        "message should mention return/type/mismatch: {diag}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_e0011_matching_return_type_is_clean() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "def count() -> int:\n    return 42\n";
+    fixture.did_open("file:///e0011_clean.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    assert!(
+        extract_diagnostic(&json, "BSK-E0011").is_none(),
+        "correct return type should not fire E0011: {raw}"
+    );
+    Ok(())
+}
+
+// ── E0012: Argument type mismatch ─────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_e0012_argument_type_mismatch_fires() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+def add(x: int, y: int) -> int:
+    return x + y
+
+result: int = add(\"hello\", \"world\")
+";
+    fixture.did_open("file:///e0012.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    let diag = extract_diagnostic(&json, "BSK-E0012").ok_or("BSK-E0012 not fired")?;
+    assert_valid_range(diag, "E0012");
+    let msg = diag["message"].as_str().unwrap_or("").to_lowercase();
+    assert!(
+        msg.contains("argument") || msg.contains("type") || msg.contains("int") || msg.contains("str"),
+        "message should mention argument/type mismatch: {diag}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_e0012_correct_args_is_clean() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+def add(x: int, y: int) -> int:
+    return x + y
+
+result: int = add(1, 2)
+";
+    fixture.did_open("file:///e0012_clean.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    assert!(
+        extract_diagnostic(&json, "BSK-E0012").is_none(),
+        "correct argument types should not fire E0012: {raw}"
+    );
+    Ok(())
+}
+
+// ── E0013: Return type mismatch (inferred) ────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_e0013_return_mismatch_fires() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    // Returns a string literal but annotated -> int
+    let code = "def label() -> int:\n    return \"hello\"\n";
+    fixture.did_open("file:///e0013.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    // Either E0011 or E0013 should fire for this mismatch
+    let fired = extract_diagnostic(&json, "BSK-E0013")
+        .or_else(|| extract_diagnostic(&json, "BSK-E0011"))
+        .ok_or("neither E0013 nor E0011 fired for return type mismatch")?;
+    assert_valid_range(fired, "E0013/E0011");
+    Ok(())
+}
+
+// ── E0014: Assignment type incompatibility ────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_e0014_assignment_type_mismatch_fires() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "count: int = \"hello\"\n";
+    fixture.did_open("file:///e0014.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    let diag = extract_diagnostic(&json, "BSK-E0014").ok_or("BSK-E0014 not fired")?;
+    assert_valid_range(diag, "E0014");
+    let msg = diag["message"].as_str().unwrap_or("").to_lowercase();
+    assert!(
+        msg.contains("int") || msg.contains("str") || msg.contains("type") || msg.contains("incompatible"),
+        "message should mention type mismatch: {diag}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_e0014_multiple_type_mismatches() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+count: int = \"hello\"
+label: str = 42
+flag: bool = \"yes\"
+ratio: float = \"1.5\"
+";
+    fixture.did_open("file:///e0014_multi.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    let diagnostics = json["params"]["diagnostics"]
+        .as_array()
+        .ok_or("no diagnostics array")?;
+    let e0014_count = diagnostics
+        .iter()
+        .filter(|d| d["code"].as_str() == Some("BSK-E0014"))
+        .count();
+    assert!(
+        e0014_count >= 4,
+        "expected ≥4 E0014 diagnostics, got {e0014_count}: {raw}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_e0014_correct_assignments_are_clean() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+count: int = 42
+label: str = \"hello\"
+flag: bool = True
+ratio: float = 1.5
+";
+    fixture.did_open("file:///e0014_clean.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    assert!(
+        extract_diagnostic(&json, "BSK-E0014").is_none(),
+        "correct assignments should not fire E0014: {raw}"
+    );
+    Ok(())
+}
+
+// ── E0015: Invalid type argument count ────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_e0015_list_wrong_arg_count_fires() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "def f(x: list[int, str]) -> None:\n    pass\n";
+    fixture.did_open("file:///e0015.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    let diag = extract_diagnostic(&json, "BSK-E0015").ok_or("BSK-E0015 not fired")?;
+    assert_valid_range(diag, "E0015");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_e0015_dict_wrong_arg_count_fires() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "def f(x: dict[str]) -> None:\n    pass\n";
+    fixture.did_open("file:///e0015_dict.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    let diag = extract_diagnostic(&json, "BSK-E0015").ok_or("BSK-E0015 not fired for dict[str]")?;
+    assert_valid_range(diag, "E0015 dict");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_e0015_correct_generics_are_clean() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+def f(x: list[int], y: dict[str, int], z: set[str]) -> None:
+    pass
+";
+    fixture.did_open("file:///e0015_clean.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    assert!(
+        extract_diagnostic(&json, "BSK-E0015").is_none(),
+        "correct generic annotations should not fire E0015: {raw}"
+    );
+    Ok(())
+}
+
+// ── E0016: Incompatible method override ───────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_e0016_incompatible_override_fires() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+from typing import override
+
+class Base:
+    def process(self, data: str) -> str:
+        return data
+
+class Child(Base):
+    @override
+    def process(self, data: int) -> int:
+        return data
+";
+    fixture.did_open("file:///e0016.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    let diag = extract_diagnostic(&json, "BSK-E0016").ok_or("BSK-E0016 not fired")?;
+    assert_valid_range(diag, "E0016");
+    let msg = diag["message"].as_str().unwrap_or("").to_lowercase();
+    assert!(
+        msg.contains("override") || msg.contains("incompatible") || msg.contains("process"),
+        "message should mention override/incompatible: {diag}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_e0016_compatible_override_is_clean() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+from typing import override
+
+class Base:
+    def process(self, data: str) -> str:
+        return data
+
+class Child(Base):
+    @override
+    def process(self, data: str) -> str:
+        return data.upper()
+";
+    fixture.did_open("file:///e0016_clean.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    assert!(
+        extract_diagnostic(&json, "BSK-E0016").is_none(),
+        "compatible override should not fire E0016: {raw}"
+    );
+    Ok(())
+}
+
+// ── E0017: Incompatible class attribute override ───────────────────────────────
+
+#[tokio::test]
+async fn test_ws_e0017_attribute_override_fires() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+class Base:
+    count: int = 0
+
+class Child(Base):
+    count: str = \"zero\"
+";
+    fixture.did_open("file:///e0017.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    let diag = extract_diagnostic(&json, "BSK-E0017").ok_or("BSK-E0017 not fired")?;
+    assert_valid_range(diag, "E0017");
+    let msg = diag["message"].as_str().unwrap_or("").to_lowercase();
+    assert!(
+        msg.contains("count") || msg.contains("override") || msg.contains("attribute") || msg.contains("int") || msg.contains("str"),
+        "message should reference attribute or types: {diag}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_e0017_same_type_attribute_is_clean() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+class Base:
+    count: int = 0
+
+class Child(Base):
+    count: int = 99
+";
+    fixture.did_open("file:///e0017_clean.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    assert!(
+        extract_diagnostic(&json, "BSK-E0017").is_none(),
+        "same-type attribute override should not fire E0017: {raw}"
+    );
+    Ok(())
+}
+
+// ── E0018: Undefined variable in return ────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_e0018_undefined_variable_fires() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "def compute() -> int:\n    return undefined_name\n";
+    fixture.did_open("file:///e0018.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    let diag = extract_diagnostic(&json, "BSK-E0018").ok_or("BSK-E0018 not fired")?;
+    assert_valid_range(diag, "E0018");
+    let msg = diag["message"].as_str().unwrap_or("").to_lowercase();
+    assert!(
+        msg.contains("undefined") || msg.contains("undefined_name") || msg.contains("unbound"),
+        "message should mention undefined: {diag}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_e0018_defined_variable_is_clean() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "def compute() -> int:\n    result = 42\n    return result\n";
+    fixture.did_open("file:///e0018_clean.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    assert!(
+        extract_diagnostic(&json, "BSK-E0018").is_none(),
+        "defined variable should not fire E0018: {raw}"
+    );
+    Ok(())
+}
+
+// ── E0019: Unbound variable on some paths ─────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_e0019_unbound_on_some_paths_fires() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+def maybe_assign(flag: bool) -> int:
+    if flag:
+        result = 42
+    return result
+";
+    fixture.did_open("file:///e0019.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    let diag = extract_diagnostic(&json, "BSK-E0019").ok_or("BSK-E0019 not fired")?;
+    assert_valid_range(diag, "E0019");
+    let msg = diag["message"].as_str().unwrap_or("").to_lowercase();
+    assert!(
+        msg.contains("unbound") || msg.contains("result") || msg.contains("path"),
+        "message should mention unbound/path: {diag}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_e0019_always_assigned_is_clean() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+def always_assign(flag: bool) -> int:
+    if flag:
+        result = 42
+    else:
+        result = 0
+    return result
+";
+    fixture.did_open("file:///e0019_clean.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    assert!(
+        extract_diagnostic(&json, "BSK-E0019").is_none(),
+        "always-assigned variable should not fire E0019: {raw}"
+    );
+    Ok(())
+}
+
+// ── E0020: Missing @overload implementation ────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_e0020_missing_overload_impl_fires() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+from typing import overload
+
+@overload
+def process(x: int) -> int: ...
+
+@overload
+def process(x: str) -> str: ...
+";
+    fixture.did_open("file:///e0020.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    let diag = extract_diagnostic(&json, "BSK-E0020").ok_or("BSK-E0020 not fired")?;
+    assert_valid_range(diag, "E0020");
+    let msg = diag["message"].as_str().unwrap_or("").to_lowercase();
+    assert!(
+        msg.contains("overload") || msg.contains("implementation") || msg.contains("process"),
+        "message should mention overload/implementation: {diag}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_e0020_overload_with_impl_is_clean() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+from typing import overload
+
+@overload
+def process(x: int) -> int: ...
+
+@overload
+def process(x: str) -> str: ...
+
+def process(x: int | str) -> int | str:
+    return x
+";
+    fixture.did_open("file:///e0020_clean.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    assert!(
+        extract_diagnostic(&json, "BSK-E0020").is_none(),
+        "overload with impl should not fire E0020: {raw}"
+    );
+    Ok(())
+}
+
+// ── E0021: Overlapping @overload signatures ────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_e0021_overlapping_overloads_fires() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+from typing import overload
+
+@overload
+def process(x: int) -> int: ...
+
+@overload
+def process(x: int) -> str: ...
+
+def process(x: int) -> int | str:
+    return x
+";
+    fixture.did_open("file:///e0021.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    let diag = extract_diagnostic(&json, "BSK-E0021").ok_or("BSK-E0021 not fired")?;
+    assert_valid_range(diag, "E0021");
+    Ok(())
+}
+
+// ── E0022: Unhashable dict key ─────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_e0022_list_as_dict_key_fires() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+def bad_keys() -> None:
+    mapping = {[1, 2]: \"value\"}
+";
+    fixture.did_open("file:///e0022.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    let diag = extract_diagnostic(&json, "BSK-E0022").ok_or("BSK-E0022 not fired")?;
+    assert_valid_range(diag, "E0022");
+    let msg = diag["message"].as_str().unwrap_or("").to_lowercase();
+    assert!(
+        msg.contains("hashable") || msg.contains("list") || msg.contains("key"),
+        "message should mention hashable/list/key: {diag}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_e0022_set_as_dict_key_fires() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+def bad_keys() -> None:
+    mapping = {{1, 2}: \"value\"}
+";
+    fixture.did_open("file:///e0022_set.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    let diag = extract_diagnostic(&json, "BSK-E0022").ok_or("BSK-E0022 not fired for set key")?;
+    assert_valid_range(diag, "E0022 set");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_e0022_hashable_key_is_clean() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+def good_keys() -> None:
+    mapping = {\"key\": \"value\", 42: \"number\", (1, 2): \"tuple\"}
+";
+    fixture.did_open("file:///e0022_clean.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    assert!(
+        extract_diagnostic(&json, "BSK-E0022").is_none(),
+        "hashable keys should not fire E0022: {raw}"
+    );
+    Ok(())
+}
+
+// ── E0023: Non-exhaustive match ────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_e0023_non_exhaustive_match_fires() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+def classify(x: int) -> str:
+    match x:
+        case 1:
+            return \"one\"
+        case 2:
+            return \"two\"
+    return \"other\"
+";
+    fixture.did_open("file:///e0023.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    let diag = extract_diagnostic(&json, "BSK-E0023").ok_or("BSK-E0023 not fired")?;
+    assert_valid_range(diag, "E0023");
+    let msg = diag["message"].as_str().unwrap_or("").to_lowercase();
+    assert!(
+        msg.contains("exhaustive") || msg.contains("match") || msg.contains("wildcard"),
+        "message should mention exhaustive/match/wildcard: {diag}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_e0023_exhaustive_match_is_clean() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+def classify(x: int) -> str:
+    match x:
+        case 1:
+            return \"one\"
+        case 2:
+            return \"two\"
+        case _:
+            return \"other\"
+";
+    fixture.did_open("file:///e0023_clean.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    assert!(
+        extract_diagnostic(&json, "BSK-E0023").is_none(),
+        "exhaustive match should not fire E0023: {raw}"
+    );
+    Ok(())
+}
+
+// ── E0024: Numeric literal as type annotation ─────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_e0024_literal_as_annotation_fires() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "def f(x: 42) -> 0:\n    pass\n";
+    fixture.did_open("file:///e0024.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    let diag = extract_diagnostic(&json, "BSK-E0024").ok_or("BSK-E0024 not fired")?;
+    assert_valid_range(diag, "E0024");
+    let msg = diag["message"].as_str().unwrap_or("").to_lowercase();
+    assert!(
+        msg.contains("literal") || msg.contains("annotation") || msg.contains("type"),
+        "message should mention literal/annotation: {diag}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_e0024_real_type_annotation_is_clean() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "def f(x: int) -> str:\n    return str(x)\n";
+    fixture.did_open("file:///e0024_clean.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    assert!(
+        extract_diagnostic(&json, "BSK-E0024").is_none(),
+        "real type annotation should not fire E0024: {raw}"
+    );
+    Ok(())
+}
+
+// ── E0025: Missing @override decorator ────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_e0025_missing_override_decorator_fires() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+class Base:
+    def process(self, data: str) -> str:
+        return data
+
+class Child(Base):
+    def process(self, data: str) -> str:
+        return data.upper()
+";
+    fixture.did_open("file:///e0025.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    let diag = extract_diagnostic(&json, "BSK-E0025").ok_or("BSK-E0025 not fired")?;
+    assert_valid_range(diag, "E0025");
+    let msg = diag["message"].as_str().unwrap_or("").to_lowercase();
+    assert!(
+        msg.contains("override") || msg.contains("process") || msg.contains("decorator"),
+        "message should mention override/decorator: {diag}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_e0025_with_override_decorator_is_clean() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+from typing import override
+
+class Base:
+    def process(self, data: str) -> str:
+        return data
+
+class Child(Base):
+    @override
+    def process(self, data: str) -> str:
+        return data.upper()
+";
+    fixture.did_open("file:///e0025_clean.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    assert!(
+        extract_diagnostic(&json, "BSK-E0025").is_none(),
+        "method with @override should not fire E0025: {raw}"
+    );
+    Ok(())
+}
+
+// ── E0026: TypeVar single constraint ──────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_e0026_typevar_single_constraint_fires() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+from typing import TypeVar
+T = TypeVar(\"T\", int)
+";
+    fixture.did_open("file:///e0026.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    let diag = extract_diagnostic(&json, "BSK-E0026").ok_or("BSK-E0026 not fired")?;
+    assert_valid_range(diag, "E0026");
+    let msg = diag["message"].as_str().unwrap_or("").to_lowercase();
+    assert!(
+        msg.contains("typevar") || msg.contains("constraint") || msg.contains("single"),
+        "message should mention TypeVar/constraint: {diag}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_e0026_typevar_two_constraints_is_clean() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+from typing import TypeVar
+T = TypeVar(\"T\", int, str)
+";
+    fixture.did_open("file:///e0026_clean.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    assert!(
+        extract_diagnostic(&json, "BSK-E0026").is_none(),
+        "TypeVar with two constraints should not fire E0026: {raw}"
+    );
+    Ok(())
+}
+
+// ── E0027: Duplicate TypeVar in Generic ────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_e0027_duplicate_typevar_fires() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+from typing import TypeVar, Generic
+T = TypeVar(\"T\")
+
+class Container(Generic[T, T]):
+    pass
+";
+    fixture.did_open("file:///e0027.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    let diag = extract_diagnostic(&json, "BSK-E0027").ok_or("BSK-E0027 not fired")?;
+    assert_valid_range(diag, "E0027");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_e0027_unique_typevars_is_clean() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+from typing import TypeVar, Generic
+T = TypeVar(\"T\")
+U = TypeVar(\"U\")
+
+class Container(Generic[T, U]):
+    pass
+";
+    fixture.did_open("file:///e0027_clean.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    assert!(
+        extract_diagnostic(&json, "BSK-E0027").is_none(),
+        "unique TypeVars in Generic should not fire E0027: {raw}"
+    );
+    Ok(())
+}
+
+// ── E0034: @final decorator violations ────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_e0034_inherit_from_final_class_fires() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+from typing import final
+
+@final
+class Sealed:
+    pass
+
+class Child(Sealed):
+    pass
+";
+    fixture.did_open("file:///e0034.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    let diag = extract_diagnostic(&json, "BSK-E0034").ok_or("BSK-E0034 not fired")?;
+    assert_valid_range(diag, "E0034");
+    let msg = diag["message"].as_str().unwrap_or("").to_lowercase();
+    assert!(
+        msg.contains("final") || msg.contains("sealed") || msg.contains("inherit"),
+        "message should mention final/inherit: {diag}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_e0034_final_on_module_function_fires() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+from typing import final
+
+@final
+def standalone() -> None:
+    pass
+";
+    fixture.did_open("file:///e0034_func.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    let diag = extract_diagnostic(&json, "BSK-E0034").ok_or("BSK-E0034 not fired for module fn")?;
+    assert_valid_range(diag, "E0034 module fn");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_e0034_override_final_method_fires() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+from typing import final, override
+
+class Base:
+    @final
+    def locked(self) -> str:
+        return \"base\"
+
+class Child(Base):
+    @override
+    def locked(self) -> str:
+        return \"child\"
+";
+    fixture.did_open("file:///e0034_method.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    let diag = extract_diagnostic(&json, "BSK-E0034").ok_or("BSK-E0034 not fired for final method override")?;
+    assert_valid_range(diag, "E0034 method override");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_e0034_final_method_not_overridden_is_clean() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+from typing import final
+
+class Base:
+    @final
+    def locked(self) -> str:
+        return \"base\"
+
+class Child(Base):
+    def other(self) -> str:
+        return \"child\"
+";
+    fixture.did_open("file:///e0034_clean.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    assert!(
+        extract_diagnostic(&json, "BSK-E0034").is_none(),
+        "final method not overridden should not fire E0034: {raw}"
+    );
+    Ok(())
+}
+
+// ── E0054: Final re-assignment ─────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_e0054_final_reassignment_fires() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+from typing import Final
+
+RATE: Final = 3000
+
+class Config:
+    def update(self) -> None:
+        global RATE
+        RATE = 9999
+";
+    fixture.did_open("file:///e0054.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    let diag = extract_diagnostic(&json, "BSK-E0054").ok_or("BSK-E0054 not fired")?;
+    assert_valid_range(diag, "E0054");
+    let msg = diag["message"].as_str().unwrap_or("").to_lowercase();
+    assert!(
+        msg.contains("final") || msg.contains("rate") || msg.contains("reassign") || msg.contains("modify"),
+        "message should mention final/reassign: {diag}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_e0054_final_class_attr_reassignment_fires() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+from typing import Final
+
+class Config:
+    MAX: Final[int] = 100
+
+    def bad_update(self) -> None:
+        self.MAX = 200
+";
+    fixture.did_open("file:///e0054_class.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    let diag = extract_diagnostic(&json, "BSK-E0054").ok_or("BSK-E0054 not fired for class attr")?;
+    assert_valid_range(diag, "E0054 class attr");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_e0054_final_not_reassigned_is_clean() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "\
+from typing import Final
+
+RATE: Final = 3000
+
+def read_rate() -> int:
+    return RATE
+";
+    fixture.did_open("file:///e0054_clean.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    assert!(
+        extract_diagnostic(&json, "BSK-E0054").is_none(),
+        "Final not reassigned should not fire E0054: {raw}"
+    );
+    Ok(())
+}
+
+// ── Full-pipeline: multiple rules in one file ──────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_multiple_rules_same_file() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    // This file intentionally triggers E0001, E0002, E0014, E0023
+    let code = "\
+count: int = \"wrong\"
+
+def classify(x):
+    match x:
+        case 1:
+            return \"one\"
+";
+    fixture.did_open("file:///multi_rules.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    let diagnostics = json["params"]["diagnostics"]
+        .as_array()
+        .ok_or("no diagnostics array")?;
+
+    assert!(
+        !diagnostics.is_empty(),
+        "multi-error file should fire diagnostics: {raw}"
+    );
+
+    // All diagnostics must have valid ranges
+    for diag in diagnostics {
+        assert_valid_range(diag, "multi-rule file");
+    }
+
+    // All diagnostics must have non-empty codes
+    for diag in diagnostics {
+        assert!(
+            diag["code"].as_str().map_or(false, |c| !c.is_empty()),
+            "every diagnostic must have a non-empty code: {diag}"
+        );
+    }
+
+    // Must fire at least E0001 (unannotated param) and E0014 (int = "wrong")
+    assert!(
+        extract_diagnostic(&json, "BSK-E0001").is_some(),
+        "should fire E0001 for unannotated param: {raw}"
+    );
+    assert!(
+        extract_diagnostic(&json, "BSK-E0014").is_some(),
+        "should fire E0014 for int = \"wrong\": {raw}"
+    );
+    assert!(
+        extract_diagnostic(&json, "BSK-E0023").is_some(),
+        "should fire E0023 for non-exhaustive match: {raw}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_diagnostic_structure_is_well_formed() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let code = "def f(x, y):\n    return x + y\n";
+    fixture.did_open("file:///structure.py", code).await?;
+    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let json: serde_json::Value = serde_json::from_str(&raw)?;
+
+    // Verify outer JSON-RPC envelope
+    assert_eq!(json["jsonrpc"], "2.0", "must be JSON-RPC 2.0: {raw}");
+    assert_eq!(
+        json["method"], "textDocument/publishDiagnostics",
+        "must be publishDiagnostics: {raw}"
+    );
+    assert!(
+        json["params"]["uri"].as_str().is_some(),
+        "must have uri in params: {raw}"
+    );
+
+    let diagnostics = json["params"]["diagnostics"]
+        .as_array()
+        .ok_or("diagnostics must be array")?;
+
+    for diag in diagnostics {
+        // code
+        assert!(
+            diag["code"].as_str().map_or(false, |c| c.starts_with("BSK-")),
+            "code must start with BSK-: {diag}"
+        );
+        // message
+        assert!(
+            diag["message"].as_str().map_or(false, |m| !m.is_empty()),
+            "message must be non-empty: {diag}"
+        );
+        // severity (1=Error, 2=Warning, 3=Info, 4=Hint)
+        let severity = diag["severity"].as_u64().unwrap_or(0);
+        assert!(
+            (1..=4).contains(&severity),
+            "severity must be 1-4, got {severity}: {diag}"
+        );
+        // range validity
+        assert_valid_range(diag, "structure test");
+        // codeDescription url
+        let url = diag["codeDescription"]["href"].as_str().unwrap_or("");
+        assert!(
+            url.starts_with("https://"),
+            "codeDescription.href must be a https URL: {diag}"
+        );
+    }
     Ok(())
 }

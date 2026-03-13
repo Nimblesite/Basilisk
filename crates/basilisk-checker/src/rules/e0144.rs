@@ -125,7 +125,7 @@ fn build_typevar_bound_map<'src>(
         for kw in &call.arguments.keywords {
             if kw.arg.as_deref() == Some("bound") {
                 if let Some(bound_class) = expr_simple_name(&kw.value) {
-                    map.insert(var_name, bound_class);
+                    let _ = map.insert(var_name, bound_class);
                 }
             }
         }
@@ -190,7 +190,7 @@ fn collect_type_params(func: &ast::StmtFunctionDef, source: &str) -> HashMap<Str
             continue;
         };
         if let Some(inner) = extract_type_subscript_text(ann, source) {
-            map.insert(param_wd.parameter.name.to_string(), inner);
+            let _ = map.insert(param_wd.parameter.name.to_string(), inner);
         }
     }
 
