@@ -48,7 +48,7 @@ class, while being strict-by-default and not requiring a Node.js runtime.
 
 ```bash
 # 1. Download the suite (one-time, not committed to the repo)
-./scripts/fetch-conformance.sh
+./conformance/fetch-conformance.sh
 
 # 2. Run the harness
 cargo test --test conformance_tests -- --nocapture
@@ -197,10 +197,10 @@ fixtures.
 
 - The conformance files are **not committed** to this repo.  They are
   downloaded from the upstream `python/typing` repository by
-  `./scripts/fetch-conformance.sh`.  This prevents the score from being
+  `./conformance/fetch-conformance.sh`.  This prevents the score from being
   gamed by modifying the tests.
 
-- The `COMMIT` variable in `scripts/fetch-conformance.sh` pins the suite to
+- The `COMMIT` variable in `conformance/fetch-conformance.sh` pins the suite to
   a specific ref.  Update it deliberately when pulling upstream changes so
   score movements are intentional, not accidental.
 

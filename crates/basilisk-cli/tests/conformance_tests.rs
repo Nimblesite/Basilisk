@@ -8,7 +8,7 @@
 //! The conformance files must be downloaded first:
 //!
 //! ```text
-//! ./scripts/fetch-conformance.sh
+//! ./conformance/fetch-conformance.sh
 //! cargo test --test conformance_tests -- --nocapture
 //! ```
 //!
@@ -307,7 +307,7 @@ fn conformance_score() {
     if !conformance_dir.exists() {
         println!();
         println!("  ⚠  Conformance suite not downloaded.");
-        println!("  Run: ./scripts/fetch-conformance.sh");
+        println!("  Run: ./conformance/fetch-conformance.sh");
         println!("  Then rerun: cargo test --test conformance_tests -- --nocapture");
         println!();
         return;
@@ -325,7 +325,7 @@ fn conformance_score() {
 
     if files.is_empty() {
         println!("  Conformance directory exists but contains no .py files.");
-        println!("  Run: ./scripts/fetch-conformance.sh");
+        println!("  Run: ./conformance/fetch-conformance.sh");
         return;
     }
 
@@ -335,7 +335,7 @@ fn conformance_score() {
 
     assert!(
         totals.files > 0,
-        "No conformance files found. Run ./scripts/fetch-conformance.sh first."
+        "No conformance files found. Run ./conformance/fetch-conformance.sh first."
     );
 }
 
@@ -355,7 +355,7 @@ struct Totals {
 
 /// Write a CSV snapshot of per-file conformance results.
 ///
-/// Output path: `benchmarks/conformance_status.csv` (repo root).
+/// Output path: `conformance/conformance_status.csv` (repo root).
 /// Columns: file, category, status, caught, missed, `false_positives`
 ///
 /// This file is the rolling log — commit it after each run to track regressions.
@@ -372,7 +372,7 @@ fn write_csv(detail_lines: &DetailLines) {
         eprintln!("  [conformance csv] could not locate repo root");
         return;
     };
-    let csv_path = repo_root.join("benchmarks/conformance_status.csv");
+    let csv_path = repo_root.join("conformance/conformance_status.csv");
     let _ = fs::create_dir_all(csv_path.parent().unwrap_or(Path::new(".")));
 
     let mut out =

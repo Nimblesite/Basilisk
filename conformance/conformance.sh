@@ -4,8 +4,8 @@
 # Downloads the python/typing conformance files first if they are missing.
 #
 # Usage:
-#   ./scripts/conformance.sh           # fetch if needed, then score
-#   ./scripts/conformance.sh --fetch   # force re-download, then score
+#   ./conformance/conformance.sh           # fetch if needed, then score
+#   ./conformance/conformance.sh --fetch   # force re-download, then score
 
 set -euo pipefail
 
@@ -29,7 +29,7 @@ warn()   { echo -e "${YELLOW}⚠ $*${RESET}"; }
 if [[ "${1:-}" == "--fetch" ]] || [[ ! -d "$CONFORMANCE_DIR" ]] || \
    [[ -z "$(ls -A "$CONFORMANCE_DIR" 2>/dev/null)" ]]; then
     header "Fetching conformance suite"
-    bash "$REPO_ROOT/scripts/fetch-conformance.sh"
+    bash "$REPO_ROOT/conformance/fetch-conformance.sh"
 else
     COUNT=$(find "$CONFORMANCE_DIR" -name "*.py" | wc -l | tr -d ' ')
     ok "Conformance suite already present ($COUNT files) — skipping download"

@@ -5,7 +5,7 @@
 # These files are NOT committed to the repo. Run this script before
 # running conformance tests:
 #
-#   ./scripts/fetch-conformance.sh
+#   ./conformance/fetch-conformance.sh
 #   cargo test --test conformance_tests
 #
 # The suite is pinned to a specific commit so results are reproducible.

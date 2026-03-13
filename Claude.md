@@ -33,6 +33,8 @@ OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK MESSAGES AND COMPLY
 
 # Rules
 
+- Zero duplication. DRY AF!!! Check for existing code before writing new code
+- Aggressively move code that can be shared out to shared crates/modules/packages
 - Ignore compiler code (except clippy fixes)
 - Do not use Git unless asked
 - NEVER DELETE FAILING TESTS
@@ -45,7 +47,6 @@ OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK MESSAGES AND COMPLY
 
 ## Core Principles
 
-- Zero duplication. DRY AF!!! Check for existing code before writing new code
 - Logging is critical. Can't see what's happening? Add more logging immediately
 - 100% test coverage is only the start
 - No unit tests. Only COARSE e2e tests
