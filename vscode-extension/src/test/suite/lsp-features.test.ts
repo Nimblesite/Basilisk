@@ -45,25 +45,6 @@ async function pollUntilResult<T>(
 }
 
 /**
- * Poll an async function until it returns a truthy, non-empty result.
- * Avoids fixed sleeps by retrying at short intervals.
- */
-async function pollUntilResult<T>(
-    fn: () => PromiseLike<T>,
-    predicate: (result: T) => boolean,
-    timeoutMs: number = 5_000,
-    intervalMs: number = 100
-): Promise<T> {
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-        const result = await fn();
-        if (predicate(result)) return result;
-        await new Promise<void>((r) => setTimeout(r, intervalMs));
-    }
-    return fn() as Promise<T>;
-}
-
-/**
  * Resolves the absolute path to the basilisk binary built from Cargo.
  * Returns undefined if the binary does not exist.
  */

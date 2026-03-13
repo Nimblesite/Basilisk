@@ -174,6 +174,7 @@ ok "lsp_e2e_tests done"
 
 header "VS Code extension — compile + test"
 cd "$REPO_ROOT/vscode-extension"
+npm ci
 npm run compile
 ok "TypeScript compiled"
 
