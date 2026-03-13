@@ -134,7 +134,7 @@ fn check_frozen_instance_assigns(module: &ResolvedModule, diagnostics: &mut Vec<
     // Also include dataclass_transform classes that are frozen
     for (name, info) in &transform_classes {
         if info.frozen {
-            frozen_classes.insert(name.as_str());
+            let _ = frozen_classes.insert(name.as_str());
         }
     }
 
@@ -156,7 +156,7 @@ fn check_frozen_instance_assigns(module: &ResolvedModule, diagnostics: &mut Vec<
         }
         let callee = callee.rsplit('.').next().unwrap_or(callee);
         if frozen_classes.contains(callee) {
-            instance_class.insert(var.name.as_str(), callee);
+            let _ = instance_class.insert(var.name.as_str(), callee);
         }
     }
 

@@ -82,7 +82,7 @@ fn extract_typevars_from_generic_base(line: &str) -> HashSet<String> {
                         .chars()
                         .all(|c| c.is_ascii_alphanumeric() || c == '_')
                 {
-                    result.insert(trimmed.to_owned());
+                    let _ = result.insert(trimmed.to_owned());
                 }
             }
         }
@@ -98,7 +98,7 @@ fn extract_typevars_from_function_sig(
     let mut result = HashSet::new();
     for typevar_name in all_typevars {
         if contains_typevar_reference(line, typevar_name) {
-            result.insert(typevar_name.clone());
+            let _ = result.insert(typevar_name.clone());
         }
     }
     result
@@ -349,7 +349,7 @@ fn collect_generic_classes(source: &str) -> Vec<GenericClassDef> {
                             if let Some(close) = body_trimmed.rfind(')') {
                                 let params_text = &body_trimmed[open + 1..close];
                                 let params = parse_method_params(params_text);
-                                methods.insert(method_name, params);
+                                let _ = methods.insert(method_name, params);
                             }
                         }
                     }
@@ -506,7 +506,7 @@ fn check_generic_instance_method_calls(
                 .zip(instance.type_args.iter())
                 .map(|(tv, ty)| (tv.clone(), ty.clone()))
                 .collect();
-            var_substitutions.insert(instance.var_name.clone(), (class_def, subst));
+            let _ = var_substitutions.insert(instance.var_name.clone(), (class_def, subst));
         }
     }
 
@@ -673,7 +673,7 @@ impl Rule for TypeVarScopeViolation {
             // Pop scopes that are no longer active (indentation decreased).
             while let Some(top) = scope_stack.last() {
                 if indent <= top.indent {
-                    scope_stack.pop();
+                    let _ = scope_stack.pop();
                 } else {
                     break;
                 }

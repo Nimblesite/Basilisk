@@ -7,7 +7,7 @@
  *
  * Prerequisites:
  *   - The `basilisk` binary must be built: `cargo build -p basilisk-cli`
- *   - The binary must be on PATH or the test will skip gracefully
+ *   - The binary must be on PATH or the test will fail hard
  */
 
 import * as assert from 'assert';
@@ -22,11 +22,8 @@ const EXTENSION_ID = 'basilisk-lang.basilisk';
 /** Maximum time (ms) to wait for diagnostics from the LSP server. */
 const DIAGNOSTIC_TIMEOUT_MS = 15_000;
 
-/** Time (ms) to wait for the LSP server to fully start. */
-const SERVER_START_WAIT_MS = 5_000;
-
-/** Time (ms) to wait for the LSP server to index a document. */
-const INDEX_WAIT_MS = 2_000;
+/** Maximum time (ms) to wait for the LSP server to become responsive. */
+const SERVER_START_WAIT_MS = 10_000;
 
 /**
  * Poll an async function until it returns a truthy, non-empty result.
@@ -52,8 +49,14 @@ async function pollUntilResult<T>(
  * Returns undefined if the binary does not exist.
  */
 function findBasiliskBinary(): string | undefined {
-    // Check the workspace-root debug build first.
-    const workspaceRoot = path.resolve(__dirname, '../../../../..');
+    // Check BASILISK_EXECUTABLE_PATH env var first (set by test.sh / CI).
+    const envPath = process.env.BASILISK_EXECUTABLE_PATH;
+    if (envPath && fs.existsSync(envPath)) {
+        return envPath;
+    }
+
+    // __dirname at runtime is vscode-extension/out/test/suite/ — 4 levels to repo root.
+    const workspaceRoot = path.resolve(__dirname, '../../../..');
     const debugBinary = path.join(workspaceRoot, 'target', 'debug', 'basilisk');
     if (fs.existsSync(debugBinary)) {
         return debugBinary;
@@ -134,9 +137,8 @@ suite('LSP Feature Tests', () => {
 
         basiliskBinary = findBasiliskBinary();
         if (!basiliskBinary) {
-            console.warn(
-                'Basilisk binary not found. LSP feature tests will be skipped. ' +
-                'Build with: cargo build -p basilisk-cli'
+            throw new Error(
+                'Basilisk binary not found. Build with: cargo build -p basilisk-cli'
             );
         }
 
@@ -148,8 +150,21 @@ suite('LSP Feature Tests', () => {
             await ext.activate();
         }
 
-        // Give the LSP server time to fully initialize.
-        await new Promise<void>((resolve) => setTimeout(resolve, SERVER_START_WAIT_MS));
+        // Poll until the LSP server is responsive.
+        const dummyPath = path.join(tmpDir, '__init__.py');
+        fs.writeFileSync(dummyPath, '', 'utf8');
+        const dummyUri = vscode.Uri.file(dummyPath);
+        const dummyDoc = await vscode.workspace.openTextDocument(dummyUri);
+        await vscode.window.showTextDocument(dummyDoc);
+        await pollUntilResult(
+            () => vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+                'vscode.executeDocumentSymbolProvider', dummyUri
+            ).then((r) => r, () => null),
+            (r) => r !== null && r !== undefined,
+            SERVER_START_WAIT_MS,
+            200
+        );
+        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     });
 
     suiteTeardown(async () => {
@@ -168,10 +183,6 @@ suite('LSP Feature Tests', () => {
     // ----------------------------------------------------------------
     test('find references works through extension', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 10_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const source = [
             'def compute(x: int) -> int:',
@@ -184,15 +195,13 @@ suite('LSP Feature Tests', () => {
 
         const { uri } = await openPythonFile(tmpDir, 'test_references.py', source);
 
-        // Allow the server time to index the file.
-        await new Promise<void>((resolve) => setTimeout(resolve, INDEX_WAIT_MS));
-
-        // Request references at the function definition "compute" on line 0, col 4.
+        // Poll until the server has indexed and returns reference results.
         const defPosition = new vscode.Position(0, 4);
-        const locations = await vscode.commands.executeCommand<vscode.Location[]>(
-            'vscode.executeReferenceProvider',
-            uri,
-            defPosition
+        const locations = await pollUntilResult(
+            () => vscode.commands.executeCommand<vscode.Location[]>(
+                'vscode.executeReferenceProvider', uri, defPosition
+            ).then((r) => r, () => [] as vscode.Location[]),
+            (r) => r !== null && r !== undefined && r.length >= 3
         );
 
         assert.ok(locations, 'Expected reference results to be defined');
@@ -221,10 +230,6 @@ suite('LSP Feature Tests', () => {
     // ----------------------------------------------------------------
     test('rename symbol works through extension', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 10_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const source = [
             'def old_name(x: int) -> int:',
@@ -236,16 +241,13 @@ suite('LSP Feature Tests', () => {
 
         const { uri } = await openPythonFile(tmpDir, 'test_rename.py', source);
 
-        // Allow the server time to index the file.
-        await new Promise<void>((resolve) => setTimeout(resolve, INDEX_WAIT_MS));
-
-        // Request rename at the function definition "old_name" on line 0, col 4.
+        // Poll until the server has indexed and returns rename results.
         const defPosition = new vscode.Position(0, 4);
-        const workspaceEdit = await vscode.commands.executeCommand<vscode.WorkspaceEdit>(
-            'vscode.executeDocumentRenameProvider',
-            uri,
-            defPosition,
-            'new_name'
+        const workspaceEdit = await pollUntilResult(
+            () => vscode.commands.executeCommand<vscode.WorkspaceEdit>(
+                'vscode.executeDocumentRenameProvider', uri, defPosition, 'new_name'
+            ).then((r) => r, () => new vscode.WorkspaceEdit()),
+            (r) => r !== null && r !== undefined && r.get(uri).length > 0
         );
 
         assert.ok(workspaceEdit, 'Expected workspace edit to be defined');
@@ -286,10 +288,6 @@ suite('LSP Feature Tests', () => {
     // ----------------------------------------------------------------
     test('inlay hints appear for unannotated variables', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 10_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const source = [
             'x = 42',
@@ -300,18 +298,16 @@ suite('LSP Feature Tests', () => {
 
         const { doc, uri } = await openPythonFile(tmpDir, 'test_inlay_hints.py', source);
 
-        // Allow the server time to index the file.
-        await new Promise<void>((resolve) => setTimeout(resolve, INDEX_WAIT_MS));
-
-        // Request inlay hints for the entire document range.
+        // Poll until the server returns inlay hints.
         const fullRange = new vscode.Range(
             new vscode.Position(0, 0),
             new vscode.Position(doc.lineCount - 1, doc.lineAt(doc.lineCount - 1).text.length)
         );
-        const hints = await vscode.commands.executeCommand<vscode.InlayHint[]>(
-            'vscode.executeInlayHintProvider',
-            uri,
-            fullRange
+        const hints = await pollUntilResult(
+            () => vscode.commands.executeCommand<vscode.InlayHint[]>(
+                'vscode.executeInlayHintProvider', uri, fullRange
+            ).then((r) => r, () => [] as vscode.InlayHint[]),
+            (r) => r !== null && r !== undefined && r.length >= 2
         );
 
         assert.ok(hints, 'Expected inlay hints result to be defined');
@@ -344,10 +340,6 @@ suite('LSP Feature Tests', () => {
     // ----------------------------------------------------------------
     test('format document works through extension', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 10_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         // Intentionally badly formatted Python code.
         const source = [
@@ -360,13 +352,13 @@ suite('LSP Feature Tests', () => {
 
         const { uri } = await openPythonFile(tmpDir, 'test_format.py', source);
 
-        // Allow the server time to index the file.
-        await new Promise<void>((resolve) => setTimeout(resolve, INDEX_WAIT_MS));
-
-        const edits = await vscode.commands.executeCommand<vscode.TextEdit[]>(
-            'vscode.executeFormatDocumentProvider',
-            uri,
-            { tabSize: 4, insertSpaces: true }
+        // Poll until the server returns formatting edits.
+        const edits = await pollUntilResult(
+            () => vscode.commands.executeCommand<vscode.TextEdit[]>(
+                'vscode.executeFormatDocumentProvider', uri,
+                { tabSize: 4, insertSpaces: true }
+            ).then((r) => r, () => [] as vscode.TextEdit[]),
+            (r) => r !== null && r !== undefined && r.length > 0
         );
 
         assert.ok(edits, 'Expected format edits to be defined');
@@ -393,10 +385,6 @@ suite('LSP Feature Tests', () => {
     // ----------------------------------------------------------------
     test('document highlight works for symbol', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 10_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const source = [
             'def process(data: str) -> str:',
@@ -409,15 +397,13 @@ suite('LSP Feature Tests', () => {
 
         const { uri } = await openPythonFile(tmpDir, 'test_highlight.py', source);
 
-        // Allow the server time to index the file.
-        await new Promise<void>((resolve) => setTimeout(resolve, INDEX_WAIT_MS));
-
-        // Request highlights at the function definition "process" on line 0, col 4.
+        // Poll until the server returns document highlights.
         const defPosition = new vscode.Position(0, 4);
-        const highlights = await vscode.commands.executeCommand<vscode.DocumentHighlight[]>(
-            'vscode.executeDocumentHighlights',
-            uri,
-            defPosition
+        const highlights = await pollUntilResult(
+            () => vscode.commands.executeCommand<vscode.DocumentHighlight[]>(
+                'vscode.executeDocumentHighlights', uri, defPosition
+            ).then((r) => r, () => [] as vscode.DocumentHighlight[]),
+            (r) => r !== null && r !== undefined && r.length >= 3
         );
 
         assert.ok(highlights, 'Expected document highlights to be defined');

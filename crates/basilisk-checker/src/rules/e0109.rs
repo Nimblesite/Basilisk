@@ -60,7 +60,7 @@ impl Rule for TypeVarBoundCallViolation {
         let mut func_map: HashMap<&str, &FunctionInfo> = HashMap::new();
         for func in &module.functions {
             if func.class_name.is_none() {
-                func_map.insert(func.name.as_str(), func);
+                let _ = func_map.insert(func.name.as_str(), func);
             }
         }
 

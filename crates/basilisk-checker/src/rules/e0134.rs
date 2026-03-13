@@ -58,7 +58,7 @@ impl Rule for InvariantGenericArgMismatch {
                 }
             }
             if !params.is_empty() {
-                func_params.insert(func.name.as_str(), params);
+                let _ = func_params.insert(func.name.as_str(), params);
             }
         }
 
@@ -93,7 +93,7 @@ fn build_class_base_map(module: &ResolvedModule) -> HashMap<&str, (&str, Vec<&st
             let span_text = source.get(entry.span.start as usize..entry.span.end as usize);
             if let Some(text) = span_text {
                 if let Some(type_args) = extract_subscript_args(text) {
-                    map.insert(cls.name.as_str(), (entry.base_name.as_str(), type_args));
+                    let _ = map.insert(cls.name.as_str(), (entry.base_name.as_str(), type_args));
                 }
             }
         }
@@ -209,7 +209,7 @@ fn build_param_type_map(
         if let Some(ann) = &param.annotation {
             let range = ann.range();
             if let Some(text) = source.get(range.start().to_usize()..range.end().to_usize()) {
-                map.insert(param.name.to_string(), text.trim().to_string());
+                let _ = map.insert(param.name.to_string(), text.trim().to_string());
             }
         }
     }

@@ -197,7 +197,7 @@ fn collect_callable_params(
         };
         let ann_text = ann_str(ann);
         if let Some(sig) = parse_callable_sig(&ann_text) {
-            map.insert(param.parameter.name.to_string(), sig);
+            let _ = map.insert(param.parameter.name.to_string(), sig);
         }
     }
     map

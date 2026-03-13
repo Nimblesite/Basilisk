@@ -206,7 +206,7 @@ fn build_param_type_map(
         if let Some(ann) = &param.annotation {
             let range = ann.range();
             if let Some(text) = source.get(range.start().to_usize()..range.end().to_usize()) {
-                map.insert(param.name.to_string(), text.trim().to_string());
+                let _ = map.insert(param.name.to_string(), text.trim().to_string());
             }
         }
     }

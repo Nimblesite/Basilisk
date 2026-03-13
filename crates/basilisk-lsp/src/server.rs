@@ -2,27 +2,39 @@
 //!
 //! Thin dispatcher that delegates to feature modules for each LSP request.
 
-use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::sync::{Mutex, RwLock};
+use tokio::task::AbortHandle;
 
-use dashmap::DashMap;
+macro_rules! diaglog {
+    ($($arg:tt)*) => {{
+        use std::io::Write as _;
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("/tmp/basilisk-diag.log")
+        {
+            let _ = writeln!(f, $($arg)*);
+        }
+    }};
+}
+
 use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::{
     CallHierarchyIncomingCall, CallHierarchyIncomingCallsParams, CallHierarchyItem,
     CallHierarchyOutgoingCall, CallHierarchyOutgoingCallsParams, CallHierarchyPrepareParams,
     CallHierarchyServerCapability, CodeActionKind, CodeActionOptions, CodeActionParams,
-    CodeActionProviderCapability, CodeActionResponse, CodeDescription, CodeLens, CodeLensOptions,
-    CodeLensParams, ColorInformation, ColorPresentation, ColorPresentationParams,
-    ColorProviderCapability, CompletionItem, CompletionOptions, CompletionParams,
-    CompletionResponse, DeclarationCapability, Diagnostic, DiagnosticSeverity,
-    DidChangeTextDocumentParams, DidChangeWatchedFilesParams, DidCloseTextDocumentParams,
-    DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentColorParams,
-    DocumentFormattingParams, DocumentHighlight, DocumentHighlightParams, DocumentSymbolParams,
-    DocumentSymbolResponse, ExecuteCommandOptions, ExecuteCommandParams, FileChangeType,
-    FoldingRange, FoldingRangeParams, FoldingRangeProviderCapability, GotoDefinitionParams,
-    GotoDefinitionResponse, Hover, HoverParams, HoverProviderCapability, InitializeParams,
-    InitializeResult, InitializedParams, InlayHint, InlayHintParams, Location, MessageType,
-    NumberOrString, OneOf, Position, PrepareRenameResponse, Range, ReferenceParams, RenameOptions,
+    CodeActionProviderCapability, CodeActionResponse, CodeLens, CodeLensOptions, CodeLensParams,
+    ColorInformation, ColorPresentation, ColorPresentationParams, ColorProviderCapability,
+    CompletionItem, CompletionOptions, CompletionParams, CompletionResponse, DeclarationCapability,
+    DidChangeConfigurationParams, DidChangeTextDocumentParams, DidChangeWatchedFilesParams,
+    DidCloseTextDocumentParams, DidOpenTextDocumentParams, DidSaveTextDocumentParams,
+    DocumentColorParams, DocumentFormattingParams, DocumentHighlight, DocumentHighlightParams,
+    DocumentSymbolParams, DocumentSymbolResponse, ExecuteCommandOptions, ExecuteCommandParams,
+    FileChangeType, FoldingRange, FoldingRangeParams, FoldingRangeProviderCapability,
+    GotoDefinitionParams, GotoDefinitionResponse, Hover, HoverParams, HoverProviderCapability,
+    InitializeParams, InitializeResult, InitializedParams, InlayHint, InlayHintParams, Location,
+    MessageType, OneOf, Position, PrepareRenameResponse, ReferenceParams, RenameOptions,
     RenameParams, SelectionRange, SelectionRangeParams, SelectionRangeProviderCapability,
     SemanticTokens, SemanticTokensFullOptions, SemanticTokensLegend, SemanticTokensOptions,
     SemanticTokensParams, SemanticTokensResult, SemanticTokensServerCapabilities,
@@ -35,36 +47,30 @@ use tower_lsp::lsp_types::{
 use tower_lsp::{Client, LspService, Server};
 use tracing::{debug, error, info, warn};
 
-use crate::util::{byte_offset_to_position, position_to_byte_offset};
+use crate::config::AnalysisMode;
+use crate::util::position_to_byte_offset;
+use crate::workspace::{resolve_analysis_mode, WorkspaceIndex};
 use crate::{
     call_hierarchy, code_actions, code_lens, completion, declaration, definition, folding,
     formatting, highlight, hover, inlay_hints, references, selection, signature, symbols,
     type_definition, type_hierarchy,
 };
 
-/// Fallback docs URL used when a diagnostic code URL fails to parse.
-const FALLBACK_DOCS_URL: &str = basilisk_common::diagnostics::DOCS_URL;
-
-/// State for a single open document.
-struct DocumentState {
-    /// Current text content.
-    text: String,
-    /// Cached resolved module from the last parse/resolve cycle.
-    resolved: Option<Arc<basilisk_resolver::ResolvedModule>>,
-    /// Cached diagnostics from the last check cycle.
-    diagnostics: Vec<basilisk_checker::Diagnostic>,
-}
+/// Debounce interval for file‑watcher notifications (milliseconds).
+const FILE_WATCHER_DEBOUNCE_MS: u64 = 200;
 
 /// The Basilisk LSP server.
 pub struct LspServer {
     /// LSP client for sending notifications back to the editor.
     client: Client,
-    /// Map from document URI to its current state.
-    documents: DashMap<Url, DocumentState>,
+    /// Workspace index (None until initialized).
+    index: Arc<RwLock<Option<WorkspaceIndex>>>,
     /// Workspace root folders discovered during initialization.
-    workspace_roots: tokio::sync::RwLock<Vec<std::path::PathBuf>>,
+    workspace_roots: RwLock<Vec<std::path::PathBuf>>,
     /// Debug session manager — spawns debugpy and tracks active sessions.
     debug_manager: crate::debug::DebugSessionManager,
+    /// Debounced file‑watcher task.
+    watcher_debounce: Mutex<Option<AbortHandle>>,
 }
 
 impl LspServer {
@@ -73,135 +79,25 @@ impl LspServer {
     pub fn new(client: Client) -> Self {
         Self {
             client,
-            documents: DashMap::new(),
-            workspace_roots: tokio::sync::RwLock::new(Vec::new()),
+            index: Arc::new(RwLock::new(None)),
+            workspace_roots: RwLock::new(Vec::new()),
             debug_manager: crate::debug::DebugSessionManager::new(),
+            watcher_debounce: Mutex::new(None),
         }
     }
 
-    /// Scan workspace directories for all `.py` files and check each one.
-    /// When both `foo.py` and `foo.pyi` exist, only the `.pyi` file is checked.
-    async fn scan_workspace(&self) {
-        let roots = self.workspace_roots.read().await;
-        let mut py_files: Vec<std::path::PathBuf> = Vec::new();
-
-        for root in roots.iter() {
-            let cfg = crate::config::load_config(root);
-            collect_python_files(root, &mut py_files, &cfg.exclude, root);
-        }
-        drop(roots);
-
-        // Group by stem (filename without extension) and prefer .pyi over .py
-        let mut by_stem: HashMap<String, std::path::PathBuf> = HashMap::new();
-        for path in py_files {
-            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                let ext = path.extension().and_then(|s| s.to_str());
-                let stem_key = stem.to_string();
-                // If we already have an entry, check if we should replace it
-                match by_stem.get(&stem_key) {
-                    Some(existing) => {
-                        let existing_ext = existing.extension().and_then(|s| s.to_str());
-                        // Prefer .pyi over .py
-                        if existing_ext == Some("py") && ext == Some("pyi") {
-                            by_stem.insert(stem_key, path);
-                        }
-                        // else keep existing (either .pyi or other)
-                    }
-                    None => {
-                        by_stem.insert(stem_key, path);
-                    }
-                }
-            }
-        }
-
-        let deduped_files: Vec<std::path::PathBuf> = by_stem.into_values().collect();
-        let file_count = deduped_files.len();
-        self.client
-            .log_message(
-                MessageType::INFO,
-                format!(
-                    "Basilisk: scanning {file_count} Python files (after .pyi/.py deduplication)"
-                ),
-            )
-            .await;
-
-        for path in &deduped_files {
-            let Ok(text) = std::fs::read_to_string(path) else {
-                continue;
-            };
-            let Some(uri) = path_to_uri(path) else {
-                continue;
-            };
-            // Don't overwrite files the user already has open.
-            if self.documents.contains_key(&uri) {
-                continue;
-            }
-            self.check_and_publish(uri, &text).await;
-        }
-
-        self.client
-            .log_message(
-                MessageType::INFO,
-                format!("Basilisk: workspace scan complete ({file_count} files)"),
-            )
-            .await;
-    }
-
-    /// Run the checker on a document, cache results, and publish diagnostics.
-    async fn check_and_publish(&self, uri: Url, text: &str) {
-        let file_path = uri.to_file_path().unwrap_or_default();
-        let path_str = file_path.to_string_lossy().into_owned();
-
-        let parsed = match basilisk_parser::parse_source(text.to_owned(), path_str) {
-            Ok(p) => p,
-            Err(e) => {
-                let lsp_diag = parse_error_diagnostic(&e.to_string());
-                self.documents.insert(
-                    uri.clone(),
-                    DocumentState {
-                        text: text.to_owned(),
-                        resolved: None,
-                        diagnostics: vec![],
-                    },
-                );
-                self.client
-                    .publish_diagnostics(uri, vec![lsp_diag], None)
-                    .await;
-                return;
-            }
-        };
-
-        let Ok(resolved) = basilisk_resolver::resolve(&parsed) else {
-            self.documents.insert(
-                uri.clone(),
-                DocumentState {
-                    text: text.to_owned(),
-                    resolved: None,
-                    diagnostics: vec![],
-                },
-            );
-            self.client.publish_diagnostics(uri, vec![], None).await;
-            return;
-        };
-
-        let checker_diags = basilisk_checker::check(&resolved);
-        let lsp_diags: Vec<Diagnostic> =
-            checker_diags.iter().map(|d| bsk_to_lsp(d, text)).collect();
-
-        self.documents.insert(
-            uri.clone(),
-            DocumentState {
-                text: text.to_owned(),
-                resolved: Some(Arc::new(resolved)),
-                diagnostics: checker_diags,
-            },
-        );
-
-        self.client.publish_diagnostics(uri, lsp_diags, None).await;
+    /// Borrow the index and call `f` with it. Returns `None` if not yet
+    /// initialized (before `initialized()` fires).
+    async fn with_index<T, F>(&self, f: F) -> Option<T>
+    where
+        F: FnOnce(&WorkspaceIndex) -> Option<T>,
+    {
+        let guard = self.index.read().await;
+        guard.as_ref().and_then(f)
     }
 
     /// Get the text, resolved module, and diagnostics for a document.
-    fn get_document_data(
+    async fn get_document_data(
         &self,
         uri: &Url,
     ) -> Option<(
@@ -209,11 +105,7 @@ impl LspServer {
         Arc<basilisk_resolver::ResolvedModule>,
         Vec<basilisk_checker::Diagnostic>,
     )> {
-        let entry = self.documents.get(uri)?;
-        let text = entry.text.clone();
-        let resolved = entry.resolved.clone()?;
-        let diagnostics = entry.diagnostics.clone();
-        Some((text, resolved, diagnostics))
+        self.with_index(|idx| idx.get_by_uri(uri)).await
     }
 
     // ── Execute command handlers ─────────────────────────────────────────────
@@ -234,9 +126,8 @@ impl LspServer {
         };
 
         let source = self
-            .documents
-            .get(&uri)
-            .map(|d| d.text.clone())
+            .with_index(|idx| idx.get_text(&uri))
+            .await
             .unwrap_or_default();
 
         if source.is_empty() {
@@ -350,57 +241,26 @@ impl LspServer {
 
         Ok(Some(serde_json::json!({ "stopped": stopped })))
     }
-}
 
-// ── Diagnostic conversion ────────────────────────────────────────────────────
-
-/// Convert a Basilisk diagnostic to an LSP diagnostic.
-fn bsk_to_lsp(d: &basilisk_checker::Diagnostic, text: &str) -> Diagnostic {
-    let start = byte_offset_to_position(text, d.span.start as usize);
-    let end = byte_offset_to_position(text, d.span.end as usize);
-    let severity = match d.severity {
-        basilisk_checker::Severity::Error | basilisk_checker::Severity::SafetyViolation => {
-            DiagnosticSeverity::ERROR
-        }
-        basilisk_checker::Severity::Warning => DiagnosticSeverity::WARNING,
-        basilisk_checker::Severity::Info => DiagnosticSeverity::INFORMATION,
-    };
-    // FALLBACK_DOCS_URL is a compile-time constant that is always a valid URL.
-    let Ok(fallback) = Url::parse(FALLBACK_DOCS_URL) else {
-        return Diagnostic {
-            range: Range { start, end },
-            severity: Some(severity),
-            code: Some(NumberOrString::String(d.code.code.to_owned())),
-            source: Some("basilisk".to_owned()),
-            message: d.message.clone(),
-            ..Default::default()
+    /// Run a position-based handler: extract document data, compute byte offset,
+    /// call `handler`, and wrap the result in `LspResult`.
+    async fn at_position<T>(
+        &self,
+        uri: Url,
+        pos: Position,
+        handler: impl FnOnce(
+            &Arc<basilisk_resolver::ResolvedModule>,
+            &str,
+            usize,
+            &Url,
+            &[basilisk_checker::Diagnostic],
+        ) -> Option<T>,
+    ) -> LspResult<Option<T>> {
+        let Some((text, resolved, diags)) = self.get_document_data(&uri).await else {
+            return Ok(None);
         };
-    };
-    Diagnostic {
-        range: Range { start, end },
-        severity: Some(severity),
-        code: Some(NumberOrString::String(d.code.code.to_owned())),
-        code_description: Some(CodeDescription {
-            href: Url::parse(d.code.docs_url).unwrap_or(fallback),
-        }),
-        source: Some("basilisk".to_owned()),
-        message: d.message.clone(),
-        ..Default::default()
-    }
-}
-
-/// Create a diagnostic for a parse error.
-fn parse_error_diagnostic(message: &str) -> Diagnostic {
-    Diagnostic {
-        range: Range {
-            start: Position::new(0, 0),
-            end: Position::new(0, 0),
-        },
-        severity: Some(DiagnosticSeverity::ERROR),
-        code: Some(NumberOrString::String("BSK-PARSE".to_owned())),
-        source: Some("basilisk".to_owned()),
-        message: format!("Parse error: {message}"),
-        ..Default::default()
+        let byte_offset = position_to_byte_offset(&text, pos);
+        Ok(handler(&resolved, &text, byte_offset, &uri, &diags))
     }
 }
 
@@ -409,8 +269,8 @@ fn parse_error_diagnostic(message: &str) -> Diagnostic {
 #[tower_lsp::async_trait]
 impl tower_lsp::LanguageServer for LspServer {
     async fn initialize(&self, params: InitializeParams) -> LspResult<InitializeResult> {
-        // Capture workspace roots for later scanning.
-        let mut roots = self.workspace_roots.write().await;
+        // Collect workspace roots.
+        let mut roots: Vec<std::path::PathBuf> = Vec::new();
         if let Some(folders) = &params.workspace_folders {
             for folder in folders {
                 if let Ok(path) = folder.uri.to_file_path() {
@@ -418,7 +278,6 @@ impl tower_lsp::LanguageServer for LspServer {
                 }
             }
         }
-        // Fallback to deprecated root_uri/root_path.
         if roots.is_empty() {
             if let Some(ref root_uri) = params.root_uri {
                 if let Ok(path) = root_uri.to_file_path() {
@@ -426,7 +285,13 @@ impl tower_lsp::LanguageServer for LspServer {
                 }
             }
         }
-        drop(roots);
+
+        // Determine analysis mode from InitializationOptions then config files.
+        let mode = resolve_analysis_mode(params.initialization_options.as_ref(), &roots);
+
+        // Build the workspace index now so `initialized()` can scan immediately.
+        let index = WorkspaceIndex::new(roots, mode);
+        *self.index.write().await = Some(index);
 
         Ok(InitializeResult {
             server_info: Some(ServerInfo {
@@ -510,8 +375,135 @@ impl tower_lsp::LanguageServer for LspServer {
             .log_message(MessageType::INFO, "Basilisk LSP initialized")
             .await;
 
-        // Scan the workspace for all Python files and publish diagnostics.
-        self.scan_workspace().await;
+        let guard = self.index.read().await;
+        let Some(index) = guard.as_ref() else { return };
+
+        match index.mode {
+            AnalysisMode::OpenFilesOnly => {
+                self.client
+                    .log_message(
+                        MessageType::INFO,
+                        "Basilisk: analysisMode=openFilesOnly — skipping workspace scan",
+                    )
+                    .await;
+            }
+            AnalysisMode::WholeModule | AnalysisMode::CrossModule => {
+                self.client
+                    .log_message(MessageType::INFO, "Basilisk: scanning workspace files...")
+                    .await;
+                let (results, file_count, error_count) = index.scan();
+
+                // Resolve imports for all scanned files.
+                let roots = self.workspace_roots.read().await;
+                let config = roots
+                    .first()
+                    .map(|r| crate::config::load_config(r))
+                    .unwrap_or_default();
+                let search_paths =
+                    crate::import_resolver::ImportSearchPaths::from_config(&roots, &config);
+                crate::import_resolver::resolve_workspace_imports(index, &search_paths);
+                drop(roots);
+
+                drop(guard);
+                for (uri, diags) in results {
+                    self.client.publish_diagnostics(uri, diags, None).await;
+                }
+                self.client
+                    .log_message(
+                        MessageType::INFO,
+                        format!(
+                            "Basilisk: workspace scan complete — {file_count} files, {error_count} error(s)"
+                        ),
+                    )
+                    .await;
+                return;
+            }
+        }
+        drop(guard);
+    }
+
+    async fn did_change_configuration(&self, params: DidChangeConfigurationParams) {
+        // Extract analysisMode from the settings.
+        let settings = params.settings;
+        diaglog!("[DIAG] did_change_configuration: settings={settings}");
+        info!(settings = %settings, "did_change_configuration received");
+        let mut mode = None;
+        if let Some(mode_str) = settings
+            .get("analysisMode")
+            .or_else(|| settings.get("basilisk").and_then(|b| b.get("analysisMode")))
+            .and_then(|v| v.as_str())
+        {
+            mode = Some(AnalysisMode::parse(mode_str));
+        }
+        let Some(new_mode) = mode else {
+            info!("did_change_configuration: no analysisMode found, ignoring");
+            return;
+        };
+
+        // Update the mode on the index.
+        {
+            let mut guard = self.index.write().await;
+            if let Some(index) = guard.as_mut() {
+                index.mode = new_mode;
+            }
+        }
+
+        self.client
+            .log_message(
+                MessageType::INFO,
+                format!("Basilisk: analysis mode changed to {new_mode:?}"),
+            )
+            .await;
+
+        // When switching to wholeModule/crossModule, trigger a workspace scan
+        // and publish diagnostics for all discovered files.
+        match new_mode {
+            AnalysisMode::WholeModule | AnalysisMode::CrossModule => {
+                let guard = self.index.read().await;
+                let Some(index) = guard.as_ref() else { return };
+                let (results, file_count, error_count) = index.scan();
+
+                // Resolve imports for all scanned files.
+                let roots = self.workspace_roots.read().await;
+                let config = roots
+                    .first()
+                    .map(|r| crate::config::load_config(r))
+                    .unwrap_or_default();
+                let search_paths =
+                    crate::import_resolver::ImportSearchPaths::from_config(&roots, &config);
+                crate::import_resolver::resolve_workspace_imports(index, &search_paths);
+                drop(roots);
+
+                drop(guard);
+                for (uri, diags) in results {
+                    self.client.publish_diagnostics(uri, diags, None).await;
+                }
+                self.client
+                    .log_message(
+                        MessageType::INFO,
+                        format!(
+                            "Basilisk: workspace scan complete — {file_count} files, {error_count} error(s)"
+                        ),
+                    )
+                    .await;
+            }
+            AnalysisMode::OpenFilesOnly => {
+                // Clear diagnostics for all non-open files. In openFilesOnly
+                // mode, only open documents should have diagnostics.
+                let guard = self.index.read().await;
+                let Some(index) = guard.as_ref() else { return };
+                let to_clear: Vec<Url> = index
+                    .files
+                    .iter()
+                    .filter(|entry| !entry.value().is_open)
+                    .filter_map(|entry| Url::from_file_path(entry.key()).ok())
+                    .collect();
+                drop(guard);
+                for uri in to_clear {
+                    self.client.publish_diagnostics(uri, vec![], None).await;
+                }
+            }
+        }
     }
 
     async fn shutdown(&self) -> LspResult<()> {
@@ -525,80 +517,188 @@ impl tower_lsp::LanguageServer for LspServer {
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
         let uri = params.text_document.uri;
         let text = params.text_document.text;
-        self.check_and_publish(uri, &text).await;
+        let version = params.text_document.version;
+        let guard = self.index.read().await;
+        let Some(index) = guard.as_ref() else { return };
+        let diags = index.set_open(&uri, &text, version);
+        drop(guard);
+        self.client.publish_diagnostics(uri, diags, None).await;
     }
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
         let uri = params.text_document.uri;
+        let version = params.text_document.version;
 
-        // Get the current text as a starting point for incremental edits.
-        let mut text = self
-            .documents
-            .get(&uri)
-            .map(|e| e.text.clone())
-            .unwrap_or_default();
+        // Get current text for incremental edits.
+        let guard = self.index.read().await;
+        let Some(index) = guard.as_ref() else { return };
+        let mut text = index.get_text(&uri).unwrap_or_default();
+        drop(guard);
 
-        // Apply each incremental change in order.
+        // Apply incremental changes.
         for change in params.content_changes {
             if let Some(range) = change.range {
-                // Incremental update: replace the specified range.
                 let start = position_to_byte_offset(&text, range.start);
                 let end = position_to_byte_offset(&text, range.end);
                 text.replace_range(start..end, &change.text);
             } else {
-                // Full replacement (fallback).
                 text = change.text;
             }
         }
 
-        self.check_and_publish(uri, &text).await;
+        let guard = self.index.read().await;
+        let Some(index) = guard.as_ref() else { return };
+        let diags = index.set_open(&uri, &text, version);
+        drop(guard);
+        self.client.publish_diagnostics(uri, diags, None).await;
     }
 
     async fn did_save(&self, params: DidSaveTextDocumentParams) {
         let uri = params.text_document.uri;
-        if let Some(entry) = self.documents.get(&uri) {
-            let text = entry.text.clone();
-            drop(entry);
-            self.check_and_publish(uri, &text).await;
-        }
+        // Re-run the pipeline on the cached in-memory text (already up-to-date).
+        let guard = self.index.read().await;
+        let Some(index) = guard.as_ref() else { return };
+        let Some(text) = index.get_text(&uri) else {
+            return;
+        };
+        let diags = index.set_open(&uri, &text, 0);
+        drop(guard);
+        self.client.publish_diagnostics(uri, diags, None).await;
     }
 
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
         let uri = params.text_document.uri;
-        self.documents.remove(&uri);
-        self.client.publish_diagnostics(uri, vec![], None).await;
+        diaglog!("[DIAG] did_close ENTER uri={uri}");
+        let guard = self.index.read().await;
+        let Some(index) = guard.as_ref() else {
+            diaglog!("[DIAG] did_close: no index, clearing");
+            info!(uri = %uri, "did_close: no index, clearing diagnostics");
+            self.client.publish_diagnostics(uri, vec![], None).await;
+            return;
+        };
+        let mode = index.mode;
+        let roots_debug: Vec<_> = index
+            .roots
+            .iter()
+            .map(|r| r.display().to_string())
+            .collect();
+        diaglog!("[DIAG] did_close: mode={mode:?} roots={roots_debug:?} uri={uri}");
+        info!(uri = %uri, ?mode, "did_close: processing");
+        // In wholeModule/crossModule: re-analyse from disk and keep diagnostics,
+        // but only for files under a workspace root (those that the scan would
+        // discover). Files outside workspace roots are transient — clear them.
+        // In openFilesOnly: always clear diagnostics (file is no longer open).
+        match mode {
+            AnalysisMode::OpenFilesOnly => {
+                // Remove from index so no subsequent event republishes.
+                if let Ok(path) = uri.to_file_path() {
+                    let _ = index.files.remove(&path);
+                }
+                drop(guard);
+                diaglog!("[DIAG] did_close: OpenFilesOnly -> clearing uri={uri}");
+                info!(uri = %uri, "did_close: openFilesOnly — clearing diagnostics");
+                self.client.publish_diagnostics(uri, vec![], None).await;
+            }
+            AnalysisMode::WholeModule | AnalysisMode::CrossModule => {
+                let in_workspace = uri
+                    .to_file_path()
+                    .is_ok_and(|path| index.roots.iter().any(|root| path.starts_with(root)));
+                diaglog!("[DIAG] did_close: WholeModule in_workspace={in_workspace} uri={uri}");
+                if in_workspace {
+                    let (publish_uri, diags) = index.set_closed(&uri);
+                    let diag_count = diags.len();
+                    drop(guard);
+                    diaglog!("[DIAG] did_close: WholeModule in-workspace republishing {diag_count} diags");
+                    info!(uri = %uri, diag_count, "did_close: wholeModule in-workspace — republishing");
+                    self.client
+                        .publish_diagnostics(publish_uri, diags, None)
+                        .await;
+                } else {
+                    // Remove from index so no subsequent event republishes.
+                    if let Ok(path) = uri.to_file_path() {
+                        let _ = index.files.remove(&path);
+                    }
+                    drop(guard);
+                    diaglog!(
+                        "[DIAG] did_close: WholeModule out-of-workspace -> clearing uri={uri}"
+                    );
+                    info!(uri = %uri, "did_close: wholeModule out-of-workspace — clearing");
+                    self.client.publish_diagnostics(uri, vec![], None).await;
+                }
+            }
+        }
     }
 
     async fn did_change_watched_files(&self, params: DidChangeWatchedFilesParams) {
+        // Quick mode check — bail early for openFilesOnly without taking the write lock.
+        {
+            let guard = self.index.read().await;
+            let Some(index) = guard.as_ref() else { return };
+            if index.mode == AnalysisMode::OpenFilesOnly {
+                return; // File-watcher events are irrelevant in openFilesOnly mode.
+            }
+        }
+
+        // Classify the incoming changes, filtering to Python files only.
+        let mut reload_targets: Vec<Url> = Vec::new();
+        let mut delete_targets: Vec<Url> = Vec::new();
+
         for change in &params.changes {
             let uri = &change.uri;
             let path = uri.to_file_path().unwrap_or_default();
-            let is_python = path
+            if !path
                 .extension()
-                .is_some_and(|ext| ext == "py" || ext == "pyi");
-            if !is_python {
+                .is_some_and(|ext| ext == "py" || ext == "pyi")
+            {
                 continue;
             }
             match change.typ {
                 FileChangeType::CREATED | FileChangeType::CHANGED => {
-                    // Re-read from disk and check (unless the file is open in the editor).
-                    if self.documents.contains_key(uri) {
-                        continue; // Editor has the live version.
-                    }
-                    if let Ok(text) = std::fs::read_to_string(&path) {
-                        self.check_and_publish(uri.clone(), &text).await;
-                    }
+                    reload_targets.push(uri.clone());
                 }
                 FileChangeType::DELETED => {
-                    // Clear diagnostics for deleted files.
-                    self.documents.remove(uri);
-                    self.client
-                        .publish_diagnostics(uri.clone(), vec![], None)
-                        .await;
+                    delete_targets.push(uri.clone());
                 }
                 _ => {}
             }
         }
+
+        if reload_targets.is_empty() && delete_targets.is_empty() {
+            return;
+        }
+
+        // Debounce: abort any pending watcher task and replace with a new one
+        // that fires after FILE_WATCHER_DEBOUNCE_MS milliseconds.
+        let index_lock = Arc::clone(&self.index);
+        let client = self.client.clone();
+
+        let task = tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(FILE_WATCHER_DEBOUNCE_MS)).await;
+
+            let guard = index_lock.read().await;
+            let Some(index) = guard.as_ref() else { return };
+
+            let reload_results: Vec<_> = reload_targets
+                .iter()
+                .filter_map(|uri| index.reload_from_disk(uri))
+                .collect();
+
+            drop(guard);
+
+            for (uri, diags) in reload_results {
+                client.publish_diagnostics(uri, diags, None).await;
+            }
+            for uri in delete_targets {
+                client.publish_diagnostics(uri, vec![], None).await;
+            }
+        });
+
+        let abort_handle = task.abort_handle();
+        let mut debounce = self.watcher_debounce.lock().await;
+        if let Some(old) = debounce.take() {
+            old.abort();
+        }
+        *debounce = Some(abort_handle);
     }
 
     // ── Hover ────────────────────────────────────────────────────────────────
@@ -606,11 +706,10 @@ impl tower_lsp::LanguageServer for LspServer {
     async fn hover(&self, params: HoverParams) -> LspResult<Option<Hover>> {
         let uri = params.text_document_position_params.text_document.uri;
         let pos = params.text_document_position_params.position;
-        let Some((text, resolved, diags)) = self.get_document_data(&uri) else {
-            return Ok(None);
-        };
-        let byte_offset = position_to_byte_offset(&text, pos);
-        Ok(hover::hover_at(&resolved, &text, byte_offset, &diags))
+        self.at_position(uri, pos, |resolved, text, offset, _, diags| {
+            hover::hover_at(resolved, text, offset, diags)
+        })
+        .await
     }
 
     // ── Go to Definition ─────────────────────────────────────────────────────
@@ -621,16 +720,10 @@ impl tower_lsp::LanguageServer for LspServer {
     ) -> LspResult<Option<GotoDefinitionResponse>> {
         let uri = params.text_document_position_params.text_document.uri;
         let pos = params.text_document_position_params.position;
-        let Some((text, resolved, _)) = self.get_document_data(&uri) else {
-            return Ok(None);
-        };
-        let byte_offset = position_to_byte_offset(&text, pos);
-        Ok(definition::goto_definition(
-            &resolved,
-            &text,
-            byte_offset,
-            &uri,
-        ))
+        self.at_position(uri, pos, |resolved, text, offset, uri, _| {
+            definition::goto_definition(resolved, text, offset, uri)
+        })
+        .await
     }
 
     // ── Go to Declaration ────────────────────────────────────────────────────
@@ -641,16 +734,10 @@ impl tower_lsp::LanguageServer for LspServer {
     ) -> LspResult<Option<GotoDefinitionResponse>> {
         let uri = params.text_document_position_params.text_document.uri;
         let pos = params.text_document_position_params.position;
-        let Some((text, resolved, _)) = self.get_document_data(&uri) else {
-            return Ok(None);
-        };
-        let byte_offset = position_to_byte_offset(&text, pos);
-        Ok(declaration::goto_declaration(
-            &resolved,
-            &text,
-            byte_offset,
-            &uri,
-        ))
+        self.at_position(uri, pos, |resolved, text, offset, uri, _| {
+            declaration::goto_declaration(resolved, text, offset, uri)
+        })
+        .await
     }
 
     // ── Go to Type Definition ───────────────────────────────────────────────
@@ -661,16 +748,10 @@ impl tower_lsp::LanguageServer for LspServer {
     ) -> LspResult<Option<GotoDefinitionResponse>> {
         let uri = params.text_document_position_params.text_document.uri;
         let pos = params.text_document_position_params.position;
-        let Some((text, resolved, _)) = self.get_document_data(&uri) else {
-            return Ok(None);
-        };
-        let byte_offset = position_to_byte_offset(&text, pos);
-        Ok(type_definition::goto_type_definition(
-            &resolved,
-            &text,
-            byte_offset,
-            &uri,
-        ))
+        self.at_position(uri, pos, |resolved, text, offset, uri, _| {
+            type_definition::goto_type_definition(resolved, text, offset, uri)
+        })
+        .await
     }
 
     // ── Document Symbols ─────────────────────────────────────────────────────
@@ -680,7 +761,7 @@ impl tower_lsp::LanguageServer for LspServer {
         params: DocumentSymbolParams,
     ) -> LspResult<Option<DocumentSymbolResponse>> {
         let uri = params.text_document.uri;
-        let Some((text, resolved, _)) = self.get_document_data(&uri) else {
+        let Some((text, resolved, _)) = self.get_document_data(&uri).await else {
             return Ok(None);
         };
         let syms = symbols::document_symbols(&resolved, &text);
@@ -699,22 +780,11 @@ impl tower_lsp::LanguageServer for LspServer {
         params: WorkspaceSymbolParams,
     ) -> LspResult<Option<Vec<SymbolInformation>>> {
         let query = &params.query;
-        let docs: Vec<_> = self
-            .documents
-            .iter()
-            .filter_map(|entry| {
-                let uri = entry.key().clone();
-                let text = entry.text.clone();
-                let resolved = entry.resolved.clone()?;
-                Some((uri, resolved, text))
-            })
-            .collect();
-        let syms = symbols::workspace_symbols(&docs, query);
-        if syms.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(syms))
-        }
+        let docs = self
+            .with_index(|idx| Some(idx.all_resolved()))
+            .await
+            .unwrap_or_default();
+        Ok(none_if_empty(symbols::workspace_symbols(&docs, query)))
     }
 
     // ── Signature Help ───────────────────────────────────────────────────────
@@ -725,11 +795,10 @@ impl tower_lsp::LanguageServer for LspServer {
     ) -> LspResult<Option<tower_lsp::lsp_types::SignatureHelp>> {
         let uri = params.text_document_position_params.text_document.uri;
         let pos = params.text_document_position_params.position;
-        let Some((text, resolved, _)) = self.get_document_data(&uri) else {
-            return Ok(None);
-        };
-        let byte_offset = position_to_byte_offset(&text, pos);
-        Ok(signature::signature_help_at(&resolved, &text, byte_offset))
+        self.at_position(uri, pos, |resolved, text, offset, _, _| {
+            signature::signature_help_at(resolved, text, offset)
+        })
+        .await
     }
 
     // ── Find All References ──────────────────────────────────────────────────
@@ -738,16 +807,16 @@ impl tower_lsp::LanguageServer for LspServer {
         let uri = params.text_document_position.text_document.uri;
         let pos = params.text_document_position.position;
         let include_decl = params.context.include_declaration;
-        let Some((text, resolved, _)) = self.get_document_data(&uri) else {
-            return Ok(None);
-        };
-        let byte_offset = position_to_byte_offset(&text, pos);
-        let locs = references::find_references(&resolved, &text, byte_offset, &uri, include_decl);
-        if locs.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(locs))
-        }
+        self.at_position(uri, pos, |resolved, text, offset, uri, _| {
+            none_if_empty(references::find_references(
+                resolved,
+                text,
+                offset,
+                uri,
+                include_decl,
+            ))
+        })
+        .await
     }
 
     // ── Document Highlight ────────────────────────────────────────────────
@@ -758,16 +827,10 @@ impl tower_lsp::LanguageServer for LspServer {
     ) -> LspResult<Option<Vec<DocumentHighlight>>> {
         let uri = params.text_document_position_params.text_document.uri;
         let pos = params.text_document_position_params.position;
-        let Some((text, resolved, _)) = self.get_document_data(&uri) else {
-            return Ok(None);
-        };
-        let byte_offset = position_to_byte_offset(&text, pos);
-        let highlights = highlight::document_highlights(&resolved, &text, byte_offset);
-        if highlights.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(highlights))
-        }
+        self.at_position(uri, pos, |resolved, text, offset, _, _| {
+            none_if_empty(highlight::document_highlights(resolved, text, offset))
+        })
+        .await
     }
 
     // ── Rename ───────────────────────────────────────────────────────────────
@@ -778,43 +841,30 @@ impl tower_lsp::LanguageServer for LspServer {
     ) -> LspResult<Option<PrepareRenameResponse>> {
         let uri = params.text_document.uri;
         let pos = params.position;
-        let Some((text, resolved, _)) = self.get_document_data(&uri) else {
-            return Ok(None);
-        };
-        let byte_offset = position_to_byte_offset(&text, pos);
-        Ok(references::prepare_rename(&resolved, &text, byte_offset))
+        self.at_position(uri, pos, |resolved, text, offset, _, _| {
+            references::prepare_rename(resolved, text, offset)
+        })
+        .await
     }
 
     async fn rename(&self, params: RenameParams) -> LspResult<Option<WorkspaceEdit>> {
         let uri = params.text_document_position.text_document.uri;
         let pos = params.text_document_position.position;
         let new_name = params.new_name;
-        let Some((text, resolved, _)) = self.get_document_data(&uri) else {
-            return Ok(None);
-        };
-        let byte_offset = position_to_byte_offset(&text, pos);
-        Ok(references::rename_symbol(
-            &resolved,
-            &text,
-            byte_offset,
-            &uri,
-            &new_name,
-        ))
+        self.at_position(uri, pos, |resolved, text, offset, uri, _| {
+            references::rename_symbol(resolved, text, offset, uri, &new_name)
+        })
+        .await
     }
 
     // ── Inlay Hints ──────────────────────────────────────────────────────────
 
     async fn inlay_hint(&self, params: InlayHintParams) -> LspResult<Option<Vec<InlayHint>>> {
         let uri = params.text_document.uri;
-        let Some((text, resolved, _)) = self.get_document_data(&uri) else {
+        let Some((text, resolved, _)) = self.get_document_data(&uri).await else {
             return Ok(None);
         };
-        let hints = inlay_hints::inlay_hints(&resolved, &text);
-        if hints.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(hints))
-        }
+        Ok(none_if_empty(inlay_hints::inlay_hints(&resolved, &text)))
     }
 
     // ── Semantic Tokens ──────────────────────────────────────────────────────
@@ -824,7 +874,7 @@ impl tower_lsp::LanguageServer for LspServer {
         params: SemanticTokensParams,
     ) -> LspResult<Option<SemanticTokensResult>> {
         let uri = params.text_document.uri;
-        let Some((text, resolved, _)) = self.get_document_data(&uri) else {
+        let Some((text, resolved, _)) = self.get_document_data(&uri).await else {
             return Ok(None);
         };
         let tokens = crate::semantic_tokens::semantic_tokens(&resolved, &text);
@@ -839,16 +889,14 @@ impl tower_lsp::LanguageServer for LspServer {
     async fn code_action(&self, params: CodeActionParams) -> LspResult<Option<CodeActionResponse>> {
         let uri = params.text_document.uri;
         let source = self
-            .documents
-            .get(&uri)
-            .map(|d| d.text.clone())
+            .with_index(|idx| idx.get_text(&uri))
+            .await
             .unwrap_or_default();
-        let actions = code_actions::code_actions(&uri, &params.context.diagnostics, &source);
-        if actions.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(actions))
-        }
+        Ok(none_if_empty(code_actions::code_actions(
+            &uri,
+            &params.context.diagnostics,
+            &source,
+        )))
     }
 
     // ── Execute Command ──────────────────────────────────────────────────────
@@ -895,11 +943,9 @@ impl tower_lsp::LanguageServer for LspServer {
     async fn completion(&self, params: CompletionParams) -> LspResult<Option<CompletionResponse>> {
         let uri = params.text_document_position.text_document.uri;
         let pos = params.text_document_position.position;
-        let Some(entry) = self.documents.get(&uri) else {
+        let Some(text) = self.with_index(|idx| idx.get_text(&uri)).await else {
             return Ok(None);
         };
-        let text = entry.text.clone();
-        drop(entry);
 
         let byte_offset = position_to_byte_offset(&text, pos);
         let file_path = uri.to_file_path().unwrap_or_default();
@@ -932,17 +978,21 @@ impl tower_lsp::LanguageServer for LspServer {
     async fn completion_resolve(&self, item: CompletionItem) -> LspResult<CompletionItem> {
         // Get the document text to resolve the module
         // We need to find which document this completion belongs to
-        let (text, path_str) =
-            self.documents
-                .iter()
-                .next()
-                .map_or((String::new(), String::new()), |entry| {
-                    let text = entry.text.clone();
-                    let uri = entry.key().clone();
-                    let file_path = uri.to_file_path().unwrap_or_default();
-                    let path_str = file_path.to_string_lossy().into_owned();
+        let (text, path_str) = self
+            .with_index(|idx| {
+                idx.files.iter().next().map(|entry| {
+                    let path = entry.key().clone();
+                    let text = entry
+                        .resolved
+                        .as_ref()
+                        .map(|r| r.source.clone())
+                        .unwrap_or_default();
+                    let path_str = path.to_string_lossy().into_owned();
                     (text, path_str)
-                });
+                })
+            })
+            .await
+            .unwrap_or_default();
 
         Ok(completion::resolve_completion_item(item, &text, &path_str))
     }
@@ -954,11 +1004,9 @@ impl tower_lsp::LanguageServer for LspServer {
         params: DocumentFormattingParams,
     ) -> LspResult<Option<Vec<TextEdit>>> {
         let uri = params.text_document.uri;
-        let Some(entry) = self.documents.get(&uri) else {
+        let Some(text) = self.with_index(|idx| idx.get_text(&uri)).await else {
             return Ok(None);
         };
-        let text = entry.text.clone();
-        drop(entry);
         let file_path = uri.to_file_path().unwrap_or_default();
         let path_str = file_path.to_string_lossy().into_owned();
         Ok(formatting::format_document(&text, &path_str))
@@ -971,15 +1019,10 @@ impl tower_lsp::LanguageServer for LspServer {
         params: FoldingRangeParams,
     ) -> LspResult<Option<Vec<FoldingRange>>> {
         let uri = params.text_document.uri;
-        let Some((text, resolved, _)) = self.get_document_data(&uri) else {
+        let Some((text, resolved, _)) = self.get_document_data(&uri).await else {
             return Ok(None);
         };
-        let ranges = folding::folding_ranges(&resolved, &text);
-        if ranges.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(ranges))
-        }
+        Ok(none_if_empty(folding::folding_ranges(&resolved, &text)))
     }
 
     // ── Selection Ranges ─────────────────────────────────────────────────
@@ -989,15 +1032,14 @@ impl tower_lsp::LanguageServer for LspServer {
         params: SelectionRangeParams,
     ) -> LspResult<Option<Vec<SelectionRange>>> {
         let uri = params.text_document.uri;
-        let Some((text, resolved, _)) = self.get_document_data(&uri) else {
+        let Some((text, resolved, _)) = self.get_document_data(&uri).await else {
             return Ok(None);
         };
-        let ranges = selection::selection_ranges(&resolved, &text, &params.positions);
-        if ranges.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(ranges))
-        }
+        Ok(none_if_empty(selection::selection_ranges(
+            &resolved,
+            &text,
+            &params.positions,
+        )))
     }
 
     // ── Call Hierarchy ──────────────────────────────────────────────────
@@ -1008,16 +1050,10 @@ impl tower_lsp::LanguageServer for LspServer {
     ) -> LspResult<Option<Vec<CallHierarchyItem>>> {
         let uri = params.text_document_position_params.text_document.uri;
         let pos = params.text_document_position_params.position;
-        let Some((text, resolved, _)) = self.get_document_data(&uri) else {
-            return Ok(None);
-        };
-        let byte_offset = position_to_byte_offset(&text, pos);
-        let items = call_hierarchy::prepare(&resolved, &text, byte_offset, &uri);
-        if items.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(items))
-        }
+        self.at_position(uri, pos, |resolved, text, offset, uri, _| {
+            none_if_empty(call_hierarchy::prepare(resolved, text, offset, uri))
+        })
+        .await
     }
 
     async fn incoming_calls(
@@ -1026,15 +1062,12 @@ impl tower_lsp::LanguageServer for LspServer {
     ) -> LspResult<Option<Vec<CallHierarchyIncomingCall>>> {
         let uri = params.item.uri.clone();
         let item_name = params.item.name.clone();
-        let Some((text, resolved, _)) = self.get_document_data(&uri) else {
+        let Some((text, resolved, _)) = self.get_document_data(&uri).await else {
             return Ok(None);
         };
-        let calls = call_hierarchy::incoming_calls(&resolved, &text, &item_name, &uri);
-        if calls.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(calls))
-        }
+        Ok(none_if_empty(call_hierarchy::incoming_calls(
+            &resolved, &text, &item_name, &uri,
+        )))
     }
 
     async fn outgoing_calls(
@@ -1043,30 +1076,22 @@ impl tower_lsp::LanguageServer for LspServer {
     ) -> LspResult<Option<Vec<CallHierarchyOutgoingCall>>> {
         let uri = params.item.uri.clone();
         let item_name = params.item.name.clone();
-        let Some((text, resolved, _)) = self.get_document_data(&uri) else {
+        let Some((text, resolved, _)) = self.get_document_data(&uri).await else {
             return Ok(None);
         };
-        let calls = call_hierarchy::outgoing_calls(&resolved, &text, &item_name, &uri);
-        if calls.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(calls))
-        }
+        Ok(none_if_empty(call_hierarchy::outgoing_calls(
+            &resolved, &text, &item_name, &uri,
+        )))
     }
 
     // ── Code Lens ─────────────────────────────────────────────────────────
 
     async fn code_lens(&self, params: CodeLensParams) -> LspResult<Option<Vec<CodeLens>>> {
         let uri = params.text_document.uri;
-        let Some((text, resolved, _)) = self.get_document_data(&uri) else {
+        let Some((text, resolved, _)) = self.get_document_data(&uri).await else {
             return Ok(None);
         };
-        let lenses = code_lens::code_lenses(&resolved, &text);
-        if lenses.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(lenses))
-        }
+        Ok(none_if_empty(code_lens::code_lenses(&resolved, &text)))
     }
 
     // ── Type Hierarchy ──────────────────────────────────────────────────
@@ -1077,16 +1102,10 @@ impl tower_lsp::LanguageServer for LspServer {
     ) -> LspResult<Option<Vec<TypeHierarchyItem>>> {
         let uri = params.text_document_position_params.text_document.uri;
         let pos = params.text_document_position_params.position;
-        let Some((text, resolved, _)) = self.get_document_data(&uri) else {
-            return Ok(None);
-        };
-        let byte_offset = position_to_byte_offset(&text, pos);
-        let items = type_hierarchy::prepare(&resolved, &text, byte_offset, &uri);
-        if items.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(items))
-        }
+        self.at_position(uri, pos, |resolved, text, offset, uri, _| {
+            none_if_empty(type_hierarchy::prepare(resolved, text, offset, uri))
+        })
+        .await
     }
 
     async fn supertypes(
@@ -1100,15 +1119,12 @@ impl tower_lsp::LanguageServer for LspServer {
             .as_ref()
             .and_then(|d| d.as_str())
             .unwrap_or(&params.item.name);
-        let Some((text, resolved, _)) = self.get_document_data(&uri) else {
+        let Some((text, resolved, _)) = self.get_document_data(&uri).await else {
             return Ok(None);
         };
-        let items = type_hierarchy::supertypes(&resolved, &text, class_name, &uri);
-        if items.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(items))
-        }
+        Ok(none_if_empty(type_hierarchy::supertypes(
+            &resolved, &text, class_name, &uri,
+        )))
     }
 
     async fn subtypes(
@@ -1122,15 +1138,12 @@ impl tower_lsp::LanguageServer for LspServer {
             .as_ref()
             .and_then(|d| d.as_str())
             .unwrap_or(&params.item.name);
-        let Some((text, resolved, _)) = self.get_document_data(&uri) else {
+        let Some((text, resolved, _)) = self.get_document_data(&uri).await else {
             return Ok(None);
         };
-        let items = type_hierarchy::subtypes(&resolved, &text, class_name, &uri);
-        if items.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(items))
-        }
+        Ok(none_if_empty(type_hierarchy::subtypes(
+            &resolved, &text, class_name, &uri,
+        )))
     }
 
     // ── Document Color ──────────────────────────────────────────────────
@@ -1141,9 +1154,8 @@ impl tower_lsp::LanguageServer for LspServer {
     ) -> LspResult<Vec<ColorInformation>> {
         let uri = params.text_document.uri;
         let source = self
-            .documents
-            .get(&uri)
-            .map(|d| d.text.clone())
+            .with_index(|idx| idx.get_text(&uri))
+            .await
             .unwrap_or_default();
         Ok(crate::color::document_colors(&source))
     }
@@ -1159,68 +1171,19 @@ impl tower_lsp::LanguageServer for LspServer {
     }
 }
 
-// ── Workspace scanning helpers ────────────────────────────────────────────────
-
-/// Recursively collect all `.py` files under `dir`, skipping hidden dirs,
-/// common non-source directories, and user-configured exclude paths.
-fn collect_python_files(
-    dir: &std::path::Path,
-    out: &mut Vec<std::path::PathBuf>,
-    exclude: &[std::path::PathBuf],
-    workspace_root: &std::path::Path,
-) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            let name = entry.file_name();
-            let name_str = name.to_string_lossy();
-            // Skip hidden dirs and common non-source directories.
-            if name_str.starts_with('.')
-                || name_str == "__pycache__"
-                || name_str == "node_modules"
-                || name_str == "venv"
-                || name_str == ".tox"
-                || name_str == ".mypy_cache"
-                || name_str == ".ruff_cache"
-            {
-                continue;
-            }
-            // Skip user-configured exclude paths.
-            if is_excluded(&path, exclude, workspace_root) {
-                continue;
-            }
-            collect_python_files(&path, out, exclude, workspace_root);
-        } else if path
-            .extension()
-            .is_some_and(|ext| ext == "py" || ext == "pyi")
-        {
-            out.push(path);
-        }
+/// Return `None` if the collection is empty, `Some(v)` otherwise.
+fn none_if_empty<T>(items: Vec<T>) -> Option<Vec<T>> {
+    if items.is_empty() {
+        None
+    } else {
+        Some(items)
     }
 }
 
-/// Check if a path matches any of the configured exclude patterns.
-fn is_excluded(
-    path: &std::path::Path,
-    exclude: &[std::path::PathBuf],
-    workspace_root: &std::path::Path,
-) -> bool {
-    let relative = path.strip_prefix(workspace_root).unwrap_or(path);
-    exclude.iter().any(|exc| {
-        // Match if the relative path starts with the exclude pattern.
-        relative.starts_with(exc)
-    })
-}
-
-/// Convert a filesystem path to an LSP `Url`.
-fn path_to_uri(path: &std::path::Path) -> Option<Url> {
-    Url::from_file_path(path).ok()
-}
-
 // ── Server entry point ───────────────────────────────────────────────────────
+
+// Build the full `ServerCapabilities` for the `initialize` response.
+// Extracted to keep `initialize` under the 100-line limit.
 
 /// Start the LSP server.
 ///

@@ -27,9 +27,9 @@ fn fixture(rel: &str) -> String {
 
 fn run_check(paths: &[&str]) -> Result<Output, Box<dyn std::error::Error>> {
     let mut cmd = binary();
-    cmd.arg("check");
+    let _ = cmd.arg("check");
     for p in paths {
-        cmd.arg(p);
+        let _ = cmd.arg(p);
     }
     Ok(cmd.output()?)
 }

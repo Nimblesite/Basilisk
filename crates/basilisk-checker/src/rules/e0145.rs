@@ -175,7 +175,7 @@ impl ModuleCtx {
                         if let Some(name) = expr_simple_name(&ann.target) {
                             if let Some(value) = &ann.value {
                                 let rhs = expr_to_str(value);
-                                type_aliases.insert(name.to_owned(), rhs);
+                                let _ = type_aliases.insert(name.to_owned(), rhs);
                             }
                         }
                     }
@@ -207,7 +207,7 @@ impl ModuleCtx {
                         }
                     }
                     if !params.is_empty() {
-                        func_params.insert(func.name.to_string(), params);
+                        let _ = func_params.insert(func.name.to_string(), params);
                     }
                 }
                 _ => {}

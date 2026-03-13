@@ -104,7 +104,7 @@ impl DebugSessionManager {
                 DebugError::SpawnFailed(err)
             })?;
 
-        self.sessions.lock().await.insert(session_id.clone(), child);
+        let _ = self.sessions.lock().await.insert(session_id.clone(), child);
 
         // Wait for debugpy to start accepting connections (up to 5s).
         debug!(port, "waiting for debugpy to accept connections");

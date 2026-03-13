@@ -139,7 +139,7 @@ fn check_stmt_for_tvt_mismatch(
     let mut kw_map: HashMap<&str, &ruff_python_ast::Expr> = HashMap::new();
     for kw in &call.arguments.keywords {
         if let Some(arg_name) = &kw.arg {
-            kw_map.insert(arg_name.as_str(), &kw.value);
+            let _ = kw_map.insert(arg_name.as_str(), &kw.value);
         }
     }
 

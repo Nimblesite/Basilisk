@@ -2,18 +2,18 @@
 # https://mutants.rs/configuration.html
 # This file must live at .cargo/mutants.toml to be auto-detected.
 
-# Multiply the baseline test duration by this factor for each mutant's timeout.
-timeout_multiplier = 2.0
-
 # Do not rebuild/test packages outside the ones being mutated.
 test_workspace = false
 
-# Only mutate these crates — they have complete, passing test suites.
-# basilisk-db, basilisk-stubs, basilisk-plugin, basilisk-lsp, basilisk-mojo
-# are excluded because they have no tests or have intentionally-failing tests.
+# Respect .gitignore when copying workspace (excludes node_modules, target, etc.)
+# Without this, cargo-mutants copies 200MB+ of node_modules per mutant → disk full.
+gitignore = true
+
+# Only mutate basilisk-checker. All other crates are excluded:
+#   basilisk-parser   — 2 mutants, 0 tests, all unviable
+#   basilisk-resolver — cold builds take 300s+; tests don't cover mutations well
+#   basilisk-lsp      — no unit tests; spawns language server subprocess
+#   basilisk-cli      — e2e tests spawn compiled binary; hangs per-mutant
 test_package = [
-    "basilisk-parser",
-    "basilisk-resolver",
     "basilisk-checker",
-    "basilisk-cli",
 ]

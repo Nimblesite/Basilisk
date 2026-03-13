@@ -1137,16 +1137,19 @@ fn guards_protocol_class_is_detected() -> Result<(), Box<dyn std::error::Error>>
 
 /// E0005 — `&&` mutant at line 33: class has no annotation AND is not in enum.
 /// If `||` becomes `&&`, un-annotated non-enum attrs get suppressed.
-/// This test ensures unannotated class attrs DO fire E0005.
+/// This test ensures unannotated class attrs with non-inferrable RHS DO fire E0005.
 #[test]
 fn e0005_unannotated_attr_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let src = concat!("class Config:\n", "    debug = True\n",);
+    let src = concat!("class Config:\n", "    debug = some_func()\n",);
     let diags = run(src)?;
     let e5: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0005")
         .collect();
-    assert!(!e5.is_empty(), "unannotated class attr must fire E0005");
+    assert!(
+        !e5.is_empty(),
+        "unannotated class attr with non-inferrable RHS must fire E0005"
+    );
     Ok(())
 }
 

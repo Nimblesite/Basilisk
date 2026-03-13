@@ -97,7 +97,7 @@ impl Rule for CyclicalTypeAliasReference {
                 }
             }
             if !edges.is_empty() {
-                graph.insert(alias.name.as_str(), edges);
+                let _ = graph.insert(alias.name.as_str(), edges);
             }
         }
 

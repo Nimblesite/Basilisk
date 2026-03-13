@@ -117,9 +117,9 @@ fn collect_typevars_in_annotation<'a>(
             continue;
         }
         if typevar_in_invariant_container(text, tv_name) {
-            nested_invariant.insert(tv_name);
+            let _ = nested_invariant.insert(tv_name);
         } else {
-            direct.insert(tv_name);
+            let _ = direct.insert(tv_name);
         }
     }
 }
@@ -183,8 +183,8 @@ fn scan_output_position<'a>(
 
     // Usage inside an invariant container in return is both input and output.
     for tv in nested_invariant {
-        input_usage.insert(tv);
-        output_usage.insert(tv);
+        let _ = input_usage.insert(tv);
+        let _ = output_usage.insert(tv);
     }
 }
 

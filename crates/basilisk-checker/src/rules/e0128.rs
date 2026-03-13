@@ -320,7 +320,7 @@ fn check_outer_scope(
     let mut outer_class_params: HashSet<&str> = HashSet::new();
     for class in &module.classes {
         for param in &class.generic_params {
-            outer_class_params.insert(param.name.as_str());
+            let _ = outer_class_params.insert(param.name.as_str());
         }
     }
 
@@ -725,7 +725,7 @@ fn resolve_generic_params(
     // First, assign explicit type args
     for (idx, param) in generic_params.iter().enumerate() {
         if let Some(&type_arg) = type_args.get(idx) {
-            resolved.insert(param.name.clone(), type_arg.to_owned());
+            let _ = resolved.insert(param.name.clone(), type_arg.to_owned());
         }
     }
 
@@ -739,7 +739,7 @@ fn resolve_generic_params(
             if let Some(ref default_name) = info.default_typevar_name {
                 // The default references another TypeVar — resolve it
                 if let Some(resolved_type) = resolved.get(default_name.as_str()) {
-                    resolved.insert(param.name.clone(), resolved_type.clone());
+                    let _ = resolved.insert(param.name.clone(), resolved_type.clone());
                 }
             }
         }

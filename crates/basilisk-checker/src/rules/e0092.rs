@@ -96,7 +96,7 @@ fn compute_arities<'a>(module: &'a ResolvedModule) -> HashMap<&'a str, TypeArity
                 })
                 .count();
             let total = cls.generic_params.len();
-            arities.insert(
+            let _ = arities.insert(
                 cls.name.as_str(),
                 TypeArity {
                     min: (required > 0).then_some(required),
@@ -116,7 +116,7 @@ fn compute_arities<'a>(module: &'a ResolvedModule) -> HashMap<&'a str, TypeArity
                     .collect::<HashSet<_>>()
                     .len();
                 if implicit_arity > 0 {
-                    arities.insert(
+                    let _ = arities.insert(
                         cls.name.as_str(),
                         TypeArity {
                             min: None,
@@ -129,7 +129,7 @@ fn compute_arities<'a>(module: &'a ResolvedModule) -> HashMap<&'a str, TypeArity
                     // and must not be further subscripted.
                     // Exclude PEP 695 classes (`class Foo[T]`) because their type
                     // params don't appear in `base_expression_names`.
-                    arities.insert(
+                    let _ = arities.insert(
                         cls.name.as_str(),
                         TypeArity {
                             min: None,
@@ -161,7 +161,7 @@ fn compute_arities<'a>(module: &'a ResolvedModule) -> HashMap<&'a str, TypeArity
             .iter()
             .filter(|&&n| !tv_defaults.get(n).copied().unwrap_or(false))
             .count();
-        arities.insert(
+        let _ = arities.insert(
             alias.name.as_str(),
             TypeArity {
                 min: (required > 0 && required < total).then_some(required),

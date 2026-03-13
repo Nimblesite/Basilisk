@@ -910,7 +910,11 @@ Disk-backed cache between sessions. On startup, Basilisk loads the cache and onl
 
 Basilisk is an LSP server first, CLI tool second. The LSP server is the primary product. The CLI is a batch-mode wrapper around the same engine. This ensures interactive and CI experiences are always consistent.
 
+> For the complete LSP specification — all 21 features, custom commands, configuration settings, binary resolution, DAP integration, and DapTcpProxy — see **`LSP-SPEC.md`**.
+
 ### 9.2 Supported LSP Methods
+
+See `LSP-SPEC.md` § LSP Features for the complete specification. Summary:
 
 | Method | Description |
 |---|---|
@@ -928,85 +932,25 @@ Basilisk is an LSP server first, CLI tool second. The LSP server is the primary 
 | `callHierarchy/outgoingCalls` | Outgoing call hierarchy |
 | `typeHierarchy` | Type inheritance navigation |
 
-### 9.3 Custom LSP Extensions
+### 9.3 Custom LSP Commands
 
-| Extension | Description |
-|---|---|
-| `basilisk/ownershipOverlay` | Visual ownership annotations (borrowed/owned/inout) in gutter |
-| `basilisk/typeCompleteness` | Per-file/module type completeness score (% typed) |
-| `basilisk/migrationProgress` | Project-wide migration dashboard |
-| `basilisk.startDebugSession` | Spawn `debugpy.adapter` on a free TCP port; returns `{host, port, sessionId}` |
-| `basilisk.stopDebugSession` | Kill a debugpy session by `sessionId`; returns `{stopped: boolean}` |
+See `LSP-SPEC.md` § Custom LSP Commands for the complete specification.
 
 ---
 
 ## 10. Editor Integrations
 
-### 10.1 VS Code Extension (VSIX)
+Each editor has a dedicated specification document:
 
-The primary integration. Open source. No Microsoft proprietary dependencies.
+| Editor | Spec | Status |
+|---|---|---|
+| **VS Code** | [`BASILISK-VSCODE-EXTENSION-SPEC.md`](BASILISK-VSCODE-EXTENSION-SPEC.md) | Primary integration |
+| **Zed** | [`BASILISK-ZED-EXTENSION-SPEC.md`](BASILISK-ZED-EXTENSION-SPEC.md) | First-class Zed extension |
+| **Neovim** | [`BASILISK-NEOVIM-EXTENSION-SPEC.md`](BASILISK-NEOVIM-EXTENSION-SPEC.md) | basilisk.nvim plugin |
+| **Helix** | Built-in LSP support. Language configuration provided. | Config only |
+| **Emacs** | `eglot` / `lsp-mode` configuration. | Config only |
 
-**Architecture**:
-- VSIX bundles a pre-compiled LSP server binary per platform
-- No Node.js dependency for the server (the extension activation layer uses VS Code's extension API)
-- Configuration exposed via VS Code settings with JSON schema validation
-
-**Features**:
-- All LSP features (diagnostics, completions, hover, navigation, refactoring)
-- Semantic highlighting (token-level coloring by type)
-- Inlay hints (inferred types, parameter names, ownership annotations)
-- Ownership visualization (gutter icons: borrowed/owned/inout)
-- Type completeness indicator (status bar: "87% typed")
-- Migration dashboard (sidebar panel)
-- Integrated Ruff linting/formatting (delegates to Ruff extension or bundled Ruff)
-- Code actions for every diagnostic (add annotation, add return type, fix coercion, etc.)
-- Integrated Python debugging via debugpy (see §10.1.1)
-
-### 10.1.1 Debug Adapter Proxy
-
-Basilisk provides integrated Python debugging through a DAP (Debug Adapter Protocol) proxy that sits between VS Code and `debugpy.adapter`.
-
-**Why a proxy, not a direct connection**:
-
-`debugpy.adapter --port` accepts exactly **one** TCP connection. The proxy owns that single connection — VS Code talks to the proxy via `DebugAdapterInlineImplementation`, never directly to debugpy. This solves three classes of debugpy quirk that cannot be fixed via `DebugAdapterTracker` (which can only observe, not modify or suppress DAP messages):
-
-**Architecture**:
-
-```
-VS Code  ←→  DAP Proxy (TypeScript, in-process)  ←→  debugpy.adapter (TCP)
-                  ↕
-         DebugAdapterInlineImplementation
-```
-
-The LSP server (`basilisk lsp`) spawns `debugpy.adapter --port <free-port>` via the `basilisk.startDebugSession` custom command. The proxy connects to that port and relays DAP messages bidirectionally, intercepting specific message patterns:
-
-**Quirk 1 — stepOut lands before assignment**:
-
-After `stepOut` from a called function, debugpy stops at the call-site line *before* the return value is assigned to the variable. The proxy detects the `stepOut` response → first `stopped` event sequence and injects an automatic `next` request, swallowing the intermediate stop. The user sees the cursor land on the line *after* the assignment completes.
-
-**Quirk 2 — Structural line stops during stepOver**:
-
-debugpy stops on `try:` lines during `next` (stepOver), even though no user code executes on these lines (the bytecode is a `NOP`). The proxy inspects each post-step stop by requesting a `stackTrace`, reading the source file, and checking if the stopped line matches the pattern `/^\s*(try\s*:)\s*(#.*)?$/`. If so, it injects another `next` and swallows the structural stop. `except:` and `finally:` lines are NOT skipped because they represent meaningful flow-control transitions that debugpy tests rely on.
-
-**Quirk 3 — Single-connection slot protection**:
-
-Any TCP connection to `debugpy.adapter --port` consumes the adapter's only slot. Port-readiness checks (e.g. a test's `checkPortListening()`) that make real TCP connections will kill the adapter. The proxy's bind-based `isPortAlive` check (attempt to bind, `EADDRINUSE` = alive) is non-destructive. In attach mode, if the port is dead, the factory respawns debugpy via the LSP and connects the proxy to the new instance.
-
-**Quirk 4 — Session termination timing**:
-
-VS Code's `activeDebugSession` may not be cleared when `onDidTerminateDebugSession` fires. The proxy ensures the `exited` event is sent before `terminated`, and introduces a minimal delay on the `terminated` event to allow VS Code's internal state to settle.
-
-**Implementation**: [`vscode-extension/src/dap-proxy.ts`](../vscode-extension/src/dap-proxy.ts) — `DebugAdapterProxy` class implementing `vscode.DebugAdapter`.
-
-### 10.2 Other Editors
-
-| Editor | Integration |
-|---|---|
-| **Neovim** | Native LSP client (`nvim-lspconfig`). Configuration example provided. |
-| **Helix** | Built-in LSP support. Language configuration provided. |
-| **Zed** | Native LSP extension. |
-| **PyCharm / IntelliJ** | LSP plugin (via IntelliJ LSP support). |
-| **Emacs** | `eglot` / `lsp-mode` configuration. |
+All editors connect to the same `basilisk lsp` binary via stdio. The LSP server is the single backend — editor extensions are thin integration layers.
 
 ---
 

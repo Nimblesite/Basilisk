@@ -146,7 +146,7 @@ fn collect_transform_base_classes(
             }
         }
 
-        result.insert(cls.name.clone(), defaults);
+        let _ = result.insert(cls.name.clone(), defaults);
     }
 
     result
@@ -183,19 +183,19 @@ fn collect_transform_subclasses<'a>(
         // We extract them from the source text around the class name.
         let name_end = cls.name_span.end as usize;
         let Some(rest) = source.get(name_end..) else {
-            result.insert(cls.name.as_str(), settings);
+            let _ = result.insert(cls.name.as_str(), settings);
             continue;
         };
 
         // Find the bases parenthesis.
         let Some(open_paren) = rest.find('(') else {
-            result.insert(cls.name.as_str(), settings);
+            let _ = result.insert(cls.name.as_str(), settings);
             continue;
         };
 
         let paren_start = name_end + open_paren + 1;
         let Some(inner) = source.get(paren_start..) else {
-            result.insert(cls.name.as_str(), settings);
+            let _ = result.insert(cls.name.as_str(), settings);
             continue;
         };
 
@@ -217,7 +217,7 @@ fn collect_transform_subclasses<'a>(
         }
 
         let Some(bases_text) = source.get(paren_start..paren_start + close_offset) else {
-            result.insert(cls.name.as_str(), settings);
+            let _ = result.insert(cls.name.as_str(), settings);
             continue;
         };
 
@@ -231,7 +231,7 @@ fn collect_transform_subclasses<'a>(
             settings.order = val;
         }
 
-        result.insert(cls.name.as_str(), settings);
+        let _ = result.insert(cls.name.as_str(), settings);
     }
 
     result
@@ -330,7 +330,7 @@ impl Rule for DataclassTransformClassViolation {
             let callee = callee.rsplit('.').next().unwrap_or(callee);
 
             if let Some(settings) = resolve_inherited_settings(callee, module, &direct_settings) {
-                instance_map.insert(var.name.as_str(), (callee, settings));
+                let _ = instance_map.insert(var.name.as_str(), (callee, settings));
             }
         }
 
