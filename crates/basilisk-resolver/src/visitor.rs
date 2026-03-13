@@ -5123,6 +5123,14 @@ fn collect_final_violations(
                 }
                 check_walrus_final(&assign.value, &module_final_names, &empty_locals, &mut out);
             }
+            Stmt::AugAssign(aug) => {
+                check_final_assign_target(
+                    aug.target.as_ref(),
+                    &module_final_names,
+                    &empty_locals,
+                    &mut out,
+                );
+            }
             _ => {}
         }
     }
