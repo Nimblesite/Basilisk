@@ -415,8 +415,10 @@ function startLspClient(
 function readBasiliskSettings(): Record<string, unknown> {
   const cfg = vscode.workspace.getConfiguration("basilisk");
   return {
+    analysisMode: cfg.get<string>("analysisMode") ?? "wholeModule",
     basilisk: {
       python: cfg.get<string>("python") ?? "",
+      analysisMode: cfg.get<string>("analysisMode") ?? "wholeModule",
       inlayHints: {
         parameterNames: cfg.get<boolean>("inlayHints.parameterNames") ?? true,
         variableTypes: cfg.get<boolean>("inlayHints.variableTypes") ?? true,

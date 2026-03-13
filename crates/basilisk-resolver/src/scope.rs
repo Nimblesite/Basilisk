@@ -608,6 +608,8 @@ pub struct ImportInfo {
     pub kind: ImportKind,
     /// How the import was resolved (source file type).
     pub resolution: ImportResolution,
+    /// Filesystem path the import resolved to, if known.
+    pub resolved_path: Option<std::path::PathBuf>,
 }
 
 /// A `match` statement with exhaustiveness information.
@@ -1120,7 +1122,7 @@ pub enum GeneratorViolationKind {
 }
 
 /// The complete resolved view of a parsed module.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ResolvedModule {
     /// All function definitions found at any nesting level.
     pub functions: Vec<FunctionInfo>,

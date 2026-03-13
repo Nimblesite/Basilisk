@@ -64,6 +64,14 @@ jobs:
       - name: Run all tests
         run: ./scripts/test.sh
 
+      - name: Upload coverage report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: target/llvm-cov/html/
+          retention-days: 14
+
       - name: Upload to Codecov
         uses: codecov/codecov-action@v4
         with:

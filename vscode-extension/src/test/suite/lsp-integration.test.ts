@@ -910,11 +910,11 @@ suite('Analysis Mode Tests', () => {
         const cfg = vscode.workspace.getConfiguration('basilisk');
         const original = cfg.get<string>('analysisMode');
         try {
-            await cfg.update('analysisMode', 'openFilesOnly', vscode.ConfigurationTarget.Global);
-            const mode = cfg.get<string>('analysisMode');
+            await cfg.update('analysisMode', 'openFilesOnly', vscode.ConfigurationTarget.Workspace);
+            const mode = vscode.workspace.getConfiguration('basilisk').get<string>('analysisMode');
             assert.strictEqual(mode, 'openFilesOnly');
         } finally {
-            await cfg.update('analysisMode', original, vscode.ConfigurationTarget.Global);
+            await cfg.update('analysisMode', original, vscode.ConfigurationTarget.Workspace);
         }
     });
 
@@ -922,20 +922,20 @@ suite('Analysis Mode Tests', () => {
         const cfg = vscode.workspace.getConfiguration('basilisk');
         const original = cfg.get<string>('analysisMode');
         try {
-            await cfg.update('analysisMode', 'crossModule', vscode.ConfigurationTarget.Global);
-            const mode = cfg.get<string>('analysisMode');
+            await cfg.update('analysisMode', 'crossModule', vscode.ConfigurationTarget.Workspace);
+            const mode = vscode.workspace.getConfiguration('basilisk').get<string>('analysisMode');
             assert.strictEqual(mode, 'crossModule');
         } finally {
-            await cfg.update('analysisMode', original, vscode.ConfigurationTarget.Global);
+            await cfg.update('analysisMode', original, vscode.ConfigurationTarget.Workspace);
         }
     });
 
     test('basilisk.analysisMode can be reset to wholeModule', async () => {
         const cfg = vscode.workspace.getConfiguration('basilisk');
         // Set to openFilesOnly first, then back to wholeModule.
-        await cfg.update('analysisMode', 'openFilesOnly', vscode.ConfigurationTarget.Global);
-        await cfg.update('analysisMode', 'wholeModule', vscode.ConfigurationTarget.Global);
-        const mode = cfg.get<string>('analysisMode');
+        await cfg.update('analysisMode', 'openFilesOnly', vscode.ConfigurationTarget.Workspace);
+        await cfg.update('analysisMode', 'wholeModule', vscode.ConfigurationTarget.Workspace);
+        const mode = vscode.workspace.getConfiguration('basilisk').get<string>('analysisMode');
         assert.strictEqual(mode, 'wholeModule', 'should be able to reset to wholeModule');
     });
 
@@ -945,12 +945,12 @@ suite('Analysis Mode Tests', () => {
         const modes = ['openFilesOnly', 'wholeModule', 'crossModule'];
         try {
             for (const m of modes) {
-                await cfg.update('analysisMode', m, vscode.ConfigurationTarget.Global);
-                const current = cfg.get<string>('analysisMode');
+                await cfg.update('analysisMode', m, vscode.ConfigurationTarget.Workspace);
+                const current = vscode.workspace.getConfiguration('basilisk').get<string>('analysisMode');
                 assert.strictEqual(current, m, `setting should accept '${m}'`);
             }
         } finally {
-            await cfg.update('analysisMode', original, vscode.ConfigurationTarget.Global);
+            await cfg.update('analysisMode', original, vscode.ConfigurationTarget.Workspace);
         }
     });
 
@@ -977,8 +977,8 @@ suite('Analysis Mode Tests', () => {
         const originalMode = cfg.get<string>('analysisMode') ?? 'wholeModule';
 
         try {
-            await cfg.update('analysisMode', 'openFilesOnly', vscode.ConfigurationTarget.Global);
-            const updated = cfg.get<string>('analysisMode');
+            await cfg.update('analysisMode', 'openFilesOnly', vscode.ConfigurationTarget.Workspace);
+            const updated = vscode.workspace.getConfiguration('basilisk').get<string>('analysisMode');
             assert.strictEqual(
                 updated,
                 'openFilesOnly',
@@ -991,7 +991,7 @@ suite('Analysis Mode Tests', () => {
                 'openFilesOnly must be different from wholeModule default'
             );
         } finally {
-            await cfg.update('analysisMode', originalMode, vscode.ConfigurationTarget.Global);
+            await cfg.update('analysisMode', originalMode, vscode.ConfigurationTarget.Workspace);
         }
     });
 
@@ -1031,7 +1031,7 @@ suite('Analysis Mode Tests', () => {
         // here affects the server's initializationOptions.)
         const cfg = vscode.workspace.getConfiguration('basilisk');
         const originalMode = cfg.get<string>('analysisMode');
-        await cfg.update('analysisMode', 'wholeModule', vscode.ConfigurationTarget.Global);
+        await cfg.update('analysisMode', 'wholeModule', vscode.ConfigurationTarget.Workspace);
 
         try {
             // Write a Python file with type errors into the workspace root.
@@ -1074,7 +1074,7 @@ suite('Analysis Mode Tests', () => {
             // Cleanup the test file from the workspace root.
             fs.unlinkSync(closedFilePath);
         } finally {
-            await cfg.update('analysisMode', originalMode, vscode.ConfigurationTarget.Global);
+            await cfg.update('analysisMode', originalMode, vscode.ConfigurationTarget.Workspace);
         }
     });
 
@@ -1103,7 +1103,7 @@ suite('Analysis Mode Tests', () => {
         );
 
         try {
-            await cfg.update('analysisMode', 'openFilesOnly', vscode.ConfigurationTarget.Global);
+            await cfg.update('analysisMode', 'openFilesOnly', vscode.ConfigurationTarget.Workspace);
 
             // Activate (or restart) the extension with openFilesOnly mode.
             const ext = vscode.extensions.getExtension(EXTENSION_ID);
@@ -1125,7 +1125,7 @@ suite('Analysis Mode Tests', () => {
             );
         } finally {
             fs.unlinkSync(closedFilePath);
-            await cfg.update('analysisMode', originalMode, vscode.ConfigurationTarget.Global);
+            await cfg.update('analysisMode', originalMode, vscode.ConfigurationTarget.Workspace);
         }
     });
 
@@ -1140,7 +1140,7 @@ suite('Analysis Mode Tests', () => {
         const originalMode = cfg.get<string>('analysisMode');
 
         try {
-            await cfg.update('analysisMode', 'openFilesOnly', vscode.ConfigurationTarget.Global);
+            await cfg.update('analysisMode', 'openFilesOnly', vscode.ConfigurationTarget.Workspace);
 
             // Open a file with type errors.
             const { uri } = await openPythonFile(
@@ -1168,7 +1168,7 @@ suite('Analysis Mode Tests', () => {
                 'openFilesOnly: diagnostics should be cleared when file is closed'
             );
         } finally {
-            await cfg.update('analysisMode', originalMode, vscode.ConfigurationTarget.Global);
+            await cfg.update('analysisMode', originalMode, vscode.ConfigurationTarget.Workspace);
         }
     });
 });

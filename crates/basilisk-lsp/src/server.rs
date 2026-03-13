@@ -408,17 +408,44 @@ impl tower_lsp::LanguageServer for LspServer {
         {
             mode = Some(AnalysisMode::parse(mode_str));
         }
-        if let Some(new_mode) = mode {
+        let Some(new_mode) = mode else { return };
+
+        // Update the mode on the index.
+        {
             let mut guard = self.index.write().await;
             if let Some(index) = guard.as_mut() {
                 index.mode = new_mode;
             }
-            self.client
-                .log_message(
-                    MessageType::INFO,
-                    format!("Basilisk: analysis mode changed to {new_mode:?}"),
-                )
-                .await;
+        }
+
+        self.client
+            .log_message(
+                MessageType::INFO,
+                format!("Basilisk: analysis mode changed to {new_mode:?}"),
+            )
+            .await;
+
+        // When switching to wholeModule/crossModule, trigger a workspace scan
+        // and publish diagnostics for all discovered files.
+        match new_mode {
+            AnalysisMode::WholeModule | AnalysisMode::CrossModule => {
+                let guard = self.index.read().await;
+                let Some(index) = guard.as_ref() else { return };
+                let (results, file_count, error_count) = index.scan();
+                drop(guard);
+                for (uri, diags) in results {
+                    self.client.publish_diagnostics(uri, diags, None).await;
+                }
+                self.client
+                    .log_message(
+                        MessageType::INFO,
+                        format!(
+                            "Basilisk: workspace scan complete — {file_count} files, {error_count} error(s)"
+                        ),
+                    )
+                    .await;
+            }
+            AnalysisMode::OpenFilesOnly => {}
         }
     }
 
@@ -489,19 +516,29 @@ impl tower_lsp::LanguageServer for LspServer {
             self.client.publish_diagnostics(uri, vec![], None).await;
             return;
         };
-        // In wholeModule/crossModule: re-analyse from disk and keep diagnostics.
-        // In openFilesOnly: clear diagnostics (file is no longer open).
+        // In wholeModule/crossModule: re-analyse from disk and keep diagnostics,
+        // but only for files under a workspace root (those that the scan would
+        // discover). Files outside workspace roots are transient — clear them.
+        // In openFilesOnly: always clear diagnostics (file is no longer open).
         match index.mode {
             AnalysisMode::OpenFilesOnly => {
                 drop(guard);
                 self.client.publish_diagnostics(uri, vec![], None).await;
             }
             AnalysisMode::WholeModule | AnalysisMode::CrossModule => {
-                let (publish_uri, diags) = index.set_closed(&uri);
-                drop(guard);
-                self.client
-                    .publish_diagnostics(publish_uri, diags, None)
-                    .await;
+                let in_workspace = uri.to_file_path().ok().is_some_and(|path| {
+                    index.roots.iter().any(|root| path.starts_with(root))
+                });
+                if in_workspace {
+                    let (publish_uri, diags) = index.set_closed(&uri);
+                    drop(guard);
+                    self.client
+                        .publish_diagnostics(publish_uri, diags, None)
+                        .await;
+                } else {
+                    drop(guard);
+                    self.client.publish_diagnostics(uri, vec![], None).await;
+                }
             }
         }
     }
