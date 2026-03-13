@@ -35,7 +35,12 @@ HTML_DIR="$REPO_ROOT/target/llvm-cov/html"
 
 header "Building basilisk binary"
 cargo build -p basilisk-cli
-ok "basilisk binary ready"
+BASILISK_BIN="$REPO_ROOT/target/debug/basilisk"
+if [[ ! -x "$BASILISK_BIN" ]]; then
+    echo -e "${RED}${BOLD}FATAL: basilisk binary not found at $BASILISK_BIN after build.${RESET}"
+    exit 1
+fi
+ok "basilisk binary ready: $BASILISK_BIN"
 
 # ── Rust tests with coverage ─────────────────────────────────────────────────
 

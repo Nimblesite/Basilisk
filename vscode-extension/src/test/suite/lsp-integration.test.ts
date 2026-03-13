@@ -53,9 +53,13 @@ async function pollUntilResult<T>(
  * Returns undefined if the binary does not exist.
  */
 function findBasiliskBinary(): string | undefined {
-    // Check the workspace-root debug build first.
-    // __dirname at runtime is vscode-extension/out/test/suite/
-    // Go up 4 levels to reach the repo root (Basilisk/).
+    // Check BASILISK_EXECUTABLE_PATH env var first (set by test.sh / CI).
+    const envPath = process.env.BASILISK_EXECUTABLE_PATH;
+    if (envPath && fs.existsSync(envPath)) {
+        return envPath;
+    }
+
+    // __dirname at runtime is vscode-extension/out/test/suite/ — 4 levels to repo root.
     const workspaceRoot = path.resolve(__dirname, '../../../..');
     const debugBinary = path.join(workspaceRoot, 'target', 'debug', 'basilisk');
     if (fs.existsSync(debugBinary)) {

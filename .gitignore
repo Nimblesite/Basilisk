@@ -40,3 +40,5 @@ logs/
 basilisk-zed/dist/
 
 *.wasm
+
+vscode-extension/coverage/

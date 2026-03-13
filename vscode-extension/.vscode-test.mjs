@@ -18,8 +18,7 @@ export default defineConfig({
     }],
     coverage: {
         includeAll: true,
-        include: ['out/src/**/*.js'],
-        exclude: ['out/src/test/**'],
+        exclude: ['**/test/**', '**/node_modules/**'],
         reporter: ['text', 'lcov'],
     },
 });
