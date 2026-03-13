@@ -7,7 +7,7 @@
  *
  * Prerequisites:
  *   - The `basilisk` binary must be built: `cargo build -p basilisk-cli`
- *   - The binary must be on PATH or the test will skip gracefully
+ *   - The binary must be on PATH or the test will fail hard
  */
 
 import * as assert from 'assert';
@@ -45,31 +45,18 @@ async function pollUntilResult<T>(
 }
 
 /**
- * Poll an async function until it returns a truthy, non-empty result.
- * Avoids fixed sleeps by retrying at short intervals.
- */
-async function pollUntilResult<T>(
-    fn: () => PromiseLike<T>,
-    predicate: (result: T) => boolean,
-    timeoutMs: number = 5_000,
-    intervalMs: number = 100
-): Promise<T> {
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-        const result = await fn();
-        if (predicate(result)) return result;
-        await new Promise<void>((r) => setTimeout(r, intervalMs));
-    }
-    return fn() as Promise<T>;
-}
-
-/**
  * Resolves the absolute path to the basilisk binary built from Cargo.
  * Returns undefined if the binary does not exist.
  */
 function findBasiliskBinary(): string | undefined {
-    // Check the workspace-root debug build first.
-    const workspaceRoot = path.resolve(__dirname, '../../../../..');
+    // Check BASILISK_EXECUTABLE_PATH env var first (set by test.sh / CI).
+    const envPath = process.env.BASILISK_EXECUTABLE_PATH;
+    if (envPath && fs.existsSync(envPath)) {
+        return envPath;
+    }
+
+    // __dirname at runtime is vscode-extension/out/test/suite/ — 4 levels to repo root.
+    const workspaceRoot = path.resolve(__dirname, '../../../..');
     const debugBinary = path.join(workspaceRoot, 'target', 'debug', 'basilisk');
     if (fs.existsSync(debugBinary)) {
         return debugBinary;
@@ -150,9 +137,8 @@ suite('LSP Feature Tests', () => {
 
         basiliskBinary = findBasiliskBinary();
         if (!basiliskBinary) {
-            console.warn(
-                'Basilisk binary not found. LSP feature tests will be skipped. ' +
-                'Build with: cargo build -p basilisk-cli'
+            throw new Error(
+                'Basilisk binary not found. Build with: cargo build -p basilisk-cli'
             );
         }
 
@@ -197,10 +183,6 @@ suite('LSP Feature Tests', () => {
     // ----------------------------------------------------------------
     test('find references works through extension', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 10_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const source = [
             'def compute(x: int) -> int:',
@@ -248,10 +230,6 @@ suite('LSP Feature Tests', () => {
     // ----------------------------------------------------------------
     test('rename symbol works through extension', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 10_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const source = [
             'def old_name(x: int) -> int:',
@@ -310,10 +288,6 @@ suite('LSP Feature Tests', () => {
     // ----------------------------------------------------------------
     test('inlay hints appear for unannotated variables', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 10_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const source = [
             'x = 42',
@@ -366,10 +340,6 @@ suite('LSP Feature Tests', () => {
     // ----------------------------------------------------------------
     test('format document works through extension', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 10_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         // Intentionally badly formatted Python code.
         const source = [
@@ -415,10 +385,6 @@ suite('LSP Feature Tests', () => {
     // ----------------------------------------------------------------
     test('document highlight works for symbol', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 10_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const source = [
             'def process(data: str) -> str:',

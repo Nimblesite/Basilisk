@@ -1614,6 +1614,48 @@ fn parameter_to_info(p: &Parameter) -> ParameterInfo {
             .annotation
             .as_deref()
             .map(|e| text_range_to_span(e.range())),
+        annotation_text: p.annotation.as_deref().map(annotation_source_text),
+    }
+}
+
+/// Produce a canonical text representation of an annotation `Expr` for
+/// structural comparison (e.g. overlapping-overload detection).
+fn annotation_source_text(expr: &Expr) -> String {
+    match expr {
+        Expr::Name(n) => n.id.to_string(),
+        Expr::Attribute(a) => format!("{}.{}", annotation_source_text(&a.value), a.attr),
+        Expr::Subscript(s) => format!(
+            "{}[{}]",
+            annotation_source_text(&s.value),
+            annotation_source_text(&s.slice)
+        ),
+        Expr::Tuple(t) => t
+            .elts
+            .iter()
+            .map(annotation_source_text)
+            .collect::<Vec<_>>()
+            .join(", "),
+        Expr::BinOp(b) => format!(
+            "{} | {}",
+            annotation_source_text(&b.left),
+            annotation_source_text(&b.right)
+        ),
+        Expr::NoneLiteral(_) => "None".to_owned(),
+        Expr::EllipsisLiteral(_) => "...".to_owned(),
+        Expr::StringLiteral(s) => format!("\"{}\"", s.value),
+        Expr::NumberLiteral(n) => format!("{n:?}"),
+        Expr::BooleanLiteral(b) => if b.value { "True" } else { "False" }.to_owned(),
+        Expr::Starred(s) => format!("*{}", annotation_source_text(&s.value)),
+        Expr::List(l) => {
+            let inner = l
+                .elts
+                .iter()
+                .map(annotation_source_text)
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("[{inner}]")
+        }
+        _ => format!("{expr:?}"),
     }
 }
 
@@ -5101,6 +5143,17 @@ fn collect_final_violations(
         match stmt {
             Stmt::ClassDef(cls_def) => {
                 collect_class_final_violations(cls_def, &class_finals, source, &mut out);
+                // Also check methods inside the class for global Final modifications.
+                for body_stmt in &cls_def.body {
+                    if let Stmt::FunctionDef(method) = body_stmt {
+                        collect_func_final_violations(
+                            method,
+                            &module_final_names,
+                            source,
+                            &mut out,
+                        );
+                    }
+                }
             }
             Stmt::FunctionDef(func) => {
                 collect_func_final_violations(func, &module_final_names, source, &mut out);
@@ -5125,6 +5178,14 @@ fn collect_final_violations(
                     check_final_assign_target(target, &module_final_names, &empty_locals, &mut out);
                 }
                 check_walrus_final(&assign.value, &module_final_names, &empty_locals, &mut out);
+            }
+            Stmt::AugAssign(aug) => {
+                check_final_assign_target(
+                    aug.target.as_ref(),
+                    &module_final_names,
+                    &empty_locals,
+                    &mut out,
+                );
             }
             _ => {}
         }

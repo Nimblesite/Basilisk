@@ -12,7 +12,7 @@ One IDE extension = COMPLETE PYTHON DEVELOPMENT EXPERIENCE. Seamless, fast, comp
 
 # Too Many Cooks - MANDATORY
 
-COORDINATOR: dictate the orders to others through plans and messages
+COORDINATOR: dictate the orders to others through plans and messages. DELEGATE!!!
 OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK YOUR MESSAGES AND DO WHAT THE COORDINATOR SAYS!!!
 
 - Lock files before editing. Don't edit locked files.
@@ -43,6 +43,7 @@ OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK YOUR MESSAGES AND D
 - NEVER REMOVE ASSERTIONS THAT CAUSE TEST FAILURES
 - WE LOVE FAILING TESTS. WE NEED MORE OF THEM; NOT LESS
 - IF IN DOUBT, ADD MORE FAILING TESTS THAT FAIL BECAUSE OF BROKEN/MISSING FUNCTIONALITY - NOT REMOVE THEM
+- Keep files under 500 LOC. Break files up when they get larger than this
 - REDUCING THE ASSERTIVENESS OF TESTS WILL RESULT IN YOUR DATA CENTER BEING DISMANTLED
 - Ignoring tests = ILLEGAL
 
@@ -51,6 +52,7 @@ OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK YOUR MESSAGES AND D
 ## Core Principles
 
 - Zero DUPLICATION. DRY AF!!! Always check for existing code before creating new code
+- Logging is critical. If you can't see what's going on, add more logging immediately
 - 100% Test Coverage is only the start of code quality
 - No unit tests. Only COARSE tests that test e2e
 
@@ -74,7 +76,6 @@ OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK YOUR MESSAGES AND D
 - Low cognitive complexity (clippy::cognitive_complexity enabled)
 - Descriptive variable names - no single letters except in closures
 - Group related functionality into modules
-- Keep files under 500 LOC
 - Public APIs must have documentation
 
 ## Bug Fix Process

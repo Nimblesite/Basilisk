@@ -84,9 +84,12 @@ fn signatures_overlap(a: &FunctionInfo, b: &FunctionInfo) -> bool {
         return false;
     }
 
-    // Exclude `self` and `cls` — these are unannotated by convention and
-    // carry no type information that could distinguish overloads.
-    let is_implicit = |p: &&basilisk_resolver::ParameterInfo| p.name == "self" || p.name == "cls";
+    // Exclude `self` and `cls` only when they lack an explicit annotation —
+    // unannotated self/cls carry no type information, but explicitly annotated
+    // ones (e.g. `self: "Array[Axis1, Axis2]"`) distinguish overloads.
+    let is_implicit = |p: &&basilisk_resolver::ParameterInfo| {
+        (p.name == "self" || p.name == "cls") && !p.has_annotation
+    };
 
     let a_typed = a
         .parameters
@@ -99,9 +102,19 @@ fn signatures_overlap(a: &FunctionInfo, b: &FunctionInfo) -> bool {
         .filter(|p| !is_implicit(p))
         .all(|p| p.has_annotation);
 
-    // If every meaningful parameter on both sides is annotated the overloads
-    // might differ by type alone — defer to a future phase.
-    !a_typed || !b_typed
+    // If at least one side has unannotated params, they definitely overlap
+    // (can't be distinguished). If both are fully annotated, they overlap
+    // only when every annotation is textually identical.
+    if !a_typed || !b_typed {
+        return true;
+    }
+
+    // Both fully annotated — overlap only if annotations are identical per param.
+    a.parameters
+        .iter()
+        .zip(b.parameters.iter())
+        .filter(|(pa, _)| !is_implicit(pa))
+        .all(|(pa, pb)| pa.annotation_text == pb.annotation_text)
 }
 
 /// Returns `true` if `"overload"` (or `"typing.overload"`) is in the list.

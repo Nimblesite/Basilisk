@@ -4,7 +4,7 @@ basilisk_rules,file,category,status,caught,missed,false_positives
 ,_enums_members.py,,PASS,0,0,0
 ,_protocols_modules1.py,,PASS,0,0,0
 ,_protocols_modules2.py,,PASS,0,0,0
-BSK-E0014,_qualifiers_final_annotation_1.py,,PASS,0,0,1
+,_qualifiers_final_annotation_1.py,,PASS,0,0,0
 ,_qualifiers_final_annotation_2.py,,PASS,0,0,0
 BSK-E0014|BSK-E0048|BSK-E0130,aliases_explicit.py,aliases,FAIL,12,9,8
 BSK-E0047|BSK-E0092|BSK-E0130,aliases_implicit.py,aliases,FAIL,7,15,9
@@ -120,7 +120,7 @@ BSK-E0110,protocols_self.py,protocols,PASS,0,0,1
 BSK-E0014|BSK-E0099,protocols_subtyping.py,protocols,PASS,7,0,7
 BSK-E0110|BSK-E0130|BSK-E0133,protocols_variance.py,protocols,PASS,5,0,3
 BSK-E0045|BSK-E0058|BSK-E0130,qualifiers_annotated.py,qualifiers,PASS,20,0,1
-BSK-E0014|BSK-E0041|BSK-E0044|BSK-E0054|BSK-E0064,qualifiers_final_annotation.py,qualifiers,PASS,26,0,1
+BSK-E0014|BSK-E0041|BSK-E0044|BSK-E0054|BSK-E0064,qualifiers_final_annotation.py,qualifiers,PASS,26,0,0
 BSK-E0034,qualifiers_final_decorator.py,qualifiers,PASS,3,0,0
 BSK-E0014,specialtypes_any.py,specialtypes,PASS,0,0,11
 BSK-E0014|BSK-E0062|BSK-E0070,specialtypes_never.py,specialtypes,PASS,3,0,1

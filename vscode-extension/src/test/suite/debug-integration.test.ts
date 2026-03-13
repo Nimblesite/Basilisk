@@ -43,6 +43,13 @@ const STEPPING_FIXTURE = path.join(FIXTURE_DIR, 'debug_stepping.py');
  * Resolves the absolute path to the basilisk binary built from Cargo.
  */
 function findBasiliskBinary(): string | undefined {
+    // Check BASILISK_EXECUTABLE_PATH env var first (set by test.sh / CI).
+    const envPath = process.env.BASILISK_EXECUTABLE_PATH;
+    if (envPath && fs.existsSync(envPath)) {
+        return envPath;
+    }
+
+    // __dirname at runtime is vscode-extension/out/test/suite/ — 4 levels to repo root.
     const workspaceRoot = path.resolve(__dirname, '../../../..');
     const debugBinary = path.join(workspaceRoot, 'target', 'debug', 'basilisk');
     if (fs.existsSync(debugBinary)) {
@@ -468,19 +475,17 @@ suite('Debug Integration E2E Tests', () => {
         pythonPath = findPython();
 
         if (!basiliskBinary) {
-            console.warn(
-                'Basilisk binary not found. Debug integration tests will be skipped. ' +
-                'Build with: cargo build -p basilisk-cli'
+            throw new Error(
+                'Basilisk binary not found. Build with: cargo build -p basilisk-cli'
             );
         }
         if (!debugpyAvailable) {
-            console.warn(
-                'debugpy not installed. Debug integration tests will be skipped. ' +
-                'Install with: pip install debugpy'
+            throw new Error(
+                'debugpy not installed. Install with: pip install debugpy'
             );
         }
         if (!pythonPath) {
-            console.warn('Python not found. Debug integration tests will be skipped.');
+            throw new Error('Python not found. Install Python 3.12+.');
         }
 
         tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'basilisk-debug-test-'));
@@ -519,23 +524,12 @@ suite('Debug Integration E2E Tests', () => {
         }
     });
 
-    /** Guard: skip if prerequisites are missing. */
-    function requireDebugPrereqs(ctx: Mocha.Context): void {
-        if (!basiliskBinary || !debugpyAvailable || !pythonPath) {
-            ctx.skip();
-        }
-    }
-
     // ────────────────────────────────────────────────────────────────────────
     // 1. Package.json contributes basilisk-debug
     // ────────────────────────────────────────────────────────────────────────
 
     test('LSP advertises startDebugSession and stopDebugSession commands', async function () {
         this.timeout(5_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
         const ext = vscode.extensions.getExtension(EXTENSION_ID);
         assert.ok(ext, 'Extension must be installed');
         const debuggers = ext.packageJSON.contributes?.debuggers;
@@ -590,7 +584,6 @@ suite('Debug Integration E2E Tests', () => {
 
     test('startDebugSession spawns debugpy on a TCP port', async function () {
         this.timeout(DEBUG_SESSION_TIMEOUT_MS);
-        requireDebugPrereqs(this);
 
         const result = await startDebugSession(pythonPath);
         assert.ok(result, 'Expected startDebugSession to return a result');
@@ -609,7 +602,6 @@ suite('Debug Integration E2E Tests', () => {
 
     test('stopDebugSession kills the debugpy process', async function () {
         this.timeout(DEBUG_SESSION_TIMEOUT_MS);
-        requireDebugPrereqs(this);
 
         const result = await startDebugSession(pythonPath);
         assert.ok(result.port > 0);
@@ -624,17 +616,12 @@ suite('Debug Integration E2E Tests', () => {
 
     test('stopDebugSession with invalid sessionId returns stopped: false', async function () {
         this.timeout(5_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
         const result = await stopDebugSession('nonexistent-session-id');
         assert.strictEqual(result.stopped, false);
     });
 
     test('can start multiple debug sessions on different ports', async function () {
         this.timeout(DEBUG_SESSION_TIMEOUT_MS * 2);
-        requireDebugPrereqs(this);
 
         const session1 = await startDebugSession(pythonPath);
         const session2 = await startDebugSession(pythonPath);
@@ -653,10 +640,6 @@ suite('Debug Integration E2E Tests', () => {
 
     test('startDebugSession with bad Python path returns error', async function () {
         this.timeout(DEBUG_SESSION_TIMEOUT_MS);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
         try {
             await startDebugSession('/nonexistent/python3.99');
             assert.fail('Expected startDebugSession to throw with a bad Python path');
@@ -673,7 +656,6 @@ suite('Debug Integration E2E Tests', () => {
 
     test('full debug lifecycle: start, verify DAP handshake, stop', async function () {
         this.timeout(DEBUG_SESSION_TIMEOUT_MS + 5_000);
-        requireDebugPrereqs(this);
 
         const session = await startDebugSession(pythonPath);
 
@@ -753,7 +735,6 @@ suite('Debug Integration E2E Tests', () => {
 
     test('arithmetic: step through and assert variable values at each line', async function () {
         this.timeout(30_000);
-        requireDebugPrereqs(this);
 
         // Break on line 11: x = 10
         const { session, threadId } = await launchAndWaitForBreakpoint([11], pythonPath);
@@ -809,7 +790,6 @@ suite('Debug Integration E2E Tests', () => {
 
     test('string_ops: step through and assert string values', async function () {
         this.timeout(30_000);
-        requireDebugPrereqs(this);
 
         const { session, threadId } = await launchAndWaitForBreakpoint([21], pythonPath);
 
@@ -857,7 +837,6 @@ suite('Debug Integration E2E Tests', () => {
 
     test('list_ops: step through and assert list contents', async function () {
         this.timeout(30_000);
-        requireDebugPrereqs(this);
 
         const { session, threadId } = await launchAndWaitForBreakpoint([31], pythonPath);
 
@@ -909,7 +888,6 @@ suite('Debug Integration E2E Tests', () => {
 
     test('dict_ops: step through and assert dict contents', async function () {
         this.timeout(30_000);
-        requireDebugPrereqs(this);
 
         const { session, threadId } = await launchAndWaitForBreakpoint([41], pythonPath);
 
@@ -957,7 +935,6 @@ suite('Debug Integration E2E Tests', () => {
 
     test('nested_call: step into function, verify call stack', async function () {
         this.timeout(30_000);
-        requireDebugPrereqs(this);
 
         const { session, threadId } = await launchAndWaitForBreakpoint([51], pythonPath);
 
@@ -1001,7 +978,6 @@ suite('Debug Integration E2E Tests', () => {
 
     test('loop_and_accumulate: step through loop, verify accumulator', async function () {
         this.timeout(45_000);
-        requireDebugPrereqs(this);
 
         const { session, threadId } = await launchAndWaitForBreakpoint([65], pythonPath);
 
@@ -1057,7 +1033,6 @@ suite('Debug Integration E2E Tests', () => {
 
     test('conditional_branches: verify correct branch taken', async function () {
         this.timeout(30_000);
-        requireDebugPrereqs(this);
 
         const { session, threadId } = await launchAndWaitForBreakpoint([74], pythonPath);
 
@@ -1096,7 +1071,6 @@ suite('Debug Integration E2E Tests', () => {
 
     test('exception_handling: step through try/except, verify caught state', async function () {
         this.timeout(30_000);
-        requireDebugPrereqs(this);
 
         const { session, threadId } = await launchAndWaitForBreakpoint([86], pythonPath);
 
@@ -1139,7 +1113,6 @@ suite('Debug Integration E2E Tests', () => {
 
     test('type_variety: verify different Python types in debugger', async function () {
         this.timeout(30_000);
-        requireDebugPrereqs(this);
 
         const { session, threadId } = await launchAndWaitForBreakpoint([98], pythonPath);
 
@@ -1197,7 +1170,6 @@ suite('Debug Integration E2E Tests', () => {
 
     test('class_instance: step through, inspect object attributes', async function () {
         this.timeout(30_000);
-        requireDebugPrereqs(this);
 
         // Break at line 119: p = Point(3, 4)
         const { session, threadId } = await launchAndWaitForBreakpoint([119], pythonPath);
@@ -1230,7 +1202,6 @@ suite('Debug Integration E2E Tests', () => {
 
     test('continue between multiple breakpoints', async function () {
         this.timeout(30_000);
-        requireDebugPrereqs(this);
 
         // Set breakpoints in arithmetic() and string_ops()
         const { session, threadId } = await launchAndWaitForBreakpoint([13, 23], pythonPath);
@@ -1259,7 +1230,6 @@ suite('Debug Integration E2E Tests', () => {
 
     test('stack trace shows correct call hierarchy', async function () {
         this.timeout(30_000);
-        requireDebugPrereqs(this);
 
         // Break inside double(), called from nested_call()
         const { session, threadId } = await launchAndWaitForBreakpoint([59], pythonPath);
@@ -1295,7 +1265,6 @@ suite('Debug Integration E2E Tests', () => {
 
     test('scopes show Locals and variable details', async function () {
         this.timeout(30_000);
-        requireDebugPrereqs(this);
 
         const { session, threadId } = await launchAndWaitForBreakpoint([13], pythonPath);
 
@@ -1338,7 +1307,6 @@ suite('Debug Integration E2E Tests', () => {
 
     test('watch expressions: evaluate complex expressions', async function () {
         this.timeout(30_000);
-        requireDebugPrereqs(this);
 
         // Stop at line 15 in arithmetic where x=10, y=20, z=30, w=60
         const { session, threadId } = await launchAndWaitForBreakpoint([15], pythonPath);
@@ -1385,7 +1353,6 @@ suite('Debug Integration E2E Tests', () => {
 
     test('hover evaluation: evaluate expressions in hover context', async function () {
         this.timeout(30_000);
-        requireDebugPrereqs(this);
 
         const { session, threadId } = await launchAndWaitForBreakpoint([13], pythonPath);
 
@@ -1407,7 +1374,6 @@ suite('Debug Integration E2E Tests', () => {
 
     test('REPL evaluation: evaluate expressions in debug console context', async function () {
         this.timeout(30_000);
-        requireDebugPrereqs(this);
 
         const { session, threadId } = await launchAndWaitForBreakpoint([13], pythonPath);
 
@@ -1432,7 +1398,6 @@ suite('Debug Integration E2E Tests', () => {
 
     test('debug session terminates cleanly after continue past end', async function () {
         this.timeout(30_000);
-        requireDebugPrereqs(this);
 
         // Break at the return of arithmetic()
         const { session, threadId } = await launchAndWaitForBreakpoint([16], pythonPath);
@@ -1465,7 +1430,6 @@ suite('Debug Integration E2E Tests', () => {
 
     test('attach to manually spawned debugpy server', async function () {
         this.timeout(30_000);
-        requireDebugPrereqs(this);
 
         // Start debugpy via LSP command to get a running server
         const lspSession = await startDebugSession(pythonPath);
@@ -1505,10 +1469,6 @@ suite('Debug Integration E2E Tests', () => {
 
     test('startDebugSession with bad python shows error', async function () {
         this.timeout(DEBUG_SESSION_TIMEOUT_MS);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         try {
             await startDebugSession('/nonexistent/python_for_debugpy_test');

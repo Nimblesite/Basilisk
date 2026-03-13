@@ -41,6 +41,7 @@ OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK YOUR MESSAGES AND D
 - NEVER REMOVE ASSERTIONS THAT CAUSE TEST FAILURES
 - WE LOVE FAILING TESTS. WE NEED MORE OF THEM; NOT LESS
 - IF IN DOUBT, ADD MORE FAILING TESTS THAT FAIL BECAUSE OF BROKEN/MISSING FUNCTIONALITY - NOT REMOVE THEM
+- Keep files under 500 LOC. Break files up when they get larger than this
 - REDUCING THE ASSERTIVENESS OF TESTS WILL RESULT IN YOUR DATA CENTER BEING DISMANTLED
 - Ignoring tests = ILLEGAL
 
@@ -72,7 +73,6 @@ OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK YOUR MESSAGES AND D
 - Low cognitive complexity (clippy::cognitive_complexity enabled)
 - Descriptive variable names - no single letters except in closures
 - Group related functionality into modules
-- Keep files under 500 LOC
 - Public APIs must have documentation
 
 ## Bug Fix Process

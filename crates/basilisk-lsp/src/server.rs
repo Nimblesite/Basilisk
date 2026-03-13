@@ -6,6 +6,19 @@ use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::AbortHandle;
 
+macro_rules! diaglog {
+    ($($arg:tt)*) => {{
+        use std::io::Write as _;
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("/tmp/basilisk-diag.log")
+        {
+            let _ = writeln!(f, $($arg)*);
+        }
+    }};
+}
+
 use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::{
     CallHierarchyIncomingCall, CallHierarchyIncomingCallsParams, CallHierarchyItem,
@@ -412,6 +425,8 @@ impl tower_lsp::LanguageServer for LspServer {
     async fn did_change_configuration(&self, params: DidChangeConfigurationParams) {
         // Extract analysisMode from the settings.
         let settings = params.settings;
+        diaglog!("[DIAG] did_change_configuration: settings={settings}");
+        info!(settings = %settings, "did_change_configuration received");
         let mut mode = None;
         if let Some(mode_str) = settings
             .get("analysisMode")
@@ -420,17 +435,74 @@ impl tower_lsp::LanguageServer for LspServer {
         {
             mode = Some(AnalysisMode::parse(mode_str));
         }
-        if let Some(new_mode) = mode {
+        let Some(new_mode) = mode else {
+            info!("did_change_configuration: no analysisMode found, ignoring");
+            return;
+        };
+
+        // Update the mode on the index.
+        {
             let mut guard = self.index.write().await;
             if let Some(index) = guard.as_mut() {
                 index.mode = new_mode;
             }
-            self.client
-                .log_message(
-                    MessageType::INFO,
-                    format!("Basilisk: analysis mode changed to {new_mode:?}"),
-                )
-                .await;
+        }
+
+        self.client
+            .log_message(
+                MessageType::INFO,
+                format!("Basilisk: analysis mode changed to {new_mode:?}"),
+            )
+            .await;
+
+        // When switching to wholeModule/crossModule, trigger a workspace scan
+        // and publish diagnostics for all discovered files.
+        match new_mode {
+            AnalysisMode::WholeModule | AnalysisMode::CrossModule => {
+                let guard = self.index.read().await;
+                let Some(index) = guard.as_ref() else { return };
+                let (results, file_count, error_count) = index.scan();
+
+                // Resolve imports for all scanned files.
+                let roots = self.workspace_roots.read().await;
+                let config = roots
+                    .first()
+                    .map(|r| crate::config::load_config(r))
+                    .unwrap_or_default();
+                let search_paths =
+                    crate::import_resolver::ImportSearchPaths::from_config(&roots, &config);
+                crate::import_resolver::resolve_workspace_imports(index, &search_paths);
+                drop(roots);
+
+                drop(guard);
+                for (uri, diags) in results {
+                    self.client.publish_diagnostics(uri, diags, None).await;
+                }
+                self.client
+                    .log_message(
+                        MessageType::INFO,
+                        format!(
+                            "Basilisk: workspace scan complete — {file_count} files, {error_count} error(s)"
+                        ),
+                    )
+                    .await;
+            }
+            AnalysisMode::OpenFilesOnly => {
+                // Clear diagnostics for all non-open files. In openFilesOnly
+                // mode, only open documents should have diagnostics.
+                let guard = self.index.read().await;
+                let Some(index) = guard.as_ref() else { return };
+                let to_clear: Vec<Url> = index
+                    .files
+                    .iter()
+                    .filter(|entry| !entry.value().is_open)
+                    .filter_map(|entry| Url::from_file_path(entry.key()).ok())
+                    .collect();
+                drop(guard);
+                for uri in to_clear {
+                    self.client.publish_diagnostics(uri, vec![], None).await;
+                }
+            }
         }
     }
 
@@ -496,24 +568,63 @@ impl tower_lsp::LanguageServer for LspServer {
 
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
         let uri = params.text_document.uri;
+        diaglog!("[DIAG] did_close ENTER uri={uri}");
         let guard = self.index.read().await;
         let Some(index) = guard.as_ref() else {
+            diaglog!("[DIAG] did_close: no index, clearing");
+            info!(uri = %uri, "did_close: no index, clearing diagnostics");
             self.client.publish_diagnostics(uri, vec![], None).await;
             return;
         };
-        // In wholeModule/crossModule: re-analyse from disk and keep diagnostics.
-        // In openFilesOnly: clear diagnostics (file is no longer open).
-        match index.mode {
+        let mode = index.mode;
+        let roots_debug: Vec<_> = index
+            .roots
+            .iter()
+            .map(|r| r.display().to_string())
+            .collect();
+        diaglog!("[DIAG] did_close: mode={mode:?} roots={roots_debug:?} uri={uri}");
+        info!(uri = %uri, ?mode, "did_close: processing");
+        // In wholeModule/crossModule: re-analyse from disk and keep diagnostics,
+        // but only for files under a workspace root (those that the scan would
+        // discover). Files outside workspace roots are transient — clear them.
+        // In openFilesOnly: always clear diagnostics (file is no longer open).
+        match mode {
             AnalysisMode::OpenFilesOnly => {
+                // Remove from index so no subsequent event republishes.
+                if let Ok(path) = uri.to_file_path() {
+                    let _ = index.files.remove(&path);
+                }
                 drop(guard);
+                diaglog!("[DIAG] did_close: OpenFilesOnly -> clearing uri={uri}");
+                info!(uri = %uri, "did_close: openFilesOnly — clearing diagnostics");
                 self.client.publish_diagnostics(uri, vec![], None).await;
             }
             AnalysisMode::WholeModule | AnalysisMode::CrossModule => {
-                let (publish_uri, diags) = index.set_closed(&uri);
-                drop(guard);
-                self.client
-                    .publish_diagnostics(publish_uri, diags, None)
-                    .await;
+                let in_workspace = uri
+                    .to_file_path()
+                    .is_ok_and(|path| index.roots.iter().any(|root| path.starts_with(root)));
+                diaglog!("[DIAG] did_close: WholeModule in_workspace={in_workspace} uri={uri}");
+                if in_workspace {
+                    let (publish_uri, diags) = index.set_closed(&uri);
+                    let diag_count = diags.len();
+                    drop(guard);
+                    diaglog!("[DIAG] did_close: WholeModule in-workspace republishing {diag_count} diags");
+                    info!(uri = %uri, diag_count, "did_close: wholeModule in-workspace — republishing");
+                    self.client
+                        .publish_diagnostics(publish_uri, diags, None)
+                        .await;
+                } else {
+                    // Remove from index so no subsequent event republishes.
+                    if let Ok(path) = uri.to_file_path() {
+                        let _ = index.files.remove(&path);
+                    }
+                    drop(guard);
+                    diaglog!(
+                        "[DIAG] did_close: WholeModule out-of-workspace -> clearing uri={uri}"
+                    );
+                    info!(uri = %uri, "did_close: wholeModule out-of-workspace — clearing");
+                    self.client.publish_diagnostics(uri, vec![], None).await;
+                }
             }
         }
     }

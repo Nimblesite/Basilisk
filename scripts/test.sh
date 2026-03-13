@@ -31,11 +31,53 @@ done
 LCOV_FILE="$REPO_ROOT/lcov.info"
 HTML_DIR="$REPO_ROOT/target/llvm-cov/html"
 
+# ── Dependency audit ────────────────────────────────────────────────────────
+# Every dependency checked up front. Missing anything = immediate hard fail.
+
+header "Auditing dependencies"
+MISSING=0
+require_cmd() {
+    if ! command -v "$1" &>/dev/null; then
+        echo -e "  ${RED}✗ MISSING: $1 — $2${RESET}"
+        MISSING=1
+    else
+        echo -e "  ${GREEN}✓ $1${RESET}"
+    fi
+}
+require_py_module() {
+    if ! python3 -c "import $1" 2>/dev/null; then
+        echo -e "  ${RED}✗ MISSING: Python module '$1' — $2${RESET}"
+        MISSING=1
+    else
+        echo -e "  ${GREEN}✓ python3 -c 'import $1'${RESET}"
+    fi
+}
+
+require_cmd cargo        "Install Rust: https://rustup.rs"
+require_cmd cargo-llvm-cov "Install: cargo install cargo-llvm-cov"
+require_cmd node         "Install Node.js 20+: https://nodejs.org"
+require_cmd npm          "Bundled with Node.js"
+require_cmd python3      "Install Python 3.12: https://python.org"
+require_cmd ruff         "Install: pip install ruff"
+require_py_module debugpy "Install: pip install debugpy"
+
+if [[ "$MISSING" -ne 0 ]]; then
+    echo ""
+    echo -e "${RED}${BOLD}FATAL: Missing dependencies. Install everything listed above, then re-run.${RESET}"
+    exit 1
+fi
+ok "All dependencies present"
+
 # ── Build ────────────────────────────────────────────────────────────────────
 
 header "Building basilisk binary"
 cargo build -p basilisk-cli
-ok "basilisk binary ready"
+BASILISK_BIN="$REPO_ROOT/target/debug/basilisk"
+if [[ ! -x "$BASILISK_BIN" ]]; then
+    echo -e "${RED}${BOLD}FATAL: basilisk binary not found at $BASILISK_BIN after build.${RESET}"
+    exit 1
+fi
+ok "basilisk binary ready: $BASILISK_BIN"
 
 # ── Rust tests with coverage ─────────────────────────────────────────────────
 
@@ -89,7 +131,7 @@ COV_FAILED=0
 HTML_ROWS=""
 check_crate() {
     local crate="$1" threshold="$2" totals total_lines missed_lines covered pct
-    totals=$(echo "$REPORT" | grep "^${crate}/" | awk '{total+=$8; missed+=$9} END {print total, missed}')
+    totals=$(echo "$REPORT" | grep "/${crate}/" | awk '{total+=$8; missed+=$9} END {print total, missed}')
     total_lines=$(echo "$totals" | awk '{print $1}')
     missed_lines=$(echo "$totals" | awk '{print $2}')
     if [ -z "$total_lines" ] || [ "$total_lines" -eq 0 ]; then
@@ -174,13 +216,19 @@ ok "lsp_e2e_tests done"
 
 header "VS Code extension — compile + test"
 cd "$REPO_ROOT/vscode-extension"
+npm ci
 npm run compile
 ok "TypeScript compiled"
 
 header "VS Code E2E tests"
+VSCODE_TEST_CMD="npm test -- --coverage"
+# On headless CI (no DISPLAY), wrap with xvfb-run so VS Code can start.
+if [[ -z "${DISPLAY:-}" ]] && command -v xvfb-run &>/dev/null; then
+    VSCODE_TEST_CMD="xvfb-run -a npm test -- --coverage"
+fi
 BASILISK_EXECUTABLE_PATH="$REPO_ROOT/target/debug/basilisk" \
 MOCHA_TIMEOUT="120000" \
-npm test
+$VSCODE_TEST_CMD
 ok "VS Code E2E tests done"
 
 header "VS Code extension — coverage threshold"
