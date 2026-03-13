@@ -36,3 +36,7 @@ logs/
 
 # OS
 .DS_Store
+
+basilisk-zed/dist/
+
+*.wasm
