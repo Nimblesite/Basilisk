@@ -42,7 +42,13 @@ impl Rule for MissingAttributeAnnotation {
                 !is_enum_class(class) && !is_protocol_class(class) && !is_namedtuple_class(class)
             })
             .for_each(|class| {
-                check_class(class, &module.path, &typevar_names, &module.classes, diagnostics);
+                check_class(
+                    class,
+                    &module.path,
+                    &typevar_names,
+                    &module.classes,
+                    diagnostics,
+                );
             });
     }
 }
@@ -83,7 +89,11 @@ fn is_scalar_literal(rhs: &RhsKind) -> bool {
 /// Returns `true` when any ancestor class declares an attribute with the same
 /// name *and* that declaration carries a type annotation.  This allows
 /// subclasses to override inherited attributes without re-annotating.
-fn parent_has_annotated_attr(attr_name: &str, class: &ClassInfo, all_classes: &[ClassInfo]) -> bool {
+fn parent_has_annotated_attr(
+    attr_name: &str,
+    class: &ClassInfo,
+    all_classes: &[ClassInfo],
+) -> bool {
     class.bases.iter().any(|base_name| {
         all_classes.iter().any(|candidate| {
             candidate.name == *base_name

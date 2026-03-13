@@ -559,7 +559,7 @@ mod tests {
         let uri = make_uri("/tmp/broken.py");
         // Trailing dot is a syntax error.
         let src = "class Dog:\n    pass\n\nDog.";
-        idx.set_open(&uri, src, 1);
+        let _ = idx.set_open(&uri, src, 1);
         // get_text must return the raw text even though parsing failed.
         let text = idx.get_text(&uri).unwrap();
         assert_eq!(text, src);
@@ -570,7 +570,7 @@ mod tests {
         let idx = make_index();
         let uri = make_uri("/tmp/valid.py");
         let src = "def foo(x: int) -> int:\n    return x\n";
-        idx.set_open(&uri, src, 1);
+        let _ = idx.set_open(&uri, src, 1);
         let text = idx.get_text(&uri).unwrap();
         assert_eq!(text, src);
     }
@@ -579,7 +579,7 @@ mod tests {
     fn test_set_open_marks_is_open() {
         let idx = make_index();
         let uri = make_uri("/tmp/open.py");
-        idx.set_open(&uri, "x: int = 1\n", 1);
+        let _ = idx.set_open(&uri, "x: int = 1\n", 1);
         let path = uri.to_file_path().unwrap();
         let entry = idx.files.get(&path).unwrap();
         assert!(entry.is_open);
@@ -612,7 +612,7 @@ mod tests {
         let idx = make_index();
         let uri = make_uri("/tmp/bad.py");
         let src = "class Dog:\n    pass\n\nDog.";
-        idx.set_open(&uri, src, 1);
+        let _ = idx.set_open(&uri, src, 1);
         assert!(
             idx.get_by_uri(&uri).is_none(),
             "get_by_uri should be None when resolved is None"
@@ -624,7 +624,7 @@ mod tests {
         let idx = make_index();
         let uri = make_uri("/tmp/ok.py");
         let src = "x: int = 1\n";
-        idx.set_open(&uri, src, 1);
+        let _ = idx.set_open(&uri, src, 1);
         let result = idx.get_by_uri(&uri);
         assert!(
             result.is_some(),
@@ -642,7 +642,7 @@ mod tests {
         let idx = make_index();
         let uri = make_uri("/tmp/memory_only_xyz123.py");
         let src = "def greet(name):\n    return f\"Hello, {name}!\"\n";
-        idx.set_open(&uri, src, 1);
+        let _ = idx.set_open(&uri, src, 1);
         // Closing it: file doesn't exist on disk → should return empty diagnostics.
         let (ret_uri, diags) = idx.set_closed(&uri);
         assert_eq!(ret_uri, uri);
@@ -665,7 +665,7 @@ mod tests {
         std::fs::write(&file_path, "x: int = 1\n").unwrap();
 
         let uri = Url::from_file_path(&file_path).unwrap();
-        idx.set_open(&uri, "x: int = 1\n", 1);
+        let _ = idx.set_open(&uri, "x: int = 1\n", 1);
         let (ret_uri, _diags) = idx.set_closed(&uri);
         assert_eq!(ret_uri, uri);
         // Entry is still in the index.
@@ -682,7 +682,7 @@ mod tests {
     fn test_reload_from_disk_skips_open_files() {
         let idx = make_index();
         let uri = make_uri("/tmp/openfile.py");
-        idx.set_open(&uri, "x: int = 1\n", 1);
+        let _ = idx.set_open(&uri, "x: int = 1\n", 1);
         // reload_from_disk must return None for open files.
         let result = idx.reload_from_disk(&uri);
         assert!(result.is_none(), "should skip open files");
@@ -699,7 +699,7 @@ mod tests {
         let idx = make_index();
         let uri = Url::from_file_path(&file_path).unwrap();
         // First load.
-        idx.reload_from_disk(&uri);
+        let _ = idx.reload_from_disk(&uri);
         // Second load — same content, should return None.
         let result = idx.reload_from_disk(&uri);
         // Note: first call returns Some (newly added), second call returns None (no change).
@@ -743,7 +743,7 @@ mod tests {
 
         let idx = WorkspaceIndex::new(vec![dir.clone()], AnalysisMode::WholeModule);
         let uri = Url::from_file_path(&file_path).unwrap();
-        idx.set_open(&uri, "x: int = 1\n", 1);
+        let _ = idx.set_open(&uri, "x: int = 1\n", 1);
 
         let (results, file_count, _) = idx.scan();
         // File is open, so scan should skip it.
@@ -764,8 +764,8 @@ mod tests {
         let idx = make_index();
         let uri1 = make_uri("/tmp/r1.py");
         let uri2 = make_uri("/tmp/r2.py");
-        idx.set_open(&uri1, "x: int = 1\n", 1);
-        idx.set_open(&uri2, "class Bad:\n    pass\nBad.", 1); // parse error → no resolved
+        let _ = idx.set_open(&uri1, "x: int = 1\n", 1);
+        let _ = idx.set_open(&uri2, "class Bad:\n    pass\nBad.", 1); // parse error → no resolved
         let resolved_list = idx.all_resolved();
         // Only uri1 should appear (uri2 failed to parse).
         assert_eq!(resolved_list.len(), 1);

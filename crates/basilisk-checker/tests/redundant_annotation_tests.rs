@@ -264,10 +264,7 @@ class Child(Base):
         1,
         "only q (non-inferrable) should fire E0005; z and w are scalar literals, got: {e0005s:?}",
     );
-    assert!(
-        e0005s.iter().any(|m| m.contains('q')),
-        "should fire for q"
-    );
+    assert!(e0005s.iter().any(|m| m.contains('q')), "should fire for q");
     Ok(())
 }
 
@@ -652,7 +649,10 @@ fn negative_int_literal_redundant() -> Result<(), Box<dyn std::error::Error>> {
 fn zero_int_redundant() -> Result<(), Box<dyn std::error::Error>> {
     let source = "x: int = 0\n";
     let diags = run(source)?;
-    assert!(has_code(&diags, "BSK-W0050"), "x: int = 0 should be redundant");
+    assert!(
+        has_code(&diags, "BSK-W0050"),
+        "x: int = 0 should be redundant"
+    );
     Ok(())
 }
 
