@@ -7,7 +7,7 @@
  *
  * Prerequisites:
  *   - The `basilisk` binary must be built: `cargo build -p basilisk-cli`
- *   - The binary must be on PATH or the test will skip gracefully
+ *   - The binary must be on PATH or the test will fail hard
  */
 
 import * as assert from 'assert';
@@ -131,9 +131,8 @@ suite('LSP Feature Tests', () => {
 
         basiliskBinary = findBasiliskBinary();
         if (!basiliskBinary) {
-            console.warn(
-                'Basilisk binary not found. LSP feature tests will be skipped. ' +
-                'Build with: cargo build -p basilisk-cli'
+            throw new Error(
+                'Basilisk binary not found. Build with: cargo build -p basilisk-cli'
             );
         }
 
@@ -178,10 +177,6 @@ suite('LSP Feature Tests', () => {
     // ----------------------------------------------------------------
     test('find references works through extension', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 10_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const source = [
             'def compute(x: int) -> int:',
@@ -229,10 +224,6 @@ suite('LSP Feature Tests', () => {
     // ----------------------------------------------------------------
     test('rename symbol works through extension', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 10_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const source = [
             'def old_name(x: int) -> int:',
@@ -291,10 +282,6 @@ suite('LSP Feature Tests', () => {
     // ----------------------------------------------------------------
     test('inlay hints appear for unannotated variables', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 10_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const source = [
             'x = 42',
@@ -347,10 +334,6 @@ suite('LSP Feature Tests', () => {
     // ----------------------------------------------------------------
     test('format document works through extension', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 10_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         // Intentionally badly formatted Python code.
         const source = [
@@ -396,10 +379,6 @@ suite('LSP Feature Tests', () => {
     // ----------------------------------------------------------------
     test('document highlight works for symbol', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 10_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const source = [
             'def process(data: str) -> str:',

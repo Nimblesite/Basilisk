@@ -7,7 +7,7 @@
  *
  * Prerequisites:
  *   - The `basilisk` binary must be built: `cargo build -p basilisk-cli`
- *   - The binary must be on PATH or the test will skip gracefully
+ *   - The binary must be on PATH or the test will fail hard
  */
 
 import * as assert from 'assert';
@@ -209,11 +209,8 @@ suite('LSP Integration Tests', () => {
 
         basiliskBinary = findBasiliskBinary();
         if (!basiliskBinary) {
-            // Cannot run LSP tests without the binary. All tests will
-            // skip individually, but we set up the directory anyway.
-            console.warn(
-                'Basilisk binary not found. LSP integration tests will be skipped. ' +
-                'Build with: cargo build -p basilisk-cli'
+            throw new Error(
+                'Basilisk binary not found. Build with: cargo build -p basilisk-cli'
             );
         }
 
@@ -258,10 +255,6 @@ suite('LSP Integration Tests', () => {
     // ----------------------------------------------------------------
     test('diagnostics appear for untyped function parameter', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 5_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -291,10 +284,6 @@ suite('LSP Integration Tests', () => {
     // ----------------------------------------------------------------
     test('diagnostics clear when errors are fixed', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS * 2 + 5_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const { doc, uri } = await openPythonFile(
             tmpDir,
@@ -335,10 +324,6 @@ suite('LSP Integration Tests', () => {
     // ----------------------------------------------------------------
     test('no diagnostics for clean, fully typed code', async function () {
         this.timeout(NO_DIAGNOSTIC_WAIT_MS + 5_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -366,10 +351,6 @@ suite('LSP Integration Tests', () => {
     // ----------------------------------------------------------------
     test('hover provides type information for a function', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 5_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -405,10 +386,6 @@ suite('LSP Integration Tests', () => {
     // ----------------------------------------------------------------
     test('completions include local function names', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 5_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -451,10 +428,6 @@ suite('LSP Integration Tests', () => {
     // ----------------------------------------------------------------
     test('document symbols include class and function names', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 5_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -500,10 +473,6 @@ suite('LSP Integration Tests', () => {
     // ----------------------------------------------------------------
     test('did_change updates diagnostics', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS * 2 + 10_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         // Open a fully typed file — should produce zero Basilisk diagnostics.
         const { doc, uri } = await openPythonFile(
@@ -555,10 +524,6 @@ suite('LSP Integration Tests', () => {
     // ----------------------------------------------------------------
     test('go-to-definition works through extension', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 5_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -608,10 +573,6 @@ suite('LSP Integration Tests', () => {
     // ----------------------------------------------------------------
     test('signature help works through extension', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 5_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -662,10 +623,6 @@ suite('LSP Integration Tests', () => {
     // ----------------------------------------------------------------
     test('code actions provided for diagnostics', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 10_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -709,10 +666,6 @@ suite('LSP Integration Tests', () => {
     // ----------------------------------------------------------------
     test('go-to-declaration works through extension', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 5_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -760,10 +713,6 @@ suite('LSP Integration Tests', () => {
     // ----------------------------------------------------------------
     test('go-to-type-definition works through extension', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 5_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -811,10 +760,6 @@ suite('LSP Integration Tests', () => {
     // ----------------------------------------------------------------
     test('hover shows docstring for function', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 5_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -1008,23 +953,14 @@ suite('Analysis Mode Tests', () => {
 
     test('wholeModule: startup scan publishes diagnostics for closed file in workspace root', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 15_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         // Determine the workspace root that VS Code opened.
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-        if (!workspaceRoot) {
-            // The test harness did not configure a workspace folder.
-            // This is a configuration issue — skip with a clear message.
-            console.warn(
-                'wholeModule scan test: no workspace folder configured. ' +
-                'Ensure .vscode-test.mjs sets workspaceFolder.'
-            );
-            this.skip();
-            return;
-        }
+        assert.ok(
+            workspaceRoot,
+            'wholeModule scan test: no workspace folder configured. ' +
+            'Ensure .vscode-test.mjs sets workspaceFolder.'
+        );
 
         // Ensure wholeModule mode is set BEFORE the extension activates.
         // (The extension reads the setting during activate(), so changing it
@@ -1080,16 +1016,13 @@ suite('Analysis Mode Tests', () => {
 
     test('openFilesOnly: startup scan does NOT run — closed workspace file gets no diagnostics', async function () {
         this.timeout(NO_DIAGNOSTIC_WAIT_MS + 10_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-        if (!workspaceRoot) {
-            this.skip();
-            return;
-        }
+        assert.ok(
+            workspaceRoot,
+            'openFilesOnly test: no workspace folder configured. ' +
+            'Ensure .vscode-test.mjs sets workspaceFolder.'
+        );
 
         const cfg = vscode.workspace.getConfiguration('basilisk');
         const originalMode = cfg.get<string>('analysisMode');
@@ -1131,10 +1064,6 @@ suite('Analysis Mode Tests', () => {
 
     test('openFilesOnly: opening a file produces diagnostics, closing clears them', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 10_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const cfg = vscode.workspace.getConfiguration('basilisk');
         const originalMode = cfg.get<string>('analysisMode');

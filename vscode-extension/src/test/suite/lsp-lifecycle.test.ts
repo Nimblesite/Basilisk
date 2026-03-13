@@ -7,7 +7,7 @@
  *
  * Prerequisites:
  *   - The `basilisk` binary must be built: `cargo build -p basilisk-cli`
- *   - The binary must be on PATH or the test will skip gracefully
+ *   - The binary must be on PATH or the test will fail hard
  */
 
 import * as assert from 'assert';
@@ -161,9 +161,8 @@ suite('LSP Lifecycle Tests', () => {
 
         basiliskBinary = findBasiliskBinary();
         if (!basiliskBinary) {
-            console.warn(
-                'Basilisk binary not found. LSP lifecycle tests will be skipped. ' +
-                'Build with: cargo build -p basilisk-cli'
+            throw new Error(
+                'Basilisk binary not found. Build with: cargo build -p basilisk-cli'
             );
         }
 
@@ -210,10 +209,6 @@ suite('LSP Lifecycle Tests', () => {
     // ----------------------------------------------------------------
     test('restartServer command works and server remains functional', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 20_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         // Execute the restart command -- it should not throw.
         let didThrow = false;
@@ -252,10 +247,6 @@ suite('LSP Lifecycle Tests', () => {
     // ----------------------------------------------------------------
     test('showOutput command works without error', async function () {
         this.timeout(10_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         // Ensure the extension is active.
         const ext = vscode.extensions.getExtension(EXTENSION_ID);
@@ -277,10 +268,6 @@ suite('LSP Lifecycle Tests', () => {
     // ----------------------------------------------------------------
     test('status bar exists after activation', async function () {
         this.timeout(10_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const ext = vscode.extensions.getExtension(EXTENSION_ID);
         assert.ok(ext, `Extension ${EXTENSION_ID} should be installed`);
@@ -315,10 +302,6 @@ suite('LSP Lifecycle Tests', () => {
     // ----------------------------------------------------------------
     test('extension activates on Python file open', async function () {
         this.timeout(15_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         // The extension should already be active from suiteSetup, but we
         // verify the activation mechanism by checking the extension state.
@@ -354,10 +337,6 @@ suite('LSP Lifecycle Tests', () => {
     // ----------------------------------------------------------------
     test('diagnostics update on file edit -- full edit-diagnose-fix-clear cycle', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS * 3 + 10_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         // Step 1: Open a clean, fully typed file -- expect zero diagnostics.
         const { doc, uri } = await openPythonFile(
@@ -427,10 +406,6 @@ suite('LSP Lifecycle Tests', () => {
     // ----------------------------------------------------------------
     test('multiple files get independent diagnostics', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS * 2 + 10_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         // Open file A with an error.
         const { uri: uriA } = await openPythonFile(
