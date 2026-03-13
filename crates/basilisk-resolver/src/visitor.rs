@@ -1614,10 +1614,7 @@ fn parameter_to_info(p: &Parameter) -> ParameterInfo {
             .annotation
             .as_deref()
             .map(|e| text_range_to_span(e.range())),
-        annotation_text: p
-            .annotation
-            .as_deref()
-            .map(annotation_source_text),
+        annotation_text: p.annotation.as_deref().map(annotation_source_text),
     }
 }
 
