@@ -22,11 +22,8 @@ const EXTENSION_ID = 'basilisk-lang.basilisk';
 /** Maximum time (ms) to wait for diagnostics from the LSP server. */
 const DIAGNOSTIC_TIMEOUT_MS = 15_000;
 
-/** Time (ms) to wait for "no diagnostics" assertions. */
+/** Maximum time (ms) to wait for diagnostics to stabilise. */
 const NO_DIAGNOSTIC_WAIT_MS = 5_000;
-
-/** Time (ms) to wait for the LSP server to fully start. */
-const SERVER_START_WAIT_MS = 5_000;
 
 /**
  * Resolves the absolute path to the basilisk binary built from Cargo.
@@ -178,8 +175,23 @@ suite('LSP Lifecycle Tests', () => {
             await ext.activate();
         }
 
-        // Give the LSP server time to fully initialize.
-        await new Promise<void>((resolve) => setTimeout(resolve, SERVER_START_WAIT_MS));
+        // Poll until the LSP server is responsive.
+        const dummyPath = path.join(tmpDir, '__init__.py');
+        fs.writeFileSync(dummyPath, '', 'utf8');
+        const dummyUri = vscode.Uri.file(dummyPath);
+        const dummyDoc = await vscode.workspace.openTextDocument(dummyUri);
+        await vscode.window.showTextDocument(dummyDoc);
+        const deadline = Date.now() + 10_000;
+        while (Date.now() < deadline) {
+            try {
+                const syms = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+                    'vscode.executeDocumentSymbolProvider', dummyUri
+                );
+                if (syms !== null && syms !== undefined) break;
+            } catch { /* server not ready yet */ }
+            await new Promise<void>((r) => setTimeout(r, 200));
+        }
+        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     });
 
     suiteTeardown(async () => {
@@ -354,7 +366,8 @@ suite('LSP Lifecycle Tests', () => {
             'def good(x: int) -> int:\n    return x\n'
         );
 
-        await new Promise<void>((resolve) => setTimeout(resolve, NO_DIAGNOSTIC_WAIT_MS));
+        // Wait for the server to have processed the file (diagnostics cleared or stable).
+        await waitForDiagnosticsCleared(uri, NO_DIAGNOSTIC_WAIT_MS);
 
         const initialDiags = vscode.languages.getDiagnostics(uri);
         const initialBasiliskDiags = initialDiags.filter(
@@ -440,8 +453,8 @@ suite('LSP Lifecycle Tests', () => {
             'def clean(x: int) -> int:\n    return x\n'
         );
 
-        // Wait for the server to analyze file B.
-        await new Promise<void>((resolve) => setTimeout(resolve, NO_DIAGNOSTIC_WAIT_MS));
+        // Wait for the server to process file B (no diagnostics expected).
+        await waitForDiagnosticsCleared(uriB, NO_DIAGNOSTIC_WAIT_MS);
 
         const diagsB = vscode.languages.getDiagnostics(uriB);
         const basiliskDiagsB = diagsB.filter(
@@ -476,7 +489,7 @@ suite('LSP Lifecycle Tests', () => {
             'def clean(x: int) -> int:\n    return x\n'
         );
 
-        await new Promise<void>((resolve) => setTimeout(resolve, NO_DIAGNOSTIC_WAIT_MS));
+        await waitForDiagnosticsCleared(uriBReopened, NO_DIAGNOSTIC_WAIT_MS);
 
         const diagsBAfterClose = vscode.languages.getDiagnostics(uriBReopened);
         const basiliskDiagsBAfter = diagsBAfterClose.filter(

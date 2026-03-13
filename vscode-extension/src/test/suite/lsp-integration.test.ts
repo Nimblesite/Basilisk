@@ -346,8 +346,8 @@ suite('LSP Integration Tests', () => {
             'def greet(name: str) -> str:\n    return name\n'
         );
 
-        // Wait a reasonable amount of time for the server to analyze.
-        await new Promise<void>((resolve) => setTimeout(resolve, NO_DIAGNOSTIC_WAIT_MS));
+        // Wait for the server to process the file (no diagnostics expected).
+        await waitForDiagnosticsCleared(uri, NO_DIAGNOSTIC_WAIT_MS);
 
         const diagnostics = vscode.languages.getDiagnostics(uri);
         const basiliskDiags = filterBasiliskDiagnostics(diagnostics);
@@ -512,8 +512,8 @@ suite('LSP Integration Tests', () => {
             'def greet(name: str) -> str:\n    return name\n'
         );
 
-        // Wait for the server to finish analysing the clean file.
-        await new Promise<void>((resolve) => setTimeout(resolve, NO_DIAGNOSTIC_WAIT_MS));
+        // Wait for the server to process the clean file (no diagnostics expected).
+        await waitForDiagnosticsCleared(uri, NO_DIAGNOSTIC_WAIT_MS);
 
         const diagsBefore = vscode.languages.getDiagnostics(uri);
         const basiliskBefore = filterBasiliskDiagnostics(diagsBefore);
