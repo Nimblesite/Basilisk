@@ -400,6 +400,61 @@ function startLspClient(
     })
   );
 
+  // Track open Python URIs so we can detect when an editor tab closes.
+  // VS Code does not reliably fire workspace.onDidCloseTextDocument when
+  // an editor tab is closed — the document stays alive in memory. We use
+  // the tab model to detect when a Python file is no longer open in any
+  // tab and manually send textDocument/didClose to the server.
+  let knownOpenUris = new Set<string>();
+
+  context.subscriptions.push(
+    vscode.window.tabGroups.onDidChangeTabs(() => {
+      if (!client?.isRunning()) return;
+
+      // Collect all Python file URIs currently open in tabs.
+      const currentUris = new Set<string>();
+      for (const group of vscode.window.tabGroups.all) {
+        for (const tab of group.tabs) {
+          const input = tab.input;
+          if (input instanceof vscode.TabInputText) {
+            if (input.uri.scheme === "file" && input.uri.fsPath.endsWith(".py")) {
+              currentUris.add(input.uri.toString());
+            }
+          }
+        }
+      }
+
+      // Any URI that was known-open but is no longer in any tab has been closed.
+      // Only send didClose in openFilesOnly mode — in wholeModule/crossModule
+      // diagnostics should persist for closed files.
+      const mode = vscode.workspace.getConfiguration("basilisk").get<string>("analysisMode") ?? "wholeModule";
+      if (mode === "openFilesOnly") {
+        for (const uriStr of knownOpenUris) {
+          if (!currentUris.has(uriStr)) {
+            const uri = vscode.Uri.parse(uriStr);
+            client.sendNotification("textDocument/didClose", {
+              textDocument: { uri: uri.toString() },
+            });
+          }
+        }
+      }
+
+      knownOpenUris = currentUris;
+    })
+  );
+
+  // Seed the set with currently open Python tabs.
+  for (const group of vscode.window.tabGroups.all) {
+    for (const tab of group.tabs) {
+      const input = tab.input;
+      if (input instanceof vscode.TabInputText) {
+        if (input.uri.scheme === "file" && input.uri.fsPath.endsWith(".py")) {
+          knownOpenUris.add(input.uri.toString());
+        }
+      }
+    }
+  }
+
   client.start().catch((error: Error) => {
     const msg =
       `Basilisk: Failed to start language server. ` +

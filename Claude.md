@@ -52,6 +52,7 @@ OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK YOUR MESSAGES AND D
 ## Core Principles
 
 - Zero DUPLICATION. DRY AF!!! Always check for existing code before creating new code
+- Logging is critical. If you can't see what's going on, add more logging immediately
 - 100% Test Coverage is only the start of code quality
 - No unit tests. Only COARSE tests that test e2e
 

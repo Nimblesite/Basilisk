@@ -123,7 +123,7 @@ async function openPythonFile(
     fs.writeFileSync(filePath, content, 'utf8');
     const uri = vscode.Uri.file(filePath);
     const doc = await vscode.workspace.openTextDocument(uri);
-    await vscode.window.showTextDocument(doc);
+    await vscode.window.showTextDocument(doc, { preview: false });
     return { doc, uri };
 }
 
