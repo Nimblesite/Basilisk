@@ -64,7 +64,8 @@ impl Rule for ModuleProtocolIncompatible {
                 continue;
             }
             let return_type = extract_return_type(func, source);
-            protocol_method_returns.insert((class_name.as_str(), func.name.as_str()), return_type);
+            let _ = protocol_method_returns
+                .insert((class_name.as_str(), func.name.as_str()), return_type);
         }
 
         // Step 3: Collect imported module names.
@@ -150,7 +151,7 @@ fn load_module_interface(
     // Collect module-level variable types.
     for var in &resolved.module_vars {
         let inferred_type = infer_rhs_type(&var.rhs_kind);
-        attributes.insert(var.name.clone(), inferred_type);
+        let _ = attributes.insert(var.name.clone(), inferred_type);
     }
 
     // Collect module-level function signatures.
@@ -159,7 +160,7 @@ fn load_module_interface(
             continue; // Skip methods of classes defined in the module.
         }
         let return_type = extract_return_type(func, &source);
-        methods.insert(func.name.clone(), return_type);
+        let _ = methods.insert(func.name.clone(), return_type);
     }
 
     Some(ModuleInterface {

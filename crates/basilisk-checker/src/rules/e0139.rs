@@ -136,7 +136,7 @@ fn build_alias_map<'a>(
 
         let info = analyse_alias_rhs(rhs_text.trim(), typevartuple_names, typevar_names);
         if info.regular_typevar_count > 0 || info.has_typevartuple {
-            map.insert(lhs_name.id.to_string(), info);
+            let _ = map.insert(lhs_name.id.to_string(), info);
         }
     }
 

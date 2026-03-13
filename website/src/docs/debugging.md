@@ -2,7 +2,7 @@
 layout: layouts/docs.njk
 title: Debugging
 description: Integrated Python debugging with Basilisk — set breakpoints, step through code, inspect variables, and evaluate expressions. No separate debug extension needed.
-keywords: basilisk, debugging, python, debugpy, breakpoints, step through, variables, watch, debug console, vs code, dap
+keywords: basilisk, debugging, python, debugpy, breakpoints, step through, variables, watch, debug console, vs code, zed, dap
 eleventyNavigation:
   key: Debugging
   order: 4
@@ -255,16 +255,79 @@ If you see `connect ECONNREFUSED 127.0.0.1:<port>`, the debugpy process may have
 2. Is the Python path correct? Check `basilisk.python` setting
 3. Check the Basilisk output channel for error details
 
+## Debugging in Zed
+
+Basilisk's debugger works in Zed via the same DAP (Debug Adapter Protocol) mechanism. The Zed extension registers the `basilisk-debug` debug adapter, which connects to debugpy over TCP.
+
+### Prerequisites
+
+Install debugpy in your Python environment:
+
+```bash
+pip install debugpy
+```
+
+### Starting a debug session
+
+1. Open a Python file in Zed
+2. Set breakpoints by clicking in the gutter
+3. Start debugging from the command palette or debug panel
+
+### Console output
+
+By default, Basilisk uses **`integratedTerminal`** mode in Zed. This means program output (from `print()`, etc.) appears in the **Terminal** tab, not the Console tab.
+
+If you want output in the debug console instead, override the `console` setting in your debug configuration:
+
+```json
+{
+  "program": "${file}",
+  "console": "internalConsole"
+}
+```
+
+### Console modes in Zed
+
+| Mode | Where output appears | When to use |
+|---|---|---|
+| `integratedTerminal` (default) | **Terminal** tab | Programs that need stdin input, or when you want output separate from debug controls |
+| `internalConsole` | **Console** tab | When you want output alongside debug expression evaluation |
+
+### Debug configuration
+
+The Zed extension supports these options in the debug launch configuration:
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `program` | `string` | — | Path to the Python file to debug (required) |
+| `args` | `string[]` | `[]` | Command-line arguments passed to the program |
+| `cwd` | `string` | workspace root | Working directory |
+| `python` | `string` | auto-detect | Path to the Python interpreter |
+| `justMyCode` | `boolean` | `true` | Only debug your code, skip library internals |
+| `stopOnEntry` | `boolean` | `false` | Break on the first line of the program |
+| `console` | `string` | `integratedTerminal` | Where to show output: `integratedTerminal` or `internalConsole` |
+
+### Verifying the debug chain in Zed
+
+Check the Zed log (`Cmd+Shift+P` → **zed: open log**) for messages confirming the debug adapter connection:
+
+```
+[basilisk-debug] Spawning debugpy on port 57356
+[basilisk-debug] DAP client connected
+```
+
+This confirms: Zed → Basilisk extension → Basilisk LSP (Rust) → debugpy → your code.
+
 ## Architecture
 
 ```
 ┌──────────────┐    LSP (JSON-RPC)    ┌──────────────┐    spawns    ┌──────────┐
-│   VS Code    │◄────────────────────►│ Basilisk LSP │────────────►│  debugpy │
-│  Extension   │                      │   (Rust)     │             │ adapter  │
+│  VS Code /   │◄────────────────────►│ Basilisk LSP │────────────►│  debugpy │
+│     Zed      │                      │   (Rust)     │             │ adapter  │
 └──────┬───────┘                      └──────────────┘             └────┬─────┘
        │                                                                │
        │              DAP (TCP, direct connection)                      │
        └────────────────────────────────────────────────────────────────┘
 ```
 
-The LSP server's only role is spawning debugpy and returning the TCP port. All DAP traffic flows directly between VS Code and debugpy with zero overhead from the Rust process.
+The LSP server's only role is spawning debugpy and returning the TCP port. All DAP traffic flows directly between the editor and debugpy with zero overhead from the Rust process.

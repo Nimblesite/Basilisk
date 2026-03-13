@@ -207,7 +207,9 @@ impl InferredType {
                 InferredType::Str | InferredType::Literal(LiteralValue::Str(_)),
                 InferredType::LiteralString,
             )
-            | (InferredType::LiteralString, InferredType::Str) => true,
+            | (InferredType::LiteralString, InferredType::Str)
+            // None is always assignable to Optional[T]
+            | (InferredType::None_, InferredType::Optional(_)) => true,
             // Optional types are assignable to their non-optional counterparts
             (InferredType::Optional(inner), other) => inner.is_assignable_to(other),
             (inner, InferredType::Optional(other)) => inner.is_assignable_to(other),
@@ -309,6 +311,21 @@ impl InferredType {
                     let inner = annotation["callable[".len()..annotation.len() - 1].trim();
                     return parse_callable_annotation(inner);
                 }
+                // Handle Final[T] — unwrap to the inner type
+                if annotation.starts_with("final[") && annotation.ends_with(']') {
+                    let inner = &annotation["final[".len()..annotation.len() - 1];
+                    return InferredType::from_annotation(inner);
+                }
+                // Handle Union[T1, T2, ...] annotations
+                if annotation.starts_with("union[") && annotation.ends_with(']') {
+                    let inner = &annotation["union[".len()..annotation.len() - 1];
+                    let parts = split_type_params(inner);
+                    let types: Vec<InferredType> = parts
+                        .iter()
+                        .map(|part| InferredType::from_annotation(part.trim()))
+                        .collect();
+                    return InferredType::Union(types);
+                }
                 // Handle simple container types
                 if annotation.starts_with("list[") && annotation.ends_with(']') {
                     let inner = &annotation[5..annotation.len() - 1];
@@ -362,7 +379,7 @@ fn parse_literal_annotation(inner: &str) -> InferredType {
 
     // Multi-valued: Literal[1, 2, "x"] → union
     if inner.contains(',') {
-        let parts = split_literal_args(inner);
+        let parts = split_type_params(inner);
         if parts.len() > 1 {
             let types: Vec<InferredType> = parts
                 .iter()
@@ -428,8 +445,8 @@ fn parse_single_literal(val: &str) -> InferredType {
     InferredType::Named(val.to_owned())
 }
 
-/// Split `Literal[...]` arguments by top-level commas, respecting nesting.
-fn split_literal_args(inner: &str) -> Vec<&str> {
+/// Split type parameters by top-level commas, respecting bracket nesting.
+fn split_type_params(inner: &str) -> Vec<&str> {
     let mut parts = Vec::new();
     let mut depth = 0u32;
     let mut start = 0;

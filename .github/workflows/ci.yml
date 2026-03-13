@@ -43,8 +43,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install debugpy
-        run: pip install debugpy
+      - name: Install Python test dependencies
+        run: pip install debugpy ruff
 
       - name: Install xvfb
         run: sudo apt-get update && sudo apt-get install -y xvfb
@@ -63,6 +63,14 @@ jobs:
 
       - name: Run all tests
         run: ./scripts/test.sh
+
+      - name: Upload coverage report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: target/llvm-cov/html/
+          retention-days: 14
 
       - name: Upload to Codecov
         uses: codecov/codecov-action@v4

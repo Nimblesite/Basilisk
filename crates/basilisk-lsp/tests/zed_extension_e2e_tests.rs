@@ -65,7 +65,7 @@ impl ZedLspFixture {
         let (tx, rx) = channel();
 
         // Background reader for stdout: parse LSP frames.
-        thread::spawn(move || {
+        let _ = thread::spawn(move || {
             let mut reader = BufReader::new(stdout);
             let mut line = String::new();
             loop {
@@ -102,7 +102,7 @@ impl ZedLspFixture {
         });
 
         // Drain stderr to console.
-        thread::spawn(move || {
+        let _ = thread::spawn(move || {
             let mut reader = BufReader::new(stderr);
             let mut line = String::new();
             while reader.read_line(&mut line).unwrap_or(0) > 0 {
@@ -383,7 +383,7 @@ fn test_zed_required_capabilities() -> TestResult<()> {
 #[test]
 fn test_zed_workspace_configuration() -> TestResult<()> {
     let mut fixture = ZedLspFixture::new()?;
-    fixture.initialize_zed_style()?;
+    let _ = fixture.initialize_zed_style()?;
 
     // Simulate Zed sending workspace/didChangeConfiguration with the same
     // structure that language_server_workspace_configuration() produces.
@@ -426,7 +426,7 @@ fn test_zed_workspace_configuration() -> TestResult<()> {
 #[test]
 fn test_zed_diagnostics_on_open() -> TestResult<()> {
     let mut fixture = ZedLspFixture::new()?;
-    fixture.initialize_zed_style()?;
+    let _ = fixture.initialize_zed_style()?;
 
     let code = "def greet(name):\n    return f\"Hello, {name}!\"\n";
     fixture.did_open("file:///greet.py", code)?;
@@ -446,7 +446,7 @@ fn test_zed_diagnostics_on_open() -> TestResult<()> {
 #[test]
 fn test_zed_clean_code_no_diagnostics() -> TestResult<()> {
     let mut fixture = ZedLspFixture::new()?;
-    fixture.initialize_zed_style()?;
+    let _ = fixture.initialize_zed_style()?;
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n";
     fixture.did_open("file:///clean.py", code)?;
@@ -467,7 +467,7 @@ fn test_zed_clean_code_no_diagnostics() -> TestResult<()> {
 #[test]
 fn test_zed_hover() -> TestResult<()> {
     let mut fixture = ZedLspFixture::new()?;
-    fixture.initialize_zed_style()?;
+    let _ = fixture.initialize_zed_style()?;
 
     let code = "def greet(name):\n    return f\"Hello, {name}!\"\n";
     fixture.did_open("file:///hover.py", code)?;
@@ -494,7 +494,7 @@ fn test_zed_hover() -> TestResult<()> {
 #[test]
 fn test_zed_completions() -> TestResult<()> {
     let mut fixture = ZedLspFixture::new()?;
-    fixture.initialize_zed_style()?;
+    let _ = fixture.initialize_zed_style()?;
 
     let code = "x: str = \"hello\"\nx.\n";
     fixture.did_open("file:///completion.py", code)?;
@@ -522,7 +522,7 @@ fn test_zed_completions() -> TestResult<()> {
 #[test]
 fn test_zed_code_actions() -> TestResult<()> {
     let mut fixture = ZedLspFixture::new()?;
-    fixture.initialize_zed_style()?;
+    let _ = fixture.initialize_zed_style()?;
 
     let code = "def greet(name):\n    return f\"Hello, {name}!\"\n";
     fixture.did_open("file:///actions.py", code)?;
@@ -555,7 +555,7 @@ fn test_zed_code_actions() -> TestResult<()> {
 #[test]
 fn test_zed_document_symbols() -> TestResult<()> {
     let mut fixture = ZedLspFixture::new()?;
-    fixture.initialize_zed_style()?;
+    let _ = fixture.initialize_zed_style()?;
 
     let code = "class MyClass:\n    def method(self) -> None:\n        pass\n\ndef standalone(x: int) -> int:\n    return x\n";
     fixture.did_open("file:///symbols.py", code)?;
@@ -582,7 +582,7 @@ fn test_zed_document_symbols() -> TestResult<()> {
 #[test]
 fn test_zed_execute_organize_imports() -> TestResult<()> {
     let mut fixture = ZedLspFixture::new()?;
-    fixture.initialize_zed_style()?;
+    let _ = fixture.initialize_zed_style()?;
 
     let code = "import os\nimport sys\n\ndef foo() -> None:\n    pass\n";
     fixture.did_open("file:///imports.py", code)?;
@@ -610,7 +610,7 @@ fn test_zed_execute_organize_imports() -> TestResult<()> {
 #[test]
 fn test_zed_execute_start_debug_session() -> TestResult<()> {
     let mut fixture = ZedLspFixture::new()?;
-    fixture.initialize_zed_style()?;
+    let _ = fixture.initialize_zed_style()?;
 
     let result = fixture.request(
         "workspace/executeCommand",
@@ -648,7 +648,7 @@ fn test_zed_execute_start_debug_session() -> TestResult<()> {
 #[test]
 fn test_zed_execute_stop_debug_session() -> TestResult<()> {
     let mut fixture = ZedLspFixture::new()?;
-    fixture.initialize_zed_style()?;
+    let _ = fixture.initialize_zed_style()?;
 
     let result = fixture.request(
         "workspace/executeCommand",
@@ -671,7 +671,7 @@ fn test_zed_execute_stop_debug_session() -> TestResult<()> {
 #[test]
 fn test_zed_inlay_hints() -> TestResult<()> {
     let mut fixture = ZedLspFixture::new()?;
-    fixture.initialize_zed_style()?;
+    let _ = fixture.initialize_zed_style()?;
 
     let code = "def add(a: int, b: int) -> int:\n    return a + b\n\nresult = add(1, 2)\n";
     fixture.did_open("file:///hints.py", code)?;
@@ -701,7 +701,7 @@ fn test_zed_inlay_hints() -> TestResult<()> {
 #[test]
 fn test_zed_semantic_tokens() -> TestResult<()> {
     let mut fixture = ZedLspFixture::new()?;
-    fixture.initialize_zed_style()?;
+    let _ = fixture.initialize_zed_style()?;
 
     let code = "def hello(name: str) -> str:\n    return name\n";
     fixture.did_open("file:///tokens.py", code)?;
@@ -726,7 +726,7 @@ fn test_zed_semantic_tokens() -> TestResult<()> {
 #[test]
 fn test_zed_go_to_definition() -> TestResult<()> {
     let mut fixture = ZedLspFixture::new()?;
-    fixture.initialize_zed_style()?;
+    let _ = fixture.initialize_zed_style()?;
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n\ngreet(\"world\")\n";
     fixture.did_open("file:///definition.py", code)?;
@@ -752,7 +752,7 @@ fn test_zed_go_to_definition() -> TestResult<()> {
 #[test]
 fn test_zed_find_references() -> TestResult<()> {
     let mut fixture = ZedLspFixture::new()?;
-    fixture.initialize_zed_style()?;
+    let _ = fixture.initialize_zed_style()?;
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n\ngreet(\"a\")\ngreet(\"b\")\n";
     fixture.did_open("file:///refs.py", code)?;
@@ -779,7 +779,7 @@ fn test_zed_find_references() -> TestResult<()> {
 #[test]
 fn test_zed_formatting() -> TestResult<()> {
     let mut fixture = ZedLspFixture::new()?;
-    fixture.initialize_zed_style()?;
+    let _ = fixture.initialize_zed_style()?;
 
     let code = "def  foo(  x:int  )->int:\n    return   x\n";
     fixture.did_open("file:///format.py", code)?;
@@ -809,7 +809,7 @@ fn test_zed_formatting() -> TestResult<()> {
 #[test]
 fn test_zed_multiple_documents() -> TestResult<()> {
     let mut fixture = ZedLspFixture::new()?;
-    fixture.initialize_zed_style()?;
+    let _ = fixture.initialize_zed_style()?;
 
     let code_with_error = "def foo(x):\n    return x\n";
     let code_clean = "def bar(x: int) -> int:\n    return x\n";
@@ -844,7 +844,7 @@ fn test_zed_multiple_documents() -> TestResult<()> {
 #[test]
 fn test_zed_diagnostic_docs_url() -> TestResult<()> {
     let mut fixture = ZedLspFixture::new()?;
-    fixture.initialize_zed_style()?;
+    let _ = fixture.initialize_zed_style()?;
 
     let code = "def foo(x):\n    return x\n";
     fixture.did_open("file:///docs_url.py", code)?;

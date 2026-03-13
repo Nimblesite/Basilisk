@@ -17,8 +17,16 @@ suite('Basilisk Extension E2E Tests', () => {
         const doc = await vscode.workspace.openTextDocument(pyUri);
         await vscode.window.showTextDocument(doc);
 
-        // Give the extension time to activate.
-        await new Promise<void>(resolve => setTimeout(resolve, 2000));
+        // Poll until the extension is active.
+        const ext = vscode.extensions.getExtension('basilisk-lang.basilisk');
+        if (ext && !ext.isActive) {
+            await ext.activate();
+        }
+        const deadline = Date.now() + 5_000;
+        while (Date.now() < deadline) {
+            if (ext?.isActive) break;
+            await new Promise<void>(r => setTimeout(r, 100));
+        }
     });
 
     // ----------------------------------------------------------------

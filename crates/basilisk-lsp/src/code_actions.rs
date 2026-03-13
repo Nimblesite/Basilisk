@@ -113,7 +113,7 @@ pub(crate) fn expand_wildcard_imports(uri: &Url, source: &str) -> Option<CodeAct
     }
 
     let mut changes = HashMap::new();
-    changes.insert(
+    let _ = changes.insert(
         uri.clone(),
         vec![TextEdit {
             range: full_document_range(source),
@@ -171,7 +171,7 @@ pub(crate) fn convert_import_style(uri: &Url, source: &str) -> Option<CodeAction
 
     let full_range = full_document_range(source);
     let mut changes = HashMap::new();
-    changes.insert(
+    let _ = changes.insert(
         uri.clone(),
         vec![TextEdit {
             range: full_range,
@@ -269,7 +269,7 @@ pub(crate) fn add_dunder_all(uri: &Url, source: &str) -> Option<CodeAction> {
     };
 
     let mut changes = HashMap::new();
-    changes.insert(
+    let _ = changes.insert(
         uri.clone(),
         vec![TextEdit {
             range: Range {
@@ -376,7 +376,7 @@ fn fix_remove_redundant_annotation(uri: &Url, diag: &Diagnostic, source: &str) -
     };
 
     let mut changes = HashMap::new();
-    changes.insert(
+    let _ = changes.insert(
         uri.clone(),
         vec![TextEdit {
             range: range_to_remove,
@@ -403,7 +403,7 @@ fn suppress_with_code(uri: &Url, diag: &Diagnostic, source: &str, code: &str) ->
     let comment = format!("  # type: ignore[{code}]");
     let insert_pos = line_end_position(diag, source);
     let mut changes = HashMap::new();
-    changes.insert(
+    let _ = changes.insert(
         uri.clone(),
         vec![TextEdit {
             range: Range {
@@ -431,7 +431,7 @@ fn demote_to_warning(uri: &Url, diag: &Diagnostic, source: &str, code: &str) -> 
     let comment = format!("  # type: warning[{code}]");
     let insert_pos = line_end_position(diag, source);
     let mut changes = HashMap::new();
-    changes.insert(
+    let _ = changes.insert(
         uri.clone(),
         vec![TextEdit {
             range: Range {
@@ -462,7 +462,7 @@ fn disable_for_file(uri: &Url, diag: &Diagnostic, _source: &str, code: &str) -> 
         character: 0,
     };
     let mut changes = HashMap::new();
-    changes.insert(
+    let _ = changes.insert(
         uri.clone(),
         vec![TextEdit {
             range: Range {
@@ -515,7 +515,7 @@ fn suppress_with_type_ignore(uri: &Url, diag: &Diagnostic, source: &str) -> Code
     };
 
     let mut changes = HashMap::new();
-    changes.insert(
+    let _ = changes.insert(
         uri.clone(),
         vec![TextEdit {
             range: Range {
@@ -572,7 +572,7 @@ pub(crate) fn organize_imports(uri: &Url, source: &str) -> Option<CodeAction> {
     }
 
     let mut changes = HashMap::new();
-    changes.insert(
+    let _ = changes.insert(
         uri.clone(),
         vec![TextEdit {
             range: full_document_range(source),
@@ -621,7 +621,7 @@ fn single_insert(
     title: &str,
 ) -> CodeAction {
     let mut changes = HashMap::new();
-    changes.insert(
+    let _ = changes.insert(
         uri.clone(),
         vec![TextEdit {
             range: Range {

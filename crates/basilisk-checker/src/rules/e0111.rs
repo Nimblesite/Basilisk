@@ -384,7 +384,7 @@ fn check_constructor_call(
             let mut substitutions: HashMap<&str, &str> = HashMap::new();
             for (idx, param) in class_info.generic_params.iter().enumerate() {
                 if let Some(arg) = type_args.get(idx) {
-                    substitutions.insert(param.name.as_str(), arg.as_str());
+                    let _ = substitutions.insert(param.name.as_str(), arg.as_str());
                 }
             }
 

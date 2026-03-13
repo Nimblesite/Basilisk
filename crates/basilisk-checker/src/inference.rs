@@ -158,7 +158,7 @@ pub fn infer_flow_union_types(
     let mut result = std::collections::HashMap::new();
     for var_name in tracker.variable_types.keys() {
         if let Some(union_type) = tracker.get_union_type(var_name) {
-            result.insert(var_name.clone(), union_type);
+            let _ = result.insert(var_name.clone(), union_type);
         }
     }
 

@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Basilisk benchmark
-# Run from repo root: bash scripts/benchmark.sh
+# Run from repo root: bash scripts/benchmark.sh [--rule PATTERN]
+# Examples:
+#   bash scripts/benchmark.sh                   # run all rules
+#   bash scripts/benchmark.sh --rule e0034      # run only e0034
+#   bash scripts/benchmark.sh --rule E0034      # case-insensitive match
 
 set -euo pipefail
 
@@ -9,6 +13,16 @@ BSK="$REPO_ROOT/target/release/basilisk"
 FX="$REPO_ROOT/benchmarks/fixtures"
 OUT="$REPO_ROOT/benchmarks/results"
 mkdir -p "$OUT"
+
+# Optional rule filter: --rule e0034 or just e0034 as first arg
+RULE_FILTER=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --rule) RULE_FILTER="$(echo "$2" | tr '[:upper:]' '[:lower:]')"; shift 2 ;;
+    -*) echo "Unknown option: $1" >&2; exit 1 ;;
+    *) RULE_FILTER="$(echo "$1" | tr '[:upper:]' '[:lower:]')"; shift ;;
+  esac
+done
 
 # Build
 printf 'Building...'
@@ -25,12 +39,22 @@ FIXTURES=(
   "e0022_unhashable_dict_key.py:E0022 Unhashable dict key"
   "e0023_nonexhaustive_match.py:E0023 Non-exhaustive match"
   "e0026_typevar_single_constraint.py:E0026 TypeVar single constraint"
+  "e0054_final_reassignment.py:E0054 Final reassignment"
 )
 
 printf 'Running benchmarks (this takes a while)...\n\n'
 
 for entry in "${FIXTURES[@]}"; do
   FILE="${entry%%:*}"
+  LABEL="${entry##*:}"
+  # Apply rule filter if specified (match against filename or label, case-insensitive)
+  if [[ -n "$RULE_FILTER" ]]; then
+    LOWER_FILE="$(echo "$FILE" | tr '[:upper:]' '[:lower:]')"
+    LOWER_LABEL="$(echo "$LABEL" | tr '[:upper:]' '[:lower:]')"
+    if [[ "$LOWER_FILE" != *"$RULE_FILTER"* && "$LOWER_LABEL" != *"$RULE_FILTER"* ]]; then
+      continue
+    fi
+  fi
   FPATH="$FX/$FILE"
   [[ -f "$FPATH" ]] || continue
   hyperfine \
@@ -44,28 +68,32 @@ for entry in "${FIXTURES[@]}"; do
     --command-name "pyrefly"  "pyrefly check $FPATH >/dev/null 2>&1" \
     --command-name "ty"       "python3 -m ty check $FPATH >/dev/null 2>&1" \
     > /dev/null 2>&1
-  printf '  ✓ %s\n' "${entry##*:}"
+  printf '  ✓ %s\n' "$LABEL"
 done
 
 # Generate report from JSON results
-python3 - "$OUT" <<'PYEOF'
-import json, sys, os, glob
+python3 - "$OUT" "$RULE_FILTER" <<'PYEOF'
+import json, sys
 from pathlib import Path
 
 out = Path(sys.argv[1])
+rule_filter = sys.argv[2].lower() if len(sys.argv) > 2 else ""
 TOOLS = ["basilisk", "pyright", "mypy", "pyrefly", "ty"]
 COL = 12
 
 FIXTURE_LABELS = {
-    "e0002_missing_return":          "E0002 Missing return",
-    "e0016_incompatible_override":   "E0016 Incompatible override",
-    "e0022_unhashable_dict_key":     "E0022 Unhashable dict key",
-    "e0023_nonexhaustive_match":     "E0023 Non-exhaustive match",
+    "e0002_missing_return":            "E0002 Missing return",
+    "e0016_incompatible_override":     "E0016 Incompatible override",
+    "e0022_unhashable_dict_key":       "E0022 Unhashable dict key",
+    "e0023_nonexhaustive_match":       "E0023 Non-exhaustive match",
     "e0026_typevar_single_constraint": "E0026 TypeVar constraint",
+    "e0054_final_reassignment":        "E0054 Final reassignment",
 }
 
 rows = []
 for stem, label in FIXTURE_LABELS.items():
+    if rule_filter and rule_filter not in stem.lower() and rule_filter not in label.lower():
+        continue
     path = out / f"{stem}.json"
     if not path.exists():
         continue

@@ -1,8 +1,8 @@
 ---
 layout: layouts/docs.njk
 title: Installation
-description: How to install Basilisk — pre-built binaries, VS Code extension, or build from source.
-keywords: basilisk, install, cargo, rust, python type checker, vs code
+description: How to install Basilisk — pre-built binaries, VS Code extension, Zed extension, or build from source.
+keywords: basilisk, install, cargo, rust, python type checker, vs code, zed
 eleventyNavigation:
   key: Installation
   order: 2
@@ -112,14 +112,92 @@ Exit codes:
 - `2` — Configuration error
 - `3` — Internal error
 
+## Zed extension
+
+Basilisk provides a native Zed extension that registers the LSP for Python files. When installed, Basilisk automatically activates as the language server for all `.py` files.
+
+### Install the extension
+
+1. Build and install the Basilisk CLI binary:
+
+```bash
+cargo install --path crates/basilisk-cli
+```
+
+This installs the binary to `~/.cargo/bin/basilisk`.
+
+2. Install the dev extension in Zed:
+
+- Open the command palette: `Cmd+Shift+P`
+- Run **zed: install dev extension**
+- Select the `basilisk-zed/` directory from the repository
+
+Zed compiles the extension's Rust source to WASM automatically. You do not need to pre-build or copy any `.wasm` files.
+
+3. Open a Python file — Basilisk is now your Python language server.
+
+### How Zed finds the binary
+
+The Zed extension resolves the Basilisk binary in this order:
+
+1. **Zed LSP settings** — if you configure an explicit path in your Zed `settings.json`:
+
+```json
+{
+  "lsp": {
+    "basilisk": {
+      "binary": {
+        "path": "/path/to/basilisk"
+      }
+    }
+  }
+}
+```
+
+2. **`BASILISK_PATH` environment variable** — set this to override the default location
+3. **`~/.cargo/bin/basilisk`** — the default location where `cargo install` places the binary
+
+Zed does **not** resolve bare command names from PATH. The extension always returns an absolute path to the binary.
+
+### Configure Basilisk settings in Zed
+
+Add Basilisk-specific settings to your Zed `settings.json`:
+
+```json
+{
+  "lsp": {
+    "basilisk": {
+      "settings": {
+        "inlayHints": {
+          "paramNames": true,
+          "varTypes": true
+        },
+        "ruff": {
+          "enabled": true
+        }
+      }
+    }
+  }
+}
+```
+
+### Rebuilding after changes
+
+If you modify the Basilisk source:
+
+1. Rebuild the CLI binary: `cargo install --path crates/basilisk-cli --force`
+2. Reinstall the dev extension in Zed: `Cmd+Shift+P` → **zed: install dev extension** → select `basilisk-zed/`
+
+Zed recompiles the WASM and reloads the extension automatically.
+
 ## Editor support (LSP)
 
 Basilisk implements the Language Server Protocol. Any editor with LSP support can use it:
 
 - **VS Code** — via the official Basilisk extension (auto-downloads the binary)
+- **Zed** — via the Basilisk Zed extension (see above)
 - **Neovim** — via nvim-lspconfig
 - **Helix** — native LSP support
-- **Zed** — via LSP extension
 - **Emacs** — via eglot or lsp-mode
 
 ## How the VS Code extension finds the binary

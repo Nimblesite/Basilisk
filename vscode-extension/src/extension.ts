@@ -324,7 +324,9 @@ function startLspClient(
     documentSelector: [{ scheme: "file", language: "python" }],
     synchronize: {
       configurationSection: "basilisk",
+      fileEvents: vscode.workspace.createFileSystemWatcher("**/*.{py,pyi}"),
     },
+    initializationOptions: readBasiliskSettings(),
     traceOutputChannel: traceChannel,
     outputChannel: outputChannel,
     errorHandler: {
@@ -350,20 +352,12 @@ function startLspClient(
           if (!Array.isArray(results)) {
             return results;
           }
-          const cfg = vscode.workspace.getConfiguration("basilisk");
           return results.map((item, idx) => {
             const section = params.items[idx]?.section;
             if (section === "basilisk" || section?.startsWith("basilisk.")) {
               return {
                 ...(typeof item === "object" && item !== null ? item : {}),
-                inlayHints: {
-                  parameterNames: cfg.get<boolean>("inlayHints.parameterNames") ?? true,
-                  variableTypes: cfg.get<boolean>("inlayHints.variableTypes") ?? true,
-                },
-                ruff: {
-                  enabled: cfg.get<boolean>("ruff.enabled") ?? true,
-                  executablePath: cfg.get<string>("ruff.executablePath") ?? "ruff",
-                },
+                ...readBasiliskSettings(),
               };
             }
             return item;
@@ -406,6 +400,61 @@ function startLspClient(
     })
   );
 
+  // Track open Python URIs so we can detect when an editor tab closes.
+  // VS Code does not reliably fire workspace.onDidCloseTextDocument when
+  // an editor tab is closed — the document stays alive in memory. We use
+  // the tab model to detect when a Python file is no longer open in any
+  // tab and manually send textDocument/didClose to the server.
+  let knownOpenUris = new Set<string>();
+
+  context.subscriptions.push(
+    vscode.window.tabGroups.onDidChangeTabs(() => {
+      if (!client?.isRunning()) return;
+
+      // Collect all Python file URIs currently open in tabs.
+      const currentUris = new Set<string>();
+      for (const group of vscode.window.tabGroups.all) {
+        for (const tab of group.tabs) {
+          const input = tab.input;
+          if (input instanceof vscode.TabInputText) {
+            if (input.uri.scheme === "file" && input.uri.fsPath.endsWith(".py")) {
+              currentUris.add(input.uri.toString());
+            }
+          }
+        }
+      }
+
+      // Any URI that was known-open but is no longer in any tab has been closed.
+      // Only send didClose in openFilesOnly mode — in wholeModule/crossModule
+      // diagnostics should persist for closed files.
+      const mode = vscode.workspace.getConfiguration("basilisk").get<string>("analysisMode") ?? "wholeModule";
+      if (mode === "openFilesOnly") {
+        for (const uriStr of knownOpenUris) {
+          if (!currentUris.has(uriStr)) {
+            const uri = vscode.Uri.parse(uriStr);
+            client.sendNotification("textDocument/didClose", {
+              textDocument: { uri: uri.toString() },
+            });
+          }
+        }
+      }
+
+      knownOpenUris = currentUris;
+    })
+  );
+
+  // Seed the set with currently open Python tabs.
+  for (const group of vscode.window.tabGroups.all) {
+    for (const tab of group.tabs) {
+      const input = tab.input;
+      if (input instanceof vscode.TabInputText) {
+        if (input.uri.scheme === "file" && input.uri.fsPath.endsWith(".py")) {
+          knownOpenUris.add(input.uri.toString());
+        }
+      }
+    }
+  }
+
   client.start().catch((error: Error) => {
     const msg =
       `Basilisk: Failed to start language server. ` +
@@ -418,12 +467,14 @@ function startLspClient(
   context.subscriptions.push(client);
 }
 
-/** Build the settings object forwarded to the LSP server. */
-function buildServerSettings(): Record<string, unknown> {
+/** Read all Basilisk settings from the VS Code configuration. */
+function readBasiliskSettings(): Record<string, unknown> {
   const cfg = vscode.workspace.getConfiguration("basilisk");
   return {
+    analysisMode: cfg.get<string>("analysisMode") ?? "wholeModule",
     basilisk: {
       python: cfg.get<string>("python") ?? "",
+      analysisMode: cfg.get<string>("analysisMode") ?? "wholeModule",
       inlayHints: {
         parameterNames: cfg.get<boolean>("inlayHints.parameterNames") ?? true,
         variableTypes: cfg.get<boolean>("inlayHints.variableTypes") ?? true,
@@ -433,7 +484,16 @@ function buildServerSettings(): Record<string, unknown> {
         executablePath: cfg.get<string>("ruff.executablePath") ?? "ruff",
       },
     },
+    ruff: {
+      enabled: cfg.get<boolean>("ruff.enabled") ?? true,
+      executablePath: cfg.get<string>("ruff.executablePath") ?? "ruff",
+    },
   };
+}
+
+/** Build the settings object forwarded to the LSP server. */
+function buildServerSettings(): Record<string, unknown> {
+  return { basilisk: readBasiliskSettings() };
 }
 
 /** Run `ruff check --select I --fix` on the active file to organize imports. */
@@ -444,14 +504,13 @@ function organizeImports(): void {
     return;
   }
 
-  const cfg = vscode.workspace.getConfiguration("basilisk");
-  const ruffEnabled = cfg.get<boolean>("ruff.enabled") ?? true;
-  if (!ruffEnabled) {
+  const settings = readBasiliskSettings() as { ruff?: { enabled?: boolean; executablePath?: string } };
+  if (!settings.ruff?.enabled) {
     vscode.window.showWarningMessage("Basilisk: Ruff integration is disabled. Enable basilisk.ruff.enabled to organize imports.");
     return;
   }
 
-  const ruffPath = cfg.get<string>("ruff.executablePath") ?? "ruff";
+  const ruffPath = settings.ruff?.executablePath ?? "ruff";
   const filePath = editor.document.uri.fsPath;
 
   execFile(

@@ -283,7 +283,7 @@ fn collect_non_type_names(module: &ResolvedModule) -> HashSet<String> {
                 .split('.')
                 .next_back()
                 .unwrap_or(import.module.as_str());
-            names.insert(local_name.to_owned());
+            let _ = names.insert(local_name.to_owned());
         }
     }
 
@@ -304,7 +304,7 @@ fn collect_non_type_names(module: &ResolvedModule) -> HashSet<String> {
                 | RhsKind::NoneValue
         );
         if is_simple_literal {
-            names.insert(var.name.clone());
+            let _ = names.insert(var.name.clone());
         }
     }
 
@@ -582,21 +582,21 @@ impl Rule for InvalidTypeAnnotation {
 fn build_module_scope_names<'a>(module: &'a ResolvedModule) -> HashSet<&'a str> {
     let mut names: HashSet<&'a str> = HashSet::new();
     for cls in &module.classes {
-        names.insert(cls.name.as_str());
+        let _ = names.insert(cls.name.as_str());
     }
     for var in &module.module_vars {
-        names.insert(var.name.as_str());
+        let _ = names.insert(var.name.as_str());
     }
     for imp in &module.imports {
         match imp.kind {
             ImportKind::From => {
                 for name in &imp.names {
-                    names.insert(name.as_str());
+                    let _ = names.insert(name.as_str());
                 }
             }
             ImportKind::Plain => {
                 if let Some(name) = imp.module.split('.').next() {
-                    names.insert(name);
+                    let _ = names.insert(name);
                 }
             }
             ImportKind::Star => {}

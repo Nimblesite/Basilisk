@@ -410,7 +410,7 @@ fn collect_defined_names(
         .collect();
 
     for var in vars {
-        names.insert(var.name.clone());
+        let _ = names.insert(var.name.clone());
     }
 
     for import in imports {
@@ -418,13 +418,13 @@ fn collect_defined_names(
             ImportKind::Plain => {
                 // `import os` binds `os`
                 if let Some(first) = import.module.split('.').next() {
-                    names.insert(first.to_owned());
+                    let _ = names.insert(first.to_owned());
                 }
             }
             ImportKind::From => {
                 // `from typing import Annotated` binds `Annotated`
                 for name in &import.names {
-                    names.insert(name.clone());
+                    let _ = names.insert(name.clone());
                 }
             }
             ImportKind::Star => {
@@ -434,11 +434,11 @@ fn collect_defined_names(
     }
 
     for cls in classes {
-        names.insert(cls.name.clone());
+        let _ = names.insert(cls.name.clone());
     }
 
     for func in functions {
-        names.insert(func.name.clone());
+        let _ = names.insert(func.name.clone());
     }
 
     names

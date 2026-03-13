@@ -824,14 +824,11 @@ COUNT: Final[int] = 0
 COUNT += 1
 "#;
     let diagnostics = run(source)?;
-    // Augmented assign to Final is caught at the e0014 level as type mismatch
-    let has_diag = diagnostics
-        .iter()
-        .any(|d| d.code.code == "BSK-E0014" || d.code.code == "BSK-E0054");
+    // Augmented assign to Final should be caught by E0054
+    let has_e0054 = diagnostics.iter().any(|d| d.code.code == "BSK-E0054");
     assert!(
-        has_diag,
-        "Should detect issue with Final augmented assign: {:?}",
-        diagnostics
+        has_e0054,
+        "Should detect Final augmented assign via E0054: {diagnostics:?}",
     );
     Ok(())
 }

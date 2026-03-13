@@ -61,7 +61,7 @@ impl LspTestFixture {
         let (tx, rx) = channel();
 
         // Background reader for stdout: parse LSP frames and push bodies into the channel.
-        thread::spawn(move || {
+        let _ = thread::spawn(move || {
             let mut reader = BufReader::new(stdout);
             let mut line = String::new();
             loop {
@@ -102,7 +102,7 @@ impl LspTestFixture {
         });
 
         // Background reader for stderr: print to console for debugging
-        thread::spawn(move || {
+        let _ = thread::spawn(move || {
             let mut reader = BufReader::new(stderr);
             let mut line = String::new();
             while reader.read_line(&mut line).unwrap_or(0) > 0 {
@@ -221,7 +221,7 @@ fn test_lsp_initialize() -> TestResult<()> {
 #[test]
 fn test_lsp_did_open_with_type_errors() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let python_code = "def greet(name):\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///test.py", python_code)?;
@@ -240,7 +240,7 @@ fn test_lsp_did_open_with_type_errors() -> TestResult<()> {
 #[test]
 fn test_lsp_did_open_with_clean_code() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let python_code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///test.py", python_code)?;
@@ -256,7 +256,7 @@ fn test_lsp_did_open_with_clean_code() -> TestResult<()> {
 #[test]
 fn test_lsp_did_open_with_syntax_error() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     // Missing colon after return type.
     let python_code = "def greet(name: str) -> str\n    return f\"Hello, {name}!\"";
@@ -275,7 +275,7 @@ fn test_lsp_did_open_with_syntax_error() -> TestResult<()> {
 #[test]
 fn test_lsp_did_change_updates_diagnostics() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let initial_code = "def greet(name):\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///test.py", initial_code)?;
@@ -307,7 +307,7 @@ fn test_lsp_did_change_updates_diagnostics() -> TestResult<()> {
 #[test]
 fn test_lsp_did_close_clears_diagnostics() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let python_code = "def greet(name):\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///test.py", python_code)?;
@@ -334,7 +334,7 @@ fn test_lsp_did_close_clears_diagnostics() -> TestResult<()> {
 #[test]
 fn test_lsp_hover_on_error_location() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let python_code = "def greet(name):\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///test.py", python_code)?;
@@ -371,7 +371,7 @@ fn test_lsp_hover_on_error_location() -> TestResult<()> {
 #[test]
 fn test_lsp_malformed_json_handling() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     // Send raw malformed JSON (not via send_json which would serialize properly).
     let bad = "{ invalid json }";
@@ -402,7 +402,7 @@ fn test_lsp_malformed_json_handling() -> TestResult<()> {
 #[test]
 fn test_lsp_unknown_method_handling() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     fixture.send_json(&serde_json::json!({
         "jsonrpc": "2.0",
@@ -430,7 +430,7 @@ fn test_lsp_unknown_method_handling() -> TestResult<()> {
 #[test]
 fn test_lsp_concurrent_document_handling() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     fixture.did_open("file:///doc1.py", "def func1(x): pass")?;
     fixture.did_open("file:///doc2.py", "def func2(y): return y")?;
@@ -453,7 +453,7 @@ fn test_lsp_concurrent_document_handling() -> TestResult<()> {
 #[test]
 fn test_lsp_large_file_handling() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let mut large_code = String::new();
     for i in 0..50 {
@@ -518,7 +518,7 @@ fn test_lsp_initialize_advertises_completion() -> TestResult<()> {
 #[test]
 fn test_lsp_completion_returns_functions_and_classes() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 class Animal:
@@ -567,7 +567,7 @@ x: int = 42
 #[test]
 fn test_lsp_completion_prefix_filtering() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 def greet(name: str) -> str:
@@ -605,7 +605,7 @@ gr";
 #[test]
 fn test_lsp_completion_imports() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 from typing import Optional, List
@@ -637,7 +637,7 @@ import os
 #[test]
 fn test_lsp_completion_dot_on_class() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 class Dog:
@@ -678,7 +678,7 @@ Dog.";
 #[test]
 fn test_lsp_completion_self_dot() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 class Cat:
@@ -717,7 +717,7 @@ class Cat:
 #[test]
 fn test_lsp_completion_builtins() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "pri";
     fixture.did_open("file:///builtins.py", code)?;
@@ -746,7 +746,7 @@ fn test_lsp_completion_builtins() -> TestResult<()> {
 #[test]
 fn test_lsp_completion_function_detail_shows_params() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 def calculate(x: int, y: int, op: str) -> int:
@@ -775,7 +775,7 @@ cal";
 #[test]
 fn test_lsp_completion_on_empty_file() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     // Empty file should still return builtins
     fixture.did_open("file:///empty.py", "")?;
@@ -844,7 +844,7 @@ fn send_request(
 #[test]
 fn test_lsp_hover_shows_function_signature() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///hover.py", code)?;
@@ -877,7 +877,7 @@ fn test_lsp_hover_shows_function_signature() -> TestResult<()> {
 #[test]
 fn test_lsp_hover_shows_class_signature() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code =
         "class Animal:\n    name: str\n    def speak(self) -> str:\n        return self.name\n";
@@ -907,7 +907,7 @@ fn test_lsp_hover_shows_class_signature() -> TestResult<()> {
 #[test]
 fn test_lsp_hover_shows_variable_type() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "x: int = 42\n";
     fixture.did_open("file:///hvar.py", code)?;
@@ -940,7 +940,7 @@ fn test_lsp_hover_shows_variable_type() -> TestResult<()> {
 #[test]
 fn test_lsp_goto_definition_function() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n";
     fixture.did_open("file:///gotodef.py", code)?;
@@ -969,7 +969,7 @@ fn test_lsp_goto_definition_function() -> TestResult<()> {
 #[test]
 fn test_lsp_goto_definition_class() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "class Dog:\n    name: str\n    def bark(self) -> str:\n        return \"woof\"\n";
     fixture.did_open("file:///gotoclass.py", code)?;
@@ -1001,7 +1001,7 @@ fn test_lsp_goto_definition_class() -> TestResult<()> {
 #[test]
 fn test_lsp_document_symbols() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 class Animal:
@@ -1045,7 +1045,7 @@ x: int = 42
 #[test]
 fn test_lsp_document_symbols_nested_methods() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 class Calculator:
@@ -1088,7 +1088,7 @@ class Calculator:
 #[test]
 fn test_lsp_signature_help() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 def greet(name: str, greeting: str) -> str:
@@ -1134,7 +1134,7 @@ result: str = greet(\"world\", \"Hi\")
 #[test]
 fn test_lsp_find_references() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 def greet(name: str) -> str:
@@ -1174,7 +1174,7 @@ result: str = greet(\"world\")
 #[test]
 fn test_lsp_prepare_rename() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n";
     fixture.did_open("file:///rename.py", code)?;
@@ -1203,7 +1203,7 @@ fn test_lsp_prepare_rename() -> TestResult<()> {
 #[test]
 fn test_lsp_rename_symbol() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 def greet(name: str) -> str:
@@ -1245,7 +1245,7 @@ result: str = greet(\"world\")
 #[test]
 fn test_lsp_inlay_hints_variable_types() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "x = 42\ny = \"hello\"\nz = True\n";
     fixture.did_open("file:///inlay.py", code)?;
@@ -1287,7 +1287,7 @@ fn test_lsp_inlay_hints_variable_types() -> TestResult<()> {
 #[test]
 fn test_lsp_semantic_tokens_full() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 class Animal:
@@ -1347,7 +1347,7 @@ x: int = 42
 #[test]
 fn test_lsp_code_action_missing_param_annotation() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "def greet(name):\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///actions.py", code)?;
@@ -1396,7 +1396,7 @@ fn test_lsp_code_action_missing_param_annotation() -> TestResult<()> {
 #[test]
 fn test_lsp_code_action_missing_return_annotation() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "def greet(name: str):\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///retact.py", code)?;
@@ -1443,7 +1443,7 @@ fn test_lsp_code_action_missing_return_annotation() -> TestResult<()> {
 #[test]
 fn test_lsp_code_action_redundant_annotation_w0050() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "x: int = 42\n";
     fixture.did_open("file:///redundant.py", code)?;
@@ -1498,7 +1498,7 @@ fn test_lsp_hover_function_exact_signature() -> TestResult<()> {
     // Proves hover shows the COMPLETE formatted signature, not just fragments.
     // format_type_signature produces: "(function) def greet(name: str) -> str"
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///hover_exact.py", code)?;
@@ -1540,7 +1540,7 @@ fn test_lsp_hover_from_call_site() -> TestResult<()> {
     // THE KEY TEST: hovering on a CALL SITE resolves to the function definition.
     // This exercises the reference-lookup path in hover_at / find_definition_by_name.
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n\nresult: str = greet(\"world\")\n";
     fixture.did_open("file:///hover_call.py", code)?;
@@ -1578,7 +1578,7 @@ fn test_lsp_hover_from_call_site() -> TestResult<()> {
 fn test_lsp_hover_parameter_shows_type() -> TestResult<()> {
     // Hover on a parameter at its definition site shows "(parameter) name: type".
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///hover_param.py", code)?;
@@ -1615,7 +1615,7 @@ fn test_lsp_hover_parameter_shows_type() -> TestResult<()> {
 fn test_lsp_hover_class_attribute() -> TestResult<()> {
     // Hover on a class attribute shows "(property) ClassName.attr: type".
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "class Animal:\n    name: str\n    age: int\n";
     fixture.did_open("file:///hover_attr.py", code)?;
@@ -1657,7 +1657,7 @@ fn test_lsp_goto_definition_returns_exact_position() -> TestResult<()> {
     // Proves that goto-def returns the EXACT line/character of the definition,
     // not just the file name.
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n";
     fixture.did_open("file:///gotoexact.py", code)?;
@@ -1694,7 +1694,7 @@ fn test_lsp_goto_definition_from_call_site() -> TestResult<()> {
     // THE KEY TEST: goto-def triggered FROM a call site jumps to the function
     // definition — the primary end-to-end user workflow for F12.
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n\nresult: str = greet(\"world\")\n";
     fixture.did_open("file:///goto_call.py", code)?;
@@ -1734,7 +1734,7 @@ fn test_lsp_goto_definition_from_call_site() -> TestResult<()> {
 fn test_lsp_goto_definition_class_from_type_annotation() -> TestResult<()> {
     // goto-def on a class name used in a type annotation resolves to the class definition.
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "class Dog:\n    name: str\n\ndef pet(dog: Dog) -> None:\n    pass\n";
     fixture.did_open("file:///goto_type.py", code)?;
@@ -1826,7 +1826,7 @@ fn test_lsp_initialize_advertises_new_capabilities() -> TestResult<()> {
 #[test]
 fn test_lsp_goto_declaration_function() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 def compute(x: int) -> int:
@@ -1863,7 +1863,7 @@ result: int = compute(10)
 #[test]
 fn test_lsp_goto_type_definition_variable() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 class MyData:
@@ -1896,7 +1896,7 @@ instance: MyData = MyData()
 #[test]
 fn test_lsp_goto_type_definition_parameter() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 class Config:
@@ -1934,7 +1934,7 @@ def process(cfg: Config) -> None:
 #[test]
 fn test_lsp_hover_shows_docstring() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 def calculate(x: int) -> int:
@@ -1965,7 +1965,7 @@ def calculate(x: int) -> int:
 #[test]
 fn test_lsp_hover_shows_docstring_at_call_site() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 def calculate(x: int) -> int:
@@ -1999,7 +1999,7 @@ result: int = calculate(5)
 #[test]
 fn test_lsp_completion_includes_docstring() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 def helper(x: int) -> int:
@@ -2042,7 +2042,7 @@ hel
 #[test]
 fn test_lsp_folding_range() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 class Animal:
@@ -2082,7 +2082,7 @@ def greet(name: str) -> str:
 #[test]
 fn test_lsp_selection_range() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 def greet(name: str) -> str:
@@ -2113,7 +2113,7 @@ def greet(name: str) -> str:
 #[test]
 fn test_lsp_code_lens() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 def greet(name: str) -> str:
@@ -2147,7 +2147,7 @@ def caller() -> None:
 #[test]
 fn test_lsp_document_highlight() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 def greet(name: str) -> str:
@@ -2179,7 +2179,7 @@ def greet(name: str) -> str:
 #[test]
 fn test_lsp_did_save_rechecks() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///save.py", code)?;
@@ -2212,7 +2212,7 @@ fn test_lsp_did_save_rechecks() -> TestResult<()> {
 #[test]
 fn test_lsp_prepare_call_hierarchy() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 def greet(name: str) -> str:
@@ -2247,7 +2247,7 @@ def main() -> None:
 #[test]
 fn test_lsp_call_hierarchy_incoming() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 def greet(name: str) -> str:
@@ -2295,7 +2295,7 @@ def main() -> None:
 #[test]
 fn test_lsp_call_hierarchy_outgoing() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 def greet(name: str) -> str:
@@ -2346,7 +2346,7 @@ def main() -> None:
 #[test]
 fn test_lsp_prepare_type_hierarchy() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 class Animal:
@@ -2381,7 +2381,7 @@ class Dog(Animal):
 #[test]
 fn test_lsp_type_hierarchy_supertypes() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 class Animal:
@@ -2431,7 +2431,7 @@ class Dog(Animal):
 #[test]
 fn test_lsp_type_hierarchy_subtypes() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 class Animal:
@@ -2486,7 +2486,7 @@ class Dog(Animal):
 #[test]
 fn test_lsp_workspace_symbol() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let code = "\
 class Animal:
@@ -2523,7 +2523,7 @@ def greet(name: str) -> str:
 #[test]
 fn test_lsp_formatting() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     // Badly formatted code
     let code = "def   greet( name:str )->str:\n    return    name\n";
@@ -2556,7 +2556,7 @@ fn test_lsp_formatting() -> TestResult<()> {
 #[test]
 fn test_lsp_execute_command_unknown() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
-    fixture.initialize()?;
+    let _ = fixture.initialize()?;
 
     let resp = send_request(
         &mut fixture,

@@ -231,7 +231,7 @@ fn expand_alias_rich(
     // Build substitution: alias free TypeVar → provided rich type arg.
     let mut substitution: HashMap<&str, &TypeArg> = HashMap::new();
     for (free_tv, provided) in free_tvs.iter().zip(provided_args.iter()) {
-        substitution.insert(*free_tv, provided);
+        let _ = substitution.insert(*free_tv, provided);
     }
 
     // Apply substitution to alias_type_args to produce effective rich args.
@@ -353,7 +353,7 @@ fn collect_leaf_variances(
 
                 let mut substitution: HashMap<&str, &TypeArg> = HashMap::new();
                 for (free_tv, provided) in free_tvs.iter().zip(args.iter()) {
-                    substitution.insert(*free_tv, provided);
+                    let _ = substitution.insert(*free_tv, provided);
                 }
 
                 let effective_args: Vec<TypeArg> = alias_type_args
@@ -472,7 +472,7 @@ fn resolve_alias_and_check(
     // Build substitution: alias free TypeVar -> provided arg.
     let mut substitution: HashMap<&str, &str> = HashMap::new();
     for (free_tv, provided) in typevar_names.iter().zip(provided_args.iter()) {
-        substitution.insert(*free_tv, provided.as_str());
+        let _ = substitution.insert(*free_tv, provided.as_str());
     }
 
     // Apply substitution to alias_type_args to get effective args for target_base.

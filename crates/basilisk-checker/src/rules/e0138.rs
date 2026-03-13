@@ -436,7 +436,7 @@ fn collect_transform_metaclasses(stmts: &[Stmt]) -> HashMap<String, TransformDes
             let (is_dt, kw_only_default, frozen_default) =
                 parse_dataclass_transform_expr(&dec.expression);
             if is_dt {
-                out.insert(
+                let _ = out.insert(
                     cls.name.to_string(),
                     TransformDesc {
                         kw_only_default,
@@ -521,7 +521,7 @@ fn collect_transform_bases(
                 continue;
             };
             if meta_classes.contains_key(meta_name.id.as_str()) {
-                out.insert(cls.name.to_string(), meta_name.id.to_string());
+                let _ = out.insert(cls.name.to_string(), meta_name.id.to_string());
             }
         }
     }
@@ -742,7 +742,7 @@ fn build_instance_class_map(
         }
         for target in &assign.targets {
             if let Expr::Name(var_name) = target {
-                out.insert(var_name.id.to_string(), callee.to_string());
+                let _ = out.insert(var_name.id.to_string(), callee.to_string());
             }
         }
     }

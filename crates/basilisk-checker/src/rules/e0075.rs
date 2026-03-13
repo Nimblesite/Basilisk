@@ -62,7 +62,7 @@ impl Rule for SelfTypeAttributeIncompatible {
                     continue;
                 };
                 if annotation_mentions_self(ann_text.trim()) {
-                    self_typed_attrs
+                    let _ = self_typed_attrs
                         .entry(cls.name.as_str())
                         .or_default()
                         .insert(attr.name.as_str());
@@ -90,7 +90,7 @@ impl Rule for SelfTypeAttributeIncompatible {
             if let Some(parents) = class_parent_map.get(cls.name.as_str()) {
                 for parent_name in parents {
                     if let Some(attrs) = self_typed_attrs.get(parent_name.as_str()) {
-                        subclass_self_attrs
+                        let _ = subclass_self_attrs
                             .insert(cls.name.as_str(), (parent_name.as_str(), attrs));
                     }
                 }
@@ -159,7 +159,7 @@ fn build_class_parent_map(stmts: &[ruff_python_ast::Stmt]) -> HashMap<String, Ve
             }
         }
         if !parents.is_empty() {
-            map.insert(cls.name.to_string(), parents);
+            let _ = map.insert(cls.name.to_string(), parents);
         }
     }
     map

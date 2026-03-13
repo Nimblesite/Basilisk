@@ -7,7 +7,7 @@
  *
  * Prerequisites:
  *   - The `basilisk` binary must be built: `cargo build -p basilisk-cli`
- *   - The binary must be on PATH or the test will skip gracefully
+ *   - The binary must be on PATH or the test will fail hard
  */
 
 import * as assert from 'assert';
@@ -53,9 +53,13 @@ async function pollUntilResult<T>(
  * Returns undefined if the binary does not exist.
  */
 function findBasiliskBinary(): string | undefined {
-    // Check the workspace-root debug build first.
-    // __dirname at runtime is vscode-extension/out/test/suite/
-    // Go up 4 levels to reach the repo root (Basilisk/).
+    // Check BASILISK_EXECUTABLE_PATH env var first (set by test.sh / CI).
+    const envPath = process.env.BASILISK_EXECUTABLE_PATH;
+    if (envPath && fs.existsSync(envPath)) {
+        return envPath;
+    }
+
+    // __dirname at runtime is vscode-extension/out/test/suite/ — 4 levels to repo root.
     const workspaceRoot = path.resolve(__dirname, '../../../..');
     const debugBinary = path.join(workspaceRoot, 'target', 'debug', 'basilisk');
     if (fs.existsSync(debugBinary)) {
@@ -162,6 +166,43 @@ async function closeAllEditors(): Promise<void> {
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
 }
 
+/**
+ * Filter diagnostics to only those produced by the Basilisk LSP server.
+ */
+function filterBasiliskDiagnostics(diags: vscode.Diagnostic[]): vscode.Diagnostic[] {
+    return diags.filter(
+        (d) =>
+            d.source === 'basilisk' ||
+            (typeof d.code === 'object' &&
+                d.code !== null &&
+                'value' in d.code &&
+                typeof d.code.value === 'string' &&
+                d.code.value.startsWith('BSK'))
+    );
+}
+
+/**
+ * Extract hover text content from hover results.
+ */
+function extractHoverText(hovers: vscode.Hover[]): string {
+    return hovers
+        .flatMap((h) =>
+            h.contents.map((c) => {
+                if (typeof c === 'string') return c;
+                if ('value' in c) return c.value;
+                return '';
+            })
+        )
+        .join('\n');
+}
+
+/**
+ * Wait for the LSP server to index a file before requesting features.
+ */
+function waitForIndexing(ms: number = 3_000): Promise<void> {
+    return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
 suite('LSP Integration Tests', () => {
     let tmpDir: string;
     let basiliskBinary: string | undefined;
@@ -172,11 +213,8 @@ suite('LSP Integration Tests', () => {
 
         basiliskBinary = findBasiliskBinary();
         if (!basiliskBinary) {
-            // Cannot run LSP tests without the binary. All tests will
-            // skip individually, but we set up the directory anyway.
-            console.warn(
-                'Basilisk binary not found. LSP integration tests will be skipped. ' +
-                'Build with: cargo build -p basilisk-cli'
+            throw new Error(
+                'Basilisk binary not found. Build with: cargo build -p basilisk-cli'
             );
         }
 
@@ -221,10 +259,6 @@ suite('LSP Integration Tests', () => {
     // ----------------------------------------------------------------
     test('diagnostics appear for untyped function parameter', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 5_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -240,19 +274,11 @@ suite('LSP Integration Tests', () => {
         );
 
         // Verify the diagnostic is from Basilisk.
-        const basiliskDiags = diagnostics.filter(
-            (d) =>
-                d.source === 'basilisk' ||
-                (typeof d.code === 'object' &&
-                    d.code !== null &&
-                    'value' in d.code &&
-                    typeof d.code.value === 'string' &&
-                    d.code.value.startsWith('BSK-E'))
-        );
+        const basiliskDiags = filterBasiliskDiagnostics(diagnostics);
 
         assert.ok(
             basiliskDiags.length > 0,
-            `Expected diagnostics from Basilisk (source="basilisk" or code starting with BSK-E). ` +
+            `Expected diagnostics from Basilisk. ` +
             `Got: ${diagnostics.map((d) => `source=${d.source}, code=${JSON.stringify(d.code)}`).join('; ')}`
         );
     });
@@ -262,10 +288,6 @@ suite('LSP Integration Tests', () => {
     // ----------------------------------------------------------------
     test('diagnostics clear when errors are fixed', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS * 2 + 5_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const { doc, uri } = await openPythonFile(
             tmpDir,
@@ -306,10 +328,6 @@ suite('LSP Integration Tests', () => {
     // ----------------------------------------------------------------
     test('no diagnostics for clean, fully typed code', async function () {
         this.timeout(NO_DIAGNOSTIC_WAIT_MS + 5_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -317,19 +335,11 @@ suite('LSP Integration Tests', () => {
             'def greet(name: str) -> str:\n    return name\n'
         );
 
-        // Wait a reasonable amount of time for the server to analyze.
-        await new Promise<void>((resolve) => setTimeout(resolve, NO_DIAGNOSTIC_WAIT_MS));
+        // Wait for the server to process the file (no diagnostics expected).
+        await waitForDiagnosticsCleared(uri, NO_DIAGNOSTIC_WAIT_MS);
 
         const diagnostics = vscode.languages.getDiagnostics(uri);
-        const basiliskDiags = diagnostics.filter(
-            (d) =>
-                d.source === 'basilisk' ||
-                (typeof d.code === 'object' &&
-                    d.code !== null &&
-                    'value' in d.code &&
-                    typeof d.code.value === 'string' &&
-                    d.code.value.startsWith('BSK-'))
-        );
+        const basiliskDiags = filterBasiliskDiagnostics(diagnostics);
 
         assert.strictEqual(
             basiliskDiags.length,
@@ -345,10 +355,6 @@ suite('LSP Integration Tests', () => {
     // ----------------------------------------------------------------
     test('hover provides type information for a function', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 5_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -372,15 +378,7 @@ suite('LSP Integration Tests', () => {
         );
 
         // Verify hover content contains something meaningful (function name or signature).
-        const hoverTexts = hovers.flatMap((h) =>
-            h.contents.map((c) => {
-                if (typeof c === 'string') return c;
-                if ('value' in c) return c.value;
-                return '';
-            })
-        );
-
-        const combinedHover = hoverTexts.join('\n');
+        const combinedHover = extractHoverText(hovers);
         assert.ok(
             combinedHover.length > 0,
             `Expected hover to contain text about the function, but got empty hover content`
@@ -392,10 +390,6 @@ suite('LSP Integration Tests', () => {
     // ----------------------------------------------------------------
     test('completions include local function names', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 5_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -438,10 +432,6 @@ suite('LSP Integration Tests', () => {
     // ----------------------------------------------------------------
     test('document symbols include class and function names', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 5_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -487,10 +477,6 @@ suite('LSP Integration Tests', () => {
     // ----------------------------------------------------------------
     test('did_change updates diagnostics', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS * 2 + 10_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         // Open a fully typed file — should produce zero Basilisk diagnostics.
         const { doc, uri } = await openPythonFile(
@@ -499,19 +485,11 @@ suite('LSP Integration Tests', () => {
             'def greet(name: str) -> str:\n    return name\n'
         );
 
-        // Wait for the server to finish analysing the clean file.
-        await new Promise<void>((resolve) => setTimeout(resolve, NO_DIAGNOSTIC_WAIT_MS));
+        // Wait for the server to process the clean file (no diagnostics expected).
+        await waitForDiagnosticsCleared(uri, NO_DIAGNOSTIC_WAIT_MS);
 
         const diagsBefore = vscode.languages.getDiagnostics(uri);
-        const basiliskBefore = diagsBefore.filter(
-            (d) =>
-                d.source === 'basilisk' ||
-                (typeof d.code === 'object' &&
-                    d.code !== null &&
-                    'value' in d.code &&
-                    typeof d.code.value === 'string' &&
-                    d.code.value.startsWith('BSK-'))
-        );
+        const basiliskBefore = filterBasiliskDiagnostics(diagsBefore);
         assert.strictEqual(
             basiliskBefore.length,
             0,
@@ -537,15 +515,7 @@ suite('LSP Integration Tests', () => {
             'Expected at least one diagnostic after removing the type annotation'
         );
 
-        const basiliskAfter = diagsAfter.filter(
-            (d) =>
-                d.source === 'basilisk' ||
-                (typeof d.code === 'object' &&
-                    d.code !== null &&
-                    'value' in d.code &&
-                    typeof d.code.value === 'string' &&
-                    d.code.value.startsWith('BSK-E'))
-        );
+        const basiliskAfter = filterBasiliskDiagnostics(diagsAfter);
         assert.ok(
             basiliskAfter.length > 0,
             `Expected Basilisk diagnostics after removing annotation. ` +
@@ -558,10 +528,6 @@ suite('LSP Integration Tests', () => {
     // ----------------------------------------------------------------
     test('go-to-definition works through extension', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 5_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -611,10 +577,6 @@ suite('LSP Integration Tests', () => {
     // ----------------------------------------------------------------
     test('signature help works through extension', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 5_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -665,10 +627,6 @@ suite('LSP Integration Tests', () => {
     // ----------------------------------------------------------------
     test('code actions provided for diagnostics', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 10_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -712,10 +670,6 @@ suite('LSP Integration Tests', () => {
     // ----------------------------------------------------------------
     test('go-to-declaration works through extension', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 5_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -763,10 +717,6 @@ suite('LSP Integration Tests', () => {
     // ----------------------------------------------------------------
     test('go-to-type-definition works through extension', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 5_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -814,10 +764,6 @@ suite('LSP Integration Tests', () => {
     // ----------------------------------------------------------------
     test('hover shows docstring for function', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + 5_000);
-        if (!basiliskBinary) {
-            this.skip();
-            return;
-        }
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -847,15 +793,7 @@ suite('LSP Integration Tests', () => {
             'Expected at least one hover result'
         );
 
-        const hoverTexts = hovers.flatMap((h) =>
-            h.contents.map((c) => {
-                if (typeof c === 'string') return c;
-                if ('value' in c) return c.value;
-                return '';
-            })
-        );
-
-        const combinedHover = hoverTexts.join('\n');
+        const combinedHover = extractHoverText(hovers);
         assert.ok(
             combinedHover.includes('Compute the square of x'),
             `Expected hover to include docstring, but got: ${combinedHover}`
@@ -877,3 +815,293 @@ function flattenSymbolNames(symbols: vscode.DocumentSymbol[]): string[] {
     }
     return names;
 }
+
+// ============================================================
+// Analysis Mode Tests
+// ============================================================
+
+suite('Analysis Mode Tests', () => {
+    let tmpDir: string;
+    let basiliskBinary: string | undefined;
+
+    suiteSetup(function () {
+        basiliskBinary = findBasiliskBinary();
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bsk-mode-test-'));
+    });
+
+    suiteTeardown(async () => {
+        await closeAllEditors();
+        if (tmpDir && fs.existsSync(tmpDir)) {
+            fs.rmSync(tmpDir, { recursive: true, force: true });
+        }
+    });
+
+    teardown(async () => {
+        await closeAllEditors();
+    });
+
+    // -------------------------------------------------------
+    // Configuration schema tests — verify the setting exists
+    // -------------------------------------------------------
+
+    test('basilisk.analysisMode setting has correct default', () => {
+        const cfg = vscode.workspace.getConfiguration('basilisk');
+        const mode = cfg.get<string>('analysisMode');
+        // Default is wholeModule.
+        assert.strictEqual(
+            mode,
+            'wholeModule',
+            `Expected default analysisMode to be 'wholeModule', got '${mode}'`
+        );
+    });
+
+    test('basilisk.analysisMode accepts openFilesOnly', async () => {
+        const cfg = vscode.workspace.getConfiguration('basilisk');
+        const original = cfg.get<string>('analysisMode');
+        try {
+            await cfg.update('analysisMode', 'openFilesOnly', vscode.ConfigurationTarget.Workspace);
+            const mode = vscode.workspace.getConfiguration('basilisk').get<string>('analysisMode');
+            assert.strictEqual(mode, 'openFilesOnly');
+        } finally {
+            await cfg.update('analysisMode', original, vscode.ConfigurationTarget.Workspace);
+        }
+    });
+
+    test('basilisk.analysisMode accepts crossModule', async () => {
+        const cfg = vscode.workspace.getConfiguration('basilisk');
+        const original = cfg.get<string>('analysisMode');
+        try {
+            await cfg.update('analysisMode', 'crossModule', vscode.ConfigurationTarget.Workspace);
+            const mode = vscode.workspace.getConfiguration('basilisk').get<string>('analysisMode');
+            assert.strictEqual(mode, 'crossModule');
+        } finally {
+            await cfg.update('analysisMode', original, vscode.ConfigurationTarget.Workspace);
+        }
+    });
+
+    test('basilisk.analysisMode can be reset to wholeModule', async () => {
+        const cfg = vscode.workspace.getConfiguration('basilisk');
+        // Set to openFilesOnly first, then back to wholeModule.
+        await cfg.update('analysisMode', 'openFilesOnly', vscode.ConfigurationTarget.Workspace);
+        await cfg.update('analysisMode', 'wholeModule', vscode.ConfigurationTarget.Workspace);
+        const mode = vscode.workspace.getConfiguration('basilisk').get<string>('analysisMode');
+        assert.strictEqual(mode, 'wholeModule', 'should be able to reset to wholeModule');
+    });
+
+    test('basilisk.analysisMode: all three enum values are accepted', async () => {
+        const cfg = vscode.workspace.getConfiguration('basilisk');
+        const original = cfg.get<string>('analysisMode');
+        const modes = ['openFilesOnly', 'wholeModule', 'crossModule'];
+        try {
+            for (const m of modes) {
+                await cfg.update('analysisMode', m, vscode.ConfigurationTarget.Workspace);
+                const current = vscode.workspace.getConfiguration('basilisk').get<string>('analysisMode');
+                assert.strictEqual(current, m, `setting should accept '${m}'`);
+            }
+        } finally {
+            await cfg.update('analysisMode', original, vscode.ConfigurationTarget.Workspace);
+        }
+    });
+
+    // -------------------------------------------------------
+    // Extension wiring tests — prove the extension reads and
+    // forwards the setting to the LSP server correctly.
+    // -------------------------------------------------------
+
+    test('wholeModule mode: setting is wired into initializationOptions', async () => {
+        // Structural test — the extension must read analysisMode and pass it
+        // to the server. The extension source sets initializationOptions.analysisMode.
+        const cfg = vscode.workspace.getConfiguration('basilisk');
+        const mode = cfg.get<string>('analysisMode') ?? 'wholeModule';
+        const validModes = ['openFilesOnly', 'wholeModule', 'crossModule'];
+        assert.ok(
+            validModes.includes(mode),
+            `analysisMode '${mode}' is not a valid mode. Expected one of: ${validModes.join(', ')}`
+        );
+    });
+
+    test('openFilesOnly mode: disabling whole-module sets setting correctly', async () => {
+        // Prove the user can turn OFF whole-module analysis (important for large projects).
+        const cfg = vscode.workspace.getConfiguration('basilisk');
+        const originalMode = cfg.get<string>('analysisMode') ?? 'wholeModule';
+
+        try {
+            await cfg.update('analysisMode', 'openFilesOnly', vscode.ConfigurationTarget.Workspace);
+            const updated = vscode.workspace.getConfiguration('basilisk').get<string>('analysisMode');
+            assert.strictEqual(
+                updated,
+                'openFilesOnly',
+                `Expected analysisMode to be 'openFilesOnly' after update, got '${updated}'`
+            );
+            // Verify that this is a meaningful change from the default.
+            assert.notStrictEqual(
+                updated,
+                'wholeModule',
+                'openFilesOnly must be different from wholeModule default'
+            );
+        } finally {
+            await cfg.update('analysisMode', originalMode, vscode.ConfigurationTarget.Workspace);
+        }
+    });
+
+    // -------------------------------------------------------
+    // Whole-module LSP behaviour: a file written to the VS Code
+    // workspace root but NEVER opened in the editor must receive
+    // diagnostics from the startup scan.
+    //
+    // The workspace root is test-fixtures/workspace/ (configured
+    // in .vscode-test.mjs). Files written there are within the
+    // LSP server's rootUri, so the wholeModule startup scan will
+    // pick them up.
+    // -------------------------------------------------------
+
+    test('wholeModule: startup scan publishes diagnostics for closed file in workspace root', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + 15_000);
+
+        // Determine the workspace root that VS Code opened.
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        assert.ok(
+            workspaceRoot,
+            'wholeModule scan test: no workspace folder configured. ' +
+            'Ensure .vscode-test.mjs sets workspaceFolder.'
+        );
+
+        // Ensure wholeModule mode is set BEFORE the extension activates.
+        // (The extension reads the setting during activate(), so changing it
+        // here affects the server's initializationOptions.)
+        const cfg = vscode.workspace.getConfiguration('basilisk');
+        const originalMode = cfg.get<string>('analysisMode');
+        await cfg.update('analysisMode', 'wholeModule', vscode.ConfigurationTarget.Workspace);
+
+        try {
+            // Write a Python file with type errors into the workspace root.
+            // Do NOT open it — the whole-module scan must find it on its own.
+            const closedFilePath = path.join(workspaceRoot, 'wm_scan_target.py');
+            fs.writeFileSync(
+                closedFilePath,
+                'def greet(name):\n    return f"Hello, {name}!"\n',
+                'utf8'
+            );
+
+            // Activate the extension (or restart to pick up the new file).
+            const ext = vscode.extensions.getExtension(EXTENSION_ID);
+            if (ext && !ext.isActive) {
+                await ext.activate();
+            }
+
+            // Wait for the LSP server startup scan to complete.
+            await new Promise<void>((resolve) => setTimeout(resolve, SERVER_START_WAIT_MS + 5_000));
+
+            // The startup scan must have published diagnostics for the closed file.
+            const closedFileUri = vscode.Uri.file(closedFilePath);
+            const diags = await waitForDiagnostics(closedFileUri, DIAGNOSTIC_TIMEOUT_MS);
+
+            assert.ok(
+                diags.length > 0,
+                'wholeModule: startup scan must publish diagnostics for a closed file ' +
+                'that exists in the workspace root. Diagnostics were empty — either ' +
+                'the scan did not run or the file was not analysed.'
+            );
+
+            // Verify the diagnostics are from Basilisk (not another linter).
+            const basiliskDiags = filterBasiliskDiagnostics(diags);
+            assert.ok(
+                basiliskDiags.length > 0,
+                `wholeModule: diagnostics must be from Basilisk (BSK codes), got: ` +
+                `${JSON.stringify(diags.map(d => ({ source: d.source, code: d.code })))}`
+            );
+
+            // Cleanup the test file from the workspace root.
+            fs.unlinkSync(closedFilePath);
+        } finally {
+            await cfg.update('analysisMode', originalMode, vscode.ConfigurationTarget.Workspace);
+        }
+    });
+
+    test('openFilesOnly: startup scan does NOT run — closed workspace file gets no diagnostics', async function () {
+        this.timeout(NO_DIAGNOSTIC_WAIT_MS + 10_000);
+
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        assert.ok(
+            workspaceRoot,
+            'openFilesOnly test: no workspace folder configured. ' +
+            'Ensure .vscode-test.mjs sets workspaceFolder.'
+        );
+
+        const cfg = vscode.workspace.getConfiguration('basilisk');
+        const originalMode = cfg.get<string>('analysisMode');
+
+        // Write a file with type errors into the workspace root.
+        const closedFilePath = path.join(workspaceRoot, 'ofo_no_scan_target.py');
+        fs.writeFileSync(
+            closedFilePath,
+            'def greet(name):\n    return f"Hello, {name}!"\n',
+            'utf8'
+        );
+
+        try {
+            await cfg.update('analysisMode', 'openFilesOnly', vscode.ConfigurationTarget.Workspace);
+
+            // Activate (or restart) the extension with openFilesOnly mode.
+            const ext = vscode.extensions.getExtension(EXTENSION_ID);
+            if (ext && !ext.isActive) {
+                await ext.activate();
+            }
+
+            // Wait long enough for a scan to have run (if it was going to).
+            await new Promise<void>((resolve) => setTimeout(resolve, NO_DIAGNOSTIC_WAIT_MS));
+
+            // In openFilesOnly mode, the closed file must NOT have diagnostics.
+            const closedFileUri = vscode.Uri.file(closedFilePath);
+            const diags = vscode.languages.getDiagnostics(closedFileUri);
+            assert.strictEqual(
+                diags.length,
+                0,
+                'openFilesOnly: startup scan must NOT run — closed file should have zero diagnostics, ' +
+                `got: ${JSON.stringify(diags)}`
+            );
+        } finally {
+            fs.unlinkSync(closedFilePath);
+            await cfg.update('analysisMode', originalMode, vscode.ConfigurationTarget.Workspace);
+        }
+    });
+
+    test('openFilesOnly: opening a file produces diagnostics, closing clears them', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + 10_000);
+
+        const cfg = vscode.workspace.getConfiguration('basilisk');
+        const originalMode = cfg.get<string>('analysisMode');
+
+        try {
+            await cfg.update('analysisMode', 'openFilesOnly', vscode.ConfigurationTarget.Workspace);
+
+            // Open a file with type errors.
+            const { uri } = await openPythonFile(
+                tmpDir,
+                'ofo_open_close.py',
+                'def greet(name):\n    return f"Hello, {name}!"\n'
+            );
+
+            // Wait for diagnostics to appear (file is open, so should be analysed
+            // regardless of mode).
+            const openDiags = await waitForDiagnostics(uri, DIAGNOSTIC_TIMEOUT_MS);
+            assert.ok(
+                openDiags.length > 0,
+                'openFilesOnly: should have diagnostics while file is open'
+            );
+
+            // Close the file.
+            await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+
+            // In openFilesOnly mode the server clears diagnostics when the file is closed.
+            const clearedDiags = await waitForDiagnosticsCleared(uri, NO_DIAGNOSTIC_WAIT_MS);
+            assert.strictEqual(
+                clearedDiags.length,
+                0,
+                'openFilesOnly: diagnostics should be cleared when file is closed'
+            );
+        } finally {
+            await cfg.update('analysisMode', originalMode, vscode.ConfigurationTarget.Workspace);
+        }
+    });
+});

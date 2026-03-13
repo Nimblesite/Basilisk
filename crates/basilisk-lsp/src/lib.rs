@@ -37,6 +37,7 @@ pub mod folding;
 pub mod formatting;
 pub mod highlight;
 pub mod hover;
+pub mod import_resolver;
 pub mod inlay_hints;
 pub mod references;
 pub mod selection;
@@ -49,6 +50,7 @@ pub mod type_definition;
 pub mod type_hierarchy;
 pub mod util;
 pub mod websocket;
+pub mod workspace;
 
 /// Run the Basilisk checker on a Python source string.
 ///

@@ -110,7 +110,7 @@ fn collect_class_members(
             .map(|span| span_text(&module.source, *span).to_owned())
             .unwrap_or_default();
 
-        members.insert(
+        let _ = members.insert(
             func.name.clone(),
             MemberKind::Method {
                 param_annotations,
@@ -124,7 +124,7 @@ fn collect_class_members(
             continue;
         }
         for attr in &class.attributes {
-            members
+            let _ = members
                 .entry(attr.name.clone())
                 .or_insert(MemberKind::Attribute);
         }
@@ -399,7 +399,7 @@ fn check_expr_for_violations(
             // Check each protocol in the second argument.
             match second {
                 Expr::Name(name) => {
-                    check_single_protocol(
+                    let _ = check_single_protocol(
                         name.id.as_str(),
                         call_name,
                         second_span,

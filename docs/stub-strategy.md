@@ -174,7 +174,7 @@ Most specific wins: line > block > file > per-path > per-module > global rule > 
 - File directives: `# basilisk: relaxed`, `# basilisk: file-disabled[CODE]`, `# basilisk: file-warning[CODE]`
 - LSP code actions for every diagnostic: ignore, demote to warning, disable for file
 - Suppression precedence: line > block > file
-- SPEC.md updated with sections 4.1.3-4.1.6 covering the full system
+- specs/SPEC.md updated with sections 4.1.3-4.1.6 covering the full system
 
 **What's missing from Layer 1:**
 - pyproject.toml config loading (per-module overrides, per-path overrides, global rule severity)

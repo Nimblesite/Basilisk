@@ -47,7 +47,8 @@ fn inject_missing_capabilities(body: &str) -> String {
         return body.to_owned();
     };
 
-    caps.entry("typeHierarchyProvider")
+    let _ = caps
+        .entry("typeHierarchyProvider")
         .or_insert(serde_json::Value::Bool(true));
 
     // Serialization of a valid `Value` never fails.
@@ -118,7 +119,7 @@ async fn read_lsp_body(reader: &mut BufReader<DuplexStream>) -> Option<String> {
     }
     let length = content_length?;
     let mut body = vec![0u8; length];
-    reader.read_exact(&mut body).await.ok()?;
+    let _ = reader.read_exact(&mut body).await.ok()?;
     String::from_utf8(body).ok()
 }
 
@@ -216,9 +217,9 @@ pub async fn run_server_ws(port: u16) -> io::Result<()> {
             .await
             .map_err(|err| ws_err(format!("ws handshake failed: {err}")))?;
 
-        tokio::spawn(async move {
+        drop(tokio::spawn(async move {
             handle_connection(ws_stream).await;
-        });
+        }));
     }
 }
 

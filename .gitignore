@@ -1,5 +1,7 @@
 # Build
 target/
+basilisk-zed/extension.wasm
+basilisk-zed/dist/
 
 # Coverage & mutation testing
 lcov.info
@@ -34,3 +36,9 @@ logs/
 
 # OS
 .DS_Store
+
+basilisk-zed/dist/
+
+*.wasm
+
+vscode-extension/coverage/

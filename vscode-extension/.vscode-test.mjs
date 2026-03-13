@@ -1,9 +1,24 @@
 import { defineConfig } from '@vscode/test-cli';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
-    files: 'out/test/suite/**/*.test.js',
-    launchArgs: ['--disable-extensions'],
-    mocha: {
-        timeout: 60000,
+    tests: [{
+        files: 'out/test/suite/**/*.test.js',
+        // Open the test-fixtures/workspace so the LSP server gets a rootUri.
+        // This enables whole-module analysis tests that write Python files to the
+        // workspace root without opening them in the editor.
+        workspaceFolder: path.join(__dirname, 'test-fixtures', 'workspace'),
+        launchArgs: ['--disable-extensions'],
+        mocha: {
+            timeout: 60000,
+        },
+    }],
+    coverage: {
+        includeAll: true,
+        exclude: ['**/test/**', '**/node_modules/**'],
+        reporter: ['text', 'lcov'],
     },
 });

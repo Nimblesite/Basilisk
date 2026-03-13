@@ -8,25 +8,23 @@ struct BasiliskExtension {
 }
 
 impl BasiliskExtension {
-    /// Resolve the basilisk binary.
+    /// Resolve the basilisk binary to an absolute path.
     ///
-    /// In the WASM sandbox, `std::fs::metadata` cannot access the host
-    /// filesystem, so we cannot probe well-known paths. Instead:
-    /// 1. Check user-configured path from Zed LSP settings
-    /// 2. Check the `BASILISK_PATH` environment variable
-    /// 3. Return bare `"basilisk"` and let Zed resolve it from PATH
-    fn resolve_binary(
-        &mut self,
-        worktree: &zed::Worktree,
-    ) -> Result<String> {
-        // Return cached path if we already resolved it.
+    /// Zed does NOT resolve bare command names from PATH — it treats them
+    /// as relative to the extension work directory. We must return an
+    /// absolute path.
+    ///
+    /// Resolution order:
+    /// 1. User-configured path from Zed LSP settings
+    /// 2. `BASILISK_PATH` environment variable
+    /// 3. Search `PATH` directories from the worktree shell environment
+    fn resolve_binary(&mut self, worktree: &zed::Worktree) -> Result<String> {
         if let Some(ref path) = self.cached_binary_path {
             return Ok(path.clone());
         }
 
         // 1. Check user-configured binary path from Zed LSP settings.
-        if let Ok(settings) = zed::settings::LspSettings::for_worktree("basilisk", worktree)
-        {
+        if let Ok(settings) = zed::settings::LspSettings::for_worktree("basilisk", worktree) {
             if let Some(binary) = settings.binary.as_ref() {
                 if let Some(ref path) = binary.path {
                     self.cached_binary_path = Some(path.clone());
@@ -36,24 +34,37 @@ impl BasiliskExtension {
         }
 
         // 2. Check BASILISK_PATH environment variable.
-        if let Some(path) = Self::env_configured_path(worktree) {
+        if let Some(path) = Self::env_var(worktree, "BASILISK_PATH") {
             self.cached_binary_path = Some(path.clone());
             return Ok(path);
         }
 
-        // 3. Try bare "basilisk" — Zed will resolve it from the shell PATH.
-        //    This works when `cargo install --path crates/basilisk-cli` has been run.
-        self.cached_binary_path = Some("basilisk".to_string());
-        Ok("basilisk".to_string())
+        // 3. Default: ~/.cargo/bin/basilisk (where cargo install puts it).
+        if let Some(path) = Self::find_binary(worktree) {
+            self.cached_binary_path = Some(path.clone());
+            return Ok(path);
+        }
+
+        Err(
+            "basilisk binary not found. Install with: cargo install --path crates/basilisk-cli"
+                .into(),
+        )
     }
 
-    /// Read binary path from BASILISK_PATH environment variable.
-    fn env_configured_path(worktree: &zed::Worktree) -> Option<String> {
+    /// Read a single environment variable from the worktree shell env.
+    fn env_var(worktree: &zed::Worktree, name: &str) -> Option<String> {
         worktree
             .shell_env()
             .into_iter()
-            .find(|(key, _)| key == "BASILISK_PATH")
+            .find(|(key, _)| key == name)
             .map(|(_, value)| value)
+    }
+
+    /// Find the basilisk binary. Since WASM can't stat files, we go straight
+    /// to the most likely location: ~/.cargo/bin/basilisk (where cargo install puts it).
+    fn find_binary(worktree: &zed::Worktree) -> Option<String> {
+        let home = Self::env_var(worktree, "HOME")?;
+        Some(format!("{home}/.cargo/bin/basilisk"))
     }
 
     /// Build a `SlashCommandOutput` with a single labeled section.

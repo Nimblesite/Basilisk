@@ -1,6 +1,84 @@
-# Basilisk LSP & VSIX — Feature Specification
+# Basilisk LSP — Feature Specification
 
 > **Goal**: Compete with Pylance. Every feature that makes a Python IDE useful.
+
+This is the **single source of truth** for all LSP features, DAP integration, custom commands, configuration settings, and binary resolution. Editor-specific specs (VS Code, Zed, Neovim) MUST reference this document rather than duplicating LSP details.
+
+- **VS Code**: `BASILISK-VSCODE-EXTENSION-SPEC.md`
+- **Zed**: `BASILISK-ZED-EXTENSION-SPEC.md`
+- **Neovim**: `BASILISK-NEOVIM-EXTENSION-SPEC.md`
+
+---
+
+## Binary Invocation
+
+```bash
+basilisk lsp [--transport stdio|ws] [--port 8765]
+```
+
+- Default transport: `stdio` (JSON-RPC over stdin/stdout)
+- WebSocket transport: `--transport ws --port 8765`
+- Logging: `BASILISK_LOG=debug basilisk lsp` (default level: `warn`, written to stderr)
+
+## Binary Resolution Order (all editors)
+
+Every editor extension MUST resolve the `basilisk` binary using this cascade:
+
+1. User-configured path (editor setting)
+2. `BASILISK_PATH` environment variable
+3. `~/.cargo/bin/basilisk`
+4. `/usr/local/bin/basilisk`
+5. `/opt/homebrew/bin/basilisk`
+6. Fall back to OS PATH search
+
+## Shared Configuration Settings (all editors)
+
+These settings are sent to the LSP server via `workspace/configuration` under the `basilisk` key. Every editor MUST support them:
+
+| Setting Key | Type | Default | Description |
+|------------|------|---------|-------------|
+| `basilisk.python` | `string` | `""` (auto-detect) | Path to Python interpreter |
+| `basilisk.executablePath` | `string` | `""` (auto-detect) | Path to basilisk binary |
+| `basilisk.enabled` | `boolean` | `true` | Enable/disable type checker |
+| `basilisk.analysisMode` | `enum` | `"wholeModule"` | `openFilesOnly` / `wholeModule` / `crossModule` |
+| `basilisk.inlayHints.parameterNames` | `boolean` | `true` | Show parameter name hints at call sites |
+| `basilisk.inlayHints.variableTypes` | `boolean` | `true` | Show inferred type hints for unannotated variables |
+| `basilisk.ruff.enabled` | `boolean` | `true` | Enable Ruff integration (formatting + import org) |
+| `basilisk.ruff.executablePath` | `string` | `"ruff"` | Path to the ruff binary |
+| `basilisk.debugger.enabled` | `boolean` | `true` | Enable debugger |
+| `basilisk.debugger.typeChecking` | `boolean` | `false` | Enable type assertion breakpoints |
+| `basilisk.debugger.debugpyPath` | `string` | `"debugpy"` | Path to debugpy module |
+| `basilisk.testExplorer.enabled` | `boolean` | `true` | Enable test discovery and execution |
+| `basilisk.testExplorer.framework` | `enum` | `"auto"` | `pytest` / `unittest` / `auto` |
+| `basilisk.testExplorer.pytestPath` | `string` | `"pytest"` | Path to pytest executable |
+| `basilisk.testExplorer.args` | `string[]` | `[]` | Additional test runner arguments |
+| `basilisk.testExplorer.autoDiscoverOnSave` | `boolean` | `true` | Re-discover tests on file save |
+
+## Custom LSP Commands (`workspace/executeCommand`)
+
+| Command | Arguments | Response | Description |
+|---------|-----------|----------|-------------|
+| `basilisk.organizeImports` | `{uri}` | `TextEdit[]` | Run Ruff import organization |
+| `basilisk/startDebugSession` | `{uri, pythonPath?}` | `{host, port, sessionId}` | Spawn debugpy, return connection info |
+| `basilisk/stopDebugSession` | `{sessionId}` | `{}` | Terminate debug session |
+| `basilisk/profiler/start` | `{pid?}` | `{sessionId}` | Start profiling (active process or PID) |
+| `basilisk/profiler/stop` | `{sessionId}` | `{results}` | Stop profiling, return results |
+| `basilisk/profiler/snapshot` | `{sessionId}` | `{results}` | Snapshot without stopping |
+| `basilisk/memory/start` | `{}` | `{sessionId}` | Start memory leak tracking |
+| `basilisk/memory/stop` | `{sessionId}` | `{leakReport}` | Stop tracking, return leak report |
+| `basilisk/memory/refs` | `{typeName}` | `{retentionPaths}` | Query retention paths for a type |
+
+## DapTcpProxy (all editors)
+
+All editors MUST implement a TCP proxy between the DAP client and debugpy to fix known stepping quirks:
+
+1. Listen on a random local port
+2. Connect to debugpy on the `{host, port}` returned by `basilisk/startDebugSession`
+3. Frame DAP messages with `Content-Length` headers
+4. **Intercept `stepOut`** — inject auto-`next` for structural lines (`try:`, `with:`, `if:`)
+5. **Attach mode timeout** — 3s timeout with synthetic success response
+6. **Inject `exited` event** before `terminated` if missing
+7. **Fast disconnect** — respond immediately post-termination
 
 ---
 
@@ -254,250 +332,13 @@ Show "N references" above each function and class definition.
 
 ---
 
-## VS Code Extension
+## Editor-Specific Specs
 
-### Commands
+For editor-specific implementation details (commands, UI, configuration schema, DAP proxy implementation), see:
 
-```json
-"commands": [
-    { "command": "basilisk.restartServer", "title": "Basilisk: Restart Language Server" },
-    { "command": "basilisk.showOutput", "title": "Basilisk: Show Output" },
-    { "command": "basilisk.organizeImports", "title": "Basilisk: Organize Imports" }
-]
-```
-
-### Configuration Settings
-
-```json
-{
-    "basilisk.inlayHints.parameterNames": {
-        "type": "boolean", "default": true,
-        "description": "Show parameter name hints at call sites."
-    },
-    "basilisk.inlayHints.variableTypes": {
-        "type": "boolean", "default": true,
-        "description": "Show inferred type hints for unannotated variables."
-    },
-    "basilisk.ruff.enabled": {
-        "type": "boolean", "default": true,
-        "description": "Enable Ruff integration for formatting and import organization."
-    },
-    "basilisk.ruff.executablePath": {
-        "type": "string", "default": "ruff",
-        "description": "Path to the ruff binary."
-    }
-}
-```
-
-### Status Bar
-
-Persistent item showing server state and diagnostic count:
-- `$(check) Basilisk` — green, server running, no errors
-- `$(warning) Basilisk (3)` — errors in current file
-- `$(error) Basilisk` — server failed/not running
-- `$(sync~spin) Basilisk` — analyzing
-
-### Error Recovery
-
-- `errorHandler` on `LanguageClient` for auto-restart (max 3 attempts)
-- User-visible error message when server fails to start
-- `basilisk.restartServer` command for manual recovery
-
-### Test Explorer Integration
-
-Discover and run Python tests (pytest, unittest) directly from VS Code's Test Explorer, powered by the Basilisk LSP.
-
-**Architecture**:
-- Implement `TestController` via VS Code's `vscode.tests` API
-- Parse Python test files to discover test functions, classes, and methods
-- Use the resolver to find `def test_*` functions, classes inheriting `unittest.TestCase`, and `@pytest.mark` decorated items
-- Execute tests via `pytest` subprocess (similar to how formatting delegates to `ruff`)
-- Stream results back to Test Explorer as pass/fail/skip/error
-
-**Test Discovery**:
-- Scan workspace for `test_*.py` and `*_test.py` files
-- Parse with `basilisk-parser` to extract test items without importing
-- Detect pytest fixtures, parametrize markers, and unittest setUp/tearDown
-- Auto-refresh on file save
-
-**Test Item Hierarchy**:
-```
-▼ tests/
-    ▼ test_api.py
-        ✅ test_login
-        ❌ test_signup — AssertionError: expected 200, got 401
-        ▼ TestUserEndpoints
-            ✅ test_get_user
-            ✅ test_delete_user
-            ❌ test_update_user
-    ▼ test_models.py
-        ✅ test_create_widget
-        ⏭ test_slow_query (skipped)
-```
-
-**Features**:
-- **Auto-discovery**: finds pytest and unittest tests from AST (no import needed)
-- **Run/debug individual tests**: click play on any test function or class
-- **Run all**: run entire test suite from Test Explorer root
-- **Inline failure messages**: show assertion errors and tracebacks inline
-- **Go to test**: click any test item to navigate to its source
-- **Re-run failed**: quick action to re-run only failed tests
-- **pytest integration**: honours `pytest.ini`, `pyproject.toml [tool.pytest]`, conftest fixtures
-- **Type-checked tests**: Basilisk diagnostics run on test files too — catch type errors in tests before running them
-- **Coverage overlay**: integrate with `pytest-cov` to show coverage gutters
-
-**Commands**:
-```json
-{
-    "command": "basilisk.runTests",
-    "title": "Basilisk: Run Tests"
-},
-{
-    "command": "basilisk.runTestFile",
-    "title": "Basilisk: Run Tests in Current File"
-},
-{
-    "command": "basilisk.debugTest",
-    "title": "Basilisk: Debug Test"
-}
-```
-
-**Configuration**:
-```json
-{
-    "basilisk.testExplorer.enabled": {
-        "type": "boolean", "default": true,
-        "description": "Enable Python test discovery and execution in Test Explorer."
-    },
-    "basilisk.testExplorer.framework": {
-        "type": "string",
-        "enum": ["pytest", "unittest", "auto"],
-        "default": "auto",
-        "description": "Test framework to use. 'auto' detects from project config."
-    },
-    "basilisk.testExplorer.pytestPath": {
-        "type": "string", "default": "pytest",
-        "description": "Path to the pytest executable."
-    },
-    "basilisk.testExplorer.args": {
-        "type": "array",
-        "items": { "type": "string" },
-        "default": [],
-        "description": "Additional arguments passed to the test runner."
-    },
-    "basilisk.testExplorer.autoDiscoverOnSave": {
-        "type": "boolean", "default": true,
-        "description": "Re-discover tests when test files are saved."
-    }
-}
-```
-
-### Python Debugger Integration
-
-A full Debug Adapter Protocol (DAP) implementation for Python debugging, shipped as a separate package (`basilisk-dap`) but integrated into the Basilisk VS Code extension.
-
-**Architecture**:
-- Separate Rust crate: `crates/basilisk-dap/` — implements the [Debug Adapter Protocol](https://microsoft.github.io/debug-adapter-protocol/)
-- Communicates with `debugpy` (the standard Python debug adapter) as a backend
-- Basilisk adds type-aware debugging features on top of standard `debugpy` capabilities
-- Ships as part of the VSIX — no separate install needed
-
-**Why a separate package**:
-- DAP is a distinct protocol from LSP — different lifecycle, different transport
-- Keeps `basilisk-lsp` focused on static analysis; `basilisk-dap` handles runtime
-- Can be used standalone (CLI debugging, other editors) without the LSP
-
-**Features**:
-
-| Feature | Description |
-|---------|-------------|
-| Launch & Attach | Launch Python scripts or attach to running processes |
-| Breakpoints | Line, conditional, logpoint, function, exception breakpoints |
-| Step execution | Step in, step over, step out, continue, pause |
-| Variable inspection | View locals, globals, closures with full type info from Basilisk |
-| Watch expressions | Evaluate expressions in the current scope |
-| Call stack | Full call stack with source navigation |
-| Type-aware hover | Hover shows both runtime value AND static type (from LSP) |
-| Conditional breakpoints | Break when a typed expression evaluates to true |
-| Type assertions | Break when a runtime type doesn't match the static annotation |
-| Ownership tracking | (Future) Visualize `Borrowed`/`Owned`/`InOut` state at runtime |
-
-**Type-aware debugging** (unique to Basilisk):
-- **Type mismatch breakpoints**: automatically break when a variable's runtime type doesn't match its annotation
-- **Annotation overlay**: debug hover shows `(static: str, runtime: str)` side-by-side
-- **Type narrowing visualization**: show which branch of a union type is active at a breakpoint
-- **Parameter contract verification**: warn when a function receives a value that violates its annotation at runtime
-
-**Launch configurations**:
-```json
-{
-    "type": "basilisk",
-    "request": "launch",
-    "name": "Basilisk: Run Current File",
-    "program": "${file}",
-    "python": "${command:python.interpreterPath}",
-    "args": [],
-    "env": {},
-    "console": "integratedTerminal",
-    "typeChecking": true
-}
-```
-
-```json
-{
-    "type": "basilisk",
-    "request": "attach",
-    "name": "Basilisk: Attach to Process",
-    "connect": { "host": "localhost", "port": 5678 },
-    "typeChecking": true
-}
-```
-
-**Commands**:
-```json
-{
-    "command": "basilisk.debugFile",
-    "title": "Basilisk: Debug Current File"
-},
-{
-    "command": "basilisk.debugTest",
-    "title": "Basilisk: Debug Test at Cursor"
-},
-{
-    "command": "basilisk.toggleTypeBreakpoints",
-    "title": "Basilisk: Toggle Type Mismatch Breakpoints"
-}
-```
-
-**Configuration**:
-```json
-{
-    "basilisk.debugger.enabled": {
-        "type": "boolean", "default": true,
-        "description": "Enable Basilisk Python debugger."
-    },
-    "basilisk.debugger.typeChecking": {
-        "type": "boolean", "default": false,
-        "description": "Enable type assertion breakpoints during debugging."
-    },
-    "basilisk.debugger.debugpyPath": {
-        "type": "string", "default": "debugpy",
-        "description": "Path to the debugpy module."
-    }
-}
-```
-
-**Crate structure**:
-```
-crates/basilisk-dap/
-    src/
-        server.rs       — DAP server (JSON-RPC over stdio)
-        adapter.rs      — debugpy subprocess management
-        types.rs        — DAP protocol types
-        breakpoints.rs  — breakpoint management + type-aware breakpoints
-        variables.rs    — variable inspection with Basilisk type overlay
-    Cargo.toml
-```
+- **VS Code**: [`BASILISK-VSCODE-EXTENSION-SPEC.md`](BASILISK-VSCODE-EXTENSION-SPEC.md)
+- **Zed**: [`BASILISK-ZED-EXTENSION-SPEC.md`](BASILISK-ZED-EXTENSION-SPEC.md)
+- **Neovim**: [`BASILISK-NEOVIM-EXTENSION-SPEC.md`](BASILISK-NEOVIM-EXTENSION-SPEC.md)
 
 ---
 
