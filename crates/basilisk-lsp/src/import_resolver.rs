@@ -478,7 +478,7 @@ mod tests {
         fs::create_dir_all(&venv).unwrap();
 
         let config = crate::config::WorkspaceConfig::default();
-        let result = find_venv_dir(&[dir.clone()], &config);
+        let result = find_venv_dir(std::slice::from_ref(&dir), &config);
         assert!(result.is_some());
         assert!(result.unwrap().ends_with(".venv"));
 
@@ -491,9 +491,11 @@ mod tests {
         let venv = dir.join("my_env");
         fs::create_dir_all(&venv).unwrap();
 
-        let mut config = crate::config::WorkspaceConfig::default();
-        config.venv_path = Some(dir.clone());
-        config.venv = Some("my_env".to_owned());
+        let config = crate::config::WorkspaceConfig {
+            venv_path: Some(dir.clone()),
+            venv: Some("my_env".to_owned()),
+            ..Default::default()
+        };
         let result = find_venv_dir(&[], &config);
         assert!(result.is_some());
 
@@ -511,7 +513,7 @@ mod tests {
         fs::create_dir_all(&sp).unwrap();
 
         let config = crate::config::WorkspaceConfig::default();
-        let result = resolve_site_packages(&[dir.clone()], &config);
+        let result = resolve_site_packages(std::slice::from_ref(&dir), &config);
         assert!(result.is_some());
         assert!(result.unwrap().ends_with("site-packages"));
 
