@@ -45,7 +45,10 @@ impl BasiliskExtension {
             return Ok(path);
         }
 
-        Err("basilisk binary not found. Install with: cargo install --path crates/basilisk-cli".into())
+        Err(
+            "basilisk binary not found. Install with: cargo install --path crates/basilisk-cli"
+                .into(),
+        )
     }
 
     /// Read a single environment variable from the worktree shell env.

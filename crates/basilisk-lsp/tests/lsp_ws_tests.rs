@@ -6416,7 +6416,7 @@ async fn test_ws_whole_module_did_close_non_disk_file_returns_empty_diagnostics(
     // File doesn't exist on disk → set_closed() removes it and returns empty diagnostics.
     let diag = fixture.wait_for_diagnostics().await;
     assert!(diag.is_some(), "should publish diagnostics on close");
-    let diag_msg = diag.unwrap();
+    let diag_msg = diag.ok_or("expected diagnostics message")?;
     assert!(
         diag_msg.contains("\"diagnostics\":[]"),
         "non-disk file close should produce empty diagnostics in wholeModule mode: {diag_msg}"
@@ -6465,7 +6465,7 @@ async fn test_ws_open_files_only_did_close_clears_diagnostics() -> TestResult<()
         close_diag.is_some(),
         "should receive publishDiagnostics after didClose"
     );
-    let close_msg = close_diag.unwrap();
+    let close_msg = close_diag.ok_or("expected diagnostics on close")?;
     assert!(
         close_msg.contains("\"diagnostics\":[]"),
         "openFilesOnly: didClose should clear diagnostics (empty array): {close_msg}"
@@ -6511,7 +6511,7 @@ async fn test_ws_whole_module_did_close_disk_file_keeps_diagnostics() -> TestRes
         close_diag.is_some(),
         "wholeModule: should receive publishDiagnostics after didClose"
     );
-    let close_msg = close_diag.unwrap();
+    let close_msg = close_diag.ok_or("expected diagnostics on close")?;
     assert!(
         !close_msg.contains("\"diagnostics\":[]"),
         "wholeModule: didClose disk file should keep diagnostics (non-empty): {close_msg}"
@@ -6678,7 +6678,10 @@ async fn test_ws_e0003_missing_variable_type_fires() -> TestResult<()> {
 
     let code = "items = []\n";
     fixture.did_open("file:///e0003.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     let diag = extract_diagnostic(&json, "BSK-E0003").ok_or("BSK-E0003 not fired")?;
@@ -6701,7 +6704,10 @@ async fn test_ws_e0003_annotated_empty_list_is_clean() -> TestResult<()> {
 
     let code = "items: list[int] = []\n";
     fixture.did_open("file:///e0003_clean.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     assert!(
@@ -6720,7 +6726,10 @@ async fn test_ws_e0011_return_type_mismatch_fires() -> TestResult<()> {
 
     let code = "def count() -> str:\n    return 42\n";
     fixture.did_open("file:///e0011.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     let diag = extract_diagnostic(&json, "BSK-E0011").ok_or("BSK-E0011 not fired")?;
@@ -6740,7 +6749,10 @@ async fn test_ws_e0011_matching_return_type_is_clean() -> TestResult<()> {
 
     let code = "def count() -> int:\n    return 42\n";
     fixture.did_open("file:///e0011_clean.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     assert!(
@@ -6764,14 +6776,20 @@ def add(x: int, y: int) -> int:
 result: int = add(\"hello\", \"world\")
 ";
     fixture.did_open("file:///e0012.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     let diag = extract_diagnostic(&json, "BSK-E0012").ok_or("BSK-E0012 not fired")?;
     assert_valid_range(diag, "E0012");
     let msg = diag["message"].as_str().unwrap_or("").to_lowercase();
     assert!(
-        msg.contains("argument") || msg.contains("type") || msg.contains("int") || msg.contains("str"),
+        msg.contains("argument")
+            || msg.contains("type")
+            || msg.contains("int")
+            || msg.contains("str"),
         "message should mention argument/type mismatch: {diag}"
     );
     Ok(())
@@ -6789,7 +6807,10 @@ def add(x: int, y: int) -> int:
 result: int = add(1, 2)
 ";
     fixture.did_open("file:///e0012_clean.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     assert!(
@@ -6809,7 +6830,10 @@ async fn test_ws_e0013_return_mismatch_fires() -> TestResult<()> {
     // Returns a string literal but annotated -> int
     let code = "def label() -> int:\n    return \"hello\"\n";
     fixture.did_open("file:///e0013.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     // Either E0011 or E0013 should fire for this mismatch
@@ -6829,14 +6853,20 @@ async fn test_ws_e0014_assignment_type_mismatch_fires() -> TestResult<()> {
 
     let code = "count: int = \"hello\"\n";
     fixture.did_open("file:///e0014.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     let diag = extract_diagnostic(&json, "BSK-E0014").ok_or("BSK-E0014 not fired")?;
     assert_valid_range(diag, "E0014");
     let msg = diag["message"].as_str().unwrap_or("").to_lowercase();
     assert!(
-        msg.contains("int") || msg.contains("str") || msg.contains("type") || msg.contains("incompatible"),
+        msg.contains("int")
+            || msg.contains("str")
+            || msg.contains("type")
+            || msg.contains("incompatible"),
         "message should mention type mismatch: {diag}"
     );
     Ok(())
@@ -6854,7 +6884,10 @@ flag: bool = \"yes\"
 ratio: float = \"1.5\"
 ";
     fixture.did_open("file:///e0014_multi.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     let diagnostics = json["params"]["diagnostics"]
@@ -6883,7 +6916,10 @@ flag: bool = True
 ratio: float = 1.5
 ";
     fixture.did_open("file:///e0014_clean.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     assert!(
@@ -6902,7 +6938,10 @@ async fn test_ws_e0015_list_wrong_arg_count_fires() -> TestResult<()> {
 
     let code = "def f(x: list[int, str]) -> None:\n    pass\n";
     fixture.did_open("file:///e0015.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     let diag = extract_diagnostic(&json, "BSK-E0015").ok_or("BSK-E0015 not fired")?;
@@ -6917,7 +6956,10 @@ async fn test_ws_e0015_dict_wrong_arg_count_fires() -> TestResult<()> {
 
     let code = "def f(x: dict[str]) -> None:\n    pass\n";
     fixture.did_open("file:///e0015_dict.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     let diag = extract_diagnostic(&json, "BSK-E0015").ok_or("BSK-E0015 not fired for dict[str]")?;
@@ -6935,7 +6977,10 @@ def f(x: list[int], y: dict[str, int], z: set[str]) -> None:
     pass
 ";
     fixture.did_open("file:///e0015_clean.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     assert!(
@@ -6965,7 +7010,10 @@ class Child(Base):
         return data
 ";
     fixture.did_open("file:///e0016.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     let diag = extract_diagnostic(&json, "BSK-E0016").ok_or("BSK-E0016 not fired")?;
@@ -6996,7 +7044,10 @@ class Child(Base):
         return data.upper()
 ";
     fixture.did_open("file:///e0016_clean.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     assert!(
@@ -7021,14 +7072,21 @@ class Child(Base):
     count: str = \"zero\"
 ";
     fixture.did_open("file:///e0017.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     let diag = extract_diagnostic(&json, "BSK-E0017").ok_or("BSK-E0017 not fired")?;
     assert_valid_range(diag, "E0017");
     let msg = diag["message"].as_str().unwrap_or("").to_lowercase();
     assert!(
-        msg.contains("count") || msg.contains("override") || msg.contains("attribute") || msg.contains("int") || msg.contains("str"),
+        msg.contains("count")
+            || msg.contains("override")
+            || msg.contains("attribute")
+            || msg.contains("int")
+            || msg.contains("str"),
         "message should reference attribute or types: {diag}"
     );
     Ok(())
@@ -7047,7 +7105,10 @@ class Child(Base):
     count: int = 99
 ";
     fixture.did_open("file:///e0017_clean.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     assert!(
@@ -7066,7 +7127,10 @@ async fn test_ws_e0018_undefined_variable_fires() -> TestResult<()> {
 
     let code = "def compute() -> int:\n    return undefined_name\n";
     fixture.did_open("file:///e0018.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     let diag = extract_diagnostic(&json, "BSK-E0018").ok_or("BSK-E0018 not fired")?;
@@ -7086,7 +7150,10 @@ async fn test_ws_e0018_defined_variable_is_clean() -> TestResult<()> {
 
     let code = "def compute() -> int:\n    result = 42\n    return result\n";
     fixture.did_open("file:///e0018_clean.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     assert!(
@@ -7110,7 +7177,10 @@ def maybe_assign(flag: bool) -> int:
     return result
 ";
     fixture.did_open("file:///e0019.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     let diag = extract_diagnostic(&json, "BSK-E0019").ok_or("BSK-E0019 not fired")?;
@@ -7137,7 +7207,10 @@ def always_assign(flag: bool) -> int:
     return result
 ";
     fixture.did_open("file:///e0019_clean.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     assert!(
@@ -7164,7 +7237,10 @@ def process(x: int) -> int: ...
 def process(x: str) -> str: ...
 ";
     fixture.did_open("file:///e0020.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     let diag = extract_diagnostic(&json, "BSK-E0020").ok_or("BSK-E0020 not fired")?;
@@ -7195,7 +7271,10 @@ def process(x: int | str) -> int | str:
     return x
 ";
     fixture.did_open("file:///e0020_clean.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     assert!(
@@ -7225,7 +7304,10 @@ def process(x: int) -> int | str:
     return x
 ";
     fixture.did_open("file:///e0021.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     let diag = extract_diagnostic(&json, "BSK-E0021").ok_or("BSK-E0021 not fired")?;
@@ -7245,7 +7327,10 @@ def bad_keys() -> None:
     mapping = {[1, 2]: \"value\"}
 ";
     fixture.did_open("file:///e0022.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     let diag = extract_diagnostic(&json, "BSK-E0022").ok_or("BSK-E0022 not fired")?;
@@ -7268,7 +7353,10 @@ def bad_keys() -> None:
     mapping = {{1, 2}: \"value\"}
 ";
     fixture.did_open("file:///e0022_set.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     let diag = extract_diagnostic(&json, "BSK-E0022").ok_or("BSK-E0022 not fired for set key")?;
@@ -7286,7 +7374,10 @@ def good_keys() -> None:
     mapping = {\"key\": \"value\", 42: \"number\", (1, 2): \"tuple\"}
 ";
     fixture.did_open("file:///e0022_clean.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     assert!(
@@ -7313,7 +7404,10 @@ def classify(x: int) -> str:
     return \"other\"
 ";
     fixture.did_open("file:///e0023.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     let diag = extract_diagnostic(&json, "BSK-E0023").ok_or("BSK-E0023 not fired")?;
@@ -7342,7 +7436,10 @@ def classify(x: int) -> str:
             return \"other\"
 ";
     fixture.did_open("file:///e0023_clean.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     assert!(
@@ -7361,7 +7458,10 @@ async fn test_ws_e0024_literal_as_annotation_fires() -> TestResult<()> {
 
     let code = "def f(x: 42) -> 0:\n    pass\n";
     fixture.did_open("file:///e0024.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     let diag = extract_diagnostic(&json, "BSK-E0024").ok_or("BSK-E0024 not fired")?;
@@ -7381,7 +7481,10 @@ async fn test_ws_e0024_real_type_annotation_is_clean() -> TestResult<()> {
 
     let code = "def f(x: int) -> str:\n    return str(x)\n";
     fixture.did_open("file:///e0024_clean.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     assert!(
@@ -7408,7 +7511,10 @@ class Child(Base):
         return data.upper()
 ";
     fixture.did_open("file:///e0025.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     let diag = extract_diagnostic(&json, "BSK-E0025").ok_or("BSK-E0025 not fired")?;
@@ -7439,7 +7545,10 @@ class Child(Base):
         return data.upper()
 ";
     fixture.did_open("file:///e0025_clean.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     assert!(
@@ -7461,7 +7570,10 @@ from typing import TypeVar
 T = TypeVar(\"T\", int)
 ";
     fixture.did_open("file:///e0026.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     let diag = extract_diagnostic(&json, "BSK-E0026").ok_or("BSK-E0026 not fired")?;
@@ -7484,7 +7596,10 @@ from typing import TypeVar
 T = TypeVar(\"T\", int, str)
 ";
     fixture.did_open("file:///e0026_clean.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     assert!(
@@ -7509,7 +7624,10 @@ class Container(Generic[T, T]):
     pass
 ";
     fixture.did_open("file:///e0027.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     let diag = extract_diagnostic(&json, "BSK-E0027").ok_or("BSK-E0027 not fired")?;
@@ -7531,7 +7649,10 @@ class Container(Generic[T, U]):
     pass
 ";
     fixture.did_open("file:///e0027_clean.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     assert!(
@@ -7559,7 +7680,10 @@ class Child(Sealed):
     pass
 ";
     fixture.did_open("file:///e0034.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     let diag = extract_diagnostic(&json, "BSK-E0034").ok_or("BSK-E0034 not fired")?;
@@ -7585,7 +7709,10 @@ def standalone() -> None:
     pass
 ";
     fixture.did_open("file:///e0034_func.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     let diag = extract_diagnostic(&json, "BSK-E0034").ok_or("BSK-E0034 not fired for module fn")?;
@@ -7612,10 +7739,14 @@ class Child(Base):
         return \"child\"
 ";
     fixture.did_open("file:///e0034_method.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
-    let diag = extract_diagnostic(&json, "BSK-E0034").ok_or("BSK-E0034 not fired for final method override")?;
+    let diag = extract_diagnostic(&json, "BSK-E0034")
+        .ok_or("BSK-E0034 not fired for final method override")?;
     assert_valid_range(diag, "E0034 method override");
     Ok(())
 }
@@ -7638,7 +7769,10 @@ class Child(Base):
         return \"child\"
 ";
     fixture.did_open("file:///e0034_clean.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     assert!(
@@ -7666,14 +7800,20 @@ class Config:
         RATE = 9999
 ";
     fixture.did_open("file:///e0054.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     let diag = extract_diagnostic(&json, "BSK-E0054").ok_or("BSK-E0054 not fired")?;
     assert_valid_range(diag, "E0054");
     let msg = diag["message"].as_str().unwrap_or("").to_lowercase();
     assert!(
-        msg.contains("final") || msg.contains("rate") || msg.contains("reassign") || msg.contains("modify"),
+        msg.contains("final")
+            || msg.contains("rate")
+            || msg.contains("reassign")
+            || msg.contains("modify"),
         "message should mention final/reassign: {diag}"
     );
     Ok(())
@@ -7694,10 +7834,14 @@ class Config:
         self.MAX = 200
 ";
     fixture.did_open("file:///e0054_class.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
-    let diag = extract_diagnostic(&json, "BSK-E0054").ok_or("BSK-E0054 not fired for class attr")?;
+    let diag =
+        extract_diagnostic(&json, "BSK-E0054").ok_or("BSK-E0054 not fired for class attr")?;
     assert_valid_range(diag, "E0054 class attr");
     Ok(())
 }
@@ -7716,7 +7860,10 @@ def read_rate() -> int:
     return RATE
 ";
     fixture.did_open("file:///e0054_clean.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     assert!(
@@ -7743,7 +7890,10 @@ def classify(x):
             return \"one\"
 ";
     fixture.did_open("file:///multi_rules.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     let diagnostics = json["params"]["diagnostics"]
@@ -7763,7 +7913,7 @@ def classify(x):
     // All diagnostics must have non-empty codes
     for diag in diagnostics {
         assert!(
-            diag["code"].as_str().map_or(false, |c| !c.is_empty()),
+            diag["code"].as_str().is_some_and(|c| !c.is_empty()),
             "every diagnostic must have a non-empty code: {diag}"
         );
     }
@@ -7791,7 +7941,10 @@ async fn test_ws_diagnostic_structure_is_well_formed() -> TestResult<()> {
 
     let code = "def f(x, y):\n    return x + y\n";
     fixture.did_open("file:///structure.py", code).await?;
-    let raw = fixture.wait_for_diagnostics().await.ok_or("no diagnostics")?;
+    let raw = fixture
+        .wait_for_diagnostics()
+        .await
+        .ok_or("no diagnostics")?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     // Verify outer JSON-RPC envelope
@@ -7812,12 +7965,12 @@ async fn test_ws_diagnostic_structure_is_well_formed() -> TestResult<()> {
     for diag in diagnostics {
         // code
         assert!(
-            diag["code"].as_str().map_or(false, |c| c.starts_with("BSK-")),
+            diag["code"].as_str().is_some_and(|c| c.starts_with("BSK-")),
             "code must start with BSK-: {diag}"
         );
         // message
         assert!(
-            diag["message"].as_str().map_or(false, |m| !m.is_empty()),
+            diag["message"].as_str().is_some_and(|m| !m.is_empty()),
             "message must be non-empty: {diag}"
         );
         // severity (1=Error, 2=Warning, 3=Info, 4=Hint)

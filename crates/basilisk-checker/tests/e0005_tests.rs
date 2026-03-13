@@ -90,10 +90,7 @@ class AdminRoute(BaseRoute):
     assert!(
         e0005_diags.is_empty(),
         "subclass overriding an annotated parent attribute should not fire E0005, got: {:?}",
-        e0005_diags
-            .iter()
-            .map(|d| &d.message)
-            .collect::<Vec<_>>()
+        e0005_diags.iter().map(|d| &d.message).collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -116,10 +113,7 @@ class AdminRoute(BaseRoute):
     assert!(
         e0005_diags.is_empty(),
         "literal attrs should not fire E0005 even in subclasses, got: {:?}",
-        e0005_diags
-            .iter()
-            .map(|d| &d.message)
-            .collect::<Vec<_>>()
+        e0005_diags.iter().map(|d| &d.message).collect::<Vec<_>>()
     );
     Ok(())
 }

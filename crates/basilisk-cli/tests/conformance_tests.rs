@@ -356,10 +356,12 @@ struct Totals {
 /// Write a CSV snapshot of per-file conformance results.
 ///
 /// Output path: `benchmarks/conformance_status.csv` (repo root).
-/// Columns: file, category, status, caught, missed, false_positives
+/// Columns: file, category, status, caught, missed, `false_positives`
 ///
 /// This file is the rolling log — commit it after each run to track regressions.
 fn write_csv(detail_lines: &DetailLines) {
+    use std::fmt::Write;
+
     // Walk up from the manifest dir to find the workspace root (contains both
     // Cargo.toml and a `crates/` subdirectory — distinguishes it from crate-level Cargo.toml).
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -373,15 +375,17 @@ fn write_csv(detail_lines: &DetailLines) {
     let csv_path = repo_root.join("benchmarks/conformance_status.csv");
     let _ = fs::create_dir_all(csv_path.parent().unwrap_or(Path::new(".")));
 
-    let mut out = String::from("basilisk_rules,file,category,status,caught,missed,false_positives\n");
+    let mut out =
+        String::from("basilisk_rules,file,category,status,caught,missed,false_positives\n");
     for (name, result) in detail_lines {
         let cat = category(name);
         let status = if result.passes() { "PASS" } else { "FAIL" };
         let rules = result.rules_fired.join("|");
-        out.push_str(&format!(
-            "{rules},{name},{cat},{status},{},{},{}\n",
+        let _ = writeln!(
+            out,
+            "{rules},{name},{cat},{status},{},{},{}",
             result.caught, result.missed, result.false_positives
-        ));
+        );
     }
 
     match fs::write(&csv_path, &out) {

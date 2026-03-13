@@ -1146,7 +1146,10 @@ fn e0005_unannotated_attr_fires() -> Result<(), Box<dyn std::error::Error>> {
         .iter()
         .filter(|d| d.code.code == "BSK-E0005")
         .collect();
-    assert!(!e5.is_empty(), "unannotated class attr with non-inferrable RHS must fire E0005");
+    assert!(
+        !e5.is_empty(),
+        "unannotated class attr with non-inferrable RHS must fire E0005"
+    );
     Ok(())
 }
 

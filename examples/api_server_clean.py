@@ -37,8 +37,8 @@ def serialize(value: object) -> str:  # basilisk: allow[BSK-E0011] -- JSON is in
 
 
 # Properly typed constants
-MAX_RETRIES: int = 3
-TIMEOUT_MS: int = 30_000
+MAX_RETRIES= 3
+TIMEOUT_MS= 30_000
 
 
 # Consistent attribute types in the hierarchy
@@ -49,7 +49,7 @@ class BaseRoute:
 
 
 class AdminRoute(BaseRoute):
-    priority: int = 100               # same type as the base class
+    priority= 100               # same type as the base class
 
 
 # Non-overlapping overloads
