@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{AttributeInfo, ClassInfo, ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -52,8 +53,7 @@ fn is_typed_dict_class(name: &str, class_map: &HashMap<&str, &ClassInfo>) -> boo
 }
 
 fn annotation_text(source: &str, span: Option<Span>) -> Option<&str> {
-    let span = span?;
-    source.get(span.start as usize..span.end as usize)
+    slice_span(source, span?)
 }
 
 /// Returns `true` when the annotation contains `TypedDict` qualifier wrappers

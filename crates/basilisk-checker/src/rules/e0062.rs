@@ -34,6 +34,7 @@
 use basilisk_resolver::{FunctionInfo, ResolvedModule, ReturnAnnotationKind};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -70,7 +71,7 @@ fn check_function(func: &FunctionInfo, source: &str, path: &str, out: &mut Vec<D
     let Some(ann_span) = func.return_annotation_span else {
         return;
     };
-    let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+    let Some(ann_text) = slice_span(source, ann_span) else {
         return;
     };
     if !is_noreturn_or_never(ann_text.trim()) {

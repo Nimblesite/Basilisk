@@ -11,5 +11,8 @@ ruff_python_ast.workspace = true
 ruff_text_size.workspace  = true
 thiserror                 = "2.0"
 
+[dev-dependencies]
+basilisk-test-utils = { workspace = true, features = ["resolver"] }
+
 [lints]
 workspace = true

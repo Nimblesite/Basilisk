@@ -155,6 +155,7 @@ dependencies = [
  "basilisk-lsp",
  "basilisk-parser",
  "basilisk-resolver",
+ "basilisk-test-utils",
  "clap",
  "serde",
  "serde_json",
@@ -192,6 +193,7 @@ dependencies = [
  "basilisk-common",
  "basilisk-parser",
  "basilisk-resolver",
+ "basilisk-test-utils",
  "dashmap 6.1.0",
  "futures-util",
  "serde",
@@ -224,6 +226,7 @@ name = "basilisk-resolver"
 version = "0.1.0"
 dependencies = [
  "basilisk-parser",
+ "basilisk-test-utils",
  "ruff_python_ast",
  "ruff_text_size",
  "thiserror 2.0.18",
@@ -232,6 +235,16 @@ dependencies = [
 [[package]]
 name = "basilisk-stubs"
 version = "0.1.0"
+
+[[package]]
+name = "basilisk-test-utils"
+version = "0.1.0"
+dependencies = [
+ "basilisk-checker",
+ "basilisk-parser",
+ "basilisk-resolver",
+ "serde_json",
+]
 
 [[package]]
 name = "basilisk-zed"

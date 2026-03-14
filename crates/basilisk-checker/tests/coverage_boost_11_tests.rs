@@ -18,7 +18,7 @@ fn run(source: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::e
     Ok(check(&resolved))
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 fn run_with_path(
     source: &str,
     path: &str,

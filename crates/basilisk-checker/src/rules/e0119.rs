@@ -60,13 +60,9 @@ fn extract_class_name(expr: &Expr) -> Option<&str> {
 
 /// Extract the source text for a span.
 fn span_text(source: &str, span: Span) -> &str {
-    let start = span.start as usize;
-    let end = span.end as usize;
-    if end <= source.len() && start <= end {
-        &source[start..end]
-    } else {
-        ""
-    }
+    let start = span.start_usize();
+    let end = span.end_usize();
+    source.get(start..end).unwrap_or_default()
 }
 
 /// Describes a member of a class relevant to protocol overlap checks.

@@ -1,0 +1,465 @@
+//! All internal types, parsing, and checking logic for BSK-E0148.
+
+use std::collections::HashMap;
+
+use ruff_python_ast::{self as ast, Expr, Stmt};
+use ruff_text_size::Ranged;
+
+use basilisk_resolver::Span;
+
+use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+
+pub(super) const CODE: ErrorCode = ErrorCode {
+    code: "BSK-E0148",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0148",
+};
+
+// ---------------------------------------------------------------------------
+// TypeVar data types
+// ---------------------------------------------------------------------------
+
+/// Constraint group for a `TypeVar`: the list of allowed types.
+#[derive(Debug, Clone)]
+pub(super) struct ConstrainedTypeVar {
+    /// The `TypeVar` name (e.g. `"AnyStr"`).
+    pub(super) name: String,
+    /// The constraint types in order (e.g. `["str", "bytes"]`).
+    pub(super) constraints: Vec<String>,
+}
+
+impl ConstrainedTypeVar {
+    /// Returns the constraint group index (0-based) that `ty` belongs to, or
+    /// `None` when `ty` is not a known constraint.
+    pub(super) fn group_of(&self, ty: &str) -> Option<usize> {
+        self.constraints
+            .iter()
+            .enumerate()
+            .find_map(|(idx, constraint)| {
+                (ty == constraint.as_str() || is_subtype_of(ty, constraint)).then_some(idx)
+            })
+    }
+}
+
+/// Returns `true` when `subtype` is a well-known subtype of `supertype`.
+fn is_subtype_of(subtype: &str, supertype: &str) -> bool {
+    matches!((subtype, supertype), ("bool", "int"))
+}
+
+/// A function signature with constrained `TypeVar` parameters.
+#[derive(Debug, Clone)]
+pub(super) struct ConstrainedFunc {
+    /// The function name.
+    pub(super) name: String,
+    /// For each parameter index: which `ConstrainedTypeVar` it uses (by name).
+    pub(super) param_tv: Vec<Option<String>>,
+}
+
+// ---------------------------------------------------------------------------
+// Module context
+// ---------------------------------------------------------------------------
+
+/// Module-level knowledge needed to check calls.
+pub(super) struct ModuleContext {
+    /// All constrained `TypeVars` defined at module level.
+    pub(super) constrained_tvars: HashMap<String, ConstrainedTypeVar>,
+    /// Functions that have at least one constrained-TypeVar parameter.
+    pub(super) constrained_funcs: Vec<ConstrainedFunc>,
+    /// Variables with known types: name -> type annotation text.
+    pub(super) var_types: HashMap<String, String>,
+    /// Classes that represent Mapping types with known key types.
+    /// Maps class name -> (`key_type_text`, `value_type_text`).
+    pub(super) mapping_vars: HashMap<String, (String, String)>,
+}
+
+impl ModuleContext {
+    /// Build a `ModuleContext` from the top-level AST statements.
+    pub(super) fn from_ast(stmts: &[Stmt]) -> Self {
+        let mut constrained_tvars: HashMap<String, ConstrainedTypeVar> = HashMap::new();
+        let mut constrained_funcs: Vec<ConstrainedFunc> = Vec::new();
+        let mut var_types: HashMap<String, String> = HashMap::new();
+        let mut mapping_vars: HashMap<String, (String, String)> = HashMap::new();
+
+        // Pass 1: collect TypeVar definitions.
+        for stmt in stmts {
+            if let Stmt::Assign(assign) = stmt {
+                if assign.targets.len() == 1 {
+                    if let Some(lhs_name) = assign.targets.first().and_then(expr_name) {
+                        if let Some(ctv) = try_parse_constrained_typevar(lhs_name, &assign.value) {
+                            let _ = constrained_tvars.insert(lhs_name.to_owned(), ctv);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Pass 2: collect function signatures and variable annotations.
+        for stmt in stmts {
+            match stmt {
+                Stmt::FunctionDef(func) => {
+                    if let Some(cfunc) = try_parse_constrained_func(func, &constrained_tvars) {
+                        constrained_funcs.push(cfunc);
+                    }
+                }
+                Stmt::AnnAssign(ann) => {
+                    if let Some(var_name) = expr_name(&ann.target) {
+                        let ann_text = ann_str(&ann.annotation);
+                        let _ = var_types.insert(var_name.to_owned(), ann_text.clone());
+                        if let Some((key_ty, val_ty)) = parse_mapping_annotation(&ann_text) {
+                            let _ = mapping_vars.insert(var_name.to_owned(), (key_ty, val_ty));
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Self {
+            constrained_tvars,
+            constrained_funcs,
+            var_types,
+            mapping_vars,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// TypeVar constraint parsing
+// ---------------------------------------------------------------------------
+
+/// Try to parse `name = TypeVar("name", str, bytes)` into a `ConstrainedTypeVar`.
+fn try_parse_constrained_typevar(lhs_name: &str, expr: &Expr) -> Option<ConstrainedTypeVar> {
+    let Expr::Call(call) = expr else {
+        return None;
+    };
+    let callee = expr_name(&call.func)?;
+    if callee != "TypeVar" {
+        return None;
+    }
+    if call.arguments.args.len() < 3 {
+        return None;
+    }
+    let constraints: Vec<String> = call
+        .arguments
+        .args
+        .get(1..)
+        .unwrap_or_default()
+        .iter()
+        .map(ann_str)
+        .collect();
+    if constraints.len() < 2 {
+        return None;
+    }
+    Some(ConstrainedTypeVar {
+        name: lhs_name.to_owned(),
+        constraints,
+    })
+}
+
+/// Try to extract constrained-TypeVar parameter info from a function definition.
+fn try_parse_constrained_func(
+    func: &ast::StmtFunctionDef,
+    tvars: &HashMap<String, ConstrainedTypeVar>,
+) -> Option<ConstrainedFunc> {
+    let mut param_tv: Vec<Option<String>> = Vec::new();
+    let mut has_constrained = false;
+
+    for param in func
+        .parameters
+        .args
+        .iter()
+        .chain(func.parameters.posonlyargs.iter())
+    {
+        let tv_name = param
+            .parameter
+            .annotation
+            .as_ref()
+            .and_then(|a| expr_name(a))
+            .and_then(|ann| tvars.get(ann).map(|tv| tv.name.clone()));
+        if tv_name.is_some() {
+            has_constrained = true;
+        }
+        param_tv.push(tv_name);
+    }
+
+    if !has_constrained {
+        return None;
+    }
+
+    Some(ConstrainedFunc {
+        name: func.name.to_string(),
+        param_tv,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Mapping annotation parsing
+// ---------------------------------------------------------------------------
+
+/// Detect Mapping-like annotations with explicit key/value types.
+///
+/// Recognises `Name[K, V]` patterns. Returns `(key_type, value_type)` or `None`.
+pub(super) fn parse_mapping_annotation(ann: &str) -> Option<(String, String)> {
+    let ann = ann.trim();
+    let bracket_pos = ann.find('[')?;
+    let inner = ann.get(bracket_pos + 1..ann.rfind(']')?)?;
+    let args = split_top_level(inner);
+    if args.len() < 2 {
+        return None;
+    }
+    let key_ty = args.first()?.trim().to_owned();
+    let val_ty = args.get(1)?.trim().to_owned();
+    if key_ty.is_empty() || val_ty.is_empty() {
+        return None;
+    }
+    Some((key_ty, val_ty))
+}
+
+// ---------------------------------------------------------------------------
+// Call-site checking (constrained TypeVar)
+// ---------------------------------------------------------------------------
+
+/// Check a single call expression for constrained-`TypeVar` group mismatches.
+pub(super) fn check_call(
+    call: &ast::ExprCall,
+    ctx: &ModuleContext,
+    path: &str,
+    diag: &mut Vec<Diagnostic>,
+) {
+    let Some(callee_name) = expr_name(&call.func) else {
+        return;
+    };
+    let Some(cfunc) = ctx.constrained_funcs.iter().find(|f| f.name == callee_name) else {
+        return;
+    };
+
+    let mut tv_group: HashMap<&str, (usize, String)> = HashMap::new();
+
+    for (arg_idx, arg) in call.arguments.args.iter().enumerate() {
+        let Some(tv_name) = cfunc.param_tv.get(arg_idx).and_then(|o| o.as_deref()) else {
+            continue;
+        };
+        let Some(constrained_tv) = ctx.constrained_tvars.get(tv_name) else {
+            continue;
+        };
+        let Some(arg_type_str) = infer_arg_type(arg, &ctx.var_types) else {
+            continue;
+        };
+        if arg_type_str == "Any" {
+            continue;
+        }
+        let Some(group) = constrained_tv.group_of(&arg_type_str) else {
+            continue;
+        };
+
+        match tv_group.get(tv_name) {
+            None => {
+                let _ = tv_group.insert(tv_name, (group, arg_type_str));
+            }
+            Some(&(existing_group, ref _existing_type)) => {
+                if existing_group != group {
+                    diag.push(Diagnostic {
+                        code: CODE.clone(),
+                        severity: Severity::Error,
+                        message: format!(
+                            "Constraint mismatch for TypeVar `{tv_name}` in call to \
+                             `{callee_name}`: argument types belong to different constraint groups"
+                        ),
+                        span: call_span(call),
+                        path: path.to_owned(),
+                        help: Some(format!(
+                            "TypeVar `{tv_name}` is constrained to `{}`; all arguments bound to \
+                             the same TypeVar must use the same constraint",
+                            constrained_tv.constraints.join("` or `")
+                        )),
+                        note: Some(
+                            "PEP 484: arguments for a constrained TypeVar must all match the \
+                             same constraint alternative"
+                                .to_owned(),
+                        ),
+                    });
+                    return; // One diagnostic per call.
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Subscript checking (Mapping key type)
+// ---------------------------------------------------------------------------
+
+/// Check a subscript expression for `Mapping` key type mismatches.
+pub(super) fn check_subscript(
+    sub: &ast::ExprSubscript,
+    ctx: &ModuleContext,
+    path: &str,
+    diag: &mut Vec<Diagnostic>,
+) {
+    let Some(obj_name) = expr_name(&sub.value) else {
+        return;
+    };
+    let Some((key_ty, _val_ty)) = ctx.mapping_vars.get(obj_name) else {
+        return;
+    };
+    let Some(idx_ty) = infer_literal_type(&sub.slice) else {
+        return;
+    };
+
+    if !types_compatible(idx_ty, key_ty) {
+        let span = Span {
+            start: sub.range().start().to_u32(),
+            end: sub.range().end().to_u32(),
+        };
+        diag.push(Diagnostic {
+            code: CODE.clone(),
+            severity: Severity::Error,
+            message: format!(
+                "Invalid subscript key type `{idx_ty}` for `{obj_name}` \
+                 which expects key type `{key_ty}`"
+            ),
+            span,
+            path: path.to_owned(),
+            help: Some(format!(
+                "`{obj_name}` is parameterized with key type `{key_ty}`; \
+                 use a `{key_ty}` value as the subscript key"
+            )),
+            note: Some(
+                "PEP 484: subscript key must be compatible with the declared key type parameter"
+                    .to_owned(),
+            ),
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Class-def checking (generic metaclass)
+// ---------------------------------------------------------------------------
+
+/// Check a class definition for use of a parameterized generic as a metaclass.
+pub(super) fn check_class_def(cls: &ast::StmtClassDef, path: &str, diag: &mut Vec<Diagnostic>) {
+    let Some(args) = &cls.arguments else {
+        return;
+    };
+
+    for kw in &args.keywords {
+        let Some(kw_name) = &kw.arg else {
+            continue;
+        };
+        if kw_name.as_str() != "metaclass" {
+            continue;
+        }
+        if matches!(&kw.value, Expr::Subscript(_)) {
+            let span = Span {
+                start: cls.range().start().to_u32(),
+                end: cls.range().end().to_u32(),
+            };
+            diag.push(Diagnostic {
+                code: CODE.clone(),
+                severity: Severity::Error,
+                message: format!(
+                    "Class `{}` uses a parameterized generic type as its metaclass",
+                    cls.name
+                ),
+                span,
+                path: path.to_owned(),
+                help: Some(
+                    "Generic metaclasses are not supported by the Python type system".to_owned(),
+                ),
+                note: Some("PEP 484: generic metaclass instances are not supported".to_owned()),
+            });
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Type inference helpers
+// ---------------------------------------------------------------------------
+
+/// Infer the type text of an argument expression, using the variable type map.
+fn infer_arg_type<'a>(arg: &'a Expr, var_types: &'a HashMap<String, String>) -> Option<String> {
+    match arg {
+        Expr::Name(n) => var_types.get(n.id.as_str()).cloned(),
+        _ => infer_literal_type(arg).map(str::to_owned),
+    }
+}
+
+/// Infer the concrete type of a literal expression.
+pub(super) fn infer_literal_type(expr: &Expr) -> Option<&'static str> {
+    match expr {
+        Expr::NumberLiteral(n) => match &n.value {
+            ruff_python_ast::Number::Int(_) => Some("int"),
+            ruff_python_ast::Number::Float(_) => Some("float"),
+            ruff_python_ast::Number::Complex { .. } => Some("complex"),
+        },
+        Expr::StringLiteral(_) => Some("str"),
+        Expr::BytesLiteral(_) => Some("bytes"),
+        Expr::BooleanLiteral(_) => Some("bool"),
+        Expr::NoneLiteral(_) => Some("None"),
+        _ => None,
+    }
+}
+
+/// Check if `actual` is compatible with `expected` for subscript key types.
+fn types_compatible(actual: &str, expected: &str) -> bool {
+    if actual == expected {
+        return true;
+    }
+    matches!(
+        (actual, expected),
+        ("bool", "int" | "float") | ("int", "float")
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Utility helpers
+// ---------------------------------------------------------------------------
+
+/// Extract the simple name from a `Name` expression.
+pub(super) fn expr_name(expr: &Expr) -> Option<&str> {
+    match expr {
+        Expr::Name(n) => Some(n.id.as_str()),
+        _ => None,
+    }
+}
+
+/// Convert an annotation expression to a readable string.
+pub(super) fn ann_str(expr: &Expr) -> String {
+    match expr {
+        Expr::Name(n) => n.id.to_string(),
+        Expr::Subscript(s) => format!("{}[{}]", ann_str(&s.value), ann_str(&s.slice)),
+        Expr::Attribute(a) => format!("{}.{}", ann_str(&a.value), a.attr),
+        Expr::Tuple(t) => t.elts.iter().map(ann_str).collect::<Vec<_>>().join(", "),
+        Expr::BinOp(b) => format!("{} | {}", ann_str(&b.left), ann_str(&b.right)),
+        Expr::NoneLiteral(_) => "None".to_owned(),
+        Expr::StringLiteral(s) => s.value.to_str().to_owned(),
+        _ => "...".to_owned(),
+    }
+}
+
+/// Split a string by top-level commas (respecting bracket nesting).
+pub(super) fn split_top_level(s: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut depth = 0i32;
+    let mut start = 0;
+    for (idx, ch) in s.char_indices() {
+        match ch {
+            '[' | '(' | '{' => depth += 1,
+            ']' | ')' | '}' => depth -= 1,
+            ',' if depth == 0 => {
+                parts.push(&s[start..idx]);
+                start = idx + 1;
+            }
+            _ => {}
+        }
+    }
+    parts.push(&s[start..]);
+    parts
+}
+
+/// Build a span for a call expression.
+pub(super) fn call_span(call: &ast::ExprCall) -> Span {
+    Span {
+        start: call.range().start().to_u32(),
+        end: call.range().end().to_u32(),
+    }
+}

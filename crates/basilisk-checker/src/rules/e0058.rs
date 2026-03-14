@@ -12,6 +12,7 @@
 use basilisk_resolver::{ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -48,9 +49,9 @@ fn is_annotated_single_arg(ann: &str) -> bool {
     let mut i = start;
     let mut end = start;
     while i < bytes.len() {
-        match bytes[i] {
-            b'[' => depth += 1,
-            b']' => {
+        match bytes.get(i).copied() {
+            Some(b'[') => depth += 1,
+            Some(b']') => {
                 depth -= 1;
                 if depth == 0 {
                     end = i;
@@ -100,7 +101,7 @@ impl Rule for AnnotatedTooFewArguments {
             let Some(ann_span) = var.annotation_span else {
                 continue;
             };
-            let Some(ann) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+            let Some(ann) = slice_span(source, ann_span) else {
                 continue;
             };
             check_annotation(ann.trim(), var.name_span, path, diagnostics);
@@ -112,7 +113,7 @@ impl Rule for AnnotatedTooFewArguments {
                 let Some(ann_span) = param.annotation_span else {
                     continue;
                 };
-                let Some(ann) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+                let Some(ann) = slice_span(source, ann_span) else {
                     continue;
                 };
                 check_annotation(ann.trim(), param.name_span, path, diagnostics);

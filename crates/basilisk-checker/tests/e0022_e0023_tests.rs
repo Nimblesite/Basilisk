@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Integration tests for BSK-E0022 (unhashable dict key) and BSK-E0023 (non-exhaustive match).
 #![allow(missing_docs)]
 

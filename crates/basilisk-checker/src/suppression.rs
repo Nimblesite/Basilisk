@@ -275,13 +275,21 @@ fn find_matching_block_start(
 
 /// Convert a byte offset to a 0-based line number in the given source text.
 #[must_use]
+#[expect(
+    clippy::as_conversions,
+    reason = "u32 to usize is always safe on 32-bit+ targets"
+)]
 pub fn byte_offset_to_line_in_source(source: &str, byte_offset: u32) -> usize {
     let offset = (byte_offset as usize).min(source.len());
-    source[..offset].matches('\n').count()
+    source.get(..offset).map_or(0, |s| s.matches('\n').count())
 }
 
 #[cfg(test)]
-#[allow(clippy::panic)]
+#[expect(
+    clippy::panic,
+    clippy::indexing_slicing,
+    reason = "Tests use assert macros (panic) and direct indexing for clarity"
+)]
 mod tests {
     use super::*;
 

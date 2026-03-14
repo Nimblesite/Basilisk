@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Integration tests for the types module: `InferredType`, Display, `from_annotation`, `is_assignable_to`.
 #![allow(missing_docs)]
 

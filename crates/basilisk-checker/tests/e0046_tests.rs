@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Integration tests for BSK-E0046: Enum member annotated (covered also in `e0040_e0046`).
 #![allow(missing_docs)]
 

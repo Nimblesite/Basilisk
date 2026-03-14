@@ -41,7 +41,7 @@ pub enum SymbolHit<'a> {
 
 /// Check if a byte offset falls within a span.
 fn in_span(offset: usize, span: Span) -> bool {
-    (span.start as usize) <= offset && offset < (span.end as usize)
+    span.start_usize() <= offset && offset < span.end_usize()
 }
 
 /// Find the symbol whose `name_span` contains the given byte offset.
@@ -140,18 +140,19 @@ pub fn identifier_at_offset(source: &str, offset: usize) -> Option<String> {
         return None;
     }
     // Must be on an identifier character.
-    if !is_ident_char(bytes[offset]) {
+    let current_byte = *bytes.get(offset)?;
+    if !is_ident_char(current_byte) {
         return None;
     }
     let mut start = offset;
-    while start > 0 && is_ident_char(bytes[start - 1]) {
+    while start > 0 && bytes.get(start - 1).copied().is_some_and(is_ident_char) {
         start -= 1;
     }
     let mut end = offset;
-    while end < bytes.len() && is_ident_char(bytes[end]) {
+    while bytes.get(end).copied().is_some_and(is_ident_char) {
         end += 1;
     }
-    Some(source[start..end].to_owned())
+    source.get(start..end).map(str::to_owned)
 }
 
 fn is_ident_char(b: u8) -> bool {
@@ -286,7 +287,7 @@ fn format_import_signature(imp: &ImportInfo) -> String {
 /// Extract annotation text from the source using a span.
 fn annotation_text(span: Option<Span>, source: &str) -> Option<String> {
     let span = span?;
-    let text = source.get(span.start as usize..span.end as usize)?;
+    let text = span.slice_source(source)?;
     Some(text.trim().to_owned())
 }
 
@@ -314,12 +315,13 @@ fn infer_rhs_display(rhs: &basilisk_resolver::RhsKind) -> &'static str {
 #[must_use]
 pub fn byte_offset_to_position(text: &str, byte_offset: usize) -> Position {
     let clamped = byte_offset.min(text.len());
-    let before = &text[..clamped];
+    let before = text.get(..clamped).unwrap_or(text);
     let line = u32::try_from(before.chars().filter(|&c| c == '\n').count()).unwrap_or(u32::MAX);
     let last_nl = before.rfind('\n').map_or(0, |p| p + 1);
-    let character = before[last_nl..]
+    let after_nl = before.get(last_nl..).unwrap_or("");
+    let character = after_nl
         .chars()
-        .map(|c| if c as u32 > 0xFFFF { 2u32 } else { 1u32 })
+        .map(|c| if u32::from(c) > 0xFFFF { 2u32 } else { 1u32 })
         .sum::<u32>();
     Position { line, character }
 }
@@ -342,7 +344,7 @@ pub fn position_to_byte_offset(text: &str, pos: Position) -> usize {
                 return byte_idx;
             }
         } else {
-            char_cu += if ch as u32 > 0xFFFF { 2 } else { 1 };
+            char_cu += if u32::from(ch) > 0xFFFF { 2 } else { 1 };
         }
         byte_pos = byte_idx + ch.len_utf8();
     }
@@ -353,7 +355,7 @@ pub fn position_to_byte_offset(text: &str, pos: Position) -> usize {
 #[must_use]
 pub fn span_to_range(text: &str, span: Span) -> tower_lsp::lsp_types::Range {
     tower_lsp::lsp_types::Range {
-        start: byte_offset_to_position(text, span.start as usize),
-        end: byte_offset_to_position(text, span.end as usize),
+        start: byte_offset_to_position(text, span.start_usize()),
+        end: byte_offset_to_position(text, span.end_usize()),
     }
 }

@@ -19,8 +19,8 @@ pub fn folding_ranges(resolved: &ResolvedModule, source: &str) -> Vec<FoldingRan
 
     // Function definitions
     for func in &resolved.functions {
-        let start = byte_offset_to_position(source, func.def_span.start as usize);
-        let end = byte_offset_to_position(source, func.def_span.end as usize);
+        let start = byte_offset_to_position(source, func.def_span.start_usize());
+        let end = byte_offset_to_position(source, func.def_span.end_usize());
         if start.line < end.line {
             ranges.push(FoldingRange {
                 start_line: start.line,
@@ -35,8 +35,8 @@ pub fn folding_ranges(resolved: &ResolvedModule, source: &str) -> Vec<FoldingRan
 
     // Class definitions
     for class in &resolved.classes {
-        let start = byte_offset_to_position(source, class.def_span.start as usize);
-        let end = byte_offset_to_position(source, class.def_span.end as usize);
+        let start = byte_offset_to_position(source, class.def_span.start_usize());
+        let end = byte_offset_to_position(source, class.def_span.end_usize());
         if start.line < end.line {
             ranges.push(FoldingRange {
                 start_line: start.line,
@@ -70,8 +70,8 @@ fn add_import_folding(resolved: &ResolvedModule, source: &str, ranges: &mut Vec<
         .imports
         .iter()
         .map(|imp| {
-            let start = byte_offset_to_position(source, imp.span.start as usize);
-            let end = byte_offset_to_position(source, imp.span.end as usize);
+            let start = byte_offset_to_position(source, imp.span.start_usize());
+            let end = byte_offset_to_position(source, imp.span.end_usize());
             (start.line, end.line, imp.span.start, imp.span.end)
         })
         .collect();
@@ -79,12 +79,16 @@ fn add_import_folding(resolved: &ResolvedModule, source: &str, ranges: &mut Vec<
     // Sort by start offset
     import_lines.sort_by_key(|entry| entry.2);
 
+    let Some(first) = import_lines.first() else {
+        return;
+    };
+
     // Group consecutive imports (gap <= 1 line)
-    let mut group_start_line = import_lines[0].0;
-    let mut group_end_line = import_lines[0].1;
+    let mut group_start_line = first.0;
+    let mut group_end_line = first.1;
     let mut group_count = 1usize;
 
-    for entry in &import_lines[1..] {
+    for entry in import_lines.get(1..).unwrap_or_default() {
         let (start_line, end_line, _, _) = *entry;
         // If this import starts within 1 line of the previous group end, extend
         if start_line <= group_end_line + 2 {

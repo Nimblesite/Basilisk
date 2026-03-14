@@ -108,7 +108,7 @@ impl FlowUnionTracker {
             if types.is_empty() {
                 InferredType::Unknown
             } else if types.len() == 1 {
-                types[0].clone()
+                types.first().cloned().unwrap_or(InferredType::Unknown)
             } else {
                 // Create a union of all types, deduplicating identical types
                 let mut deduplicated_types = Vec::new();
@@ -119,10 +119,16 @@ impl FlowUnionTracker {
                 }
 
                 if deduplicated_types.len() == 1 {
-                    deduplicated_types[0].clone()
+                    deduplicated_types
+                        .first()
+                        .cloned()
+                        .unwrap_or(InferredType::Unknown)
                 } else {
-                    let mut union_type = deduplicated_types[0].clone();
-                    for t in &deduplicated_types[1..] {
+                    let mut union_type = deduplicated_types
+                        .first()
+                        .cloned()
+                        .unwrap_or(InferredType::Unknown);
+                    for t in deduplicated_types.get(1..).unwrap_or_default() {
                         union_type = InferredType::union(union_type, t.clone());
                     }
                     union_type

@@ -23,7 +23,7 @@ vscode-extension/out/
 vscode-extension/.vscode-test/
 *.vsix
 
-# Conformance test suite (fetched via scripts/fetch-conformance.sh)
+# Conformance test suite (fetched via conformance/fetch-conformance.sh)
 crates/basilisk-cli/tests/conformance/
 
 # Tool / agent state

@@ -2,8 +2,9 @@
 # Run the full Basilisk test suite with coverage.
 #
 # Usage:
-#   ./scripts/test.sh          # run everything
-#   ./scripts/test.sh --open   # open HTML report after
+#   ./scripts/test.sh                  # run everything
+#   ./scripts/test.sh --skip-build     # skip the initial cargo build step
+#   ./scripts/test.sh --open           # open HTML report after
 
 set -euo pipefail
 
@@ -22,9 +23,11 @@ ok()     { echo -e "${GREEN}✓ $*${RESET}"; }
 warn()   { echo -e "${YELLOW}⚠ $*${RESET}"; }
 
 OPEN_REPORT=0
+SKIP_BUILD=0
 for arg in "$@"; do
     case "$arg" in
         --open) OPEN_REPORT=1 ;;
+        --skip-build) SKIP_BUILD=1 ;;
     esac
 done
 
@@ -70,20 +73,23 @@ ok "All dependencies present"
 
 # ── Build ────────────────────────────────────────────────────────────────────
 
-header "Building basilisk binary"
-cargo build -p basilisk-cli
-BASILISK_BIN="$REPO_ROOT/target/debug/basilisk"
+BASILISK_BIN="$REPO_ROOT/target/release/basilisk"
+if [[ "$SKIP_BUILD" -eq 0 ]]; then
+    header "Building basilisk binary"
+    cargo build --release -p basilisk-cli
+    ok "basilisk binary ready: $BASILISK_BIN"
+fi
 if [[ ! -x "$BASILISK_BIN" ]]; then
-    echo -e "${RED}${BOLD}FATAL: basilisk binary not found at $BASILISK_BIN after build.${RESET}"
+    echo -e "${RED}${BOLD}FATAL: basilisk binary not found at $BASILISK_BIN. Build first or drop --skip-build.${RESET}"
     exit 1
 fi
-ok "basilisk binary ready: $BASILISK_BIN"
 
 # ── Rust tests with coverage ─────────────────────────────────────────────────
 
 header "Running tests with coverage instrumentation"
 set +e
 cargo llvm-cov \
+    --release \
     --workspace \
     --exclude basilisk-compiler \
     --all-targets \
@@ -101,16 +107,16 @@ if [[ "$TESTS_EXIT" -ne 0 ]]; then
 fi
 ok "All workspace tests passed"
 
-cargo llvm-cov report --html --output-dir "$HTML_DIR"
+cargo llvm-cov report --release --html --output-dir "$HTML_DIR"
 ok "HTML report → $HTML_DIR/index.html"
 
 header "Running passing compiler E2E tests (hello, arithmetic)"
 BASILISK_COMPILER_FILTER="hello,arithmetic" \
-    cargo test -p basilisk-compiler --test e2e_tests -- --nocapture
+    cargo test --release -p basilisk-compiler --test e2e_tests -- --nocapture
 ok "Compiler E2E tests passed"
 
 header "Coverage summary"
-REPORT=$(cargo llvm-cov report 2>&1)
+REPORT=$(cargo llvm-cov report --release 2>&1)
 echo "$REPORT"
 echo ""
 echo -e "${BOLD}VSCode:${RESET} install 'Coverage Gutters' (ryanluker.vscode-coverage-gutters),"
@@ -205,12 +211,12 @@ ok "All projects meet their coverage thresholds."
 # ── LSP tests ────────────────────────────────────────────────────────────────
 
 header "Running LSP tests"
-cargo test -p basilisk-lsp --test lsp_tests
+cargo test --release -p basilisk-lsp --test lsp_tests
 ok "lsp_tests done"
 
 header "Running LSP E2E tests"
-cargo test -p basilisk-lsp --test lsp_e2e_tests
-ok "lsp_e2e_tests done"
+cargo test --release -p basilisk-lsp --test 'lsp_e2e_*'
+ok "lsp_e2e tests done"
 
 # ── VS Code extension ────────────────────────────────────────────────────────
 
@@ -226,7 +232,7 @@ VSCODE_TEST_CMD="npm test -- --coverage"
 if [[ -z "${DISPLAY:-}" ]] && command -v xvfb-run &>/dev/null; then
     VSCODE_TEST_CMD="xvfb-run -a npm test -- --coverage"
 fi
-BASILISK_EXECUTABLE_PATH="$REPO_ROOT/target/debug/basilisk" \
+BASILISK_EXECUTABLE_PATH="$REPO_ROOT/target/release/basilisk" \
 MOCHA_TIMEOUT="120000" \
 $VSCODE_TEST_CMD
 ok "VS Code E2E tests done"
@@ -248,7 +254,7 @@ cd "$REPO_ROOT"
 
 header "Zed extension — tests"
 cd "$REPO_ROOT/basilisk-zed"
-cargo test --all-targets
+cargo test --release --all-targets
 ok "Zed extension done"
 cd "$REPO_ROOT"
 

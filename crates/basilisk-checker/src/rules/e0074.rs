@@ -30,6 +30,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -269,7 +270,10 @@ fn extract_type_args_text(slice: &ruff_python_ast::Expr, source: &str) -> Vec<St
 
 /// Check whether the arguments to a `__new__` method are compatible after
 /// type parameter substitution.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "diagnostic context requires many parameters"
+)]
 fn check_new_method_args(
     new_func: &basilisk_resolver::FunctionInfo,
     substitutions: &HashMap<&str, &str>,
@@ -286,7 +290,7 @@ fn check_new_method_args(
     // Check the cls parameter for explicit type annotation mismatch (Case 2).
     if let Some(cls_param) = new_func.parameters.first() {
         if let Some(ann_span) = cls_param.annotation_span {
-            if let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) {
+            if let Some(ann_text) = slice_span(source, ann_span) {
                 // Resolve string annotations (quoted type expressions).
                 let resolved_ann = resolve_string_annotation(ann_text.trim());
                 check_cls_param_mismatch(
@@ -320,7 +324,7 @@ fn check_new_method_args(
         let Some(ann_span) = param.annotation_span else {
             continue;
         };
-        let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+        let Some(ann_text) = slice_span(source, ann_span) else {
             continue;
         };
 
@@ -372,7 +376,6 @@ fn check_new_method_args(
 
 /// Check if the `cls` parameter annotation is incompatible with the provided
 /// type arguments.
-#[allow(clippy::too_many_arguments)]
 fn check_cls_param_mismatch(
     cls_annotation: &str,
     class_name: &str,
@@ -400,14 +403,18 @@ fn check_cls_param_mismatch(
         return;
     };
 
-    let ann_class_name = inner[..bracket_pos].trim();
+    let Some(ann_class_name) = inner.get(..bracket_pos) else {
+        return;
+    };
+    let ann_class_name = ann_class_name.trim();
     if ann_class_name != class_name {
         return;
     }
 
     // Extract the type args from the annotation.
-    let Some(ann_args_str) = inner[bracket_pos..]
-        .strip_prefix('[')
+    let Some(ann_args_str) = inner
+        .get(bracket_pos..)
+        .and_then(|s| s.strip_prefix('['))
         .and_then(|s| s.strip_suffix(']'))
     else {
         return;
@@ -480,7 +487,10 @@ fn resolve_string_annotation(annotation: &str) -> String {
     if (annotation.starts_with('"') && annotation.ends_with('"'))
         || (annotation.starts_with('\'') && annotation.ends_with('\''))
     {
-        annotation[1..annotation.len() - 1].to_owned()
+        annotation
+            .get(1..annotation.len().saturating_sub(1))
+            .unwrap_or(annotation)
+            .to_owned()
     } else {
         annotation.to_owned()
     }

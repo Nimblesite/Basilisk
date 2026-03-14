@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Subprocess tests for the `basilisk` binary.
 //!
 //! These are the only tests that exercise `main.rs` and `output.rs` — code

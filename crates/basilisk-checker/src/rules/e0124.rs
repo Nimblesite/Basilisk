@@ -23,6 +23,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{AttributeInfo, ClassInfo, FunctionInfo, ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -98,18 +99,16 @@ fn check_class(
         .iter()
         .filter_map(|param| {
             let ann_span = param.annotation_span?;
-            let ann_text = source.get(ann_span.start as usize..ann_span.end as usize)?;
+            let ann_text = slice_span(source, ann_span)?;
             Some((param.name.as_str(), ann_text))
         })
         .collect();
 
     // Scan the function body source text for `self.attr = expr` patterns.
-    let Some(func_source) =
-        source.get(init_func.def_span.start as usize..init_func.def_span.end as usize)
-    else {
+    let Some(func_source) = slice_span(source, init_func.def_span) else {
         return;
     };
-    let func_offset = init_func.def_span.start as usize;
+    let func_offset = usize::try_from(init_func.def_span.start).unwrap_or(0);
 
     for line in func_source.lines() {
         let trimmed = line.trim();
@@ -132,7 +131,7 @@ fn check_class(
                 continue;
             };
 
-            let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+            let Some(ann_text) = slice_span(source, ann_span) else {
                 continue;
             };
 
@@ -161,10 +160,9 @@ fn check_class(
                     // Find the span for this line in the source.
                     let line_offset = find_line_offset(func_source, line);
                     let absolute_offset = func_offset + line_offset;
-                    #[allow(clippy::cast_possible_truncation)]
                     let span = Span {
-                        start: absolute_offset as u32,
-                        end: (absolute_offset + line.len()) as u32,
+                        start: u32::try_from(absolute_offset).unwrap_or(0),
+                        end: u32::try_from(absolute_offset + line.len()).unwrap_or(0),
                     };
 
                     out.push(Diagnostic {
@@ -210,8 +208,8 @@ fn parse_self_attr_assignment(line: &str) -> Option<SelfAttrAssignment<'_>> {
         return None;
     }
 
-    let attr_name = line[..eq_idx].trim();
-    let rhs = line[eq_idx + 1..].trim();
+    let attr_name = line.get(..eq_idx)?.trim();
+    let rhs = line.get(eq_idx + 1..)?.trim();
 
     // Strip trailing comments.
     let rhs = rhs.split('#').next().map(str::trim)?;
@@ -270,9 +268,10 @@ fn types_compatible(actual: &str, expected: &str) -> bool {
 }
 
 /// Find the byte offset of a line within a larger text.
+///
+/// Uses the fact that `line` is a sub-slice of `text` (produced by
+/// `str::lines()`), so we can compute the offset via pointer addresses
+/// without `as` conversions.
 fn find_line_offset(text: &str, line: &str) -> usize {
-    // Use pointer arithmetic to find the offset.
-    let text_start = text.as_ptr() as usize;
-    let line_start = line.as_ptr() as usize;
-    line_start - text_start
+    line.as_ptr().addr().saturating_sub(text.as_ptr().addr())
 }

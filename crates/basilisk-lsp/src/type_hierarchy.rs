@@ -39,8 +39,8 @@ pub fn prepare(
     uri: &Url,
 ) -> Vec<TypeHierarchyItem> {
     for class in &resolved.classes {
-        let start = class.name_span.start as usize;
-        let end = class.name_span.end as usize;
+        let start = class.name_span.start_usize();
+        let end = class.name_span.end_usize();
         if start <= byte_offset && byte_offset < end {
             return vec![class_to_item(class, source, uri)];
         }

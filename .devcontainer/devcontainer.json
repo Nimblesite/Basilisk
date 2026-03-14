@@ -1,0 +1,30 @@
+{
+  "name": "Basilisk CI",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+  "containerEnv": {
+    "CARGO_TERM_COLOR": "always",
+    "RUSTFLAGS": "-D warnings"
+  },
+  "runArgs": ["--memory=16g", "--memory-swap=16g", "--shm-size=4g"],
+  "remoteUser": "dev",
+  "postCreateCommand": "rustc --version && cargo clippy --version && python3 --version && node --version",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "vadimcn.vscode-lldb",
+        "anthropic.claude-code",
+        "nimblesite.commandtree"
+      ],
+      "settings": {
+        "rust-analyzer.check.command": "clippy",
+        "rust-analyzer.check.allTargets": true
+      }
+    }
+  }
+}

@@ -7,6 +7,18 @@ description: Submit a pull request following DataProvider project standards
 
 Create a pull request following project requirements.
 
+## Ensure All Files Are Pushed
+
+If there are files that have not been committed or pushed, stop and tell the user you cannot continue. List the files/commmits that have not been committed/pushed.
+
+## Format
+
+Run fmt for all Rust crates, and any other formatters across the workspace. If there are resulting changes, commmit and push these changes before continuing
+
+## Run Lints
+
+Run clippy on the entire workspace. If there are any failures, crash out and tell the user you cannot continue. List the failures.
+
 ## Get Context
 
 Get the diff between main and current branch:

@@ -17,7 +17,6 @@ use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
 use super::Rule;
 
-#[allow(dead_code)]
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0053",
     docs_url: "https://www.basilisk-python.dev/errors/BSK-E0053",
@@ -27,7 +26,6 @@ const CODE: ErrorCode = ErrorCode {
 ///
 /// Currently disabled — requires full type inference to avoid false positives.
 /// Re-enable in `mod.rs` `run_all()` once the type engine is in place.
-#[allow(dead_code)]
 pub(crate) struct AssertTypeMismatch;
 
 impl Rule for AssertTypeMismatch {

@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Coverage boost tests batch 4: deeper coverage of complex rules.
 //! Focuses on rules that re-parse source code and have complex control flow.
 #![allow(missing_docs)]

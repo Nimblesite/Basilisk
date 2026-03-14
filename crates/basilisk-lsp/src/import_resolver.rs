@@ -87,14 +87,15 @@ fn try_resolve_in_dir(module_name: &str, dir: &Path) -> Option<ResolvedImport> {
     let mut current = dir.to_path_buf();
 
     // Navigate through package directories for all but the last part.
-    for &part in &parts[..parts.len() - 1] {
+    let (leading, trailing) = parts.split_at(parts.len().saturating_sub(1));
+    for &part in leading {
         current = current.join(part);
         if !current.is_dir() {
             return None;
         }
     }
 
-    let last = parts[parts.len() - 1];
+    let last = trailing.first()?;
     try_resolve_name(&current, last)
 }
 
@@ -236,10 +237,23 @@ pub fn resolve_workspace_imports(index: &WorkspaceIndex, search_paths: &ImportSe
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
+#[expect(
+    clippy::unwrap_used,
+    reason = "test-only code: unwrap acceptable in unit tests"
+)]
 mod tests {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
     use super::*;
     use std::fs;
+
+    static TEST_CTR: AtomicU64 = AtomicU64::new(0);
+
+    /// Generate a unique temp dir path to avoid races between parallel tests.
+    fn unique_tmp(prefix: &str) -> PathBuf {
+        let n = TEST_CTR.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir().join(format!("{prefix}_{n}_{}", std::process::id()))
+    }
 
     fn make_search_paths(roots: Vec<PathBuf>) -> ImportSearchPaths {
         ImportSearchPaths {
@@ -251,7 +265,7 @@ mod tests {
 
     #[test]
     fn test_resolve_simple_module() {
-        let dir = std::env::temp_dir().join("bsk_ir_simple");
+        let dir = unique_tmp("bsk_ir_simple");
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("foo.py"), "x = 1\n").unwrap();
 
@@ -267,7 +281,7 @@ mod tests {
 
     #[test]
     fn test_resolve_prefers_pyi() {
-        let dir = std::env::temp_dir().join("bsk_ir_pyi");
+        let dir = unique_tmp("bsk_ir_pyi");
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("bar.py"), "x = 1\n").unwrap();
         fs::write(dir.join("bar.pyi"), "x: int\n").unwrap();
@@ -282,7 +296,7 @@ mod tests {
 
     #[test]
     fn test_resolve_package_init() {
-        let dir = std::env::temp_dir().join("bsk_ir_pkg");
+        let dir = unique_tmp("bsk_ir_pkg");
         let pkg = dir.join("mypkg");
         fs::create_dir_all(&pkg).unwrap();
         fs::write(pkg.join("__init__.py"), "").unwrap();
@@ -297,7 +311,7 @@ mod tests {
 
     #[test]
     fn test_resolve_dotted_module() {
-        let dir = std::env::temp_dir().join("bsk_ir_dotted");
+        let dir = unique_tmp("bsk_ir_dotted");
         let sub = dir.join("pkg").join("sub");
         fs::create_dir_all(&sub).unwrap();
         fs::write(dir.join("pkg").join("__init__.py"), "").unwrap();
@@ -312,7 +326,7 @@ mod tests {
 
     #[test]
     fn test_resolve_unresolved() {
-        let dir = std::env::temp_dir().join("bsk_ir_unresolved");
+        let dir = unique_tmp("bsk_ir_unresolved");
         fs::create_dir_all(&dir).unwrap();
 
         let paths = make_search_paths(vec![dir.clone()]);
@@ -324,7 +338,7 @@ mod tests {
 
     #[test]
     fn test_resolve_relative_import_same_dir() {
-        let dir = std::env::temp_dir().join("bsk_ir_rel");
+        let dir = unique_tmp("bsk_ir_rel");
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("sibling.py"), "x = 1\n").unwrap();
         let importing = dir.join("main.py");
@@ -339,7 +353,7 @@ mod tests {
 
     #[test]
     fn test_resolve_relative_import_parent() {
-        let dir = std::env::temp_dir().join("bsk_ir_rel_parent");
+        let dir = unique_tmp("bsk_ir_rel_parent");
         let sub = dir.join("pkg");
         fs::create_dir_all(&sub).unwrap();
         fs::write(dir.join("utils.py"), "x = 1\n").unwrap();
@@ -355,7 +369,7 @@ mod tests {
 
     #[test]
     fn test_resolve_relative_import_bare_dot() {
-        let dir = std::env::temp_dir().join("bsk_ir_rel_bare");
+        let dir = unique_tmp("bsk_ir_rel_bare");
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("__init__.py"), "").unwrap();
         let importing = dir.join("mod.py");
@@ -370,8 +384,8 @@ mod tests {
 
     #[test]
     fn test_extra_paths_searched() {
-        let root = std::env::temp_dir().join("bsk_ir_extra_root");
-        let extra = std::env::temp_dir().join("bsk_ir_extra_lib");
+        let root = unique_tmp("bsk_ir_extra_root");
+        let extra = unique_tmp("bsk_ir_extra_lib");
         fs::create_dir_all(&root).unwrap();
         fs::create_dir_all(&extra).unwrap();
         fs::write(extra.join("libmod.py"), "x = 1\n").unwrap();
@@ -390,8 +404,8 @@ mod tests {
 
     #[test]
     fn test_site_packages_searched() {
-        let root = std::env::temp_dir().join("bsk_ir_sp_root");
-        let sp = std::env::temp_dir().join("bsk_ir_sp_pkgs");
+        let root = unique_tmp("bsk_ir_sp_root");
+        let sp = unique_tmp("bsk_ir_sp_pkgs");
         fs::create_dir_all(&root).unwrap();
         fs::create_dir_all(&sp).unwrap();
         fs::write(sp.join("requests.py"), "").unwrap();
@@ -410,8 +424,8 @@ mod tests {
 
     #[test]
     fn test_workspace_root_takes_priority() {
-        let root = std::env::temp_dir().join("bsk_ir_prio_root");
-        let extra = std::env::temp_dir().join("bsk_ir_prio_extra");
+        let root = unique_tmp("bsk_ir_prio_root");
+        let extra = unique_tmp("bsk_ir_prio_extra");
         fs::create_dir_all(&root).unwrap();
         fs::create_dir_all(&extra).unwrap();
         fs::write(root.join("dup.py"), "root\n").unwrap();
@@ -431,7 +445,7 @@ mod tests {
 
     #[test]
     fn test_package_init_pyi_preferred() {
-        let dir = std::env::temp_dir().join("bsk_ir_pkg_pyi");
+        let dir = unique_tmp("bsk_ir_pkg_pyi");
         let pkg = dir.join("mypkg");
         fs::create_dir_all(&pkg).unwrap();
         fs::write(pkg.join("__init__.py"), "").unwrap();
@@ -446,7 +460,7 @@ mod tests {
 
     #[test]
     fn test_dotted_module_intermediate_missing() {
-        let dir = std::env::temp_dir().join("bsk_ir_dotted_miss");
+        let dir = unique_tmp("bsk_ir_dotted_miss");
         fs::create_dir_all(&dir).unwrap();
         // No pkg/ directory exists.
 
@@ -459,7 +473,7 @@ mod tests {
 
     #[test]
     fn test_resolve_relative_import_too_many_levels() {
-        let dir = std::env::temp_dir().join("bsk_ir_rel_deep");
+        let dir = unique_tmp("bsk_ir_rel_deep");
         fs::create_dir_all(&dir).unwrap();
         let importing = dir.join("mod.py");
 
@@ -473,7 +487,7 @@ mod tests {
 
     #[test]
     fn test_find_venv_dir_common_names() {
-        let dir = std::env::temp_dir().join("bsk_ir_venv");
+        let dir = unique_tmp("bsk_ir_venv");
         let venv = dir.join(".venv");
         fs::create_dir_all(&venv).unwrap();
 
@@ -487,7 +501,7 @@ mod tests {
 
     #[test]
     fn test_find_venv_dir_explicit_config() {
-        let dir = std::env::temp_dir().join("bsk_ir_venv_cfg");
+        let dir = unique_tmp("bsk_ir_venv_cfg");
         let venv = dir.join("my_env");
         fs::create_dir_all(&venv).unwrap();
 
@@ -504,7 +518,7 @@ mod tests {
 
     #[test]
     fn test_resolve_site_packages_unix_layout() {
-        let dir = std::env::temp_dir().join("bsk_ir_sp_unix");
+        let dir = unique_tmp("bsk_ir_sp_unix");
         let sp = dir
             .join(".venv")
             .join("lib")

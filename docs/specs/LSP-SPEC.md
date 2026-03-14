@@ -332,6 +332,173 @@ Show "N references" above each function and class definition.
 
 ---
 
+## Stub Resolution & Type Provenance
+
+> **Plan**: `docs/plans/CROSS-MODULE-ANALYSIS-PLAN.md` — Phases 1 and 4
+
+### Stub Resolution Order (PEP 561)
+
+Following PEP 561, matching Pyright's behaviour:
+
+1. **User stubs** — `.pyi` files in `stub-paths` config directories
+2. **User source** — `.py` files in the project
+3. **Stub-only packages** — installed `foopkg-stubs` packages (e.g. `types-requests`)
+4. **Inline-typed packages** — installed packages with `py.typed` marker
+5. **Bundled typeshed** — stdlib stubs compiled into the binary from `basilisk-stubs`
+6. **No stubs found** — type resolves to `Unknown`, BSK-E0010 fires
+
+### Stub Discovery Engine
+
+The `basilisk-stubs` crate provides stub resolution:
+
+```rust
+pub struct StubResolution {
+    pub module: String,
+    pub source: StubSource,
+    pub pyi_path: Option<PathBuf>,
+    pub tier: StubTier,
+}
+
+pub enum StubSource {
+    UserStub,       // from stub-paths config
+    StubPackage,    // from foopkg-stubs
+    InlineTyped,    // from py.typed marker
+    Typeshed,       // bundled
+}
+
+pub enum StubTier {
+    Tier1,  // hand-written, verified (typeshed, official stubs)
+    Tier2,  // auto-generated, community-reviewed
+    Tier3,  // best-effort inference (auto-generated)
+}
+```
+
+### typeshed Bundling
+
+The hardcoded `STDLIB_ROOTS` list is replaced by a compiled typeshed index:
+
+- `build.rs` in `basilisk-stubs` reads typeshed `.pyi` files at compile time
+- Produces a `phf` hash map for O(1) module lookup
+- `lookup_builtin()` queries this index
+- The stdlib whitelist becomes derived data, not a maintained list
+
+### `.pyi` File Parsing
+
+Since Basilisk uses `ruff_python_parser`, the same parser handles `.pyi` files:
+
+- Only signatures matter (function defs, class defs, variable annotations)
+- Bodies are `...` or `pass` — ignored
+- `@overload` decorator is significant
+- No runtime code analysis needed
+
+### Type Provenance Tracking
+
+Types carry metadata about where their type information came from:
+
+```rust
+pub enum TypeProvenance {
+    Source,      // from source code annotations or inference
+    StubTier1,   // from typeshed, hand-written stubs
+    StubTier2,   // from auto-generated, community-reviewed stubs
+    StubTier3,   // from best-effort auto-generated stubs
+    Untyped,     // no type information available
+}
+
+pub struct TrackedType {
+    pub ty: InferredType,
+    pub provenance: TypeProvenance,
+}
+```
+
+### Diagnostic Behaviour by Provenance
+
+| Provenance | BSK-E0010 | Downstream type errors | LSP hover |
+|------------|-----------|----------------------|-----------|
+| Source | not fired | normal errors | shows inferred type |
+| StubTier1 | not fired | normal errors | shows stub type |
+| StubTier2 | not fired | normal errors | shows type + "(auto-generated stub)" |
+| StubTier3 | downgraded to info | warnings only | shows type + "(best-effort, may be inaccurate)" |
+| Untyped | error (default) | **suppressed** | shows "Unknown (no stubs)" |
+
+One diagnostic at the import site is worth more than fifty cascading errors at use sites. When provenance is `Untyped`:
+
+1. BSK-E0010 fires once at the import
+2. The imported symbol becomes `Unknown` with `Untyped` provenance
+3. Downstream rules check provenance — if one operand is `Untyped`, the cascade is suppressed
+4. The developer fixes the root cause (add stubs, suppress, or configure) rather than fighting noise
+
+### Provenance in Hover
+
+| Cursor on | Hover display |
+|-----------|---------------|
+| Untyped import | `fastmcp (no type stubs available)` |
+| Tier 3 stub symbol | `FastMCP (best-effort stub, may be inaccurate)` |
+| typeshed symbol | `os.path.join (typeshed)` |
+| Tier 1 stub symbol | `requests.get(...) -> Response` (no annotation — trusted) |
+
+### Suppression System
+
+Four-mode severity for every rule: `error`, `warning`, `info`, `disabled`. Configurable at every scope:
+
+```python
+# Per-line suppression:
+from fastmcp import FastMCP  # type: ignore[BSK-E0010]
+
+# Per-line severity demotion:
+from fastmcp import FastMCP  # type: warning[BSK-E0010]
+
+# Block suppression:
+# type: disabled[BSK-E0010]
+from fastmcp import FastMCP
+from result import Result, Ok, Err
+# type: end-disabled[BSK-E0010]
+
+# Per-file:
+# basilisk: file-disabled[BSK-E0010]
+
+# Per-file relaxed mode (all errors become warnings):
+# basilisk: relaxed
+```
+
+**Precedence** (most specific wins): line > block > file > per-path > per-module > global rule > rule default.
+
+### Stub-Related Configuration
+
+| Setting Key | Type | Default | Description |
+|------------|------|---------|-------------|
+| `basilisk.stubPaths` | `string[]` | `[]` | Additional directories to search for `.pyi` stubs |
+
+`pyproject.toml` configuration:
+
+```toml
+[tool.basilisk]
+stub-paths = ["stubs/"]
+
+[tool.basilisk.rules]
+"BSK-E0010" = "warning"
+
+[tool.basilisk.per-module-overrides."fastmcp"]
+ignore-missing-stubs = true
+
+[tool.basilisk.per-module-overrides."django.*"]
+ignore-missing-stubs = true
+
+[tool.basilisk.per-path-overrides."vendor/**"]
+rules.disabled = ["BSK-E0010"]
+```
+
+### Auto-Stub Generation (CLI)
+
+```bash
+basilisk stubs generate requests      # generate stubs for one package
+basilisk stubs generate --all         # generate for all untyped imports
+basilisk stubs status                 # show stub coverage report
+```
+
+Generated stubs go into `.basilisk/stubs/`, tagged as Tier 3. The provenance system ensures these produce warnings, not false confidence.
+
+---
+
 ## Editor-Specific Specs
 
 For editor-specific implementation details (commands, UI, configuration schema, DAP proxy implementation), see:

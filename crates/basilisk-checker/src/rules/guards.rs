@@ -99,7 +99,7 @@ pub(crate) struct TransformClassInfo {
 fn extract_bool_kwarg(args_text: &str, key: &str) -> Option<bool> {
     let pattern = format!("{key}=");
     let idx = args_text.find(&pattern)?;
-    let after = args_text[idx + pattern.len()..].trim_start();
+    let after = args_text.get(idx + pattern.len()..)?.trim_start();
     if after.starts_with("True") {
         Some(true)
     } else if after.starts_with("False") {
@@ -135,7 +135,7 @@ pub(crate) fn collect_transform_functions(
         }
 
         // Extract the source region covering decorators + def line
-        let func_source_start = func.def_span.start as usize;
+        let func_source_start = func.def_span.start_usize();
         // Look at source from the function start to find @dataclass_transform(...)
         let Some(search_region) = module.source.get(func_source_start..) else {
             continue;
@@ -187,7 +187,7 @@ pub(crate) fn collect_transform_classes(
 
         // Look at source before the class definition to find decorators.
         // cls.def_span covers the entire class including decorators.
-        let cls_start = cls.def_span.start as usize;
+        let cls_start = cls.def_span.start_usize();
         // Find the `class` keyword to delimit the decorator region
         let Some(class_kw_offset) = module
             .source
@@ -216,7 +216,7 @@ pub(crate) fn collect_transform_classes(
                 .as_bytes()
                 .get(after_at_name)
                 .copied()
-                .unwrap_or(b'\n');
+                .map_or(b'\n', |c| c);
             if next_char.is_ascii_alphanumeric() || next_char == b'_' {
                 continue;
             }

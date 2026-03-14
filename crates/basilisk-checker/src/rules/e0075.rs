@@ -32,6 +32,7 @@ use std::collections::{HashMap, HashSet};
 use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -57,8 +58,7 @@ impl Rule for SelfTypeAttributeIncompatible {
                 let Some(ann_span) = attr.annotation_span else {
                     continue;
                 };
-                let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize)
-                else {
+                let Some(ann_text) = slice_span(source, ann_span) else {
                     continue;
                 };
                 if annotation_mentions_self(ann_text.trim()) {
@@ -109,7 +109,7 @@ impl Rule for SelfTypeAttributeIncompatible {
             .filter(|v| v.rhs_kind == basilisk_resolver::RhsKind::CallExpr)
             .filter_map(|v| {
                 let rhs_span = v.rhs_span?;
-                let rhs_text = source.get(rhs_span.start as usize..rhs_span.end as usize)?;
+                let rhs_text = slice_span(source, rhs_span)?;
                 let class_name = extract_callee_name(rhs_text)?;
                 Some((v.name.as_str(), class_name))
             })

@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Coverage boost tests batch 8: deep code path coverage.
 //! Targets uncovered branches in e0115, e0137, e0140, e0107, e0149, e0079, e0144, e0072
 #![allow(missing_docs)]
