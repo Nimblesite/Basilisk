@@ -24,6 +24,7 @@ pub mod rules;
 pub mod span_util;
 pub mod suppression;
 pub mod types;
+pub mod types_parsing;
 
 pub use diagnostic::{Diagnostic, ErrorCode, Severity};
 

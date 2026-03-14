@@ -285,7 +285,11 @@ pub fn byte_offset_to_line_in_source(source: &str, byte_offset: u32) -> usize {
 }
 
 #[cfg(test)]
-#[cfg_attr(test, allow(clippy::panic))]
+#[expect(
+    clippy::panic,
+    clippy::indexing_slicing,
+    reason = "Tests use assert macros (panic) and direct indexing for clarity"
+)]
 mod tests {
     use super::*;
 

@@ -1,0 +1,438 @@
+//! BSK-E0137: Generic protocol violations.
+//!
+//! Detects violations related to generic protocol usage:
+//!
+//! 1. **Protocol[T] combined with Generic[T]**: The `Protocol[T, S, ...]` shorthand
+//!    is already equivalent to `Protocol, Generic[T, S, ...]`. It is an error to
+//!    combine the shorthand with an explicit `Generic[...]` base.
+//!
+//! 2. **Incompatible generic protocol assignment**: When a module-level variable
+//!    is annotated with a concrete generic protocol specialisation like
+//!    `Proto[int, str]` and the RHS is a concrete class, the concrete class's
+//!    method signatures must be compatible with the substituted type arguments.
+//!
+//! 3. **Self-typed protocol method incompatibility**: When a protocol declares
+//!    methods using a `self: T` annotation (making the return type depend on the
+//!    concrete receiver), concrete classes that implement those methods with
+//!    incompatible signatures are flagged.
+//!
+//! ```python
+//! from typing import Generic, Protocol, TypeVar
+//!
+//! T_co = TypeVar("T_co", covariant=True)
+//!
+//! class Proto2(Protocol[T_co], Generic[T_co]):  # E — shorthand + Generic
+//!     ...
+//! ```
+//!
+//! PEP 544: <https://typing.readthedocs.io/en/latest/spec/protocol.html#generic-protocols>
+
+mod helpers;
+
+use std::collections::HashMap;
+
+use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule};
+
+use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
+
+use super::Rule;
+use helpers::{
+    check_self_typed_method_incompatibility, extract_constructor_name, find_method_mismatch,
+    get_self_typevar_name, method_has_typed_self, parse_subscript_annotation,
+};
+
+const CODE: ErrorCode = ErrorCode {
+    code: "BSK-E0137",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0137",
+};
+
+/// Emits BSK-E0137 for generic protocol violations.
+pub(crate) struct GenericProtocolViolation;
+
+impl Rule for GenericProtocolViolation {
+    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+        let source = &module.source;
+        let path = &module.path;
+
+        // Build a lookup map from class name to ClassInfo.
+        let class_map: HashMap<&str, &ClassInfo> = module
+            .classes
+            .iter()
+            .map(|cls| (cls.name.as_str(), cls))
+            .collect();
+
+        // Build a map from class name -> list of methods.
+        let class_methods: HashMap<&str, Vec<&FunctionInfo>> = module
+            .classes
+            .iter()
+            .map(|cls| {
+                let methods: Vec<&FunctionInfo> = module
+                    .functions
+                    .iter()
+                    .filter(|f| f.class_name.as_deref() == Some(cls.name.as_str()))
+                    .collect();
+                (cls.name.as_str(), methods)
+            })
+            .collect();
+
+        // Build TypeVar variance info.
+        let typevar_info: HashMap<&str, bool> = module
+            .typevar_calls
+            .iter()
+            .map(|tv| (tv.name.as_str(), tv.is_covariant || tv.is_contravariant))
+            .collect();
+
+        // --- Check 1: Protocol[T] combined with Generic[T] ---
+        check_protocol_generic_combined(module, path, diagnostics);
+
+        // --- Check 2: Generic protocol assignment type arg mismatch ---
+        check_generic_protocol_assignments(
+            module,
+            source,
+            path,
+            &class_map,
+            &class_methods,
+            &typevar_info,
+            diagnostics,
+        );
+
+        // --- Check 3: Self-typed protocol method incompatibility ---
+        check_self_typed_protocol_assignments(
+            module,
+            source,
+            path,
+            &class_map,
+            &class_methods,
+            diagnostics,
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Check 1: Protocol[T] shorthand combined with Generic[T]
+// ---------------------------------------------------------------------------
+
+/// Detect classes that inherit from both `Protocol[T]` (subscript) and `Generic[T]`.
+///
+/// Per PEP 544, `Protocol[T, S, ...]` is a shorthand for `Protocol, Generic[T, S, ...]`.
+/// Combining both is a redundant and invalid form.
+fn check_protocol_generic_combined(
+    module: &ResolvedModule,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for class in &module.classes {
+        // Only check classes that have Protocol as a base (either plain or subscripted).
+        let has_protocol_in_bases = class.bases.iter().any(|b| b == "Protocol")
+            || class
+                .base_subscripts
+                .iter()
+                .any(|bs| bs.base_name == "Protocol");
+        if !has_protocol_in_bases {
+            continue;
+        }
+
+        // Check if any base subscript uses Protocol[T] (subscript form).
+        let protocol_is_subscripted = class
+            .base_subscripts
+            .iter()
+            .any(|bs| bs.base_name == "Protocol");
+
+        if !protocol_is_subscripted {
+            continue;
+        }
+
+        // Check if Generic also appears as a base (subscript or plain).
+        let has_generic_base = class.bases.iter().any(|b| b == "Generic")
+            || class
+                .base_subscripts
+                .iter()
+                .any(|bs| bs.base_name == "Generic");
+
+        if has_generic_base {
+            diagnostics.push(Diagnostic {
+                code: CODE.clone(),
+                severity: Severity::Error,
+                message: format!(
+                    "Protocol class `{}` combines `Protocol[T]` shorthand with explicit `Generic[T]` base",
+                    class.name
+                ),
+                span: class.name_span,
+                path: path.to_owned(),
+                help: Some(
+                    "Remove the explicit `Generic[T]` base; `Protocol[T]` already implies \
+                     `Generic[T]`"
+                        .to_owned(),
+                ),
+                note: Some(
+                    "PEP 544: `Protocol[T, S, ...]` is shorthand for `Protocol, Generic[T, S, ...]`. \
+                     Combining the two is redundant and invalid."
+                        .to_owned(),
+                ),
+            });
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Check 2: Generic protocol assignment with wrong type arguments
+// ---------------------------------------------------------------------------
+
+/// Check module-level annotated assignments where:
+/// - The annotation is a subscripted generic protocol (`Proto[A, B]`)
+/// - The RHS is a concrete class constructor call
+/// - The concrete class's methods are incompatible with the substituted type args.
+fn check_generic_protocol_assignments(
+    module: &ResolvedModule,
+    source: &str,
+    path: &str,
+    class_map: &HashMap<&str, &ClassInfo>,
+    class_methods: &HashMap<&str, Vec<&FunctionInfo>>,
+    typevar_info: &HashMap<&str, bool>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for var in &module.module_vars {
+        if !var.has_annotation {
+            continue;
+        }
+
+        let Some(ann_span) = var.annotation_span else {
+            continue;
+        };
+        let Some(rhs_span) = var.rhs_span else {
+            continue;
+        };
+
+        let Some(ann_text) = slice_span(source, ann_span) else {
+            continue;
+        };
+        let ann_text = ann_text.trim();
+
+        // Only process subscripted annotations like `Proto[T1, T2]`.
+        let Some((proto_name, type_args)) = parse_subscript_annotation(ann_text) else {
+            continue;
+        };
+
+        // Look up the protocol class.
+        let Some(proto_class) = class_map.get(proto_name) else {
+            continue;
+        };
+
+        // Only process Protocol classes.
+        let is_protocol = proto_class.bases.iter().any(|b| b == "Protocol")
+            || proto_class
+                .base_subscripts
+                .iter()
+                .any(|bs| bs.base_name == "Protocol");
+        if !is_protocol {
+            continue;
+        }
+
+        // Get the protocol's type parameters in order.
+        let proto_type_params: Vec<&str> = proto_class
+            .generic_params
+            .iter()
+            .map(|p| p.name.as_str())
+            .collect();
+
+        if proto_type_params.is_empty() || type_args.len() != proto_type_params.len() {
+            continue;
+        }
+
+        // Build the substitution map: TypeVar name -> concrete type.
+        let substitution: HashMap<&str, &str> = proto_type_params
+            .iter()
+            .zip(type_args.iter())
+            .map(|(&tv, arg)| (tv, arg.as_str()))
+            .collect();
+
+        // Extract RHS class name.
+        let Some(rhs_text) = slice_span(source, rhs_span) else {
+            continue;
+        };
+        let rhs_text = rhs_text.trim();
+        let Some(rhs_class_name) = extract_constructor_name(rhs_text) else {
+            continue;
+        };
+
+        // If same class, skip.
+        if rhs_class_name == proto_name {
+            continue;
+        }
+
+        // Check that the concrete class's methods are compatible with the substituted types.
+        let Some(rhs_methods) = class_methods.get(rhs_class_name) else {
+            continue;
+        };
+
+        // For each method in the protocol, check the concrete class's signature.
+        let Some(proto_methods) = class_methods.get(proto_name) else {
+            continue;
+        };
+
+        if let Some(mismatch_details) = find_method_mismatch(
+            proto_methods,
+            rhs_methods,
+            source,
+            &substitution,
+            typevar_info,
+        ) {
+            diagnostics.push(Diagnostic {
+                code: CODE.clone(),
+                severity: Severity::Error,
+                message: format!(
+                    "Class `{rhs_class_name}` is incompatible with `{ann_text}`: {mismatch_details}"
+                ),
+                span: var.name_span,
+                path: path.to_owned(),
+                help: Some(format!(
+                    "The concrete class `{rhs_class_name}` does not satisfy the \
+                     type constraints of `{ann_text}`"
+                )),
+                note: Some(
+                    "Generic protocols require that the implementing class's method signatures \
+                     are compatible with the substituted type arguments"
+                        .to_owned(),
+                ),
+            });
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Check 3: Self-typed protocol method incompatibility
+// ---------------------------------------------------------------------------
+
+/// Check module-level annotated assignments for protocols that use `self: T`
+/// typed parameters, where the concrete class doesn't correctly implement them.
+///
+/// When a protocol declares `def f(self: T) -> T` and a concrete class is
+/// assigned to a variable of that protocol type, the concrete class must
+/// implement `f` with a compatible self-typed signature.
+fn check_self_typed_protocol_assignments(
+    module: &ResolvedModule,
+    source: &str,
+    path: &str,
+    class_map: &HashMap<&str, &ClassInfo>,
+    class_methods: &HashMap<&str, Vec<&FunctionInfo>>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for var in &module.module_vars {
+        if !var.has_annotation {
+            continue;
+        }
+
+        let Some(ann_span) = var.annotation_span else {
+            continue;
+        };
+        let Some(rhs_span) = var.rhs_span else {
+            continue;
+        };
+
+        let Some(ann_text) = slice_span(source, ann_span) else {
+            continue;
+        };
+        let ann_name = ann_text.trim();
+
+        // Skip subscripted annotations (handled by Check 2).
+        if ann_name.contains('[') {
+            continue;
+        }
+
+        // Look up the protocol class.
+        let Some(proto_class) = class_map.get(ann_name) else {
+            continue;
+        };
+
+        // Only process Protocol classes.
+        let is_protocol = proto_class.bases.iter().any(|b| b == "Protocol")
+            || proto_class
+                .base_subscripts
+                .iter()
+                .any(|bs| bs.base_name == "Protocol");
+        if !is_protocol {
+            continue;
+        }
+
+        // Extract RHS class name.
+        let Some(rhs_text) = slice_span(source, rhs_span) else {
+            continue;
+        };
+        let rhs_text = rhs_text.trim();
+        let Some(rhs_class_name) = extract_constructor_name(rhs_text) else {
+            continue;
+        };
+
+        if rhs_class_name == ann_name {
+            continue;
+        }
+
+        // Check if the protocol has self-typed methods (methods with `self: T`).
+        let Some(proto_methods) = class_methods.get(ann_name) else {
+            continue;
+        };
+
+        let self_typed_methods: Vec<&FunctionInfo> = proto_methods
+            .iter()
+            .filter(|m| method_has_typed_self(m))
+            .copied()
+            .collect();
+
+        if self_typed_methods.is_empty() {
+            continue;
+        }
+
+        // Get the concrete class's methods.
+        let Some(concrete_methods) = class_methods.get(rhs_class_name) else {
+            continue;
+        };
+
+        // Check each self-typed protocol method.
+        for proto_method in &self_typed_methods {
+            let Some(concrete_method) = concrete_methods
+                .iter()
+                .find(|m| m.name == proto_method.name)
+            else {
+                continue;
+            };
+
+            // Get the TypeVar name used as the self annotation in the protocol.
+            let proto_self_typevar = get_self_typevar_name(proto_method, source);
+
+            // Check if concrete method has a compatible self-typed or Self-typed signature.
+            if let Some(tv_name) = &proto_self_typevar {
+                let mismatch = check_self_typed_method_incompatibility(
+                    proto_method,
+                    concrete_method,
+                    tv_name,
+                    source,
+                );
+
+                if let Some(detail) = mismatch {
+                    diagnostics.push(Diagnostic {
+                        code: CODE.clone(),
+                        severity: Severity::Error,
+                        message: format!(
+                            "Class `{rhs_class_name}` is incompatible with protocol `{ann_name}`: \
+                             {detail}"
+                        ),
+                        span: var.name_span,
+                        path: path.to_owned(),
+                        help: Some(format!(
+                            "Method `{}` in `{rhs_class_name}` must match the self-typed \
+                             signature declared in protocol `{ann_name}`",
+                            proto_method.name
+                        )),
+                        note: Some(
+                            "PEP 544: methods with `self: T` annotations in protocols require \
+                             that implementing classes use compatible self-typed or `Self` signatures"
+                                .to_owned(),
+                        ),
+                    });
+                    break;
+                }
+            }
+        }
+    }
+}

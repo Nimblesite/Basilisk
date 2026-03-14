@@ -1,0 +1,216 @@
+//! Text document lifecycle handlers for the Basilisk LSP server.
+//!
+//! Covers `did_open`, `did_change`, `did_save`, `did_close`, and
+//! `did_change_watched_files`.
+
+use std::sync::Arc;
+
+use tower_lsp::lsp_types::{
+    DidChangeTextDocumentParams, DidChangeWatchedFilesParams, DidCloseTextDocumentParams,
+    DidOpenTextDocumentParams, DidSaveTextDocumentParams, FileChangeType, Url,
+};
+use tracing::info;
+
+use crate::config::AnalysisMode;
+use crate::util::position_to_byte_offset;
+
+use super::{LspServer, FILE_WATCHER_DEBOUNCE_MS};
+
+/// Handle `textDocument/didOpen`: index the document and publish diagnostics.
+pub(super) async fn did_open(server: &LspServer, params: DidOpenTextDocumentParams) {
+    let uri = params.text_document.uri;
+    let text = params.text_document.text;
+    let version = params.text_document.version;
+    let guard = server.index.read().await;
+    let Some(index) = guard.as_ref() else { return };
+    let diags = index.set_open(&uri, &text, version);
+    drop(guard);
+    server.client.publish_diagnostics(uri, diags, None).await;
+}
+
+/// Handle `textDocument/didChange`: apply incremental edits and republish diagnostics.
+pub(super) async fn did_change(server: &LspServer, params: DidChangeTextDocumentParams) {
+    let uri = params.text_document.uri;
+    let version = params.text_document.version;
+
+    // Get current text for incremental edits.
+    let guard = server.index.read().await;
+    let Some(index) = guard.as_ref() else { return };
+    let mut text = index.get_text(&uri).unwrap_or_default();
+    drop(guard);
+
+    // Apply incremental changes.
+    for change in params.content_changes {
+        if let Some(range) = change.range {
+            let start = position_to_byte_offset(&text, range.start);
+            let end = position_to_byte_offset(&text, range.end);
+            text.replace_range(start..end, &change.text);
+        } else {
+            text = change.text;
+        }
+    }
+
+    let guard = server.index.read().await;
+    let Some(index) = guard.as_ref() else { return };
+    let diags = index.set_open(&uri, &text, version);
+    drop(guard);
+    server.client.publish_diagnostics(uri, diags, None).await;
+}
+
+/// Handle `textDocument/didSave`: re-run the pipeline on the cached text.
+pub(super) async fn did_save(server: &LspServer, params: DidSaveTextDocumentParams) {
+    let uri = params.text_document.uri;
+    // Re-run the pipeline on the cached in-memory text (already up-to-date).
+    let guard = server.index.read().await;
+    let Some(index) = guard.as_ref() else { return };
+    let Some(text) = index.get_text(&uri) else {
+        return;
+    };
+    let diags = index.set_open(&uri, &text, 0);
+    drop(guard);
+    server.client.publish_diagnostics(uri, diags, None).await;
+}
+
+/// Handle `textDocument/didClose`: clear or re-publish diagnostics according to
+/// the current analysis mode and whether the file is inside a workspace root.
+pub(super) async fn did_close(server: &LspServer, params: DidCloseTextDocumentParams) {
+    let uri = params.text_document.uri;
+    super::diaglog!("[DIAG] did_close ENTER uri={uri}");
+    let guard = server.index.read().await;
+    let Some(index) = guard.as_ref() else {
+        super::diaglog!("[DIAG] did_close: no index, clearing");
+        info!(uri = %uri, "did_close: no index, clearing diagnostics");
+        server.client.publish_diagnostics(uri, vec![], None).await;
+        return;
+    };
+    let mode = index.mode;
+    let roots_debug: Vec<_> = index
+        .roots
+        .iter()
+        .map(|r| r.display().to_string())
+        .collect();
+    super::diaglog!("[DIAG] did_close: mode={mode:?} roots={roots_debug:?} uri={uri}");
+    info!(uri = %uri, ?mode, "did_close: processing");
+
+    match mode {
+        AnalysisMode::OpenFilesOnly => {
+            // Remove from index so no subsequent event republishes.
+            if let Ok(path) = uri.to_file_path() {
+                let _ = index.files.remove(&path);
+            }
+            drop(guard);
+            super::diaglog!("[DIAG] did_close: OpenFilesOnly -> clearing uri={uri}");
+            info!(uri = %uri, "did_close: openFilesOnly — clearing diagnostics");
+            server.client.publish_diagnostics(uri, vec![], None).await;
+        }
+        AnalysisMode::WholeModule | AnalysisMode::CrossModule => {
+            let in_workspace = uri
+                .to_file_path()
+                .is_ok_and(|path| index.roots.iter().any(|root| path.starts_with(root)));
+            super::diaglog!(
+                "[DIAG] did_close: WholeModule in_workspace={in_workspace} uri={uri}"
+            );
+            if in_workspace {
+                let (publish_uri, diags) = index.set_closed(&uri);
+                let diag_count = diags.len();
+                drop(guard);
+                super::diaglog!(
+                    "[DIAG] did_close: WholeModule in-workspace republishing {diag_count} diags"
+                );
+                info!(uri = %uri, diag_count, "did_close: wholeModule in-workspace — republishing");
+                server
+                    .client
+                    .publish_diagnostics(publish_uri, diags, None)
+                    .await;
+            } else {
+                // Remove from index so no subsequent event republishes.
+                if let Ok(path) = uri.to_file_path() {
+                    let _ = index.files.remove(&path);
+                }
+                drop(guard);
+                super::diaglog!(
+                    "[DIAG] did_close: WholeModule out-of-workspace -> clearing uri={uri}"
+                );
+                info!(uri = %uri, "did_close: wholeModule out-of-workspace — clearing");
+                server.client.publish_diagnostics(uri, vec![], None).await;
+            }
+        }
+    }
+}
+
+/// Handle `workspace/didChangeWatchedFiles`: debounce and republish diagnostics
+/// for changed/created Python files, and clear diagnostics for deleted files.
+pub(super) async fn did_change_watched_files(
+    server: &LspServer,
+    params: DidChangeWatchedFilesParams,
+) {
+    // Quick mode check — bail early for openFilesOnly without taking the write lock.
+    {
+        let guard = server.index.read().await;
+        let Some(index) = guard.as_ref() else { return };
+        if index.mode == AnalysisMode::OpenFilesOnly {
+            return; // File-watcher events are irrelevant in openFilesOnly mode.
+        }
+    }
+
+    // Classify the incoming changes, filtering to Python files only.
+    let mut reload_targets: Vec<Url> = Vec::new();
+    let mut delete_targets: Vec<Url> = Vec::new();
+
+    for change in &params.changes {
+        let uri = &change.uri;
+        let path = uri.to_file_path().unwrap_or_default();
+        if !path
+            .extension()
+            .is_some_and(|ext| ext == "py" || ext == "pyi")
+        {
+            continue;
+        }
+        match change.typ {
+            FileChangeType::CREATED | FileChangeType::CHANGED => {
+                reload_targets.push(uri.clone());
+            }
+            FileChangeType::DELETED => {
+                delete_targets.push(uri.clone());
+            }
+            _ => {}
+        }
+    }
+
+    if reload_targets.is_empty() && delete_targets.is_empty() {
+        return;
+    }
+
+    // Debounce: abort any pending watcher task and replace with a new one
+    // that fires after FILE_WATCHER_DEBOUNCE_MS milliseconds.
+    let index_lock = Arc::clone(&server.index);
+    let client = server.client.clone();
+
+    let task = tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(FILE_WATCHER_DEBOUNCE_MS)).await;
+
+        let guard = index_lock.read().await;
+        let Some(index) = guard.as_ref() else { return };
+
+        let reload_results: Vec<_> = reload_targets
+            .iter()
+            .filter_map(|uri| index.reload_from_disk(uri))
+            .collect();
+
+        drop(guard);
+
+        for (uri, diags) in reload_results {
+            client.publish_diagnostics(uri, diags, None).await;
+        }
+        for uri in delete_targets {
+            client.publish_diagnostics(uri, vec![], None).await;
+        }
+    });
+
+    let abort_handle = task.abort_handle();
+    let mut debounce = server.watcher_debounce.lock().await;
+    if let Some(old) = debounce.take() {
+        old.abort();
+    }
+    *debounce = Some(abort_handle);
+}

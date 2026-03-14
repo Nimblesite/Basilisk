@@ -18,6 +18,8 @@
 //! 5. **No custom `__init__` with arguments** (L130): Classes inheriting only
 //!    from `object` (no custom `__init__` or `__new__`) cannot accept arguments.
 
+mod helpers;
+
 use std::collections::HashMap;
 
 use basilisk_resolver::{ResolvedModule, Span};
@@ -26,6 +28,10 @@ use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 use crate::span_util::slice_span;
 
 use super::Rule;
+use helpers::{
+    classify_literal_type, extract_type_args_text, find_init_in_hierarchy, has_custom_init_in_bases,
+    is_namedtuple_class, is_subclass, is_type_compatible, resolve_string_annotation,
+};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0111",
@@ -383,54 +389,10 @@ fn check_no_init_with_args(
     });
 }
 
-/// Collect all base class names (simple and subscripted) for a class.
-fn all_base_names(class_info: &basilisk_resolver::ClassInfo) -> Vec<&str> {
-    let mut names: Vec<&str> = class_info
-        .bases
-        .iter()
-        .map(|b| b.split('[').next().unwrap_or(b.as_str()))
-        .collect();
-    for entry in &class_info.base_subscripts {
-        let name = entry.base_name.as_str();
-        if !names.contains(&name) {
-            names.push(name);
-        }
-    }
-    names
-}
-
-/// Recursively check if any base class defines `__init__` or `__new__`.
-fn has_custom_init_in_bases(
-    class_info: &basilisk_resolver::ClassInfo,
-    class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
-    method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
-) -> bool {
-    for base_name in all_base_names(class_info) {
-        if base_name == "object" || base_name == "Generic" || base_name == "Protocol" {
-            continue;
-        }
-
-        // Check if the base class itself defines __init__ or __new__.
-        if method_map.contains_key(&(base_name, "__init__"))
-            || method_map.contains_key(&(base_name, "__new__"))
-        {
-            return true;
-        }
-
-        // Recurse into the base's bases.
-        if let Some(base_class) = class_map.get(base_name) {
-            if has_custom_init_in_bases(base_class, class_map, method_map) {
-                return true;
-            }
-        }
-    }
-    false
-}
-
 /// Check 2: Self type incompatibility through inheritance.
 ///
-/// When `__init__` has `self: Self | None`, passing a base-class instance
-/// where `Self` expects the subclass is an error.
+/// When `__init__` has `self: Self | None`, passing a base-class instance where
+/// `Self` expects the subclass is an error.
 fn check_self_type_incompatibility(
     call: &ruff_python_ast::ExprCall,
     class_name: &str,
@@ -506,61 +468,6 @@ fn check_self_type_incompatibility(
             }
         }
     }
-}
-
-/// Find `__init__` methods for a class, searching up the MRO.
-fn find_init_in_hierarchy<'a>(
-    class_name: &str,
-    class_info: &basilisk_resolver::ClassInfo,
-    class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
-    method_map: &'a HashMap<(&str, &str), Vec<&'a basilisk_resolver::FunctionInfo>>,
-) -> Option<Vec<&'a basilisk_resolver::FunctionInfo>> {
-    // Check the class itself first.
-    if let Some(funcs) = method_map.get(&(class_name, "__init__")) {
-        return Some(funcs.clone());
-    }
-
-    // Walk bases (both simple and subscripted).
-    for base_name in all_base_names(class_info) {
-        if base_name == "object" || base_name == "Generic" || base_name == "Protocol" {
-            continue;
-        }
-
-        if let Some(funcs) = method_map.get(&(base_name, "__init__")) {
-            return Some(funcs.clone());
-        }
-
-        if let Some(base_class) = class_map.get(base_name) {
-            if let Some(funcs) =
-                find_init_in_hierarchy(base_name, base_class, class_map, method_map)
-            {
-                return Some(funcs);
-            }
-        }
-    }
-
-    None
-}
-
-/// Check if `class_name` is a subclass of `base_name` by walking the class hierarchy.
-fn is_subclass(
-    class_name: &str,
-    base_name: &str,
-    class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
-) -> bool {
-    let Some(class_info) = class_map.get(class_name) else {
-        return false;
-    };
-
-    for base in all_base_names(class_info) {
-        if base == base_name {
-            return true;
-        }
-        if is_subclass(base, base_name, class_map) {
-            return true;
-        }
-    }
-    false
 }
 
 /// Check arguments to `__init__` after type parameter substitution.
@@ -763,109 +670,4 @@ fn check_self_param_init_mismatch(
             )),
         });
     }
-}
-
-/// Extract type argument texts from a subscript slice expression.
-fn extract_type_args_text(slice: &ruff_python_ast::Expr, source: &str) -> Vec<String> {
-    use ruff_python_ast::Expr;
-    use ruff_text_size::Ranged as _;
-
-    match slice {
-        Expr::Tuple(tuple) => tuple
-            .elts
-            .iter()
-            .map(|e| {
-                let range = e.range();
-                source
-                    .get(range.start().to_usize()..range.end().to_usize())
-                    .unwrap_or("")
-                    .trim()
-                    .to_owned()
-            })
-            .collect(),
-        other => {
-            let range = other.range();
-            vec![source
-                .get(range.start().to_usize()..range.end().to_usize())
-                .unwrap_or("")
-                .trim()
-                .to_owned()]
-        }
-    }
-}
-
-/// Resolve a string annotation by stripping surrounding quotes.
-fn resolve_string_annotation(annotation: &str) -> String {
-    if (annotation.starts_with('"') && annotation.ends_with('"'))
-        || (annotation.starts_with('\'') && annotation.ends_with('\''))
-    {
-        annotation
-            .get(1..annotation.len().saturating_sub(1))
-            .unwrap_or(annotation)
-            .to_owned()
-    } else {
-        annotation.to_owned()
-    }
-}
-
-/// Classify the Python type of a literal expression.
-fn classify_literal_type(expr: &ruff_python_ast::Expr) -> Option<&'static str> {
-    use ruff_python_ast::Expr;
-    match expr {
-        Expr::StringLiteral(_) => Some("str"),
-        Expr::NumberLiteral(num) => {
-            if num.value.is_int() {
-                Some("int")
-            } else {
-                Some("float")
-            }
-        }
-        Expr::BooleanLiteral(_) => Some("bool"),
-        Expr::BytesLiteral(_) => Some("bytes"),
-        Expr::NoneLiteral(_) => Some("None"),
-        _ => None,
-    }
-}
-
-/// Check if an argument type is compatible with a parameter type.
-fn is_type_compatible(arg_type: &str, param_type: &str) -> bool {
-    if arg_type == param_type {
-        return true;
-    }
-    if param_type == "Any" || param_type == "object" {
-        return true;
-    }
-    if param_type == "int" && arg_type == "bool" {
-        return true;
-    }
-    if param_type == "float" && (arg_type == "int" || arg_type == "bool") {
-        return true;
-    }
-    if param_type == "complex" && (arg_type == "int" || arg_type == "float" || arg_type == "bool") {
-        return true;
-    }
-    if param_type.contains('|') {
-        return param_type
-            .split('|')
-            .any(|part| is_type_compatible(arg_type, part.trim()));
-    }
-    false
-}
-
-/// Check if a class is a `NamedTuple` subclass (directly or transitively).
-fn is_namedtuple_class(
-    class_info: &basilisk_resolver::ClassInfo,
-    class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
-) -> bool {
-    for base_name in all_base_names(class_info) {
-        if base_name == "NamedTuple" {
-            return true;
-        }
-        if let Some(base_class) = class_map.get(base_name) {
-            if is_namedtuple_class(base_class, class_map) {
-                return true;
-            }
-        }
-    }
-    false
 }

@@ -1,27 +1,7 @@
-//! BSK-E0142: `dataclass_transform` violations when the transform is applied via a base class.
+//! Helper types and functions for BSK-E0142.
 //!
-//! When a class is decorated with `@dataclass_transform(...)`, subclasses that inherit
-//! from it behave like dataclasses with the transform's default settings overridable by
-//! keyword arguments on the class definition.
-//!
-//! This rule detects:
-//! 1. A non-frozen subclass inheriting from a frozen transform-class (line 51).
-//! 2. Attribute assignment on a frozen transform-class instance (lines 63, 122).
-//! 3. Positional arguments to a `kw_only` transform-class constructor (lines 66, 82).
-//! 4. Comparison operators on transform-class instances that lack `order=True` (line 72).
-//!
-//! ```python
-//! from typing import dataclass_transform
-//!
-//! @dataclass_transform(kw_only_default=True)
-//! class ModelBase: ...
-//!
-//! class Customer(ModelBase, frozen=True):
-//!     id: int
-//!
-//! c = Customer(3)           # E — kw_only requires keyword args
-//! c.id = 4                  # E — frozen instance is immutable
-//! ```
+//! Contains data types for transform-class settings, source text parsing
+//! utilities, and the four sub-checks that back [`DataclassTransformClassViolation`].
 
 use std::collections::HashMap;
 
@@ -30,34 +10,32 @@ use basilisk_resolver::{ResolvedModule, Span};
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 use crate::span_util::slice_span;
 
-use super::Rule;
-
-const CODE: ErrorCode = ErrorCode {
+pub(super) const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0142",
     docs_url: "https://www.basilisk-python.dev/errors/BSK-E0142",
 };
 
 /// Effective settings for a class that inherits from a `@dataclass_transform` base.
 #[derive(Debug, Clone)]
-struct TransformClassSettings {
+pub(super) struct TransformClassSettings {
     /// Whether this class is effectively frozen.
-    frozen: bool,
+    pub(super) frozen: bool,
     /// Whether this class has keyword-only constructor parameters.
-    kw_only: bool,
+    pub(super) kw_only: bool,
     /// Whether this class has ordering comparisons synthesised.
-    order: bool,
+    pub(super) order: bool,
 }
 
 /// Defaults extracted from a `@dataclass_transform(...)` decorator on a class.
 #[derive(Debug, Clone)]
-struct TransformBaseDefaults {
-    frozen_default: bool,
-    kw_only_default: bool,
-    order_default: bool,
+pub(super) struct TransformBaseDefaults {
+    pub(super) frozen_default: bool,
+    pub(super) kw_only_default: bool,
+    pub(super) order_default: bool,
 }
 
 /// Extract a boolean keyword argument value from a parenthesised argument text.
-fn extract_bool_kwarg(args_text: &str, key: &str) -> Option<bool> {
+pub(super) fn extract_bool_kwarg(args_text: &str, key: &str) -> Option<bool> {
     let pattern = format!("{key}=");
     let idx = args_text.find(&pattern)?;
     let after = args_text[idx + pattern.len()..].trim_start();
@@ -71,7 +49,7 @@ fn extract_bool_kwarg(args_text: &str, key: &str) -> Option<bool> {
 }
 
 /// Extract the text inside `(...)` following `end_pos` in `source`.
-fn extract_paren_args(source: &str, name_end: usize) -> Option<&str> {
+pub(super) fn extract_paren_args(source: &str, name_end: usize) -> Option<&str> {
     let rest = source.get(name_end..)?;
     let open = rest.find('(')?;
     let after_open = name_end + open + 1;
@@ -98,14 +76,13 @@ fn extract_paren_args(source: &str, name_end: usize) -> Option<&str> {
 
 /// Find all class names (in this module) that are decorated with `@dataclass_transform`
 /// and parse their default settings.
-fn collect_transform_base_classes(
+pub(super) fn collect_transform_base_classes(
     module: &ResolvedModule,
 ) -> HashMap<String, TransformBaseDefaults> {
     let source = &module.source;
     let mut result = HashMap::new();
 
     for cls in &module.classes {
-        // Check decorator_spans for "dataclass_transform".
         let has_dt = cls
             .decorator_spans
             .iter()
@@ -114,7 +91,6 @@ fn collect_transform_base_classes(
             continue;
         }
 
-        // Find the `@dataclass_transform` in the source before the class keyword.
         let cls_start = cls.def_span.start_usize();
         let search_end = cls_start
             + source
@@ -155,7 +131,7 @@ fn collect_transform_base_classes(
 
 /// For each class in the module, determine if it inherits (directly) from a
 /// `@dataclass_transform` base class and compute its effective settings.
-fn collect_transform_subclasses<'a>(
+pub(super) fn collect_transform_subclasses<'a>(
     module: &'a ResolvedModule,
     transform_bases: &HashMap<String, TransformBaseDefaults>,
 ) -> HashMap<&'a str, TransformClassSettings> {
@@ -163,7 +139,6 @@ fn collect_transform_subclasses<'a>(
     let mut result = HashMap::new();
 
     for cls in &module.classes {
-        // Find a transform base that this class inherits from.
         let Some((_, base_defaults)) = cls
             .bases
             .iter()
@@ -172,23 +147,18 @@ fn collect_transform_subclasses<'a>(
             continue;
         };
 
-        // Start with the base defaults.
         let mut settings = TransformClassSettings {
             frozen: base_defaults.frozen_default,
             kw_only: base_defaults.kw_only_default,
             order: base_defaults.order_default,
         };
 
-        // Override with keyword arguments on the class definition itself.
-        // These appear in `class Foo(Base, frozen=True, kw_only=False, order=True): ...`
-        // We extract them from the source text around the class name.
         let name_end = cls.name_span.end_usize();
         let Some(rest) = source.get(name_end..) else {
             let _ = result.insert(cls.name.as_str(), settings);
             continue;
         };
 
-        // Find the bases parenthesis.
         let Some(open_paren) = rest.find('(') else {
             let _ = result.insert(cls.name.as_str(), settings);
             continue;
@@ -200,7 +170,6 @@ fn collect_transform_subclasses<'a>(
             continue;
         };
 
-        // Find closing `)`.
         let mut depth = 1i32;
         let mut close_offset = inner.len();
         for (idx, ch) in inner.char_indices() {
@@ -240,20 +209,15 @@ fn collect_transform_subclasses<'a>(
 
 /// Compute the effective `frozen/kw_only/order` settings for a class that
 /// **inherits from another transform subclass** (not directly from the base).
-///
-/// This handles the case where `Customer1Subclass(Customer1)` where `Customer1`
-/// is itself a transform subclass.
-fn resolve_inherited_settings<'a>(
+pub(super) fn resolve_inherited_settings<'a>(
     cls_name: &str,
     module: &'a ResolvedModule,
     direct_settings: &HashMap<&'a str, TransformClassSettings>,
 ) -> Option<TransformClassSettings> {
-    // If this class itself is a direct transform subclass, return that.
     if let Some(s) = direct_settings.get(cls_name) {
         return Some(s.clone());
     }
 
-    // Otherwise check if any base is a direct (or indirect) transform subclass.
     let cls = module.classes.iter().find(|c| c.name == cls_name)?;
     for base in &cls.bases {
         if let Some(s) = resolve_inherited_settings(base, module, direct_settings) {
@@ -279,7 +243,7 @@ fn line_start_offset(source: &str, line: usize) -> Option<u32> {
 }
 
 /// Return a span covering the trimmed content of a source line (1-based).
-fn span_for_source_line(source: &str, line: usize) -> Span {
+pub(super) fn span_for_source_line(source: &str, line: usize) -> Span {
     let Some(start_u32) = line_start_offset(source, line) else {
         return Span { start: 0, end: 0 };
     };
@@ -298,71 +262,14 @@ fn span_for_source_line(source: &str, line: usize) -> Span {
     }
 }
 
-/// Emits BSK-E0142 for `dataclass_transform` violations via class-based transform.
-pub(crate) struct DataclassTransformClassViolation;
-
-impl Rule for DataclassTransformClassViolation {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let transform_bases = collect_transform_base_classes(module);
-        if transform_bases.is_empty() {
-            return;
-        }
-
-        // Direct transform subclasses (inherit from a @dataclass_transform base).
-        let direct_settings = collect_transform_subclasses(module, &transform_bases);
-        if direct_settings.is_empty() {
-            return;
-        }
-
-        let source = &module.source;
-        let path = &module.path;
-
-        // Build a map of all transform-class instances at module level:
-        // variable_name -> (class_name, settings).
-        let mut instance_map: HashMap<&str, (&str, TransformClassSettings)> = HashMap::new();
-        for var in &module.module_vars {
-            let Some(rhs_span) = var.rhs_span else {
-                continue;
-            };
-            let Some(rhs_text) = slice_span(source, rhs_span) else {
-                continue;
-            };
-            // Extract the callee name: `Customer1(...)` -> `"Customer1"`.
-            let callee = rhs_text.split(['(', '[']).next().unwrap_or("").trim();
-            if callee.is_empty() {
-                continue;
-            }
-            // Resolve through any dot-qualifiers.
-            let callee = callee.rsplit('.').next().unwrap_or(callee);
-
-            if let Some(settings) = resolve_inherited_settings(callee, module, &direct_settings) {
-                let _ = instance_map.insert(var.name.as_str(), (callee, settings));
-            }
-        }
-
-        // --- Check 1: Non-frozen subclass inheriting from a frozen transform class ---
-        check_frozen_inheritance(module, &direct_settings, path, diagnostics);
-
-        // --- Check 2: Attribute assignment on frozen transform-class instances ---
-        check_frozen_instance_assignment(module, &instance_map, source, path, diagnostics);
-
-        // --- Check 3: Positional args to kw_only transform-class constructor ---
-        check_kw_only_positional_args(module, &direct_settings, source, path, diagnostics);
-
-        // --- Check 4: Comparison operator on instance without order=True ---
-        check_no_order_comparison(module, &instance_map, source, path, diagnostics);
-    }
-}
-
 /// Check 1: A non-frozen class directly inheriting from a frozen transform subclass.
-fn check_frozen_inheritance(
+pub(super) fn check_frozen_inheritance(
     module: &ResolvedModule,
     direct_settings: &HashMap<&str, TransformClassSettings>,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for cls in &module.classes {
-        // This class must NOT itself be a direct transform subclass.
         if direct_settings.contains_key(cls.name.as_str()) {
             continue;
         }
@@ -399,10 +306,9 @@ fn check_frozen_inheritance(
 }
 
 /// Check 2: Attribute assignment on a frozen transform-class instance.
-fn check_frozen_instance_assignment(
+pub(super) fn check_frozen_instance_assignment(
     module: &ResolvedModule,
     instance_map: &HashMap<&str, (&str, TransformClassSettings)>,
-    _source: &str,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
@@ -439,16 +345,12 @@ fn check_frozen_instance_assignment(
 
 /// Parse the parenthesised argument list of a call site, returning whether any
 /// positional (non-keyword) arguments are present beyond the first.
-///
-/// Returns `(call_site_line, has_positional_args)`.
 fn parse_call_positional(_source: &str, rhs_text: &str, _rhs_start: usize) -> bool {
-    // Find the opening `(` in rhs_text.
     let Some(paren_pos) = rhs_text.find('(') else {
         return false;
     };
     let args_start_in_rhs = paren_pos + 1;
     let args_text_raw = &rhs_text[args_start_in_rhs..];
-    // Find the matching `)`.
     let mut depth = 1i32;
     let mut args_end = args_text_raw.len();
     for (idx, ch) in args_text_raw.char_indices() {
@@ -469,13 +371,10 @@ fn parse_call_positional(_source: &str, rhs_text: &str, _rhs_start: usize) -> bo
         return false;
     }
 
-    // Check if the first argument is positional (does not contain `=` before the first `,`).
-    // We need to split at top-level commas.
     let first_arg = split_first_top_level_arg(args_text);
     if first_arg.is_empty() {
         return false;
     }
-    // If the first arg has `=` that is not inside brackets, it's a keyword arg.
     !is_keyword_arg(first_arg)
 }
 
@@ -496,7 +395,6 @@ fn split_first_top_level_arg(args: &str) -> &str {
 /// Returns `true` if the argument text looks like a keyword arg (`name=value`).
 fn is_keyword_arg(arg: &str) -> bool {
     let arg = arg.trim();
-    // A keyword arg starts with an identifier followed by `=`.
     let eq_pos = arg.find('=');
     let Some(eq_pos) = eq_pos else {
         return false;
@@ -516,7 +414,7 @@ fn is_keyword_arg(arg: &str) -> bool {
 ///
 /// This scans module-level assignment RHS call expressions for the pattern
 /// `ClassName(positional_arg, ...)` where `ClassName` is a `kw_only` transform class.
-fn check_kw_only_positional_args(
+pub(super) fn check_kw_only_positional_args(
     module: &ResolvedModule,
     direct_settings: &HashMap<&str, TransformClassSettings>,
     source: &str,
@@ -531,14 +429,12 @@ fn check_kw_only_positional_args(
             continue;
         };
 
-        // Extract the callee name.
         let callee = rhs_text.split(['(', '[']).next().unwrap_or("").trim();
         if callee.is_empty() {
             continue;
         }
         let callee = callee.rsplit('.').next().unwrap_or(callee);
 
-        // Resolve settings (including inherited ones).
         let Some(settings) = resolve_inherited_settings(callee, module, direct_settings) else {
             continue;
         };
@@ -574,7 +470,7 @@ fn check_kw_only_positional_args(
 ///
 /// Scans source lines for binary comparison operators (`<`, `>`, `<=`, `>=`)
 /// where either operand is a known transform-class instance that lacks `order=True`.
-fn check_no_order_comparison(
+pub(super) fn check_no_order_comparison(
     _module: &ResolvedModule,
     instance_map: &HashMap<&str, (&str, TransformClassSettings)>,
     source: &str,
@@ -585,7 +481,6 @@ fn check_no_order_comparison(
         return;
     }
 
-    // Collect variable names that are non-order transform instances.
     let no_order_vars: Vec<&str> = instance_map
         .iter()
         .filter(|(_, (_, s))| !s.order)
@@ -598,10 +493,8 @@ fn check_no_order_comparison(
 
     for (line_idx, line) in source.lines().enumerate() {
         let line_number = line_idx + 1;
-        // Strip trailing comment.
         let code_part = line.split('#').next().unwrap_or(line);
 
-        // Check for comparison operators.
         let has_comparison = code_part.contains(" < ")
             || code_part.contains(" > ")
             || code_part.contains(" <= ")
@@ -611,7 +504,6 @@ fn check_no_order_comparison(
             continue;
         }
 
-        // Check if any non-order variable appears in this line.
         let offending_var = no_order_vars
             .iter()
             .find(|&&var_name| contains_identifier(code_part, var_name));
@@ -648,7 +540,7 @@ fn check_no_order_comparison(
 }
 
 /// Returns `true` if `name` appears as a whole identifier in `text`.
-fn contains_identifier(text: &str, name: &str) -> bool {
+pub(super) fn contains_identifier(text: &str, name: &str) -> bool {
     let name_bytes = name.as_bytes();
     let text_bytes = text.as_bytes();
     let mut start = 0;

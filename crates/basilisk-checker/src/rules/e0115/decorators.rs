@@ -1,7 +1,6 @@
 //! Decorator detection helpers for BSK-E0115.
 
 use ruff_python_ast::Expr;
-use ruff_text_size::Ranged;
 
 use basilisk_resolver::Span;
 
