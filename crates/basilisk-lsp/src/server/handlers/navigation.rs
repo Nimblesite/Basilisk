@@ -274,9 +274,12 @@ pub(in crate::server) async fn rename(
             let byte_offset = crate::util::position_to_byte_offset(&text, pos);
 
             // Single-file rename edits.
-            let local_edit = references::rename_symbol(&resolved, &text, byte_offset, &uri, &new_name)?;
-            let mut all_changes: std::collections::HashMap<Url, Vec<tower_lsp::lsp_types::TextEdit>> =
-                local_edit.changes.unwrap_or_default();
+            let local_edit =
+                references::rename_symbol(&resolved, &text, byte_offset, &uri, &new_name)?;
+            let mut all_changes: std::collections::HashMap<
+                Url,
+                Vec<tower_lsp::lsp_types::TextEdit>,
+            > = local_edit.changes.unwrap_or_default();
 
             // Extract the old symbol name for cross-file search.
             let name = crate::util::identifier_at_offset(&text, byte_offset)?;
@@ -300,10 +303,7 @@ pub(in crate::server) async fn rename(
                                             })
                                             .collect();
                                     if !edits.is_empty() {
-                                        all_changes
-                                            .entry(importer_uri)
-                                            .or_default()
-                                            .extend(edits);
+                                        all_changes.entry(importer_uri).or_default().extend(edits);
                                     }
                                 }
                             }
@@ -328,10 +328,7 @@ pub(in crate::server) async fn rename(
                                     })
                                     .collect();
                             if !edits.is_empty() {
-                                all_changes
-                                    .entry(source_uri)
-                                    .or_default()
-                                    .extend(edits);
+                                all_changes.entry(source_uri).or_default().extend(edits);
                             }
                         }
                     }

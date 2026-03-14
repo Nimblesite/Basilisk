@@ -154,9 +154,11 @@ name = "basilisk-cli"
 version = "0.1.0"
 dependencies = [
  "basilisk-checker",
+ "basilisk-config",
  "basilisk-lsp",
  "basilisk-parser",
  "basilisk-resolver",
+ "basilisk-stubs",
  "basilisk-test-utils",
  "clap",
  "serde",
