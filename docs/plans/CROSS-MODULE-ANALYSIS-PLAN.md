@@ -182,9 +182,9 @@ uv integration is additive to cross-module analysis — it accelerates Phases 1 
 - [x] Cross-file Find All References — use import graph reverse edges, search all importers for symbol usage
 - [ ] Cross-file Rename — multi-file `WorkspaceEdit`: definition site + import sites + usage sites
 - [ ] Import statement updates for Rename — `from module import old_name` → `from module import new_name`
-- [ ] Build workspace symbol index in `auto_import.rs` — index all exported symbols from all workspace files
-- [ ] Auto-import completion — suggest imports from workspace symbol index for unknown symbols
-- [ ] Import insertion — generate `TextEdit` to add import statement at top of file
+- [x] Build workspace symbol index in `auto_import.rs` — `SymbolIndex`, `build_symbol_index()`, `suggest_imports()`, 7 unit tests
+- [x] Auto-import completion — wired into completion handler, suggests imports from workspace symbol index for unknown symbols
+- [x] Import insertion — `generate_import_text()`, `find_import_insertion_offset()`, `additionalTextEdits` in completion items
 - [ ] Per-root config — each workspace folder gets its own config resolution
 - [ ] Merged index for multi-root — single `WorkspaceIndex` spans all roots, imports cross root boundaries
 

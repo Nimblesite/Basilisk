@@ -4,11 +4,11 @@ Basilisk implements premium type inference that not only improves type safety - 
 
 Basilisk's type inference towers above the other systems like Pyrefly and PyRight.
 
-> **Status**: Draft — Basilisk is in the specification stage. This document defines the target behavior for the type inference engine. Don't get stuck going down the rabbit hole of expecting type inference infrastructure at this point. Focus on other parts of the system until we have some infastructure built
->
 > **Canonical Python version**: 3.12
 >
 > **Authoritative references**: [PEP 484](https://peps.python.org/pep-0484/), [PEP 526](https://peps.python.org/pep-0526/), [Python Typing Spec](https://typing.readthedocs.io/en/latest/), [Python Typing Conformance Suite](https://github.com/python/typing/tree/main/conformance)
+>
+> **Implementation**: Core inference engine (`inference.rs`, `collection_inference.rs`, `types.rs`, `types_parsing.rs`) is wired into rules E0011, E0013, E0014, E0120, and W0050.
 
 ---
 

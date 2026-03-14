@@ -6,8 +6,8 @@ basilisk_rules,file,category,status,caught,missed,false_positives
 ,_protocols_modules2.py,,PASS,0,0,0
 ,_qualifiers_final_annotation_1.py,,PASS,0,0,0
 ,_qualifiers_final_annotation_2.py,,PASS,0,0,0
-BSK-E0014|BSK-E0048,aliases_explicit.py,aliases,FAIL,12,9,1
-BSK-E0047|BSK-E0092,aliases_implicit.py,aliases,FAIL,7,15,0
+BSK-E0048,aliases_explicit.py,aliases,FAIL,19,2,0
+BSK-E0047|BSK-E0048|BSK-E0092,aliases_implicit.py,aliases,FAIL,9,13,0
 BSK-E0014|BSK-E0050,aliases_newtype.py,aliases,PASS,14,0,0
 BSK-E0014|BSK-E0104,aliases_recursive.py,aliases,PASS,11,0,20
 BSK-E0014|BSK-E0057|BSK-E0149,aliases_type_statement.py,aliases,FAIL,15,10,4
@@ -64,7 +64,7 @@ BSK-E0066,enums_member_values.py,enums,PASS,2,0,0
 BSK-E0046|BSK-E0061|BSK-E0067,enums_members.py,enums,PASS,7,0,7
 BSK-E0013|BSK-E0053,exceptions_context_managers.py,exceptions,PASS,0,0,6
 BSK-E0027|BSK-E0047|BSK-E0092|BSK-E0132|BSK-E0134,generics_base_class.py,generics,PASS,7,0,0
-BSK-E0026|BSK-E0027|BSK-E0043|BSK-E0148,generics_basic.py,generics,FAIL,12,1,0
+BSK-E0026|BSK-E0027|BSK-E0043|BSK-E0148,generics_basic.py,generics,PASS,13,0,0
 BSK-E0030|BSK-E0091|BSK-E0092|BSK-E0130,generics_defaults.py,generics,PASS,5,0,2
 BSK-E0102|BSK-E0128,generics_defaults_referential.py,generics,FAIL,5,2,0
 BSK-E0092,generics_defaults_specialization.py,generics,PASS,2,0,0

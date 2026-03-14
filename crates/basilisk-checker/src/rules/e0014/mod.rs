@@ -118,6 +118,18 @@ fn check_vars(
                 ));
             }
 
+            // Skip TypeAlias-annotated variables — E0048 handles validation.
+            // The annotation may be `TypeAlias`, `TA`, or any local alias.
+            {
+                let ann_lower = annotation_text.trim().to_ascii_lowercase();
+                if ann_lower == "typealias"
+                    || ann_lower.ends_with(".typealias")
+                    || matches!(declared_type, InferredType::Named(ref n) if n == "ta")
+                {
+                    return None;
+                }
+            }
+
             // Skip dict literal assignments to TypedDict annotations. E0014 compares
             // the top-level type (e.g. `dict[str, str|int]` vs `Movie`) which always
             // mismatches. Field-level checking is done by E0093 instead.

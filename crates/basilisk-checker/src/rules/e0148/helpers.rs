@@ -255,6 +255,73 @@ pub(super) fn parse_mapping_annotation(ann: &str) -> Option<(String, String)> {
     Some((key_ty, val_ty))
 }
 
+/// Resolve a Mapping annotation, handling custom subclasses with reordered Generic params.
+///
+/// For `MyMap2[int, str]` where `MyMap2(Mapping[K, V], Generic[V, K])`:
+/// - Generic[V, K] → specialization order: V=int, K=str
+/// - Mapping[K, V] → key=K=str, value=V=int
+/// Returns `(key_type, value_type)`.
+pub(super) fn resolve_mapping_annotation(
+    ann: &str,
+    class_bases: &HashMap<String, Vec<String>>,
+) -> Option<(String, String)> {
+    // First try direct Mapping/dict annotation.
+    let bracket = ann.find('[')?;
+    let class_name = ann.get(..bracket)?.trim();
+
+    // Direct Mapping/dict — use first two args directly.
+    if matches!(
+        class_name,
+        "Mapping" | "Dict" | "dict" | "MutableMapping" | "OrderedDict" | "DefaultDict"
+    ) {
+        return parse_mapping_annotation(ann);
+    }
+
+    // Custom class — check if it inherits from Mapping via class_bases.
+    let bases = class_bases.get(class_name)?;
+    let mapping_base = bases
+        .iter()
+        .find(|b| b.starts_with("Mapping[") || b.starts_with("MutableMapping["))?;
+    let generic_base = bases.iter().find(|b| b.starts_with("Generic["));
+
+    // Parse the specialization args from the annotation.
+    let inner = ann.get(bracket + 1..ann.rfind(']')?)?;
+    let spec_args: Vec<String> = split_top_level(inner)
+        .into_iter()
+        .map(|s| s.trim().to_owned())
+        .collect();
+
+    // Parse Generic param order if available.
+    if let Some(generic) = generic_base {
+        let gb = generic.find('[')?;
+        let generic_inner = generic.get(gb + 1..generic.rfind(']')?)?;
+        let generic_params: Vec<&str> = generic_inner.split(',').map(str::trim).collect();
+
+        // Build substitution map: generic_param → specialized_arg
+        let mut subs: HashMap<&str, &str> = HashMap::new();
+        for (idx, param) in generic_params.iter().enumerate() {
+            if let Some(arg) = spec_args.get(idx) {
+                let _ = subs.insert(param, arg.as_str());
+            }
+        }
+
+        // Parse Mapping[K, V] to find key/value param names.
+        let mb = mapping_base.find('[')?;
+        let mapping_inner = mapping_base.get(mb + 1..mapping_base.rfind(']')?)?;
+        let mapping_params: Vec<&str> = mapping_inner.split(',').map(str::trim).collect();
+        let key_param = mapping_params.first()?;
+        let val_param = mapping_params.get(1)?;
+
+        // Substitute.
+        let key_ty = subs.get(key_param).unwrap_or(key_param);
+        let val_ty = subs.get(val_param).unwrap_or(val_param);
+        return Some(((*key_ty).to_owned(), (*val_ty).to_owned()));
+    }
+
+    // No Generic base — assume direct parameter order matches Mapping.
+    parse_mapping_annotation(ann)
+}
+
 // ---------------------------------------------------------------------------
 // Call-site checking (constrained TypeVar)
 // ---------------------------------------------------------------------------

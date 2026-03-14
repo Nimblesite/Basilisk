@@ -24,6 +24,7 @@
 //! - Selection Ranges (Smart Select)
 //! - Semantic Tokens (syntax-aware highlighting)
 
+pub mod auto_import;
 pub mod call_hierarchy;
 pub mod code_actions;
 pub mod code_lens;

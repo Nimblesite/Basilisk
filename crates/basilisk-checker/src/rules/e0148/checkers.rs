@@ -64,7 +64,9 @@ pub(super) fn check_func_body(
         if let Some(ann) = &param.parameter.annotation {
             let ann_text = ann_str(ann);
             let _ = local_types.insert(param.parameter.name.to_string(), ann_text.clone());
-            if let Some((key_ty, val_ty)) = super::parse_mapping_annotation(&ann_text) {
+            if let Some((key_ty, val_ty)) =
+                super::helpers::resolve_mapping_annotation(&ann_text, &ctx.class_bases)
+            {
                 let _ =
                     local_mapping_vars.insert(param.parameter.name.to_string(), (key_ty, val_ty));
             }

@@ -13,8 +13,8 @@ use tower_lsp::lsp_types::{
 };
 
 use crate::{
-    code_actions, code_lens, completion, folding, formatting, hover, inlay_hints, selection,
-    signature,
+    auto_import, code_actions, code_lens, completion, folding, formatting, hover, inlay_hints,
+    selection, signature,
 };
 
 use crate::server::{none_if_empty, LspServer};
@@ -118,12 +118,96 @@ pub(in crate::server) async fn completion(
         return Ok(None);
     };
 
-    let items = completion::complete(&resolved, &text, byte_offset);
+    let mut items = completion::complete(&resolved, &text, byte_offset);
+
+    // Add auto-import suggestions for unknown symbols from the workspace index.
+    let prefix = extract_completion_prefix(&text, byte_offset);
+    if !prefix.is_empty() {
+        let auto_imports = server
+            .with_index(|idx| {
+                let symbol_index = auto_import::build_symbol_index(idx);
+                Some(build_auto_import_items(
+                    &symbol_index,
+                    &prefix,
+                    &text,
+                    &file_path,
+                ))
+            })
+            .await;
+        if let Some(mut ai_items) = auto_imports {
+            items.append(&mut ai_items);
+        }
+    }
+
     if items.is_empty() {
         Ok(None)
     } else {
         Ok(Some(CompletionResponse::Array(items)))
     }
+}
+
+/// Extract the identifier prefix at the cursor position for auto-import matching.
+fn extract_completion_prefix(text: &str, byte_offset: usize) -> String {
+    let before = text.get(..byte_offset).unwrap_or("");
+    let start = before
+        .rfind(|c: char| !c.is_alphanumeric() && c != '_')
+        .map_or(0, |pos| pos + 1);
+    before.get(start..byte_offset).unwrap_or("").to_owned()
+}
+
+/// Build auto-import completion items from the workspace symbol index.
+fn build_auto_import_items(
+    symbol_index: &auto_import::SymbolIndex,
+    prefix: &str,
+    source: &str,
+    current_file: &std::path::Path,
+) -> Vec<CompletionItem> {
+    use tower_lsp::lsp_types::{
+        CompletionItemKind, CompletionItemLabelDetails, InsertTextFormat, Range,
+    };
+
+    let candidates = auto_import::suggest_imports(symbol_index, prefix);
+    let insert_offset = auto_import::find_import_insertion_offset(source);
+    let insert_pos = byte_offset_to_position(source, insert_offset);
+
+    candidates
+        .into_iter()
+        .filter(|sym| sym.file_path != current_file)
+        .take(10)
+        .map(|sym| {
+            let import_text = auto_import::generate_import_text(sym);
+            let kind = match sym.kind {
+                auto_import::SymbolKind::Function => CompletionItemKind::FUNCTION,
+                auto_import::SymbolKind::Class => CompletionItemKind::CLASS,
+                auto_import::SymbolKind::Variable => CompletionItemKind::VARIABLE,
+            };
+            CompletionItem {
+                label: sym.name.clone(),
+                kind: Some(kind),
+                label_details: Some(CompletionItemLabelDetails {
+                    detail: Some(format!(" (auto-import from {})", sym.module_path)),
+                    description: None,
+                }),
+                insert_text: Some(sym.name.clone()),
+                insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
+                additional_text_edits: Some(vec![TextEdit {
+                    range: Range::new(insert_pos, insert_pos),
+                    new_text: import_text,
+                }]),
+                sort_text: Some(format!("zz_{}", sym.name)),
+                ..Default::default()
+            }
+        })
+        .collect()
+}
+
+/// Convert a byte offset to an LSP `Position`.
+fn byte_offset_to_position(source: &str, offset: usize) -> tower_lsp::lsp_types::Position {
+    let clamped = offset.min(source.len());
+    let before = source.get(..clamped).unwrap_or(source);
+    let line = before.chars().filter(|&c| c == '\n').count() as u32;
+    let col = before.rfind('\n').map_or(clamped, |pos| clamped - pos - 1) as u32;
+    tower_lsp::lsp_types::Position::new(line, col)
 }
 
 /// Handle `completionItem/resolve`: lazily load documentation for a completion item.
