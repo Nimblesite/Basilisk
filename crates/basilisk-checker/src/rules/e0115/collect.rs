@@ -249,6 +249,61 @@ fn collect_var_types_from_stmts(stmts: &[Stmt], var_types: &mut HashMap<String, 
     }
 }
 
+/// Extract variable types from function parameter annotations.
+///
+/// Maps parameter names to their annotated types, e.g. `def foo(f: Bar)` maps `f -> Bar`.
+/// Handles simple name annotations and dotted attribute annotations (e.g. `module.Class`).
+/// Skips `self` and `cls` parameters.
+pub(super) fn collect_param_annotation_types(
+    func: &ruff_python_ast::StmtFunctionDef,
+    var_types: &mut HashMap<String, VarType>,
+) {
+    let params = &func.parameters;
+    for param in params
+        .args
+        .iter()
+        .chain(params.posonlyargs.iter())
+        .chain(params.kwonlyargs.iter())
+    {
+        let name = param.parameter.name.as_str();
+        if name == "self" || name == "cls" {
+            continue;
+        }
+        if let Some(annotation) = &param.parameter.annotation {
+            if let Some(var_type) = annotation_to_var_type(annotation) {
+                let _ = var_types.insert(name.to_owned(), var_type);
+            }
+        }
+    }
+}
+
+/// Extract a `VarType` from a type annotation expression.
+///
+/// Handles:
+/// - `Name("Foo")` → `VarType { module_alias: "", class_name: "Foo" }`
+/// - `Attribute(Name("mod"), "Foo")` → `VarType { module_alias: "mod", class_name: "Foo" }`
+/// - `Subscript(Name("Foo"), ...)` → `VarType { module_alias: "", class_name: "Foo" }`
+fn annotation_to_var_type(expr: &Expr) -> Option<VarType> {
+    match expr {
+        Expr::Name(name) => Some(VarType {
+            module_alias: String::new(),
+            class_name: name.id.to_string(),
+        }),
+        Expr::Attribute(attr) => {
+            if let Expr::Name(obj) = attr.value.as_ref() {
+                Some(VarType {
+                    module_alias: obj.id.to_string(),
+                    class_name: attr.attr.to_string(),
+                })
+            } else {
+                None
+            }
+        }
+        Expr::Subscript(sub) => annotation_to_var_type(&sub.value),
+        _ => None,
+    }
+}
+
 /// Infer the class type from a constructor call expression.
 fn infer_call_type(expr: &Expr) -> Option<VarType> {
     if let Expr::Call(call) = expr {

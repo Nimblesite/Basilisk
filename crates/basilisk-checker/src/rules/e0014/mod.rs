@@ -41,17 +41,43 @@ pub(crate) struct AssignmentTypeMismatch;
 impl Rule for AssignmentTypeMismatch {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         let empty_params = std::collections::HashMap::new();
+        let typeddict_names = collect_typeddict_names(module);
         check_vars(
             &module.module_vars,
             &module.source,
             &module.path,
             diagnostics,
             &empty_params,
+            &typeddict_names,
         );
-        check_local_vars(module, diagnostics);
+        check_local_vars(module, diagnostics, &typeddict_names);
         check_tuple_reassignments(module, diagnostics);
         check_dataclass_attr_assignments(module, diagnostics);
     }
+}
+
+/// Collect names of TypedDict classes defined in this module, including
+/// classes that transitively inherit from TypedDict.
+///
+/// E0014 cannot do structural field-level type checking on TypedDicts, so
+/// dict literal assignments to TypedDict annotations are skipped to avoid
+/// false positives.
+fn collect_typeddict_names(module: &ResolvedModule) -> std::collections::HashSet<String> {
+    let names: std::collections::HashSet<String> = module
+        .classes
+        .iter()
+        .filter(|c| {
+            c.bases.iter().any(|b| {
+                matches!(
+                    b.as_str(),
+                    "TypedDict" | "typing.TypedDict" | "typing_extensions.TypedDict"
+                )
+            })
+        })
+        .map(|c| c.name.clone())
+        .collect();
+
+    names
 }
 
 /// Check a slice of annotated variables for type mismatches.
@@ -66,12 +92,28 @@ fn check_vars(
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
     param_types: &std::collections::HashMap<String, InferredType>,
+    typeddict_names: &std::collections::HashSet<String>,
 ) {
     vars.iter()
         .filter(|var| var.has_annotation && var.rhs_span.is_some())
         .filter_map(|var| {
             let annotation_text = extract_annotation(source, var.name_span)?;
             let declared_type = InferredType::from_annotation(annotation_text);
+
+            // Skip dict literal assignments to TypedDict annotations. E0014 compares
+            // the top-level type (e.g. `dict[str, str|int]` vs `Movie`) which always
+            // mismatches. Field-level checking is done by E0093 instead.
+            if let InferredType::Named(ref name) = declared_type {
+                if typeddict_names.contains(name.as_str()) {
+                    let rhs_is_dict_literal = var
+                        .rhs_span
+                        .and_then(|sp| slice_span(source, sp))
+                        .is_some_and(|rhs| rhs.trim_start().starts_with('{'));
+                    if rhs_is_dict_literal {
+                        return None;
+                    }
+                }
+            }
 
             // When the declared type is a Literal, try to infer the RHS as a
             // literal value so we can compare values, not just kinds.
@@ -117,7 +159,11 @@ fn check_vars(
 /// Builds a map of parameter name to declared type for each function so that
 /// assignments like `x: Literal[False] = a` (where `a: Literal[0]`) can be
 /// checked for Literal-level incompatibility.
-fn check_local_vars(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+fn check_local_vars(
+    module: &ResolvedModule,
+    diagnostics: &mut Vec<Diagnostic>,
+    typeddict_names: &std::collections::HashSet<String>,
+) {
     let source = &module.source;
     for func in &module.functions {
         let param_types = build_param_type_map(&func.parameters, source);
@@ -127,6 +173,7 @@ fn check_local_vars(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) 
             &module.path,
             diagnostics,
             &param_types,
+            typeddict_names,
         );
     }
 }

@@ -351,6 +351,9 @@ fn check_constructor_call(
                 diagnostics,
             );
 
+            // Check 6: Unknown kwargs to dataclass/transform class constructors.
+            check_dataclass_unknown_kwargs(call, class_name, class_info, path, diagnostics);
+
             // Check 2: Self type incompatibility through inheritance.
             check_self_type_incompatibility(
                 call,
@@ -434,6 +437,16 @@ fn check_no_init_with_args(
         return;
     }
 
+    // Dataclass-decorated classes have synthesized __init__.
+    if class_info.is_dataclass {
+        return;
+    }
+
+    // TypedDict classes have synthesized constructors.
+    if class_info.is_typed_dict {
+        return;
+    }
+
     // Check if the class itself defines __init__ or __new__.
     if method_map.contains_key(&(class_name, "__init__"))
         || method_map.contains_key(&(class_name, "__new__"))
@@ -466,4 +479,58 @@ fn check_no_init_with_args(
         )),
         note: None,
     });
+}
+
+/// Check 6: Detect unknown keyword arguments passed to dataclass/transform constructors.
+///
+/// Dataclass constructors accept kwargs matching their field names. Passing an
+/// unknown kwarg (not matching any field) is an error.
+fn check_dataclass_unknown_kwargs(
+    call: &ruff_python_ast::ExprCall,
+    class_name: &str,
+    class_info: &basilisk_resolver::ClassInfo,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    use ruff_text_size::Ranged as _;
+
+    if !class_info.is_dataclass {
+        return;
+    }
+
+    if call.arguments.keywords.is_empty() {
+        return;
+    }
+
+    let known_fields: std::collections::HashSet<&str> = class_info
+        .attributes
+        .iter()
+        .map(|attr| attr.name.as_str())
+        .collect();
+
+    if known_fields.is_empty() {
+        return;
+    }
+
+    for kw in &call.arguments.keywords {
+        let Some(arg_name) = kw.arg.as_ref() else {
+            continue; // **kwargs unpacking
+        };
+        if !known_fields.contains(arg_name.as_str()) {
+            diagnostics.push(Diagnostic {
+                code: CODE.clone(),
+                severity: Severity::Error,
+                message: format!(
+                    "Unknown field `{arg_name}` in constructor of dataclass `{class_name}`"
+                ),
+                span: crate::span_util::text_range_to_span(kw.range()),
+                path: path.to_owned(),
+                help: Some(format!(
+                    "`{class_name}` has fields: {}",
+                    known_fields.iter().copied().collect::<Vec<_>>().join(", ")
+                )),
+                note: None,
+            });
+        }
+    }
 }

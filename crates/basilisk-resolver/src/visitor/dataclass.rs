@@ -38,8 +38,11 @@ pub(super) fn apply_dataclass_transform(
         };
         cls.is_dataclass = true;
         cls.is_dataclass_kw_only = factory.kw_only_default;
+        cls.is_dataclass_frozen = factory.frozen_default;
 
+        // Check for per-class overrides like `@create_model(frozen=True)`
         if let Some(class_def) = find_class_def(stmts, &cls.name) {
+            apply_class_decorator_overrides(class_def, &factory.name, cls);
             resolve_transform_field_attrs(
                 class_def,
                 &mut cls.attributes,
@@ -59,12 +62,13 @@ pub(super) fn collect_dc_transform_factories(stmts: &[Stmt]) -> Vec<DcTransformF
             continue;
         };
         for dec in &func.decorator_list {
-            let (is_dc_transform, kw_only_default, field_specifier_names) =
+            let (is_dc_transform, kw_only_default, frozen_default, field_specifier_names) =
                 parse_dataclass_transform_decorator(&dec.expression);
             if is_dc_transform {
                 out.push(DcTransformFactory {
                     name: func.name.to_string(),
                     kw_only_default,
+                    frozen_default,
                     field_specifier_names,
                 });
             }
@@ -187,6 +191,46 @@ pub(super) fn find_matching_factory<'a>(
         }
     }
     None
+}
+
+/// Apply per-class keyword overrides from the decorator call.
+///
+/// For `@create_model(frozen=True)`, overrides the factory's `frozen_default`.
+fn apply_class_decorator_overrides(
+    class_def: &StmtClassDef,
+    factory_name: &str,
+    cls: &mut ClassInfo,
+) {
+    for dec in &class_def.decorator_list {
+        let Expr::Call(call) = &dec.expression else {
+            continue;
+        };
+        let callee = match call.func.as_ref() {
+            Expr::Name(n) => n.id.as_str(),
+            Expr::Attribute(a) => a.attr.as_str(),
+            _ => continue,
+        };
+        if callee != factory_name {
+            continue;
+        }
+        for kw in &call.arguments.keywords {
+            let Some(arg_name) = kw.arg.as_ref() else {
+                continue;
+            };
+            match arg_name.as_str() {
+                "frozen" => {
+                    cls.is_dataclass_frozen =
+                        matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
+                }
+                "kw_only" => {
+                    cls.is_dataclass_kw_only =
+                        matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
+                }
+                _ => {}
+            }
+        }
+        break;
+    }
 }
 
 /// Find a class definition by name in the top-level statements.

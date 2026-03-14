@@ -221,6 +221,8 @@ pub(super) struct DcTransformFactory {
     pub(super) name: String,
     /// `kw_only_default` from the decorator (default `false`).
     pub(super) kw_only_default: bool,
+    /// `frozen_default` from the decorator (default `false`).
+    pub(super) frozen_default: bool,
     /// Field specifier function names extracted from `field_specifiers=(...)`.
     pub(super) field_specifier_names: Vec<String>,
 }
@@ -237,14 +239,14 @@ pub(super) struct FieldSpecOverload {
 
 /// Scan module-level statements for `@dataclass_transform(...)` decorated functions
 /// and apply their semantics to classes decorated by those factories.
-pub(super) fn parse_dataclass_transform_decorator(expr: &Expr) -> (bool, bool, Vec<String>) {
+pub(super) fn parse_dataclass_transform_decorator(expr: &Expr) -> (bool, bool, bool, Vec<String>) {
     let Expr::Call(call) = expr else {
         if let Expr::Name(n) = expr {
             if n.id.as_str() == "dataclass_transform" {
-                return (true, false, Vec::new());
+                return (true, false, false, Vec::new());
             }
         }
-        return (false, false, Vec::new());
+        return (false, false, false, Vec::new());
     };
     let is_dc = match call.func.as_ref() {
         Expr::Name(n) => n.id.as_str() == "dataclass_transform",
@@ -252,10 +254,11 @@ pub(super) fn parse_dataclass_transform_decorator(expr: &Expr) -> (bool, bool, V
         _ => false,
     };
     if !is_dc {
-        return (false, false, Vec::new());
+        return (false, false, false, Vec::new());
     }
 
     let mut kw_only_default = false;
+    let mut frozen_default = false;
     let mut field_specifier_names = Vec::new();
 
     for kw in &call.arguments.keywords {
@@ -265,6 +268,9 @@ pub(super) fn parse_dataclass_transform_decorator(expr: &Expr) -> (bool, bool, V
         match arg_name.as_str() {
             "kw_only_default" => {
                 kw_only_default = matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
+            }
+            "frozen_default" => {
+                frozen_default = matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
             }
             "field_specifiers" => {
                 if let Expr::Tuple(tup) = &kw.value {
@@ -279,7 +285,7 @@ pub(super) fn parse_dataclass_transform_decorator(expr: &Expr) -> (bool, bool, V
         }
     }
 
-    (true, kw_only_default, field_specifier_names)
+    (true, kw_only_default, frozen_default, field_specifier_names)
 }
 
 /// Build overload info for a field specifier function.

@@ -107,10 +107,48 @@ impl WorkspaceIndex {
         version: i32,
     ) -> Vec<tower_lsp::lsp_types::Diagnostic> {
         let path = uri.to_file_path().unwrap_or_default();
+
+        // Capture cross-module data from the previous entry before overwriting.
+        let prev_cross_module = self.files.get(&path).and_then(|prev| {
+            prev.resolved.as_ref().map(|r| {
+                (
+                    r.imported_symbols.clone(),
+                    r.imports
+                        .iter()
+                        .filter_map(|imp| {
+                            imp.resolved_path
+                                .as_ref()
+                                .map(|p| (imp.module.clone(), p.clone()))
+                        })
+                        .collect::<Vec<_>>(),
+                )
+            })
+        });
+
         let (entry, lsp_diags) = analyse(text, &path);
         let mut entry = entry;
         entry.is_open = true;
         entry.version = version;
+
+        // Restore cross-module symbols and resolved import paths from the
+        // previous entry so that goto-definition and other cross-module
+        // features keep working after didOpen re-parses the file.
+        if let Some((prev_symbols, prev_resolved_paths)) = prev_cross_module {
+            if let Some(ref mut resolved_arc) = entry.resolved {
+                let resolved = Arc::make_mut(resolved_arc);
+                if resolved.imported_symbols.is_empty() {
+                    resolved.imported_symbols = prev_symbols;
+                }
+                for (module, resolved_path) in prev_resolved_paths {
+                    for imp in &mut resolved.imports {
+                        if imp.module == module && imp.resolved_path.is_none() {
+                            imp.resolved_path = Some(resolved_path.clone());
+                        }
+                    }
+                }
+            }
+        }
+
         let _ = self.files.insert(path, entry);
         lsp_diags
     }

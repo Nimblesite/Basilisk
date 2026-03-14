@@ -31,8 +31,8 @@ use super::Rule;
 use check::check_generic_instance_method_calls;
 use types::ScopeInfo;
 use utils::{
-    contains_typevar_reference, extract_typevars_from_function_sig,
-    extract_typevars_from_generic_base, leading_indent, span_for_line,
+    collect_full_signature, contains_typevar_reference, extract_typevars_from_function_sig,
+    extract_typevars_from_generic_base, is_simple_assignment, leading_indent, span_for_line,
 };
 
 const CODE: ErrorCode = ErrorCode {
@@ -137,9 +137,12 @@ impl Rule for TypeVarScopeViolation {
                 continue;
             }
 
-            // Detect function definitions.
+            // Detect function definitions. For multi-line signatures, collect
+            // the full signature text so TypeVars in parameter annotations are
+            // correctly recognised as bound.
             if trimmed.starts_with("def ") || trimmed.starts_with("async def ") {
-                let bound_tvs = extract_typevars_from_function_sig(trimmed, &all_typevars);
+                let full_sig = collect_full_signature(&lines, line_idx);
+                let bound_tvs = extract_typevars_from_function_sig(&full_sig, &all_typevars);
                 scope_stack.push(ScopeInfo {
                     indent,
                     bound_typevars: bound_tvs,
@@ -315,7 +318,7 @@ impl Rule for TypeVarScopeViolation {
                     // Module-level assignments with TypeVars are implicit type aliases
                     // (PEP 484): `MyAlias = list[T]` is valid. Also skip TypeVar
                     // definitions, ParamSpec, TypeVarTuple, and TypeAlias annotations.
-                    let is_type_alias_or_def = before_comment.contains('=')
+                    let is_type_alias_or_def = is_simple_assignment(before_comment)
                         || before_comment.contains("TypeVar")
                         || before_comment.contains("ParamSpec")
                         || before_comment.contains("TypeVarTuple")

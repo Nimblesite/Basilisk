@@ -415,6 +415,7 @@ pub(super) fn collect_name_refs_from_expr(expr: &Expr, out: &mut Vec<String>) {
                 collect_name_refs_from_expr(arg, out);
             }
         }
+        Expr::Starred(starred) => collect_name_refs_from_expr(&starred.value, out),
         _ => {}
     }
 }
@@ -443,6 +444,7 @@ pub(super) fn collect_name_refs_with_spans(expr: &Expr, out: &mut Vec<(String, S
                 collect_name_refs_with_spans(arg, out);
             }
         }
+        Expr::Starred(starred) => collect_name_refs_with_spans(&starred.value, out),
         _ => {}
     }
 }

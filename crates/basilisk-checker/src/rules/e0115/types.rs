@@ -20,5 +20,5 @@ pub(super) struct DeprecatedUsageContext<'a> {
     pub(super) deprecated_members: &'a HashMap<String, HashMap<String, DeprecatedInfo>>,
     pub(super) var_types: &'a HashMap<String, VarType>,
     pub(super) path: &'a str,
-    pub(super) _def_spans: &'a HashSet<u32>,
+    pub(super) def_spans: &'a HashSet<u32>,
 }
