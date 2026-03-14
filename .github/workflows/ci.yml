@@ -94,10 +94,21 @@ jobs:
           # libasound2 was renamed to libasound2t64 on Ubuntu 24.04+
           sudo apt-get install -y libasound2 2>/dev/null || sudo apt-get install -y libasound2t64
 
+      - name: Add swap space
+        run: |
+          sudo fallocate -l 4G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
       - name: Run all tests
+        env:
+          # Limit parallel linker invocations to avoid OOM (Bus error)
+          # during coverage-instrumented linking on 7GB runners
+          CARGO_BUILD_JOBS: "4"
         run: ./scripts/test.sh
 
       - name: Upload coverage report artifact
