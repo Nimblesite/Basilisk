@@ -53,6 +53,8 @@ pub struct WorkspaceConfig {
     pub venv: Option<String>,
     /// Which files to analyse. Defaults to `WholeModule`.
     pub analysis_mode: AnalysisMode,
+    /// Additional directories to search for `.pyi` stub files.
+    pub stub_paths: Vec<PathBuf>,
 }
 
 impl Default for WorkspaceConfig {
@@ -67,6 +69,7 @@ impl Default for WorkspaceConfig {
             venv_path: None,
             venv: None,
             analysis_mode: AnalysisMode::WholeModule,
+            stub_paths: Vec::new(),
         }
     }
 }
@@ -152,6 +155,16 @@ fn load_json_config(path: &Path) -> Option<WorkspaceConfig> {
     if let Some(v) = obj.get("analysisMode").and_then(|v| v.as_str()) {
         cfg.analysis_mode = AnalysisMode::parse(v);
     }
+    if let Some(arr) = obj
+        .get("stubPaths")
+        .or_else(|| obj.get("stub-paths"))
+        .and_then(|v| v.as_array())
+    {
+        cfg.stub_paths = arr
+            .iter()
+            .filter_map(|v| v.as_str().map(PathBuf::from))
+            .collect();
+    }
 
     Some(cfg)
 }
@@ -209,6 +222,10 @@ fn load_pyproject_config(path: &Path) -> Option<WorkspaceConfig> {
                 }
                 "analysisMode" | "analysis_mode" => {
                     cfg.analysis_mode = AnalysisMode::parse(value);
+                }
+                "stubPaths" | "stub_paths" | "stub-paths" => {
+                    // Simple single-value handling; array parsing requires TOML crate.
+                    cfg.stub_paths.push(PathBuf::from(value));
                 }
                 _ => {}
             }

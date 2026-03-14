@@ -10,7 +10,7 @@ use dashmap::DashMap;
 use tower_lsp::lsp_types::Url;
 
 use crate::config::AnalysisMode;
-
+use crate::import_graph::ImportGraph;
 use crate::workspace_analysis::{analyse, fnv1a};
 use crate::workspace_scan::{collect_python_files, deduplicate_by_stem, path_to_uri};
 
@@ -46,6 +46,11 @@ pub struct WorkspaceIndex {
     pub files: DashMap<PathBuf, FileEntry>,
     /// Analysis mode controlling which files are analysed.
     pub mode: AnalysisMode,
+    /// Import dependency graph for cross-module invalidation.
+    ///
+    /// Built during workspace scan in `crossModule` mode.
+    /// Protected by a `Mutex` for interior mutability.
+    pub import_graph: std::sync::Mutex<ImportGraph>,
 }
 
 impl WorkspaceIndex {
@@ -56,6 +61,7 @@ impl WorkspaceIndex {
             roots,
             files: DashMap::new(),
             mode,
+            import_graph: std::sync::Mutex::new(ImportGraph::new()),
         }
     }
 
@@ -231,6 +237,96 @@ impl WorkspaceIndex {
                 Some((uri, resolved, text))
             })
             .collect()
+    }
+
+    /// Build (or rebuild) the import graph from the current index state.
+    ///
+    /// Called after workspace scan or when the analysis mode is `CrossModule`.
+    pub fn build_import_graph(&self) {
+        let Ok(mut graph) = self.import_graph.lock() else {
+            return;
+        };
+        *graph = ImportGraph::new();
+        graph.build_from_index(self);
+    }
+
+    /// Re-analyse files that transitively depend on a changed file.
+    ///
+    /// Returns `(uri, diagnostics)` pairs for all files that were re-analysed
+    /// due to the change. The changed file itself is NOT included (it should
+    /// already have been re-analysed by the caller).
+    #[must_use]
+    pub fn invalidate_dependents(
+        &self,
+        changed_path: &std::path::Path,
+    ) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
+        let importers = {
+            let Ok(graph) = self.import_graph.lock() else {
+                return vec![];
+            };
+            graph.transitive_importers(changed_path)
+        };
+
+        let mut results = Vec::new();
+        for importer_path in importers {
+            // Re-analyse using the stored text (could be in-memory or from disk).
+            let text = {
+                let Some(entry) = self.files.get(&importer_path) else {
+                    continue;
+                };
+                entry.text.clone()
+            };
+
+            let (new_entry, lsp_diags) = analyse(&text, &importer_path);
+            let version = self
+                .files
+                .get(&importer_path)
+                .map(|e| e.version)
+                .unwrap_or(0);
+            let is_open = self
+                .files
+                .get(&importer_path)
+                .map(|e| e.is_open)
+                .unwrap_or(false);
+            let mut entry = new_entry;
+            entry.version = version;
+            entry.is_open = is_open;
+            let _ = self.files.insert(importer_path.clone(), entry);
+
+            if let Some(uri) = path_to_uri(&importer_path) {
+                results.push((uri, lsp_diags));
+            }
+        }
+
+        results
+    }
+
+    /// Extract the set of exported symbol names from a file.
+    ///
+    /// Used for diffing exports before and after a re-analysis to determine
+    /// whether dependents need invalidation.
+    #[must_use]
+    pub fn exported_symbol_names(
+        &self,
+        path: &std::path::Path,
+    ) -> std::collections::HashSet<String> {
+        let mut names = std::collections::HashSet::new();
+        let Some(entry) = self.files.get(path) else {
+            return names;
+        };
+        let Some(resolved) = &entry.resolved else {
+            return names;
+        };
+        for func in &resolved.functions {
+            let _ = names.insert(func.name.clone());
+        }
+        for class in &resolved.classes {
+            let _ = names.insert(class.name.clone());
+        }
+        for var in &resolved.module_vars {
+            let _ = names.insert(var.name.clone());
+        }
+        names
     }
 }
 

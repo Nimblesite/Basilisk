@@ -1,9 +1,15 @@
 [package]
 name        = "basilisk-stubs"
-description = "Bundled type stubs for Basilisk (Phase 5+)"
+description = "Bundled type stubs and stdlib index for Basilisk"
 version.workspace    = true
 edition.workspace    = true
 license.workspace    = true
+
+[dependencies]
+phf.workspace = true
+
+[build-dependencies]
+phf_codegen = "0.11"
 
 [lints]
 workspace = true

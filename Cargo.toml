@@ -7,6 +7,7 @@ members = [
     "crates/basilisk-checker",
     "crates/basilisk-cli",
     "crates/basilisk-stubs",
+    "crates/basilisk-config",
     "crates/basilisk-plugin",
     "crates/basilisk-lsp",
     "crates/basilisk-mojo",
@@ -41,6 +42,8 @@ thiserror = "2.0"
 walkdir   = "2.5"
 serde     = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+toml      = "0.8"
+phf       = "0.11"
 
 # Workspace crates
 basilisk-db       = { path = "crates/basilisk-db" }
@@ -49,6 +52,8 @@ basilisk-resolver = { path = "crates/basilisk-resolver" }
 basilisk-checker  = { path = "crates/basilisk-checker" }
 basilisk-lsp      = { path = "crates/basilisk-lsp" }
 basilisk-compiler = { path = "crates/basilisk-compiler" }
+basilisk-stubs      = { path = "crates/basilisk-stubs" }
+basilisk-config     = { path = "crates/basilisk-config" }
 basilisk-common     = { path = "crates/basilisk-common" }
 basilisk-test-utils = { path = "crates/basilisk-test-utils" }
 
