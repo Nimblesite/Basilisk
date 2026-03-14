@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Coverage boost tests batch 19: final push toward 89% coverage.
 //! Focuses on remaining reachable uncovered code paths across many rules.
 #![allow(missing_docs)]

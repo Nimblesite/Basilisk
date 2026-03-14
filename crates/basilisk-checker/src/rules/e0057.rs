@@ -14,6 +14,7 @@ use std::collections::HashSet;
 use basilisk_resolver::{ResolvedModule, RhsKind, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -37,7 +38,7 @@ fn make_diag(name: &str, span: Span, path: &str) -> Diagnostic {
 }
 
 fn span_text(source: &str, span: Span) -> Option<&str> {
-    source.get(span.start as usize..span.end as usize)
+    slice_span(source, span)
 }
 
 fn is_invalid_rhs(rhs: &str) -> bool {
@@ -91,10 +92,10 @@ fn has_top_level_token(s: &str, token: &str) -> bool {
     let tok_len = tok.len();
     let mut i = 0;
     while i < bytes.len() {
-        match bytes[i] {
-            b'[' | b'(' | b'{' => depth += 1,
-            b']' | b')' | b'}' => depth -= 1,
-            _ if depth == 0 => {
+        match bytes.get(i).copied() {
+            Some(b'[' | b'(' | b'{') => depth += 1,
+            Some(b']' | b')' | b'}') => depth -= 1,
+            Some(_) if depth == 0 => {
                 if bytes.get(i..i + tok_len) == Some(tok) {
                     return true;
                 }

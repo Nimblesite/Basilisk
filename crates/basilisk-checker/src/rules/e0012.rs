@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{FunctionInfo, ResolvedModule, RhsKind, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -62,16 +63,11 @@ impl Rule for ArgumentTypeMismatch {
                 let Some(ann_span) = param.annotation_span else {
                     continue;
                 };
-                let Some(ann_text) = module
-                    .source
-                    .get(ann_span.start as usize..ann_span.end as usize)
-                else {
+                let Some(ann_text) = slice_span(&module.source, ann_span) else {
                     continue;
                 };
 
-                let arg_source = module
-                    .source
-                    .get(arg_span.start as usize..arg_span.end as usize);
+                let arg_source = slice_span(&module.source, *arg_span);
 
                 if let Some(description) = arg_rhs_mismatch(ann_text, rhs_kind, arg_source) {
                     diagnostics.push(make_diagnostic(
@@ -138,7 +134,7 @@ fn resolve_overload_for_call<'a>(
         }
         1 => {
             // Exactly one overload matches arity — check against it.
-            Some(arity_matches[0])
+            arity_matches.first().copied()
         }
         _ => {
             // Multiple overloads match arity — fall back to implementation

@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Coverage boost tests batch 16: deep-dive into remaining uncovered paths.
 //! Focus areas: e0138 `frozen/kw_only/order`, e0144 `type()` deep constructor paths,
 //! e0111 constructor self-type/base/generic, e0143 `NamedTuple` delete/unpack/index,

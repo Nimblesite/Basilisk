@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Tests for BSK-E0061: `assert_type` with `Literal[Enum.MEMBER]` on enum-typed param.
 //!
 //! This rule detects when `assert_type()` is used with a `Literal[Enum.MEMBER]` type

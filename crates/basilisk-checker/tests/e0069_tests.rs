@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Integration tests for BSK-E0069: dataclass `kw_only`.
 #![allow(missing_docs)]
 

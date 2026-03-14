@@ -51,6 +51,8 @@ pub mod type_hierarchy;
 pub mod util;
 pub mod websocket;
 pub mod workspace;
+pub mod workspace_analysis;
+pub mod workspace_scan;
 
 /// Run the Basilisk checker on a Python source string.
 ///
@@ -81,7 +83,7 @@ pub fn check_source(source: &str) -> Vec<String> {
         .into_iter()
         .map(|d| {
             // Compute 1-based line/col from the byte span.
-            let (line, col) = byte_offset_to_line_col(source, d.span.start as usize);
+            let (line, col) = byte_offset_to_line_col(source, d.span.start_usize());
             format!("{}:{}:{}: {}", d.code.code, line, col, d.message)
         })
         .collect()
@@ -89,7 +91,7 @@ pub fn check_source(source: &str) -> Vec<String> {
 
 fn byte_offset_to_line_col(source: &str, offset: usize) -> (usize, usize) {
     let clamped = offset.min(source.len());
-    let before = &source[..clamped];
+    let before = source.get(..clamped).unwrap_or(source);
     let line = before.chars().filter(|&c| c == '\n').count() + 1;
     let col = before.rfind('\n').map_or(clamped, |pos| clamped - pos - 1) + 1;
     (line, col)

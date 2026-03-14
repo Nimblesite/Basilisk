@@ -41,11 +41,13 @@ function findSystemVSCodeElectron(): string | undefined {
 /**
  * Find the debug-built basilisk binary.
  */
-function findDebugBinary(): string | undefined {
+function findBinary(): string | undefined {
     const workspaceRoot = path.resolve(__dirname, '../../..');
-    const debugBinary = path.join(workspaceRoot, 'target', 'debug', 'basilisk');
-    if (fs.existsSync(debugBinary)) {
-        return debugBinary;
+    for (const profile of ['release', 'debug']) {
+        const binary = path.join(workspaceRoot, 'target', profile, 'basilisk');
+        if (fs.existsSync(binary)) {
+            return binary;
+        }
     }
     return undefined;
 }
@@ -63,7 +65,7 @@ async function main(): Promise<void> {
         const vscodeDir = path.join(tmpWorkspace, '.vscode');
         fs.mkdirSync(vscodeDir, { recursive: true });
 
-        const debugBinary = process.env.BASILISK_EXECUTABLE_PATH ?? findDebugBinary();
+        const debugBinary = process.env.BASILISK_EXECUTABLE_PATH ?? findBinary();
         const settings: Record<string, unknown> = {};
         if (debugBinary) {
             settings['basilisk.executablePath'] = debugBinary;

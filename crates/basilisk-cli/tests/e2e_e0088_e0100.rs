@@ -1,0 +1,247 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
+//! E2E tests for error codes E0088 through E0100.
+
+mod common;
+
+use common::run;
+
+// ---------------------------------------------------------------------------
+// E0088 — TypedDict runtime violation (isinstance)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0088_typeddict_isinstance() -> Result<(), Box<dyn std::error::Error>> {
+    let diags = run("errors/e0088_typeddict_isinstance.py")?;
+    let filtered: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0088")
+        .collect();
+    assert!(
+        !filtered.is_empty(),
+        "expected at least one BSK-E0088 diagnostic"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// E0089 — Invalid PEP 695 type parameter bound or constraint
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0089_pep695_invalid_bound() -> Result<(), Box<dyn std::error::Error>> {
+    let diags = run("errors/e0089_pep695_invalid_bound.py")?;
+    let filtered: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0089")
+        .collect();
+    assert!(
+        !filtered.is_empty(),
+        "expected at least one BSK-E0089 diagnostic"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// E0090 — Invalid tuple type syntax
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0090_invalid_tuple_syntax() -> Result<(), Box<dyn std::error::Error>> {
+    let diags = run("errors/e0090_invalid_tuple_syntax.py")?;
+    let filtered: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0090")
+        .collect();
+    assert!(
+        !filtered.is_empty(),
+        "expected at least one BSK-E0090 diagnostic"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// E0091 — Incompatible TypeVar bound/constraint with default
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0091_typevar_default_incompat() -> Result<(), Box<dyn std::error::Error>> {
+    let diags = run("errors/e0091_typevar_default_incompat.py")?;
+    let filtered: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0091")
+        .collect();
+    assert!(
+        !filtered.is_empty(),
+        "expected at least one BSK-E0091 diagnostic"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// E0092 — Too few type arguments to generic class
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0092_too_few_type_args() -> Result<(), Box<dyn std::error::Error>> {
+    let diags = run("errors/e0092_too_few_type_args.py")?;
+    let filtered: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0092")
+        .collect();
+    assert!(
+        !filtered.is_empty(),
+        "expected at least one BSK-E0092 diagnostic"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// E0093 — Invalid key or value type in TypedDict assignment
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0093_typeddict_key_validation() -> Result<(), Box<dyn std::error::Error>> {
+    let diags = run("errors/e0093_typeddict_key_validation.py")?;
+    let filtered: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0093")
+        .collect();
+    assert!(
+        !filtered.is_empty(),
+        "expected at least one BSK-E0093 diagnostic"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// E0094 — Self type used in an invalid location
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0094_self_type_invalid_location() -> Result<(), Box<dyn std::error::Error>> {
+    let diags = run("errors/e0094_self_type_invalid_location.py")?;
+    let filtered: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0094")
+        .collect();
+    assert!(
+        !filtered.is_empty(),
+        "expected at least one BSK-E0094 diagnostic"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// E0095 — InitVar field validation in dataclasses
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0095_initvar_field() -> Result<(), Box<dyn std::error::Error>> {
+    let diags = run("errors/e0095_initvar_field.py")?;
+    let filtered: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0095")
+        .collect();
+    assert!(
+        !filtered.is_empty(),
+        "expected at least one BSK-E0095 diagnostic"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// E0096 — Dataclass field default_factory type mismatch
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0096_dataclass_default_factory() -> Result<(), Box<dyn std::error::Error>> {
+    let diags = run("errors/e0096_dataclass_default_factory.py")?;
+    let filtered: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0096")
+        .collect();
+    assert!(
+        !filtered.is_empty(),
+        "expected at least one BSK-E0096 diagnostic"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// E0097 — Protocol __new__/__init__ sets undeclared self-attributes
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0097_protocol_self_attr() -> Result<(), Box<dyn std::error::Error>> {
+    let diags = run("errors/e0097_protocol_self_attr.py")?;
+    let filtered: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0097")
+        .collect();
+    assert!(
+        !filtered.is_empty(),
+        "expected at least one BSK-E0097 diagnostic"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// E0098 — Non-Protocol base class in Protocol definition
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0098_non_protocol_base() -> Result<(), Box<dyn std::error::Error>> {
+    let diags = run("errors/e0098_non_protocol_base.py")?;
+    let filtered: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0098")
+        .collect();
+    assert!(
+        !filtered.is_empty(),
+        "expected at least one BSK-E0098 diagnostic"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// E0099 — Direct instantiation of a Protocol class
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0099_protocol_instantiation() -> Result<(), Box<dyn std::error::Error>> {
+    let diags = run("errors/e0099_protocol_instantiation.py")?;
+    let filtered: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0099")
+        .collect();
+    assert!(
+        !filtered.is_empty(),
+        "expected at least one BSK-E0099 diagnostic"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// E0100 — Augmented assignment widens Literal type
+// ---------------------------------------------------------------------------
+
+#[test]
+fn e0100_literal_augmented_assign() -> Result<(), Box<dyn std::error::Error>> {
+    let diags = run("errors/e0100_literal_augmented_assign.py")?;
+    let filtered: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0100")
+        .collect();
+    assert!(
+        !filtered.is_empty(),
+        "expected at least one BSK-E0100 diagnostic"
+    );
+    Ok(())
+}

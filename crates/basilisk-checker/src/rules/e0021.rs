@@ -48,7 +48,7 @@ impl Rule for OverlappingOverloads {
 /// Checks all pairs within a group for identical signatures.
 fn check_group(func_name: &str, funcs: &[&FunctionInfo], path: &str, out: &mut Vec<Diagnostic>) {
     for (later_idx, later) in funcs.iter().enumerate().skip(1) {
-        for earlier in &funcs[..later_idx] {
+        for earlier in funcs.get(..later_idx).unwrap_or_default() {
             if signatures_overlap(earlier, later) {
                 out.push(make_diagnostic(later, func_name, path));
                 // Only emit one diagnostic per later overload even if it

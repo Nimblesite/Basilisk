@@ -135,13 +135,14 @@ pub(crate) fn find_identifier_occurrences(source: &str, name: &str) -> Vec<Range
     let mut results = Vec::new();
     let mut search_start = 0;
 
-    while let Some(pos) = source[search_start..].find(name) {
+    while let Some(pos) = source.get(search_start..).and_then(|s| s.find(name)) {
         let abs_pos = search_start + pos;
         let end_pos = abs_pos + name.len();
 
         // Check word boundaries.
-        let at_word_start = abs_pos == 0 || !is_ident_byte(bytes[abs_pos - 1]);
-        let at_word_end = end_pos >= bytes.len() || !is_ident_byte(bytes[end_pos]);
+        let at_word_start =
+            abs_pos == 0 || bytes.get(abs_pos - 1).is_none_or(|&b| !is_ident_byte(b));
+        let at_word_end = bytes.get(end_pos).is_none_or(|&b| !is_ident_byte(b));
 
         if at_word_start && at_word_end {
             // Make sure we're not inside a string or comment (simple heuristic).
@@ -161,15 +162,15 @@ pub(crate) fn find_identifier_occurrences(source: &str, name: &str) -> Vec<Range
 /// Compute the LSP range of the identifier at a byte offset.
 fn identifier_range_at(source: &str, offset: usize) -> Option<Range> {
     let bytes = source.as_bytes();
-    if offset >= bytes.len() || !is_ident_byte(bytes[offset]) {
+    if !bytes.get(offset).is_some_and(|&b| is_ident_byte(b)) {
         return None;
     }
     let mut start = offset;
-    while start > 0 && is_ident_byte(bytes[start - 1]) {
+    while start > 0 && bytes.get(start - 1).is_some_and(|&b| is_ident_byte(b)) {
         start -= 1;
     }
     let mut end = offset;
-    while end < bytes.len() && is_ident_byte(bytes[end]) {
+    while bytes.get(end).is_some_and(|&b| is_ident_byte(b)) {
         end += 1;
     }
     let lsp_start = crate::util::byte_offset_to_position(source, start);
@@ -187,13 +188,20 @@ fn is_ident_byte(b: u8) -> bool {
 /// Simple heuristic: check if position is inside a `#` comment or string literal.
 pub(crate) fn is_in_string_or_comment(source: &str, offset: usize) -> bool {
     // Find the start of the line containing offset.
-    let line_start = source[..offset].rfind('\n').map_or(0, |p| p + 1);
-    let line_before = &source[line_start..offset];
+    let line_start = source
+        .get(..offset)
+        .and_then(|s| s.rfind('\n'))
+        .map_or(0, |p| p + 1);
+    let Some(line_before) = source.get(line_start..offset) else {
+        return false;
+    };
 
     // If there's a `#` before us on the same line (outside strings), it's a comment.
     if let Some(hash_pos) = line_before.find('#') {
         // Simple check: no string quote before the hash on this line.
-        let before_hash = &line_before[..hash_pos];
+        let Some(before_hash) = line_before.get(..hash_pos) else {
+            return false;
+        };
         let single_quotes = before_hash.chars().filter(|&c| c == '\'').count();
         let double_quotes = before_hash.chars().filter(|&c| c == '"').count();
         if single_quotes % 2 == 0 && double_quotes % 2 == 0 {

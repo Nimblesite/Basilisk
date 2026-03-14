@@ -9,6 +9,7 @@ use basilisk_resolver::ResolvedModule;
 
 use super::Rule;
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0101",
@@ -48,7 +49,7 @@ impl Rule for TypeGuardNoNarrowingParam {
             };
 
             // Extract annotation text from source.
-            let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+            let Some(ann_text) = slice_span(source, ann_span) else {
                 continue;
             };
 

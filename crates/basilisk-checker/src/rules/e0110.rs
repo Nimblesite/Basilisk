@@ -17,6 +17,7 @@ use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule};
 use super::guards::is_protocol_class;
 use super::Rule;
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0110",
@@ -53,20 +54,25 @@ fn contains_typevar(text: &str, name: &str) -> bool {
     }
 
     for start in 0..=(text_bytes.len() - name_len) {
-        if &text_bytes[start..start + name_len] != name_bytes {
+        let Some(slice) = text_bytes.get(start..start + name_len) else {
+            continue;
+        };
+        if slice != name_bytes {
             continue;
         }
         if start > 0 {
-            let left = text_bytes[start - 1];
-            if left.is_ascii_alphanumeric() || left == b'_' {
-                continue;
+            if let Some(&left) = text_bytes.get(start - 1) {
+                if left.is_ascii_alphanumeric() || left == b'_' {
+                    continue;
+                }
             }
         }
         let end = start + name_len;
         if end < text_bytes.len() {
-            let right = text_bytes[end];
-            if right.is_ascii_alphanumeric() || right == b'_' {
-                continue;
+            if let Some(&right) = text_bytes.get(end) {
+                if right.is_ascii_alphanumeric() || right == b'_' {
+                    continue;
+                }
             }
         }
         return true;
@@ -76,7 +82,7 @@ fn contains_typevar(text: &str, name: &str) -> bool {
 
 /// Extract the text for a span from source, returning `None` if out of range.
 fn span_text(source: &str, span: basilisk_resolver::Span) -> Option<&str> {
-    source.get(span.start as usize..span.end as usize)
+    slice_span(source, span)
 }
 
 /// Check whether a `TypeVar` appears inside a generic container that is NOT

@@ -118,14 +118,17 @@ pub(crate) mod e0117;
 pub(crate) mod e0118;
 pub(crate) mod e0119;
 pub(crate) mod e0120;
+pub(crate) mod e0120_helpers;
 pub(crate) mod e0121;
 pub(crate) mod e0122;
 pub(crate) mod e0123;
 pub(crate) mod e0124;
 pub(crate) mod e0125;
 pub(crate) mod e0126;
+pub(crate) mod e0126_helpers;
 pub(crate) mod e0127;
 pub(crate) mod e0128;
+pub(crate) mod e0128_helpers;
 pub(crate) mod e0129;
 pub(crate) mod e0130;
 pub(crate) mod e0131;
@@ -161,7 +164,10 @@ pub(crate) trait Rule {
 }
 
 /// All registered Phase 1 rules.
-#[allow(clippy::too_many_lines)]
+#[expect(
+    clippy::too_many_lines,
+    reason = "rule registry listing is inherently long"
+)]
 fn all_rules() -> &'static [&'static dyn Rule] {
     &[
         &e0001::MissingParameterAnnotation,

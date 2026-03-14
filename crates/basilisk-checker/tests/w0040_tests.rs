@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Integration tests for BSK-W0040: Lambda missing type annotations.
 #![allow(missing_docs)]
 

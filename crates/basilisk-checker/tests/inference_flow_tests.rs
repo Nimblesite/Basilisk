@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Tests targeting inference.rs (`FlowUnionTracker`, `check_annotated_variable`, `infer_flow_union_types`)
 //! and guards.rs (`dataclass_transform`, `collect_transform_functions`, `collect_transform_classes`).
 #![allow(missing_docs)]

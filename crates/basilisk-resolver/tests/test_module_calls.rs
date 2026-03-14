@@ -1,0 +1,37 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
+//! Tests for resolver: `test_module_calls`.
+
+mod common;
+
+use common::resolve_src;
+
+#[test]
+fn collects_call_from_module_level_ann_assign() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "def add(x: int) -> int:\n    return x\n\nresult: int = add(42)\n".to_owned();
+    let resolved = resolve_src(&src)?;
+    assert!(
+        !resolved.calls.is_empty(),
+        "AnnAssign call must be collected"
+    );
+    assert_eq!(resolved.calls[0].callee, "add");
+    Ok(())
+}
+
+#[test]
+fn collects_call_from_module_level_expr_stmt() -> Result<(), Box<dyn std::error::Error>> {
+    let src = "def side_effect() -> None:\n    pass\n\nside_effect()\n".to_owned();
+    let resolved = resolve_src(&src)?;
+    assert!(
+        !resolved.calls.is_empty(),
+        "Expr-stmt call must be collected"
+    );
+    assert_eq!(resolved.calls[0].callee, "side_effect");
+    Ok(())
+}

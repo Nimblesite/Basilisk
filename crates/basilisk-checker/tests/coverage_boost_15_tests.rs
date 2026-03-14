@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Coverage boost tests batch 15: targeting remaining uncovered code paths with
 //! very specific Python patterns. Focus on: nested generics for e0107 variance,
 //! e0144 `type()` deep paths, e0138 transform edge cases, e0143 `NamedTuple` paths,

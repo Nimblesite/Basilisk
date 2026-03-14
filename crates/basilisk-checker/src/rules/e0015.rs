@@ -20,6 +20,7 @@
 use basilisk_resolver::{FunctionInfo, ParameterInfo, ResolvedModule, Span, VariableInfo};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -81,7 +82,7 @@ fn check_module_var(var: &VariableInfo, source: &str, path: &str, out: &mut Vec<
     let Some(ann_span) = var.annotation_span else {
         return;
     };
-    let Some(annotation) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+    let Some(annotation) = slice_span(source, ann_span) else {
         return;
     };
     if let Some(violation) = check_annotation(annotation.trim()) {
@@ -117,7 +118,7 @@ fn check_annotation(annotation: &str) -> Option<Violation> {
     let trimmed = annotation.trim();
 
     let bracket_pos = trimmed.find('[')?;
-    let generic_name = trimmed[..bracket_pos].trim().to_ascii_lowercase();
+    let generic_name = trimmed.get(..bracket_pos)?.trim().to_ascii_lowercase();
     let after_bracket = trimmed.get(bracket_pos + 1..)?;
     // Strip only the final `]` that closes the outermost `[`.
     let inner = after_bracket.strip_suffix(']').unwrap_or(after_bracket);
@@ -180,7 +181,8 @@ fn check_callable_form(inner: &str) -> Option<Violation> {
 
     // List form — check for `[...]` (ellipsis inside brackets is invalid).
     if first.starts_with('[') && first.ends_with(']') {
-        let list_inner = first[1..first.len() - 1].trim();
+        let list_inner = first.get(1..first.len().saturating_sub(1))?;
+        let list_inner = list_inner.trim();
         if list_inner == "..." {
             return Some(Violation::CallableEllipsisInBrackets);
         }
@@ -216,7 +218,7 @@ fn split_callable_args(inner: &str) -> Option<(&str, &str)> {
             '[' => depth += 1,
             ']' => depth = depth.saturating_sub(1),
             ',' if depth == 0 => {
-                return Some((&inner[..idx], &inner[idx + 1..]));
+                return Some((inner.get(..idx)?, inner.get(idx + 1..)?));
             }
             _ => {}
         }
@@ -248,20 +250,22 @@ fn count_type_args(inner: &str) -> usize {
 
 /// Extracts the annotation text for a parameter from the source.
 fn extract_param_annotation(source: &str, name_span: Span) -> Option<&str> {
-    let start = name_span.start as usize;
-    let line_start = source[..start].rfind('\n').map_or(0, |p| p + 1);
-    let line_end = source[start..]
+    let start = name_span.start_usize();
+    let line_start = source.get(..start)?.rfind('\n').map_or(0, |p| p + 1);
+    let line_end = source
+        .get(start..)?
         .find('\n')
         .map_or(source.len(), |p| start + p);
 
     let line = source.get(line_start..line_end)?;
     let name_offset = start.checked_sub(line_start)?;
 
-    let colon_pos = line[name_offset..].find(": ")? + name_offset;
+    let colon_pos = line.get(name_offset..)?.find(": ")? + name_offset;
     let after_colon = colon_pos + 2;
 
     let mut depth: usize = 0;
-    let annotation_end = line[after_colon..]
+    let annotation_end = line
+        .get(after_colon..)?
         .char_indices()
         .find_map(|(idx, ch)| match ch {
             '[' => {
@@ -310,7 +314,7 @@ fn make_diagnostic(
                  e.g. `{generic_name}[{}]`",
                 if *expected == 1 { "" } else { "s" },
                 (0..*expected)
-                    .map(|i| ["T", "K", "V"][i.min(2)])
+                    .map(|i| *["T", "K", "V"].get(i.min(2)).unwrap_or(&"T"))
                     .collect::<Vec<_>>()
                     .join(", "),
             )),

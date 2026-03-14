@@ -22,6 +22,7 @@
 use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -69,12 +70,12 @@ fn extract_literal_inner(ann: &str) -> Option<&str> {
     let bytes = ann.as_bytes();
     let mut i = start_bracket;
     while i < bytes.len() {
-        match bytes[i] {
-            b'[' => depth += 1,
-            b']' => {
+        match bytes.get(i).copied() {
+            Some(b'[') => depth += 1,
+            Some(b']') => {
                 depth -= 1;
                 if depth == 0 {
-                    return Some(&ann[start_bracket..i]);
+                    return ann.get(start_bracket..i);
                 }
             }
             _ => {}
@@ -237,7 +238,7 @@ impl Rule for InvalidLiteralParam {
             let Some(ann_span) = var.annotation_span else {
                 continue;
             };
-            let Some(ann) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+            let Some(ann) = slice_span(source, ann_span) else {
                 continue;
             };
             let ann = ann.trim();
@@ -269,7 +270,7 @@ impl Rule for InvalidLiteralParam {
                 let Some(ann_span) = param.annotation_span else {
                     continue;
                 };
-                let Some(ann) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+                let Some(ann) = slice_span(source, ann_span) else {
                     continue;
                 };
                 let ann = ann.trim();

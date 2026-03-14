@@ -6,7 +6,7 @@
 //! basilisk check [paths...] --output json
 //! ```
 
-use std::process;
+use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 use tracing::{error, warn};
@@ -56,7 +56,7 @@ enum Command {
     },
 }
 
-fn main() {
+fn main() -> ExitCode {
     // Initialize tracing. Controlled via BASILISK_LOG env var (defaults to info).
     // Examples: BASILISK_LOG=debug, BASILISK_LOG=basilisk_lsp::debug=trace
     tracing_subscriber::fmt()
@@ -69,7 +69,7 @@ fn main() {
 
     let cli = Cli::parse();
 
-    let exit_code = match cli.command {
+    let exit_code: u8 = match cli.command {
         Command::Check { paths, output } => run_check(&paths, output),
         Command::Lsp { transport, port } => match transport {
             Transport::Stdio => match basilisk_lsp::run_server() {
@@ -89,7 +89,7 @@ fn main() {
         },
     };
 
-    process::exit(exit_code);
+    ExitCode::from(exit_code)
 }
 
 /// Run the check subcommand.
@@ -98,7 +98,7 @@ fn main() {
 /// - `0` — clean, no errors
 /// - `1` — type errors found
 /// - `3` — internal error
-fn run_check(paths: &[String], format: OutputFormat) -> i32 {
+fn run_check(paths: &[String], format: OutputFormat) -> u8 {
     match collect_and_check(paths) {
         Ok((diagnostics, sources)) => match format {
             OutputFormat::Json => {
@@ -107,7 +107,7 @@ fn run_check(paths: &[String], format: OutputFormat) -> i32 {
                     .iter()
                     .filter(|d| d.severity == basilisk_checker::Severity::Error)
                     .count();
-                i32::from(error_count > 0)
+                u8::from(error_count > 0)
             }
             OutputFormat::Text => {
                 let error_count = render_diagnostics(&diagnostics, &sources);
@@ -123,7 +123,7 @@ fn run_check(paths: &[String], format: OutputFormat) -> i32 {
                         error_count,
                         if error_count == 1 { "" } else { "s" },
                     );
-                    i32::from(error_count > 0)
+                    u8::from(error_count > 0)
                 }
             }
         },

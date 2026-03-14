@@ -34,6 +34,7 @@ use std::collections::HashMap;
 use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -86,7 +87,7 @@ impl Rule for NonHashableDataclassAssignment {
             };
 
             // Check whether the annotation is `Hashable` (bare or qualified).
-            let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+            let Some(ann_text) = slice_span(source, ann_span) else {
                 continue;
             };
             if !is_hashable_annotation(ann_text.trim()) {
@@ -94,7 +95,7 @@ impl Rule for NonHashableDataclassAssignment {
             }
 
             // Extract the callee from the RHS (e.g. `DC1` from `DC1(0)`).
-            let Some(rhs_text) = source.get(rhs_span.start as usize..rhs_span.end as usize) else {
+            let Some(rhs_text) = slice_span(source, rhs_span) else {
                 continue;
             };
             let callee = rhs_callee(rhs_text);

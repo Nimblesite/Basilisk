@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Coverage boost tests batch 9: complex scenarios hitting deep code paths.
 //! Each test exercises multiple rule code paths through realistic Python patterns.
 #![allow(missing_docs)]

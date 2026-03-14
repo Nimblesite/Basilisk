@@ -6,13 +6,17 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-D warnings"
 
 jobs:
   ci:
-    name: CI
+    name: Build, Lint & Test
     runs-on: ubuntu-latest
     env:
       TEST_COVERAGE_BASILISK_CHECKER: ${{ vars.TEST_COVERAGE_BASILISK_CHECKER || '89' }}
@@ -27,11 +31,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # ── Toolchains ──────────────────────────────────────────────────────────
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
+          components: rustfmt, clippy, llvm-tools-preview
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
 
       - uses: actions/setup-node@v4
         with:
@@ -46,23 +53,46 @@ jobs:
       - name: Install Python test dependencies
         run: pip install debugpy ruff
 
-      - name: Install xvfb
-        run: sudo apt-get update && sudo apt-get install -y xvfb
+      - name: Install xvfb and VS Code test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            xvfb \
+            libnspr4 \
+            libnss3 \
+            libgbm1 \
+            libxkbfile1 \
+            libsecret-1-0 \
+            libgtk-3-0 \
+            libxss1 \
+            libxtst6 \
+            libatk1.0-0 \
+            libatk-bridge2.0-0 \
+            libgdk-pixbuf2.0-0 \
+            libdbus-1-3
+          # libasound2 was renamed to libasound2t64 on Ubuntu 24.04+
+          sudo apt-get install -y libasound2 2>/dev/null || sudo apt-get install -y libasound2t64
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
+      # ── Build ───────────────────────────────────────────────────────────────
+      - name: Build workspace (release)
+        run: cargo build --release --workspace --exclude basilisk-compiler
+
+      # ── Lint ────────────────────────────────────────────────────────────────
       - name: cargo fmt --check
         run: cargo fmt --all --check
 
-      - name: clippy (all targets)
+      - name: clippy (workspace)
         run: cargo clippy --all-targets
 
       - name: clippy (zed extension)
         run: cargo clippy --all-targets --manifest-path basilisk-zed/Cargo.toml
 
+      # ── Test ────────────────────────────────────────────────────────────────
       - name: Run all tests
-        run: ./scripts/test.sh
+        run: ./scripts/test.sh --skip-build
 
       - name: Upload coverage report artifact
         if: always()

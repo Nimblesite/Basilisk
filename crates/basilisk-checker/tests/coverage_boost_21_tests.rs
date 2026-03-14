@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Coverage boost tests batch 21: targeting previously untouched rules and deeper
 //! code paths in rules with many uncovered lines.
 //! Targets: e0066, e0071, e0096, e0050, e0117, e0094, e0078, e0075, e0118,

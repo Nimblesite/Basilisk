@@ -132,7 +132,7 @@ impl Rule for RedundantAnnotationWarning {
 /// such pattern is found.
 fn extract_annotation(source: &str, name_span: basilisk_resolver::Span) -> Option<&str> {
     // Find the byte offset of the start of the line containing the name.
-    let start = name_span.start as usize;
+    let start = name_span.start_usize();
     let line_start = source[..start].rfind('\n').map_or(0, |pos| pos + 1);
     let line_end = source[start..]
         .find('\n')
@@ -188,7 +188,7 @@ fn infer_type_from_source(
     declared_type: &InferredType,
 ) -> InferredType {
     // Extract the line containing the assignment
-    let start = name_span.start as usize;
+    let start = name_span.start_usize();
     let line_start = source[..start].rfind('\n').map_or(0, |pos| pos + 1);
     let line_end = source[start..]
         .find('\n')

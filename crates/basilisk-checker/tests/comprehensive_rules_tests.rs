@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Comprehensive integration tests that exercise many checker rules through complex Python code.
 //! These tests ensure code paths in rule implementations are covered even when no diagnostics fire.
 #![allow(missing_docs)]

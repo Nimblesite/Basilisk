@@ -25,6 +25,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -101,9 +102,7 @@ fn check_class(
                 continue;
             }
 
-            let Some(stmt_text) =
-                source.get(ret_stmt.span.start as usize..ret_stmt.span.end as usize)
-            else {
+            let Some(stmt_text) = slice_span(source, ret_stmt.span) else {
                 continue;
             };
 
@@ -171,12 +170,12 @@ fn is_abstract_method(class: &ClassInfo, method_name: &str) -> bool {
 /// `None` otherwise.
 fn extract_super_call_method(text: &str) -> Option<&str> {
     let super_idx = text.find("super()")?;
-    let after_super = &text[super_idx + "super()".len()..];
+    let after_super = text.get(super_idx + "super()".len()..)?;
     let after_dot = after_super.strip_prefix('.')?;
 
     // Find the method name: everything up to the next '('.
     let paren_idx = after_dot.find('(')?;
-    let method_name = after_dot[..paren_idx].trim();
+    let method_name = after_dot.get(..paren_idx)?.trim();
 
     if method_name.is_empty() {
         return None;

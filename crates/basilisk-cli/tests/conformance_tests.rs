@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! PEP conformance test harness.
 //!
 //! Runs every `.py` file from the `python/typing` conformance suite against
@@ -8,7 +16,7 @@
 //! The conformance files must be downloaded first:
 //!
 //! ```text
-//! ./scripts/fetch-conformance.sh
+//! ./conformance/fetch-conformance.sh
 //! cargo test --test conformance_tests -- --nocapture
 //! ```
 //!
@@ -137,7 +145,7 @@ struct FileResult {
     /// Lines Basilisk flagged that had no annotation (false positives).
     false_positives: usize,
     /// `# E?` optional lines where Basilisk did fire.
-    #[allow(dead_code)]
+    #[expect(dead_code, reason = "tracked for future reporting")]
     optional_caught: usize,
     /// `# E[tag]` groups satisfied.
     tagged_exact_satisfied: usize,
@@ -307,7 +315,7 @@ fn conformance_score() {
     if !conformance_dir.exists() {
         println!();
         println!("  ⚠  Conformance suite not downloaded.");
-        println!("  Run: ./scripts/fetch-conformance.sh");
+        println!("  Run: ./conformance/fetch-conformance.sh");
         println!("  Then rerun: cargo test --test conformance_tests -- --nocapture");
         println!();
         return;
@@ -325,7 +333,7 @@ fn conformance_score() {
 
     if files.is_empty() {
         println!("  Conformance directory exists but contains no .py files.");
-        println!("  Run: ./scripts/fetch-conformance.sh");
+        println!("  Run: ./conformance/fetch-conformance.sh");
         return;
     }
 
@@ -335,7 +343,7 @@ fn conformance_score() {
 
     assert!(
         totals.files > 0,
-        "No conformance files found. Run ./scripts/fetch-conformance.sh first."
+        "No conformance files found. Run ./conformance/fetch-conformance.sh first."
     );
 }
 
@@ -355,7 +363,7 @@ struct Totals {
 
 /// Write a CSV snapshot of per-file conformance results.
 ///
-/// Output path: `benchmarks/conformance_status.csv` (repo root).
+/// Output path: `conformance/conformance_status.csv` (repo root).
 /// Columns: file, category, status, caught, missed, `false_positives`
 ///
 /// This file is the rolling log — commit it after each run to track regressions.
@@ -372,7 +380,7 @@ fn write_csv(detail_lines: &DetailLines) {
         eprintln!("  [conformance csv] could not locate repo root");
         return;
     };
-    let csv_path = repo_root.join("benchmarks/conformance_status.csv");
+    let csv_path = repo_root.join("conformance/conformance_status.csv");
     let _ = fs::create_dir_all(csv_path.parent().unwrap_or(Path::new(".")));
 
     let mut out =
@@ -433,10 +441,11 @@ fn collect_results(files: &[std::fs::DirEntry]) -> (Totals, CategoryMap, DetailL
     (totals, by_category, detail_lines)
 }
 
-#[allow(
+#[expect(
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
-    clippy::cast_sign_loss
+    clippy::cast_sign_loss,
+    reason = "percentage display requires float conversion from counters"
 )]
 fn print_scorecard(t: &Totals, by_category: &CategoryMap, detail_lines: &DetailLines) {
     let pct = if t.files > 0 {

@@ -19,6 +19,7 @@ use std::collections::HashSet;
 use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -65,11 +66,13 @@ fn is_word_boundary_match(haystack: &str, needle: &str) -> bool {
                 return false;
             }
             let before_ok = i == 0
-                || (!haystack_bytes[i - 1].is_ascii_alphanumeric()
-                    && haystack_bytes[i - 1] != b'_');
+                || !haystack_bytes
+                    .get(i - 1)
+                    .is_some_and(|&b| b.is_ascii_alphanumeric() || b == b'_');
             let after_ok = i + needle_len >= haystack_bytes.len()
-                || (!haystack_bytes[i + needle_len].is_ascii_alphanumeric()
-                    && haystack_bytes[i + needle_len] != b'_');
+                || !haystack_bytes
+                    .get(i + needle_len)
+                    .is_some_and(|&b| b.is_ascii_alphanumeric() || b == b'_');
             before_ok && after_ok
         })
 }
@@ -169,11 +172,11 @@ impl Rule for Pep695TraditionalTypeVarMix {
                 .iter()
                 .filter_map(|p| {
                     p.annotation_span
-                        .and_then(|s| module.source.get(s.start as usize..s.end as usize))
+                        .and_then(|s| slice_span(&module.source, s))
                 })
                 .chain(
                     func.return_annotation_span
-                        .and_then(|s| module.source.get(s.start as usize..s.end as usize)),
+                        .and_then(|s| slice_span(&module.source, s)),
                 )
                 .collect();
 

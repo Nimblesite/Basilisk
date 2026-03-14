@@ -97,7 +97,7 @@ fn parse_callable_annotation(param_name: &str, annotation: &Expr) -> Option<Call
     if tuple_elts.len() != 2 {
         return None;
     }
-    let first_arg = &tuple_elts[0];
+    let first_arg = tuple_elts.first()?;
     if matches!(first_arg, Expr::EllipsisLiteral(_)) {
         return Some(CallableParam {
             name: param_name.to_owned(),
