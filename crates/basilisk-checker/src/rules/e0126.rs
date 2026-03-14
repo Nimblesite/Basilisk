@@ -28,7 +28,6 @@ use basilisk_resolver::{FunctionInfo, ResolvedModule};
 
 use crate::diagnostic::Diagnostic;
 
-use super::Rule;
 use super::e0126_helpers::{
     emit_container_call_str_error, emit_fstring_literal_string_error,
     emit_invariant_container_mismatch, emit_literal_value_mismatch, extract_fstring_names,
@@ -36,6 +35,7 @@ use super::e0126_helpers::{
     is_simple_identifier, param_annotations, parse_annotated_assigns, parse_simple_call,
     split_generic, LocalAssign,
 };
+use super::Rule;
 
 /// Emits BSK-E0126 for `LiteralString` / `Literal[...]` assignment
 /// incompatibilities found inside function bodies.
@@ -191,7 +191,13 @@ fn check_invariant_generic_literal_string(
                     if let Some(param_ann) = param_anns.get(arg.as_str()) {
                         if is_plain_str_type(param_ann) {
                             emit_container_call_str_error(
-                                assign, rhs, ann, arg, param_ann, path, diagnostics,
+                                assign,
+                                rhs,
+                                ann,
+                                arg,
+                                param_ann,
+                                path,
+                                diagnostics,
                             );
                             return;
                         }

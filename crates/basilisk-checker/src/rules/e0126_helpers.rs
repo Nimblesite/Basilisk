@@ -359,8 +359,7 @@ pub(super) fn emit_literal_value_mismatch(
              but the parameter has type `Literal[\"{source_value}\"]`"
         )),
         note: Some(
-            "PEP 586: Literal types are only compatible when their values match exactly"
-                .to_owned(),
+            "PEP 586: Literal types are only compatible when their values match exactly".to_owned(),
         ),
     });
 }

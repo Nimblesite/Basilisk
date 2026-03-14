@@ -107,9 +107,7 @@ pub(super) async fn did_close(server: &LspServer, params: DidCloseTextDocumentPa
             let in_workspace = uri
                 .to_file_path()
                 .is_ok_and(|path| index.roots.iter().any(|root| path.starts_with(root)));
-            super::diaglog!(
-                "[DIAG] did_close: WholeModule in_workspace={in_workspace} uri={uri}"
-            );
+            super::diaglog!("[DIAG] did_close: WholeModule in_workspace={in_workspace} uri={uri}");
             if in_workspace {
                 let (publish_uri, diags) = index.set_closed(&uri);
                 let diag_count = diags.len();

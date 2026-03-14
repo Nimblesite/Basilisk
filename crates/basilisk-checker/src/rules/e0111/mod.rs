@@ -29,8 +29,9 @@ use crate::span_util::slice_span;
 
 use super::Rule;
 use helpers::{
-    classify_literal_type, extract_type_args_text, find_init_in_hierarchy, has_custom_init_in_bases,
-    is_namedtuple_class, is_subclass, is_type_compatible, resolve_string_annotation,
+    classify_literal_type, extract_type_args_text, find_init_in_hierarchy,
+    has_custom_init_in_bases, is_namedtuple_class, is_subclass, is_type_compatible,
+    resolve_string_annotation,
 };
 
 const CODE: ErrorCode = ErrorCode {

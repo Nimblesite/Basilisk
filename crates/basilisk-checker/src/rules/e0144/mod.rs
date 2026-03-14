@@ -31,8 +31,8 @@ use crate::diagnostic::{Diagnostic, Severity};
 use super::Rule;
 
 use helpers::{
-    ConstructorSig, build_typevar_bound_map, check_kwarg_types, check_positional_arg_types,
-    expr_simple_name, resolve_constructor_sig, CODE,
+    build_typevar_bound_map, check_kwarg_types, check_positional_arg_types, expr_simple_name,
+    resolve_constructor_sig, ConstructorSig, CODE,
 };
 
 /// Emits BSK-E0144 for invalid constructor calls via `type[T]` parameters.

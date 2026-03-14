@@ -35,14 +35,9 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 use helpers::{
-    TransformClassSettings,
-    check_frozen_inheritance,
-    check_frozen_instance_assignment,
-    check_kw_only_positional_args,
-    check_no_order_comparison,
-    collect_transform_base_classes,
-    collect_transform_subclasses,
-    resolve_inherited_settings,
+    check_frozen_inheritance, check_frozen_instance_assignment, check_kw_only_positional_args,
+    check_no_order_comparison, collect_transform_base_classes, collect_transform_subclasses,
+    resolve_inherited_settings, TransformClassSettings,
 };
 
 /// Emits BSK-E0142 for `dataclass_transform` violations via class-based transform.

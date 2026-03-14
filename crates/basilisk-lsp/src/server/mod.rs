@@ -26,6 +26,7 @@ macro_rules! diaglog {
 
 pub(crate) use diaglog;
 
+use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::{
     CallHierarchyIncomingCall, CallHierarchyIncomingCallsParams, CallHierarchyItem,
     CallHierarchyOutgoingCall, CallHierarchyOutgoingCallsParams, CallHierarchyPrepareParams,
@@ -36,14 +37,13 @@ use tower_lsp::lsp_types::{
     DidSaveTextDocumentParams, DocumentColorParams, DocumentFormattingParams, DocumentHighlight,
     DocumentHighlightParams, DocumentSymbolParams, DocumentSymbolResponse, ExecuteCommandParams,
     FoldingRange, FoldingRangeParams, GotoDefinitionParams, GotoDefinitionResponse, Hover,
-    HoverParams, InitializeParams, InitializeResult, InitializedParams, InlayHint,
-    InlayHintParams, Location, Position, PrepareRenameResponse, ReferenceParams, RenameParams,
-    SemanticTokensParams, SemanticTokensResult, SelectionRange, SelectionRangeParams,
-    SignatureHelpParams, SymbolInformation, TextDocumentPositionParams, TextEdit, TypeHierarchyItem,
+    HoverParams, InitializeParams, InitializeResult, InitializedParams, InlayHint, InlayHintParams,
+    Location, Position, PrepareRenameResponse, ReferenceParams, RenameParams, SelectionRange,
+    SelectionRangeParams, SemanticTokensParams, SemanticTokensResult, SignatureHelpParams,
+    SymbolInformation, TextDocumentPositionParams, TextEdit, TypeHierarchyItem,
     TypeHierarchyPrepareParams, TypeHierarchySubtypesParams, TypeHierarchySupertypesParams, Url,
     WorkspaceEdit, WorkspaceSymbolParams,
 };
-use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::{Client, LspService, Server};
 
 use crate::workspace::WorkspaceIndex;

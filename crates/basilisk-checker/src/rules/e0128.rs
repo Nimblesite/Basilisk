@@ -35,11 +35,11 @@ use basilisk_resolver::ResolvedModule;
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 use crate::span_util::slice_span;
 
-use super::Rule;
 use super::e0128_helpers::{
-    TypeVarInfo, find_matching_bracket, is_numeric_subtype, literal_type_mismatch,
-    parse_typevar_info_from_source, resolve_generic_params, split_top_level_args,
+    find_matching_bracket, is_numeric_subtype, literal_type_mismatch,
+    parse_typevar_info_from_source, resolve_generic_params, split_top_level_args, TypeVarInfo,
 };
+use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0128",

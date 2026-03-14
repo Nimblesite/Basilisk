@@ -283,5 +283,4 @@ impl InferredType {
             _ => false,
         }
     }
-
 }

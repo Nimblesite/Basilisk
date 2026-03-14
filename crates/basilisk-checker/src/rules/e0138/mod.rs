@@ -40,9 +40,8 @@ use crate::diagnostic::Diagnostic;
 use super::Rule;
 
 use helpers::{
-    CODE, TransformClassDesc, build_instance_class_map, check_call_expr,
-    class_keyword_bool, collect_transform_bases, collect_transform_classes,
-    collect_transform_metaclasses,
+    build_instance_class_map, check_call_expr, class_keyword_bool, collect_transform_bases,
+    collect_transform_classes, collect_transform_metaclasses, TransformClassDesc, CODE,
 };
 
 /// Emits BSK-E0138 for violations related to `@dataclass_transform` metaclasses.

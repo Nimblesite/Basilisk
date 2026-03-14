@@ -51,7 +51,7 @@ pub(super) async fn dispatch_execute_command(
 }
 
 /// Handle `basilisk.organizeImports`.
-pub(crate) async fn execute_organize_imports(
+async fn execute_organize_imports(
     server: &LspServer,
     args: &[serde_json::Value],
 ) -> LspResult<Option<serde_json::Value>> {

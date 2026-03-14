@@ -15,10 +15,10 @@ use tower_lsp::lsp_types::{
     DocumentHighlightParams, DocumentSymbolParams, DocumentSymbolResponse, FoldingRange,
     FoldingRangeParams, GotoDefinitionParams, GotoDefinitionResponse, Hover, HoverParams,
     InlayHint, InlayHintParams, Location, PrepareRenameResponse, ReferenceParams, RenameParams,
-    SemanticTokens, SemanticTokensParams, SemanticTokensResult, SelectionRange,
-    SelectionRangeParams, SignatureHelpParams, SymbolInformation, TextDocumentPositionParams,
+    SelectionRange, SelectionRangeParams, SemanticTokens, SemanticTokensParams,
+    SemanticTokensResult, SignatureHelpParams, SymbolInformation, TextDocumentPositionParams,
     TextEdit, TypeHierarchyItem, TypeHierarchyPrepareParams, TypeHierarchySubtypesParams,
-    TypeHierarchySupertypesParams, WorkspaceSymbolParams, WorkspaceEdit,
+    TypeHierarchySupertypesParams, WorkspaceEdit, WorkspaceSymbolParams,
 };
 
 use crate::{

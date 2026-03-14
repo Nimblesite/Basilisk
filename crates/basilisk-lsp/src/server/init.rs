@@ -5,16 +5,15 @@
 use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::{
     CallHierarchyServerCapability, CodeActionKind, CodeActionOptions, CodeActionProviderCapability,
-    CodeLensOptions, CompletionOptions, DeclarationCapability, DidChangeConfigurationParams,
-    ExecuteCommandOptions, FoldingRangeProviderCapability, GotoDefinitionResponse,
-    HoverProviderCapability, InitializeParams, InitializeResult, MessageType, OneOf,
-    RenameOptions, SelectionRangeProviderCapability, SemanticTokensFullOptions,
-    SemanticTokensLegend, SemanticTokensOptions, SemanticTokensServerCapabilities,
-    ServerCapabilities, ServerInfo, SignatureHelpOptions, TextDocumentSyncCapability,
-    TextDocumentSyncKind, TypeDefinitionProviderCapability, Url, WorkDoneProgressOptions,
-    ColorProviderCapability,
+    CodeLensOptions, ColorProviderCapability, CompletionOptions, DeclarationCapability,
+    DidChangeConfigurationParams, ExecuteCommandOptions, FoldingRangeProviderCapability,
+    HoverProviderCapability, InitializeParams, InitializeResult, MessageType, OneOf, RenameOptions,
+    SelectionRangeProviderCapability, SemanticTokensFullOptions, SemanticTokensLegend,
+    SemanticTokensOptions, SemanticTokensServerCapabilities, ServerCapabilities, ServerInfo,
+    SignatureHelpOptions, TextDocumentSyncCapability, TextDocumentSyncKind,
+    TypeDefinitionProviderCapability, Url, WorkDoneProgressOptions,
 };
-use tracing::{debug, info};
+use tracing::info;
 
 use crate::config::AnalysisMode;
 use crate::workspace::WorkspaceIndex;
@@ -114,8 +113,8 @@ fn build_capabilities() -> ServerCapabilities {
             work_done_progress_options: WorkDoneProgressOptions::default(),
         }),
         inlay_hint_provider: Some(OneOf::Left(true)),
-        semantic_tokens_provider: Some(
-            SemanticTokensServerCapabilities::SemanticTokensOptions(SemanticTokensOptions {
+        semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
+            SemanticTokensOptions {
                 legend: SemanticTokensLegend {
                     token_types: crate::semantic_tokens::TOKEN_TYPES.to_vec(),
                     token_modifiers: crate::semantic_tokens::TOKEN_MODIFIERS.to_vec(),
@@ -123,8 +122,8 @@ fn build_capabilities() -> ServerCapabilities {
                 full: Some(SemanticTokensFullOptions::Bool(true)),
                 range: None,
                 work_done_progress_options: WorkDoneProgressOptions::default(),
-            }),
-        ),
+            },
+        )),
         color_provider: Some(ColorProviderCapability::Simple(true)),
         ..Default::default()
     }
