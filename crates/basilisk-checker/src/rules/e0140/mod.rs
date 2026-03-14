@@ -3,8 +3,10 @@
 //! Checks that when a function is assigned to a variable annotated with a
 //! `Callable` type or a callback `Protocol`, the signatures are compatible.
 
+mod callable;
 mod checks;
-mod types;
+mod context;
+mod protocol;
 
 use basilisk_resolver::ResolvedModule;
 
@@ -12,7 +14,7 @@ use crate::diagnostic::{Diagnostic, ErrorCode};
 
 use super::Rule;
 use checks::check_stmts;
-use types::ModuleContext;
+use context::ModuleContext;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0140",

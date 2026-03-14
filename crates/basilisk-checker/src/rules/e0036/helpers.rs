@@ -1,4 +1,4 @@
-//! Shared helper utilities for BSK-E0036: text-based ClassVar detection,
+//! Shared helper utilities for BSK-E0036: text-based `ClassVar` detection,
 //! diagnostic construction, and the `TypeParamKind` classification enum.
 
 use basilisk_resolver::Span;
@@ -66,7 +66,7 @@ pub(super) fn make_diagnostic(message: String, span: Span, path: &str) -> Diagno
 /// Returns the text slice for an optional span within the source.
 ///
 /// Returns `None` when the span is `None` or out of bounds.
-pub(super) fn span_text<'a>(source: &'a str, span: Option<Span>) -> Option<&'a str> {
+pub(super) fn span_text(source: &str, span: Option<Span>) -> Option<&str> {
     slice_span(source, span?)
 }
 

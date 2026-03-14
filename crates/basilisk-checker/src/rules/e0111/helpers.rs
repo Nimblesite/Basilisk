@@ -6,6 +6,8 @@ use basilisk_resolver::ClassInfo;
 
 use basilisk_resolver::Span;
 
+use crate::span_util::slice_span;
+
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
 /// Error code for BSK-E0111 diagnostics.
@@ -218,6 +220,11 @@ pub(super) fn extract_type_args_text(slice: &ruff_python_ast::Expr, source: &str
     }
 }
 
+/// Check Self type incompatibility through inheritance in `__init__`.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "self type incompatibility check needs class map, method map, and call context"
+)]
 pub(super) fn check_self_type_incompatibility(
     call: &ruff_python_ast::ExprCall,
     class_name: &str,
@@ -241,7 +248,7 @@ pub(super) fn check_self_type_incompatibility(
         let has_self_annotation = init_func.parameters.iter().skip(1).any(|param| {
             param
                 .annotation_span
-                .and_then(|span| source.get(span.start as usize..span.end as usize))
+                .and_then(|span| slice_span(source, span))
                 .is_some_and(|ann_text| {
                     let resolved = resolve_string_annotation(ann_text.trim());
                     resolved.contains("Self")
@@ -297,8 +304,11 @@ pub(super) fn check_self_type_incompatibility(
     }
 }
 
-/// Find `__init__` methods for a class, searching up the MRO.
-
+/// Check arguments to `__init__` after type parameter substitution.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "init method validation requires substitutions, call, class info and context"
+)]
 pub(super) fn check_init_method_args(
     init_func: &basilisk_resolver::FunctionInfo,
     substitutions: &HashMap<&str, &str>,
@@ -316,7 +326,7 @@ pub(super) fn check_init_method_args(
     // Check 3: Explicit self annotation mismatch.
     if let Some(self_param) = init_func.parameters.first() {
         if let Some(ann_span) = self_param.annotation_span {
-            if let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) {
+            if let Some(ann_text) = slice_span(source, ann_span) {
                 let resolved = resolve_string_annotation(ann_text.trim());
                 check_self_param_init_mismatch(
                     &resolved,
@@ -349,7 +359,7 @@ pub(super) fn check_init_method_args(
         let Some(ann_span) = param.annotation_span else {
             continue;
         };
-        let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+        let Some(ann_text) = slice_span(source, ann_span) else {
             continue;
         };
 

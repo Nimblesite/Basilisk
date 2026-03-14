@@ -135,7 +135,7 @@ fn check_class_scoped_typevars_in_self(
                 continue;
             };
 
-            let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+            let Some(ann_text) = ann_span.slice_source(source) else {
                 continue;
             };
 
@@ -202,7 +202,6 @@ fn check_class_scoped_typevars_in_self(
 }
 
 /// Walk a statement looking for constructor call expressions.
-#[allow(clippy::too_many_arguments)]
 fn check_stmt(
     stmt: &ruff_python_ast::Stmt,
     source: &str,
@@ -284,7 +283,6 @@ fn check_stmt(
 }
 
 /// Recursively check expressions for constructor call errors.
-#[allow(clippy::too_many_arguments)]
 fn check_expr_recursive(
     expr: &ruff_python_ast::Expr,
     source: &str,
@@ -323,7 +321,6 @@ fn check_expr_recursive(
 }
 
 /// Check a single call expression for constructor call errors.
-#[allow(clippy::too_many_arguments)]
 fn check_constructor_call(
     call: &ruff_python_ast::ExprCall,
     source: &str,
@@ -416,7 +413,6 @@ fn check_constructor_call(
 }
 
 /// Check 5: Classes without custom `__init__` that receive arguments.
-#[allow(clippy::too_many_arguments)]
 fn check_no_init_with_args(
     call: &ruff_python_ast::ExprCall,
     class_name: &str,

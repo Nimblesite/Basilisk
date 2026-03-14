@@ -1,4 +1,4 @@
-//! TypeVar constraint detection and parsing for BSK-E0148.
+//! `TypeVar` constraint detection and parsing for BSK-E0148.
 
 use std::collections::HashMap;
 
@@ -12,7 +12,7 @@ use super::helpers::{ann_str, expr_name};
 
 /// Constraint group for a `TypeVar`: the list of allowed types.
 #[derive(Debug, Clone)]
-pub(super) struct ConstrainedTypeVar {
+pub(in super::super) struct ConstrainedTypeVar {
     /// The `TypeVar` name (e.g. `"AnyStr"`).
     pub(super) name: String,
     /// The constraint types in order (e.g. `["str", "bytes"]`).
@@ -51,7 +51,7 @@ fn is_subtype_of(subtype: &str, supertype: &str) -> bool {
 
 /// A function signature with constrained `TypeVar` parameters.
 #[derive(Debug, Clone)]
-pub(super) struct ConstrainedFunc {
+pub(in super::super) struct ConstrainedFunc {
     /// The function name.
     pub(super) name: String,
     /// For each parameter index: which `ConstrainedTypeVar` it uses (by name).

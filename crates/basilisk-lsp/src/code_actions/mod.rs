@@ -12,9 +12,7 @@ mod suppress;
 pub(super) static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 // Re-export pub(crate) items that the server module calls directly.
-pub(crate) use imports::{
-    add_dunder_all, convert_import_style, expand_wildcard_imports, organize_imports,
-};
+pub(crate) use imports::organize_imports;
 
 /// Generate code actions for the given diagnostics.
 ///

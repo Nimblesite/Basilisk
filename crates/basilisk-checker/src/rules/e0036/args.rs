@@ -1,5 +1,5 @@
-//! Argument validation helpers for BSK-E0036: ClassVar argument correctness
-//! checks and type-mismatch detection between the ClassVar inner type and the RHS.
+//! Argument validation helpers for BSK-E0036: `ClassVar` argument correctness
+//! checks and type-mismatch detection between the `ClassVar` inner type and the RHS.
 
 use basilisk_resolver::Span;
 

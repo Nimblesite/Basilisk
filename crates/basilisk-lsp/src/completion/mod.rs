@@ -73,12 +73,22 @@ pub fn patch_cursor_line(text: &str, line_number: u32) -> String {
 /// - For functions/classes: `data.file_path` for the source file
 #[must_use]
 pub fn resolve_completion_item(item: CompletionItem, text: &str, path: &str) -> CompletionItem {
-    let Some(data) = &item.data else {
-        return item;
+    let (kind, name) = {
+        let Some(data) = &item.data else {
+            return item;
+        };
+        let kind = data
+            .get("kind")
+            .and_then(|k| k.as_str())
+            .unwrap_or("")
+            .to_owned();
+        let name = data
+            .get("name")
+            .and_then(|n| n.as_str())
+            .unwrap_or("")
+            .to_owned();
+        (kind, name)
     };
-
-    let kind = data.get("kind").and_then(|k| k.as_str()).unwrap_or("");
-    let name = data.get("name").and_then(|n| n.as_str()).unwrap_or("");
 
     if name.is_empty() {
         return item;
@@ -88,10 +98,10 @@ pub fn resolve_completion_item(item: CompletionItem, text: &str, path: &str) -> 
         return item;
     };
 
-    match kind {
-        "function" | "method" => resolve_function(item, &resolved, name),
-        "class" => resolve_class(item, &resolved, name),
-        "variable" | "attribute" => resolve_variable(item, &resolved, name),
+    match kind.as_str() {
+        "function" | "method" => resolve_function(item, &resolved, &name),
+        "class" => resolve_class(item, &resolved, &name),
+        "variable" | "attribute" => resolve_variable(item, &resolved, &name),
         _ => item,
     }
 }

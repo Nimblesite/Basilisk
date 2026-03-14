@@ -16,7 +16,8 @@
 mod collect;
 mod decorators;
 mod types;
-mod visit;
+mod visit_expr;
+mod visit_stmt;
 
 use std::collections::{HashMap, HashSet};
 
@@ -31,7 +32,7 @@ use collect::{
     collect_imported_deprecated_members, collect_var_types,
 };
 use types::DeprecatedUsageContext;
-use visit::visit_stmt_for_usage;
+use visit_stmt::visit_stmt_for_usage;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0115",

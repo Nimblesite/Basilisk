@@ -2,7 +2,7 @@
 //!
 //! Contains pure functions for detecting structurally invalid type expressions
 //! by examining annotation text (as a string slice), plus non-type name detection
-//! and ParamSpec invalid annotation detection.
+//! and `ParamSpec` invalid annotation detection.
 
 use std::collections::HashSet;
 

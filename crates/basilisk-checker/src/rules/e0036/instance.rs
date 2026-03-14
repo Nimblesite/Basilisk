@@ -1,8 +1,8 @@
-//! Instance-level ClassVar violation checks for BSK-E0036.
+//! Instance-level `ClassVar` violation checks for BSK-E0036.
 //!
 //! Handles two cases:
 //! 1. `self.x: ClassVar[T]` annotations inside methods (invalid context).
-//! 2. `instance.classvar_attr = value` assignments to class-level ClassVar
+//! 2. `instance.classvar_attr = value` assignments to class-level `ClassVar`
 //!    attributes through an instance (forbidden by PEP 526).
 
 use basilisk_resolver::{ResolvedModule, Span};

@@ -290,7 +290,7 @@ fn check_bound_constraint_compat(
     }
 }
 
-/// Check bound and constraint compatibility for a single TypeVar pair.
+/// Check bound and constraint compatibility for a single `TypeVar` pair.
 fn check_one_bound_compat(
     info: &TypeVarInfo,
     ref_info: &TypeVarInfo,
@@ -458,7 +458,7 @@ fn check_subscripted_class_on_line(
     line: &str,
     trimmed: &str,
     class_name: &&str,
-    class_info: &&basilisk_resolver::ClassInfo,
+    class_info: &basilisk_resolver::ClassInfo,
 ) {
     if class_info.generic_params.is_empty() {
         return;

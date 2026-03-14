@@ -1,4 +1,4 @@
-//! Protocol ClassVar conformance checks for BSK-E0036.
+//! Protocol `ClassVar` conformance checks for BSK-E0036.
 //!
 //! When a variable is typed as a `Protocol` with `ClassVar` attributes, the RHS
 //! implementation class must have those attributes defined at the **class level**
@@ -27,10 +27,6 @@ fn is_classvar_annotation(ann: &str) -> bool {
 /// When a variable is typed as a `Protocol` with `ClassVar` attributes, the RHS
 /// implementation class must have those attributes defined at the **class level**
 /// (not merely as `self.x = ...` in `__init__`).
-#[expect(
-    clippy::too_many_lines,
-    reason = "protocol ClassVar conformance requires extensive matching logic"
-)]
 pub(super) fn check_protocol_classvar_conformance(
     module: &ResolvedModule,
     diagnostics: &mut Vec<Diagnostic>,
@@ -133,7 +129,7 @@ pub(super) fn check_protocol_classvar_conformance(
     }
 }
 
-/// Emit diagnostics for any required ClassVar attributes missing from the implementation class.
+/// Emit diagnostics for any required `ClassVar` attributes missing from the implementation class.
 fn emit_protocol_violations(
     required_cv_attrs: &[&str],
     cls_attrs: &[&str],

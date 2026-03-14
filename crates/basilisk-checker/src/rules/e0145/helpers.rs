@@ -1,6 +1,31 @@
-//! Predicate and AST utility helpers for BSK-E0145.
+//! AST utility helpers and predicate functions for BSK-E0145.
 
 use ruff_python_ast::Expr;
+
+/// Special-form names that are not valid class objects for `type[T]`.
+pub(super) const SPECIAL_FORMS: &[&str] = &[
+    "Callable",
+    "Union",
+    "Optional",
+    "ClassVar",
+    "Final",
+    "Literal",
+    "Annotated",
+    "TypeGuard",
+    "TypeIs",
+    "Never",
+    "NoReturn",
+    "LiteralString",
+    "Self",
+    "Unpack",
+    "TypeVarTuple",
+    "ParamSpec",
+    "Concatenate",
+    "Required",
+    "NotRequired",
+    "ReadOnly",
+    "TypeAlias",
+];
 
 /// Known attributes on `type` / `object` (the metaclass API) that are always
 /// legal to access on `type[object]` or a plain `type` annotation.
@@ -33,8 +58,7 @@ pub(super) const KNOWN_TYPE_ATTRS: &[&str] = &[
     "__subclasshook__",
 ];
 
-/// Returns `true` if `ann` is a `type[…]` or `Type[…]` annotation of any form
-/// (including `type[Any]`, `type[T]`, `type[A | B]`).
+/// Returns `true` if `ann` is a `type[…]` or `Type[…]` annotation of any form.
 pub(super) fn is_any_type_annotation(ann: &str) -> bool {
     strip_type_bracket(ann).is_some()
 }
@@ -51,20 +75,14 @@ pub(super) fn strip_type_bracket(ann: &str) -> Option<&str> {
 
 /// Returns `true` if `ann` is a `type[X]` where `X` is a **concrete** (non-Any,
 /// non-TypeVar) type — e.g. `type[object]`, `Type[object]`, `type[int]`.
-///
-/// We intentionally exclude `type[Any]` and `type[T]` (`TypeVar` parameters)
-/// because those expose all attributes.
 pub(super) fn is_concrete_type_annotation(ann: &str) -> bool {
     let Some(inner) = strip_type_bracket(ann) else {
         return false;
     };
     let inner = inner.trim();
-    // Exclude `Any` (exposes everything) and obvious TypeVar identifiers
-    // (single uppercase letter).
     if inner == "Any" || inner.len() == 1 && inner.chars().next().is_some_and(char::is_uppercase) {
         return false;
     }
-    // Include only known concrete types for which we know `unknown` is invalid.
     matches!(inner, "object" | "int" | "str" | "float" | "bool" | "bytes")
 }
 
@@ -75,13 +93,12 @@ pub(super) fn is_type_annotation(rhs: &str) -> bool {
     matches!(rhs, "type" | "Type") || rhs.starts_with("type[") || rhs.starts_with("Type[")
 }
 
-/// Returns `true` if `attr` is a well-known attribute on the `type` metaclass
-/// or `object` that is always valid to access on any `type[X]`.
+/// Returns `true` if `attr` is a well-known attribute on the `type` metaclass.
 pub(super) fn is_known_type_attr(attr: &str) -> bool {
     KNOWN_TYPE_ATTRS.contains(&attr)
 }
 
-/// Extract the simple name from an expression, if it is a bare `Name` node.
+/// Extract the simple name string from a `Name` expression.
 pub(super) fn expr_simple_name(expr: &Expr) -> Option<&str> {
     match expr {
         Expr::Name(n) => Some(n.id.as_str()),
@@ -89,7 +106,7 @@ pub(super) fn expr_simple_name(expr: &Expr) -> Option<&str> {
     }
 }
 
-/// Returns `true` if `expr` is a call to `TypeVar(...)`.
+/// Returns `true` if the expression is a `TypeVar(...)` call.
 pub(super) fn is_typevar_call(expr: &Expr) -> bool {
     matches!(
         expr,
