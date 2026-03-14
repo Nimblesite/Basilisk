@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn function_defined_inside_try_block() -> Result<(), Box<dyn std::error::Error>> {

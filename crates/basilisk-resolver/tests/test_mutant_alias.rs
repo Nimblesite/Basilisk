@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn alias_name_preserves_import_name() -> Result<(), Box<dyn std::error::Error>> {

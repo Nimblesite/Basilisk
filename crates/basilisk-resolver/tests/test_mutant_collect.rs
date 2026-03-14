@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn collect_from_stmt_for_loop_body_has_nested_function() -> Result<(), Box<dyn std::error::Error>> {

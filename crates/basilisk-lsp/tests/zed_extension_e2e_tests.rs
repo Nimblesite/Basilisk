@@ -1,255 +1,13 @@
 //! E2E tests simulating the Zed extension's interaction with the Basilisk LSP.
 //!
-//! These tests exercise the exact code paths that the Zed extension triggers:
-//!   1. Initialize with `workspaceRoot` in `initializationOptions` (Zed pattern)
-//!   2. Send `workspace/configuration` with basilisk-specific config keys
-//!   3. Open files and verify diagnostics flow through
-//!   4. Test completions, hover, code actions, inlay hints
-//!   5. Execute custom commands (`basilisk.startDebugSession`, etc.)
-//!   6. Verify the LSP advertises all capabilities the Zed extension relies on
-//!
-//! The shared `basilisk_common` crate ensures the command names and config keys
-//! used here are identical to those in the live Zed extension.
+//! Tests: initialization, capabilities, configuration, diagnostics, hover,
+//! completions, code actions, and document symbols.
 
-use std::io::{BufRead, BufReader, Read, Write};
-use std::process::{Child, ChildStdin, Command, Stdio};
-use std::sync::mpsc::{channel, Receiver};
-use std::thread;
-use std::time::Duration;
+mod zed_e2e_common;
+use basilisk_common::config_keys;
+use zed_e2e_common::*;
 
-use basilisk_common::{commands, config_keys};
-
-type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
-
-/// Timeout for reading a single LSP message.
-const READ_TIMEOUT: Duration = Duration::from_secs(5);
-
-/// Path to the pre-built basilisk binary.
-fn basilisk_binary() -> String {
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(debug_dir) = exe.parent().and_then(|deps| deps.parent()) {
-            let candidate = debug_dir.join("basilisk");
-            if candidate.exists() {
-                return candidate.to_string_lossy().into_owned();
-            }
-        }
-    }
-    format!("{}/../../target/debug/basilisk", env!("CARGO_MANIFEST_DIR"))
-}
-
-/// Test fixture that manages a `basilisk lsp` child process.
-///
-/// Mirrors the exact spawn-and-communicate pattern that the Zed extension uses
-/// (binary + "lsp" arg, stdio JSON-RPC).
-struct ZedLspFixture {
-    child: Child,
-    stdin: ChildStdin,
-    responses: Receiver<String>,
-    next_id: i64,
-}
-
-impl ZedLspFixture {
-    /// Spawn the LSP server exactly as the Zed extension would.
-    fn new() -> TestResult<Self> {
-        let mut child = Command::new(basilisk_binary())
-            .arg("lsp")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()?;
-
-        let stdin = child.stdin.take().ok_or("failed to get stdin")?;
-        let stdout = child.stdout.take().ok_or("failed to get stdout")?;
-        let stderr = child.stderr.take().ok_or("failed to get stderr")?;
-
-        let (tx, rx) = channel();
-
-        // Background reader for stdout: parse LSP frames.
-        let _ = thread::spawn(move || {
-            let mut reader = BufReader::new(stdout);
-            let mut line = String::new();
-            loop {
-                let mut content_length: Option<usize> = None;
-                loop {
-                    line.clear();
-                    if reader.read_line(&mut line).unwrap_or(0) == 0 {
-                        return;
-                    }
-                    let trimmed = line.trim();
-                    if trimmed.is_empty() {
-                        if content_length.is_some() {
-                            break;
-                        }
-                        continue;
-                    }
-                    if let Some(rest) = trimmed.strip_prefix("Content-Length:") {
-                        content_length = rest.trim().parse().ok();
-                    }
-                }
-                let Some(length) = content_length else {
-                    continue;
-                };
-                let mut buf = vec![0u8; length];
-                if reader.read_exact(&mut buf).is_err() {
-                    return;
-                }
-                if let Ok(body) = String::from_utf8(buf) {
-                    if tx.send(body).is_err() {
-                        return;
-                    }
-                }
-            }
-        });
-
-        // Drain stderr to console.
-        let _ = thread::spawn(move || {
-            let mut reader = BufReader::new(stderr);
-            let mut line = String::new();
-            while reader.read_line(&mut line).unwrap_or(0) > 0 {
-                eprint!("[LSP stderr] {line}");
-                line.clear();
-            }
-        });
-
-        Ok(Self {
-            child,
-            stdin,
-            responses: rx,
-            next_id: 1,
-        })
-    }
-
-    /// Send a JSON-RPC message.
-    fn send_json(&mut self, value: &serde_json::Value) -> TestResult<()> {
-        let body = value.to_string();
-        let frame = format!("Content-Length: {}\r\n\r\n{}", body.len(), body);
-        self.stdin.write_all(frame.as_bytes())?;
-        self.stdin.flush()?;
-        Ok(())
-    }
-
-    /// Read the next message (with timeout).
-    fn recv(&self) -> Option<String> {
-        self.responses.recv_timeout(READ_TIMEOUT).ok()
-    }
-
-    /// Allocate the next request ID.
-    fn next_id(&mut self) -> i64 {
-        let id = self.next_id;
-        self.next_id += 1;
-        id
-    }
-
-    /// Initialize with Zed-style `initializationOptions` (workspaceRoot).
-    ///
-    /// This is exactly what `language_server_initialization_options()` sends.
-    fn initialize_zed_style(&mut self) -> TestResult<String> {
-        let id = self.next_id();
-        self.send_json(&serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": id,
-            "method": "initialize",
-            "params": {
-                "processId": std::process::id(),
-                "rootUri": null,
-                "capabilities": {},
-                "initializationOptions": {
-                    "workspaceRoot": "/tmp/basilisk-zed-test"
-                },
-                "trace": "off"
-            }
-        }))?;
-
-        // The server may send log/notification messages before the init
-        // response. Search by ID to find the actual response.
-        let id_str = format!("\"id\":{id}");
-        let mut response = None;
-        for _ in 0..20 {
-            let Some(msg) = self.recv() else { break };
-            if msg.contains(&id_str) {
-                response = Some(msg);
-                break;
-            }
-        }
-        let response = response.ok_or("no response to initialize")?;
-
-        self.send_json(&serde_json::json!({
-            "jsonrpc": "2.0",
-            "method": "initialized",
-            "params": {}
-        }))?;
-
-        // Drain any log messages from initialization.
-        let _ = self.responses.recv_timeout(Duration::from_millis(500));
-        let _ = self.responses.recv_timeout(Duration::from_millis(500));
-
-        Ok(response)
-    }
-
-    /// Send `textDocument/didOpen`.
-    fn did_open(&mut self, uri: &str, text: &str) -> TestResult<()> {
-        self.send_json(&serde_json::json!({
-            "jsonrpc": "2.0",
-            "method": "textDocument/didOpen",
-            "params": {
-                "textDocument": {
-                    "uri": uri,
-                    "languageId": "python",
-                    "version": 1,
-                    "text": text
-                }
-            }
-        }))
-    }
-
-    /// Wait for a `publishDiagnostics` notification, skipping unrelated messages.
-    fn wait_for_diagnostics(&self) -> Option<String> {
-        for _ in 0..10 {
-            let msg = self.recv()?;
-            if msg.contains("\"method\":\"textDocument/publishDiagnostics\"") {
-                return Some(msg);
-            }
-        }
-        None
-    }
-
-    /// Send a request and wait for the response with the matching ID.
-    fn request(
-        &mut self,
-        method: &str,
-        params: &serde_json::Value,
-    ) -> TestResult<serde_json::Value> {
-        let id = self.next_id();
-        self.send_json(&serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": id,
-            "method": method,
-            "params": params
-        }))?;
-
-        let id_str = format!("\"id\":{id}");
-        for _ in 0..20 {
-            let Some(msg) = self.recv() else {
-                return Err("timeout waiting for response".into());
-            };
-            if msg.contains(&id_str) {
-                return Ok(serde_json::from_str(&msg)?);
-            }
-        }
-        Err(format!("no response found for id {id}").into())
-    }
-}
-
-impl Drop for ZedLspFixture {
-    fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-    }
-}
-
-// ────────────────────────────────────────────────────────────────────
-// Tests: Zed Extension ↔ LSP E2E
-// ────────────────────────────────────────────────────────────────────
+// ── Initialization ──────────────────────────────────────────────────────────
 
 /// The Zed extension calls `language_server_command()` which returns the binary
 /// with "lsp" arg, then sends `initialize` with `workspaceRoot` in
@@ -271,6 +29,8 @@ fn test_zed_initialize_with_workspace_root() -> TestResult<()> {
 
     Ok(())
 }
+
+// ── Capabilities ────────────────────────────────────────────────────────────
 
 /// The Zed extension relies on specific LSP capabilities. Verify they're all
 /// advertised in the initialize response.
@@ -378,6 +138,8 @@ fn test_zed_required_capabilities() -> TestResult<()> {
     Ok(())
 }
 
+// ── Configuration ───────────────────────────────────────────────────────────
+
 /// The Zed extension sends workspace configuration with the shared config keys.
 /// The LSP must not reject this.
 #[test]
@@ -422,6 +184,8 @@ fn test_zed_workspace_configuration() -> TestResult<()> {
     Ok(())
 }
 
+// ── Diagnostics ─────────────────────────────────────────────────────────────
+
 /// Diagnostics must flow to the Zed extension after opening a Python file.
 #[test]
 fn test_zed_diagnostics_on_open() -> TestResult<()> {
@@ -463,6 +227,8 @@ fn test_zed_clean_code_no_diagnostics() -> TestResult<()> {
     Ok(())
 }
 
+// ── Hover ───────────────────────────────────────────────────────────────────
+
 /// Hover must work — the Zed extension displays hover info on mouse-over.
 #[test]
 fn test_zed_hover() -> TestResult<()> {
@@ -489,6 +255,8 @@ fn test_zed_hover() -> TestResult<()> {
 
     Ok(())
 }
+
+// ── Completions ─────────────────────────────────────────────────────────────
 
 /// Completions must work — the Zed extension triggers these on dot and typing.
 #[test]
@@ -518,6 +286,8 @@ fn test_zed_completions() -> TestResult<()> {
     Ok(())
 }
 
+// ── Code Actions ────────────────────────────────────────────────────────────
+
 /// Code actions must work — Zed shows these in the lightbulb menu.
 #[test]
 fn test_zed_code_actions() -> TestResult<()> {
@@ -546,316 +316,6 @@ fn test_zed_code_actions() -> TestResult<()> {
     assert!(
         !result.is_null(),
         "code actions must not be null: {actions}"
-    );
-
-    Ok(())
-}
-
-/// Document symbols must work — Zed uses these for the outline panel.
-#[test]
-fn test_zed_document_symbols() -> TestResult<()> {
-    let mut fixture = ZedLspFixture::new()?;
-    let _ = fixture.initialize_zed_style()?;
-
-    let code = "class MyClass:\n    def method(self) -> None:\n        pass\n\ndef standalone(x: int) -> int:\n    return x\n";
-    fixture.did_open("file:///symbols.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
-
-    let symbols = fixture.request(
-        "textDocument/documentSymbol",
-        &serde_json::json!({
-            "textDocument": { "uri": "file:///symbols.py" }
-        }),
-    )?;
-
-    let result = &symbols["result"];
-    assert!(
-        result.is_array(),
-        "document symbols must return an array: {symbols}"
-    );
-
-    Ok(())
-}
-
-/// Execute command: the Zed extension uses basilisk custom commands via LSP.
-/// Verify the organize imports command works.
-#[test]
-fn test_zed_execute_organize_imports() -> TestResult<()> {
-    let mut fixture = ZedLspFixture::new()?;
-    let _ = fixture.initialize_zed_style()?;
-
-    let code = "import os\nimport sys\n\ndef foo() -> None:\n    pass\n";
-    fixture.did_open("file:///imports.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
-
-    let result = fixture.request(
-        "workspace/executeCommand",
-        &serde_json::json!({
-            "command": commands::ORGANIZE_IMPORTS,
-            "arguments": [{ "uri": "file:///imports.py" }]
-        }),
-    )?;
-
-    // Must not return an error.
-    assert!(
-        result.get("error").is_none(),
-        "organize imports should not error: {result}"
-    );
-
-    Ok(())
-}
-
-/// Execute command: start debug session. Even if debugpy isn't installed,
-/// the LSP should return a structured error (not crash).
-#[test]
-fn test_zed_execute_start_debug_session() -> TestResult<()> {
-    let mut fixture = ZedLspFixture::new()?;
-    let _ = fixture.initialize_zed_style()?;
-
-    let result = fixture.request(
-        "workspace/executeCommand",
-        &serde_json::json!({
-            "command": commands::START_DEBUG_SESSION,
-            "arguments": []
-        }),
-    )?;
-
-    // The command should either succeed (if debugpy is installed) or return
-    // a structured error — either way, the LSP must stay alive.
-    // Verify the LSP didn't crash by sending another request.
-    let code = "x: int = 1\n";
-    fixture.did_open("file:///alive_check.py", code)?;
-    let diag = fixture
-        .wait_for_diagnostics()
-        .ok_or("LSP died after startDebugSession")?;
-
-    assert!(
-        diag.contains("\"diagnostics\""),
-        "LSP must still respond: {diag}"
-    );
-
-    // Check result shape — must be a response (not a crash).
-    assert!(
-        result.get("id").is_some(),
-        "must have response id: {result}"
-    );
-
-    Ok(())
-}
-
-/// Execute command: stop debug session with a fake session ID.
-/// Should not crash the LSP.
-#[test]
-fn test_zed_execute_stop_debug_session() -> TestResult<()> {
-    let mut fixture = ZedLspFixture::new()?;
-    let _ = fixture.initialize_zed_style()?;
-
-    let result = fixture.request(
-        "workspace/executeCommand",
-        &serde_json::json!({
-            "command": commands::STOP_DEBUG_SESSION,
-            "arguments": [{ "sessionId": "nonexistent-session-id" }]
-        }),
-    )?;
-
-    // Must not crash. Result should indicate the session wasn't found.
-    assert!(
-        result.get("id").is_some(),
-        "must have response id: {result}"
-    );
-
-    Ok(())
-}
-
-/// Inlay hints must work — Zed shows these inline in the editor.
-#[test]
-fn test_zed_inlay_hints() -> TestResult<()> {
-    let mut fixture = ZedLspFixture::new()?;
-    let _ = fixture.initialize_zed_style()?;
-
-    let code = "def add(a: int, b: int) -> int:\n    return a + b\n\nresult = add(1, 2)\n";
-    fixture.did_open("file:///hints.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
-
-    let hints = fixture.request(
-        "textDocument/inlayHint",
-        &serde_json::json!({
-            "textDocument": { "uri": "file:///hints.py" },
-            "range": {
-                "start": { "line": 0, "character": 0 },
-                "end": { "line": 4, "character": 0 }
-            }
-        }),
-    )?;
-
-    // Must return a response (even if empty array).
-    assert!(
-        hints.get("result").is_some(),
-        "inlay hints must return a result: {hints}"
-    );
-
-    Ok(())
-}
-
-/// Semantic tokens must work — Zed uses these with `semantic_tokens: combined`.
-#[test]
-fn test_zed_semantic_tokens() -> TestResult<()> {
-    let mut fixture = ZedLspFixture::new()?;
-    let _ = fixture.initialize_zed_style()?;
-
-    let code = "def hello(name: str) -> str:\n    return name\n";
-    fixture.did_open("file:///tokens.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
-
-    let tokens = fixture.request(
-        "textDocument/semanticTokens/full",
-        &serde_json::json!({
-            "textDocument": { "uri": "file:///tokens.py" }
-        }),
-    )?;
-
-    assert!(
-        tokens.get("result").is_some(),
-        "semantic tokens must return a result: {tokens}"
-    );
-
-    Ok(())
-}
-
-/// Go to definition must work.
-#[test]
-fn test_zed_go_to_definition() -> TestResult<()> {
-    let mut fixture = ZedLspFixture::new()?;
-    let _ = fixture.initialize_zed_style()?;
-
-    let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n\ngreet(\"world\")\n";
-    fixture.did_open("file:///definition.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
-
-    let definition = fixture.request(
-        "textDocument/definition",
-        &serde_json::json!({
-            "textDocument": { "uri": "file:///definition.py" },
-            "position": { "line": 3, "character": 1 }
-        }),
-    )?;
-
-    assert!(
-        definition.get("result").is_some(),
-        "definition must return a result: {definition}"
-    );
-
-    Ok(())
-}
-
-/// Find references must work.
-#[test]
-fn test_zed_find_references() -> TestResult<()> {
-    let mut fixture = ZedLspFixture::new()?;
-    let _ = fixture.initialize_zed_style()?;
-
-    let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n\ngreet(\"a\")\ngreet(\"b\")\n";
-    fixture.did_open("file:///refs.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
-
-    let refs = fixture.request(
-        "textDocument/references",
-        &serde_json::json!({
-            "textDocument": { "uri": "file:///refs.py" },
-            "position": { "line": 0, "character": 5 },
-            "context": { "includeDeclaration": true }
-        }),
-    )?;
-
-    assert!(
-        refs.get("result").is_some(),
-        "references must return a result: {refs}"
-    );
-
-    Ok(())
-}
-
-/// Formatting must work (delegated to Ruff).
-#[test]
-fn test_zed_formatting() -> TestResult<()> {
-    let mut fixture = ZedLspFixture::new()?;
-    let _ = fixture.initialize_zed_style()?;
-
-    let code = "def  foo(  x:int  )->int:\n    return   x\n";
-    fixture.did_open("file:///format.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
-
-    let format_result = fixture.request(
-        "textDocument/formatting",
-        &serde_json::json!({
-            "textDocument": { "uri": "file:///format.py" },
-            "options": {
-                "tabSize": 4,
-                "insertSpaces": true
-            }
-        }),
-    )?;
-
-    // Must return a result (even if null when Ruff isn't available).
-    assert!(
-        format_result.get("id").is_some(),
-        "formatting must return a response: {format_result}"
-    );
-
-    Ok(())
-}
-
-/// Multiple documents open concurrently — the Zed editor can have many tabs.
-#[test]
-fn test_zed_multiple_documents() -> TestResult<()> {
-    let mut fixture = ZedLspFixture::new()?;
-    let _ = fixture.initialize_zed_style()?;
-
-    let code_with_error = "def foo(x):\n    return x\n";
-    let code_clean = "def bar(x: int) -> int:\n    return x\n";
-
-    fixture.did_open("file:///doc_a.py", code_with_error)?;
-    fixture.did_open("file:///doc_b.py", code_clean)?;
-
-    // Collect diagnostics for both documents.
-    let mut got_a = false;
-    let mut got_b = false;
-
-    for _ in 0..20 {
-        let Some(msg) = fixture.recv() else { break };
-        if msg.contains("doc_a.py") && msg.contains("BSK-E0001") {
-            got_a = true;
-        }
-        if msg.contains("doc_b.py") && msg.contains("\"diagnostics\":[]") {
-            got_b = true;
-        }
-        if got_a && got_b {
-            break;
-        }
-    }
-
-    assert!(got_a, "doc_a.py should have diagnostics");
-    assert!(got_b, "doc_b.py should be clean");
-
-    Ok(())
-}
-
-/// Verify the LSP uses the shared constant for docs URL.
-#[test]
-fn test_zed_diagnostic_docs_url() -> TestResult<()> {
-    let mut fixture = ZedLspFixture::new()?;
-    let _ = fixture.initialize_zed_style()?;
-
-    let code = "def foo(x):\n    return x\n";
-    fixture.did_open("file:///docs_url.py", code)?;
-
-    let diag = fixture.wait_for_diagnostics().ok_or("no diagnostics")?;
-
-    // Diagnostics should reference the Basilisk docs URL from basilisk_common.
-    assert!(
-        diag.contains(basilisk_common::diagnostics::DOCS_URL),
-        "diagnostics should contain docs URL '{}': {diag}",
-        basilisk_common::diagnostics::DOCS_URL
     );
 
     Ok(())

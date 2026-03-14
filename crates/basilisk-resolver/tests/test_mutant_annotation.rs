@@ -2,7 +2,7 @@ mod common;
 
 use basilisk_parser::parse_source;
 use basilisk_resolver::resolve;
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn annotation_flags_none_is_not_any() -> Result<(), Box<dyn std::error::Error>> {

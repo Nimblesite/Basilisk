@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn resolves_for_loop_with_else_clause() -> Result<(), Box<dyn std::error::Error>> {

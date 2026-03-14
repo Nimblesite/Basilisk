@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn typeddict_total_false_detected() -> Result<(), Box<dyn std::error::Error>> {

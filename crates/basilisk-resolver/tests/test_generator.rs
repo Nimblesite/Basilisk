@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn generator_with_valid_return_type_no_violation() -> Result<(), Box<dyn std::error::Error>> {

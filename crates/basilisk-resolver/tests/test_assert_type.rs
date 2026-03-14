@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn assert_type_in_function_body() -> Result<(), Box<dyn std::error::Error>> {

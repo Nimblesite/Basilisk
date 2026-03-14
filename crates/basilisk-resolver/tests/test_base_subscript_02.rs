@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn typeddict_bool_compatible_with_int() -> Result<(), Box<dyn std::error::Error>> {

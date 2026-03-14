@@ -10,7 +10,8 @@ use tokio::net::TcpListener;
 use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::Message;
 
-pub type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
+// Re-export shared helpers from the test-utils crate.
+pub use basilisk_test_utils::{assert_valid_range, extract_diagnostic, TestResult};
 
 /// Default timeout for receiving a single message from the server.
 pub const RECV_TIMEOUT: Duration = Duration::from_secs(10);
@@ -175,10 +176,7 @@ impl WsTestFixture {
 // ── Shared helper functions ─────────────────────────────────────────────────
 
 /// Initialize + open a file + wait for diagnostics. Returns the fixture.
-pub async fn open_and_diagnose(
-    uri: &str,
-    code: &str,
-) -> TestResult<(WsTestFixture, String)> {
+pub async fn open_and_diagnose(uri: &str, code: &str) -> TestResult<(WsTestFixture, String)> {
     let mut fixture = WsTestFixture::new().await?;
     let _ = fixture.initialize().await?;
     fixture.did_open(uri, code).await?;
@@ -240,34 +238,6 @@ pub async fn code_action_for(
         )
         .await?
         .ok_or_else(|| format!("no code action response for {diag_code}").into())
-}
-
-/// Parse the first diagnostic with the given code from a publishDiagnostics message.
-pub fn extract_diagnostic<'a>(
-    diag_json: &'a serde_json::Value,
-    code: &str,
-) -> Option<&'a serde_json::Value> {
-    diag_json["params"]["diagnostics"]
-        .as_array()?
-        .iter()
-        .find(|d| d["code"].as_str() == Some(code))
-}
-
-/// Assert that a diagnostic has a valid LSP range (all four fields present and >= 0).
-pub fn assert_valid_range(diag: &serde_json::Value, label: &str) {
-    let range = &diag["range"];
-    assert!(
-        !range.is_null(),
-        "{label}: diagnostic must have a range: {diag}"
-    );
-    let sl = range["start"]["line"].as_u64();
-    let sc = range["start"]["character"].as_u64();
-    let el = range["end"]["line"].as_u64();
-    let ec = range["end"]["character"].as_u64();
-    assert!(
-        sl.is_some() && sc.is_some() && el.is_some() && ec.is_some(),
-        "{label}: range must have start/end line+character: {range}"
-    );
 }
 
 /// Parse semantic token data into Vec of (deltaLine, deltaStart, length, tokenType, modifiers).
@@ -395,8 +365,7 @@ pub async fn assert_rule_fires(
 ) -> TestResult<()> {
     let (_fixture, raw) = open_and_diagnose(uri, code).await?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
-    let diag = extract_diagnostic(&json, rule_code)
-        .ok_or(format!("{rule_code} not fired"))?;
+    let diag = extract_diagnostic(&json, rule_code).ok_or(format!("{rule_code} not fired"))?;
     assert_valid_range(diag, rule_code);
     if !message_keywords.is_empty() {
         let msg = diag["message"].as_str().unwrap_or("").to_lowercase();
@@ -409,11 +378,7 @@ pub async fn assert_rule_fires(
 }
 
 /// Helper for diagnostic rule tests: opens code, checks that `rule_code` does NOT fire.
-pub async fn assert_rule_clean(
-    uri: &str,
-    code: &str,
-    rule_code: &str,
-) -> TestResult<()> {
+pub async fn assert_rule_clean(uri: &str, code: &str, rule_code: &str) -> TestResult<()> {
     let (_fixture, raw) = open_and_diagnose(uri, code).await?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
     assert!(

@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn ellipsis_body_is_stub() -> Result<(), Box<dyn std::error::Error>> {

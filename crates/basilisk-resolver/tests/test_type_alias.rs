@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn type_alias_def_explicit_annotation() -> Result<(), Box<dyn std::error::Error>> {

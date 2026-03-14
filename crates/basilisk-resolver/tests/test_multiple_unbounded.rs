@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn multiple_unbounded_tuple_starred_unpacks() -> Result<(), Box<dyn std::error::Error>> {

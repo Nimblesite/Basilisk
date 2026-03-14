@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! LSP E2E tests — Completion (IntelliSense).
 
 mod lsp_e2e_common;

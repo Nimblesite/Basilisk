@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn class_info_from_qualified_dataclass_decorator() -> Result<(), Box<dyn std::error::Error>> {

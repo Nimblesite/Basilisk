@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn literal_string_enum_mismatch_found() -> Result<(), Box<dyn std::error::Error>> {

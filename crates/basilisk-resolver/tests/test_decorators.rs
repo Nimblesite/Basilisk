@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn collects_decorator_with_call_on_attribute() -> Result<(), Box<dyn std::error::Error>> {

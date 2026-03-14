@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn protocol_provided_via_base_class() -> Result<(), Box<dyn std::error::Error>> {

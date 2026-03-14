@@ -55,7 +55,7 @@ BSK-E0014,directives_type_checking.py,directives,PASS,0,0,1
 BSK-E0014,directives_type_ignore.py,directives,PASS,0,0,1
 BSK-E0014,directives_type_ignore_file1.py,directives,PASS,0,0,1
 BSK-E0014,directives_type_ignore_file2.py,directives,PASS,1,0,0
-,directives_version_platform.py,directives,FAIL,0,3,0
+BSK-E0014,directives_version_platform.py,directives,PASS,0,0,4
 BSK-E0040|BSK-E0061|BSK-E0111,enums_behaviors.py,enums,PASS,1,0,0
 BSK-E0061,enums_definition.py,enums,PASS,0,0,1
 BSK-E0061,enums_expansion.py,enums,PASS,1,0,0
@@ -66,7 +66,7 @@ BSK-E0013|BSK-E0053,exceptions_context_managers.py,exceptions,PASS,0,0,6
 BSK-E0027|BSK-E0047|BSK-E0092|BSK-E0132|BSK-E0134,generics_base_class.py,generics,PASS,7,0,0
 BSK-E0026|BSK-E0027|BSK-E0043|BSK-E0148,generics_basic.py,generics,FAIL,11,2,0
 BSK-E0030|BSK-E0091|BSK-E0092|BSK-E0130,generics_defaults.py,generics,PASS,5,0,4
-BSK-E0102|BSK-E0128,generics_defaults_referential.py,generics,FAIL,5,2,0
+BSK-E0102|BSK-E0111|BSK-E0128,generics_defaults_referential.py,generics,PASS,7,0,0
 BSK-E0092|BSK-E0130,generics_defaults_specialization.py,generics,PASS,2,0,1
 BSK-E0026|BSK-E0047|BSK-E0130,generics_paramspec_basic.py,generics,PASS,7,0,3
 BSK-E0130,generics_paramspec_components.py,generics,FAIL,0,16,2
@@ -144,4 +144,3 @@ BSK-E0014|BSK-E0056|BSK-E0093,typeddicts_readonly_update.py,typeddicts,PASS,1,0,
 BSK-E0014|BSK-E0035|BSK-E0093,typeddicts_required.py,typeddicts,PASS,4,0,4
 BSK-E0014|BSK-E0093,typeddicts_type_consistency.py,typeddicts,FAIL,2,7,7
 BSK-E0014|BSK-E0088|BSK-E0093|BSK-E0111,typeddicts_usage.py,typeddicts,PASS,5,0,2
-BSK-E0014|BSK-E0018|BSK-E0036|BSK-E0130,typeforms_typeform.py,typeforms,FAIL,5,11,5

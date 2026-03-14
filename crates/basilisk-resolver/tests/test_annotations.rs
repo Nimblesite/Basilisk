@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn annotation_attribute_detected_as_any() -> Result<(), Box<dyn std::error::Error>> {

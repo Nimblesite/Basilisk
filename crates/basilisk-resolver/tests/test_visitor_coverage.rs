@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn dict_spread_item_does_not_crash() -> Result<(), Box<dyn std::error::Error>> {

@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn collect_unconditional_assigns_ann_assign() -> Result<(), Box<dyn std::error::Error>> {

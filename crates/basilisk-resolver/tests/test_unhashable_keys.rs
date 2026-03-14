@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn detects_list_key_in_dict() -> Result<(), Box<dyn std::error::Error>> {

@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn typevar_bound_typeddict_violation() -> Result<(), Box<dyn std::error::Error>> {

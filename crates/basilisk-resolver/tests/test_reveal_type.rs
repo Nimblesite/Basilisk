@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn reveal_type_inside_while_collected() -> Result<(), Box<dyn std::error::Error>> {

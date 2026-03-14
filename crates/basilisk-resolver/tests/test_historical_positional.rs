@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn historical_posonly_violation_detected() -> Result<(), Box<dyn std::error::Error>> {

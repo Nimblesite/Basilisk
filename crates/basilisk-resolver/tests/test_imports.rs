@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn resolves_star_import() -> Result<(), Box<dyn std::error::Error>> {

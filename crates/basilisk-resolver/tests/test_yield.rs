@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn yield_exprs_collected_in_function() -> Result<(), Box<dyn std::error::Error>> {

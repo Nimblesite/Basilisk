@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn bounded_typevar_detects_invalid_attr_on_str_bound() -> Result<(), Box<dyn std::error::Error>> {

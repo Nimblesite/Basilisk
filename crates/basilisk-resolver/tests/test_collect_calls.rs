@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn calls_collected_from_for_loop() -> Result<(), Box<dyn std::error::Error>> {

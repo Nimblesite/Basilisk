@@ -57,22 +57,13 @@ async fn test_ws_rename_symbol() -> TestResult<()> {
 
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
     let changes = &parsed["result"]["changes"];
-    assert!(
-        !changes.is_null(),
-        "changes must not be null: {resp}"
-    );
+    assert!(!changes.is_null(), "changes must not be null: {resp}");
 
     let file_edits = changes[uri].as_array();
-    assert!(
-        file_edits.is_some(),
-        "file edits must not be null: {resp}"
-    );
+    assert!(file_edits.is_some(), "file edits must not be null: {resp}");
 
     let edits = file_edits.expect("already asserted");
-    assert!(
-        !edits.is_empty(),
-        "edits must be non-empty: {resp}"
-    );
+    assert!(!edits.is_empty(), "edits must be non-empty: {resp}");
 
     for edit in edits {
         assert!(
@@ -142,10 +133,7 @@ async fn test_ws_rename_multiple_occurrences() -> TestResult<()> {
 
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
     let changes = &parsed["result"]["changes"];
-    assert!(
-        !changes.is_null(),
-        "changes must not be null: {resp}"
-    );
+    assert!(!changes.is_null(), "changes must not be null: {resp}");
 
     let file_edits = changes[uri]
         .as_array()

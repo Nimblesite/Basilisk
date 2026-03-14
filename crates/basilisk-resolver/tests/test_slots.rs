@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn class_manual_slots_detected() -> Result<(), Box<dyn std::error::Error>> {

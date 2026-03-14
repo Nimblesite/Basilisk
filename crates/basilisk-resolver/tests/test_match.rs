@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn resolves_match_statement_with_wildcard() -> Result<(), Box<dyn std::error::Error>> {

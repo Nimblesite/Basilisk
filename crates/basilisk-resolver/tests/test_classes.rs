@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn class_assign_without_annotation_collected() -> Result<(), Box<dyn std::error::Error>> {

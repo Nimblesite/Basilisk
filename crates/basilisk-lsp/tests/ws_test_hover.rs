@@ -9,9 +9,18 @@ async fn test_ws_hover_function_exact_signature() -> TestResult<()> {
     let code = "def greet(name: str) -> str:\n    return f'Hello, {name}!'\n";
     let resp = hover_at(uri, code, 0, 4, 300).await?;
 
-    assert!(resp.contains("(function)"), "should contain (function): {resp}");
-    assert!(resp.contains("def greet"), "should contain def greet: {resp}");
-    assert!(resp.contains("name: str"), "should contain name: str: {resp}");
+    assert!(
+        resp.contains("(function)"),
+        "should contain (function): {resp}"
+    );
+    assert!(
+        resp.contains("def greet"),
+        "should contain def greet: {resp}"
+    );
+    assert!(
+        resp.contains("name: str"),
+        "should contain name: str: {resp}"
+    );
     assert!(resp.contains("-> str"), "should contain -> str: {resp}");
 
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
@@ -36,9 +45,15 @@ async fn test_ws_hover_from_call_site() -> TestResult<()> {
     let code = "def greet(name: str) -> str:\n    return f'Hello, {name}!'\n\nresult: str = greet('world')\n";
     let resp = hover_at(uri, code, 3, 14, 301).await?;
 
-    assert!(resp.contains("(function)"), "should contain (function): {resp}");
+    assert!(
+        resp.contains("(function)"),
+        "should contain (function): {resp}"
+    );
     assert!(resp.contains("greet"), "should contain greet: {resp}");
-    assert!(resp.contains("name: str"), "should contain name: str: {resp}");
+    assert!(
+        resp.contains("name: str"),
+        "should contain name: str: {resp}"
+    );
 
     Ok(())
 }
@@ -49,7 +64,10 @@ async fn test_ws_hover_parameter_shows_type() -> TestResult<()> {
     let code = "def greet(name: str) -> str:\n    return f'Hello, {name}!'\n";
     let resp = hover_at(uri, code, 0, 10, 302).await?;
 
-    assert!(resp.contains("(parameter)"), "should contain (parameter): {resp}");
+    assert!(
+        resp.contains("(parameter)"),
+        "should contain (parameter): {resp}"
+    );
     assert!(resp.contains("name"), "should contain name: {resp}");
     assert!(resp.contains("str"), "should contain str: {resp}");
 
@@ -59,11 +77,18 @@ async fn test_ws_hover_parameter_shows_type() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_hover_class_attribute() -> TestResult<()> {
     let uri = "file:///hover_attr.py";
-    let code = "class Animal:\n    name: str\n    def speak(self) -> str:\n        return self.name\n";
+    let code =
+        "class Animal:\n    name: str\n    def speak(self) -> str:\n        return self.name\n";
     let resp = hover_at(uri, code, 1, 4, 303).await?;
 
-    assert!(resp.contains("(property)"), "should contain (property): {resp}");
-    assert!(resp.contains("Animal.name"), "should contain Animal.name: {resp}");
+    assert!(
+        resp.contains("(property)"),
+        "should contain (property): {resp}"
+    );
+    assert!(
+        resp.contains("Animal.name"),
+        "should contain Animal.name: {resp}"
+    );
     assert!(resp.contains("str"), "should contain str: {resp}");
 
     Ok(())
@@ -87,11 +112,15 @@ async fn test_ws_hover_unknown_position_returns_null() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_hover_method_shows_class_prefix() -> TestResult<()> {
     let uri = "file:///hover_method.py";
-    let code = "class Animal:\n    name: str\n    def speak(self) -> str:\n        return self.name\n";
+    let code =
+        "class Animal:\n    name: str\n    def speak(self) -> str:\n        return self.name\n";
     let resp = hover_at(uri, code, 2, 8, 305).await?;
 
     assert!(resp.contains("(method)"), "should contain (method): {resp}");
-    assert!(resp.contains("Animal.speak"), "should contain Animal.speak: {resp}");
+    assert!(
+        resp.contains("Animal.speak"),
+        "should contain Animal.speak: {resp}"
+    );
 
     Ok(())
 }
@@ -114,7 +143,10 @@ async fn test_ws_hover_variable_shows_type() -> TestResult<()> {
     let code = "x: int = 42\n";
     let resp = hover_at(uri, code, 0, 0, 307).await?;
 
-    assert!(resp.contains("(variable)"), "should contain (variable): {resp}");
+    assert!(
+        resp.contains("(variable)"),
+        "should contain (variable): {resp}"
+    );
     assert!(resp.contains("int"), "should contain int: {resp}");
 
     Ok(())
@@ -151,7 +183,8 @@ async fn test_ws_hover_import_shows_module() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_hover_shows_docstring() -> TestResult<()> {
     let uri = "file:///hover_docstring.py";
-    let code = "def square(x: int) -> int:\n    \"\"\"Compute the square of x.\"\"\"\n    return x * x\n";
+    let code =
+        "def square(x: int) -> int:\n    \"\"\"Compute the square of x.\"\"\"\n    return x * x\n";
     let resp = hover_at(uri, code, 0, 4, 310).await?;
 
     assert!(

@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn class_final_with_init_no_violation() -> Result<(), Box<dyn std::error::Error>> {

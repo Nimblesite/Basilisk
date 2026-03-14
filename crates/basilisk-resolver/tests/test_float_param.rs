@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn float_param_int_attr_access_detected() -> Result<(), Box<dyn std::error::Error>> {

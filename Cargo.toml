@@ -12,6 +12,7 @@ members = [
     "crates/basilisk-mojo",
     "crates/basilisk-compiler",
     "crates/basilisk-common",
+    "crates/basilisk-test-utils",
     "basilisk-zed",
 ]
 exclude = []
@@ -48,7 +49,8 @@ basilisk-resolver = { path = "crates/basilisk-resolver" }
 basilisk-checker  = { path = "crates/basilisk-checker" }
 basilisk-lsp      = { path = "crates/basilisk-lsp" }
 basilisk-compiler = { path = "crates/basilisk-compiler" }
-basilisk-common   = { path = "crates/basilisk-common" }
+basilisk-common     = { path = "crates/basilisk-common" }
+basilisk-test-utils = { path = "crates/basilisk-test-utils" }
 
 [workspace.lints.rust]
 unsafe_code  = "deny"

@@ -1,9 +1,10 @@
 #![allow(dead_code)]
+//! LSP E2E tests — Call Hierarchy and Type Hierarchy.
 
 mod lsp_e2e_common;
-use lsp_e2e_common::*;
+use lsp_e2e_common::{send_request, LspTestFixture, TestResult};
 
-// ── Call Hierarchy ──────────────────────────────────────────────────────────
+// ── Call Hierarchy ───────────────────────────────────────────────────────────
 
 #[test]
 fn test_lsp_prepare_call_hierarchy() -> TestResult<()> {
@@ -20,7 +21,6 @@ def main() -> None:
     fixture.did_open("file:///callh.py", code)?;
     let _ = fixture.wait_for_diagnostics();
 
-    // Prepare call hierarchy on 'greet' definition (line 0, char 4)
     let resp = send_request(
         &mut fixture,
         304,
@@ -55,7 +55,6 @@ def main() -> None:
     fixture.did_open("file:///callhi.py", code)?;
     let _ = fixture.wait_for_diagnostics();
 
-    // First prepare to get the item
     let prep = send_request(
         &mut fixture,
         305,
@@ -67,11 +66,10 @@ def main() -> None:
     )?
     .ok_or("no prepareCallHierarchy response")?;
 
-    // Parse the item from the prepare response
     let prep_val: serde_json::Value = serde_json::from_str(&prep)?;
     let items = prep_val["result"].as_array().ok_or("no items in prepare")?;
     if items.is_empty() {
-        return Ok(()); // No items — skip incoming calls test
+        return Ok(());
     }
 
     let resp = send_request(
@@ -103,7 +101,6 @@ def main() -> None:
     fixture.did_open("file:///callho.py", code)?;
     let _ = fixture.wait_for_diagnostics();
 
-    // Prepare on 'main' (line 3, char 4) which calls 'greet'
     let prep = send_request(
         &mut fixture,
         307,
@@ -135,7 +132,7 @@ def main() -> None:
     Ok(())
 }
 
-// ── Type Hierarchy ──────────────────────────────────────────────────────────
+// ── Type Hierarchy ───────────────────────────────────────────────────────────
 
 #[test]
 fn test_lsp_prepare_type_hierarchy() -> TestResult<()> {
@@ -152,7 +149,6 @@ class Dog(Animal):
     fixture.did_open("file:///typeh.py", code)?;
     let _ = fixture.wait_for_diagnostics();
 
-    // Prepare type hierarchy on 'Dog' (line 3, char 6)
     let resp = send_request(
         &mut fixture,
         309,
@@ -237,7 +233,6 @@ class Dog(Animal):
     fixture.did_open("file:///typehsub.py", code)?;
     let _ = fixture.wait_for_diagnostics();
 
-    // Prepare on 'Animal' (line 0, char 6)
     let prep = send_request(
         &mut fixture,
         312,
@@ -269,97 +264,6 @@ class Dog(Animal):
     assert!(
         resp.contains("Dog"),
         "subtypes of Animal should include Dog: {resp}"
-    );
-    Ok(())
-}
-
-// ── Workspace Symbols ───────────────────────────────────────────────────────
-
-#[test]
-fn test_lsp_workspace_symbol() -> TestResult<()> {
-    let mut fixture = LspTestFixture::new()?;
-    let _ = fixture.initialize()?;
-
-    let code = "\
-class Animal:
-    name: str
-
-def greet(name: str) -> str:
-    return name
-";
-    fixture.did_open("file:///wssym.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
-
-    let resp = send_request(
-        &mut fixture,
-        314,
-        "workspace/symbol",
-        serde_json::json!({
-            "query": "greet"
-        }),
-    )?
-    .ok_or("no workspace/symbol response")?;
-
-    assert!(resp.contains("\"result\""), "should have a result: {resp}");
-    assert!(
-        resp.contains("greet"),
-        "workspace symbols should contain 'greet': {resp}"
-    );
-    Ok(())
-}
-
-// ── Document Formatting (via Ruff) ──────────────────────────────────────────
-
-#[test]
-fn test_lsp_formatting() -> TestResult<()> {
-    let mut fixture = LspTestFixture::new()?;
-    let _ = fixture.initialize()?;
-
-    // Badly formatted code
-    let code = "def   greet( name:str )->str:\n    return    name\n";
-    fixture.did_open("file:///fmt.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
-
-    let resp = send_request(
-        &mut fixture,
-        315,
-        "textDocument/formatting",
-        serde_json::json!({
-            "textDocument": { "uri": "file:///fmt.py" },
-            "options": {
-                "tabSize": 4,
-                "insertSpaces": true
-            }
-        }),
-    )?
-    .ok_or("no formatting response")?;
-
-    // The response should contain either edits or null result (if ruff is not installed).
-    assert!(resp.contains("\"result\""), "should have a result: {resp}");
-    Ok(())
-}
-
-// ── Execute Command ─────────────────────────────────────────────────────────
-
-#[test]
-fn test_lsp_execute_command_unknown() -> TestResult<()> {
-    let mut fixture = LspTestFixture::new()?;
-    let _ = fixture.initialize()?;
-
-    let resp = send_request(
-        &mut fixture,
-        316,
-        "workspace/executeCommand",
-        serde_json::json!({
-            "command": "basilisk.nonExistentCommand",
-            "arguments": []
-        }),
-    )?
-    .ok_or("no executeCommand response")?;
-
-    assert!(
-        resp.contains("\"result\""),
-        "should have a result (null) for unknown command: {resp}"
     );
     Ok(())
 }

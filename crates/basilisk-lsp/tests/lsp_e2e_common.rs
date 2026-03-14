@@ -9,30 +9,11 @@ use std::sync::mpsc::{channel, Receiver};
 use std::thread;
 use std::time::Duration;
 
-pub type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
+// Re-export shared helpers from the test-utils crate.
+pub use basilisk_test_utils::{basilisk_binary, TestResult};
 
 /// Default timeout for reading a single LSP message.
 pub const READ_TIMEOUT: Duration = Duration::from_secs(5);
-
-/// Path to the pre-built basilisk binary.
-///
-/// Derives the target directory from the test executable's own location,
-/// which works regardless of whether `cargo test` or `cargo llvm-cov`
-/// (which uses a different `--target-dir`) invoked us.
-pub fn basilisk_binary() -> String {
-    // The test binary lives under <target-dir>/debug/deps/...
-    // We want <target-dir>/debug/basilisk
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(debug_dir) = exe.parent().and_then(|deps| deps.parent()) {
-            let candidate = debug_dir.join("basilisk");
-            if candidate.exists() {
-                return candidate.to_string_lossy().into_owned();
-            }
-        }
-    }
-    // Fallback to the original hardcoded path.
-    format!("{}/../../target/debug/basilisk", env!("CARGO_MANIFEST_DIR"))
-}
 
 /// Test fixture that manages a `basilisk lsp` child process.
 pub struct LspTestFixture {

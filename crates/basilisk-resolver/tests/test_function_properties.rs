@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn async_function_is_async_flag() -> Result<(), Box<dyn std::error::Error>> {

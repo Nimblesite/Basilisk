@@ -4,7 +4,7 @@
 
 mod common;
 
-use common::{fixture, run};
+use common::run;
 
 // ---------------------------------------------------------------------------
 // Clean fixtures — zero diagnostics expected

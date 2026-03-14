@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn collects_ann_assign_in_function_body() -> Result<(), Box<dyn std::error::Error>> {

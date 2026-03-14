@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn collect_typevar_calls_returns_entries() -> Result<(), Box<dyn std::error::Error>> {

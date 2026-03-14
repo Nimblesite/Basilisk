@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn module_order_comparison_collected() -> Result<(), Box<dyn std::error::Error>> {

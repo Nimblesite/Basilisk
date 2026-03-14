@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn types_match_bare_generic_vs_any() -> Result<(), Box<dyn std::error::Error>> {

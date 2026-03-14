@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn typeddict_key_violation_invalid_subscript_key() -> Result<(), Box<dyn std::error::Error>> {

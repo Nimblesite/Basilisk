@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn collects_return_name_from_for_else() -> Result<(), Box<dyn std::error::Error>> {

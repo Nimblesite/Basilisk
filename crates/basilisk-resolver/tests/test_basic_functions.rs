@@ -2,7 +2,7 @@ mod common;
 
 use basilisk_parser::parse_source;
 use basilisk_resolver::resolve;
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn detects_unannotated_parameter() -> Result<(), Box<dyn std::error::Error>> {

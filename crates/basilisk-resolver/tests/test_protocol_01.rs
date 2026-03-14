@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn protocol_instantiation_detected() -> Result<(), Box<dyn std::error::Error>> {

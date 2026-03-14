@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn collect_special_calls_assert_type_returns_entries() -> Result<(), Box<dyn std::error::Error>> {

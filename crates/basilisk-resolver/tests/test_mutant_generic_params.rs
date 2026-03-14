@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn extract_generic_params_collects_multiple_params() -> Result<(), Box<dyn std::error::Error>> {

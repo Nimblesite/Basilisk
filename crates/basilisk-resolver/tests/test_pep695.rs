@@ -1,6 +1,6 @@
 mod common;
 
-use common::{resolve_src};
+use common::resolve_src;
 
 #[test]
 fn pep695_list_bound_violation() -> Result<(), Box<dyn std::error::Error>> {

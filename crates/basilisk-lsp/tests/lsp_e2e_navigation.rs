@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! LSP E2E tests — Go to Definition, Declaration, and Type Definition.
 
 mod lsp_e2e_common;
