@@ -7,6 +7,7 @@ This is the **single source of truth** for all LSP features, DAP integration, cu
 - **VS Code**: `BASILISK-VSCODE-EXTENSION-SPEC.md`
 - **Zed**: `BASILISK-ZED-EXTENSION-SPEC.md`
 - **Neovim**: `BASILISK-NEOVIM-EXTENSION-SPEC.md`
+- **uv Integration**: `UV-INTEGRATION-SPEC.md` — environment detection, lock file intelligence, package commands
 
 ---
 
@@ -53,6 +54,11 @@ These settings are sent to the LSP server via `workspace/configuration` under th
 | `basilisk.testExplorer.pytestPath` | `string` | `"pytest"` | Path to pytest executable |
 | `basilisk.testExplorer.args` | `string[]` | `[]` | Additional test runner arguments |
 | `basilisk.testExplorer.autoDiscoverOnSave` | `boolean` | `true` | Re-discover tests on file save |
+| `basilisk.uv.enabled` | `boolean` | `true` | Enable uv integration (auto-detected, see `UV-INTEGRATION-SPEC.md`) |
+| `basilisk.uv.executablePath` | `string` | `""` (auto-detect) | Path to `uv` binary (only needed for commands, not detection) |
+| `basilisk.uv.autoSync` | `boolean` | `false` | Auto-run `uv sync` when `pyproject.toml` changes |
+| `basilisk.uv.stubSuggestions` | `boolean` | `true` | Suggest installing type stub packages |
+| `basilisk.uv.dependencyDiagnostics` | `boolean` | `false` | Enable BSK-W0011/W0012/W0013 dependency hygiene warnings |
 
 ## Custom LSP Commands (`workspace/executeCommand`)
 
@@ -67,6 +73,12 @@ These settings are sent to the LSP server via `workspace/configuration` under th
 | `basilisk/memory/start` | `{}` | `{sessionId}` | Start memory leak tracking |
 | `basilisk/memory/stop` | `{sessionId}` | `{leakReport}` | Stop tracking, return leak report |
 | `basilisk/memory/refs` | `{typeName}` | `{retentionPaths}` | Query retention paths for a type |
+| `basilisk.uv.sync` | `{}` | `{}` | Run `uv sync` in project root (see `UV-INTEGRATION-SPEC.md`) |
+| `basilisk.uv.add` | `{package}` | `{}` | Run `uv add <package>` |
+| `basilisk.uv.addDev` | `{package}` | `{}` | Run `uv add --dev <package>` |
+| `basilisk.uv.remove` | `{package}` | `{}` | Run `uv remove <package>` |
+| `basilisk.uv.lock` | `{}` | `{}` | Run `uv lock` (resolve without installing) |
+| `basilisk.uv.createEnv` | `{pythonVersion?}` | `{}` | Run `uv venv` (optionally `--python X.Y`) |
 
 ## DapTcpProxy (all editors)
 
@@ -264,6 +276,10 @@ Validates symbol is renameable, returns `WorkspaceEdit` with `TextEdit` for each
 | (any) | Suppress with `# type: ignore` | Append comment to line |
 | (source) | Organize imports | Delegate to `ruff check --select I --fix` |
 
+| BSK-E0010 (uv) | Add dependency | `uv add <package>` (future, see `UV-INTEGRATION-SPEC.md`) |
+| BSK-W0010 (uv) | Install type stubs | `uv add --dev types-<package>` (future) |
+| BSK-W0013 (uv) | Sync environment | `uv sync` (future) |
+
 Register `codeActionKinds`: `[QUICKFIX, SOURCE_ORGANIZE_IMPORTS, REFACTOR]`
 
 ### Execute Command (`workspace/executeCommand`)
@@ -335,6 +351,7 @@ Show "N references" above each function and class definition.
 ## Stub Resolution & Type Provenance
 
 > **Plan**: `docs/plans/CROSS-MODULE-ANALYSIS-PLAN.md` — Phases 1 and 4
+> **Future**: `docs/specs/UV-INTEGRATION-SPEC.md` — `PackageRegistry` accelerates stub discovery and provenance classification
 
 ### Stub Resolution Order (PEP 561)
 
@@ -346,6 +363,8 @@ Following PEP 561, matching Pyright's behaviour:
 4. **Inline-typed packages** — installed packages with `py.typed` marker
 5. **Bundled typeshed** — stdlib stubs compiled into the binary from `basilisk-stubs`
 6. **No stubs found** — type resolves to `Unknown`, BSK-E0010 fires
+
+> **uv fast path**: In uv projects, steps 3–4 are accelerated by the `PackageRegistry` parsed from `uv.lock`. The registry knows every installed package and whether a companion stub package exists — no site-packages directory walk needed. See `UV-INTEGRATION-SPEC.md` section 3.
 
 ### Stub Discovery Engine
 
@@ -435,6 +454,8 @@ One diagnostic at the import site is worth more than fifty cascading errors at u
 | Tier 3 stub symbol | `FastMCP (best-effort stub, may be inaccurate)` |
 | typeshed symbol | `os.path.join (typeshed)` |
 | Tier 1 stub symbol | `requests.get(...) -> Response` (no annotation — trusted) |
+
+> **uv enrichment** (future): In uv projects, import hovers additionally show package version, direct/transitive classification, and stub package status from the `PackageRegistry`. See `UV-INTEGRATION-SPEC.md` section 8.
 
 ### Suppression System
 
