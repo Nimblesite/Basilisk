@@ -45,6 +45,10 @@ pub enum InferredType {
     LiteralString,
     /// Named type (`ClassName`) - fallback for named types not yet resolved
     Named(String),
+    /// TypeForm[T] — represents a type form object for type T (PEP 747).
+    /// The inner type is what the type form represents (e.g. `TypeForm[int]`
+    /// means a type form that represents `int`).
+    TypeForm(Box<InferredType>),
 }
 
 /// Represents a callable type's parameter and return type information.
@@ -121,6 +125,10 @@ impl fmt::Display for InferredType {
             InferredType::Unknown => write!(f, "Unknown"),
             InferredType::LiteralString => write!(f, "LiteralString"),
             InferredType::Named(name) => write!(f, "{name}"),
+            InferredType::TypeForm(inner) => match inner.as_ref() {
+                InferredType::Any => write!(f, "TypeForm"),
+                other => write!(f, "TypeForm[{other}]"),
+            },
         }
     }
 }
@@ -192,10 +200,11 @@ impl InferredType {
     #[must_use]
     pub fn is_assignable_to(&self, other: &InferredType) -> bool {
         match (self, other) {
-            // Any target or Never source is always assignable
-            // Unknown means we cannot determine the type — assume compatible to avoid false positives
-            (_, InferredType::Any | InferredType::Unknown)
-            | (InferredType::Never | InferredType::Unknown, _) => true,
+            // Any is assignable to/from everything (PEP 484).
+            // Unknown means we cannot determine the type — assume compatible to avoid false positives.
+            // Never is the bottom type — assignable to everything.
+            (InferredType::Any | InferredType::Never | InferredType::Unknown, _)
+            | (_, InferredType::Any | InferredType::Unknown) => true,
             // Same types are assignable
             (a, b) if a == b => true,
             // Int→float widening, Literal assignable to base type,
@@ -278,8 +287,18 @@ impl InferredType {
 
                 true
             }
-            // Any can be assigned to Callable (unsafe but allowed by typing)
-            (_, InferredType::Callable(_)) if matches!(self, InferredType::Any) => true,
+            // TypeForm covariance: TypeForm[S] is assignable to TypeForm[T] if S is assignable to T.
+            (InferredType::TypeForm(inner_a), InferredType::TypeForm(inner_b)) => {
+                inner_a.is_assignable_to(inner_b)
+            }
+            // Named types with the same base name (before `[`) are assumed compatible.
+            // Without full generic variance analysis we cannot determine if
+            // `Foo[int]` is assignable to `Foo[float]`, so we avoid false positives.
+            (InferredType::Named(a_name), InferredType::Named(b_name)) => {
+                let a_base = a_name.split('[').next().unwrap_or(a_name);
+                let b_base = b_name.split('[').next().unwrap_or(b_name);
+                a_base == b_base
+            }
             _ => false,
         }
     }

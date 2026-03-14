@@ -22,7 +22,9 @@ pub(super) fn td_check_regular_assign(
         let Some(class_name) = var_type.get(&var_name) else {
             continue;
         };
-        let Some((all_fields, field_types, is_total)) = fields.get(class_name.as_str()) else {
+        let Some((all_fields, field_types, is_total, has_extra_items)) =
+            fields.get(class_name.as_str())
+        else {
             continue;
         };
         let Expr::Dict(dict) = node.value.as_ref() else {
@@ -55,11 +57,16 @@ pub(super) fn td_check_regular_assign(
             })
             .collect();
 
-        let invalid_keys: Vec<String> = literal_keys
-            .iter()
-            .filter(|k| !all_fields.contains(&k.as_str()))
-            .cloned()
-            .collect();
+        // When `extra_items` is set, unknown keys are allowed.
+        let invalid_keys: Vec<String> = if *has_extra_items {
+            Vec::new()
+        } else {
+            literal_keys
+                .iter()
+                .filter(|k| !all_fields.contains(&k.as_str()))
+                .cloned()
+                .collect()
+        };
         let missing_keys: Vec<String> = if *is_total {
             all_fields
                 .iter()
@@ -121,7 +128,7 @@ pub(super) fn td_check_ann_assign(
         return;
     };
     let class_name = ann_name.id.as_str();
-    let Some((all_fields, _, is_total)) = fields.get(class_name) else {
+    let Some((all_fields, _, is_total, has_extra_items)) = fields.get(class_name) else {
         return;
     };
     let Expr::Dict(dict) = value.as_ref() else {
@@ -154,11 +161,16 @@ pub(super) fn td_check_ann_assign(
         })
         .collect();
 
-    let invalid_keys: Vec<String> = literal_keys
-        .iter()
-        .filter(|k| !all_fields.contains(&k.as_str()))
-        .cloned()
-        .collect();
+    // When `extra_items` is set, unknown keys are allowed.
+    let invalid_keys: Vec<String> = if *has_extra_items {
+        Vec::new()
+    } else {
+        literal_keys
+            .iter()
+            .filter(|k| !all_fields.contains(&k.as_str()))
+            .cloned()
+            .collect()
+    };
     let missing_keys: Vec<String> = if *is_total {
         all_fields
             .iter()
@@ -181,7 +193,7 @@ pub(super) fn td_check_ann_assign(
     }
 
     // Check value types in dict literal against field types.
-    let Some((_, field_types, _)) = fields.get(class_name) else {
+    let Some((_, field_types, _, _)) = fields.get(class_name) else {
         return;
     };
     for item in &dict.items {
@@ -221,7 +233,7 @@ pub(super) fn td_check_expr_reads(
         Expr::Subscript(sub) => {
             if let Some(var_name) = expr_simple_name(&sub.value) {
                 if let Some(class_name) = var_type.get(&var_name) {
-                    if let Some((all_fields, _, _)) = fields.get(class_name.as_str()) {
+                    if let Some((all_fields, _, _, _)) = fields.get(class_name.as_str()) {
                         if let Expr::StringLiteral(key_str) = sub.slice.as_ref() {
                             let key = key_str.value.to_string();
                             if !all_fields.contains(&key.as_str()) {

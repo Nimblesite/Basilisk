@@ -150,7 +150,7 @@ fn check_call(call: &ast::ExprCall, ctx: &ModuleContext, path: &str, diag: &mut 
         }
 
         // Find which constraint group this argument belongs to.
-        let Some(group) = constrained_tv.group_of(&arg_type_str) else {
+        let Some(group) = constrained_tv.group_of(&arg_type_str, &ctx.class_bases) else {
             // Try to resolve via known subtypes: if arg_type_str is a class
             // in this module that inherits from one of the constraints, map
             // to that constraint's group.  We use a conservative heuristic.

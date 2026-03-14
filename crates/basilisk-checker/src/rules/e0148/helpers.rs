@@ -30,19 +30,43 @@ pub(super) struct ConstrainedTypeVar {
 impl ConstrainedTypeVar {
     /// Returns the constraint group index (0-based) that `ty` belongs to, or
     /// `None` when `ty` is not a known constraint.
-    pub(super) fn group_of(&self, ty: &str) -> Option<usize> {
+    pub(super) fn group_of(
+        &self,
+        ty: &str,
+        class_bases: &HashMap<String, Vec<String>>,
+    ) -> Option<usize> {
         self.constraints
             .iter()
             .enumerate()
             .find_map(|(idx, constraint)| {
-                (ty == constraint.as_str() || is_subtype_of(ty, constraint)).then_some(idx)
+                (ty == constraint.as_str() || is_subtype_of(ty, constraint, class_bases))
+                    .then_some(idx)
             })
     }
 }
 
-/// Returns `true` when `subtype` is a well-known subtype of `supertype`.
-fn is_subtype_of(subtype: &str, supertype: &str) -> bool {
-    matches!((subtype, supertype), ("bool", "int"))
+/// Returns `true` when `subtype` is a well-known subtype of `supertype`,
+/// or when class inheritance shows `subtype` inherits from `supertype`.
+fn is_subtype_of(
+    subtype: &str,
+    supertype: &str,
+    class_bases: &HashMap<String, Vec<String>>,
+) -> bool {
+    // Built-in subtype relationships.
+    if matches!((subtype, supertype), ("bool", "int")) {
+        return true;
+    }
+    // Check class inheritance chain.
+    if let Some(bases) = class_bases.get(subtype) {
+        if bases.iter().any(|b| b == supertype) {
+            return true;
+        }
+        // Recursive: check if any base is a subtype of supertype.
+        return bases
+            .iter()
+            .any(|b| is_subtype_of(b, supertype, class_bases));
+    }
+    false
 }
 
 /// A function signature with constrained `TypeVar` parameters.
@@ -69,6 +93,9 @@ pub(super) struct ModuleContext {
     /// Classes that represent Mapping types with known key types.
     /// Maps class name -> (`key_type_text`, `value_type_text`).
     pub(super) mapping_vars: HashMap<String, (String, String)>,
+    /// Class inheritance: maps class name -> list of base class names.
+    /// Used for resolving subclass-to-constraint matching in `TypeVar` checks.
+    pub(super) class_bases: HashMap<String, Vec<String>>,
 }
 
 impl ModuleContext {
@@ -113,11 +140,29 @@ impl ModuleContext {
             }
         }
 
+        // Pass 3: collect class inheritance for subtype resolution.
+        let mut class_bases: HashMap<String, Vec<String>> = HashMap::new();
+        for stmt in stmts {
+            if let Stmt::ClassDef(cls) = stmt {
+                if let Some(args) = &cls.arguments {
+                    let bases: Vec<String> = args
+                        .args
+                        .iter()
+                        .filter_map(|arg| Some(ann_str(arg)))
+                        .collect();
+                    if !bases.is_empty() {
+                        let _ = class_bases.insert(cls.name.to_string(), bases);
+                    }
+                }
+            }
+        }
+
         Self {
             constrained_tvars,
             constrained_funcs,
             var_types,
             mapping_vars,
+            class_bases,
         }
     }
 }
@@ -247,7 +292,7 @@ pub(super) fn check_call(
         if arg_type_str == "Any" {
             continue;
         }
-        let Some(group) = constrained_tv.group_of(&arg_type_str) else {
+        let Some(group) = constrained_tv.group_of(&arg_type_str, &ctx.class_bases) else {
             continue;
         };
 

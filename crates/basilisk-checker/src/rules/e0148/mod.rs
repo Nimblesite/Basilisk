@@ -90,6 +90,7 @@ fn check_func_body(
         constrained_funcs: ctx.constrained_funcs.clone(),
         var_types: local_types,
         mapping_vars: local_mapping_vars,
+        class_bases: ctx.class_bases.clone(),
     };
 
     for stmt in &func.body {

@@ -6,45 +6,83 @@
 
 ## Status
 
-Phases 0–6 are COMPLETE. Remaining work is cross-module infrastructure, advanced refactoring, and closing every Pylance parity gap.
+Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE — stub infrastructure, import graph, cross-file symbols all operational. Phase 3.5 (PEP conformance push) is ACTIVE — currently at 82.2%, target 85%.
 
 ---
 
-## Phase 7 — Cross-Module Foundation (BLOCKING for everything below)
+## Phase 7 — Cross-Module Foundation (MOSTLY COMPLETE)
 
-> **The big unlock.** Without a workspace module resolver, none of the cross-file
-> features are possible. This phase builds the infrastructure.
+> **The big unlock.** Workspace module resolver, import graph, cross-file symbol sharing
+> are all operational. Remaining: re-exports, rename, auto-import, multi-root.
 
 | Task | Description | Difficulty | Status |
 |------|-------------|------------|--------|
-| 7.1 | Workspace module resolver — scan workspace, resolve `import X` to file paths | Hard | PARTIAL — file scanner + `collect_python_files()` done in `workspace.rs`; `ImportInfo` struct exists with `ImportResolution` enum; actual import→file resolution NOT implemented (`Unresolved` always) |
-| 7.2 | Multi-file `ResolvedModule` graph — resolve across files, cache per-file | Hard | TODO — `ResolvedModule` is per-file only, no cross-file symbol sharing |
-| 7.4 | Salsa integration — memoized incremental computation (like rust-analyzer) | Hard | TODO — no `salsa` dependency, full re-parse on every change |
-| 7.5 | Stub file (`.pyi`) support — resolve type info from `.pyi` alongside `.py` | Medium | PARTIAL — dedup logic prefers `.pyi` over `.py`, both collected; `ImportResolution::StubPyi` variant exists but never set; no cross-file type extraction from stubs |
-| 7.6 | Third-party type stubs — typeshed bundling, `py.typed` marker detection (PEP 561) | Medium | MINIMAL — `basilisk-stubs` crate is skeleton with basic `lookup_builtin()` only; no typeshed bundle, no `py.typed` detection |
-| 7.7 | Config file reading — `pyrightconfig.json`, `pyproject.toml`, `basilisk.json` | Medium | DONE — reads `pythonVersion`, `pythonPlatform`, `include`, `exclude`, `extraPaths`, `typeCheckingMode`, `venvPath`, `venv`; `extraPaths`/`venv` stored but not used by import resolver yet |
+| 7.1 | Workspace module resolver — scan workspace, resolve `import X` to file paths | Hard | DONE — `import_resolver.rs` resolves imports, `workspace.rs` scans files |
+| 7.2 | Multi-file `ResolvedModule` graph — cross-file symbol sharing | Hard | DONE — `imported_symbols: HashMap<String, ExternalSymbol>` on `ResolvedModule`, populated by `cross_module.rs` |
+| 7.3 | Import graph — topological ordering, cycle detection, incremental invalidation | Medium | DONE — `import_graph.rs` with forward+reverse edges, Kahn's algorithm, DFS cycle detection |
+| 7.4 | Salsa integration — memoized incremental computation (like rust-analyzer) | Hard | TODO — no `salsa` dependency, current `DashMap` + `Arc` approach works |
+| 7.5 | Stub file (`.pyi`) support — resolve type info from `.pyi` alongside `.py` | Medium | DONE — full `.pyi` parser in `pyi_parser.rs`, PEP 561 resolution order implemented |
+| 7.6 | Third-party type stubs — typeshed bundling, `py.typed` marker detection (PEP 561) | Medium | DONE — `phf` stdlib module set, `py.typed` detection, stub package discovery |
+| 7.7 | Config file reading — `pyproject.toml`, `basilisk.json` | Medium | DONE — `basilisk-config` crate with per-module/per-path overrides |
+
+## Phase 7.5 — PEP Conformance Push (ACTIVE — 82.2% → 85%)
+
+> **BLOCKING for Phase 9.** The type system needs these capabilities to stop producing
+> false positives and to catch real typing errors conformance expects.
+
+### Tier 1 — Medium complexity, highest ROI
+
+| Task | Conformance files it flips | Complexity | Status |
+|------|---------------------------|------------|--------|
+| NamedTuple constructor arg count + type validation | namedtuples_define_class.py | Medium | IN PROGRESS |
+| TypedDict `extra_items` kwarg in resolver | typeddicts_extra_items.py | Medium | TODO |
+| Class inheritance in TypeVar constraints | generics_basic.py | Medium | TODO |
+| Protocol structural subtyping (attrs satisfy properties) | protocols_definition.py | High | TODO |
+
+### Tier 2 — High complexity, massive impact
+
+| Task | Conformance files it flips | Complexity | Status |
+|------|---------------------------|------------|--------|
+| TypeVarTuple semantics | 6-8 generics files | Very High | TODO |
+| ParamSpec semantics | 2-3 generics files | Very High | TODO |
+| Variance (covariant/contravariant) | protocols_generic.py + others | High | TODO |
+| Dead branch elimination (`sys.version_info`) | directives_version_platform.py | High | TODO |
+
+### Completed this sprint
+- [x] E0130: Module-level type alias TypeVar, Protocol[T] binding, multi-line sigs
+- [x] E0111: Skip dataclass/TypedDict synthesized constructors
+- [x] E0092: TypeVarTuple via Expr::Starred in name collection
+- [x] E0111: NamedTuple constructor arg count validation
+- [x] FP reduction: 435 → 294 unexpected diagnostics
 
 ## Phase 8 — Cross-Module Features (requires Phase 7)
 
 | Task | Description | Difficulty | Status |
 |------|-------------|------------|--------|
-| 8.1 | Cross-file Go to Definition | Medium | TODO |
-| 8.2 | Cross-file Find All References | Medium | TODO |
-| 8.3 | Cross-file Rename | Hard | TODO |
-| 8.4 | Auto-import suggestions — suggest imports from workspace index | Hard | TODO |
-| 8.5 | Module-level auto-import index with depth control | Hard | TODO |
-| 8.6 | Multi-root workspace support | Medium | TODO |
+| 8.1 | Cross-file Go to Definition | Medium | DONE |
+| 8.2 | Cross-file Find All References | Medium | DONE |
+| 8.3 | Handle re-exports in Go to Definition | Medium | TODO |
+| 8.4 | Cross-file Rename — multi-file `WorkspaceEdit` | Hard | TODO |
+| 8.5 | Auto-import suggestions — suggest imports from workspace index | Hard | TODO |
+| 8.6 | Module-level auto-import index with depth control | Hard | TODO |
+| 8.7 | Multi-root workspace support | Medium | TODO |
 
-## Phase 9 — Advanced Refactoring (requires Phase 7+8)
+## Phase 9 — Advanced Type Inference (requires Phase 7.5)
+
+> Full type inference engine. This is the core of Pyright/Pylance parity.
 
 | Task | Description | Difficulty | Status |
 |------|-------------|------------|--------|
-| 9.1 | Full type inference (generics, unions, narrowing, type guards) | Very Hard | TODO |
-| 9.2 | Extract variable (code action) | Medium | TODO |
-| 9.3 | Extract method (code action) | Hard | TODO |
-| 9.4 | Implement abstract methods (code action) | Medium | TODO |
-| 9.5 | Override stub completions | Medium | TODO |
-| 9.6 | Move symbol to existing/new file (code action) | Hard | TODO |
+| 9.1 | TypeVarTuple/ParamSpec full semantics | Very Hard | TODO |
+| 9.2 | Variance tracking (covariant/contravariant/invariant) | Hard | TODO |
+| 9.3 | Protocol structural subtyping | Hard | TODO |
+| 9.4 | Conditional flow-based type narrowing (isinstance, is None, truthiness) | Very Hard | TODO |
+| 9.5 | Class hierarchy awareness in type inference | Medium | TODO |
+| 9.6 | Dead branch elimination (sys.version_info, sys.platform) | Hard | TODO |
+| 9.7 | Extract variable / Extract method (code actions) | Medium | TODO |
+| 9.8 | Implement abstract methods (code action) | Medium | TODO |
+| 9.9 | Override stub completions | Medium | TODO |
+| 9.10 | Move symbol to existing/new file (code action) | Hard | TODO |
 
 ---
 
@@ -85,6 +123,12 @@ Phases 0–6 are COMPLETE. Remaining work is cross-module infrastructure, advanc
 
 ### Type Inference Engine
 
+- [ ] **TypeVarTuple semantics** — unpack, concat, specialization (PEP 646)
+- [ ] **ParamSpec semantics** — components, specialization (PEP 612)
+- [ ] **Variance tracking** — covariant, contravariant, invariant type parameters
+- [ ] **Protocol structural subtyping** — attribute satisfaction, method compatibility
+- [ ] **Class hierarchy awareness** — subclass resolution for TypeVar constraints
+- [ ] **Dead branch elimination** — `sys.version_info`, `sys.platform` guards
 - [ ] **Conditional flow-based type narrowing** — isinstance, is None, truthiness, literal equality, membership tests, bool(), aliased conditionals
 - [ ] **Strict list/dict/set inference** — `strictListInference`, `strictDictionaryInference`, `strictSetInference` settings
 - [ ] **"Unknown" type vs explicit `Any`** — distinguish unknown from intentional Any
@@ -130,11 +174,11 @@ Phases 0–6 are COMPLETE. Remaining work is cross-module infrastructure, advanc
 
 ### Navigation
 
+- [x] **Cross-file Go to Definition** (Phase 8 — DONE)
+- [x] **Cross-file Find All References** (Phase 8 — DONE)
+- [ ] **Cross-file Rename** (Phase 8 — TODO)
 - [ ] **Go to Implementation** — `textDocument/implementation` (distinct from definition)
 - [ ] **Pytest fixture go-to-definition** — navigate from fixture parameter to fixture function
-- [ ] **Cross-file Go to Definition** (requires Phase 7)
-- [ ] **Cross-file Find All References** (requires Phase 7)
-- [ ] **Cross-file Rename** (requires Phase 7)
 
 ### Hover
 
@@ -157,12 +201,12 @@ Phases 0–6 are COMPLETE. Remaining work is cross-module infrastructure, advanc
 
 ### Stubs & Typeshed
 
-- [ ] **Bundle current typeshed stdlib stubs** — ship with the binary
-- [ ] **py.typed package support** (PEP 561)
+- [x] **Bundle current typeshed stdlib stubs** — ship with the binary (phf set)
+- [x] **py.typed package support** (PEP 561)
 - [ ] **Automatic type stub generation** — CLI `--createstub`
 - [ ] **Type completeness verification** — CLI `--verifytypes`
 - [ ] **Library code analysis fallback** — `useLibraryCodeForTypes`
-- [ ] **Stub file (.pyi) resolution** — resolve `.pyi` alongside `.py`
+- [x] **Stub file (.pyi) resolution** — resolve `.pyi` alongside `.py`
 
 ### CLI Features (Pyright parity)
 
@@ -181,12 +225,11 @@ Phases 0–6 are COMPLETE. Remaining work is cross-module infrastructure, advanc
 - [ ] **Graceful syntax error recovery** — analysis continues on partial/broken code
 - [ ] **Jupyter notebook cell awareness** — cross-cell type checking
 
-### PEP Conformance (Pylance supports 29+ PEPs)
+### PEP Conformance (currently 82.2%, target 85%, stretch 100%)
 
-> We're at ~83% PEP conformance. Pylance supports: 484, 487, 526, 544, 561, 563, 570, 585, 586, 589, 591, 593, 604, 612, 613, 635, 646, 647, 655, 673, 675, 681, 692, 695, 696, 698, 702, 705, 728, 742.
+> Pylance supports: 484, 487, 526, 544, 561, 563, 570, 585, 586, 589, 591, 593, 604, 612, 613, 635, 646, 647, 655, 673, 675, 681, 692, 695, 696, 698, 702, 705, 728, 742.
 
-- [ ] Audit each PEP against our implementation — identify specific gaps
-- [ ] Target 100% conformance on the typing conformance test suite
+See Phase 3.5 in `docs/plans/CROSS-MODULE-ANALYSIS-PLAN.md` for the detailed conformance push plan.
 
 ---
 

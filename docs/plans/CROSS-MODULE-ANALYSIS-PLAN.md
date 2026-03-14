@@ -140,7 +140,7 @@ uv integration is additive to cross-module analysis — it accelerates Phases 1 
 
 ## TODO
 
-### Phase 1: Stub Infrastructure
+### Phase 1: Stub Infrastructure — COMPLETE
 - [x] Create `crates/basilisk-stubs/build.rs` — `phf_codegen` generates `phf::Set<&str>` with 220+ CPython 3.12 stdlib modules
 - [x] Replace hardcoded `STDLIB_ROOTS` in `e0010.rs` with `basilisk_stubs::is_stdlib_module()`
 - [x] Add `phf` + `phf_codegen` build dependencies to `crates/basilisk-stubs/Cargo.toml`
@@ -162,7 +162,7 @@ uv integration is additive to cross-module analysis — it accelerates Phases 1 
 - [x] E2E tests: config overrides through full pipeline — 9 tests in `e2e_config_overrides.rs` (global severity, per-module, per-path, combined)
 - [x] E2E tests: stub resolution through full pipeline — 11 tests in `e2e_stub_resolution.rs` (PEP 561, stub priority, round-trip resolve+parse)
 
-### Phase 2: Import Graph
+### Phase 2: Import Graph — COMPLETE
 - [x] Create `ImportGraph` struct in `crates/basilisk-lsp/src/import_graph.rs` — `HashMap<PathBuf, HashSet<PathBuf>>` forward + reverse edges
 - [x] Implement `build_from_index()` — walk `ImportInfo.resolved_path` for every file, populate edges
 - [x] Implement `topological_order()` — Kahn's algorithm, imported-first ordering
@@ -187,6 +187,53 @@ uv integration is additive to cross-module analysis — it accelerates Phases 1 
 - [ ] Import insertion — generate `TextEdit` to add import statement at top of file
 - [ ] Per-root config — each workspace folder gets its own config resolution
 - [ ] Merged index for multi-root — single `WorkspaceIndex` spans all roots, imports cross root boundaries
+
+### Phase 3.5: PEP Conformance Push — TARGET 85% (currently 82.2%, 120/146)
+
+> **BLOCKING.** Conformance regression must be fixed before Phase 4.
+> These are single-file type system improvements, not cross-module features.
+
+#### Tier 1 — Medium complexity, high impact (flip 1-2 files each)
+
+| Task | Files it flips | Missed | FP | Rule(s) | Status |
+|------|---------------|--------|-----|---------|--------|
+| NamedTuple constructor arg count + type validation | namedtuples_define_class.py | 5 | 1 | E0111 | IN PROGRESS — arg count done, type checking TODO |
+| TypedDict `extra_items` kwarg handling in resolver | typeddicts_extra_items.py | 18 | 19 | E0093, E0014 | TODO |
+| Class inheritance in constrained TypeVar resolution | generics_basic.py | 2 | 0 | E0148 | TODO |
+| Protocol structural subtyping — attrs satisfy properties | protocols_definition.py | 17 | 13 | E0121 | TODO |
+
+#### Tier 2 — High complexity, high impact (flip 1-6 files each)
+
+| Task | Files it flips | Rule(s) | Status |
+|------|---------------|---------|--------|
+| TypeVarTuple semantics (unpack, concat, specialization) | 6-8 generics files | E0092, E0130, E0139 | TODO |
+| ParamSpec semantics (components, specialization) | 2-3 generics files | NEW | TODO |
+| Variance tracking (covariant/contravariant) in type assignability | protocols_generic.py, others | E0014 | TODO |
+| Dead branch elimination (`sys.version_info`, `sys.platform`) | directives_version_platform.py | E0018 / NEW | TODO |
+
+#### Tier 3 — Medium complexity, lower impact
+
+| Task | Files it flips | Status |
+|------|---------------|--------|
+| TypeVar defaults in generic constructors | generics_defaults_referential.py | TODO |
+| `type` statement aliases (PEP 695) | aliases_type_statement.py | TODO |
+| `TypeAliasType` call-based aliases | aliases_typealiastype.py | TODO |
+| Callable `**kwargs` type checking | callables_kwargs.py | TODO |
+| Callable protocol assignability | callables_protocol.py | TODO |
+| Callable as constructor (`__init_subclass__`) | constructors_callable.py | TODO |
+| `dataclass_transform` frozen/converter semantics | dataclasses_transform_converter.py | TODO |
+| TypedDict readonly + inheritance rules | typeddicts_readonly_inheritance.py | TODO |
+| TypedDict type consistency rules | typeddicts_type_consistency.py | TODO |
+| `TypeForm` support | typeforms_typeform.py | TODO |
+
+#### Completed conformance fixes (this sprint)
+- [x] E0130: Module-level type alias TypeVar usage — skip assignments (PEP 484/613)
+- [x] E0130: `Protocol[T]` binding — treat like `Generic[T]`
+- [x] E0130: Multi-line function signatures — collect full sig for TypeVar extraction
+- [x] E0111: Skip `is_dataclass` and `is_typed_dict` classes (synthesized `__init__`)
+- [x] E0092: `Expr::Starred` handling in `collect_name_refs_from_expr` — TypeVarTuple in implicit aliases
+- [x] E0111: NamedTuple constructor arg count validation (too few, too many, unknown kwargs)
+- [x] FP reduction: 435 → 294 unexpected diagnostics
 
 ### Phase 4: Type Provenance
 - [ ] Add `TypeProvenance` enum (Source/StubTier1/StubTier2/StubTier3/Untyped) to `crates/basilisk-checker/src/types.rs`

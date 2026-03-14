@@ -16,6 +16,7 @@
 mod dataclass_check;
 mod literal_parse;
 mod tuple_check;
+mod typeform_check;
 
 use crate::span_util::slice_span;
 use crate::types::InferredType;
@@ -49,19 +50,20 @@ impl Rule for AssignmentTypeMismatch {
             diagnostics,
             &empty_params,
             &typeddict_names,
+            &module.functions,
         );
         check_local_vars(module, diagnostics, &typeddict_names);
         check_tuple_reassignments(module, diagnostics);
         check_dataclass_attr_assignments(module, diagnostics);
+        typeform_check::check_typeform_calls(module, diagnostics);
     }
 }
 
-/// Collect names of TypedDict classes defined in this module, including
-/// classes that transitively inherit from TypedDict.
+/// Collect names of `TypedDict` classes defined in this module.
 ///
-/// E0014 cannot do structural field-level type checking on TypedDicts, so
-/// dict literal assignments to TypedDict annotations are skipped to avoid
-/// false positives.
+/// BSK-E0014 cannot do structural field-level type checking on `TypedDict`
+/// subclasses, so dict literal assignments to `TypedDict` annotations are
+/// skipped to avoid false positives.
 fn collect_typeddict_names(module: &ResolvedModule) -> std::collections::HashSet<String> {
     let names: std::collections::HashSet<String> = module
         .classes
@@ -93,12 +95,28 @@ fn check_vars(
     diagnostics: &mut Vec<Diagnostic>,
     param_types: &std::collections::HashMap<String, InferredType>,
     typeddict_names: &std::collections::HashSet<String>,
+    functions: &[basilisk_resolver::FunctionInfo],
 ) {
     vars.iter()
         .filter(|var| var.has_annotation && var.rhs_span.is_some())
         .filter_map(|var| {
             let annotation_text = extract_annotation(source, var.name_span)?;
             let declared_type = InferredType::from_annotation(annotation_text);
+
+            // TypeForm assignments require type-expression validation, not
+            // value-type inference.  Delegate to the dedicated module.
+            if let InferredType::TypeForm(ref inner) = declared_type {
+                if typeform_check::is_valid_typeform_assignment(var, source, inner, functions) {
+                    return None;
+                }
+                let inferred_type = infer_with_literal_value(var, source, &declared_type);
+                return Some((
+                    var,
+                    annotation_text.to_owned(),
+                    inferred_type,
+                    declared_type,
+                ));
+            }
 
             // Skip dict literal assignments to TypedDict annotations. E0014 compares
             // the top-level type (e.g. `dict[str, str|int]` vs `Movie`) which always
@@ -174,6 +192,7 @@ fn check_local_vars(
             diagnostics,
             &param_types,
             typeddict_names,
+            &module.functions,
         );
     }
 }
