@@ -96,7 +96,10 @@ impl Rule for TupleIndexOutOfRange {
 }
 
 /// Check a single source line for out-of-range subscript access on a tuple parameter.
-#[expect(clippy::too_many_arguments, reason = "tuple subscript check requires full source context")]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "tuple subscript check requires full source context"
+)]
 fn check_subscript_on_line(
     trimmed: &str,
     tuple_name: &str,
@@ -112,7 +115,10 @@ fn check_subscript_on_line(
     let search_pattern = format!("{tuple_name}[");
     let mut search_from = 0usize;
 
-    while let Some(pos) = trimmed.get(search_from..).and_then(|s| s.find(&search_pattern)) {
+    while let Some(pos) = trimmed
+        .get(search_from..)
+        .and_then(|s| s.find(&search_pattern))
+    {
         let abs_pos = search_from + pos;
         let bracket_pos = abs_pos + tuple_name.len();
 
@@ -167,11 +173,14 @@ fn check_subscript_on_line(
 
             if out_of_range {
                 // Compute the span: find this line in the full source
-                let line_offset_in_source =
-                    raw_line.as_ptr().addr().saturating_sub(full_source.as_ptr().addr());
+                let line_offset_in_source = raw_line
+                    .as_ptr()
+                    .addr()
+                    .saturating_sub(full_source.as_ptr().addr());
                 let expr_start_in_line = raw_line.find(trimmed).unwrap_or(0);
-                let span_start = u32::try_from(line_offset_in_source + expr_start_in_line + abs_pos)
-                    .unwrap_or(u32::MAX);
+                let span_start =
+                    u32::try_from(line_offset_in_source + expr_start_in_line + abs_pos)
+                        .unwrap_or(u32::MAX);
                 // Span covers `name[index]`
                 let span_end = span_start.saturating_add(
                     u32::try_from(bracket_pos + 1 + close_bracket + 1 - abs_pos)

@@ -48,7 +48,9 @@ fn contains_typevar(text: &str, name: &str) -> bool {
         if let Some(pos) = text[start..].find(name) {
             let abs_pos = start + pos;
             let before_ok = abs_pos == 0
-                || text_bytes.get(abs_pos - 1).is_none_or(|&b| !is_ident_char(b));
+                || text_bytes
+                    .get(abs_pos - 1)
+                    .is_none_or(|&b| !is_ident_char(b));
             let after_pos = abs_pos + name_bytes.len();
             let after_ok = after_pos >= text_bytes.len()
                 || text_bytes.get(after_pos).is_none_or(|&b| !is_ident_char(b));
@@ -82,9 +84,13 @@ fn typevar_only_in_subscript(ret_text: &str, tv_name: &str) -> bool {
             break;
         };
         let abs_pos = start + pos;
-        let before_ok = abs_pos == 0 || !is_ident_char(text_bytes[abs_pos - 1]);
+        let before_ok = abs_pos == 0
+            || text_bytes
+                .get(abs_pos - 1)
+                .is_none_or(|&b| !is_ident_char(b));
         let after_pos = abs_pos + tv_name.len();
-        let after_ok = after_pos >= text_bytes.len() || !is_ident_char(text_bytes[after_pos]);
+        let after_ok = after_pos >= text_bytes.len()
+            || text_bytes.get(after_pos).is_none_or(|&b| !is_ident_char(b));
         if before_ok && after_ok {
             found_any = true;
             // Check bracket depth at this position.
@@ -240,13 +246,14 @@ fn infer_variance(
         // Check parameter types (contravariant position).
         let params_to_check = if method.parameters.is_empty() {
             &method.parameters[..]
+        } else if method
+            .parameters
+            .first()
+            .is_some_and(|p| p.name == "self" || p.name == "cls")
+        {
+            method.parameters.get(1..).unwrap_or_default()
         } else {
-            let first_name = &method.parameters[0].name;
-            if first_name == "self" || first_name == "cls" {
-                &method.parameters[1..]
-            } else {
-                &method.parameters[..]
-            }
+            &method.parameters[..]
         };
 
         for param in params_to_check {

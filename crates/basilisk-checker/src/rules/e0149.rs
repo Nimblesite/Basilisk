@@ -430,7 +430,9 @@ fn check_decorator_uses_class_type_param(
     }
 
     // Check the decorator line for references to those type params.
-    let decorator_text = lines[decorator_line - 1];
+    let Some(decorator_text) = lines.get(decorator_line - 1) else {
+        return;
+    };
     for param_name in &target_params {
         if !contains_name(decorator_text, param_name) {
             continue;
@@ -553,7 +555,10 @@ fn check_method_redefines_class_type_param(
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let class_trimmed = lines[class_line - 1].trim();
+    let Some(class_line_text) = lines.get(class_line - 1) else {
+        return;
+    };
+    let class_trimmed = class_line_text.trim();
     let Some(class_params) = extract_pep695_type_params(class_trimmed) else {
         return;
     };
@@ -561,7 +566,7 @@ fn check_method_redefines_class_type_param(
         return;
     }
 
-    let class_indent = leading_indent(lines[class_line - 1]);
+    let class_indent = leading_indent(class_line_text);
     let method_indent = class_indent + 4; // standard Python indent
 
     // Walk subsequent lines that are at method indentation inside the class.

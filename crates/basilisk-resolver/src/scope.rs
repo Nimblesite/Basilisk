@@ -22,7 +22,10 @@ impl Span {
     ///
     /// Safe because u32 fits in usize on all supported (32-bit+) targets.
     #[must_use]
-    #[expect(clippy::as_conversions, reason = "u32 to usize is safe on 32-bit+ targets")]
+    #[expect(
+        clippy::as_conversions,
+        reason = "u32 to usize is safe on 32-bit+ targets"
+    )]
     pub const fn start_usize(&self) -> usize {
         self.start as usize
     }
@@ -31,7 +34,10 @@ impl Span {
     ///
     /// Safe because u32 fits in usize on all supported (32-bit+) targets.
     #[must_use]
-    #[expect(clippy::as_conversions, reason = "u32 to usize is safe on 32-bit+ targets")]
+    #[expect(
+        clippy::as_conversions,
+        reason = "u32 to usize is safe on 32-bit+ targets"
+    )]
     pub const fn end_usize(&self) -> usize {
         self.end as usize
     }
@@ -40,7 +46,10 @@ impl Span {
     ///
     /// Safe because u32 fits in usize on all supported (32-bit+) targets.
     #[must_use]
-    #[expect(clippy::as_conversions, reason = "u32 to usize is safe on 32-bit+ targets")]
+    #[expect(
+        clippy::as_conversions,
+        reason = "u32 to usize is safe on 32-bit+ targets"
+    )]
     pub const fn as_range(&self) -> std::ops::Range<usize> {
         self.start as usize..self.end as usize
     }

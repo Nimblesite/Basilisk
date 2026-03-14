@@ -60,9 +60,13 @@ fn contains_typevar_reference(text: &str, typevar_name: &str) -> bool {
                 return false;
             }
             let before_ok = idx == 0
-                || haystack.get(idx - 1).is_some_and(|&b| !b.is_ascii_alphanumeric() && b != b'_');
+                || haystack
+                    .get(idx - 1)
+                    .is_some_and(|&b| !b.is_ascii_alphanumeric() && b != b'_');
             let after_ok = idx + needle_len >= haystack.len()
-                || haystack.get(idx + needle_len).is_some_and(|&b| !b.is_ascii_alphanumeric() && b != b'_');
+                || haystack
+                    .get(idx + needle_len)
+                    .is_some_and(|&b| !b.is_ascii_alphanumeric() && b != b'_');
             before_ok && after_ok
         })
 }
@@ -875,7 +879,8 @@ impl Rule for TypeVarScopeViolation {
                     scope_stack.iter().filter(|scope| scope.is_class).collect();
 
                 if class_scopes.len() == 1 && trimmed.contains("TypeAlias") {
-                    let Some(enclosing_tvs) = class_scopes.first().map(|s| &s.bound_typevars) else {
+                    let Some(enclosing_tvs) = class_scopes.first().map(|s| &s.bound_typevars)
+                    else {
                         continue;
                     };
                     if !enclosing_tvs.is_empty() {

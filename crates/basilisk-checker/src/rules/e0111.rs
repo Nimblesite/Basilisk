@@ -564,7 +564,10 @@ fn is_subclass(
 }
 
 /// Check arguments to `__init__` after type parameter substitution.
-#[expect(clippy::too_many_arguments, reason = "init method validation requires substitutions, call, class info and context")]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "init method validation requires substitutions, call, class info and context"
+)]
 fn check_init_method_args(
     init_func: &basilisk_resolver::FunctionInfo,
     substitutions: &HashMap<&str, &str>,
