@@ -285,7 +285,7 @@ pub fn byte_offset_to_line_in_source(source: &str, byte_offset: u32) -> usize {
 }
 
 #[cfg(test)]
-#[allow(clippy::panic)]
+#[cfg_attr(test, allow(clippy::panic))]
 mod tests {
     use super::*;
 

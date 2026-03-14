@@ -96,7 +96,6 @@ impl Rule for TupleIndexOutOfRange {
 }
 
 /// Check a single source line for out-of-range subscript access on a tuple parameter.
-#[allow(clippy::too_many_arguments)]
 fn check_subscript_on_line(
     trimmed: &str,
     tuple_name: &str,
@@ -144,7 +143,6 @@ fn check_subscript_on_line(
                 .map(|(_, val)| *val)
         };
 
-        #[allow(clippy::cast_possible_wrap)]
         if let Some(idx) = index_value {
             let tuple_len_i64 = tuple_len as i64;
             let out_of_range = if idx >= 0 {
@@ -153,10 +151,8 @@ fn check_subscript_on_line(
                 idx < -tuple_len_i64
             };
 
-            #[allow(clippy::cast_possible_truncation)]
             if out_of_range {
                 // Compute the span: find this line in the full source
-                #[allow(clippy::as_conversions)]
                 let line_offset_in_source =
                     raw_line.as_ptr() as usize - full_source.as_ptr() as usize;
                 let expr_start_in_line = raw_line.find(trimmed).unwrap_or(0);
@@ -164,7 +160,6 @@ fn check_subscript_on_line(
                 // Span covers `name[index]`
                 let span_end = span_start + (bracket_pos + 1 + close_bracket + 1 - abs_pos) as u32;
 
-                #[allow(clippy::cast_possible_wrap)]
                 let max_pos = tuple_len as i64 - 1;
 
                 diagnostics.push(Diagnostic {

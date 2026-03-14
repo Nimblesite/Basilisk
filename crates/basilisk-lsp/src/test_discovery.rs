@@ -62,7 +62,10 @@ pub fn discover_tests_in_file(path: &Path, source: &str) -> Vec<TestItem> {
     // Find test functions (def test_*) — skip methods (they belong to classes).
     for func in &resolved.functions {
         if func.name.starts_with("test_") && func.class_name.is_none() {
-            #[expect(clippy::cast_possible_truncation, reason = "u32 byte offset to usize is safe on 32/64-bit")]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "u32 byte offset to usize is safe on 32/64-bit"
+            )]
             let line = func.def_span.start as usize;
             let line_num = byte_offset_to_line(source, line);
             items.push(TestItem {
@@ -79,7 +82,10 @@ pub fn discover_tests_in_file(path: &Path, source: &str) -> Vec<TestItem> {
     // Find test classes (class Test*) and their test methods.
     for class in &resolved.classes {
         if class.name.starts_with("Test") || is_unittest_class(class) {
-            #[expect(clippy::cast_possible_truncation, reason = "u32 byte offset to usize is safe on 32/64-bit")]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "u32 byte offset to usize is safe on 32/64-bit"
+            )]
             let class_line = class.def_span.start as usize;
             let class_line_num = byte_offset_to_line(source, class_line);
 
@@ -88,7 +94,10 @@ pub fn discover_tests_in_file(path: &Path, source: &str) -> Vec<TestItem> {
             for func in &resolved.functions {
                 let is_method = func.class_name.as_ref().is_some_and(|cn| cn == &class.name);
                 if is_method && func.name.starts_with("test") {
-                    #[expect(clippy::cast_possible_truncation, reason = "u32 byte offset to usize is safe on 32/64-bit")]
+                    #[expect(
+                        clippy::cast_possible_truncation,
+                        reason = "u32 byte offset to usize is safe on 32/64-bit"
+                    )]
                     let method_line = func.def_span.start as usize;
                     let method_line_num = byte_offset_to_line(source, method_line);
                     methods.push(TestItem {
@@ -133,7 +142,10 @@ pub fn discover_workspace_tests(root: &Path) -> Vec<TestItem> {
                 .unwrap_or(path)
                 .to_string_lossy()
                 .into_owned();
-            #[expect(clippy::cast_possible_truncation, reason = "no truncation: line is hardcoded 0")]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "no truncation: line is hardcoded 0"
+            )]
             all_items.push(TestItem {
                 name: relative.clone(),
                 id: relative,
@@ -246,7 +258,11 @@ fn collect_test_files(dir: &Path, out: &mut Vec<PathBuf>) {
 }
 
 #[cfg(test)]
-#[expect(clippy::unwrap_used, clippy::expect_used, reason = "test-only code: unwrap/expect acceptable in unit tests")]
+#[expect(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test-only code: unwrap/expect acceptable in unit tests"
+)]
 mod tests {
     use super::*;
 

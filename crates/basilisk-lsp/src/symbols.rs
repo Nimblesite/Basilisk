@@ -2,7 +2,10 @@
 
 use std::sync::Arc;
 
-#[expect(deprecated, reason = "LSP spec requires the deprecated SymbolInformation type")]
+#[expect(
+    deprecated,
+    reason = "LSP spec requires the deprecated SymbolInformation type"
+)]
 use tower_lsp::lsp_types::{DocumentSymbol, Location, SymbolInformation, SymbolKind, Url};
 
 use basilisk_resolver::ResolvedModule;
@@ -10,7 +13,10 @@ use basilisk_resolver::ResolvedModule;
 use crate::util::span_to_range;
 
 /// Build a hierarchical document symbol tree from a resolved module.
-#[expect(deprecated, reason = "DocumentSymbol.deprecated field is deprecated but required by the LSP struct")]
+#[expect(
+    deprecated,
+    reason = "DocumentSymbol.deprecated field is deprecated but required by the LSP struct"
+)]
 #[must_use]
 pub fn document_symbols(resolved: &ResolvedModule, source: &str) -> Vec<DocumentSymbol> {
     let mut top_level: Vec<DocumentSymbol> = Vec::new();
@@ -109,7 +115,10 @@ pub fn document_symbols(resolved: &ResolvedModule, source: &str) -> Vec<Document
 /// Each entry in `documents` is `(uri, resolved_module, source_text)`.
 /// Symbols whose names contain `query` (case-insensitive) are included.
 /// An empty `query` returns every symbol from every document.
-#[expect(deprecated, reason = "SymbolInformation.deprecated field is deprecated but required by the LSP struct")]
+#[expect(
+    deprecated,
+    reason = "SymbolInformation.deprecated field is deprecated but required by the LSP struct"
+)]
 #[must_use]
 pub fn workspace_symbols(
     documents: &[(Url, Arc<ResolvedModule>, String)],
@@ -124,7 +133,10 @@ pub fn workspace_symbols(
 }
 
 /// Collect flat `SymbolInformation` entries for one document.
-#[expect(deprecated, reason = "SymbolInformation.deprecated field is deprecated but required by the LSP struct")]
+#[expect(
+    deprecated,
+    reason = "SymbolInformation.deprecated field is deprecated but required by the LSP struct"
+)]
 fn collect_for_doc(
     uri: &Url,
     resolved: &ResolvedModule,

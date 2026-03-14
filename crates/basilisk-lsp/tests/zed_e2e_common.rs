@@ -119,7 +119,7 @@ impl ZedLspFixture {
     }
 
     /// Read the next message (with timeout).
-    pub fn recv(&self) -> Option<String> {
+    #[must_use] pub fn recv(&self) -> Option<String> {
         self.responses.recv_timeout(READ_TIMEOUT).ok()
     }
 

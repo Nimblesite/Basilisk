@@ -110,7 +110,11 @@ fn leading_indent(line: &str) -> usize {
 }
 
 /// Find the byte offset of a given 1-based line number in source text.
-#[expect(clippy::cast_possible_truncation, reason = "byte offsets fit u32 for source files")]
+#[expect(
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    reason = "byte offsets fit u32 for source files"
+)]
 fn line_to_byte_offset(source: &str, target_line: usize) -> u32 {
     let mut current_line = 1usize;
     for (byte_idx, ch) in source.char_indices() {
@@ -125,7 +129,11 @@ fn line_to_byte_offset(source: &str, target_line: usize) -> u32 {
 }
 
 /// Build a span covering the trimmed content of the given 1-based line.
-#[expect(clippy::as_conversions, clippy::cast_possible_truncation, reason = "u32<->usize safe on 32-bit+")]
+#[expect(
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    reason = "u32<->usize safe on 32-bit+"
+)]
 fn span_for_line(source: &str, line_number: usize) -> Span {
     let start = line_to_byte_offset(source, line_number) as usize;
     let line_text = source
@@ -274,7 +282,10 @@ fn generic_types_compatible(actual: &str, expected: &str) -> bool {
 }
 
 /// Scan source text to collect generic class definitions.
-#[expect(clippy::too_many_lines, reason = "scanning class bodies requires sequential logic")]
+#[expect(
+    clippy::too_many_lines,
+    reason = "scanning class bodies requires sequential logic"
+)]
 fn collect_generic_classes(source: &str) -> Vec<GenericClassDef> {
     let lines: Vec<&str> = source.lines().collect();
     let mut classes: Vec<GenericClassDef> = Vec::new();
@@ -477,7 +488,10 @@ fn collect_generic_instances(source: &str) -> Vec<GenericInstance> {
 }
 
 /// Check module-level method calls on generic class instances for type mismatches.
-#[expect(clippy::too_many_lines, reason = "method call validation requires many steps")]
+#[expect(
+    clippy::too_many_lines,
+    reason = "method call validation requires many steps"
+)]
 fn check_generic_instance_method_calls(
     source: &str,
     all_typevars: &HashSet<String>,
@@ -645,7 +659,11 @@ fn find_matching_close(text: &str) -> usize {
 }
 
 impl Rule for TypeVarScopeViolation {
-    #[expect(clippy::too_many_lines, clippy::cognitive_complexity, reason = "TypeVar scoping requires many interleaved checks")]
+    #[expect(
+        clippy::too_many_lines,
+        clippy::cognitive_complexity,
+        reason = "TypeVar scoping requires many interleaved checks"
+    )]
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         let all_typevars: HashSet<String> = module
             .typevar_calls

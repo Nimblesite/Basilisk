@@ -334,8 +334,8 @@ impl InferredType {
                     let inner = &annotation[5..annotation.len() - 1];
                     let parts: Vec<&str> = inner.split(',').collect();
                     if parts.len() == 2 {
-                        let key_type = InferredType::from_annotation(parts[0].trim());
-                        let value_type = InferredType::from_annotation(parts[1].trim());
+                        let key_type = InferredType::from_annotation(parts.first().map_or("", |s| s.trim()));
+                        let value_type = InferredType::from_annotation(parts.get(1).map_or("", |s| s.trim()));
                         InferredType::Dict(Box::new(key_type), Box::new(value_type))
                     } else {
                         InferredType::Named(annotation)

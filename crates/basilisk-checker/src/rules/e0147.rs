@@ -285,7 +285,10 @@ fn check_literal_against_annotation(elems: &[String], annotation: &str) -> Optio
 
 /// Check a tuple literal against a mixed starred-unpack annotation
 /// like `tuple[int, *tuple[str, ...], int]`.
-#[expect(clippy::too_many_arguments, reason = "tuple type checking requires all context")]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "tuple type checking requires all context"
+)]
 fn check_literal_against_mixed(
     elems: &[String],
     fixed_prefix: usize,
@@ -305,15 +308,19 @@ fn check_literal_against_mixed(
         }
         // Check prefix types.
         for (i, pt) in prefix_types.iter().enumerate() {
-            if i < n && !elem_type_compatible(&elems[i], pt) {
-                return Some("tuple literal element type incompatible with annotation prefix");
+            if let Some(elem) = elems.get(i) {
+                if !elem_type_compatible(elem, pt) {
+                    return Some("tuple literal element type incompatible with annotation prefix");
+                }
             }
         }
         // Check suffix types (from the right).
         for (j, st) in suffix_types.iter().enumerate() {
             let elem_idx = n - fixed_suffix + j;
-            if elem_idx < n && !elem_type_compatible(&elems[elem_idx], st) {
-                return Some("tuple literal element type incompatible with annotation suffix");
+            if let Some(elem) = elems.get(elem_idx) {
+                if !elem_type_compatible(elem, st) {
+                    return Some("tuple literal element type incompatible with annotation suffix");
+                }
             }
         }
         return None;
@@ -326,16 +333,20 @@ fn check_literal_against_mixed(
 
     // Check fixed prefix.
     for (i, pt) in prefix_types.iter().enumerate() {
-        if i < n && !elem_type_compatible(&elems[i], pt) {
-            return Some("tuple literal element type incompatible with annotation prefix");
+        if let Some(elem) = elems.get(i) {
+            if !elem_type_compatible(elem, pt) {
+                return Some("tuple literal element type incompatible with annotation prefix");
+            }
         }
     }
 
     // Check fixed suffix (from the right).
     for (j, st) in suffix_types.iter().enumerate() {
         let elem_idx = n - fixed_suffix + j;
-        if elem_idx < n && !elem_type_compatible(&elems[elem_idx], st) {
-            return Some("tuple literal element type incompatible with annotation suffix");
+        if let Some(elem) = elems.get(elem_idx) {
+            if !elem_type_compatible(elem, st) {
+                return Some("tuple literal element type incompatible with annotation suffix");
+            }
         }
     }
 
@@ -343,7 +354,7 @@ fn check_literal_against_mixed(
     if let Some(mid_type) = middle_type {
         let middle_start = fixed_prefix;
         let middle_end = n - fixed_suffix;
-        for elem in &elems[middle_start..middle_end] {
+        for elem in elems.get(middle_start..middle_end).unwrap_or_default() {
             if !elem_type_compatible(elem, mid_type) {
                 return Some(
                     "tuple literal middle element type incompatible with starred-unpack annotation",
@@ -400,8 +411,8 @@ fn parse_tuple_annotation(ann: &str) -> Option<TupleAnnotation> {
         .collect();
 
     // Homogeneous unbounded: `tuple[T, ...]`
-    if components.len() == 2 && components[1] == "..." {
-        let element_type = components[0].to_owned();
+    if components.len() == 2 && components.get(1).copied() == Some("...") {
+        let element_type = components.first()?.to_owned();
         return Some(TupleAnnotation::Homogeneous { element_type });
     }
 
@@ -415,7 +426,7 @@ fn parse_tuple_annotation(ann: &str) -> Option<TupleAnnotation> {
         });
     };
 
-    let star_component = components[star_idx];
+    let star_component = components.get(star_idx)?;
     // Must be `*tuple[...]`
     let unpack_inner = star_component
         .strip_prefix('*')
@@ -423,11 +434,13 @@ fn parse_tuple_annotation(ann: &str) -> Option<TupleAnnotation> {
         .and_then(|s| strip_outer_bracket(s))?;
     let unpack_inner = unpack_inner.trim();
 
-    let prefix_types: Vec<String> = components[..star_idx]
+    let prefix_types: Vec<String> = components.get(..star_idx)
+        .unwrap_or_default()
         .iter()
         .map(|s| (*s).to_owned())
         .collect();
-    let suffix_types: Vec<String> = components[star_idx + 1..]
+    let suffix_types: Vec<String> = components.get(star_idx + 1..)
+        .unwrap_or_default()
         .iter()
         .map(|s| (*s).to_owned())
         .collect();
@@ -440,9 +453,9 @@ fn parse_tuple_annotation(ann: &str) -> Option<TupleAnnotation> {
         .map(str::trim)
         .collect();
 
-    if unpack_parts.len() == 2 && unpack_parts[1] == "..." {
+    if unpack_parts.len() == 2 && unpack_parts.get(1).copied() == Some("...") {
         // `*tuple[T, ...]` — unbounded middle.
-        let middle_type = Some(unpack_parts[0].to_owned());
+        let middle_type = Some(unpack_parts.first()?.to_owned());
         Some(TupleAnnotation::Mixed {
             fixed_prefix,
             fixed_suffix,
@@ -801,7 +814,10 @@ fn func_body_lines(source: &str, def_offset: usize) -> Vec<LineInfo<'_>> {
 }
 
 /// Compute a `Span` for an entire source line given the line's byte offset.
-#[expect(clippy::cast_possible_truncation, reason = "byte offsets fit u32 for source files")]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "byte offsets fit u32 for source files"
+)]
 fn line_span(source: &str, line_offset: usize) -> Span {
     let start = line_offset as u32;
     let end = source[line_offset..]

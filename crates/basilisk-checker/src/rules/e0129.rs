@@ -123,7 +123,6 @@ impl Rule for LiteralValueIncompatible {
 // ---------------------------------------------------------------------------
 
 /// Check `x: Literal[V] = rhs_name` where `rhs_name` has a different Literal type.
-#[allow(clippy::cast_possible_truncation)]
 fn check_annotated_assignment(
     trimmed: &str,
     line_byte_offset: usize,
@@ -205,7 +204,6 @@ fn check_annotated_assignment(
 // ---------------------------------------------------------------------------
 
 /// Check `param_name += expr` where param has a Literal type.
-#[allow(clippy::cast_possible_truncation)]
 fn check_augmented_assignment(
     trimmed: &str,
     line_byte_offset: usize,

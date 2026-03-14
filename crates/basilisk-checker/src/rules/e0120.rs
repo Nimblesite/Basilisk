@@ -309,7 +309,6 @@ fn check_return_in_generator(
 }
 
 /// Check a `yield from expr` against the outer generator's declared yield type.
-#[allow(clippy::too_many_arguments)]
 fn check_yield_from(
     func: &FunctionInfo,
     yield_expr: &basilisk_resolver::YieldExprInfo,
@@ -377,7 +376,6 @@ fn check_yield_from_list(
 }
 
 /// Check `yield from callee()` against the declared yield and send types.
-#[allow(clippy::too_many_arguments)]
 fn check_yield_from_call(
     func: &FunctionInfo,
     yield_expr: &basilisk_resolver::YieldExprInfo,
@@ -445,7 +443,6 @@ fn check_yield_from_call(
 }
 
 /// Check send type compatibility for `yield from` between two `Generator` types.
-#[allow(clippy::too_many_arguments)]
 fn check_send_type_compat(
     func: &FunctionInfo,
     yield_expr: &basilisk_resolver::YieldExprInfo,

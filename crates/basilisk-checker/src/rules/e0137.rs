@@ -177,7 +177,10 @@ fn check_protocol_generic_combined(
 /// - The annotation is a subscripted generic protocol (`Proto[A, B]`)
 /// - The RHS is a concrete class constructor call
 /// - The concrete class's methods are incompatible with the substituted type args.
-#[expect(clippy::too_many_arguments, reason = "protocol checking requires full context")]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "protocol checking requires full context"
+)]
 fn check_generic_protocol_assignments(
     module: &ResolvedModule,
     source: &str,
@@ -872,7 +875,10 @@ fn _collect_class_methods<'a>(
 }
 
 /// Compute the byte span of a line in the source for diagnostic anchoring.
-#[expect(clippy::cast_possible_truncation, reason = "byte offsets fit u32 for source files")]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "byte offsets fit u32 for source files"
+)]
 fn _line_span(source: &str, line_number: usize) -> Option<Span> {
     let mut current_line = 1;
     let mut start = 0;

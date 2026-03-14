@@ -226,7 +226,11 @@ fn collect_base_namedtuple_fields<'a>(
     let mut field_names = Vec::new();
     for base_name in &class.bases {
         let stripped = base_name.split('[').next().unwrap_or_default();
-        if stripped.is_empty() || stripped == "NamedTuple" || stripped == "Generic" || stripped == "object" {
+        if stripped.is_empty()
+            || stripped == "NamedTuple"
+            || stripped == "Generic"
+            || stripped == "object"
+        {
             continue;
         }
         if let Some(base_class) = class_map.get(stripped) {

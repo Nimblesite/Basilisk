@@ -277,7 +277,6 @@ fn collect_protocol_required_methods(
 }
 
 /// Check if a concrete class satisfies a protocol's structural requirements.
-#[allow(clippy::too_many_arguments)]
 fn check_protocol_conformance(
     protocol_name: &str,
     protocol_class: &basilisk_resolver::ClassInfo,

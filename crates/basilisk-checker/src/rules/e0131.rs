@@ -62,7 +62,10 @@ impl Rule for GeneratorTypeMismatch {
 }
 
 /// Parsed generator return annotation.
-#[expect(clippy::struct_field_names, reason = "field names intentionally mirror the type parameter names")]
+#[expect(
+    clippy::struct_field_names,
+    reason = "field names intentionally mirror the type parameter names"
+)]
 struct GeneratorAnnotation {
     /// The yield type (first type parameter).
     yield_type: String,
@@ -85,7 +88,7 @@ fn parse_generator_annotation(ann: &str) -> Option<GeneratorAnnotation> {
             return None;
         }
         return Some(GeneratorAnnotation {
-            yield_type: args[0].trim().to_owned(),
+            yield_type: args.first()?.trim().to_owned(),
             send_type: args.get(1).map(|s| s.trim().to_owned()),
             return_type: args.get(2).map(|s| s.trim().to_owned()),
         });
@@ -98,7 +101,7 @@ fn parse_generator_annotation(ann: &str) -> Option<GeneratorAnnotation> {
             return None;
         }
         return Some(GeneratorAnnotation {
-            yield_type: args[0].trim().to_owned(),
+            yield_type: args.first()?.trim().to_owned(),
             send_type: None,
             return_type: None,
         });
@@ -111,7 +114,7 @@ fn parse_generator_annotation(ann: &str) -> Option<GeneratorAnnotation> {
             return None;
         }
         return Some(GeneratorAnnotation {
-            yield_type: args[0].trim().to_owned(),
+            yield_type: args.first()?.trim().to_owned(),
             send_type: None,
             return_type: None,
         });
@@ -131,7 +134,7 @@ fn strip_generic_prefix<'a>(ann: &'a str, prefix: &str) -> Option<&'a str> {
     if inner_end <= inner_start {
         return None;
     }
-    Some(&ann[inner_start..inner_end])
+    ann.get(inner_start..inner_end)
 }
 
 /// Split comma-separated type arguments at the top level (respecting bracket nesting).
@@ -145,13 +148,17 @@ fn split_top_level_args(inner: &str) -> Vec<&str> {
             '[' | '(' | '{' => depth += 1,
             ']' | ')' | '}' => depth -= 1,
             ',' if depth == 0 => {
-                args.push(&inner[start..idx]);
+                if let Some(slice) = inner.get(start..idx) {
+                    args.push(slice);
+                }
                 start = idx + 1;
             }
             _ => {}
         }
     }
-    args.push(&inner[start..]);
+    if let Some(slice) = inner.get(start..) {
+        args.push(slice);
+    }
     args
 }
 
@@ -166,57 +173,64 @@ struct YieldExpr {
 }
 
 /// Find all yield expressions in a function body substring.
-#[expect(clippy::cast_possible_truncation, reason = "byte offsets fit u32 for source files")]
 fn find_yield_expressions(body: &str, body_offset: usize) -> Vec<YieldExpr> {
     let mut results = Vec::new();
     let bytes = body.as_bytes();
     let mut pos = 0;
 
     while pos < bytes.len() {
+        let Some(&current_byte) = bytes.get(pos) else {
+            break;
+        };
+
         // Skip string literals (single/double/triple quoted)
-        if bytes[pos] == b'\'' || bytes[pos] == b'"' {
+        if current_byte == b'\'' || current_byte == b'"' {
             pos = skip_string(body, pos);
             continue;
         }
 
         // Skip comments
-        if bytes[pos] == b'#' {
-            while pos < bytes.len() && bytes[pos] != b'\n' {
+        if current_byte == b'#' {
+            while pos < bytes.len() && bytes.get(pos).copied() != Some(b'\n') {
                 pos += 1;
             }
             continue;
         }
 
         // Look for `yield` keyword
-        if pos + 5 <= bytes.len() && &body[pos..pos + 5] == "yield" {
+        if pos + 5 <= bytes.len() && body.get(pos..pos + 5) == Some("yield") {
             // Make sure it's a standalone keyword (not part of a larger identifier)
-            let before_ok = pos == 0 || !is_identifier_char(bytes[pos - 1]);
+            let before_ok =
+                pos == 0 || bytes.get(pos.wrapping_sub(1)).map_or(true, |&b| !is_identifier_char(b));
             let after_pos = pos + 5;
 
             if before_ok && after_pos <= bytes.len() {
                 // Check for `yield from`
                 let is_yield_from = after_pos + 5 <= bytes.len()
-                    && &body[after_pos..after_pos + 5] == " from"
-                    && (after_pos + 5 >= bytes.len() || !is_identifier_char(bytes[after_pos + 5]));
+                    && body.get(after_pos..after_pos + 5) == Some(" from")
+                    && bytes.get(after_pos + 5).map_or(true, |&b| !is_identifier_char(b));
 
                 if is_yield_from {
                     let expr_start = after_pos + 5;
                     let expr_text = extract_yield_expr(body, expr_start);
-                    results.push(YieldExpr {
-                        offset: (body_offset + pos) as u32,
-                        expr_text,
-                        is_yield_from: true,
-                    });
-                } else if after_pos < bytes.len()
-                    && (bytes[after_pos] == b' ' || bytes[after_pos] == b'\n')
-                    && !is_identifier_char(bytes[after_pos])
-                {
+                    if let Some(offset) = u32::try_from(body_offset + pos).ok() {
+                        results.push(YieldExpr {
+                            offset,
+                            expr_text,
+                            is_yield_from: true,
+                        });
+                    }
+                } else if bytes.get(after_pos).map_or(false, |&b| {
+                    (b == b' ' || b == b'\n') && !is_identifier_char(b)
+                }) {
                     let expr_text = extract_yield_expr(body, after_pos);
-                    results.push(YieldExpr {
-                        offset: (body_offset + pos) as u32,
-                        expr_text,
-                        is_yield_from: false,
-                    });
+                    if let Some(offset) = u32::try_from(body_offset + pos).ok() {
+                        results.push(YieldExpr {
+                            offset,
+                            expr_text,
+                            is_yield_from: false,
+                        });
+                    }
                 }
             }
         }
@@ -229,7 +243,7 @@ fn find_yield_expressions(body: &str, body_offset: usize) -> Vec<YieldExpr> {
 
 /// Extract the expression text after a yield keyword.
 fn extract_yield_expr(body: &str, start: usize) -> String {
-    let rest = body[start..].trim_start();
+    let rest = body.get(start..).unwrap_or("").trim_start();
     // Find the end of the expression: newline, comment, or end of string
     let mut depth = 0i32;
     let mut end = rest.len();
@@ -251,7 +265,7 @@ fn extract_yield_expr(body: &str, start: usize) -> String {
             _ => {}
         }
     }
-    rest[..end].trim().to_owned()
+    rest.get(..end).unwrap_or("").trim().to_owned()
 }
 
 fn is_identifier_char(byte: u8) -> bool {
@@ -260,13 +274,21 @@ fn is_identifier_char(byte: u8) -> bool {
 
 fn skip_string(body: &str, start: usize) -> usize {
     let bytes = body.as_bytes();
-    let quote = bytes[start];
+    let Some(&quote) = bytes.get(start) else {
+        return start;
+    };
 
     // Check for triple quotes
-    if start + 2 < bytes.len() && bytes[start + 1] == quote && bytes[start + 2] == quote {
+    if start + 2 < bytes.len()
+        && bytes.get(start + 1).copied() == Some(quote)
+        && bytes.get(start + 2).copied() == Some(quote)
+    {
         let mut pos = start + 3;
         while pos + 2 < bytes.len() {
-            if bytes[pos] == quote && bytes[pos + 1] == quote && bytes[pos + 2] == quote {
+            if bytes.get(pos).copied() == Some(quote)
+                && bytes.get(pos + 1).copied() == Some(quote)
+                && bytes.get(pos + 2).copied() == Some(quote)
+            {
                 return pos + 3;
             }
             pos += 1;
@@ -277,14 +299,17 @@ fn skip_string(body: &str, start: usize) -> usize {
     // Single quoted string
     let mut pos = start + 1;
     while pos < bytes.len() {
-        if bytes[pos] == b'\\' {
+        let Some(&byte) = bytes.get(pos) else {
+            break;
+        };
+        if byte == b'\\' {
             pos += 2;
             continue;
         }
-        if bytes[pos] == quote {
+        if byte == quote {
             return pos + 1;
         }
-        if bytes[pos] == b'\n' {
+        if byte == b'\n' {
             return pos;
         }
         pos += 1;
@@ -321,7 +346,7 @@ fn infer_expr_type(expr: &str) -> Option<&str> {
     if expr.chars().all(|c| c.is_ascii_digit())
         || (expr.starts_with('-')
             && expr.len() > 1
-            && expr[1..].chars().all(|c| c.is_ascii_digit()))
+            && expr.get(1..).unwrap_or("").chars().all(|c| c.is_ascii_digit()))
     {
         return Some("int");
     }
@@ -349,7 +374,7 @@ fn infer_expr_type(expr: &str) -> Option<&str> {
 fn get_constructor_name(expr: &str) -> Option<&str> {
     let expr = expr.trim();
     let paren_pos = expr.find('(')?;
-    let name = expr[..paren_pos].trim();
+    let name = expr.get(..paren_pos)?.trim();
 
     if name
         .chars()
@@ -386,7 +411,7 @@ fn is_type_compatible(actual: &str, expected: &str) -> bool {
 fn extract_call_name(expr: &str) -> Option<&str> {
     let expr = expr.trim();
     let paren_pos = expr.find('(')?;
-    let name = expr[..paren_pos].trim();
+    let name = expr.get(..paren_pos)?.trim();
 
     if !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_') {
         Some(name)
@@ -401,16 +426,13 @@ fn infer_list_element_type(expr: &str) -> Option<&str> {
     if !expr.starts_with('[') || !expr.ends_with(']') {
         return None;
     }
-    let inner = expr[1..expr.len() - 1].trim();
+    let inner = expr.get(1..expr.len().saturating_sub(1))?.trim();
     if inner.is_empty() {
         return None;
     }
 
     let first_elem = split_top_level_args(inner);
-    if first_elem.is_empty() {
-        return None;
-    }
-    infer_expr_type(first_elem[0].trim())
+    infer_expr_type(first_elem.first()?.trim())
 }
 
 fn check_function(
@@ -438,16 +460,18 @@ fn check_function(
 
     // Find the function body.
     let def_start = func.def_span.start_usize();
-    let Some(colon_rel) = source[def_start..].find(':') else {
+    let Some(colon_rel) = source.get(def_start..).and_then(|s| s.find(':')) else {
         return;
     };
     let body_start = def_start + colon_rel + 1;
 
-    let def_line_start = source[..def_start].rfind('\n').map_or(0, |idx| idx + 1);
+    let def_line_start = source.get(..def_start).and_then(|s| s.rfind('\n')).map_or(0, |idx| idx + 1);
     let def_indent = def_start - def_line_start;
 
     let body_end = find_body_end(source, body_start, def_indent);
-    let body = &source[body_start..body_end];
+    let Some(body) = source.get(body_start..body_end) else {
+        return;
+    };
 
     let yields = find_yield_expressions(body, body_start);
 
@@ -473,7 +497,7 @@ fn find_body_end(source: &str, body_start: usize, def_indent: usize) -> usize {
     let mut pos = body_start;
     let mut first_line = true;
 
-    for line in source[body_start..].lines() {
+    for line in source.get(body_start..).unwrap_or("").lines() {
         if first_line {
             first_line = false;
             pos += line.len() + 1;

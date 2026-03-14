@@ -140,7 +140,6 @@ fn text_range_to_span(range: ruff_text_size::TextRange) -> Span {
 ///
 /// Returns `None` if not a deprecated decorator, `Some(None)` if deprecated
 /// without a message, and `Some(Some(msg))` if deprecated with a message.
-#[allow(clippy::option_option)]
 fn is_deprecated_decorator(expr: &Expr) -> Option<Option<String>> {
     match expr {
         Expr::Call(call) => {
@@ -539,7 +538,6 @@ struct DeprecatedUsageContext<'a> {
 }
 
 /// Visit a statement looking for deprecated name usages.
-#[allow(clippy::too_many_lines)]
 fn visit_stmt_for_usage(
     stmt: &Stmt,
     ctx: &DeprecatedUsageContext<'_>,
@@ -723,7 +721,6 @@ fn check_assignment_target_deprecated(
 ///
 /// - `spam += 1` triggers the deprecated `__add__` method on `spam`'s type.
 /// - `spam.shape += "cube"` triggers the deprecated property setter.
-#[allow(clippy::too_many_arguments)]
 fn check_aug_assign_deprecated(
     target: &Expr,
     op: Operator,
@@ -772,7 +769,6 @@ fn check_aug_assign_deprecated(
 }
 
 /// Visit an expression to find deprecated name usages.
-#[allow(clippy::too_many_lines)]
 fn visit_expr_for_usage(
     expr: &Expr,
     deprecated: &HashMap<String, DeprecatedInfo>,
@@ -1018,7 +1014,6 @@ fn visit_expr_for_usage(
 }
 
 /// Check if an attribute access refers to a deprecated member (module-level or qualified).
-#[allow(clippy::too_many_arguments)]
 fn check_attribute_deprecated(
     attr: &ruff_python_ast::ExprAttribute,
     deprecated: &HashMap<String, DeprecatedInfo>,
@@ -1105,7 +1100,6 @@ fn check_attribute_deprecated(
 }
 
 /// Check if a binary operation triggers a deprecated dunder method on the left operand.
-#[allow(clippy::too_many_arguments)]
 fn check_binop_deprecated(
     left: &Expr,
     op: Operator,

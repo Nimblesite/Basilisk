@@ -261,7 +261,10 @@ pub async fn check_debugpy(python: &str) -> Result<(), DebugError> {
 }
 
 #[cfg(test)]
-#[expect(clippy::expect_used, reason = "test-only code: expect acceptable in unit tests")]
+#[expect(
+    clippy::expect_used,
+    reason = "test-only code: expect acceptable in unit tests"
+)]
 mod tests {
     use super::*;
     use tokio::net::TcpStream;

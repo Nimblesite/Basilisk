@@ -160,7 +160,6 @@ fn check_class(
                     // Find the span for this line in the source.
                     let line_offset = find_line_offset(func_source, line);
                     let absolute_offset = func_offset + line_offset;
-                    #[allow(clippy::cast_possible_truncation)]
                     let span = Span {
                         start: absolute_offset as u32,
                         end: (absolute_offset + line.len()) as u32,
@@ -269,7 +268,6 @@ fn types_compatible(actual: &str, expected: &str) -> bool {
 }
 
 /// Find the byte offset of a line within a larger text.
-#[allow(clippy::as_conversions)]
 fn find_line_offset(text: &str, line: &str) -> usize {
     // Use pointer arithmetic to find the offset.
     let text_start = text.as_ptr() as usize;

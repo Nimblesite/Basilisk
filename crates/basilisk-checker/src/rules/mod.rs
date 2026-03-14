@@ -161,7 +161,6 @@ pub(crate) trait Rule {
 }
 
 /// All registered Phase 1 rules.
-#[allow(clippy::too_many_lines)]
 fn all_rules() -> &'static [&'static dyn Rule] {
     &[
         &e0001::MissingParameterAnnotation,

@@ -183,7 +183,6 @@ fn infer_rhs_type(kind: &basilisk_resolver::RhsKind) -> String {
 }
 
 /// Check an annotated assignment for module-protocol incompatibility.
-#[expect(clippy::too_many_arguments)]
 fn check_annotated_assign(
     stmt: &ruff_python_ast::Stmt,
     source: &str,

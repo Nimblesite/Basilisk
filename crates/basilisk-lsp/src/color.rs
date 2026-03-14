@@ -50,13 +50,29 @@ pub fn document_colors(source: &str) -> Vec<ColorInformation> {
 /// Build color presentation strings from an RGBA color value.
 #[must_use]
 pub fn color_presentations(color: &Color, range: &Range) -> Vec<ColorPresentation> {
-    #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "LSP Color components are 0.0..=1.0 so f32*255 fits in u8")]
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "LSP Color components are 0.0..=1.0 so f32*255 fits in u8"
+    )]
     let r = (color.red * 255.0_f32) as u8;
-    #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "LSP Color components are 0.0..=1.0 so f32*255 fits in u8")]
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "LSP Color components are 0.0..=1.0 so f32*255 fits in u8"
+    )]
     let g = (color.green * 255.0_f32) as u8;
-    #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "LSP Color components are 0.0..=1.0 so f32*255 fits in u8")]
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "LSP Color components are 0.0..=1.0 so f32*255 fits in u8"
+    )]
     let b = (color.blue * 255.0_f32) as u8;
-    #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "LSP Color components are 0.0..=1.0 so f32*255 fits in u8")]
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "LSP Color components are 0.0..=1.0 so f32*255 fits in u8"
+    )]
     let a = (color.alpha * 255.0_f32) as u8;
 
     let mut presentations = Vec::with_capacity(2);

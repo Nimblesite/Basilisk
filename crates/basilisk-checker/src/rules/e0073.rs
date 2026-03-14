@@ -242,7 +242,10 @@ fn split_type_args(inner: &str) -> Vec<&str> {
 }
 
 /// Check each element type in the tuple annotation against the `NamedTuple` field type.
-#[expect(clippy::too_many_arguments, reason = "diagnostic context requires many parameters")]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "diagnostic context requires many parameters"
+)]
 fn check_element_types(
     tuple_types: &[&str],
     nt_field_types: &[&str],

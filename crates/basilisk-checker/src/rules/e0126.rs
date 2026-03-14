@@ -199,7 +199,6 @@ fn parse_single_annotated_assign<'a>(
     }
 
     // Calculate source offset for the name.
-    #[allow(clippy::as_conversions)]
     let line_offset_in_body = raw_line.as_ptr() as usize - body.as_ptr() as usize;
     let name_start_in_line = raw_line.len() - raw_line.trim_start().len();
     let name_offset = body_offset + line_offset_in_body + name_start_in_line;

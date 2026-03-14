@@ -265,7 +265,10 @@ fn resolve_inherited_settings<'a>(
 }
 
 /// Return the byte offset of the start of a 1-based line.
-#[expect(clippy::cast_possible_truncation, reason = "byte offsets fit u32 for source files")]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "byte offsets fit u32 for source files"
+)]
 fn line_start_offset(source: &str, line: usize) -> u32 {
     let mut current = 1usize;
     for (idx, ch) in source.char_indices() {
@@ -280,7 +283,11 @@ fn line_start_offset(source: &str, line: usize) -> u32 {
 }
 
 /// Return a span covering the trimmed content of a source line (1-based).
-#[expect(clippy::as_conversions, clippy::cast_possible_truncation, reason = "u32<->usize safe on 32-bit+")]
+#[expect(
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    reason = "u32<->usize safe on 32-bit+"
+)]
 fn span_for_source_line(source: &str, line: usize) -> Span {
     let start = line_start_offset(source, line) as usize;
     let line_text = source
@@ -299,7 +306,10 @@ fn span_for_source_line(source: &str, line: usize) -> Span {
 pub(crate) struct DataclassTransformClassViolation;
 
 impl Rule for DataclassTransformClassViolation {
-    #[expect(clippy::too_many_lines, reason = "dataclass_transform checking requires many steps")]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "dataclass_transform checking requires many steps"
+    )]
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         let transform_bases = collect_transform_base_classes(module);
         if transform_bases.is_empty() {

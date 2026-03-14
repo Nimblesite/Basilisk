@@ -78,7 +78,6 @@ struct TransformDesc {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
-#[allow(clippy::struct_excessive_bools)]
 struct TransformClassDesc {
     name: String,
     /// `frozen=True/False` from the class keyword args (overrides `frozen_default`).
@@ -101,7 +100,7 @@ struct MetaTransformCtx {
     /// map from metaclass name -> transform descriptor.
     meta_classes: HashMap<String, TransformDesc>,
     /// map from "base class that has a dataclass-transform metaclass" -> metaclass name.
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     transform_bases: HashMap<String, String>,
     /// all classes that inherit from a transform base.
     transform_classes: Vec<TransformClassDesc>,
@@ -167,7 +166,6 @@ impl MetaTransformCtx {
     // Frozen inheritance
     // -----------------------------------------------------------------------
 
-    #[allow(clippy::unused_self)]
     fn check_frozen_inheritance(
         &self,
         stmts: &[Stmt],
@@ -233,7 +231,6 @@ impl MetaTransformCtx {
     // Frozen attribute assignment
     // -----------------------------------------------------------------------
 
-    #[allow(clippy::unused_self)]
     fn check_frozen_assign(
         &self,
         stmts: &[Stmt],
@@ -297,7 +294,6 @@ impl MetaTransformCtx {
     // kw-only positional argument violations
     // -----------------------------------------------------------------------
 
-    #[allow(clippy::unused_self)]
     fn check_kw_only_calls(
         &self,
         stmts: &[Stmt],

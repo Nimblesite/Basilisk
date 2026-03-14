@@ -270,7 +270,10 @@ fn extract_type_args_text(slice: &ruff_python_ast::Expr, source: &str) -> Vec<St
 
 /// Check whether the arguments to a `__new__` method are compatible after
 /// type parameter substitution.
-#[expect(clippy::too_many_arguments, reason = "diagnostic context requires many parameters")]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "diagnostic context requires many parameters"
+)]
 fn check_new_method_args(
     new_func: &basilisk_resolver::FunctionInfo,
     substitutions: &HashMap<&str, &str>,
@@ -373,7 +376,10 @@ fn check_new_method_args(
 
 /// Check if the `cls` parameter annotation is incompatible with the provided
 /// type arguments.
-#[expect(clippy::too_many_arguments, reason = "diagnostic context requires many parameters")]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "diagnostic context requires many parameters"
+)]
 fn check_cls_param_mismatch(
     cls_annotation: &str,
     class_name: &str,

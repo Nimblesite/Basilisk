@@ -285,7 +285,10 @@ impl Interpreter {
         Ok(Signal::Ok)
     }
 
-    #[expect(clippy::too_many_lines, reason = "statement execution covers all Python statement types")]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "statement execution covers all Python statement types"
+    )]
     fn exec_stmt(&mut self, stmt: &Stmt, env: &mut Env) -> Result<Signal, CompileError> {
         match stmt {
             Stmt::Expr(expr_stmt) => {
@@ -514,7 +517,10 @@ impl Interpreter {
 
     // ── Expression evaluation ────────────────────────────────────────────────
 
-    #[expect(clippy::too_many_lines, reason = "expression evaluation covers all Python expression types")]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "expression evaluation covers all Python expression types"
+    )]
     fn eval_expr(&mut self, expr: &Expr, env: &mut Env) -> Result<Value, CompileError> {
         match expr {
             Expr::NoneLiteral(_) => Ok(Value::None),
@@ -687,7 +693,10 @@ impl Interpreter {
 
     // ── Function / method calls ──────────────────────────────────────────────
 
-    #[expect(clippy::too_many_lines, reason = "call evaluation handles function, method, and constructor dispatch")]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "call evaluation handles function, method, and constructor dispatch"
+    )]
     fn eval_call(&mut self, call: &ast::ExprCall, env: &mut Env) -> Result<Value, CompileError> {
         // Check for method calls
         if let Expr::Attribute(attr) = call.func.as_ref() {
@@ -829,7 +838,10 @@ impl Interpreter {
 
     // ── Builtin functions ────────────────────────────────────────────────────
 
-    #[expect(clippy::too_many_lines, reason = "builtin dispatch covers all Python builtin functions")]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "builtin dispatch covers all Python builtin functions"
+    )]
     fn try_builtin(
         &mut self,
         name: &str,
@@ -954,7 +966,11 @@ impl Interpreter {
                 if args.len() != 1 {
                     return Err(CompileError::Codegen("chr() takes 1 argument".to_string()));
                 }
-                #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "chr() input is validated by char::from_u32 on the next line")]
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss,
+                    reason = "chr() input is validated by char::from_u32 on the next line"
+                )]
                 let n = args[0].as_int()? as u32;
                 let ch = char::from_u32(n)
                     .ok_or_else(|| CompileError::Codegen(format!("chr() invalid: {n}")))?;
@@ -1046,7 +1062,10 @@ impl Interpreter {
 
     // ── Method calls ─────────────────────────────────────────────────────────
 
-    #[expect(clippy::too_many_lines, reason = "method dispatch covers all builtin type methods")]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "method dispatch covers all builtin type methods"
+    )]
     fn call_method(
         &mut self,
         obj: &Value,
@@ -1472,7 +1491,10 @@ impl Interpreter {
 
     // ── Binary operations ────────────────────────────────────────────────────
 
-    #[expect(clippy::too_many_lines, reason = "binary operations cover all operator and type combinations")]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "binary operations cover all operator and type combinations"
+    )]
     fn binop(&self, op: ast::Operator, lhs: &Value, rhs: &Value) -> Result<Value, CompileError> {
         // String concatenation
         if let (Value::Str(a), Value::Str(b)) = (lhs, rhs) {

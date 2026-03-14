@@ -236,7 +236,10 @@ pub fn resolve_workspace_imports(index: &WorkspaceIndex, search_paths: &ImportSe
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
-#[expect(clippy::unwrap_used, reason = "test-only code: unwrap acceptable in unit tests")]
+#[expect(
+    clippy::unwrap_used,
+    reason = "test-only code: unwrap acceptable in unit tests"
+)]
 mod tests {
     use super::*;
     use std::fs;

@@ -71,7 +71,12 @@ impl Rule for TypeVarTupleUnpackViolation {
 
         for stmt in &parsed.ast.body {
             visit_stmt_for_variadic_calls(
-                stmt, source, path, &variadic_params, &module.functions, diagnostics,
+                stmt,
+                source,
+                path,
+                &variadic_params,
+                &module.functions,
+                diagnostics,
             );
         }
     }
@@ -144,13 +149,24 @@ fn visit_stmt_for_variadic_calls(
         let param_types = build_param_type_map(func_def, source);
         for body_stmt in &func_def.body {
             check_body_stmt(
-                body_stmt, source, path, variadic_params, &param_types, functions, diagnostics,
+                body_stmt,
+                source,
+                path,
+                variadic_params,
+                &param_types,
+                functions,
+                diagnostics,
             );
         }
     } else if let Stmt::ClassDef(cls) = stmt {
         for body_stmt in &cls.body {
             visit_stmt_for_variadic_calls(
-                body_stmt, source, path, variadic_params, functions, diagnostics,
+                body_stmt,
+                source,
+                path,
+                variadic_params,
+                functions,
+                diagnostics,
             );
         }
     }
@@ -174,7 +190,6 @@ fn build_param_type_map(
     map
 }
 
-#[expect(clippy::too_many_arguments)]
 fn check_body_stmt(
     stmt: &ruff_python_ast::Stmt,
     _source: &str,
@@ -188,10 +203,18 @@ fn check_body_stmt(
     use ruff_text_size::Ranged as _;
     let call = match stmt {
         Stmt::Expr(expr_stmt) => {
-            if let Expr::Call(c) = expr_stmt.value.as_ref() { c } else { return; }
+            if let Expr::Call(c) = expr_stmt.value.as_ref() {
+                c
+            } else {
+                return;
+            }
         }
         Stmt::Assign(assign) => {
-            if let Expr::Call(c) = assign.value.as_ref() { c } else { return; }
+            if let Expr::Call(c) = assign.value.as_ref() {
+                c
+            } else {
+                return;
+            }
         }
         _ => return,
     };
@@ -199,16 +222,27 @@ fn check_body_stmt(
         Expr::Name(name) => name.id.as_str(),
         _ => return,
     };
-    let Some(vparams) = variadic_params.get(callee_name) else { return; };
+    let Some(vparams) = variadic_params.get(callee_name) else {
+        return;
+    };
     for vparam in vparams {
-        let Some(arg_expr) = call.arguments.args.get(vparam.param_idx) else { continue; };
-        let Expr::Name(arg_name) = arg_expr else { continue; };
-        let Some(arg_type) = param_types.get(arg_name.id.as_str()) else { continue; };
+        let Some(arg_expr) = call.arguments.args.get(vparam.param_idx) else {
+            continue;
+        };
+        let Expr::Name(arg_name) = arg_expr else {
+            continue;
+        };
+        let Some(arg_type) = param_types.get(arg_name.id.as_str()) else {
+            continue;
+        };
         let arg_type_arg_count = count_type_args(arg_type, &vparam.base_class);
         if let Some(count) = arg_type_arg_count {
             if count < vparam.min_type_args {
                 let range = call.range();
-                let span = Span { start: range.start().to_u32(), end: range.end().to_u32() };
+                let span = Span {
+                    start: range.start().to_u32(),
+                    end: range.end().to_u32(),
+                };
                 let _ = functions;
                 diagnostics.push(Diagnostic {
                     code: CODE.clone(),
@@ -235,7 +269,9 @@ fn check_body_stmt(
 fn count_type_args(annotation: &str, expected_base: &str) -> Option<usize> {
     let bracket_pos = annotation.find('[')?;
     let base = annotation.get(..bracket_pos)?.trim();
-    if base != expected_base { return None; }
+    if base != expected_base {
+        return None;
+    }
     let inner = annotation.get(bracket_pos + 1..annotation.len().checked_sub(1)?)?;
     let args = split_type_args_at_commas(inner);
     Some(args.iter().filter(|a| !a.trim().is_empty()).count())

@@ -219,7 +219,10 @@ fn build_param_type_map(
 
 /// Check a statement inside a function body for calls with invariant
 /// mismatches.
-#[expect(clippy::too_many_arguments, reason = "context parameters needed for type checking")]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "context parameters needed for type checking"
+)]
 fn check_body_stmt(
     stmt: &ruff_python_ast::Stmt,
     _source: &str,
@@ -337,7 +340,10 @@ fn check_body_stmt(
 }
 
 /// Emit the invariant generic argument mismatch diagnostic.
-#[expect(clippy::too_many_arguments, reason = "diagnostic formatting requires all context")]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "diagnostic formatting requires all context"
+)]
 fn emit_diagnostic(
     callee_name: &str,
     param_name: &str,

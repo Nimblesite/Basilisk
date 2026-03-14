@@ -334,15 +334,14 @@ fn find_self_classvar_annotations(source: &str) -> Vec<(String, Span)> {
         }
 
         // Check if annotation starts with "ClassVar" or "CV"
-        let has_cv =
-            if bytes.get(ann_start..ann_start + 8) == Some(b"ClassVar") {
-                true
-            } else {
-                bytes.get(ann_start..ann_start + 2) == Some(b"CV")
-                    && (ann_start + 2 >= source_len
-                        || bytes.get(ann_start + 2) == Some(&b'[')
-                        || bytes.get(ann_start + 2) == Some(&b' '))
-            };
+        let has_cv = if bytes.get(ann_start..ann_start + 8) == Some(b"ClassVar") {
+            true
+        } else {
+            bytes.get(ann_start..ann_start + 2) == Some(b"CV")
+                && (ann_start + 2 >= source_len
+                    || bytes.get(ann_start + 2) == Some(&b'[')
+                    || bytes.get(ann_start + 2) == Some(&b' '))
+        };
 
         if has_cv {
             let Some(span_start) = u32::try_from(idx).ok() else {
@@ -370,7 +369,10 @@ fn find_self_classvar_annotations(source: &str) -> Vec<(String, Span)> {
 pub(crate) struct ClassVarInvalidContext;
 
 impl Rule for ClassVarInvalidContext {
-    #[expect(clippy::too_many_lines, reason = "ClassVar validation covers many distinct contexts")]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "ClassVar validation covers many distinct contexts"
+    )]
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         let source = &module.source;
         let path = &module.path;

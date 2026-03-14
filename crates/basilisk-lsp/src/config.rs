@@ -219,7 +219,10 @@ fn load_pyproject_config(path: &Path) -> Option<WorkspaceConfig> {
 }
 
 #[cfg(test)]
-#[expect(clippy::unwrap_used, reason = "test-only code: unwrap acceptable in unit tests")]
+#[expect(
+    clippy::unwrap_used,
+    reason = "test-only code: unwrap acceptable in unit tests"
+)]
 mod tests {
     use super::*;
 
