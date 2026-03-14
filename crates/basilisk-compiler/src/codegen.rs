@@ -1,5 +1,5 @@
 // Interpreter inherently does dynamic casts between i64/usize/f64/u32.
-#![allow(
+#![expect(
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
     clippy::cast_precision_loss,
@@ -10,12 +10,10 @@
     clippy::float_cmp,
     clippy::wildcard_enum_match_arm,
     clippy::needless_continue,
-    clippy::if_not_else,
-    clippy::too_many_lines,
-    clippy::single_match_else,
     clippy::match_wildcard_for_single_variants,
-    clippy::redundant_else,
-    clippy::missing_docs_in_private_items
+    clippy::missing_docs_in_private_items,
+    clippy::as_conversions,
+    clippy::indexing_slicing
 )]
 
 //! Tree-walking interpreter for typed Python.
@@ -693,10 +691,6 @@ impl Interpreter {
 
     // ── Function / method calls ──────────────────────────────────────────────
 
-    #[expect(
-        clippy::too_many_lines,
-        reason = "call evaluation handles function, method, and constructor dispatch"
-    )]
     fn eval_call(&mut self, call: &ast::ExprCall, env: &mut Env) -> Result<Value, CompileError> {
         // Check for method calls
         if let Expr::Attribute(attr) = call.func.as_ref() {
@@ -912,7 +906,7 @@ impl Interpreter {
                     Value::Float(f) => Ok(Some(Value::Int(*f as i64))),
                     Value::Bool(b) => Ok(Some(Value::Int(i64::from(*b)))),
                     Value::Str(s) => {
-                        let n = s.trim().parse::<i64>().map_err(|_| {
+                        let n = s.trim().parse::<i64>().map_err(|_parse_err| {
                             CompileError::Codegen(format!("invalid int literal: {s}"))
                         })?;
                         Ok(Some(Value::Int(n)))
@@ -1062,10 +1056,6 @@ impl Interpreter {
 
     // ── Method calls ─────────────────────────────────────────────────────────
 
-    #[expect(
-        clippy::too_many_lines,
-        reason = "method dispatch covers all builtin type methods"
-    )]
     fn call_method(
         &mut self,
         obj: &Value,
@@ -1491,10 +1481,6 @@ impl Interpreter {
 
     // ── Binary operations ────────────────────────────────────────────────────
 
-    #[expect(
-        clippy::too_many_lines,
-        reason = "binary operations cover all operator and type combinations"
-    )]
     fn binop(&self, op: ast::Operator, lhs: &Value, rhs: &Value) -> Result<Value, CompileError> {
         // String concatenation
         if let (Value::Str(a), Value::Str(b)) = (lhs, rhs) {

@@ -171,7 +171,12 @@ fn delta_encode(raw: &[RawToken], source: &str) -> Vec<SemanticToken> {
     let mut tokens = Vec::with_capacity(raw.len());
 
     for rt in raw {
-        let pos = byte_offset_to_position(source, rt.byte_offset as usize);
+        #[expect(
+            clippy::as_conversions,
+            reason = "u32 to usize is safe on 32-bit+ targets"
+        )]
+        let offset = rt.byte_offset as usize;
+        let pos = byte_offset_to_position(source, offset);
         let delta_line = pos.line.saturating_sub(prev_line);
         let delta_start = if delta_line == 0 {
             pos.character.saturating_sub(prev_start)

@@ -87,14 +87,15 @@ fn try_resolve_in_dir(module_name: &str, dir: &Path) -> Option<ResolvedImport> {
     let mut current = dir.to_path_buf();
 
     // Navigate through package directories for all but the last part.
-    for &part in &parts[..parts.len() - 1] {
+    let (leading, trailing) = parts.split_at(parts.len().saturating_sub(1));
+    for &part in leading {
         current = current.join(part);
         if !current.is_dir() {
             return None;
         }
     }
 
-    let last = parts[parts.len() - 1];
+    let last = trailing.first()?;
     try_resolve_name(&current, last)
 }
 

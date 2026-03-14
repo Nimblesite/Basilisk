@@ -256,13 +256,7 @@ pub(crate) fn add_dunder_all(uri: &Url, source: &str) -> Option<CodeAction> {
     for (idx, line) in source.lines().enumerate() {
         let trimmed = line.trim();
         if trimmed.starts_with("import ") || trimmed.starts_with("from ") {
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "line index from enumerate fits in u32 for any real source file"
-            )]
-            {
-                insert_line = (idx + 1) as u32;
-            }
+            insert_line = u32::try_from(idx + 1).unwrap_or(u32::MAX);
         }
     }
 
@@ -348,7 +342,7 @@ fn fix_missing_variable_annotation(uri: &Url, diag: &Diagnostic) -> CodeAction {
 /// Finds the colon on the diagnostic's source line and removes everything
 /// from the colon to the equals sign (including the colon and space).
 fn fix_remove_redundant_annotation(uri: &Url, diag: &Diagnostic, source: &str) -> CodeAction {
-    let line_idx = diag.range.start.line as usize;
+    let line_idx = usize::try_from(diag.range.start.line).unwrap_or(usize::MAX);
 
     // Find the colon after the variable name (within the diagnostic span).
     // The diagnostic span covers the variable name; we need to find the colon
@@ -490,15 +484,12 @@ fn disable_for_file(uri: &Url, diag: &Diagnostic, _source: &str, code: &str) -> 
 
 /// Get the end-of-line position for a diagnostic's line.
 fn line_end_position(diag: &Diagnostic, source: &str) -> Position {
-    let line_idx = diag.range.start.line as usize;
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "line character count fits in u32 for any real source line"
-    )]
-    let line_char_len = source
+    let line_idx = usize::try_from(diag.range.start.line).unwrap_or(usize::MAX);
+    let line_char_count = source
         .lines()
         .nth(line_idx)
-        .map_or(0, |l| l.chars().count()) as u32;
+        .map_or(0, |l| l.chars().count());
+    let line_char_len = u32::try_from(line_char_count).unwrap_or(u32::MAX);
     Position {
         line: diag.range.start.line,
         character: line_char_len,
@@ -509,15 +500,12 @@ fn line_end_position(diag: &Diagnostic, source: &str) -> Position {
 
 /// Append `  # type: ignore` at the end of the diagnostic's source line.
 fn suppress_with_type_ignore(uri: &Url, diag: &Diagnostic, source: &str) -> CodeAction {
-    let line_idx = diag.range.start.line as usize;
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "line character count fits in u32 for any real source line"
-    )]
-    let line_char_len = source
+    let line_idx = usize::try_from(diag.range.start.line).unwrap_or(usize::MAX);
+    let line_char_count = source
         .lines()
         .nth(line_idx)
-        .map_or(0, |l| l.chars().count()) as u32;
+        .map_or(0, |l| l.chars().count());
+    let line_char_len = u32::try_from(line_char_count).unwrap_or(u32::MAX);
     let insert_pos = Position {
         line: diag.range.start.line,
         character: line_char_len,
@@ -605,16 +593,9 @@ pub(crate) fn organize_imports(uri: &Url, source: &str) -> Option<CodeAction> {
 
 /// Compute the LSP range covering the entire document.
 fn full_document_range(source: &str) -> Range {
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "line count fits in u32 for any real source file"
-    )]
-    let line_count = source.lines().count() as u32;
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "line character count fits in u32 for any real source line"
-    )]
-    let last_line_len = source.lines().last().map_or(0, |l| l.chars().count()) as u32;
+    let line_count = u32::try_from(source.lines().count()).unwrap_or(u32::MAX);
+    let last_line_char_count = source.lines().last().map_or(0, |l| l.chars().count());
+    let last_line_len = u32::try_from(last_line_char_count).unwrap_or(u32::MAX);
     Range {
         start: Position {
             line: 0,

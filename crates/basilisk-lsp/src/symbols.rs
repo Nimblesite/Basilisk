@@ -2,10 +2,6 @@
 
 use std::sync::Arc;
 
-#[expect(
-    deprecated,
-    reason = "LSP spec requires the deprecated SymbolInformation type"
-)]
 use tower_lsp::lsp_types::{DocumentSymbol, Location, SymbolInformation, SymbolKind, Url};
 
 use basilisk_resolver::ResolvedModule;
@@ -115,10 +111,6 @@ pub fn document_symbols(resolved: &ResolvedModule, source: &str) -> Vec<Document
 /// Each entry in `documents` is `(uri, resolved_module, source_text)`.
 /// Symbols whose names contain `query` (case-insensitive) are included.
 /// An empty `query` returns every symbol from every document.
-#[expect(
-    deprecated,
-    reason = "SymbolInformation.deprecated field is deprecated but required by the LSP struct"
-)]
 #[must_use]
 pub fn workspace_symbols(
     documents: &[(Url, Arc<ResolvedModule>, String)],
@@ -274,6 +266,6 @@ fn return_annotation(func: &basilisk_resolver::FunctionInfo, source: &str) -> St
 
 fn annotation_detail(span: Option<basilisk_resolver::Span>, source: &str) -> Option<String> {
     let span = span?;
-    let text = source.get(span.start as usize..span.end as usize)?;
+    let text = span.slice_source(source)?;
     Some(text.trim().to_owned())
 }

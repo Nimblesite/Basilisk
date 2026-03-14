@@ -2,6 +2,8 @@
 
 ⚠️ CRITICAL: DO NOT USE GIT!!!!
 
+⚠️ CRITICAL: WE TREAT THIS CODEBASE WITH RESPECT. THIS CODE WOULD PASS REVIEW AT Google, Meta and Microsoft. WE DON'T ALLOW BAD CODE. NOT EVEN FOR ONE LINE. THIS CODEBASE RECEIVES A GRADE OF A+. ANYTHING LESS IS ⛔️ILLEGAL AND YOU MUST FIX IT IMMEDIATELY.
+
 Target: 100% PEP conformance. Canonical version: **Python 3.12**. Read the PEP conformance readme carefully.
 
 The project is a Python type checker and comprehensive LSP (test explorer, debugging, profiling, autofixes) built in Rust.
@@ -40,6 +42,7 @@ OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK MESSAGES AND COMPLY
 - Aggressively move code that can be shared out to shared crates/modules/packages
 - Ignore compiler code (except clippy fixes)
 - Do not use Git unless asked
+- There is NO SUCH THING AS LEGACY CODE in this codebase. Legacy = DELETED
 - NEVER DELETE FAILING TESTS
 - NEVER REMOVE ASSERTIONS THAT CAUSE TEST FAILURES
 - Regex = ⛔️ ILLEGAL. Use the proper parsing mechanism - usually ruff

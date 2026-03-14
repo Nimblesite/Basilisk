@@ -92,10 +92,10 @@ pub fn render_diagnostics_json(diagnostics: &[Diagnostic], sources: &[FileSource
                 .find(|s| s.path == d.path)
                 .map(|s| s.text.as_str());
             let (line, col) = source.map_or((1, 1), |src| {
-                byte_offset_to_line_col(src, d.span.start as usize)
+                byte_offset_to_line_col(src, d.span.start_usize())
             });
             let (end_line, end_col) = source.map_or((line, col + 1), |src| {
-                byte_offset_to_line_col(src, d.span.end as usize)
+                byte_offset_to_line_col(src, d.span.end_usize())
             });
             JsonDiagnostic {
                 code: d.code.code,
@@ -129,7 +129,7 @@ fn render_one(diag: &Diagnostic, source: Option<&str>) {
     let location = source.map_or_else(
         || diag.path.clone(),
         |src| {
-            let (line, col) = byte_offset_to_line_col(src, diag.span.start as usize);
+            let (line, col) = byte_offset_to_line_col(src, diag.span.start_usize());
             format!("{}:{}:{}", diag.path, line, col)
         },
     );
@@ -138,7 +138,7 @@ fn render_one(diag: &Diagnostic, source: Option<&str>) {
 
     // Source snippet with underline
     if let Some(src) = source {
-        render_snippet(src, diag.span.start as usize, diag.span.end as usize);
+        render_snippet(src, diag.span.start_usize(), diag.span.end_usize());
     }
 
     // Annotations

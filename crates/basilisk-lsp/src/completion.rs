@@ -46,6 +46,10 @@ pub fn patch_cursor_line(text: &str, line_number: u32) -> String {
     text.lines()
         .enumerate()
         .map(|(idx, line)| {
+            #[expect(
+                clippy::as_conversions,
+                reason = "u32 line_number to usize for comparison with enumerate index"
+            )]
             if idx == line_number as usize {
                 let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
                 format!("{indent}pass")
@@ -156,7 +160,7 @@ pub fn resolve_completion_item(item: CompletionItem, text: &str, path: &str) -> 
 // ── Prefix / dot detection ───────────────────────────────────────────────────
 
 fn extract_prefix(text: &str, byte_offset: usize) -> String {
-    let before = &text[..byte_offset.min(text.len())];
+    let before = text.get(..byte_offset.min(text.len())).unwrap_or(text);
     before
         .chars()
         .rev()
@@ -168,13 +172,13 @@ fn extract_prefix(text: &str, byte_offset: usize) -> String {
 }
 
 fn is_dot_completion(text: &str, byte_offset: usize) -> bool {
-    let before = &text[..byte_offset.min(text.len())];
+    let before = text.get(..byte_offset.min(text.len())).unwrap_or(text);
     let stripped = before.trim_end_matches(|c: char| c.is_alphanumeric() || c == '_');
     stripped.ends_with('.')
 }
 
 fn dot_receiver(text: &str, byte_offset: usize) -> Option<String> {
-    let before = &text[..byte_offset.min(text.len())];
+    let before = text.get(..byte_offset.min(text.len())).unwrap_or(text);
     let stripped = before.trim_end_matches(|c: char| c.is_alphanumeric() || c == '_');
     let before_dot = stripped.strip_suffix('.')?;
     let name: String = before_dot
@@ -225,7 +229,7 @@ fn enclosing_class(
     let func = resolved
         .functions
         .iter()
-        .find(|f| f.class_name.is_some() && (f.def_span.start as usize) <= offset)?;
+        .find(|f| f.class_name.is_some() && f.def_span.start_usize() <= offset)?;
     let class_name = func.class_name.as_ref()?;
     resolved.classes.iter().find(|c| &c.name == class_name)
 }
@@ -302,7 +306,7 @@ fn kwarg_completions(
 /// Scan backwards from `byte_offset` to find an unmatched `(`, then extract
 /// the callee name (the identifier immediately before the `(`).
 fn find_enclosing_call(text: &str, byte_offset: usize) -> Option<String> {
-    let before = &text[..byte_offset.min(text.len())];
+    let before = text.get(..byte_offset.min(text.len())).unwrap_or(text);
     let mut depth: i32 = 0;
     let mut paren_pos = None;
 
@@ -321,7 +325,7 @@ fn find_enclosing_call(text: &str, byte_offset: usize) -> Option<String> {
     }
 
     let paren_idx = paren_pos?;
-    let before_paren = &text[..paren_idx];
+    let before_paren = text.get(..paren_idx)?;
     let name: String = before_paren
         .chars()
         .rev()
@@ -349,7 +353,7 @@ fn find_function<'a>(
 /// Scan the text between the enclosing `(` and the cursor for keyword
 /// arguments that have already been provided (patterns like `name=`).
 fn already_provided_kwargs(text: &str, byte_offset: usize) -> HashSet<String> {
-    let before = &text[..byte_offset.min(text.len())];
+    let before = text.get(..byte_offset.min(text.len())).unwrap_or(text);
     let mut result = HashSet::new();
 
     // Find the unmatched `(` position
@@ -374,26 +378,36 @@ fn already_provided_kwargs(text: &str, byte_offset: usize) -> HashSet<String> {
     };
 
     // Scan the argument region for `identifier=` patterns (not `==`)
-    let args_region = &text[start + 1..byte_offset.min(text.len())];
+    let args_region = text
+        .get(start + 1..byte_offset.min(text.len()))
+        .unwrap_or("");
     let chars: Vec<char> = args_region.chars().collect();
     let len = chars.len();
     let mut idx = 0;
 
     while idx < len {
+        let Some(&ch) = chars.get(idx) else { break };
         // Skip whitespace
-        if chars[idx].is_whitespace() || chars[idx] == ',' {
+        if ch.is_whitespace() || ch == ',' {
             idx += 1;
             continue;
         }
         // Try to read an identifier
-        if chars[idx].is_alphabetic() || chars[idx] == '_' {
+        if ch.is_alphabetic() || ch == '_' {
             let start_idx = idx;
-            while idx < len && (chars[idx].is_alphanumeric() || chars[idx] == '_') {
+            while idx < len
+                && chars
+                    .get(idx)
+                    .is_some_and(|c| c.is_alphanumeric() || *c == '_')
+            {
                 idx += 1;
             }
-            let ident: String = chars[start_idx..idx].iter().collect();
+            let ident: String = chars
+                .get(start_idx..idx)
+                .map(|s| s.iter().collect())
+                .unwrap_or_default();
             // Check if followed by `=` but not `==`
-            if idx < len && chars[idx] == '=' && (idx + 1 >= len || chars[idx + 1] != '=') {
+            if chars.get(idx) == Some(&'=') && chars.get(idx + 1) != Some(&'=') {
                 let _ = result.insert(ident);
             }
         } else {

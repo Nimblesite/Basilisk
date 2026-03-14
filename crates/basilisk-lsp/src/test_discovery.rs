@@ -62,11 +62,7 @@ pub fn discover_tests_in_file(path: &Path, source: &str) -> Vec<TestItem> {
     // Find test functions (def test_*) — skip methods (they belong to classes).
     for func in &resolved.functions {
         if func.name.starts_with("test_") && func.class_name.is_none() {
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "u32 byte offset to usize is safe on 32/64-bit"
-            )]
-            let line = func.def_span.start as usize;
+            let line = func.def_span.start_usize();
             let line_num = byte_offset_to_line(source, line);
             items.push(TestItem {
                 name: func.name.clone(),
@@ -82,11 +78,7 @@ pub fn discover_tests_in_file(path: &Path, source: &str) -> Vec<TestItem> {
     // Find test classes (class Test*) and their test methods.
     for class in &resolved.classes {
         if class.name.starts_with("Test") || is_unittest_class(class) {
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "u32 byte offset to usize is safe on 32/64-bit"
-            )]
-            let class_line = class.def_span.start as usize;
+            let class_line = class.def_span.start_usize();
             let class_line_num = byte_offset_to_line(source, class_line);
 
             // Find test methods by matching functions whose class_name == this class.
@@ -94,11 +86,7 @@ pub fn discover_tests_in_file(path: &Path, source: &str) -> Vec<TestItem> {
             for func in &resolved.functions {
                 let is_method = func.class_name.as_ref().is_some_and(|cn| cn == &class.name);
                 if is_method && func.name.starts_with("test") {
-                    #[expect(
-                        clippy::cast_possible_truncation,
-                        reason = "u32 byte offset to usize is safe on 32/64-bit"
-                    )]
-                    let method_line = func.def_span.start as usize;
+                    let method_line = func.def_span.start_usize();
                     let method_line_num = byte_offset_to_line(source, method_line);
                     methods.push(TestItem {
                         name: func.name.clone(),
@@ -142,10 +130,6 @@ pub fn discover_workspace_tests(root: &Path) -> Vec<TestItem> {
                 .unwrap_or(path)
                 .to_string_lossy()
                 .into_owned();
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "no truncation: line is hardcoded 0"
-            )]
             all_items.push(TestItem {
                 name: relative.clone(),
                 id: relative,
@@ -226,7 +210,9 @@ fn is_unittest_class(class: &basilisk_resolver::scope::ClassInfo) -> bool {
 /// Convert a byte offset to a 0-based line number.
 fn byte_offset_to_line(source: &str, offset: usize) -> usize {
     let clamped = offset.min(source.len());
-    source[..clamped].chars().filter(|&c| c == '\n').count()
+    source
+        .get(..clamped)
+        .map_or(0, |s| s.chars().filter(|&c| c == '\n').count())
 }
 
 /// Recursively collect test files (test_*.py, *_test.py).

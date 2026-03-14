@@ -368,8 +368,8 @@ fn bsk_to_lsp(d: &basilisk_checker::Diagnostic, text: &str) -> tower_lsp::lsp_ty
         CodeDescription, Diagnostic, DiagnosticSeverity, NumberOrString, Range, Url,
     };
 
-    let start = byte_offset_to_position(text, d.span.start as usize);
-    let end = byte_offset_to_position(text, d.span.end as usize);
+    let start = byte_offset_to_position(text, d.span.start_usize());
+    let end = byte_offset_to_position(text, d.span.end_usize());
     let severity = match d.severity {
         basilisk_checker::Severity::Error | basilisk_checker::Severity::SafetyViolation => {
             DiagnosticSeverity::ERROR
