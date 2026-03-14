@@ -47,6 +47,9 @@ RUN cargo install cargo-llvm-cov --version 0.8.4 --locked
 # Python packages (pinned — matches CI: pip install debugpy ruff)
 RUN pip install --break-system-packages debugpy==1.8.14 ruff==0.11.2
 
+# Claude Code CLI
+RUN npm install -g @anthropic-ai/claude-code
+
 # Match CI environment variables
 ENV CARGO_TERM_COLOR=always
 ENV RUSTFLAGS="-D warnings"
