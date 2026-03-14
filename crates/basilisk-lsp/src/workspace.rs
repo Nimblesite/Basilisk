@@ -464,7 +464,17 @@ pub fn resolve_analysis_mode(
     reason = "test-only code: unwrap acceptable in unit tests"
 )]
 mod tests {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
     use super::*;
+
+    static TEST_CTR: AtomicU64 = AtomicU64::new(0);
+
+    /// Generate a unique temp dir path to avoid races between parallel tests.
+    fn unique_tmp(prefix: &str) -> std::path::PathBuf {
+        let n = TEST_CTR.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir().join(format!("{prefix}_{n}_{}", std::process::id()))
+    }
 
     #[test]
     fn test_fnv1a_differs_for_different_strings() {
@@ -662,7 +672,7 @@ mod tests {
     fn test_set_closed_existing_file_re_analyses() {
         let idx = make_index();
         // Write a real temp file.
-        let dir = std::env::temp_dir().join("bsk_set_closed_test");
+        let dir = unique_tmp("bsk_set_closed");
         std::fs::create_dir_all(&dir).unwrap();
         let file_path = dir.join("test.py");
         std::fs::write(&file_path, "x: int = 1\n").unwrap();
@@ -693,7 +703,7 @@ mod tests {
 
     #[test]
     fn test_reload_from_disk_skips_unchanged_hash() {
-        let dir = std::env::temp_dir().join("bsk_reload_test");
+        let dir = unique_tmp("bsk_reload");
         std::fs::create_dir_all(&dir).unwrap();
         let file_path = dir.join("unchanged.py");
         let src = "x: int = 1\n";
@@ -724,7 +734,7 @@ mod tests {
 
     #[test]
     fn test_scan_collects_python_files() {
-        let dir = std::env::temp_dir().join("bsk_scan_test");
+        let dir = unique_tmp("bsk_scan");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("a.py"), "x: int = 1\n").unwrap();
         std::fs::write(dir.join("b.py"), "y: str = 'hi'\n").unwrap();
@@ -739,7 +749,7 @@ mod tests {
 
     #[test]
     fn test_scan_skips_open_files() {
-        let dir = std::env::temp_dir().join("bsk_scan_skip_open");
+        let dir = unique_tmp("bsk_scan_skip_open");
         std::fs::create_dir_all(&dir).unwrap();
         let file_path = dir.join("open.py");
         std::fs::write(&file_path, "x: int = 1\n").unwrap();
