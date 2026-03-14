@@ -8,6 +8,7 @@ use basilisk_resolver::ResolvedModule;
 
 use super::Rule;
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0113",
@@ -174,7 +175,7 @@ impl Rule for TypeIsInconsistentNarrowing {
             };
 
             // Extract annotation text.
-            let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+            let Some(ann_text) = ann_span.slice_source(source) else {
                 continue;
             };
 
@@ -203,9 +204,7 @@ impl Rule for TypeIsInconsistentNarrowing {
                 continue;
             };
 
-            let Some(param_type) =
-                source.get(param_ann_span.start as usize..param_ann_span.end as usize)
-            else {
+            let Some(param_type) = param_ann_span.slice_source(source) else {
                 continue;
             };
 

@@ -57,8 +57,7 @@ impl Rule for SelfTypeAttributeIncompatible {
                 let Some(ann_span) = attr.annotation_span else {
                     continue;
                 };
-                let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize)
-                else {
+                let Some(ann_text) = ann_span.slice_source(source) else {
                     continue;
                 };
                 if annotation_mentions_self(ann_text.trim()) {
@@ -109,7 +108,7 @@ impl Rule for SelfTypeAttributeIncompatible {
             .filter(|v| v.rhs_kind == basilisk_resolver::RhsKind::CallExpr)
             .filter_map(|v| {
                 let rhs_span = v.rhs_span?;
-                let rhs_text = source.get(rhs_span.start as usize..rhs_span.end as usize)?;
+                let rhs_text = rhs_span.slice_source(source)?;
                 let class_name = extract_callee_name(rhs_text)?;
                 Some((v.name.as_str(), class_name))
             })

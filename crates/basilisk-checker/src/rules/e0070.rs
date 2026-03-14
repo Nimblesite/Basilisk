@@ -73,7 +73,7 @@ fn check_local_assignments(
         .iter()
         .filter_map(|param| {
             let ann_span = param.annotation_span?;
-            let ann_text = source.get(ann_span.start as usize..ann_span.end as usize)?;
+            let ann_text = ann_span.slice_source(source)?;
             Some((param.name.as_str(), ann_text.trim()))
         })
         .collect();
@@ -167,7 +167,7 @@ fn check_return_stmts(
     let Some(ann_span) = func.return_annotation_span else {
         return;
     };
-    let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+    let Some(ann_text) = ann_span.slice_source(source) else {
         return;
     };
     let ann_text = ann_text.trim();
@@ -182,8 +182,7 @@ fn check_return_stmts(
         if !ret_stmt.has_value {
             continue;
         }
-        let Some(ret_full) = source.get(ret_stmt.span.start as usize..ret_stmt.span.end as usize)
-        else {
+        let Some(ret_full) = ret_stmt.span.slice_source(source) else {
             continue;
         };
         let ret_full = ret_full.trim();

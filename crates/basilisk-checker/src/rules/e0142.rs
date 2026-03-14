@@ -28,6 +28,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -114,7 +115,7 @@ fn collect_transform_base_classes(
         }
 
         // Find the `@dataclass_transform` in the source before the class keyword.
-        let cls_start = cls.def_span.start as usize;
+        let cls_start = cls.def_span.start_usize();
         let search_end = cls_start
             + source
                 .get(cls_start..)
@@ -181,7 +182,7 @@ fn collect_transform_subclasses<'a>(
         // Override with keyword arguments on the class definition itself.
         // These appear in `class Foo(Base, frozen=True, kw_only=False, order=True): ...`
         // We extract them from the source text around the class name.
-        let name_end = cls.name_span.end as usize;
+        let name_end = cls.name_span.end_usize();
         let Some(rest) = source.get(name_end..) else {
             let _ = result.insert(cls.name.as_str(), settings);
             continue;
@@ -281,10 +282,14 @@ fn line_start_offset(source: &str, line: usize) -> u32 {
 /// Return a span covering the trimmed content of a source line (1-based).
 #[allow(clippy::cast_possible_truncation)]
 fn span_for_source_line(source: &str, line: usize) -> Span {
-    let start = line_start_offset(source, line) as usize;
-    let line_text = source[start..].lines().next().unwrap_or("");
+    let start = usize::from(line_start_offset(source, line));
+    let line_text = source
+        .get(start..)
+        .and_then(|s| s.lines().next())
+        .unwrap_or("");
     let trim_leading = line_text.len() - line_text.trim_start().len();
     let trimmed = line_text.trim();
+    #[allow(clippy::cast_possible_truncation)]
     Span {
         start: (start + trim_leading) as u32,
         end: (start + trim_leading + trimmed.len()) as u32,
@@ -318,7 +323,7 @@ impl Rule for DataclassTransformClassViolation {
             let Some(rhs_span) = var.rhs_span else {
                 continue;
             };
-            let Some(rhs_text) = source.get(rhs_span.start as usize..rhs_span.end as usize) else {
+            let Some(rhs_text) = rhs_span.slice_source(source) else {
                 continue;
             };
             // Extract the callee name: `Customer1(...)` -> `"Customer1"`.
@@ -521,7 +526,7 @@ fn check_kw_only_positional_args(
         let Some(rhs_span) = var.rhs_span else {
             continue;
         };
-        let Some(rhs_text) = source.get(rhs_span.start as usize..rhs_span.end as usize) else {
+        let Some(rhs_text) = rhs_span.slice_source(source) else {
             continue;
         };
 
@@ -541,7 +546,7 @@ fn check_kw_only_positional_args(
             continue;
         }
 
-        if parse_call_positional(source, rhs_text, rhs_span.start as usize) {
+        if parse_call_positional(source, rhs_text, rhs_span.start_usize()) {
             diagnostics.push(Diagnostic {
                 code: CODE.clone(),
                 severity: Severity::Error,

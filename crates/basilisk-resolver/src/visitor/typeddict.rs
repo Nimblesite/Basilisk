@@ -10,7 +10,7 @@ use crate::scope::{
 
 use super::annotations::strip_annotated_wrapper;
 use super::class_info_ext::expr_simple_name;
-use super::core::{check_td_stmts, text_range_to_span};
+use super::core::{check_td_stmts, source_slice_span, text_range_to_span};
 use super::final_readonly::TYPING_FORMS;
 use super::typeddict_ext::{expr_literal_type_name, typeddict_field_type_compatible};
 
@@ -216,10 +216,7 @@ pub(super) fn collect_typeddict_key_violations<'a>(
                 .iter()
                 .filter_map(|a| {
                     let span = a.annotation_span?;
-                    let type_text = source
-                        .get(span.start as usize..span.end as usize)?
-                        .trim()
-                        .to_owned();
+                    let type_text = source_slice_span(source, span)?.trim().to_owned();
                     Some((a.name.as_str(), type_text))
                 })
                 .collect();

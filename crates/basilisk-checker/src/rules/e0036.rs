@@ -37,6 +37,7 @@
 use basilisk_resolver::{ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -47,8 +48,7 @@ const CODE: ErrorCode = ErrorCode {
 
 /// Returns the text slice for a span within the source.
 fn span_text(source: &str, span: Option<Span>) -> Option<&str> {
-    let span = span?;
-    source.get(span.start as usize..span.end as usize)
+    slice_span(source, span?)
 }
 
 /// Returns `true` when the annotation text contains `ClassVar[` at all —
@@ -338,11 +338,17 @@ fn find_self_classvar_annotations(source: &str) -> Vec<(String, Span)> {
             };
 
         if has_cv {
-            let target_start = idx;
-            #[allow(clippy::cast_possible_truncation)]
+            let Some(span_start) = u32::try_from(idx).ok() else {
+                idx = attr_end;
+                continue;
+            };
+            let Some(span_end) = u32::try_from(attr_end).ok() else {
+                idx = attr_end;
+                continue;
+            };
             let span = Span {
-                start: target_start as u32,
-                end: attr_end as u32,
+                start: span_start,
+                end: span_end,
             };
             results.push((attr_name, span));
         }

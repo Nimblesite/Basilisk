@@ -5,6 +5,7 @@
 //! handle all return type mismatches using the inference system.
 
 use crate::inference::infer_rhs;
+use crate::span_util::slice_span;
 use crate::types::InferredType;
 use basilisk_resolver::{FunctionInfo, ResolvedModule, ReturnStmtInfo};
 
@@ -41,10 +42,7 @@ fn check_function(func: &FunctionInfo, module: &ResolvedModule, out: &mut Vec<Di
     let Some(ann_span) = func.return_annotation_span else {
         return;
     };
-    let Some(ann_text) = module
-        .source
-        .get(ann_span.start as usize..ann_span.end as usize)
-    else {
+    let Some(ann_text) = slice_span(&module.source, ann_span) else {
         return;
     };
 

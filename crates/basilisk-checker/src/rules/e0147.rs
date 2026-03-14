@@ -32,6 +32,7 @@
 use basilisk_resolver::{ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -120,7 +121,7 @@ fn check_function_bodies(
         let mut param_annotations: Vec<(String, String)> = Vec::new();
         for param in &func.parameters {
             if let Some(ann_span) = param.annotation_span {
-                if let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) {
+                if let Some(ann_text) = ann_span.slice_source(source) {
                     param_annotations.push((param.name.clone(), ann_text.trim().to_owned()));
                 }
             }
@@ -130,7 +131,7 @@ fn check_function_bodies(
         let mut local_annotations: Vec<(String, String)> = Vec::new();
 
         // Extract the function body source (lines indented past the `def`).
-        let body_lines = func_body_lines(source, func.def_span.start as usize);
+        let body_lines = func_body_lines(source, func.def_span.start_usize());
 
         for line_info in &body_lines {
             let trimmed = line_info.text.trim();

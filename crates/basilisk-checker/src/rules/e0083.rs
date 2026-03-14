@@ -29,6 +29,7 @@ use std::collections::HashSet;
 use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -55,7 +56,7 @@ fn make_diag(msg: String, span: basilisk_resolver::Span, path: &str) -> Diagnost
 
 fn span_text(source: &str, span: Option<basilisk_resolver::Span>) -> Option<&str> {
     let span = span?;
-    source.get(span.start as usize..span.end as usize)
+    slice_span(source, span)
 }
 
 /// Emits BSK-E0083 when a `TypeVarTuple` is used without unpacking.

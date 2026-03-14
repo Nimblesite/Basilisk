@@ -135,7 +135,7 @@ pub(crate) fn collect_transform_functions(
         }
 
         // Extract the source region covering decorators + def line
-        let func_source_start = func.def_span.start as usize;
+        let func_source_start = func.def_span.start_usize();
         // Look at source from the function start to find @dataclass_transform(...)
         let Some(search_region) = module.source.get(func_source_start..) else {
             continue;
@@ -187,7 +187,7 @@ pub(crate) fn collect_transform_classes(
 
         // Look at source before the class definition to find decorators.
         // cls.def_span covers the entire class including decorators.
-        let cls_start = cls.def_span.start as usize;
+        let cls_start = cls.def_span.start_usize();
         // Find the `class` keyword to delimit the decorator region
         let Some(class_kw_offset) = module
             .source

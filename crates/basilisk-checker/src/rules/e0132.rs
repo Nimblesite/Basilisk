@@ -55,7 +55,7 @@ fn extract_base_subscripts(
     source: &str,
     class: &basilisk_resolver::ClassInfo,
 ) -> Vec<BaseSubscript> {
-    let name_end = class.name_span.end as usize;
+    let name_end = class.name_span.end_usize();
 
     // Find the opening `(` after the class name.
     let after_name = source.get(name_end..).unwrap_or("");

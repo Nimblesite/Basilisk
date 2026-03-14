@@ -32,6 +32,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -198,7 +199,7 @@ fn check_generic_protocol_assignments(
             continue;
         };
 
-        let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+        let Some(ann_text) = ann_span.slice_source(source) else {
             continue;
         };
         let ann_text = ann_text.trim();
@@ -242,7 +243,7 @@ fn check_generic_protocol_assignments(
             .collect();
 
         // Extract RHS class name.
-        let Some(rhs_text) = source.get(rhs_span.start as usize..rhs_span.end as usize) else {
+        let Some(rhs_text) = rhs_span.slice_source(source) else {
             continue;
         };
         let rhs_text = rhs_text.trim();
@@ -349,12 +350,8 @@ fn check_return_type_mismatch(
         return None;
     };
 
-    let proto_ret = source
-        .get(proto_ret_span.start as usize..proto_ret_span.end as usize)
-        .map_or("", str::trim);
-    let concrete_ret = source
-        .get(concrete_ret_span.start as usize..concrete_ret_span.end as usize)
-        .map_or("", str::trim);
+    let proto_ret = proto_ret_span.slice_source(source).map_or("", str::trim);
+    let concrete_ret = concrete_ret_span.slice_source(source).map_or("", str::trim);
 
     let expected_ret = substitute_typevars(proto_ret, substitution, typevar_info);
 
@@ -386,12 +383,8 @@ fn check_param_type_mismatch(
         if let (Some(proto_ann_span), Some(concrete_ann_span)) =
             (proto_param.annotation_span, concrete_param.annotation_span)
         {
-            let proto_ann = source
-                .get(proto_ann_span.start as usize..proto_ann_span.end as usize)
-                .map_or("", str::trim);
-            let concrete_ann = source
-                .get(concrete_ann_span.start as usize..concrete_ann_span.end as usize)
-                .map_or("", str::trim);
+            let proto_ann = proto_ann_span.slice_source(source).map_or("", str::trim);
+            let concrete_ann = concrete_ann_span.slice_source(source).map_or("", str::trim);
 
             let expected_ann = substitute_typevars(proto_ann, substitution, typevar_info);
 
@@ -436,7 +429,7 @@ fn check_self_typed_protocol_assignments(
             continue;
         };
 
-        let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+        let Some(ann_text) = ann_span.slice_source(source) else {
             continue;
         };
         let ann_name = ann_text.trim();
@@ -462,7 +455,7 @@ fn check_self_typed_protocol_assignments(
         }
 
         // Extract RHS class name.
-        let Some(rhs_text) = source.get(rhs_span.start as usize..rhs_span.end as usize) else {
+        let Some(rhs_text) = rhs_span.slice_source(source) else {
             continue;
         };
         let rhs_text = rhs_text.trim();
@@ -735,9 +728,7 @@ fn get_self_typevar_name(method: &FunctionInfo, source: &str) -> Option<String> 
         return None;
     }
     let ann_span = first_param.annotation_span?;
-    let ann_text = source
-        .get(ann_span.start as usize..ann_span.end as usize)?
-        .trim();
+    let ann_text = ann_span.slice_source(source)?.trim();
     // The TypeVar name is a simple identifier.
     if ann_text.chars().all(|c| c.is_alphanumeric() || c == '_') {
         Some(ann_text.to_owned())
@@ -766,19 +757,19 @@ fn check_self_typed_method_incompatibility(
         .first()
         .filter(|p| p.name == "self")
         .and_then(|p| p.annotation_span)
-        .and_then(|span| source.get(span.start as usize..span.end as usize))
+        .and_then(|span| span.slice_source(source))
         .map(str::trim);
 
     // Get the proto method's return type.
     let proto_ret = proto_method
         .return_annotation_span
-        .and_then(|span| source.get(span.start as usize..span.end as usize))
+        .and_then(|span| span.slice_source(source))
         .map(str::trim);
 
     // Get the concrete method's return type.
     let concrete_ret = concrete_method
         .return_annotation_span
-        .and_then(|span| source.get(span.start as usize..span.end as usize))
+        .and_then(|span| span.slice_source(source))
         .map(str::trim);
 
     // If the protocol return type is the TypeVar itself (T returns T),
@@ -829,7 +820,7 @@ fn check_self_typed_method_incompatibility(
     for (proto_param, concrete_param) in proto_params.iter().zip(concrete_params.iter()) {
         let proto_ann = proto_param
             .annotation_span
-            .and_then(|span| source.get(span.start as usize..span.end as usize))
+            .and_then(|span| span.slice_source(source))
             .map_or("", str::trim);
 
         if proto_ann != tv_name {
@@ -841,7 +832,7 @@ fn check_self_typed_method_incompatibility(
         // The concrete method must use the same type consistently.
         let concrete_ann = concrete_param
             .annotation_span
-            .and_then(|span| source.get(span.start as usize..span.end as usize))
+            .and_then(|span| span.slice_source(source))
             .map_or("", str::trim);
 
         // The concrete parameter type must match what is inferred from the self type.

@@ -81,7 +81,7 @@ fn check_module_var(var: &VariableInfo, source: &str, path: &str, out: &mut Vec<
     let Some(ann_span) = var.annotation_span else {
         return;
     };
-    let Some(annotation) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+    let Some(annotation) = ann_span.slice_source(source) else {
         return;
     };
     if let Some(violation) = check_annotation(annotation.trim()) {
@@ -248,7 +248,7 @@ fn count_type_args(inner: &str) -> usize {
 
 /// Extracts the annotation text for a parameter from the source.
 fn extract_param_annotation(source: &str, name_span: Span) -> Option<&str> {
-    let start = name_span.start as usize;
+    let start = name_span.start_usize();
     let line_start = source[..start].rfind('\n').map_or(0, |p| p + 1);
     let line_end = source[start..]
         .find('\n')

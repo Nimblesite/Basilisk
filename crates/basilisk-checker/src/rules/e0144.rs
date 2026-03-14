@@ -25,6 +25,7 @@ use ruff_text_size::Ranged as _;
 use basilisk_resolver::{ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -644,7 +645,7 @@ fn check_kwarg_types(
         let Some(ann_span) = param.annotation_span else {
             continue;
         };
-        let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+        let Some(ann_text) = ann_span.slice_source(source) else {
             continue;
         };
         let expected_type = ann_text.trim();
@@ -694,7 +695,7 @@ fn check_positional_arg_types(
         let Some(ann_span) = param.annotation_span else {
             continue;
         };
-        let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+        let Some(ann_text) = ann_span.slice_source(source) else {
             continue;
         };
         let expected_type = ann_text.trim();

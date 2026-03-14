@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{AttributeInfo, ClassInfo, ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -170,8 +171,7 @@ fn uses_typed_dict_qualifier(ann: Option<&str>) -> bool {
 
 /// Extract annotation text from source given an optional span.
 fn annotation_text(source: &str, span: Option<Span>) -> Option<&str> {
-    let span = span?;
-    source.get(span.start as usize..span.end as usize)
+    slice_span(source, span?)
 }
 
 #[allow(clippy::too_many_arguments)]

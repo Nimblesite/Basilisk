@@ -50,8 +50,7 @@ impl Rule for TypeVarTupleUnpackViolation {
                 let Some(ann_span) = param.annotation_span else {
                     continue;
                 };
-                let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize)
-                else {
+                let Some(ann_text) = ann_span.slice_source(source) else {
                     continue;
                 };
                 if let Some(vparam) = parse_variadic_annotation(ann_text.trim(), idx) {

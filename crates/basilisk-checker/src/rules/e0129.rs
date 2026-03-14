@@ -23,6 +23,7 @@
 use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -46,7 +47,7 @@ impl Rule for LiteralValueIncompatible {
                 .iter()
                 .filter_map(|param| {
                     let ann_span = param.annotation_span?;
-                    let ann = source.get(ann_span.start as usize..ann_span.end as usize)?;
+                    let ann = ann_span.slice_source(source)?;
                     let ann = ann.trim();
                     // Only interested in Literal[...] annotations (including L[...] alias).
                     if contains_literal_subscript(ann) {
@@ -62,8 +63,12 @@ impl Rule for LiteralValueIncompatible {
             }
 
             // Scan the source lines in the function body region.
-            let body_start = func.def_span.start as usize;
-            let func_source = &source[body_start..];
+            let Some(body_start) = usize::try_from(func.def_span.start).ok() else {
+                continue;
+            };
+            let Some(func_source) = source.get(body_start..) else {
+                continue;
+            };
 
             // Find the colon ending the def line, then scan body lines.
             let Some(colon_offset) = func_source.find(':') else {

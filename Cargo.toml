@@ -54,7 +54,7 @@ basilisk-test-utils = { path = "crates/basilisk-test-utils" }
 
 [workspace.lints.rust]
 unsafe_code  = "deny"
-missing_docs = "warn"
+missing_docs = "deny"
 unused_imports = "deny"
 dead_code = "deny"
 unused_variables = "deny"
@@ -70,3 +70,23 @@ expect_used          = "deny"
 panic                = "deny"
 todo                 = "deny"
 unimplemented        = "deny"
+# Implicit panics from out-of-bounds indexing — use .get() instead
+indexing_slicing     = "deny"
+# Silent lossy type conversions via `as` — use .into()/.try_into() instead
+as_conversions       = "deny"
+# Forgotten debug macros leaking info to stderr
+dbg_macro            = "deny"
+# Resource leaks from skipped destructors — use ManuallyDrop if needed
+mem_forget           = "deny"
+# From impls that can panic should be TryFrom instead
+fallible_impl_from   = "deny"
+# Catch needless String::to_string() allocations — use .clone() for explicit intent
+string_to_string     = "deny"
+# Require SAFETY comments on any unsafe block — defense in depth for allowed exceptions
+undocumented_unsafe_blocks = "deny"
+# Prevent silent precision loss in float literals — critical for numeric type correctness
+lossy_float_literal  = "deny"
+# Prevent stack overflow from oversized local variables — critical for recursive AST walking
+large_stack_frames   = "deny"
+# Force #[expect] over #[allow] so stale lint suppressions don't hide new violations
+allow_attributes     = "deny"

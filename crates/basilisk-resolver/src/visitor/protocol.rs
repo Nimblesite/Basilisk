@@ -8,7 +8,7 @@ use crate::scope::{
 };
 
 use super::class_info_ext::expr_simple_name;
-use super::core::text_range_to_span;
+use super::core::{source_slice_range, source_slice_span, text_range_to_span};
 use super::protocol_ext::{
     collect_protocol_required_attrs, collect_protocol_required_methods, collect_provided_members,
     collect_transitive_required_members, find_protocol_instantiations,
@@ -30,10 +30,7 @@ pub(super) fn collect_protocol_self_violations(
                 .filter(|f| f.class_name.as_deref() == Some(cls.name.as_str()))
                 .filter(|f| {
                     f.return_annotation_span.is_some_and(|span| {
-                        source
-                            .get(span.start as usize..span.end as usize)
-                            .map(str::trim)
-                            == Some("Self")
+                        source_slice_span(source, span).map(str::trim) == Some("Self")
                     })
                 })
                 .map(|f| f.name.as_str())
@@ -60,8 +57,7 @@ pub(super) fn collect_protocol_self_violations(
                 .iter()
                 .filter_map(|p| {
                     p.annotation_span.and_then(|span| {
-                        source
-                            .get(span.start as usize..span.end as usize)
+                        source_slice_span(source, span)
                             .map(|ann_text| (p.name.as_str(), ann_text.trim()))
                     })
                 })
@@ -82,8 +78,7 @@ pub(super) fn collect_protocol_self_violations(
                 .filter(|f| f.class_name.as_deref() == Some(cls.name.as_str()))
                 .filter_map(|f| {
                     f.return_annotation_span.and_then(|span| {
-                        source
-                            .get(span.start as usize..span.end as usize)
+                        source_slice_span(source, span)
                             .map(|ret_text| (f.name.as_str(), ret_text.trim()))
                     })
                 })
@@ -105,7 +100,6 @@ pub(super) fn collect_protocol_self_violations(
 }
 
 /// Walk statements recursively to find function bodies with protocol violations.
-#[allow(dead_code)]
 pub(super) fn collect_protocol_violations_from_stmts(
     stmts: &[Stmt],
     protocol_self_methods: &std::collections::HashMap<&str, Vec<&str>>,
@@ -138,7 +132,6 @@ pub(super) fn collect_protocol_violations_from_stmts(
 }
 
 /// Check a single function body for calls that violate protocol `Self` conformance.
-#[allow(dead_code)]
 pub(super) fn check_protocol_violations_in_function(
     func: &StmtFunctionDef,
     protocol_self_methods: &std::collections::HashMap<&str, Vec<&str>>,
@@ -157,8 +150,7 @@ pub(super) fn check_protocol_violations_in_function(
         .filter_map(|p| {
             p.parameter.annotation.as_deref().and_then(|ann| {
                 let range = ann.range();
-                source
-                    .get(range.start().to_u32() as usize..range.end().to_u32() as usize)
+                source_slice_range(source, range)
                     .map(|text| (p.parameter.name.as_str(), text.trim()))
             })
         })

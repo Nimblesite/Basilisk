@@ -30,6 +30,7 @@ use basilisk_resolver::ResolvedModule;
 
 use super::Rule;
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0121",
@@ -100,13 +101,13 @@ impl Rule for ProtocolAssignmentConformance {
             };
 
             // Extract annotation text (the type name).
-            let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+            let Some(ann_text) = ann_span.slice_source(source) else {
                 continue;
             };
             let ann_name = ann_text.trim();
 
             // Extract RHS text and check if it's a constructor call `ClassName()`.
-            let Some(rhs_text) = source.get(rhs_span.start as usize..rhs_span.end as usize) else {
+            let Some(rhs_text) = rhs_span.slice_source(source) else {
                 continue;
             };
             let rhs_trimmed = rhs_text.trim();

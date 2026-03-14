@@ -75,9 +75,7 @@ fn check_vars(
             // name, use the parameter's declared type instead.
             if matches!(inferred_type, InferredType::Unknown) {
                 if let Some(rhs_span) = var.rhs_span {
-                    if let Some(rhs_text) =
-                        source.get(rhs_span.start as usize..rhs_span.end as usize)
-                    {
+                    if let Some(rhs_text) = rhs_span.slice_source(source) {
                         let rhs_name = rhs_text.trim();
                         if let Some(param_type) = param_types.get(rhs_name) {
                             inferred_type = param_type.clone();
@@ -127,7 +125,7 @@ fn infer_with_literal_value(
     let Some(rhs_span) = var.rhs_span else {
         return base;
     };
-    let rhs_text = match source.get(rhs_span.start as usize..rhs_span.end as usize) {
+    let rhs_text = match rhs_span.slice_source(source) {
         Some(text) => text.trim(),
         None => return base,
     };
@@ -174,7 +172,7 @@ fn parse_str_literal(text: &str) -> Option<InferredType> {
     if (text.starts_with('"') && text.ends_with('"'))
         || (text.starts_with('\'') && text.ends_with('\''))
     {
-        let content = &text[1..text.len() - 1];
+        let content = text.get(1..text.len().saturating_sub(1))?;
         return Some(InferredType::Literal(LiteralValue::Str(content.to_owned())));
     }
     None
@@ -202,7 +200,7 @@ fn parse_bytes_literal(text: &str) -> Option<InferredType> {
     if (text.starts_with("b\"") || text.starts_with("b'"))
         && (text.ends_with('"') || text.ends_with('\''))
     {
-        let content = &text[2..text.len() - 1];
+        let content = text.get(2..text.len().saturating_sub(1))?;
         return Some(InferredType::Literal(LiteralValue::Bytes(
             content.as_bytes().to_vec(),
         )));
@@ -243,7 +241,7 @@ fn build_param_type_map(
         let Some(ann_span) = param.annotation_span else {
             continue;
         };
-        let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+        let Some(ann_text) = ann_span.slice_source(source) else {
             continue;
         };
         let inferred = InferredType::from_annotation(ann_text.trim());
@@ -285,9 +283,10 @@ fn make_diagnostic(
 /// such pattern is found.
 fn extract_annotation(source: &str, name_span: Span) -> Option<&str> {
     // Find the byte offset of the start of the line containing the name.
-    let start = name_span.start as usize;
-    let line_start = source[..start].rfind('\n').map_or(0, |pos| pos + 1);
-    let line_end = source[start..]
+    let start = usize::try_from(name_span.start).ok()?;
+    let line_start = source.get(..start)?.rfind('\n').map_or(0, |pos| pos + 1);
+    let line_end = source
+        .get(start..)?
         .find('\n')
         .map_or(source.len(), |pos| start + pos);
 
@@ -297,11 +296,12 @@ fn extract_annotation(source: &str, name_span: Span) -> Option<&str> {
     let name_offset = start.checked_sub(line_start)?;
 
     // Find `: ` after the name position on this line.
-    let colon_pos = line[name_offset..].find(": ")? + name_offset;
+    let colon_pos = line.get(name_offset..)?.find(": ")? + name_offset;
     let after_colon = colon_pos + 2; // skip ': '
 
     // Find `=` that ends the annotation (must be after the colon).
-    let annotation_end = line[after_colon..]
+    let annotation_end = line
+        .get(after_colon..)?
         .find('=')
         .map_or(line.len(), |p| after_colon + p);
 
@@ -332,7 +332,7 @@ fn check_tuple_reassignments(module: &ResolvedModule, diagnostics: &mut Vec<Diag
         let Some(ann_span) = var.annotation_span else {
             continue;
         };
-        let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+        let Some(ann_text) = ann_span.slice_source(source) else {
             continue;
         };
         let ann_trimmed = ann_text.trim();
@@ -356,7 +356,7 @@ fn check_tuple_reassignments(module: &ResolvedModule, diagnostics: &mut Vec<Diag
         let Some(rhs_span) = var.rhs_span else {
             continue;
         };
-        let Some(rhs_text) = source.get(rhs_span.start as usize..rhs_span.end as usize) else {
+        let Some(rhs_text) = rhs_span.slice_source(source) else {
             continue;
         };
         let rhs_trimmed = rhs_text.trim();
@@ -393,8 +393,10 @@ fn is_tuple_annotation(ann: &str) -> bool {
         return false;
     }
     // Skip annotations with starred components (TypeVarTuple unpacks)
-    let inner = &ann["tuple[".len()..ann.len() - 1];
-    !inner.contains('*')
+    match ann.get("tuple[".len()..ann.len().saturating_sub(1)) {
+        Some(inner) => !inner.contains('*'),
+        None => false,
+    }
 }
 
 /// Returns `true` if the source text looks like a tuple literal `(...)`.
@@ -426,7 +428,9 @@ fn check_tuple_literal_mismatch(rhs: &str, ann: &str) -> Option<String> {
 
     // Empty tuple: `tuple[()]`
     if inner_ann.trim() == "()" {
-        if !(rhs_elems.is_empty() || rhs_elems.len() == 1 && rhs_elems[0].trim().is_empty()) {
+        if !(rhs_elems.is_empty()
+            || rhs_elems.len() == 1 && rhs_elems.first().is_some_and(|elem| elem.trim().is_empty()))
+        {
             return Some(format!(
                 "a tuple with {} element(s) (expected empty tuple)",
                 rhs_elems.len()
@@ -472,13 +476,15 @@ fn split_tuple_literal_elems(inner: &str) -> Vec<&str> {
             '(' | '[' | '{' => depth = depth.saturating_add(1),
             ')' | ']' | '}' => depth = depth.saturating_sub(1),
             ',' if depth == 0 => {
-                parts.push(inner[start..idx].trim());
+                if let Some(part) = inner.get(start..idx) {
+                    parts.push(part.trim());
+                }
                 start = idx + 1;
             }
             _ => {}
         }
     }
-    let remainder = inner[start..].trim();
+    let remainder = inner.get(start..).unwrap_or_default().trim();
     if !remainder.is_empty() {
         parts.push(remainder);
     }
@@ -495,16 +501,18 @@ fn split_type_list(inner: &str) -> Vec<&str> {
             '[' | '(' => depth = depth.saturating_add(1),
             ']' | ')' => depth = depth.saturating_sub(1),
             ',' if depth == 0 => {
-                let part = inner[start..idx].trim();
-                if !part.is_empty() {
-                    parts.push(part);
+                if let Some(part) = inner.get(start..idx) {
+                    let part = part.trim();
+                    if !part.is_empty() {
+                        parts.push(part);
+                    }
                 }
                 start = idx + 1;
             }
             _ => {}
         }
     }
-    let remainder = inner[start..].trim();
+    let remainder = inner.get(start..).unwrap_or_default().trim();
     if !remainder.is_empty() {
         parts.push(remainder);
     }
@@ -591,10 +599,7 @@ fn check_dataclass_attr_assignments(module: &ResolvedModule, diagnostics: &mut V
         let mut fields = HashMap::new();
         for attr in &cls.attributes {
             if let Some(ann_span) = attr.annotation_span {
-                if let Some(ann_text) = module
-                    .source
-                    .get(ann_span.start as usize..ann_span.end as usize)
-                {
+                if let Some(ann_text) = ann_span.slice_source(&module.source) {
                     let _ = fields.insert(attr.name.as_str(), ann_text.trim());
                 }
             }
@@ -613,7 +618,7 @@ fn check_dataclass_attr_assignments(module: &ResolvedModule, diagnostics: &mut V
         .iter()
         .filter_map(|var| {
             let rhs_span = var.rhs_span?;
-            let rhs_text = source.get(rhs_span.start as usize..rhs_span.end as usize)?;
+            let rhs_text = rhs_span.slice_source(source)?;
             let callee = rhs_text.split(['(', '[']).next()?.trim();
             let callee = callee.rsplit('.').next().unwrap_or(callee);
             if class_field_types.contains_key(callee) {
@@ -671,7 +676,7 @@ fn check_dataclass_attr_assignments(module: &ResolvedModule, diagnostics: &mut V
 /// Given the target span of `obj.attr` in `obj.attr = value`, finds the `= value`
 /// portion and determines the literal kind.
 fn extract_rhs_kind_from_assign(source: &str, target_span: Span) -> Option<RhsKind> {
-    let target_end = target_span.end as usize;
+    let target_end = target_span.end_usize();
     let line_end = source[target_end..]
         .find('\n')
         .map_or(source.len(), |pos| target_end + pos);

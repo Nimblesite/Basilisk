@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{FunctionInfo, ResolvedModule};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -81,10 +82,7 @@ impl Rule for TypeVarBoundCallViolation {
                 let Some(ann_span) = param.annotation_span else {
                     continue;
                 };
-                let Some(ann_text) = module
-                    .source
-                    .get(ann_span.start as usize..ann_span.end as usize)
-                else {
+                let Some(ann_text) = module.ann_span.slice_source(source) else {
                     continue;
                 };
                 let ann_trimmed = ann_text.trim();
@@ -95,10 +93,7 @@ impl Rule for TypeVarBoundCallViolation {
                 };
 
                 // Get the argument source text to identify what's being passed
-                let Some(arg_text) = module
-                    .source
-                    .get(arg_span.start as usize..arg_span.end as usize)
-                else {
+                let Some(arg_text) = module.arg_span.slice_source(source) else {
                     continue;
                 };
                 let arg_name = arg_text.trim();
@@ -151,9 +146,7 @@ fn find_arg_type<'a>(
         for param in &func.parameters {
             if param.name == name {
                 let ann_span = param.annotation_span?;
-                let ann_text = module
-                    .source
-                    .get(ann_span.start as usize..ann_span.end as usize)?;
+                let ann_text = module.ann_span.slice_source(source)?;
                 return Some(ann_text.trim());
             }
         }
@@ -163,9 +156,7 @@ fn find_arg_type<'a>(
     for var in &module.module_vars {
         if var.name == name && var.has_annotation {
             let ann_span = var.annotation_span?;
-            let ann_text = module
-                .source
-                .get(ann_span.start as usize..ann_span.end as usize)?;
+            let ann_text = module.ann_span.slice_source(source)?;
             return Some(ann_text.trim());
         }
     }

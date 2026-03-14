@@ -32,6 +32,7 @@ use ruff_text_size::Ranged;
 
 use super::Rule;
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0119",
@@ -60,8 +61,8 @@ fn extract_class_name(expr: &Expr) -> Option<&str> {
 
 /// Extract the source text for a span.
 fn span_text(source: &str, span: Span) -> &str {
-    let start = span.start as usize;
-    let end = span.end as usize;
+    let start = span.start_usize();
+    let end = span.end_usize();
     if end <= source.len() && start <= end {
         &source[start..end]
     } else {

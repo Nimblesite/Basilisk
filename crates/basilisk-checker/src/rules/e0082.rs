@@ -162,9 +162,7 @@ fn check_stmt_for_tvt_mismatch(
         .iter()
         .filter_map(|p| {
             let ann_span = p.annotation_span?;
-            source
-                .get(ann_span.start as usize..ann_span.end as usize)
-                .map(|s| s.trim().to_owned())
+            ann_span.slice_source(source).map(|s| s.trim().to_owned())
         })
         .collect();
 
@@ -238,7 +236,7 @@ fn find_linked_tvt_params(func: &FunctionInfo, source: &str) -> Option<(String, 
         let Some(ann_span) = param.annotation_span else {
             continue;
         };
-        let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+        let Some(ann_text) = ann_span.slice_source(source) else {
             continue;
         };
         let ann_text = ann_text.trim();

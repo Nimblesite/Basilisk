@@ -301,7 +301,11 @@ pub(super) fn bound_refs_outer_typeparam(
 /// Multi-letter names could be concrete types (e.g. `str`, `int`, `ForwardReference`).
 pub(super) fn is_typevar_like_name(name: &str) -> bool {
     let bytes = name.as_bytes();
-    bytes.len() == 1 && bytes[0].is_ascii_uppercase()
+    bytes.len() == 1
+        && bytes
+            .first()
+            .copied()
+            .is_some_and(|b| b.is_ascii_uppercase())
 }
 
 /// Returns `false` if this expression is not a valid constraint tuple element.

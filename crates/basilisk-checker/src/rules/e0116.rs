@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{ClassInfo, ResolvedModule};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -100,7 +101,7 @@ fn check_default_ordering(
 
         // Skip ClassVar fields - they are not NamedTuple fields.
         if let Some(ann_span) = attr.annotation_span {
-            if let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) {
+            if let Some(ann_text) = ann_span.slice_source(source) {
                 if ann_text.trim().starts_with("ClassVar") {
                     continue;
                 }

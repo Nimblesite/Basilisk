@@ -77,9 +77,11 @@ fn check_self_attr_assignments(module: &ResolvedModule, diagnostics: &mut Vec<Di
         };
 
         // Extract the class body source text.
-        let class_start = cls.def_span.start as usize;
-        let class_end = cls.def_span.end as usize;
-        let Some(class_source) = source.get(class_start..class_end) else {
+        let Some(class_source) = cls.def_span.slice_source(source) else {
+            continue;
+        };
+        let class_start = usize::try_from(cls.def_span.start).ok();
+        let Some(class_start) = class_start else {
             continue;
         };
 
@@ -90,7 +92,6 @@ fn check_self_attr_assignments(module: &ResolvedModule, diagnostics: &mut Vec<Di
 
 /// Scan class source text for `self.ATTR = value` patterns where ATTR is not
 /// in the declared slots.
-#[allow(clippy::cast_possible_truncation)]
 fn find_undeclared_self_assignments(
     class_source: &str,
     class_offset: usize,
@@ -116,14 +117,19 @@ fn find_undeclared_self_assignments(
         let attr_end = after_self
             .find(|c: char| !c.is_alphanumeric() && c != '_')
             .unwrap_or(after_self.len());
-        let attr_name = &after_self[..attr_end];
+        let Some(attr_name) = after_self.get(..attr_end) else {
+            continue;
+        };
 
         if attr_name.is_empty() {
             continue;
         }
 
         // Check this is an assignment (not just an access).
-        let rest = after_self[attr_end..].trim_start();
+        let Some(rest) = after_self.get(attr_end..) else {
+            continue;
+        };
+        let rest = rest.trim_start();
         if !rest.starts_with('=') || rest.starts_with("==") {
             continue;
         }
@@ -141,8 +147,8 @@ fn find_undeclared_self_assignments(
                     cls.name
                 ),
                 span: Span {
-                    start: byte_offset as u32,
-                    end: span_end as u32,
+                    start: u32::try_from(byte_offset).unwrap_or(0),
+                    end: u32::try_from(span_end).unwrap_or(0),
                 },
                 path: path.to_owned(),
                 help: Some(format!(
@@ -229,7 +235,6 @@ fn check_slots_access_on_non_slots_class(
 
 /// Detect `ClassName(...)._slots__` patterns in source text -- instance
 /// construction followed by `.__slots__` attribute access.
-#[allow(clippy::cast_possible_truncation)]
 fn check_instance_slots_access(
     module: &ResolvedModule,
     non_slots_dataclasses: &HashSet<&str>,
@@ -261,17 +266,30 @@ fn check_instance_slots_access(
             };
 
             // Find closing paren after the call.
-            let after_open = &trimmed[call_pos + pattern.len()..];
+            let Some(after_open) = trimmed.get(call_pos + pattern.len()..) else {
+                continue;
+            };
             let Some(close_paren) = find_matching_paren(after_open) else {
                 continue;
             };
 
-            let after_close = &after_open[close_paren + 1..];
+            let Some(after_close) = after_open.get(close_paren + 1..) else {
+                continue;
+            };
             if after_close.starts_with(".__slots__") {
                 // Compute byte offset for the span.
+                let Some(&line_start) = line_starts.get(line_idx) else {
+                    continue;
+                };
                 let col_offset = line.len() - trimmed.len();
-                let byte_start = line_starts[line_idx] + col_offset + call_pos;
+                let byte_start = line_start + col_offset + call_pos;
                 let byte_end = byte_start + pattern.len() + close_paren + 1 + ".__slots__".len();
+                let Some(span_start) = u32::try_from(byte_start).ok() else {
+                    continue;
+                };
+                let Some(span_end) = u32::try_from(byte_end).ok() else {
+                    continue;
+                };
 
                 diagnostics.push(Diagnostic {
                     code: CODE.clone(),
@@ -281,8 +299,8 @@ fn check_instance_slots_access(
                          class does not define `__slots__`"
                     ),
                     span: Span {
-                        start: byte_start as u32,
-                        end: byte_end as u32,
+                        start: span_start,
+                        end: span_end,
                     },
                     path: path.clone(),
                     help: Some(format!(

@@ -169,11 +169,11 @@ impl Rule for Pep695TraditionalTypeVarMix {
                 .iter()
                 .filter_map(|p| {
                     p.annotation_span
-                        .and_then(|s| module.source.get(s.start as usize..s.end as usize))
+                        .and_then(|s| module.s.slice_source(source))
                 })
                 .chain(
                     func.return_annotation_span
-                        .and_then(|s| module.source.get(s.start as usize..s.end as usize)),
+                        .and_then(|s| module.s.slice_source(source)),
                 )
                 .collect();
 

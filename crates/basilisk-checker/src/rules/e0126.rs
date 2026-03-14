@@ -27,6 +27,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -60,7 +61,7 @@ fn param_annotations<'a>(func: &'a FunctionInfo, source: &'a str) -> HashMap<&'a
         .chain(func.kwarg.iter())
     {
         if let Some(ann_span) = param.annotation_span {
-            if let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) {
+            if let Some(ann_text) = ann_span.slice_source(source) {
                 let _ = map.insert(param.name.as_str(), ann_text.trim());
             }
         }
@@ -74,16 +75,17 @@ fn param_annotations<'a>(func: &'a FunctionInfo, source: &'a str) -> HashMap<&'a
 /// indentation, or end of file).
 fn function_body_range(func: &FunctionInfo, source: &str) -> Option<(usize, usize)> {
     // Start from the def keyword span.
-    let def_start = func.def_span.start as usize;
+    let def_start = usize::try_from(func.def_span.start).ok()?;
 
     // Find the colon that ends the function signature.
-    let colon_pos = source[def_start..]
+    let after_def = source.get(def_start..)?;
+    let colon_pos = after_def
         .find(":\n")
-        .or_else(|| source[def_start..].find("):\n").map(|p| p + 1))?;
+        .or_else(|| after_def.find("):\n").map(|p| p + 1))?;
     let body_start = def_start + colon_pos + 1; // after ':'
 
     // Determine the indentation of the `def` line.
-    let line_start = source[..def_start].rfind('\n').map_or(0, |p| p + 1);
+    let line_start = source.get(..def_start)?.rfind('\n').map_or(0, |p| p + 1);
     let def_indent = def_start - line_start;
 
     // Scan forward to find the end: a line at the same or lesser indentation
@@ -91,7 +93,8 @@ fn function_body_range(func: &FunctionInfo, source: &str) -> Option<(usize, usiz
     let mut body_end = source.len();
     let mut pos = body_start;
     let mut first_line = true;
-    for line in source[body_start..].lines() {
+    let body_source = source.get(body_start..)?;
+    for line in body_source.lines() {
         if first_line {
             first_line = false;
             pos += line.len() + 1; // +1 for '\n'
@@ -196,6 +199,7 @@ fn parse_single_annotated_assign<'a>(
     }
 
     // Calculate source offset for the name.
+    #[allow(clippy::as_conversions)]
     let line_offset_in_body = raw_line.as_ptr() as usize - body.as_ptr() as usize;
     let name_start_in_line = raw_line.len() - raw_line.trim_start().len();
     let name_offset = body_offset + line_offset_in_body + name_start_in_line;

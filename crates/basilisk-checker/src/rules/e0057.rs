@@ -14,6 +14,7 @@ use std::collections::HashSet;
 use basilisk_resolver::{ResolvedModule, RhsKind, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -37,7 +38,7 @@ fn make_diag(name: &str, span: Span, path: &str) -> Diagnostic {
 }
 
 fn span_text(source: &str, span: Span) -> Option<&str> {
-    source.get(span.start as usize..span.end as usize)
+    slice_span(source, span)
 }
 
 fn is_invalid_rhs(rhs: &str) -> bool {

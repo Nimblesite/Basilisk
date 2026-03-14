@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -52,7 +53,7 @@ impl Rule for InvariantGenericArgMismatch {
             for param in &func.parameters {
                 let ann_text = param
                     .annotation_span
-                    .and_then(|span| source.get(span.start as usize..span.end as usize));
+                    .and_then(|span| span.slice_source(source));
                 if let Some(ann) = ann_text {
                     params.push((param.name.as_str(), ann.trim()));
                 }
@@ -90,7 +91,7 @@ fn build_class_base_map(module: &ResolvedModule) -> HashMap<&str, (&str, Vec<&st
             if !is_builtin_generic(&entry.base_name) {
                 continue;
             }
-            let span_text = source.get(entry.span.start as usize..entry.span.end as usize);
+            let span_text = entry.span.slice_source(source);
             if let Some(text) = span_text {
                 if let Some(type_args) = extract_subscript_args(text) {
                     let _ = map.insert(cls.name.as_str(), (entry.base_name.as_str(), type_args));

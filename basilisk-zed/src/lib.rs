@@ -1,3 +1,9 @@
+//! Basilisk extension for the Zed editor.
+#![expect(
+    missing_docs,
+    reason = "zed::register_extension! generates undocumented items"
+)]
+
 use zed_extension_api::{self as zed, serde_json, Result};
 
 use basilisk_common::{config_keys, slash_commands};
@@ -99,7 +105,7 @@ impl zed::Extension for BasiliskExtension {
         Ok(zed::Command {
             command: binary_path,
             args: vec!["lsp".into()],
-            env: Default::default(),
+            env: Vec::new(),
         })
     }
 

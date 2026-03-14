@@ -16,7 +16,6 @@ pub(super) fn collect_unhashable_keys_from_stmts(stmts: &[Stmt]) -> Vec<Unhashab
     out
 }
 
-#[allow(clippy::too_many_lines)]
 pub(super) fn collect_unhashable_keys_from_stmt(stmt: &Stmt, out: &mut Vec<UnhashableKeyRef>) {
     match stmt {
         Stmt::Assign(node) => collect_unhashable_keys_from_expr(&node.value, out),

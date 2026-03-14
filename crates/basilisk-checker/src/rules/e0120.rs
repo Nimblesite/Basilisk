@@ -28,6 +28,7 @@ use basilisk_resolver::{FunctionInfo, ResolvedModule, RhsKind};
 use super::Rule;
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 use crate::inference::infer_rhs;
+use crate::span_util::slice_span;
 use crate::types::InferredType;
 
 const CODE: ErrorCode = ErrorCode {
@@ -131,10 +132,7 @@ fn check_yield_types(func: &FunctionInfo, module: &ResolvedModule, out: &mut Vec
     let Some(ann_span) = func.return_annotation_span else {
         return;
     };
-    let Some(ann_text) = module
-        .source
-        .get(ann_span.start as usize..ann_span.end as usize)
-    else {
+    let Some(ann_text) = module.ann_span.slice_source(source) else {
         return;
     };
 
@@ -217,10 +215,7 @@ fn check_return_in_generator(
     let Some(ann_span) = func.return_annotation_span else {
         return;
     };
-    let Some(ann_text) = module
-        .source
-        .get(ann_span.start as usize..ann_span.end as usize)
-    else {
+    let Some(ann_text) = module.ann_span.slice_source(source) else {
         return;
     };
 
@@ -401,10 +396,7 @@ fn check_yield_from_call(
     let Some(callee_ann_span) = callee_func.return_annotation_span else {
         return;
     };
-    let Some(callee_ann) = module
-        .source
-        .get(callee_ann_span.start as usize..callee_ann_span.end as usize)
-    else {
+    let Some(callee_ann) = module.callee_ann_span.slice_source(source) else {
         return;
     };
 

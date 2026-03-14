@@ -247,7 +247,10 @@ impl LspStdioFixture {
     ///
     /// # Errors
     /// Returns an error if writing the request fails.
-    #[allow(clippy::needless_pass_by_value)]
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "preserving standalone-function call style"
+    )]
     pub fn send_request(
         &mut self,
         id: u64,

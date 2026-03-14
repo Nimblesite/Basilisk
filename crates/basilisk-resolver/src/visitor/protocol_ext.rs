@@ -102,7 +102,10 @@ pub(super) fn is_function_body_stub(body: &[Stmt]) -> bool {
     if body.len() != 1 {
         return false;
     }
-    match &body[0] {
+    let Some(first) = body.first() else {
+        return false;
+    };
+    match first {
         Stmt::Pass(_) => true,
         Stmt::Expr(expr_stmt) => matches!(&*expr_stmt.value, Expr::EllipsisLiteral(_)),
         _ => false,

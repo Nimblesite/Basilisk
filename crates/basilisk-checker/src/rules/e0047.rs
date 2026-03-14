@@ -36,6 +36,7 @@ use std::collections::HashSet;
 use basilisk_resolver::{ImportKind, ResolvedModule, RhsKind, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -45,8 +46,7 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 fn span_text(source: &str, span: Option<Span>) -> Option<&str> {
-    let span = span?;
-    source.get(span.start as usize..span.end as usize)
+    slice_span(source, span?)
 }
 
 fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {

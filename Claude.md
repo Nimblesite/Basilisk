@@ -7,7 +7,7 @@ Target: 100% PEP conformance. Canonical version: **Python 3.12**. Read the PEP c
 The project is a Python type checker and comprehensive LSP (test explorer, debugging, profiling, autofixes) built in Rust.
 
 **Overall aim: FIX THE PYTHON DEVELOPER EXPERIENCE.**
-One IDE extension = complete Python development experience. Seamless, fast, complete.
+One IDE extension = COMPLETE PYTHON DEVELOPMENT EXPERIENCE. SEAMLESS, FAST, COMPLETE.
 
 # Too Many Cooks - MANDATORY
 
@@ -33,6 +33,9 @@ OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK MESSAGES AND COMPLY
 
 # Rules
 
+- 
+   allow(clippy = ⛔️ ILLEGAL. If you have to do this, you better add a damn good reason!!! 
+   **aggressively remove** allow from the code!!!
 - Zero duplication. DRY AF!!! Check for existing code before writing new code
 - Aggressively move code that can be shared out to shared crates/modules/packages
 - Ignore compiler code (except clippy fixes)

@@ -6,7 +6,7 @@ use ruff_text_size::Ranged;
 use crate::scope::{FloatParamIntAttrAccess, FunctionInfo, Span};
 
 use super::class_info_ext::expr_simple_name;
-use super::core::text_range_to_span;
+use super::core::{source_slice_range, source_slice_span, text_range_to_span};
 use super::enum_checks::INT_ONLY_FLOAT_ATTRS;
 use super::protocol_ext::{base_type_name, ASYNC_GENERATOR_TYPES, SYNC_GENERATOR_TYPES};
 
@@ -40,10 +40,7 @@ pub(super) fn collect_float_accesses_in_function(
         .filter(|p| {
             p.parameter.annotation.as_deref().is_some_and(|ann| {
                 let range = ann.range();
-                source
-                    .get(range.start().to_u32() as usize..range.end().to_u32() as usize)
-                    .map(str::trim)
-                    == Some("float")
+                source_slice_range(source, range).map(str::trim) == Some("float")
             })
         })
         .map(|p| p.parameter.name.as_str())
@@ -253,7 +250,6 @@ pub(super) fn collect_order_comparisons_from_expr(
 /// When a function has a parameter typed as a `Protocol` with a `Self`-returning
 /// method, and that function is called with an argument whose class's corresponding
 /// method does not return `Self` or the class itself, this is a protocol violation.
-#[allow(dead_code)]
 pub(super) fn collect_generator_violations(
     functions: &[FunctionInfo],
     source: &str,
@@ -266,7 +262,7 @@ pub(super) fn collect_generator_violations(
         let Some(ann_span) = func.return_annotation_span else {
             continue;
         };
-        let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+        let Some(ann_text) = source_slice_span(source, ann_span) else {
             continue;
         };
         let base = base_type_name(ann_text);

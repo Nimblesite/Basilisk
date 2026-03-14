@@ -7,7 +7,7 @@ use crate::scope::ClassInfo;
 
 use super::annotations::ann_text_is_final;
 use super::assigns::collect_unconditional_self_assigns;
-use super::core::text_range_to_span;
+use super::core::{source_slice_range, source_slice_span, text_range_to_span};
 
 pub(super) fn collect_final_violations(
     stmts: &[Stmt],
@@ -25,8 +25,7 @@ pub(super) fn collect_final_violations(
                 return None;
             };
             let range = ann.annotation.range();
-            let ann_text =
-                source.get(range.start().to_u32() as usize..range.end().to_u32() as usize)?;
+            let ann_text = source_slice_range(source, range)?;
             ann_text_is_final(ann_text).then(|| n.id.as_str())
         })
         .collect();
@@ -41,7 +40,7 @@ pub(super) fn collect_final_violations(
                 .filter(|a| {
                     a.has_annotation
                         && a.annotation_span
-                            .and_then(|sp| source.get(sp.start as usize..sp.end as usize))
+                            .and_then(|sp| source_slice_span(source, sp))
                             .is_some_and(ann_text_is_final)
                 })
                 .map(|a| a.name.as_str())
@@ -153,9 +152,7 @@ pub(super) fn collect_class_final_violations(
         };
         let attr_name = n.id.as_str();
         let range = ann.annotation.range();
-        let Some(ann_text) =
-            source.get(range.start().to_u32() as usize..range.end().to_u32() as usize)
-        else {
+        let Some(ann_text) = source_slice_range(source, range) else {
             continue;
         };
         if ann_text_is_final(ann_text) {
@@ -233,7 +230,7 @@ pub(super) fn collect_subclass_override_final(
     for body_stmt in &cls_def.body {
         let attr_name = match body_stmt {
             Stmt::Assign(assign) if assign.targets.len() == 1 => {
-                if let Expr::Name(n) = &assign.targets[0] {
+                if let Some(Expr::Name(n)) = assign.targets.first() {
                     n.id.as_str()
                 } else {
                     continue;
@@ -283,12 +280,7 @@ pub(super) fn collect_instance_final_violations(
             // self.x: Final = ... outside __init__
             if !is_init {
                 if let Expr::Attribute(attr) = ann.target.as_ref() {
-                    let Some(ann_span) = Some(ann.annotation.range()) else {
-                        return;
-                    };
-                    let Some(ann_text) = source
-                        .get(ann_span.start().to_u32() as usize..ann_span.end().to_u32() as usize)
-                    else {
+                    let Some(ann_text) = source_slice_range(source, ann.annotation.range()) else {
                         return;
                     };
                     if ann_text_is_final(ann_text) {
@@ -400,7 +392,6 @@ pub(super) fn collect_func_final_violations(
 }
 
 /// Process a single statement inside a function for Final violations.
-#[allow(clippy::too_many_arguments)]
 pub(super) fn collect_func_stmt_final_violations(
     stmt: &Stmt,
     global_finals: &std::collections::HashSet<&str>,
@@ -413,9 +404,7 @@ pub(super) fn collect_func_stmt_final_violations(
             // Register x: Final = ... as a local Final.
             if let Expr::Name(n) = ann.target.as_ref() {
                 let range = ann.annotation.range();
-                if let Some(ann_text) =
-                    source.get(range.start().to_u32() as usize..range.end().to_u32() as usize)
-                {
+                if let Some(ann_text) = source_slice_range(source, range) {
                     if ann_text_is_final(ann_text) {
                         let _ = local_finals.insert(n.id.to_string());
                     }

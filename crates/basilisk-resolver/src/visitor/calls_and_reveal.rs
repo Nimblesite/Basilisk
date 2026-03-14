@@ -6,7 +6,7 @@ use ruff_text_size::Ranged;
 use crate::scope::{AssertTypeCallInfo, CallSite, RevealTypeCallInfo, RhsKind, Span, TypeArg};
 
 use super::class_info_ext::expr_simple_name;
-use super::core::{classify_rhs, text_range_to_span, types_match};
+use super::core::{classify_rhs, source_slice_range, text_range_to_span, types_match};
 use super::function_info::build_param_scope_owned;
 use super::type_alias::is_user_defined_type_alias;
 use super::typeddict::{normalize_type_str, resolve_actual_type};
@@ -374,8 +374,24 @@ pub(super) fn build_assert_type_call_info(
         };
     }
 
-    let first_arg = &call.arguments.args[0];
-    let second_arg = &call.arguments.args[1];
+    let Some(first_arg) = call.arguments.args.first() else {
+        return AssertTypeCallInfo {
+            arg_count,
+            span,
+            actual_type: None,
+            expected_type: None,
+            type_mismatch: false,
+        };
+    };
+    let Some(second_arg) = call.arguments.args.get(1) else {
+        return AssertTypeCallInfo {
+            arg_count,
+            span,
+            actual_type: None,
+            expected_type: None,
+            type_mismatch: false,
+        };
+    };
 
     // Determine the actual type of the first argument.
     let actual_type = resolve_actual_type(first_arg, params, source);
@@ -409,10 +425,7 @@ pub(super) fn build_assert_type_call_info(
 /// - If it is a literal, returns the corresponding primitive type name.
 /// - Otherwise returns `None`.
 pub(super) fn extract_type_text(expr: &Expr, source: &str) -> Option<String> {
-    let range = expr.range();
-    source
-        .get(range.start().to_u32() as usize..range.end().to_u32() as usize)
-        .map(normalize_type_str)
+    source_slice_range(source, expr.range()).map(normalize_type_str)
 }
 
 /// Normalize a type annotation string for comparison.

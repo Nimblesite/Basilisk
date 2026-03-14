@@ -127,10 +127,14 @@ fn line_to_byte_offset(source: &str, target_line: usize) -> u32 {
 /// Build a span covering the trimmed content of the given 1-based line.
 #[allow(clippy::cast_possible_truncation)]
 fn span_for_line(source: &str, line_number: usize) -> Span {
-    let start = line_to_byte_offset(source, line_number) as usize;
-    let line_text = source[start..].lines().next().unwrap_or("");
+    let start = usize::from(line_to_byte_offset(source, line_number));
+    let line_text = source
+        .get(start..)
+        .and_then(|s| s.lines().next())
+        .unwrap_or("");
     let trimmed_start = start + (line_text.len() - line_text.trim_start().len());
     let trimmed_end = start + line_text.trim_end().len();
+    #[allow(clippy::cast_possible_truncation)]
     Span {
         start: trimmed_start as u32,
         end: trimmed_end as u32,

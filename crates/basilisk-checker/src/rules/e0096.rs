@@ -17,6 +17,7 @@
 use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -48,12 +49,10 @@ impl Rule for DataclassFieldDefaultFactoryMismatch {
                 let Some(rhs_span) = attr.rhs_span else {
                     continue;
                 };
-                let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize)
-                else {
+                let Some(ann_text) = slice_span(source, ann_span) else {
                     continue;
                 };
-                let Some(rhs_text) = source.get(rhs_span.start as usize..rhs_span.end as usize)
-                else {
+                let Some(rhs_text) = slice_span(source, rhs_span) else {
                     continue;
                 };
 

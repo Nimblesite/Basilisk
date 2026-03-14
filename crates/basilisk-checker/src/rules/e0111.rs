@@ -23,6 +23,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -133,7 +134,7 @@ fn check_class_scoped_typevars_in_self(
                 continue;
             };
 
-            let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+            let Some(ann_text) = ann_span.slice_source(source) else {
                 continue;
             };
 
@@ -542,7 +543,7 @@ fn check_self_type_incompatibility(
         let has_self_annotation = init_func.parameters.iter().skip(1).any(|param| {
             param
                 .annotation_span
-                .and_then(|span| source.get(span.start as usize..span.end as usize))
+                .and_then(|span| span.slice_source(source))
                 .is_some_and(|ann_text| {
                     let resolved = resolve_string_annotation(ann_text.trim());
                     resolved.contains("Self")
@@ -672,7 +673,7 @@ fn check_init_method_args(
     // Check 3: Explicit self annotation mismatch.
     if let Some(self_param) = init_func.parameters.first() {
         if let Some(ann_span) = self_param.annotation_span {
-            if let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) {
+            if let Some(ann_text) = ann_span.slice_source(source) {
                 let resolved = resolve_string_annotation(ann_text.trim());
                 check_self_param_init_mismatch(
                     &resolved,
@@ -705,7 +706,7 @@ fn check_init_method_args(
         let Some(ann_span) = param.annotation_span else {
             continue;
         };
-        let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+        let Some(ann_text) = ann_span.slice_source(source) else {
             continue;
         };
 

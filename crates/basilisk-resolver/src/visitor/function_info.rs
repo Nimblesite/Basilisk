@@ -14,7 +14,7 @@ use super::assigns::{collect_all_assigns, collect_unconditional_assigns};
 use super::class_info_ext::{
     body_is_stub, decorator_name, decorator_name_and_span, extract_docstring,
 };
-use super::core::{classify_rhs, text_range_to_span};
+use super::core::{classify_rhs, source_slice_range, text_range_to_span};
 use super::type_alias::type_param_name;
 use super::unhashable::collect_unhashable_keys_from_stmts;
 use super::yield_exprs::{collect_yield_exprs, stmt_contains_yield};
@@ -392,7 +392,6 @@ pub(super) fn parse_defaults_count(keywords: &[ruff_python_ast::Keyword]) -> usi
 /// Returns a map from variable name to the string value (e.g., `X: Final = "x"` yields
 /// `"X" -> "x"`).  Only `Final` / `Final[str]` annotations with string-literal RHS
 /// are included.
-#[allow(dead_code)]
 pub(super) fn collect_name_refs_from_expr(expr: &Expr, out: &mut Vec<String>) {
     match expr {
         Expr::Name(name) => out.push(name.id.to_string()),
@@ -493,8 +492,7 @@ pub(super) fn build_param_scope_owned(
             let name = p.parameter.name.to_string();
             let ann = p.parameter.annotation.as_deref()?;
             let range = ann.range();
-            let ann_text =
-                source.get(range.start().to_u32() as usize..range.end().to_u32() as usize)?;
+            let ann_text = source_slice_range(source, range)?;
             Some((name, ann_text.to_owned()))
         })
         .collect()

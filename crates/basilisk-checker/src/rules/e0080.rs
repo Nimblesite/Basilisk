@@ -91,7 +91,7 @@ fn build_func_param_bounds<'a>(
             let Some(ann_span) = param.annotation_span else {
                 continue;
             };
-            let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+            let Some(ann_text) = ann_span.slice_source(source) else {
                 continue;
             };
             let ann_text = ann_text.trim();
@@ -157,7 +157,7 @@ fn check_function_call(
         .enumerate()
         .filter_map(|(idx, param)| {
             let ann_span = param.annotation_span?;
-            let ann_text = source.get(ann_span.start as usize..ann_span.end as usize)?;
+            let ann_text = ann_span.slice_source(source)?;
             let ann_text = ann_text.trim();
             typevar_bounds
                 .get(ann_text)
@@ -211,7 +211,7 @@ fn check_function_call(
 
 /// Extract the bound text from a `TypeVar("Name", bound=X)` call in source.
 fn extract_bound_text(source: &str, span: basilisk_resolver::Span) -> Option<String> {
-    let call_text = source.get(span.start as usize..span.end as usize)?;
+    let call_text = span.slice_source(source)?;
     let bound_idx = call_text.find("bound=")?;
     let after_bound = &call_text[bound_idx + "bound=".len()..];
 

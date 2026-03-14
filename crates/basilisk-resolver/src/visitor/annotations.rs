@@ -170,11 +170,15 @@ pub(super) fn tuple_slice_has_invalid_ellipsis(slice: &Expr) -> bool {
                 return false; // No bare ellipsis — nothing to validate here
             }
             // Valid form: exactly 2 elements, first is NOT ellipsis, second IS ellipsis
-            if elts.len() == 2 && matches!(elts[1], Expr::EllipsisLiteral(_)) {
+            if elts.len() == 2
+                && elts
+                    .get(1)
+                    .is_some_and(|e| matches!(e, Expr::EllipsisLiteral(_)))
+            {
                 // `tuple[T, ...]` is valid only if T is not itself a starred expression.
                 // Both `tuple[*tuple[str], ...]` (non-variadic) and
                 // `tuple[*tuple[str, ...], ...]` (variadic) are invalid.
-                return matches!(elts[0], Expr::Starred(_));
+                return elts.first().is_some_and(|e| matches!(e, Expr::Starred(_)));
             }
             // Any other placement of bare `...` is invalid:
             // - More than one ellipsis
@@ -267,12 +271,7 @@ pub(super) fn collect_multi_unbounded_from_stmt(stmt: &Stmt, out: &mut Vec<Span>
 // assert_type type-aware collection
 // ---------------------------------------------------------------------------
 
-/// Collect all `assert_type(value, ExpectedType)` calls from the given statements,
-#[allow(dead_code)]
-/// using `params` as the in-scope parameter map (`name → annotation text`).
-///
-/// Recursively descends into function bodies (updating the param scope) and all
-/// other control-flow constructs (preserving the current scope).
+/// Strip `Annotated[T, ...]` wrapper, returning just `T`.
 pub(super) fn strip_annotated_wrapper(ann: &str) -> Option<&str> {
     let ann = ann.trim();
     if !ann.starts_with("Annotated[") {

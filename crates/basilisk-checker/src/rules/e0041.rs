@@ -176,7 +176,7 @@ fn annotation_is_classvar(source: &str, span: Option<Span>) -> bool {
     let Some(span) = span else {
         return false;
     };
-    let Some(text) = source.get(span.start as usize..span.end as usize) else {
+    let Some(text) = span.slice_source(source) else {
         return false;
     };
     let t = text.trim();
@@ -268,7 +268,7 @@ fn check_dataclass_arg_types(
         let Some(ann_span) = field.annotation_span else {
             continue;
         };
-        let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+        let Some(ann_text) = ann_span.slice_source(source) else {
             continue;
         };
         if is_clearly_incompatible(arg_type, ann_text) {

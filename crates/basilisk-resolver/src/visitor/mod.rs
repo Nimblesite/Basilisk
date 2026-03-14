@@ -53,7 +53,17 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
     reclassify_generic_params(&mut classes, &typevar_calls);
 
     let collected = collect_analysis_results(module, &classes, &functions);
-    build_resolved_module(module, functions, classes, module_vars, imports, match_stmts, calls, typevar_calls, collected)
+    build_resolved_module(
+        module,
+        functions,
+        classes,
+        module_vars,
+        imports,
+        match_stmts,
+        calls,
+        typevar_calls,
+        collected,
+    )
 }
 
 /// Reclassify generic params that are not actual `TypeVar`s.
@@ -117,12 +127,15 @@ fn collect_analysis_results(
         .collect();
     let mut isinstance_typeddict_spans =
         typeddict_ext::collect_isinstance_typeddict_violations(stmts, &typeddict_class_names);
-    isinstance_typeddict_spans
-        .extend(typevar::collect_typevar_bound_typeddict_violations(stmts));
+    isinstance_typeddict_spans.extend(typevar::collect_typevar_bound_typeddict_violations(stmts));
 
     AnalysisResults {
         reveal_type_calls: calls_and_reveal::collect_reveal_type_calls(stmts),
-        assert_type_calls: calls_and_reveal::collect_assert_type_calls_from_stmts(stmts, &[], source),
+        assert_type_calls: calls_and_reveal::collect_assert_type_calls_from_stmts(
+            stmts,
+            &[],
+            source,
+        ),
         typeddict_calls: typeddict::collect_typeddict_calls(stmts),
         newtype_calls: type_alias::collect_newtype_calls(stmts),
         namedtuple_defs: type_alias::collect_namedtuple_defs(stmts, source),
@@ -130,11 +143,19 @@ fn collect_analysis_results(
         module_bare_assignments: assigns::collect_module_bare_assignments(stmts),
         module_attr_assignments: assigns::collect_module_attr_assignments(stmts),
         final_issues: final_readonly_ext::collect_final_violations(stmts, classes, source),
-        float_param_int_attr_accesses: module_level::collect_float_param_int_attr_accesses(stmts, source),
-        literal_string_enum_mismatches: enum_checks::collect_literal_string_enum_mismatches(stmts, source),
+        float_param_int_attr_accesses: module_level::collect_float_param_int_attr_accesses(
+            stmts, source,
+        ),
+        literal_string_enum_mismatches: enum_checks::collect_literal_string_enum_mismatches(
+            stmts, source,
+        ),
         readonly_issues: final_readonly::collect_readonly_violations(stmts, classes),
-        protocol_self_issues: protocol::collect_protocol_self_violations(stmts, classes, functions, source),
-        protocol_instantiation_issues: protocol::collect_protocol_instantiation_violations(stmts, classes),
+        protocol_self_issues: protocol::collect_protocol_self_violations(
+            stmts, classes, functions, source,
+        ),
+        protocol_instantiation_issues: protocol::collect_protocol_instantiation_violations(
+            stmts, classes,
+        ),
         isinstance_typeddict_spans,
         typeddict_key_issues: typeddict::collect_typeddict_key_violations(stmts, classes, source),
         generic_subscript_sites: generics::collect_generic_subscript_sites(stmts),
@@ -145,7 +166,10 @@ fn collect_analysis_results(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "module building requires many context params"
+)]
 fn build_resolved_module(
     module: &ParsedModule,
     functions: Vec<crate::scope::FunctionInfo>,
@@ -185,10 +209,15 @@ fn build_resolved_module(
         namedtuple_defs: results.namedtuple_defs,
         float_param_int_attr_accesses: results.float_param_int_attr_accesses,
         literal_string_enum_mismatches: results.literal_string_enum_mismatches,
-        enum_value_type_violations: enum_checks::collect_enum_value_type_violations(stmts, &module.source),
+        enum_value_type_violations: enum_checks::collect_enum_value_type_violations(
+            stmts,
+            &module.source,
+        ),
         local_classvar_violations: Vec::new(),
         pep695_bound_violations: generics::collect_pep695_bound_violations(stmts),
-        historical_positional_violations: historical::collect_historical_positional_violations(stmts),
+        historical_positional_violations: historical::collect_historical_positional_violations(
+            stmts,
+        ),
         invalid_string_annotations: annotations::collect_invalid_annotations(stmts),
         protocol_self_violations: results.protocol_self_issues,
         protocol_instantiation_violations: results.protocol_instantiation_issues,

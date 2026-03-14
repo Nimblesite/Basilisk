@@ -25,6 +25,7 @@
 use basilisk_resolver::{ImportKind, ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -34,8 +35,7 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 fn span_text(source: &str, span: Option<Span>) -> Option<&str> {
-    let span = span?;
-    source.get(span.start as usize..span.end as usize)
+    slice_span(source, span?)
 }
 
 fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
@@ -71,11 +71,7 @@ fn collect_type_alias_names(module: &ResolvedModule) -> Vec<String> {
             continue;
         }
         // Scan the raw import source text for `TypeAlias as <alias>` patterns.
-        let import_span = import.span;
-        let Some(import_text) = module
-            .source
-            .get(import_span.start as usize..import_span.end as usize)
-        else {
+        let Some(import_text) = slice_span(&module.source, import.span) else {
             continue;
         };
         // Find all occurrences of `TypeAlias as <identifier>`

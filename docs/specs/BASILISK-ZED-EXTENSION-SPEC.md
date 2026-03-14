@@ -11,6 +11,8 @@ Share code between the Zed extension and the other crates AMAP - even if just sh
 
 All LSP features, DAP integration, custom commands, configuration settings, and binary resolution are defined in **`LSP-SPEC.md`** — the single source of truth. This spec only documents **Zed-specific implementation details**.
 
+CRITICAL: We only target Wasm 64 bit. We don't need to support 32 bit wasm for now
+
 ## Critical Docs
 
 - [Zed Extension Development](https://zed.dev/docs/extensions/developing-extensions)

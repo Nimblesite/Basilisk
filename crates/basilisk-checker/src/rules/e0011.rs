@@ -28,6 +28,7 @@
 //! ```
 
 use crate::inference::infer_rhs;
+use crate::span_util::slice_span;
 use crate::types::InferredType;
 use basilisk_resolver::{FunctionInfo, ParameterInfo, ResolvedModule, ReturnAnnotationKind};
 
@@ -156,10 +157,7 @@ fn check_return_type_mismatch(
         let Some(ann_span) = func.return_annotation_span else {
             continue;
         };
-        let Some(ann_text) = module
-            .source
-            .get(ann_span.start as usize..ann_span.end as usize)
-        else {
+        let Some(ann_text) = slice_span(&module.source, ann_span) else {
             continue;
         };
 

@@ -35,6 +35,7 @@ use std::collections::{HashMap, HashSet};
 use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -642,10 +643,7 @@ fn check_subscripted_class_calls(
                 let Some(ann_span) = param.annotation_span else {
                     continue;
                 };
-                let Some(ann_text) = module
-                    .source
-                    .get(ann_span.start as usize..ann_span.end as usize)
-                else {
+                let Some(ann_text) = module.ann_span.slice_source(source) else {
                     continue;
                 };
 

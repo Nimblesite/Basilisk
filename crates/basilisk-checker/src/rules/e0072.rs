@@ -48,7 +48,7 @@ impl Rule for NoMatchingOverload {
             .filter(|v| v.rhs_kind == basilisk_resolver::RhsKind::CallExpr)
             .filter_map(|v| {
                 let rhs_span = v.rhs_span?;
-                let rhs_text = source.get(rhs_span.start as usize..rhs_span.end as usize)?;
+                let rhs_text = rhs_span.slice_source(source)?;
                 // Extract class name from "ClassName()" or "ClassName(args)"
                 let class_name = rhs_text.split('(').next()?;
                 let class_name = class_name.trim();
@@ -87,9 +87,7 @@ impl Rule for NoMatchingOverload {
             // The first parameter is `self`; the type-bearing parameter is the second.
             if let Some(param) = func.parameters.get(1) {
                 if let Some(ann_span) = param.annotation_span {
-                    if let Some(ann_text) =
-                        source.get(ann_span.start as usize..ann_span.end as usize)
-                    {
+                    if let Some(ann_text) = ann_span.slice_source(source) {
                         overload_getitem
                             .entry(class_name)
                             .or_default()

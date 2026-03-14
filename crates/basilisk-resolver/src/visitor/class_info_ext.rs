@@ -58,7 +58,11 @@ pub(super) fn class_info_from(
         attributes,
         method_names,
         method_decorators,
-        decorator_spans: class.decorator_list.iter().filter_map(decorator_name_and_span).collect(),
+        decorator_spans: class
+            .decorator_list
+            .iter()
+            .filter_map(decorator_name_and_span)
+            .collect(),
         generic_params,
         is_typed_dict: extract_is_typed_dict(class),
         is_typeddict_total: extract_is_typeddict_total(class),
@@ -66,15 +70,20 @@ pub(super) fn class_info_from(
         is_dataclass,
         is_dataclass_frozen: is_dataclass && dataclass_flag(class, "frozen"),
         is_dataclass_kw_only: pre_is_dataclass_kw_only,
-        is_dataclass_match_args_false: is_dataclass && dataclass_bool_flag_is_false(class, "match_args"),
+        is_dataclass_match_args_false: is_dataclass
+            && dataclass_bool_flag_is_false(class, "match_args"),
         is_dataclass_order: is_dataclass && dataclass_flag(class, "order"),
         is_dataclass_unsafe_hash: is_dataclass && dataclass_flag(class, "unsafe_hash"),
         is_dataclass_eq_false: is_dataclass && dataclass_bool_flag_is_false(class, "eq"),
         is_dataclass_init_false: is_dataclass && dataclass_bool_flag_is_false(class, "init"),
-        is_final: class_decorators.iter().any(|d| d == "final" || d.rsplit('.').next() == Some("final")),
+        is_final: class_decorators
+            .iter()
+            .any(|d| d == "final" || d.rsplit('.').next() == Some("final")),
         is_enum: extract_is_enum(class),
         has_pep695_type_params: class.type_params.is_some(),
-        pep695_type_param_names: class.type_params.as_deref()
+        pep695_type_param_names: class
+            .type_params
+            .as_deref()
             .map(|tp| tp.type_params.iter().map(type_param_name).collect())
             .unwrap_or_default(),
         base_expression_names,
@@ -136,7 +145,9 @@ fn mark_protocol_stubs(class: &StmtClassDef, bases: &[String], functions: &mut [
 
 fn extract_is_typed_dict(class: &StmtClassDef) -> bool {
     class.arguments.as_ref().is_some_and(|args| {
-        args.args.iter().any(|expr| expr_simple_name(expr).is_some_and(|n| n == "TypedDict"))
+        args.args
+            .iter()
+            .any(|expr| expr_simple_name(expr).is_some_and(|n| n == "TypedDict"))
     })
 }
 
@@ -175,9 +186,9 @@ fn extract_metaclass_name(class: &StmtClassDef) -> Option<String> {
 
 fn extract_is_enum(class: &StmtClassDef) -> bool {
     class.arguments.as_ref().is_some_and(|args| {
-        args.args.iter().any(|expr| {
-            expr_simple_name(expr).is_some_and(|n| ENUM_BASES.contains(&n.as_str()))
-        })
+        args.args
+            .iter()
+            .any(|expr| expr_simple_name(expr).is_some_and(|n| ENUM_BASES.contains(&n.as_str())))
     })
 }
 

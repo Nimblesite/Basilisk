@@ -9,9 +9,43 @@ pub struct Span {
     pub end: u32,
 }
 
+impl Span {
+    /// Slice `source` using this span without `as` conversions.
+    ///
+    /// Returns `None` if the span is out of bounds.
+    #[must_use]
+    pub fn slice_source<'a>(&self, source: &'a str) -> Option<&'a str> {
+        source.get(self.as_range())
+    }
+
+    /// Convert start offset to `usize`.
+    #[must_use]
+    #[expect(clippy::as_conversions, reason = "u32 to usize is always safe")]
+    pub const fn start_usize(&self) -> usize {
+        self.start as usize
+    }
+
+    /// Convert end offset to `usize`.
+    #[must_use]
+    #[expect(clippy::as_conversions, reason = "u32 to usize is always safe")]
+    pub const fn end_usize(&self) -> usize {
+        self.end as usize
+    }
+
+    /// Convert this span to a `Range<usize>` for slicing.
+    #[must_use]
+    #[expect(clippy::as_conversions, reason = "u32 to usize is always safe")]
+    pub const fn as_range(&self) -> std::ops::Range<usize> {
+        self.start as usize..self.end as usize
+    }
+}
+
 /// Information about a single function parameter.
 #[derive(Debug, Clone)]
-#[allow(clippy::struct_excessive_bools)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "Python parameters have many boolean flags"
+)]
 pub struct ParameterInfo {
     /// The parameter name as it appears in source.
     pub name: String,
@@ -56,7 +90,10 @@ impl ReturnAnnotationKind {
 
 /// Information about a single function definition.
 #[derive(Debug, Clone)]
-#[allow(clippy::struct_excessive_bools)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "Python functions have many boolean flags"
+)]
 pub struct FunctionInfo {
     /// The function name.
     pub name: String,
@@ -293,7 +330,10 @@ pub struct VariableInfo {
 
 /// A class attribute (declared in the class body).
 #[derive(Debug, Clone)]
-#[allow(clippy::struct_excessive_bools)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "Python attributes have many boolean flags"
+)]
 pub struct AttributeInfo {
     /// The attribute name.
     pub name: String,
@@ -381,7 +421,10 @@ pub enum EnumValueTypeViolationKind {
 
 /// A class definition with its attributes and method names.
 #[derive(Debug, Clone)]
-#[allow(clippy::struct_excessive_bools)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "Python classes have many boolean flags"
+)]
 pub struct ClassInfo {
     /// The class name.
     pub name: String,
@@ -528,7 +571,10 @@ pub struct GenericSubscriptSite {
 
 /// Information about a module-level `TypeVar(...)` call.
 #[derive(Debug, Clone)]
-#[allow(clippy::struct_excessive_bools)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "TypeVar has many boolean constraint flags"
+)]
 pub struct TypeVarCallInfo {
     /// The name the `TypeVar` is bound to (LHS of assignment).
     pub name: String,

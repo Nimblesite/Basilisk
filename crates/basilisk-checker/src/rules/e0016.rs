@@ -22,6 +22,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -137,8 +138,7 @@ fn skip_self_param(
 
 /// Extract annotation text from source given an optional span.
 fn annotation_text(source: &str, span: Option<basilisk_resolver::Span>) -> Option<&str> {
-    let span = span?;
-    source.get(span.start as usize..span.end as usize)
+    slice_span(source, span?)
 }
 
 fn make_diagnostic(

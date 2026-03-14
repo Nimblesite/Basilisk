@@ -7,7 +7,7 @@ use crate::scope::{ClassInfo, ReadOnlyViolationInfo, ReadOnlyViolationKind};
 
 use super::annotations::{ann_text_is_final, annotation_contains_readonly_expr};
 use super::class_info_ext::expr_simple_name;
-use super::core::text_range_to_span;
+use super::core::{source_slice_range, text_range_to_span};
 use super::typeddict::build_var_type_map;
 
 pub(super) fn collect_final_string_constants<'a>(
@@ -21,9 +21,7 @@ pub(super) fn collect_final_string_constants<'a>(
             continue;
         };
         let range = ann.annotation.range();
-        let Some(ann_text) =
-            source.get(range.start().to_u32() as usize..range.end().to_u32() as usize)
-        else {
+        let Some(ann_text) = source_slice_range(source, range) else {
             continue;
         };
         if !ann_text_is_final(ann_text) {
@@ -279,9 +277,7 @@ pub(super) fn collect_file_final_names(
             continue;
         };
         let range = ann.annotation.range();
-        let Some(ann_text) =
-            source.get(range.start().to_u32() as usize..range.end().to_u32() as usize)
-        else {
+        let Some(ann_text) = source_slice_range(source, range) else {
             continue;
         };
         if ann_text_is_final(ann_text) {

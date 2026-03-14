@@ -52,7 +52,6 @@ pub(super) fn apply_dataclass_transform(
 }
 
 /// Collect `@dataclass_transform(...)` decorated functions at module level.
-#[allow(dead_code)]
 pub(super) fn collect_dc_transform_factories(stmts: &[Stmt]) -> Vec<DcTransformFactory> {
     let mut out = Vec::new();
     for stmt in stmts {

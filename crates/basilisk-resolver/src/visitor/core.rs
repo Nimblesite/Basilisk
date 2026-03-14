@@ -40,7 +40,10 @@ pub(super) fn collect_from_body(
     }
 }
 
-#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+#[expect(
+    clippy::too_many_lines,
+    reason = "AST visitor covers many statement types"
+)]
 pub(super) fn collect_from_stmt(
     stmt: &Stmt,
     functions: &mut Vec<FunctionInfo>,
@@ -215,7 +218,6 @@ pub(super) fn collect_from_stmt(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(super) fn collect_from_elif_else(
     clauses: &[ElifElseClause],
     functions: &mut Vec<FunctionInfo>,
@@ -264,7 +266,6 @@ pub(super) fn collect_from_handlers(
 // Class info
 // ---------------------------------------------------------------------------
 
-#[allow(clippy::type_complexity)]
 pub(super) fn classify_rhs(expr: &Expr) -> RhsKind {
     match expr {
         Expr::BooleanLiteral(_) => RhsKind::BoolLiteral,
@@ -310,6 +311,26 @@ pub(super) fn text_range_to_span(range: TextRange) -> Span {
         start: range.start().to_u32(),
         end: range.end().to_u32(),
     }
+}
+
+/// Slice `source` using a [`TextRange`] without `as` conversions.
+///
+/// Returns `None` if the range is out of bounds.
+#[must_use]
+pub(super) fn source_slice_range(source: &str, range: TextRange) -> Option<&str> {
+    let start = usize::try_from(range.start().to_u32()).ok()?;
+    let end = usize::try_from(range.end().to_u32()).ok()?;
+    source.get(start..end)
+}
+
+/// Slice `source` using a [`Span`] without `as` conversions.
+///
+/// Returns `None` if the span is out of bounds.
+#[must_use]
+pub(super) fn source_slice_span(source: &str, span: Span) -> Option<&str> {
+    let start = usize::try_from(span.start).ok()?;
+    let end = usize::try_from(span.end).ok()?;
+    source.get(start..end)
 }
 
 // ---------------------------------------------------------------------------

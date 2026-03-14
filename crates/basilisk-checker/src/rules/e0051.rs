@@ -22,6 +22,7 @@
 use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -237,7 +238,7 @@ impl Rule for InvalidLiteralParam {
             let Some(ann_span) = var.annotation_span else {
                 continue;
             };
-            let Some(ann) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+            let Some(ann) = slice_span(source, ann_span) else {
                 continue;
             };
             let ann = ann.trim();
@@ -269,7 +270,7 @@ impl Rule for InvalidLiteralParam {
                 let Some(ann_span) = param.annotation_span else {
                     continue;
                 };
-                let Some(ann) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+                let Some(ann) = slice_span(source, ann_span) else {
                     continue;
                 };
                 let ann = ann.trim();

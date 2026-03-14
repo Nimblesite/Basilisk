@@ -22,6 +22,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{ClassInfo, ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -32,7 +33,7 @@ const CODE: ErrorCode = ErrorCode {
 
 /// Extract text from source at the given span.
 fn span_text(source: &str, span: Span) -> Option<&str> {
-    source.get(span.start as usize..span.end as usize)
+    span.slice_source(source)
 }
 
 /// Check whether `name` appears as a standalone type reference in `text`.

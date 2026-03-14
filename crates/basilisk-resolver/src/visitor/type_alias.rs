@@ -9,7 +9,7 @@ use crate::scope::{
 };
 
 use super::class_info_ext::expr_simple_name;
-use super::core::text_range_to_span;
+use super::core::{source_slice_range, text_range_to_span};
 use super::dataclass::extract_string_list;
 use super::final_readonly::collect_final_string_constants;
 use super::function_info::{
@@ -131,7 +131,10 @@ pub(super) fn collect_namedtuple_defs(stmts: &[Stmt], source: &str) -> Vec<Named
                 if tuple_expr.elts.len() < 2 {
                     continue;
                 }
-                let field_name = match &tuple_expr.elts[0] {
+                let Some(first_elt) = tuple_expr.elts.first() else {
+                    continue;
+                };
+                let field_name = match first_elt {
                     Expr::StringLiteral(s) => s.value.to_str().to_owned(),
                     Expr::Name(n) => {
                         if let Some(resolved) = final_string_constants.get(n.id.as_str()) {
@@ -142,9 +145,11 @@ pub(super) fn collect_namedtuple_defs(stmts: &[Stmt], source: &str) -> Vec<Named
                     }
                     _ => continue,
                 };
-                let type_range = tuple_expr.elts[1].range();
-                let field_type = source
-                    .get(type_range.start().to_u32() as usize..type_range.end().to_u32() as usize)
+                let Some(second_elt) = tuple_expr.elts.get(1) else {
+                    continue;
+                };
+                let type_range = second_elt.range();
+                let field_type = source_slice_range(source, type_range)
                     .unwrap_or("")
                     .to_owned();
                 field_names.push(field_name);
@@ -348,7 +353,10 @@ pub(super) fn collect_type_alias_defs(stmts: &[Stmt]) -> Vec<TypeAliasDefInfo> {
             if assign.targets.len() != 1 {
                 continue;
             }
-            let Some(name) = expr_simple_name(&assign.targets[0]) else {
+            let Some(first_target) = assign.targets.first() else {
+                continue;
+            };
+            let Some(name) = expr_simple_name(first_target) else {
                 continue;
             };
             // Only treat subscript RHS as implicit alias (Name = Something[...])

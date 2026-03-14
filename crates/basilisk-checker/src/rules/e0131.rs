@@ -23,6 +23,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{FunctionInfo, ResolvedModule, ReturnAnnotationKind, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -43,9 +44,7 @@ impl Rule for GeneratorTypeMismatch {
             .iter()
             .filter_map(|func| {
                 let ann_span = func.return_annotation_span?;
-                let ann_text = module
-                    .source
-                    .get(ann_span.start as usize..ann_span.end as usize)?;
+                let ann_text = module.ann_span.slice_source(source)?;
                 Some((func.name.as_str(), ann_text.trim()))
             })
             .collect();
@@ -428,7 +427,7 @@ fn check_function(
     let Some(ann_span) = func.return_annotation_span else {
         return;
     };
-    let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+    let Some(ann_text) = ann_span.slice_source(source) else {
         return;
     };
     let ann_text = ann_text.trim();
@@ -438,7 +437,7 @@ fn check_function(
     };
 
     // Find the function body.
-    let def_start = func.def_span.start as usize;
+    let def_start = func.def_span.start_usize();
     let Some(colon_rel) = source[def_start..].find(':') else {
         return;
     };

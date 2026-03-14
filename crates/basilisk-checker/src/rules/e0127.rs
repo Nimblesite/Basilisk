@@ -15,6 +15,7 @@
 use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -39,7 +40,7 @@ impl Rule for TupleIndexOutOfRange {
                 let Some(ann_span) = param.annotation_span else {
                     continue;
                 };
-                let Some(ann) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+                let Some(ann) = ann_span.slice_source(source) else {
                     continue;
                 };
                 let ann = ann.trim();
@@ -57,8 +58,12 @@ impl Rule for TupleIndexOutOfRange {
 
             // Scan lines in the function body for subscript expressions.
             // We look for patterns like `name[index]` on each source line.
-            let func_start = func.def_span.start as usize;
-            let body_source = &source[func_start..];
+            let Some(func_start) = usize::try_from(func.def_span.start).ok() else {
+                continue;
+            };
+            let Some(body_source) = source.get(func_start..) else {
+                continue;
+            };
 
             // Find lines belonging to this function body (indented lines after the def line).
             for line in body_source.lines().skip(1) {
@@ -151,6 +156,7 @@ fn check_subscript_on_line(
             #[allow(clippy::cast_possible_truncation)]
             if out_of_range {
                 // Compute the span: find this line in the full source
+                #[allow(clippy::as_conversions)]
                 let line_offset_in_source =
                     raw_line.as_ptr() as usize - full_source.as_ptr() as usize;
                 let expr_start_in_line = raw_line.find(trimmed).unwrap_or(0);

@@ -23,6 +23,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{AttributeInfo, ClassInfo, FunctionInfo, ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -98,18 +99,16 @@ fn check_class(
         .iter()
         .filter_map(|param| {
             let ann_span = param.annotation_span?;
-            let ann_text = source.get(ann_span.start as usize..ann_span.end as usize)?;
+            let ann_text = ann_span.slice_source(source)?;
             Some((param.name.as_str(), ann_text))
         })
         .collect();
 
     // Scan the function body source text for `self.attr = expr` patterns.
-    let Some(func_source) =
-        source.get(init_func.def_span.start as usize..init_func.def_span.end as usize)
-    else {
+    let Some(func_source) = init_func.def_span.slice_source(source) else {
         return;
     };
-    let func_offset = init_func.def_span.start as usize;
+    let func_offset = usize::try_from(init_func.def_span.start).unwrap_or(0);
 
     for line in func_source.lines() {
         let trimmed = line.trim();
@@ -132,7 +131,7 @@ fn check_class(
                 continue;
             };
 
-            let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+            let Some(ann_text) = ann_span.slice_source(source) else {
                 continue;
             };
 
@@ -270,6 +269,7 @@ fn types_compatible(actual: &str, expected: &str) -> bool {
 }
 
 /// Find the byte offset of a line within a larger text.
+#[allow(clippy::as_conversions)]
 fn find_line_offset(text: &str, line: &str) -> usize {
     // Use pointer arithmetic to find the offset.
     let text_start = text.as_ptr() as usize;

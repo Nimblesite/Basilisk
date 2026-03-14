@@ -24,6 +24,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{ResolvedModule, RhsKind, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -80,9 +81,7 @@ fn collect_namedtuple_classes(module: &ResolvedModule) -> HashMap<&str, Vec<&str
                 .filter(|attr| attr.has_annotation)
                 .filter_map(|attr| {
                     let ann_span = attr.annotation_span?;
-                    module
-                        .source
-                        .get(ann_span.start as usize..ann_span.end as usize)
+                    ann_span.slice_source(&module.source)
                 })
                 .collect();
             (cls.name.as_str(), field_types)
@@ -101,9 +100,7 @@ fn build_var_to_nt_map<'a>(
         .filter(|v| v.rhs_kind == RhsKind::CallExpr)
         .filter_map(|v| {
             let rhs_span = v.rhs_span?;
-            let rhs_text = module
-                .source
-                .get(rhs_span.start as usize..rhs_span.end as usize)?;
+            let rhs_text = rhs_span.slice_source(&module.source)?;
             let class_name = rhs_text.split('(').next()?.trim();
             if namedtuple_classes.contains_key(class_name) {
                 Some((v.name.as_str(), class_name))
@@ -129,7 +126,7 @@ fn check_variable(
     let Some(ann_span) = var.annotation_span else {
         return;
     };
-    let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+    let Some(ann_text) = ann_span.slice_source(source) else {
         return;
     };
     let Some(tuple_element_types) = parse_fixed_tuple_annotation(ann_text) else {
@@ -138,7 +135,7 @@ fn check_variable(
     let Some(rhs_span) = var.rhs_span else {
         return;
     };
-    let Some(rhs_text) = source.get(rhs_span.start as usize..rhs_span.end as usize) else {
+    let Some(rhs_text) = rhs_span.slice_source(source) else {
         return;
     };
     let rhs_name = rhs_text.trim();

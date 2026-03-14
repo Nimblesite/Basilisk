@@ -111,8 +111,8 @@ fn extract_return_type(func: &basilisk_resolver::FunctionInfo, source: &str) -> 
         basilisk_resolver::ReturnAnnotationKind::NoneType => "None".to_owned(),
         basilisk_resolver::ReturnAnnotationKind::Other => {
             if let Some(ann_span) = func.return_annotation_span {
-                source
-                    .get(ann_span.start as usize..ann_span.end as usize)
+                ann_span
+                    .slice_source(source)
                     .map_or_else(|| "object".to_owned(), |s| s.trim().to_owned())
             } else {
                 "object".to_owned()
@@ -183,7 +183,7 @@ fn infer_rhs_type(kind: &basilisk_resolver::RhsKind) -> String {
 }
 
 /// Check an annotated assignment for module-protocol incompatibility.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 fn check_annotated_assign(
     stmt: &ruff_python_ast::Stmt,
     source: &str,
@@ -301,8 +301,8 @@ fn check_protocol_compatibility(
 
         // Get the protocol's declared type for this attribute.
         let protocol_type = if let Some(ann_span) = attr.annotation_span {
-            source
-                .get(ann_span.start as usize..ann_span.end as usize)
+            ann_span
+                .slice_source(source)
                 .map_or_else(|| "object".to_owned(), |s| s.trim().to_owned())
         } else {
             "object".to_owned()

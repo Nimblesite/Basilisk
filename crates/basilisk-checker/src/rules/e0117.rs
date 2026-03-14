@@ -27,6 +27,7 @@ use std::collections::HashSet;
 use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -114,7 +115,7 @@ fn extract_names_from_annotation(annotation_text: &str) -> Vec<&str> {
 
 /// Get the annotation text from source given a span.
 fn annotation_text(source: &str, span: basilisk_resolver::Span) -> Option<&str> {
-    source.get(span.start as usize..span.end as usize)
+    span.slice_source(source)
 }
 
 /// Find `TypeVar` references in an annotation that are NOT in the allowed set.

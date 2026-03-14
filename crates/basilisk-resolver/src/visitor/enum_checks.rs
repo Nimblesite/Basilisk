@@ -6,7 +6,7 @@ use ruff_text_size::Ranged;
 use crate::scope::LiteralStringEnumMismatch;
 
 use super::class_info_ext::expr_simple_name;
-use super::core::text_range_to_span;
+use super::core::{source_slice_range, text_range_to_span};
 use super::ENUM_BASES;
 
 pub(super) fn collect_enum_value_type_violations(
@@ -45,7 +45,7 @@ pub(super) fn check_enum_member_values(
         if assign.targets.len() != 1 {
             continue;
         }
-        let Expr::Name(name_expr) = &assign.targets[0] else {
+        let Some(Expr::Name(name_expr)) = assign.targets.first() else {
             continue;
         };
         let member_name = name_expr.id.as_str();
@@ -95,9 +95,7 @@ pub(super) fn check_enum_init_value_param(
                 }
                 let ann_expr = p.parameter.annotation.as_deref()?;
                 let range = ann_expr.range();
-                let ann_text = source
-                    .get(range.start().to_u32() as usize..range.end().to_u32() as usize)?
-                    .trim();
+                let ann_text = source_slice_range(source, range)?.trim();
                 Some((p.parameter.name.as_str(), ann_text))
             })
             .collect();
@@ -129,7 +127,7 @@ pub(super) fn check_init_self_value_assign<'a>(
     if assign.targets.len() != 1 {
         return;
     }
-    let Expr::Attribute(attr) = &assign.targets[0] else {
+    let Some(Expr::Attribute(attr)) = assign.targets.first() else {
         return;
     };
     if attr.attr.as_str() != "_value_" {
@@ -193,10 +191,7 @@ pub(super) fn find_enum_value_annotation(cls: &StmtClassDef, source: &str) -> Op
             continue;
         }
         let range = ann.annotation.range();
-        let ann_text = source
-            .get(range.start().to_u32() as usize..range.end().to_u32() as usize)?
-            .trim()
-            .to_owned();
+        let ann_text = source_slice_range(source, range)?.trim().to_owned();
         return Some(ann_text);
     }
     None
@@ -353,9 +348,7 @@ pub(super) fn collect_literal_mismatches_in_function(
         .filter_map(|p| {
             let ann_expr = p.parameter.annotation.as_deref()?;
             let range = ann_expr.range();
-            let ann_text = source
-                .get(range.start().to_u32() as usize..range.end().to_u32() as usize)?
-                .trim();
+            let ann_text = source_slice_range(source, range)?.trim();
             let inner = literal_inner_content(ann_text)?;
             let inner = inner.trim();
             if is_enum_member_form(inner) {
@@ -393,9 +386,7 @@ pub(super) fn collect_literal_mismatches_in_function(
 
         // Extract the annotation text of the LHS variable.
         let ann_range = ann_assign.annotation.range();
-        let Some(ann_text) =
-            source.get(ann_range.start().to_u32() as usize..ann_range.end().to_u32() as usize)
-        else {
+        let Some(ann_text) = source_slice_range(source, ann_range) else {
             continue;
         };
         let ann_text = ann_text.trim();

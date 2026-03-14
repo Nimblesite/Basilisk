@@ -33,6 +33,7 @@ use std::collections::{HashMap, HashSet};
 use basilisk_resolver::{ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -110,9 +111,7 @@ fn build_var_class_map<'a>(
         .iter()
         .filter_map(|var| {
             let rhs_span = var.rhs_span?;
-            let rhs_text = module
-                .source
-                .get(rhs_span.start as usize..rhs_span.end as usize)?;
+            let rhs_text = slice_span(&module.source, rhs_span)?;
             let callee = rhs_text.split(['(', '[']).next()?.trim();
             let callee = callee.rsplit('.').next().unwrap_or(callee);
             if all_dc_classes.contains_key(callee) {
@@ -214,7 +213,10 @@ fn emit_comparison_diagnostics(
 ///
 /// Scans for patterns like `name1 < name2`, `name1 <= name2`, `name1 > name2`,
 /// `name1 >= name2` in module-level code lines (not inside class/function bodies).
-#[allow(clippy::cast_possible_truncation)]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "source lengths always fit in u32"
+)]
 fn extract_comparisons_from_source(source: &str) -> Vec<SourceComparison> {
     let mut results = Vec::new();
     let operators = [" <= ", " >= ", " < ", " > "];
@@ -232,19 +234,20 @@ fn extract_comparisons_from_source(source: &str) -> Vec<SourceComparison> {
         if !dominated {
             for op in &operators {
                 if let Some(op_pos) = line.find(op) {
-                    let left_part = line[..op_pos].trim();
+                    let left_part = line.get(..op_pos).unwrap_or("").trim();
                     let left_name = extract_last_identifier(left_part);
 
-                    let right_part = line[op_pos + op.len()..].trim();
+                    let right_part = line.get(op_pos + op.len()..).unwrap_or("").trim();
                     let right_name = extract_first_identifier(right_part);
 
                     if let (Some(left), Some(right)) = (left_name, right_name) {
+                        let line_len = u32::try_from(line.len()).unwrap_or(0);
                         results.push(SourceComparison {
                             left_name: left.to_owned(),
                             right_name: right.to_owned(),
                             span: Span {
                                 start: byte_offset,
-                                end: byte_offset + line.len() as u32,
+                                end: byte_offset.saturating_add(line_len),
                             },
                         });
                         break; // Only match first operator per line
@@ -253,7 +256,8 @@ fn extract_comparisons_from_source(source: &str) -> Vec<SourceComparison> {
             }
         }
 
-        byte_offset += line.len() as u32 + 1; // +1 for newline
+        let line_len = u32::try_from(line.len()).unwrap_or(0);
+        byte_offset = byte_offset.saturating_add(line_len).saturating_add(1);
     }
 
     results
@@ -271,7 +275,7 @@ fn extract_last_identifier(text: &str) -> Option<&str> {
         .find(|(_, byte)| !byte.is_ascii_alphanumeric() && *byte != b'_')
         .map_or(0, |(idx, _)| idx + 1);
 
-    let ident = &text[start..end];
+    let ident = text.get(start..end)?;
     if ident.is_empty() || ident.bytes().next()?.is_ascii_digit() {
         None
     } else {
@@ -287,7 +291,7 @@ fn extract_first_identifier(text: &str) -> Option<&str> {
         .position(|byte| !byte.is_ascii_alphanumeric() && byte != b'_')
         .unwrap_or(text.len());
 
-    let ident = &text[..end];
+    let ident = text.get(..end)?;
     if ident.is_empty() || ident.bytes().next()?.is_ascii_digit() {
         None
     } else {

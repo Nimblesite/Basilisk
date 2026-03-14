@@ -263,9 +263,7 @@ fn check_expr_for_overload_call(
             let matches_any = arity_matches.iter().any(|overload| {
                 if let Some(param) = overload.parameters.get(arg_idx) {
                     if let Some(ann_span) = param.annotation_span {
-                        if let Some(ann_text) =
-                            source.get(ann_span.start as usize..ann_span.end as usize)
-                        {
+                        if let Some(ann_text) = ann_span.slice_source(source) {
                             return is_type_assignable(member, ann_text);
                         }
                     }

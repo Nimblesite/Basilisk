@@ -286,7 +286,7 @@ fn check_new_method_args(
     // Check the cls parameter for explicit type annotation mismatch (Case 2).
     if let Some(cls_param) = new_func.parameters.first() {
         if let Some(ann_span) = cls_param.annotation_span {
-            if let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) {
+            if let Some(ann_text) = ann_span.slice_source(source) {
                 // Resolve string annotations (quoted type expressions).
                 let resolved_ann = resolve_string_annotation(ann_text.trim());
                 check_cls_param_mismatch(
@@ -320,7 +320,7 @@ fn check_new_method_args(
         let Some(ann_span) = param.annotation_span else {
             continue;
         };
-        let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+        let Some(ann_text) = ann_span.slice_source(source) else {
             continue;
         };
 

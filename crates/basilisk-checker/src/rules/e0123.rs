@@ -101,9 +101,7 @@ fn check_class(
                 continue;
             }
 
-            let Some(stmt_text) =
-                source.get(ret_stmt.span.start as usize..ret_stmt.span.end as usize)
-            else {
+            let Some(stmt_text) = ret_stmt.span.slice_source(source) else {
                 continue;
             };
 
