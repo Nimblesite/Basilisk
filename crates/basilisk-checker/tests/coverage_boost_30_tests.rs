@@ -1,6 +1,6 @@
-//! Coverage boost tests batch 30: e0107 variance, e0137 generic protocol, e0139 TypeVarTuple,
-//! e0140 callable, e0047 invalid type, e0015 type arg count, e0113 TypeIs, e0111 constructor,
-//! e0036 ClassVar, e0075 Self attribute.
+//! Coverage boost tests batch 30: e0107 variance, e0137 generic protocol, e0139 `TypeVarTuple`,
+//! e0140 callable, e0047 invalid type, e0015 type arg count, e0113 `TypeIs`, e0111 constructor,
+//! e0036 `ClassVar`, e0075 Self attribute.
 
 use basilisk_checker::check;
 use basilisk_parser::parse_source;
