@@ -1,4 +1,4 @@
-//! Tests for resolver: test_mutant_typevar.
+//! Tests for resolver: `test_mutant_typevar`.
 
 mod common;
 

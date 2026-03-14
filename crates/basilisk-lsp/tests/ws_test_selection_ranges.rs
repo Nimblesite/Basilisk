@@ -1,4 +1,4 @@
-//! Tests for LSP: ws_test_selection_ranges.
+//! Tests for LSP: `ws_test_selection_ranges`.
 
 #![allow(dead_code, unused_imports)]
 

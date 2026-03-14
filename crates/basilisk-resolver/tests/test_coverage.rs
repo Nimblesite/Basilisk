@@ -1,4 +1,4 @@
-//! Tests for resolver: test_coverage.
+//! Tests for resolver: `test_coverage`.
 
 mod common;
 

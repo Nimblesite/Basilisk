@@ -1,4 +1,4 @@
-//! Tests for resolver: test_float_param.
+//! Tests for resolver: `test_float_param`.
 
 mod common;
 

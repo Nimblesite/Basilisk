@@ -1,4 +1,4 @@
-//! Tests for LSP: ws_test_rename.
+//! Tests for LSP: `ws_test_rename`.
 
 #![allow(dead_code)]
 

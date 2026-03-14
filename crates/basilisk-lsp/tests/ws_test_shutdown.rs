@@ -1,4 +1,4 @@
-//! Tests for LSP: ws_test_shutdown.
+//! Tests for LSP: `ws_test_shutdown`.
 
 #![allow(dead_code)]
 

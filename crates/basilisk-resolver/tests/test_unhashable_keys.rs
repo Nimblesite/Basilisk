@@ -1,4 +1,4 @@
-//! Tests for resolver: test_unhashable_keys.
+//! Tests for resolver: `test_unhashable_keys`.
 
 mod common;
 

@@ -1,4 +1,4 @@
-//! Tests for LSP: ws_test_analysis_modes.
+//! Tests for LSP: `ws_test_analysis_modes`.
 
 #![allow(dead_code)]
 

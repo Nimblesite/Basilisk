@@ -1,4 +1,4 @@
-//! Tests for resolver: test_mutant_typeddict.
+//! Tests for resolver: `test_mutant_typeddict`.
 
 mod common;
 

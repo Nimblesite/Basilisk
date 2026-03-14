@@ -1,4 +1,4 @@
-//! Tests for resolver: test_mutant_annotation.
+//! Tests for resolver: `test_mutant_annotation`.
 
 mod common;
 

@@ -1,4 +1,4 @@
-//! Tests for resolver: test_conditional_assigns.
+//! Tests for resolver: `test_conditional_assigns`.
 
 mod common;
 

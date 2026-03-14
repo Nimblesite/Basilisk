@@ -1,4 +1,4 @@
-//! Tests for resolver: test_exception_handler.
+//! Tests for resolver: `test_exception_handler`.
 
 mod common;
 

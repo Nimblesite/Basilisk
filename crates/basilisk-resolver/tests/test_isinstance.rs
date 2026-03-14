@@ -1,4 +1,4 @@
-//! Tests for resolver: test_isinstance.
+//! Tests for resolver: `test_isinstance`.
 
 mod common;
 

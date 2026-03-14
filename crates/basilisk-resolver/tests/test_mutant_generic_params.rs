@@ -1,4 +1,4 @@
-//! Tests for resolver: test_mutant_generic_params.
+//! Tests for resolver: `test_mutant_generic_params`.
 
 mod common;
 

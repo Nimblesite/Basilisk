@@ -1,4 +1,4 @@
-//! Tests for LSP: ws_test_execute_command.
+//! Tests for LSP: `ws_test_execute_command`.
 
 #![allow(dead_code)]
 

@@ -1,4 +1,4 @@
-//! Tests for LSP: ws_test_signature_help.
+//! Tests for LSP: `ws_test_signature_help`.
 
 #![allow(dead_code)]
 

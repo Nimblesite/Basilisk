@@ -1,4 +1,4 @@
-//! Tests for resolver: test_protocol_02.
+//! Tests for resolver: `test_protocol_02`.
 
 mod common;
 

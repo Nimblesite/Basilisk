@@ -1,4 +1,4 @@
-//! Tests for resolver: test_docstring.
+//! Tests for resolver: `test_docstring`.
 
 mod common;
 

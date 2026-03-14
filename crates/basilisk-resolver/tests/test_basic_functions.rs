@@ -1,4 +1,4 @@
-//! Tests for resolver: test_basic_functions.
+//! Tests for resolver: `test_basic_functions`.
 
 mod common;
 

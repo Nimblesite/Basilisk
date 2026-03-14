@@ -1,4 +1,4 @@
-//! Tests for resolver: test_namedtuple.
+//! Tests for resolver: `test_namedtuple`.
 
 mod common;
 

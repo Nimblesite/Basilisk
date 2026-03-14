@@ -1,4 +1,4 @@
-//! Tests for LSP: ws_test_hierarchies.
+//! Tests for LSP: `ws_test_hierarchies`.
 
 #![allow(dead_code)]
 

@@ -1,4 +1,4 @@
-//! Tests for resolver: test_stub_body.
+//! Tests for resolver: `test_stub_body`.
 
 mod common;
 

@@ -1,4 +1,4 @@
-//! Tests for resolver: test_self_assigns.
+//! Tests for resolver: `test_self_assigns`.
 
 mod common;
 

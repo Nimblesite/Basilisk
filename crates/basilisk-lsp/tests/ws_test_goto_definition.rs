@@ -1,4 +1,4 @@
-//! Tests for LSP: ws_test_goto_definition.
+//! Tests for LSP: `ws_test_goto_definition`.
 
 #![allow(dead_code)]
 

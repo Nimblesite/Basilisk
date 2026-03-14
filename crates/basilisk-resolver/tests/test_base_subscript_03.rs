@@ -1,4 +1,4 @@
-//! Tests for resolver: test_base_subscript_03.
+//! Tests for resolver: `test_base_subscript_03`.
 
 mod common;
 

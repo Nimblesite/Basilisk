@@ -1,4 +1,4 @@
-//! Tests for LSP: ws_test_completion.
+//! Tests for LSP: `ws_test_completion`.
 
 #![allow(dead_code)]
 

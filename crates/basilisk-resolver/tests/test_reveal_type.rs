@@ -1,4 +1,4 @@
-//! Tests for resolver: test_reveal_type.
+//! Tests for resolver: `test_reveal_type`.
 
 mod common;
 

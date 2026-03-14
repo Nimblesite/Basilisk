@@ -1,4 +1,4 @@
-//! Tests for resolver: test_yield.
+//! Tests for resolver: `test_yield`.
 
 mod common;
 

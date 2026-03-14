@@ -1,4 +1,4 @@
-//! Tests for resolver: test_collect_from_stmt.
+//! Tests for resolver: `test_collect_from_stmt`.
 
 mod common;
 

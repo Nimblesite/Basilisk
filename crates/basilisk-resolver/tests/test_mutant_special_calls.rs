@@ -1,4 +1,4 @@
-//! Tests for resolver: test_mutant_special_calls.
+//! Tests for resolver: `test_mutant_special_calls`.
 
 mod common;
 

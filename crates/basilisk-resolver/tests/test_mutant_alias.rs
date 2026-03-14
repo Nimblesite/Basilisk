@@ -1,4 +1,4 @@
-//! Tests for resolver: test_mutant_alias.
+//! Tests for resolver: `test_mutant_alias`.
 
 mod common;
 

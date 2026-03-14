@@ -1,4 +1,4 @@
-//! Tests for resolver: test_decorators.
+//! Tests for resolver: `test_decorators`.
 
 mod common;
 

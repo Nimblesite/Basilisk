@@ -1,4 +1,4 @@
-//! Tests for LSP: lsp_e2e_hierarchies.
+//! Tests for LSP: `lsp_e2e_hierarchies`.
 
 #![allow(dead_code)]
 //! LSP E2E tests — Call Hierarchy and Type Hierarchy.

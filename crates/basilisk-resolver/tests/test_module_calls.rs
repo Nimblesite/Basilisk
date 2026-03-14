@@ -1,4 +1,4 @@
-//! Tests for resolver: test_module_calls.
+//! Tests for resolver: `test_module_calls`.
 
 mod common;
 

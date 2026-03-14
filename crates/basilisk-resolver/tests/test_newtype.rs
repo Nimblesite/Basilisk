@@ -1,4 +1,4 @@
-//! Tests for resolver: test_newtype.
+//! Tests for resolver: `test_newtype`.
 
 mod common;
 

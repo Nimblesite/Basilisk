@@ -1,4 +1,4 @@
-//! Tests for resolver: test_readonly.
+//! Tests for resolver: `test_readonly`.
 
 mod common;
 

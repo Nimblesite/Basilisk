@@ -1,4 +1,4 @@
-//! Tests for LSP: ws_test_document_symbols.
+//! Tests for LSP: `ws_test_document_symbols`.
 
 #![allow(dead_code)]
 

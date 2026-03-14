@@ -1,4 +1,4 @@
-//! Tests for LSP: lsp_e2e_advanced.
+//! Tests for LSP: `lsp_e2e_advanced`.
 
 #![allow(dead_code)]
 //! LSP E2E tests — Capabilities, Folding, Selection, Code Lens, Highlight,

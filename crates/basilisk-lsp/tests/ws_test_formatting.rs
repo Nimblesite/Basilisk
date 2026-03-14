@@ -1,4 +1,4 @@
-//! Tests for LSP: ws_test_formatting.
+//! Tests for LSP: `ws_test_formatting`.
 
 #![allow(dead_code)]
 

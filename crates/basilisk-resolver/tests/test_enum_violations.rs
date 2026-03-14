@@ -1,4 +1,4 @@
-//! Tests for resolver: test_enum_violations.
+//! Tests for resolver: `test_enum_violations`.
 
 mod common;
 

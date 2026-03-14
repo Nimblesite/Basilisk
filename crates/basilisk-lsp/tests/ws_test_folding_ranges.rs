@@ -1,4 +1,4 @@
-//! Tests for LSP: ws_test_folding_ranges.
+//! Tests for LSP: `ws_test_folding_ranges`.
 
 #![allow(dead_code, unused_imports)]
 

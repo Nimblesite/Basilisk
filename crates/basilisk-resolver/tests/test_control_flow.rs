@@ -1,4 +1,4 @@
-//! Tests for resolver: test_control_flow.
+//! Tests for resolver: `test_control_flow`.
 
 mod common;
 

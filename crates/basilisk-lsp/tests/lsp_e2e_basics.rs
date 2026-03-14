@@ -1,4 +1,4 @@
-//! Tests for LSP: lsp_e2e_basics.
+//! Tests for LSP: `lsp_e2e_basics`.
 
 #![allow(dead_code)]
 //! LSP E2E tests — Initialize, document lifecycle, error handling.

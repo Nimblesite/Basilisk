@@ -1,4 +1,4 @@
-//! Tests for resolver: test_bounded_typevar.
+//! Tests for resolver: `test_bounded_typevar`.
 
 mod common;
 

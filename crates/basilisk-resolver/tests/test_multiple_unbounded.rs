@@ -1,4 +1,4 @@
-//! Tests for resolver: test_multiple_unbounded.
+//! Tests for resolver: `test_multiple_unbounded`.
 
 mod common;
 

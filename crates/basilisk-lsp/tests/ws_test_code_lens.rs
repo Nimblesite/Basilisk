@@ -1,4 +1,4 @@
-//! Tests for LSP: ws_test_code_lens.
+//! Tests for LSP: `ws_test_code_lens`.
 
 #![allow(dead_code)]
 

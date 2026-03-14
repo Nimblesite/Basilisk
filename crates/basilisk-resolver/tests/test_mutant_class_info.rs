@@ -1,4 +1,4 @@
-//! Tests for resolver: test_mutant_class_info.
+//! Tests for resolver: `test_mutant_class_info`.
 
 mod common;
 

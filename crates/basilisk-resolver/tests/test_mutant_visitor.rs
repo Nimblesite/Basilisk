@@ -1,4 +1,4 @@
-//! Tests for resolver: test_mutant_visitor.
+//! Tests for resolver: `test_mutant_visitor`.
 
 mod common;
 

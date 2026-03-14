@@ -1,4 +1,4 @@
-//! Tests for LSP: lsp_e2e_navigation.
+//! Tests for LSP: `lsp_e2e_navigation`.
 
 #![allow(dead_code)]
 //! LSP E2E tests — Go to Definition, Declaration, and Type Definition.

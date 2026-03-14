@@ -1,4 +1,4 @@
-//! Tests for resolver: test_mutant_classify_rhs.
+//! Tests for resolver: `test_mutant_classify_rhs`.
 
 mod common;
 

@@ -1,4 +1,4 @@
-//! Tests for resolver: test_typeddict_calls.
+//! Tests for resolver: `test_typeddict_calls`.
 
 mod common;
 

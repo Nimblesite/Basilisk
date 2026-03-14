@@ -1,4 +1,4 @@
-//! Tests for resolver: test_typeddict_keys_01.
+//! Tests for resolver: `test_typeddict_keys_01`.
 
 mod common;
 

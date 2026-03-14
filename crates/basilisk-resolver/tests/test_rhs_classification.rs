@@ -1,4 +1,4 @@
-//! Tests for resolver: test_rhs_classification.
+//! Tests for resolver: `test_rhs_classification`.
 
 mod common;
 

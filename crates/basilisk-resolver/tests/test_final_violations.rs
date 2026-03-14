@@ -1,4 +1,4 @@
-//! Tests for resolver: test_final_violations.
+//! Tests for resolver: `test_final_violations`.
 
 mod common;
 

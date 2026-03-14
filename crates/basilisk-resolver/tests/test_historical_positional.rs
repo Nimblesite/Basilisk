@@ -1,4 +1,4 @@
-//! Tests for resolver: test_historical_positional.
+//! Tests for resolver: `test_historical_positional`.
 
 mod common;
 

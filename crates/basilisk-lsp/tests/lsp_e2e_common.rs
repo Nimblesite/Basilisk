@@ -17,10 +17,6 @@ pub type LspTestFixture = basilisk_test_utils::LspStdioFixture;
 ///
 /// # Errors
 /// Returns an error if writing the request or reading the response fails.
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "preserving standalone-function call style"
-)]
 pub fn send_request(
     fixture: &mut LspTestFixture,
     id: u64,

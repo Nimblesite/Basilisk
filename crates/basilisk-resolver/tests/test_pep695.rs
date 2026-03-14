@@ -1,4 +1,4 @@
-//! Tests for resolver: test_pep695.
+//! Tests for resolver: `test_pep695`.
 
 mod common;
 

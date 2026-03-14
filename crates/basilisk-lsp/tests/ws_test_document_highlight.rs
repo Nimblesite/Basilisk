@@ -1,4 +1,4 @@
-//! Tests for LSP: ws_test_document_highlight.
+//! Tests for LSP: `ws_test_document_highlight`.
 
 #![allow(dead_code, unused_imports)]
 

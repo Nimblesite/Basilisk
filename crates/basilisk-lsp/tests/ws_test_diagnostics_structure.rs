@@ -1,4 +1,4 @@
-//! Tests for LSP: ws_test_diagnostics_structure.
+//! Tests for LSP: `ws_test_diagnostics_structure`.
 
 #![allow(dead_code)]
 

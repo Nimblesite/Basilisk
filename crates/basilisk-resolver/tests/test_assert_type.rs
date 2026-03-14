@@ -1,4 +1,4 @@
-//! Tests for resolver: test_assert_type.
+//! Tests for resolver: `test_assert_type`.
 
 mod common;
 

@@ -1,4 +1,4 @@
-//! Tests for LSP: ws_test_hover.
+//! Tests for LSP: `ws_test_hover`.
 
 #![allow(dead_code)]
 

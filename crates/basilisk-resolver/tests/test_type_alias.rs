@@ -1,4 +1,4 @@
-//! Tests for resolver: test_type_alias.
+//! Tests for resolver: `test_type_alias`.
 
 mod common;
 

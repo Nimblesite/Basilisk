@@ -1,4 +1,4 @@
-//! Tests for resolver: test_match.
+//! Tests for resolver: `test_match`.
 
 mod common;
 

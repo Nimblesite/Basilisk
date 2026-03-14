@@ -1,4 +1,4 @@
-//! Tests for LSP: lsp_e2e_hover.
+//! Tests for LSP: `lsp_e2e_hover`.
 
 #![allow(dead_code)]
 //! LSP E2E tests — Hover (type signatures, docstrings, enhanced hover).
