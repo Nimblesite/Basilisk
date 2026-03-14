@@ -73,6 +73,12 @@ fn extract_generic_params_single_param() -> Result<(), Box<dyn std::error::Error
         1,
         "Generic[T] must produce 1 param"
     );
-    assert_eq!(cls.generic_params[0].name, "T");
+    assert_eq!(
+        cls.generic_params
+            .first()
+            .expect("expected at least one generic param")
+            .name,
+        "T"
+    );
     Ok(())
 }

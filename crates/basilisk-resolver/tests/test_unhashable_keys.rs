@@ -8,12 +8,18 @@ use common::resolve_src;
 fn detects_list_key_in_dict() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo() -> None:\n    d = {[1, 2]: 'val'}\n".to_owned();
     let resolved = resolve_src(&src)?;
-    let func = &resolved.functions[0];
+    let func = resolved.functions.first().expect("expected at least one function");
     assert!(
         !func.unhashable_keys.is_empty(),
         "list dict key must be detected"
     );
-    assert_eq!(func.unhashable_keys[0].key_type, "list");
+    assert_eq!(
+        func.unhashable_keys
+            .first()
+            .expect("expected at least one unhashable key")
+            .key_type,
+        "list"
+    );
     Ok(())
 }
 
@@ -21,7 +27,7 @@ fn detects_list_key_in_dict() -> Result<(), Box<dyn std::error::Error>> {
 fn detects_unhashable_key_in_if_body() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo() -> None:\n    if True:\n        d = {[1]: 'x'}\n".to_owned();
     let resolved = resolve_src(&src)?;
-    let func = &resolved.functions[0];
+    let func = resolved.functions.first().expect("expected at least one function");
     assert!(!func.unhashable_keys.is_empty());
     Ok(())
 }
@@ -30,7 +36,7 @@ fn detects_unhashable_key_in_if_body() -> Result<(), Box<dyn std::error::Error>>
 fn detects_unhashable_key_in_return_expr() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo() -> dict:\n    return {[1]: 'x'}\n".to_owned();
     let resolved = resolve_src(&src)?;
-    let func = &resolved.functions[0];
+    let func = resolved.functions.first().expect("expected at least one function");
     assert!(!func.unhashable_keys.is_empty());
     Ok(())
 }
@@ -39,7 +45,7 @@ fn detects_unhashable_key_in_return_expr() -> Result<(), Box<dyn std::error::Err
 fn detects_unhashable_key_in_expr_stmt() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo() -> None:\n    _ = {[1]: 'x'}\n".to_owned();
     let resolved = resolve_src(&src)?;
-    let func = &resolved.functions[0];
+    let func = resolved.functions.first().expect("expected at least one function");
     assert!(!func.unhashable_keys.is_empty());
     Ok(())
 }
@@ -49,7 +55,7 @@ fn detects_unhashable_key_in_while_body() -> Result<(), Box<dyn std::error::Erro
     let src =
         "def foo() -> None:\n    while True:\n        d = {[1]: 'x'}\n        break\n".to_owned();
     let resolved = resolve_src(&src)?;
-    let func = &resolved.functions[0];
+    let func = resolved.functions.first().expect("expected at least one function");
     assert!(!func.unhashable_keys.is_empty());
     Ok(())
 }
@@ -58,7 +64,7 @@ fn detects_unhashable_key_in_while_body() -> Result<(), Box<dyn std::error::Erro
 fn detects_unhashable_key_in_with_body() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo() -> None:\n    with open('f') as f:\n        d = {[1]: 'x'}\n".to_owned();
     let resolved = resolve_src(&src)?;
-    let func = &resolved.functions[0];
+    let func = resolved.functions.first().expect("expected at least one function");
     assert!(!func.unhashable_keys.is_empty());
     Ok(())
 }
@@ -74,7 +80,7 @@ fn detects_unhashable_key_in_try_body() -> Result<(), Box<dyn std::error::Error>
     )
     .to_owned();
     let resolved = resolve_src(&src)?;
-    let func = &resolved.functions[0];
+    let func = resolved.functions.first().expect("expected at least one function");
     assert!(!func.unhashable_keys.is_empty());
     Ok(())
 }
@@ -83,7 +89,7 @@ fn detects_unhashable_key_in_try_body() -> Result<(), Box<dyn std::error::Error>
 fn detects_unhashable_key_in_for_body() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo() -> None:\n    for i in range(1):\n        d = {[i]: 'x'}\n".to_owned();
     let resolved = resolve_src(&src)?;
-    let func = &resolved.functions[0];
+    let func = resolved.functions.first().expect("expected at least one function");
     assert!(!func.unhashable_keys.is_empty());
     Ok(())
 }
@@ -93,12 +99,18 @@ fn detects_set_key_in_dict() -> Result<(), Box<dyn std::error::Error>> {
     // {1, 2} as a dict key — set is unhashable at runtime
     let src = "def foo() -> None:\n    d = {{1, 2}: 'val'}\n".to_owned();
     let resolved = resolve_src(&src)?;
-    let func = &resolved.functions[0];
+    let func = resolved.functions.first().expect("expected at least one function");
     assert!(
         !func.unhashable_keys.is_empty(),
         "set dict key must be detected"
     );
-    assert_eq!(func.unhashable_keys[0].key_type, "set");
+    assert_eq!(
+        func.unhashable_keys
+            .first()
+            .expect("expected at least one unhashable key")
+            .key_type,
+        "set"
+    );
     Ok(())
 }
 
@@ -107,12 +119,18 @@ fn detects_dict_key_in_dict() -> Result<(), Box<dyn std::error::Error>> {
     // {'a': 1} as a dict key — dicts are unhashable
     let src = "def foo() -> None:\n    d = {{'a': 1}: 'val'}\n".to_owned();
     let resolved = resolve_src(&src)?;
-    let func = &resolved.functions[0];
+    let func = resolved.functions.first().expect("expected at least one function");
     assert!(
         !func.unhashable_keys.is_empty(),
         "dict dict key must be detected"
     );
-    assert_eq!(func.unhashable_keys[0].key_type, "dict");
+    assert_eq!(
+        func.unhashable_keys
+            .first()
+            .expect("expected at least one unhashable key")
+            .key_type,
+        "dict"
+    );
     Ok(())
 }
 
@@ -121,7 +139,7 @@ fn detects_unhashable_key_inside_tuple_expr() -> Result<(), Box<dyn std::error::
     // A tuple assigned as RHS — exercises the Expr::Tuple traversal path
     let src = "def foo() -> None:\n    _ = ({[1]: 2},)\n".to_owned();
     let resolved = resolve_src(&src)?;
-    let func = &resolved.functions[0];
+    let func = resolved.functions.first().expect("expected at least one function");
     assert!(
         !func.unhashable_keys.is_empty(),
         "unhashable key inside tuple element must be detected"
@@ -134,7 +152,7 @@ fn detects_unhashable_key_inside_call_arg() -> Result<(), Box<dyn std::error::Er
     // A dict with list key passed as a function argument — exercises Expr::Call traversal
     let src = "def foo() -> None:\n    _ = some_func({[1]: 2})\n".to_owned();
     let resolved = resolve_src(&src)?;
-    let func = &resolved.functions[0];
+    let func = resolved.functions.first().expect("expected at least one function");
     assert!(
         !func.unhashable_keys.is_empty(),
         "unhashable key inside call argument must be detected"

@@ -73,7 +73,10 @@ fn assert_type_strip_annotated() -> Result<(), Box<dyn std::error::Error>> {
     let resolved = resolve_src(&src)?;
     assert!(!resolved.assert_type_calls.is_empty());
     // The assert_type should not flag a mismatch since Annotated[int, ...] == int
-    let call = &resolved.assert_type_calls[0];
+    let call = resolved
+        .assert_type_calls
+        .first()
+        .expect("expected at least one assert_type call");
     assert!(call.actual_type.is_some());
     Ok(())
 }

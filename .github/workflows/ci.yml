@@ -18,8 +18,6 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    permissions:
-      actions: write
     steps:
       - uses: actions/checkout@v4
 
@@ -39,17 +37,6 @@ jobs:
 
       - name: clippy (zed extension)
         run: cargo clippy --all-targets --manifest-path basilisk-zed/Cargo.toml
-
-      - name: Cancel workflow on lint failure
-        if: failure()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await github.rest.actions.cancelWorkflowRun({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id: context.runId,
-            })
 
   test:
     name: Test

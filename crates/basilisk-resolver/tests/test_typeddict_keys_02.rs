@@ -16,7 +16,13 @@ fn types_match_bare_generic_vs_any() -> Result<(), Box<dyn std::error::Error>> {
 fn body_last_stmt_terminates_with_raise_stmt() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo() -> None:\n    raise ValueError('bad')\n".to_owned();
     let resolved = resolve_src(&src)?;
-    assert!(resolved.functions[0].body_last_stmt_terminates);
+    assert!(
+        resolved
+            .functions
+            .first()
+            .expect("expected at least one function")
+            .body_last_stmt_terminates
+    );
     Ok(())
 }
 

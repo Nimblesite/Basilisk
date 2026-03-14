@@ -9,8 +9,12 @@ fn module_order_comparison_collected() -> Result<(), Box<dyn std::error::Error>>
     let src = "a = 1\nb = 2\na < b\n".to_owned();
     let resolved = resolve_src(&src)?;
     assert_eq!(resolved.module_order_comparisons.len(), 1);
-    assert_eq!(resolved.module_order_comparisons[0].left_name, "a");
-    assert_eq!(resolved.module_order_comparisons[0].right_name, "b");
+    let cmp = resolved
+        .module_order_comparisons
+        .first()
+        .expect("expected at least one order comparison");
+    assert_eq!(cmp.left_name, "a");
+    assert_eq!(cmp.right_name, "b");
     Ok(())
 }
 
@@ -66,8 +70,12 @@ fn module_attr_assignment_collected() -> Result<(), Box<dyn std::error::Error>> 
     let src = concat!("class Foo:\n", "    pass\n", "Foo.x = 42\n",).to_owned();
     let resolved = resolve_src(&src)?;
     assert_eq!(resolved.module_attr_assignments.len(), 1);
-    assert_eq!(resolved.module_attr_assignments[0].object_name, "Foo");
-    assert_eq!(resolved.module_attr_assignments[0].attr_name, "x");
+    let assignment = resolved
+        .module_attr_assignments
+        .first()
+        .expect("expected at least one attr assignment");
+    assert_eq!(assignment.object_name, "Foo");
+    assert_eq!(assignment.attr_name, "x");
     Ok(())
 }
 

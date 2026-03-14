@@ -11,7 +11,7 @@ fn annotation_flags_none_is_not_any() -> Result<(), Box<dyn std::error::Error>> 
     use basilisk_resolver::ReturnAnnotationKind;
     let src = "def f() -> None: pass\n".to_owned();
     let resolved = resolve_src(&src)?;
-    let func = &resolved.functions[0];
+    let func = resolved.functions.first().expect("expected at least one function");
     assert!(
         matches!(func.return_annotation, ReturnAnnotationKind::NoneType),
         "None annotation must be NoneType, not Any — got {:?}",
@@ -25,7 +25,7 @@ fn annotation_flags_any_is_any() -> Result<(), Box<dyn std::error::Error>> {
     use basilisk_resolver::ReturnAnnotationKind;
     let src = "from typing import Any\ndef f() -> Any: pass\n".to_owned();
     let resolved = resolve_src(&src)?;
-    let func = &resolved.functions[0];
+    let func = resolved.functions.first().expect("expected at least one function");
     assert!(
         matches!(func.return_annotation, ReturnAnnotationKind::Any),
         "Any annotation must be ReturnAnnotationKind::Any — got {:?}",
@@ -43,7 +43,11 @@ fn annotation_flags_none_name_is_none_not_other() -> Result<(), Box<dyn std::err
     let resolved_none = resolve(&parsed_none)?;
     assert!(
         matches!(
-            resolved_none.functions[0].return_annotation,
+            resolved_none
+                .functions
+                .first()
+                .expect("expected at least one function")
+                .return_annotation,
             ReturnAnnotationKind::NoneType
         ),
         "-> None must be NoneType"
@@ -54,7 +58,11 @@ fn annotation_flags_none_name_is_none_not_other() -> Result<(), Box<dyn std::err
     let resolved_int = resolve(&parsed_int)?;
     assert!(
         matches!(
-            resolved_int.functions[0].return_annotation,
+            resolved_int
+                .functions
+                .first()
+                .expect("expected at least one function")
+                .return_annotation,
             ReturnAnnotationKind::Other
         ),
         "-> int must be Other, not NoneType"

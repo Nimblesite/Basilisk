@@ -9,8 +9,12 @@ fn generic_subscript_site_bare_expr() -> Result<(), Box<dyn std::error::Error>> 
     let src = "list[int]\n".to_owned();
     let resolved = resolve_src(&src)?;
     assert_eq!(resolved.generic_subscript_sites.len(), 1);
-    assert_eq!(resolved.generic_subscript_sites[0].base_name, "list");
-    assert_eq!(resolved.generic_subscript_sites[0].arg_count, 1);
+    let site = resolved
+        .generic_subscript_sites
+        .first()
+        .expect("expected at least one generic subscript site");
+    assert_eq!(site.base_name, "list");
+    assert_eq!(site.arg_count, 1);
     Ok(())
 }
 
@@ -19,8 +23,12 @@ fn generic_subscript_site_annotated_assign() -> Result<(), Box<dyn std::error::E
     let src = "x: dict[str, int] = {}\n".to_owned();
     let resolved = resolve_src(&src)?;
     assert_eq!(resolved.generic_subscript_sites.len(), 1);
-    assert_eq!(resolved.generic_subscript_sites[0].base_name, "dict");
-    assert_eq!(resolved.generic_subscript_sites[0].arg_count, 2);
+    let site = resolved
+        .generic_subscript_sites
+        .first()
+        .expect("expected at least one generic subscript site");
+    assert_eq!(site.base_name, "dict");
+    assert_eq!(site.arg_count, 2);
     Ok(())
 }
 
@@ -29,7 +37,14 @@ fn generic_subscript_site_function_param() -> Result<(), Box<dyn std::error::Err
     let src = concat!("def process(data: list[int]) -> None:\n", "    pass\n",).to_owned();
     let resolved = resolve_src(&src)?;
     assert_eq!(resolved.generic_subscript_sites.len(), 1);
-    assert_eq!(resolved.generic_subscript_sites[0].base_name, "list");
+    assert_eq!(
+        resolved
+            .generic_subscript_sites
+            .first()
+            .expect("expected at least one generic subscript site")
+            .base_name,
+        "list"
+    );
     Ok(())
 }
 

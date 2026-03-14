@@ -9,9 +9,12 @@ fn annotation_attribute_detected_as_any() -> Result<(), Box<dyn std::error::Erro
     let src = "import typing\ndef foo(x: typing.Any) -> typing.Any:\n    pass\n".to_owned();
     let resolved = resolve_src(&src)?;
     assert_eq!(resolved.functions.len(), 1);
-    let func = &resolved.functions[0];
+    let func = resolved.functions.first().expect("expected at least one function");
     assert!(
-        func.parameters[0].annotation_is_any,
+        func.parameters
+            .first()
+            .expect("expected at least one parameter")
+            .annotation_is_any,
         "typing.Any parameter annotation must be detected as Any"
     );
     Ok(())
@@ -23,7 +26,11 @@ fn numeric_return_annotation_detected() -> Result<(), Box<dyn std::error::Error>
     let src = "def foo() -> 1:\n    pass\n".to_owned();
     let resolved = resolve_src(&src)?;
     assert_eq!(
-        resolved.functions[0].return_annotation,
+        resolved
+            .functions
+            .first()
+            .expect("expected at least one function")
+            .return_annotation,
         ReturnAnnotationKind::NumericLiteral
     );
     Ok(())
@@ -36,7 +43,11 @@ fn boolean_return_annotation_detected_as_numeric_literal() -> Result<(), Box<dyn
     let src = "def foo() -> True:\n    pass\n".to_owned();
     let resolved = resolve_src(&src)?;
     assert_eq!(
-        resolved.functions[0].return_annotation,
+        resolved
+            .functions
+            .first()
+            .expect("expected at least one function")
+            .return_annotation,
         ReturnAnnotationKind::NumericLiteral
     );
     Ok(())

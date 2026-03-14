@@ -10,7 +10,11 @@ fn resolves_match_statement_with_wildcard() -> Result<(), Box<dyn std::error::Er
     let resolved = resolve_src(&src)?;
     assert_eq!(resolved.match_stmts.len(), 1);
     assert!(
-        resolved.match_stmts[0].has_wildcard,
+        resolved
+            .match_stmts
+            .first()
+            .expect("expected at least one match stmt")
+            .has_wildcard,
         "case _ must set has_wildcard"
     );
     Ok(())
@@ -22,7 +26,11 @@ fn resolves_match_with_or_wildcard_pattern() -> Result<(), Box<dyn std::error::E
     let resolved = resolve_src(&src)?;
     assert_eq!(resolved.match_stmts.len(), 1);
     assert!(
-        resolved.match_stmts[0].has_wildcard,
+        resolved
+            .match_stmts
+            .first()
+            .expect("expected at least one match stmt")
+            .has_wildcard,
         "case 1 | _ must be recognised as wildcard via MatchOr"
     );
     Ok(())
@@ -33,7 +41,13 @@ fn match_without_wildcard_has_no_wildcard() -> Result<(), Box<dyn std::error::Er
     let src = "x = 1\nmatch x:\n    case 1:\n        pass\n    case 2:\n        pass\n".to_owned();
     let resolved = resolve_src(&src)?;
     assert_eq!(resolved.match_stmts.len(), 1);
-    assert!(!resolved.match_stmts[0].has_wildcard);
+    assert!(
+        !resolved
+            .match_stmts
+            .first()
+            .expect("expected at least one match stmt")
+            .has_wildcard
+    );
     Ok(())
 }
 

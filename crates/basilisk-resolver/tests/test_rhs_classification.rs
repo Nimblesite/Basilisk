@@ -34,7 +34,14 @@ fn classifies_call_expr_rhs() -> Result<(), Box<dyn std::error::Error>> {
     let src = "result = some_func()\n".to_owned();
     let resolved = resolve_src(&src)?;
     assert_eq!(resolved.module_vars.len(), 1);
-    assert_eq!(resolved.module_vars[0].rhs_kind, RhsKind::CallExpr);
+    assert_eq!(
+        resolved
+            .module_vars
+            .first()
+            .expect("expected at least one module var")
+            .rhs_kind,
+        RhsKind::CallExpr
+    );
     Ok(())
 }
 
@@ -44,7 +51,14 @@ fn classifies_fstring_as_str_literal() -> Result<(), Box<dyn std::error::Error>>
     let src = "name = f\"hello\"\n".to_owned();
     let resolved = resolve_src(&src)?;
     assert_eq!(resolved.module_vars.len(), 1);
-    assert_eq!(resolved.module_vars[0].rhs_kind, RhsKind::StrLiteral);
+    assert_eq!(
+        resolved
+            .module_vars
+            .first()
+            .expect("expected at least one module var")
+            .rhs_kind,
+        RhsKind::StrLiteral
+    );
     Ok(())
 }
 
@@ -53,7 +67,14 @@ fn classifies_int_literal_rhs() -> Result<(), Box<dyn std::error::Error>> {
     use basilisk_resolver::RhsKind;
     let src = "count = 42\n".to_owned();
     let resolved = resolve_src(&src)?;
-    assert_eq!(resolved.module_vars[0].rhs_kind, RhsKind::IntLiteral);
+    assert_eq!(
+        resolved
+            .module_vars
+            .first()
+            .expect("expected at least one module var")
+            .rhs_kind,
+        RhsKind::IntLiteral
+    );
     Ok(())
 }
 
@@ -62,7 +83,14 @@ fn classifies_empty_list_rhs() -> Result<(), Box<dyn std::error::Error>> {
     use basilisk_resolver::RhsKind;
     let src = "items = []\n".to_owned();
     let resolved = resolve_src(&src)?;
-    assert_eq!(resolved.module_vars[0].rhs_kind, RhsKind::EmptyList);
+    assert_eq!(
+        resolved
+            .module_vars
+            .first()
+            .expect("expected at least one module var")
+            .rhs_kind,
+        RhsKind::EmptyList
+    );
     Ok(())
 }
 
@@ -71,6 +99,13 @@ fn classifies_empty_dict_rhs() -> Result<(), Box<dyn std::error::Error>> {
     use basilisk_resolver::RhsKind;
     let src = "mapping = {}\n".to_owned();
     let resolved = resolve_src(&src)?;
-    assert_eq!(resolved.module_vars[0].rhs_kind, RhsKind::EmptyDict);
+    assert_eq!(
+        resolved
+            .module_vars
+            .first()
+            .expect("expected at least one module var")
+            .rhs_kind,
+        RhsKind::EmptyDict
+    );
     Ok(())
 }

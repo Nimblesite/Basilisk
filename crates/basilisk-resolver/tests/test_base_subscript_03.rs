@@ -139,7 +139,12 @@ fn numeric_literal_param_annotation() -> Result<(), Box<dyn std::error::Error>> 
     let src = "def foo(x: 42) -> None:\n    pass\n".to_owned();
     let resolved = resolve_src(&src)?;
     let func = resolved.functions.iter().find(|f| f.name == "foo");
-    assert!(func.is_some_and(|f| f.parameters[0].annotation_is_numeric_literal));
+    assert!(func.is_some_and(|f| {
+        f.parameters
+            .first()
+            .expect("expected at least one parameter")
+            .annotation_is_numeric_literal
+    }));
     Ok(())
 }
 
@@ -148,7 +153,12 @@ fn boolean_literal_param_annotation() -> Result<(), Box<dyn std::error::Error>> 
     let src = "def foo(x: True) -> None:\n    pass\n".to_owned();
     let resolved = resolve_src(&src)?;
     let func = resolved.functions.iter().find(|f| f.name == "foo");
-    assert!(func.is_some_and(|f| f.parameters[0].annotation_is_numeric_literal));
+    assert!(func.is_some_and(|f| {
+        f.parameters
+            .first()
+            .expect("expected at least one parameter")
+            .annotation_is_numeric_literal
+    }));
     Ok(())
 }
 

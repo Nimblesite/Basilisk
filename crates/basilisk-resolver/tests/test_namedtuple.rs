@@ -13,9 +13,10 @@ fn namedtuple_typing_form_collected() -> Result<(), Box<dyn std::error::Error>> 
     .to_owned();
     let resolved = resolve_src(&src)?;
     assert_eq!(resolved.namedtuple_defs.len(), 1);
-    assert_eq!(resolved.namedtuple_defs[0].lhs_name, "Point");
-    assert_eq!(resolved.namedtuple_defs[0].field_names, vec!["x", "y"]);
-    assert!(resolved.namedtuple_defs[0].has_types);
+    let nt = resolved.namedtuple_defs.first().expect("expected at least one namedtuple def");
+    assert_eq!(nt.lhs_name, "Point");
+    assert_eq!(nt.field_names, vec!["x", "y"]);
+    assert!(nt.has_types);
     Ok(())
 }
 
@@ -28,8 +29,9 @@ fn namedtuple_collections_form_string_arg() -> Result<(), Box<dyn std::error::Er
     .to_owned();
     let resolved = resolve_src(&src)?;
     assert_eq!(resolved.namedtuple_defs.len(), 1);
-    assert_eq!(resolved.namedtuple_defs[0].field_names, vec!["x", "y"]);
-    assert!(!resolved.namedtuple_defs[0].has_types);
+    let nt = resolved.namedtuple_defs.first().expect("expected at least one namedtuple def");
+    assert_eq!(nt.field_names, vec!["x", "y"]);
+    assert!(!nt.has_types);
     Ok(())
 }
 
@@ -42,7 +44,14 @@ fn namedtuple_collections_form_comma_string() -> Result<(), Box<dyn std::error::
     .to_owned();
     let resolved = resolve_src(&src)?;
     assert_eq!(resolved.namedtuple_defs.len(), 1);
-    assert_eq!(resolved.namedtuple_defs[0].field_names, vec!["x", "y", "z"]);
+    assert_eq!(
+        resolved
+            .namedtuple_defs
+            .first()
+            .expect("expected at least one namedtuple def")
+            .field_names,
+        vec!["x", "y", "z"]
+    );
     Ok(())
 }
 
@@ -55,7 +64,14 @@ fn namedtuple_collections_form_list_arg() -> Result<(), Box<dyn std::error::Erro
     .to_owned();
     let resolved = resolve_src(&src)?;
     assert_eq!(resolved.namedtuple_defs.len(), 1);
-    assert_eq!(resolved.namedtuple_defs[0].field_names, vec!["x", "y"]);
+    assert_eq!(
+        resolved
+            .namedtuple_defs
+            .first()
+            .expect("expected at least one namedtuple def")
+            .field_names,
+        vec!["x", "y"]
+    );
     Ok(())
 }
 
@@ -68,7 +84,14 @@ fn namedtuple_collections_form_tuple_arg() -> Result<(), Box<dyn std::error::Err
     .to_owned();
     let resolved = resolve_src(&src)?;
     assert_eq!(resolved.namedtuple_defs.len(), 1);
-    assert_eq!(resolved.namedtuple_defs[0].field_names, vec!["x", "y"]);
+    assert_eq!(
+        resolved
+            .namedtuple_defs
+            .first()
+            .expect("expected at least one namedtuple def")
+            .field_names,
+        vec!["x", "y"]
+    );
     Ok(())
 }
 
@@ -96,7 +119,14 @@ fn namedtuple_typing_form_tuple_pairs() -> Result<(), Box<dyn std::error::Error>
     .to_owned();
     let resolved = resolve_src(&src)?;
     assert_eq!(resolved.namedtuple_defs.len(), 1);
-    assert_eq!(resolved.namedtuple_defs[0].field_names, vec!["x", "y"]);
+    assert_eq!(
+        resolved
+            .namedtuple_defs
+            .first()
+            .expect("expected at least one namedtuple def")
+            .field_names,
+        vec!["x", "y"]
+    );
     Ok(())
 }
 
@@ -112,7 +142,7 @@ fn namedtuple_typing_list_of_pairs() -> Result<(), Box<dyn std::error::Error>> {
         !resolved.namedtuple_defs.is_empty(),
         "NamedTuple def should be collected"
     );
-    let nt = &resolved.namedtuple_defs[0];
+    let nt = resolved.namedtuple_defs.first().expect("expected at least one namedtuple def");
     assert_eq!(nt.field_names, vec!["x", "y"]);
     assert!(nt.has_types);
     Ok(())
@@ -127,7 +157,14 @@ fn namedtuple_typing_tuple_of_pairs() -> Result<(), Box<dyn std::error::Error>> 
     .to_owned();
     let resolved = resolve_src(&src)?;
     assert!(!resolved.namedtuple_defs.is_empty());
-    assert_eq!(resolved.namedtuple_defs[0].field_names, vec!["x", "y"]);
+    assert_eq!(
+        resolved
+            .namedtuple_defs
+            .first()
+            .expect("expected at least one namedtuple def")
+            .field_names,
+        vec!["x", "y"]
+    );
     Ok(())
 }
 
@@ -140,7 +177,7 @@ fn namedtuple_collections_string_arg() -> Result<(), Box<dyn std::error::Error>>
     .to_owned();
     let resolved = resolve_src(&src)?;
     assert!(!resolved.namedtuple_defs.is_empty());
-    let nt = &resolved.namedtuple_defs[0];
+    let nt = resolved.namedtuple_defs.first().expect("expected at least one namedtuple def");
     assert_eq!(nt.field_names, vec!["x", "y"]);
     assert!(!nt.has_types);
     Ok(())
@@ -155,7 +192,14 @@ fn namedtuple_collections_list_of_strings() -> Result<(), Box<dyn std::error::Er
     .to_owned();
     let resolved = resolve_src(&src)?;
     assert!(!resolved.namedtuple_defs.is_empty());
-    assert_eq!(resolved.namedtuple_defs[0].field_names, vec!["x", "y"]);
+    assert_eq!(
+        resolved
+            .namedtuple_defs
+            .first()
+            .expect("expected at least one namedtuple def")
+            .field_names,
+        vec!["x", "y"]
+    );
     Ok(())
 }
 
@@ -168,7 +212,14 @@ fn namedtuple_with_defaults_keyword() -> Result<(), Box<dyn std::error::Error>> 
     .to_owned();
     let resolved = resolve_src(&src)?;
     assert!(!resolved.namedtuple_defs.is_empty());
-    assert_eq!(resolved.namedtuple_defs[0].defaults_count, 2);
+    assert_eq!(
+        resolved
+            .namedtuple_defs
+            .first()
+            .expect("expected at least one namedtuple def")
+            .defaults_count,
+        2
+    );
     Ok(())
 }
 
@@ -184,7 +235,14 @@ fn namedtuple_final_string_constant_resolved() -> Result<(), Box<dyn std::error:
     .to_owned();
     let resolved = resolve_src(&src)?;
     assert!(!resolved.namedtuple_defs.is_empty());
-    assert_eq!(resolved.namedtuple_defs[0].field_names, vec!["x", "y"]);
+    assert_eq!(
+        resolved
+            .namedtuple_defs
+            .first()
+            .expect("expected at least one namedtuple def")
+            .field_names,
+        vec!["x", "y"]
+    );
     Ok(())
 }
 
