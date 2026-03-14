@@ -11,7 +11,16 @@ use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, Severity};
 
-use super::helpers::CODE;
+use super::helpers::{CODE, span_text};
+
+/// Returns `true` when the annotation text looks like a `ClassVar` annotation.
+fn is_classvar_annotation(ann: &str) -> bool {
+    ann.starts_with("ClassVar[")
+        || ann.starts_with("ClassVar ")
+        || ann == "ClassVar"
+        || ann.starts_with("CV[")
+        || ann == "CV"
+}
 
 /// Check module-level annotated assignments for protocol `ClassVar` conformance.
 ///
@@ -39,14 +48,7 @@ pub(super) fn check_protocol_classvar_conformance(
             .attributes
             .iter()
             .filter(|attr| {
-                crate::span_util::slice_span(source, attr.annotation_span.unwrap_or_default())
-                    .is_some_and(|ann| {
-                        ann.starts_with("ClassVar[")
-                            || ann.starts_with("ClassVar ")
-                            || ann == "ClassVar"
-                            || ann.starts_with("CV[")
-                            || ann == "CV"
-                    })
+                span_text(source, attr.annotation_span).is_some_and(is_classvar_annotation)
             })
             .map(|attr| attr.name.as_str())
             .collect();
@@ -73,13 +75,9 @@ pub(super) fn check_protocol_classvar_conformance(
     // Step 3: Check module-level annotated assignments like `a: ProtoName = ClassName(...)`.
     for var in &module.module_vars {
         // Get the annotation text (e.g. "ProtoA").
-        let Some(ann_text) =
-            var.annotation_span
-                .and_then(|s| crate::span_util::slice_span(source, s))
-        else {
+        let Some(ann_trimmed) = span_text(source, var.annotation_span).map(str::trim) else {
             continue;
         };
-        let ann_trimmed = ann_text.trim();
 
         // Check if the annotation names a protocol with ClassVar attrs.
         let Some((_proto_name, required_cv_attrs)) = protocol_classvar_attrs
@@ -90,20 +88,18 @@ pub(super) fn check_protocol_classvar_conformance(
         };
 
         // Get the RHS text and check if it's a constructor call.
-        let Some(rhs_text) = var.rhs_span.and_then(|s| crate::span_util::slice_span(source, s))
-        else {
+        let Some(rhs_trimmed) = span_text(source, var.rhs_span).map(str::trim) else {
             continue;
         };
-        let rhs_trimmed = rhs_text.trim();
 
         // Extract class name from constructor call: ClassName(...)
         let Some(paren_idx) = rhs_trimmed.find('(') else {
             continue;
         };
-        let Some(impl_class_name) = rhs_trimmed.get(..paren_idx) else {
+        let Some(impl_class_name) = rhs_trimmed.get(..paren_idx).map(str::trim) else {
             continue;
         };
-        let impl_class_name = impl_class_name.trim();
+
         if impl_class_name.is_empty()
             || !impl_class_name
                 .chars()
@@ -125,30 +121,51 @@ pub(super) fn check_protocol_classvar_conformance(
         };
 
         // Check each required ClassVar attribute.
-        for cv_attr in required_cv_attrs {
-            if !cls_attrs.contains(cv_attr) {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
-                        "Class `{impl_class_name}` is not compatible with protocol \
-                         `{ann_trimmed}`: attribute `{cv_attr}` is required to be a \
-                         class variable (`ClassVar`) but is not defined at class level",
-                    ),
-                    span: var.name_span,
-                    path: path.to_owned(),
-                    help: Some(format!(
-                        "Define `{cv_attr}` as a class-level attribute in \
-                         `{impl_class_name}` instead of assigning via `self.{cv_attr}` \
-                         in `__init__`",
-                    )),
-                    note: Some(
-                        "Protocol `ClassVar` attributes must be class-level variables \
-                         in the implementation, not instance variables"
-                            .to_owned(),
-                    ),
-                });
-            }
+        emit_protocol_violations(
+            required_cv_attrs,
+            cls_attrs,
+            impl_class_name,
+            ann_trimmed,
+            var.name_span,
+            path,
+            diagnostics,
+        );
+    }
+}
+
+/// Emit diagnostics for any required ClassVar attributes missing from the implementation class.
+fn emit_protocol_violations(
+    required_cv_attrs: &[&str],
+    cls_attrs: &[&str],
+    impl_class_name: &str,
+    ann_trimmed: &str,
+    name_span: basilisk_resolver::Span,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for cv_attr in required_cv_attrs {
+        if !cls_attrs.contains(cv_attr) {
+            diagnostics.push(Diagnostic {
+                code: CODE.clone(),
+                severity: Severity::Error,
+                message: format!(
+                    "Class `{impl_class_name}` is not compatible with protocol \
+                     `{ann_trimmed}`: attribute `{cv_attr}` is required to be a \
+                     class variable (`ClassVar`) but is not defined at class level",
+                ),
+                span: name_span,
+                path: path.to_owned(),
+                help: Some(format!(
+                    "Define `{cv_attr}` as a class-level attribute in \
+                     `{impl_class_name}` instead of assigning via `self.{cv_attr}` \
+                     in `__init__`",
+                )),
+                note: Some(
+                    "Protocol `ClassVar` attributes must be class-level variables \
+                     in the implementation, not instance variables"
+                        .to_owned(),
+                ),
+            });
         }
     }
 }

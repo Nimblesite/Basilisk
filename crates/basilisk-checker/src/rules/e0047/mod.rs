@@ -31,7 +31,8 @@
 //! y: {} = {}                            # E — dict literal not a type
 //! ```
 
-mod helpers;
+mod scope;
+mod type_checks;
 
 use std::collections::HashSet;
 
@@ -42,10 +43,13 @@ use crate::span_util::slice_span;
 
 use super::Rule;
 
-use helpers::{
-    PYTHON_BUILTIN_TYPE_NAMES, build_module_scope_names, collect_non_type_names,
-    is_bare_identifier, is_circular_string_annotation, is_invalid_type_annotation,
-    is_non_type_name, is_paramspec_invalid_annotation,
+use scope::{
+    PYTHON_BUILTIN_TYPE_NAMES, build_module_scope_names, is_bare_identifier,
+    is_circular_string_annotation,
+};
+use type_checks::{
+    collect_non_type_names, is_invalid_type_annotation, is_non_type_name,
+    is_paramspec_invalid_annotation,
 };
 
 use basilisk_resolver::Span;

@@ -83,8 +83,8 @@ dbg_macro            = "deny"
 mem_forget           = "deny"
 # From impls that can panic should be TryFrom instead
 fallible_impl_from   = "deny"
-# Catch needless String::to_string() allocations — use .clone() for explicit intent
-string_to_string     = "deny"
+# Catch needless implicit clones — use .clone() for explicit intent
+implicit_clone       = "deny"
 # Require SAFETY comments on any unsafe block — defense in depth for allowed exceptions
 undocumented_unsafe_blocks = "deny"
 # Prevent silent precision loss in float literals — critical for numeric type correctness

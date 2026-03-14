@@ -9,7 +9,7 @@ use basilisk_resolver::{ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, Severity};
 
-use super::helpers::{CODE, is_ident_char, make_diagnostic};
+use super::helpers::{CODE, is_ident_char, make_diagnostic, span_text};
 
 /// Scan source text for `self.<name>: ClassVar` or `self.<name>: CV` patterns
 /// and return the spans and names of violations.
@@ -106,6 +106,15 @@ pub(super) fn find_self_classvar_annotations(source: &str) -> Vec<(String, Span)
     results
 }
 
+/// Returns `true` when the annotation text looks like a `ClassVar` annotation.
+fn is_classvar_annotation(ann: &str) -> bool {
+    ann.starts_with("ClassVar[")
+        || ann.starts_with("ClassVar ")
+        || ann == "ClassVar"
+        || ann.starts_with("CV[")
+        || ann == "CV"
+}
+
 /// Check module-level attribute assignments to ClassVar-annotated class attributes.
 ///
 /// e.g. `enterprise_d.stats = {}` where `stats: ClassVar[dict[str, int]]` in the class.
@@ -123,14 +132,7 @@ pub(super) fn check_instance_classvar_assignments(
             .attributes
             .iter()
             .filter(|attr| {
-                crate::span_util::slice_span(source, attr.annotation_span.unwrap_or_default())
-                    .is_some_and(|ann| {
-                        ann.starts_with("ClassVar[")
-                            || ann.starts_with("ClassVar ")
-                            || ann == "ClassVar"
-                            || ann.starts_with("CV[")
-                            || ann == "CV"
-                    })
+                span_text(source, attr.annotation_span).is_some_and(is_classvar_annotation)
             })
             .map(|attr| attr.name.as_str())
             .collect();
@@ -145,31 +147,7 @@ pub(super) fn check_instance_classvar_assignments(
 
     // Build a map of variable names to their class types (simple heuristic)
     // Look for module-level assignments like `enterprise_d = Starship(3000)`
-    let mut instance_class_map: Vec<(String, String)> = Vec::new();
-    for var in &module.module_vars {
-        let Some(rhs) = var.rhs_span.and_then(|s| crate::span_util::slice_span(source, s)) else {
-            continue;
-        };
-        // Check if RHS is a constructor call: ClassName(...)
-        let Some(paren_idx) = rhs.find('(') else {
-            continue;
-        };
-        let Some(class_name) = rhs.get(..paren_idx) else {
-            continue;
-        };
-        let class_name = class_name.trim();
-        if !class_name.is_empty()
-            && class_name
-                .chars()
-                .next()
-                .is_some_and(|ch| ch.is_ascii_uppercase())
-            && class_name
-                .chars()
-                .all(|ch| ch.is_alphanumeric() || ch == '_')
-        {
-            instance_class_map.push((var.name.clone(), class_name.to_owned()));
-        }
-    }
+    let instance_class_map = build_instance_class_map(module, source);
 
     // Check each module-level attribute assignment
     for assignment in &module.module_attr_assignments {
@@ -209,6 +187,38 @@ pub(super) fn check_instance_classvar_assignments(
             });
         }
     }
+}
+
+/// Build a map of variable name -> class name by scanning module-level constructor calls.
+///
+/// e.g. `enterprise_d = Starship(3000)` yields `("enterprise_d", "Starship")`.
+fn build_instance_class_map(module: &ResolvedModule, source: &str) -> Vec<(String, String)> {
+    let mut map = Vec::new();
+    for var in &module.module_vars {
+        let Some(rhs) = span_text(source, var.rhs_span) else {
+            continue;
+        };
+        // Check if RHS is a constructor call: ClassName(...)
+        let Some(paren_idx) = rhs.find('(') else {
+            continue;
+        };
+        let Some(class_name) = rhs.get(..paren_idx) else {
+            continue;
+        };
+        let class_name = class_name.trim();
+        if !class_name.is_empty()
+            && class_name
+                .chars()
+                .next()
+                .is_some_and(|ch| ch.is_ascii_uppercase())
+            && class_name
+                .chars()
+                .all(|ch| ch.is_alphanumeric() || ch == '_')
+        {
+            map.push((var.name.clone(), class_name.to_owned()));
+        }
+    }
+    map
 }
 
 /// Emit BSK-E0036 for every `self.<name>: ClassVar` annotation found inside a method body.

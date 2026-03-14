@@ -2,7 +2,31 @@
 
 use basilisk_resolver::Span;
 
+use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+
 use super::types::TypeParamKind;
+
+pub(super) const CODE: ErrorCode = ErrorCode {
+    code: "BSK-E0036",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0036",
+};
+
+/// Build a `BSK-E0036` diagnostic.
+pub(super) fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
+    Diagnostic {
+        code: CODE.clone(),
+        severity: Severity::Error,
+        message,
+        span,
+        path: path.to_owned(),
+        help: Some("`ClassVar` is only valid as a class body attribute annotation".to_owned()),
+        note: Some(
+            "PEP 526: `ClassVar` cannot appear in function signatures, local variables, \
+             or module-level annotations, and cannot be nested inside another type"
+                .to_owned(),
+        ),
+    }
+}
 
 /// Returns the text slice for a span within the source.
 pub(super) fn span_text(source: &str, span: Option<Span>) -> Option<&str> {

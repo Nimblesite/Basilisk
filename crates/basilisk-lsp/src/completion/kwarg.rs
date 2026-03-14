@@ -7,7 +7,6 @@ use std::collections::HashSet;
 
 use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind};
 
-use super::prefix::extract_prefix;
 
 /// Return `param=` completion items when the cursor is inside a call, or
 /// `None` if the context does not match a function call.
@@ -160,6 +159,3 @@ fn is_self_or_cls(name: &str) -> bool {
     name == "self" || name == "cls"
 }
 
-/// Extract the identifier prefix at the cursor (re-exported for `kwarg`
-/// callers that already hold a prefix string computed elsewhere).
-pub(super) use extract_prefix as cursor_prefix;

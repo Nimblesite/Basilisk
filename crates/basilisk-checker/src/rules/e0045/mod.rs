@@ -33,23 +33,19 @@ use std::collections::HashSet;
 use basilisk_resolver::{CallSite, ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
-use crate::span_util::slice_span;
 
 use super::Rule;
 
 use helpers::{
-    annotated_inner, check_vars_type_annotation_incompatible, collect_defined_names,
+    annotated_inner, annotation_is_type_subscript, collect_defined_names,
     collect_type_alias_names, count_args, first_arg, is_invalid_type_expr, is_undefined_bare_name,
+    span_text,
 };
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0045",
     docs_url: "https://www.basilisk-python.dev/errors/BSK-E0045",
 };
-
-fn span_text(source: &str, span: Option<Span>) -> Option<&str> {
-    slice_span(source, span?)
-}
 
 fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
     Diagnostic {
@@ -110,21 +106,23 @@ impl Rule for AnnotatedInvalidFirstArg {
             ));
         }
 
-        // Detect calls to TypeAlias names.
+        // Detect calls to TypeAlias names (e.g. `SmallInt(1)` where
+        // `SmallInt: TypeAlias = Annotated[int, ""]`).
         let type_alias_names = collect_type_alias_names(&module.module_vars, source);
         check_type_alias_calls(&module.calls, &type_alias_names, path, diagnostics);
 
-        // Detect `type[...] = Annotated[...]` assignments.
+        // Detect `type[...] = Annotated[...]` and `type[...] = <TypeAlias>` assignments.
+        // PEP 593: Annotated is not type-compatible with `type` or `type[T]`.
         check_vars_type_annotation_incompatible(
             &module.module_vars,
             source,
             path,
             &type_alias_names,
             diagnostics,
-            &make_diagnostic,
         );
 
-        // Detect `func(Annotated[...])` call arguments.
+        // Detect `func(Annotated[...])` and `func(TypeAlias)` call arguments.
+        // Passing an Annotated expression or TypeAlias where `type[T]` is expected is invalid.
         check_calls_with_annotated_args(
             &module.calls,
             source,
@@ -134,10 +132,6 @@ impl Rule for AnnotatedInvalidFirstArg {
         );
     }
 }
-
-// ---------------------------------------------------------------------------
-// Per-site annotation checks
-// ---------------------------------------------------------------------------
 
 fn check_annotated_in_vars(
     vars: &[basilisk_resolver::VariableInfo],
@@ -226,6 +220,7 @@ fn check_annotated_annotation(
 
     let arg_count = count_args(inner);
 
+    // Annotated[int] — too few arguments
     if arg_count < 2 {
         diagnostics.push(make_diagnostic(
             format!("`Annotated` requires at least two arguments for `{name}`"),
@@ -235,6 +230,7 @@ fn check_annotated_annotation(
         return;
     }
 
+    // Check that the first argument is a valid type expression
     let first = first_arg(inner);
     if is_invalid_type_expr(first) || is_undefined_bare_name(first, defined_names) {
         diagnostics.push(make_diagnostic(
@@ -245,11 +241,10 @@ fn check_annotated_annotation(
     }
 }
 
-// ---------------------------------------------------------------------------
-// Call-site checks
-// ---------------------------------------------------------------------------
-
 /// Emit E0045 for module-level calls where the callee is a known `TypeAlias` name.
+///
+/// A `TypeAlias` variable holds a type expression, not a callable. Calling it is always
+/// an error (`SmallInt(1)` where `SmallInt: TypeAlias = Annotated[int, ""]`).
 fn check_type_alias_calls(
     calls: &[CallSite],
     type_alias_names: &HashSet<String>,
@@ -270,8 +265,56 @@ fn check_type_alias_calls(
     }
 }
 
-/// Emit E0045 for call sites where a positional argument is an `Annotated[...]`
+/// Emit E0045 for module variables annotated `type[...]` whose RHS is an `Annotated[...]`
+/// expression or a known `TypeAlias` name.
+///
+/// PEP 593: `Annotated[T, ...]` is not compatible with `type[T]` — it is a value that
+/// carries metadata, not a type constructor.
+fn check_vars_type_annotation_incompatible(
+    vars: &[basilisk_resolver::VariableInfo],
+    source: &str,
+    path: &str,
+    type_alias_names: &HashSet<String>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for var in vars {
+        let Some(ann) = span_text(source, var.annotation_span) else {
+            continue;
+        };
+        if !annotation_is_type_subscript(ann.trim()) {
+            continue;
+        }
+        let Some(rhs) = span_text(source, var.rhs_span) else {
+            continue;
+        };
+        let rhs = rhs.trim();
+        if rhs.starts_with("Annotated[") {
+            diagnostics.push(make_diagnostic(
+                format!(
+                    "`Annotated[...]` is not compatible with `type[...]` for `{}`",
+                    var.name
+                ),
+                var.name_span,
+                path,
+            ));
+        } else if type_alias_names.contains(rhs) {
+            diagnostics.push(make_diagnostic(
+                format!(
+                    "Type alias `{rhs}` (an `Annotated[...]` alias) is not compatible with `type[...]` for `{}`",
+                    var.name
+                ),
+                var.name_span,
+                path,
+            ));
+        }
+    }
+}
+
+/// Emit E0045 for module-level call sites where a positional argument is an `Annotated[...]`
 /// subscript expression, or a known `TypeAlias` name.
+///
+/// PEP 593: `Annotated[T, ...]` is not type-compatible with `type[T]` — passing it where
+/// a `type[T]` value is expected is always a type error.
 fn check_calls_with_annotated_args(
     calls: &[CallSite],
     source: &str,
@@ -280,6 +323,7 @@ fn check_calls_with_annotated_args(
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for call in calls {
+        // Skip calls whose callee is already a TypeAlias name (handled by check_type_alias_calls).
         if type_alias_names.contains(&call.callee) {
             continue;
         }
@@ -310,4 +354,3 @@ fn check_calls_with_annotated_args(
         }
     }
 }
-

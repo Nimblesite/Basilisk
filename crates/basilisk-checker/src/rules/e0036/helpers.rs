@@ -4,6 +4,7 @@
 use basilisk_resolver::Span;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 /// The error code for this rule.
 pub(super) const CODE: ErrorCode = ErrorCode {
@@ -60,6 +61,13 @@ pub(super) fn make_diagnostic(message: String, span: Span, path: &str) -> Diagno
                 .to_owned(),
         ),
     }
+}
+
+/// Returns the text slice for an optional span within the source.
+///
+/// Returns `None` when the span is `None` or out of bounds.
+pub(super) fn span_text<'a>(source: &'a str, span: Option<Span>) -> Option<&'a str> {
+    slice_span(source, span?)
 }
 
 /// Returns `true` if the byte is an ASCII alphanumeric or underscore character.

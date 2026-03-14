@@ -3,7 +3,7 @@
 //!
 //! See `docs/WHOLE-MODULE-ANALYSIS-SPEC.md` for the full specification.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use dashmap::DashMap;

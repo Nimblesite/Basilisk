@@ -7,8 +7,6 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use tower_lsp::lsp_types::Url;
-
 use crate::config::{AnalysisMode, WorkspaceConfig};
 
 use super::workspace::FileEntry;

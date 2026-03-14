@@ -29,8 +29,8 @@
 //!
 //! <https://typing.readthedocs.io/en/latest/spec/tuples.html#type-compatibility-rules>
 
-mod annotation;
-mod source;
+pub(super) mod annotation;
+pub(super) mod source;
 
 use basilisk_resolver::ResolvedModule;
 
@@ -38,6 +38,7 @@ use crate::diagnostic::{Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
+
 use annotation::{
     annotation_has_starred_unpack, check_literal_against_annotation, check_var_against_annotation,
     is_simple_name,
