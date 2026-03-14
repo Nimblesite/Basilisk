@@ -25,39 +25,8 @@ pub(super) fn class_info_from(
     functions: &mut Vec<FunctionInfo>,
     match_stmts: &mut Vec<MatchStmtInfo>,
 ) -> ClassInfo {
-    let bases: Vec<String> = class
-        .arguments
-        .as_ref()
-        .map(|args| {
-            args.args
-                .iter()
-                .filter_map(|expr| {
-                    // Simple name bases (e.g. `object`, `Protocol`)
-                    if let Some(name) = expr_simple_name(expr) {
-                        return Some(name);
-                    }
-                    // Attribute bases (e.g. `abc.ABC`): extract the attribute name
-                    if let ruff_python_ast::Expr::Attribute(attr) = expr {
-                        return Some(attr.attr.to_string());
-                    }
-                    // Subscripted bases (e.g. `Protocol[T]`, `Generic[T]`): extract the base name
-                    if let ruff_python_ast::Expr::Subscript(sub) = expr {
-                        if let Some(name) = expr_simple_name(&sub.value) {
-                            return Some(name);
-                        }
-                        // Also handle `abc.ABC[T]`
-                        if let ruff_python_ast::Expr::Attribute(attr) = sub.value.as_ref() {
-                            return Some(attr.attr.to_string());
-                        }
-                    }
-                    None
-                })
-                .collect()
-        })
-        .unwrap_or_default();
+    let bases = extract_class_bases(class);
 
-    // Pre-compute is_dataclass and is_dataclass_kw_only so we can pass kw_only
-    // into collect_class_body for per-attribute kw_only resolution.
     let pre_is_dataclass = class.decorator_list.iter().any(
         |d| matches!(decorator_name(d), Some(n) if n == "dataclass" || n.ends_with(".dataclass")),
     );
@@ -67,8 +36,90 @@ pub(super) fn class_info_from(
         collect_class_body(class, functions, match_stmts, pre_is_dataclass_kw_only);
 
     let (generic_params, generic_non_typevar_args) = extract_generic_params(class);
+    mark_protocol_stubs(class, &bases, functions);
 
-    // If this class is a Protocol or ABC, mark methods with `pass`-only bodies as stubs.
+    let class_decorators: Vec<String> = class
+        .decorator_list
+        .iter()
+        .filter_map(decorator_name)
+        .collect();
+
+    let is_dataclass = class_decorators
+        .iter()
+        .any(|d| d == "dataclass" || d.ends_with(".dataclass"));
+
+    let (base_expression_names, has_subscript_base) = extract_base_refs(class);
+
+    ClassInfo {
+        name: class.name.to_string(),
+        name_span: text_range_to_span(class.name.range),
+        def_span: text_range_to_span(class.range),
+        bases,
+        attributes,
+        method_names,
+        method_decorators,
+        decorator_spans: class.decorator_list.iter().filter_map(decorator_name_and_span).collect(),
+        generic_params,
+        is_typed_dict: extract_is_typed_dict(class),
+        is_typeddict_total: extract_is_typeddict_total(class),
+        class_keywords: extract_class_keywords(class),
+        is_dataclass,
+        is_dataclass_frozen: is_dataclass && dataclass_flag(class, "frozen"),
+        is_dataclass_kw_only: pre_is_dataclass_kw_only,
+        is_dataclass_match_args_false: is_dataclass && dataclass_bool_flag_is_false(class, "match_args"),
+        is_dataclass_order: is_dataclass && dataclass_flag(class, "order"),
+        is_dataclass_unsafe_hash: is_dataclass && dataclass_flag(class, "unsafe_hash"),
+        is_dataclass_eq_false: is_dataclass && dataclass_bool_flag_is_false(class, "eq"),
+        is_dataclass_init_false: is_dataclass && dataclass_bool_flag_is_false(class, "init"),
+        is_final: class_decorators.iter().any(|d| d == "final" || d.rsplit('.').next() == Some("final")),
+        is_enum: extract_is_enum(class),
+        has_pep695_type_params: class.type_params.is_some(),
+        pep695_type_param_names: class.type_params.as_deref()
+            .map(|tp| tp.type_params.iter().map(type_param_name).collect())
+            .unwrap_or_default(),
+        base_expression_names,
+        generic_non_typevar_args,
+        metaclass_name: extract_metaclass_name(class),
+        has_subscript_base,
+        base_subscripts: extract_base_subscripts(class),
+        is_dataclass_slots: is_dataclass && dataclass_flag(class, "slots"),
+        has_manual_slots: class_has_manual_slots(class),
+        docstring: extract_docstring(&class.body),
+    }
+}
+
+/// Extract base class names from a class definition.
+fn extract_class_bases(class: &StmtClassDef) -> Vec<String> {
+    class
+        .arguments
+        .as_ref()
+        .map(|args| {
+            args.args
+                .iter()
+                .filter_map(|expr| {
+                    if let Some(name) = expr_simple_name(expr) {
+                        return Some(name);
+                    }
+                    if let ruff_python_ast::Expr::Attribute(attr) = expr {
+                        return Some(attr.attr.to_string());
+                    }
+                    if let ruff_python_ast::Expr::Subscript(sub) = expr {
+                        if let Some(name) = expr_simple_name(&sub.value) {
+                            return Some(name);
+                        }
+                        if let ruff_python_ast::Expr::Attribute(attr) = sub.value.as_ref() {
+                            return Some(attr.attr.to_string());
+                        }
+                    }
+                    None
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// If this class is a Protocol or ABC, mark methods with `pass`-only bodies as stubs.
+fn mark_protocol_stubs(class: &StmtClassDef, bases: &[String], functions: &mut [FunctionInfo]) {
     let is_protocol_or_abc = bases.iter().any(|b| b == "Protocol" || b == "ABC");
     if is_protocol_or_abc {
         let class_name_str = class.name.to_string();
@@ -81,18 +132,27 @@ pub(super) fn class_info_from(
             }
         }
     }
+}
 
-    let is_typed_dict = bases.iter().any(|b| b == "TypedDict");
-    // Detect `total=False` keyword in TypedDict subclass definitions.
-    let is_typeddict_total = !is_typed_dict
+fn extract_is_typed_dict(class: &StmtClassDef) -> bool {
+    class.arguments.as_ref().is_some_and(|args| {
+        args.args.iter().any(|expr| expr_simple_name(expr).is_some_and(|n| n == "TypedDict"))
+    })
+}
+
+fn extract_is_typeddict_total(class: &StmtClassDef) -> bool {
+    let is_typed_dict = extract_is_typed_dict(class);
+    !is_typed_dict
         || !class.arguments.as_ref().is_some_and(|args| {
             args.keywords.iter().any(|kw| {
                 kw.arg.as_ref().is_some_and(|a| a.as_str() == "total")
                     && matches!(&kw.value, ruff_python_ast::Expr::BooleanLiteral(b) if !b.value)
             })
-        });
+        })
+}
 
-    let class_keywords: Vec<String> = class
+fn extract_class_keywords(class: &StmtClassDef) -> Vec<String> {
+    class
         .arguments
         .as_ref()
         .map(|args| {
@@ -101,53 +161,29 @@ pub(super) fn class_info_from(
                 .filter_map(|kw| kw.arg.as_ref().map(ToString::to_string))
                 .collect()
         })
-        .unwrap_or_default();
+        .unwrap_or_default()
+}
 
-    let metaclass_name: Option<String> = class.arguments.as_ref().and_then(|args| {
+fn extract_metaclass_name(class: &StmtClassDef) -> Option<String> {
+    class.arguments.as_ref().and_then(|args| {
         args.keywords
             .iter()
             .find(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "metaclass"))
             .and_then(|kw| expr_simple_name(&kw.value))
-    });
+    })
+}
 
-    let class_decorators: Vec<String> = class
-        .decorator_list
-        .iter()
-        .filter_map(decorator_name)
-        .collect();
+fn extract_is_enum(class: &StmtClassDef) -> bool {
+    class.arguments.as_ref().is_some_and(|args| {
+        args.args.iter().any(|expr| {
+            expr_simple_name(expr).is_some_and(|n| ENUM_BASES.contains(&n.as_str()))
+        })
+    })
+}
 
-    let class_decorator_spans: Vec<(String, Span)> = class
-        .decorator_list
-        .iter()
-        .filter_map(decorator_name_and_span)
-        .collect();
-
-    let is_dataclass = class_decorators
-        .iter()
-        .any(|d| d == "dataclass" || d.ends_with(".dataclass"));
-
-    let is_dataclass_frozen = is_dataclass && dataclass_flag(class, "frozen");
-    let is_dataclass_kw_only = pre_is_dataclass_kw_only;
-    let is_dataclass_match_args_false =
-        is_dataclass && dataclass_bool_flag_is_false(class, "match_args");
-    let is_dataclass_order = is_dataclass && dataclass_flag(class, "order");
-    let is_dataclass_unsafe_hash = is_dataclass && dataclass_flag(class, "unsafe_hash");
-    let is_dataclass_eq_false = is_dataclass && dataclass_bool_flag_is_false(class, "eq");
-    let is_dataclass_init_false = is_dataclass && dataclass_bool_flag_is_false(class, "init");
-
-    let is_final = class_decorators
-        .iter()
-        .any(|d| d == "final" || d.rsplit('.').next() == Some("final"));
-
-    let is_enum = bases.iter().any(|b| ENUM_BASES.contains(&b.as_str()));
-
-    let has_pep695_type_params = class.type_params.is_some();
-    let pep695_type_param_names: Vec<String> = class
-        .type_params
-        .as_deref()
-        .map(|tp| tp.type_params.iter().map(type_param_name).collect())
-        .unwrap_or_default();
-    let (base_expression_names, has_subscript_base) = class
+/// Extract name references and subscript presence from base class expressions.
+fn extract_base_refs(class: &StmtClassDef) -> (Vec<String>, bool) {
+    class
         .arguments
         .as_ref()
         .map(|args| {
@@ -161,42 +197,7 @@ pub(super) fn class_info_from(
             }
             (names, has_sub)
         })
-        .unwrap_or_default();
-
-    ClassInfo {
-        name: class.name.to_string(),
-        name_span: text_range_to_span(class.name.range),
-        def_span: text_range_to_span(class.range),
-        bases,
-        attributes,
-        method_names,
-        method_decorators,
-        decorator_spans: class_decorator_spans,
-        generic_params,
-        is_typed_dict,
-        is_typeddict_total,
-        class_keywords,
-        is_dataclass,
-        is_dataclass_frozen,
-        is_dataclass_kw_only,
-        is_dataclass_match_args_false,
-        is_dataclass_order,
-        is_dataclass_unsafe_hash,
-        is_dataclass_eq_false,
-        is_dataclass_init_false,
-        is_final,
-        is_enum,
-        has_pep695_type_params,
-        pep695_type_param_names,
-        base_expression_names,
-        generic_non_typevar_args,
-        metaclass_name,
-        has_subscript_base,
-        base_subscripts: extract_base_subscripts(class),
-        is_dataclass_slots: is_dataclass && dataclass_flag(class, "slots"),
-        has_manual_slots: class_has_manual_slots(class),
-        docstring: extract_docstring(&class.body),
-    }
+        .unwrap_or_default()
 }
 
 // ---------------------------------------------------------------------------

@@ -4,6 +4,7 @@
 //! from LSP `publishDiagnostics` notifications.
 
 /// Parse the first diagnostic with the given code from a `publishDiagnostics` message.
+#[must_use]
 pub fn extract_diagnostic<'a>(
     diag_json: &'a serde_json::Value,
     code: &str,
@@ -15,6 +16,11 @@ pub fn extract_diagnostic<'a>(
 }
 
 /// Assert that a diagnostic has a valid LSP range (all four fields present and >= 0).
+///
+/// # Panics
+///
+/// Panics if the diagnostic is missing a `range` field or if any of the
+/// `start.line`, `start.character`, `end.line`, `end.character` values are absent.
 pub fn assert_valid_range(diag: &serde_json::Value, label: &str) {
     let range = &diag["range"];
     assert!(

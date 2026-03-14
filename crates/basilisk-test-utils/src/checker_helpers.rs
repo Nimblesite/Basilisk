@@ -21,6 +21,7 @@ pub struct Expected {
 
 impl Expected {
     /// Shorthand for an error diagnostic.
+    #[must_use]
     pub fn error(
         code: &'static str,
         message_contains: &'static str,
@@ -37,6 +38,7 @@ impl Expected {
     }
 
     /// Shorthand for a warning diagnostic.
+    #[must_use]
     pub fn warning(
         code: &'static str,
         message_contains: &'static str,
@@ -55,6 +57,11 @@ impl Expected {
 
 /// Assert that `diags` matches `expected` exactly — same count, same order
 /// (sorted by span start), same code/severity/location/message.
+///
+/// # Panics
+///
+/// Panics if the number of diagnostics differs from expected, or if any
+/// diagnostic has a mismatched code, severity, line, column, or message.
 pub fn assert_diagnostics(source: &str, diags: &[Diagnostic], expected: &[Expected]) {
     let mut sorted = diags.to_vec();
     // Sort by span start, then by code for a stable order when two diagnostics

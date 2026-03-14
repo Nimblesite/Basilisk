@@ -5,6 +5,7 @@
 /// Derives the target directory from the test executable's own location,
 /// which works regardless of whether `cargo test` or `cargo llvm-cov`
 /// (which uses a different `--target-dir`) invoked us.
+#[must_use]
 pub fn basilisk_binary() -> String {
     // The test binary lives under <target-dir>/debug/deps/...
     // We want <target-dir>/debug/basilisk
@@ -21,6 +22,7 @@ pub fn basilisk_binary() -> String {
 }
 
 /// Convert a byte offset in `source` into a 1-based (line, col) pair.
+#[must_use]
 pub fn line_col(source: &str, offset: u32) -> (usize, usize) {
     let clamped = (offset as usize).min(source.len());
     let before = &source[..clamped];

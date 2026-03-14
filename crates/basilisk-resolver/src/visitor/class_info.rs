@@ -5,6 +5,10 @@ use ruff_text_size::Ranged;
 
 use crate::scope::{AttributeInfo, FunctionInfo, MatchStmtInfo, RhsKind};
 
+/// Return type for [`collect_class_body`]: attributes, method names, and
+/// per-method decorator lists.
+pub(super) type ClassBodyInfo = (Vec<AttributeInfo>, Vec<String>, Vec<(String, Vec<String>)>);
+
 use super::annotations::{
     annotation_contains_readonly_expr, annotation_is_init_var, annotation_is_kw_only,
 };
@@ -18,7 +22,7 @@ pub(super) fn collect_class_body(
     functions: &mut Vec<FunctionInfo>,
     match_stmts: &mut Vec<MatchStmtInfo>,
     class_kw_only: bool,
-) -> (Vec<AttributeInfo>, Vec<String>, Vec<(String, Vec<String>)>) {
+) -> ClassBodyInfo {
     let mut attributes = Vec::new();
     let mut method_names = Vec::new();
     let mut method_decorators: Vec<(String, Vec<String>)> = Vec::new();
