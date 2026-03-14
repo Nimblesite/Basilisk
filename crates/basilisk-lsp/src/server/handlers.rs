@@ -18,7 +18,7 @@ use tower_lsp::lsp_types::{
     SelectionRange, SelectionRangeParams, SemanticTokens, SemanticTokensParams,
     SemanticTokensResult, SignatureHelpParams, SymbolInformation, TextDocumentPositionParams,
     TextEdit, TypeHierarchyItem, TypeHierarchyPrepareParams, TypeHierarchySubtypesParams,
-    TypeHierarchySupertypesParams, WorkspaceEdit, WorkspaceSymbolParams,
+    TypeHierarchySupertypesParams, Url, WorkspaceEdit, WorkspaceSymbolParams,
 };
 
 use crate::{
@@ -41,17 +41,41 @@ pub(super) async fn hover(server: &LspServer, params: HoverParams) -> LspResult<
 }
 
 /// Handle `textDocument/definition`.
+///
+/// Tries single-file definition first. If no local definition is found,
+/// falls back to cross-file lookup via `imported_symbols` populated by
+/// cross-module analysis.
 pub(super) async fn goto_definition(
     server: &LspServer,
     params: GotoDefinitionParams,
 ) -> LspResult<Option<GotoDefinitionResponse>> {
     let uri = params.text_document_position_params.text_document.uri;
     let pos = params.text_document_position_params.position;
-    server
-        .at_position(uri, pos, |resolved, text, offset, uri, _| {
-            definition::goto_definition(resolved, text, offset, uri)
+    Ok(server
+        .with_index(|idx| {
+            let (text, resolved, _) = idx.get_by_uri(&uri)?;
+            let byte_offset = crate::util::position_to_byte_offset(&text, pos);
+
+            // Try single-file definition first.
+            if let Some(resp) =
+                definition::goto_definition(&resolved, &text, byte_offset, &uri)
+            {
+                return Some(resp);
+            }
+
+            // Cross-file: extract identifier and check imported symbols.
+            let name = crate::util::identifier_at_offset(&text, byte_offset)?;
+            let ext_sym = resolved.imported_symbols.get(&name)?;
+            let target_entry = idx.files.get(&ext_sym.source_path)?;
+            let range = crate::util::span_to_range(&target_entry.text, ext_sym.source_span);
+            let target_uri = Url::from_file_path(&ext_sym.source_path).ok()?;
+
+            Some(GotoDefinitionResponse::Scalar(Location {
+                uri: target_uri,
+                range,
+            }))
         })
-        .await
+        .await)
 }
 
 /// Handle `textDocument/declaration`.

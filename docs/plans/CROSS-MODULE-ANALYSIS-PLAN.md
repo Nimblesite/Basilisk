@@ -155,7 +155,7 @@ uv integration is additive to cross-module analysis — it accelerates Phases 1 
 - [x] Create `crates/basilisk-config/` crate — `serde` + `toml`, parses `basilisk.json` and `[tool.basilisk]` from `pyproject.toml`
 - [x] Implement `ModuleOverride` + `module_matches_pattern()` with `django.*` wildcard in `crates/basilisk-config/src/overrides.rs`
 - [x] Implement `PathOverride` + `path_matches_pattern()` with `vendor/**` glob in `crates/basilisk-config/src/overrides.rs`
-- [ ] `.pyi` file parsing — extract signatures, class defs, variable annotations, `@overload` support
+- [x] `.pyi` file parsing — extract signatures, class defs, variable annotations, `@overload` support
 - [ ] Wire `basilisk-config` overrides into checker — apply per-module/per-path overrides during `check()`
 - [ ] "Disable in project config" code action in `code_actions.rs` — opens/edits `pyproject.toml`
 - [ ] Python env detection — `python3 -c "import sys; print(sys.path)"` fallback for site-packages discovery
@@ -172,10 +172,10 @@ uv integration is additive to cross-module analysis — it accelerates Phases 1 
 - [x] Create `crates/basilisk-lsp/src/cross_module.rs` — `extract_exports()`, `build_function_signature()`, `populate_cross_module_symbols()` (two-pass algorithm)
 - [x] Implement `invalidate_dependents()` in `workspace.rs` — re-analyse changed file, cascade to transitive importers if exports changed
 - [x] Implement `exported_symbol_names()` in `workspace.rs` — export diffing, skip cascade if unchanged
-- [ ] Wire `imported_symbols` into checker rules — type checks query cross-file type info
+- [x] Wire `imported_symbols` into checker rules — e0018 checks cross-module symbols, init.rs calls `populate_cross_module_symbols()` + `recheck_with_cross_module_symbols()`
 
 ### Phase 3: Cross-File LSP Features
-- [ ] Cross-file Go to Definition — follow `resolved_path`, find symbol's `name_span` in target `ResolvedModule`
+- [WIP] Cross-file Go to Definition — follow `resolved_path`, find symbol's `name_span` in target `ResolvedModule`
 - [ ] Handle re-exports in Go to Definition — follow import chain across modules
 - [ ] Cross-file Find All References — use import graph reverse edges, search all importers for symbol usage
 - [ ] Cross-file Rename — multi-file `WorkspaceEdit`: definition site + import sites + usage sites

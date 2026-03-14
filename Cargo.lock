@@ -249,6 +249,9 @@ version = "0.1.0"
 dependencies = [
  "phf",
  "phf_codegen",
+ "ruff_python_ast",
+ "ruff_python_parser",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

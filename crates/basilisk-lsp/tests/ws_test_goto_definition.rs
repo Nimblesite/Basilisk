@@ -13,6 +13,10 @@
 mod ws_test_common;
 use ws_test_common::*;
 
+use std::time::Duration;
+
+use futures_util::StreamExt;
+
 #[tokio::test]
 async fn test_ws_goto_definition_function() -> TestResult<()> {
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n";
@@ -365,5 +369,147 @@ x = 42
         resp.contains("\"result\":null"),
         "type definition for unannotated variable should be null: {resp}"
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_goto_definition_cross_file_function() -> TestResult<()> {
+    // Set up a workspace with two files: helpers.py defines `greet`,
+    // main.py imports and uses it.
+    let dir = unique_temp_dir("bsk_goto_cross_file");
+    std::fs::create_dir_all(&dir)?;
+
+    std::fs::write(
+        dir.join("helpers.py"),
+        "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n",
+    )?;
+    std::fs::write(
+        dir.join("main.py"),
+        "from helpers import greet\n\nresult: str = greet(\"world\")\n",
+    )?;
+
+    let root_uri = format!("file://{}", dir.display());
+    let main_uri = format!("file://{}", dir.join("main.py").display());
+
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = initialize_with_root(&mut fixture, &root_uri, "crossModule").await?;
+
+    // Drain startup scan messages (diagnostics for both files).
+    for _ in 0..20 {
+        let msg = tokio::time::timeout(Duration::from_millis(500), fixture.ws_read.next()).await;
+        if msg.is_err() {
+            break;
+        }
+    }
+
+    // Go to definition on `greet` at the call site in main.py.
+    // Line 2: "result: str = greet("world")" — 'g' of "greet" at character 14.
+    let resp = fixture
+        .request(
+            500,
+            "textDocument/definition",
+            serde_json::json!({
+                "textDocument": { "uri": main_uri },
+                "position": { "line": 2, "character": 14 }
+            }),
+        )
+        .await?
+        .ok_or("no response to cross-file goto definition")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert!(
+        parsed["result"] != serde_json::Value::Null,
+        "cross-file goto-def must resolve: {resp}"
+    );
+
+    // Should jump to helpers.py, not main.py.
+    let result_uri = parsed["result"]["uri"].as_str().unwrap_or("");
+    assert!(
+        result_uri.contains("helpers.py"),
+        "cross-file goto-def should jump to helpers.py, got: {result_uri}"
+    );
+
+    // Should land at the `greet` function definition: line 0, character 4.
+    let start = &parsed["result"]["range"]["start"];
+    assert_eq!(
+        start["line"], 0,
+        "cross-file goto-def should land on line 0 of helpers.py: {resp}"
+    );
+    assert_eq!(
+        start["character"], 4,
+        "cross-file goto-def should land at char 4 where 'greet' is defined: {resp}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_goto_definition_cross_file_class() -> TestResult<()> {
+    // Set up a workspace: models.py defines `Dog`, app.py imports and uses it.
+    let dir = unique_temp_dir("bsk_goto_cross_class");
+    std::fs::create_dir_all(&dir)?;
+
+    std::fs::write(
+        dir.join("models.py"),
+        "class Dog:\n    name: str\n    def bark(self) -> str:\n        return \"woof\"\n",
+    )?;
+    std::fs::write(
+        dir.join("app.py"),
+        "from models import Dog\n\npet: Dog = Dog()\n",
+    )?;
+
+    let root_uri = format!("file://{}", dir.display());
+    let app_uri = format!("file://{}", dir.join("app.py").display());
+
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = initialize_with_root(&mut fixture, &root_uri, "crossModule").await?;
+
+    // Drain startup messages.
+    for _ in 0..20 {
+        let msg = tokio::time::timeout(Duration::from_millis(500), fixture.ws_read.next()).await;
+        if msg.is_err() {
+            break;
+        }
+    }
+
+    // Go to definition on `Dog` usage at line 2: "pet: Dog = Dog()"
+    // First `Dog` (type annotation) starts at character 5.
+    let resp = fixture
+        .request(
+            501,
+            "textDocument/definition",
+            serde_json::json!({
+                "textDocument": { "uri": app_uri },
+                "position": { "line": 2, "character": 5 }
+            }),
+        )
+        .await?
+        .ok_or("no response to cross-file goto definition for class")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert!(
+        parsed["result"] != serde_json::Value::Null,
+        "cross-file goto-def for class must resolve: {resp}"
+    );
+
+    let result_uri = parsed["result"]["uri"].as_str().unwrap_or("");
+    assert!(
+        result_uri.contains("models.py"),
+        "cross-file goto-def should jump to models.py, got: {result_uri}"
+    );
+
+    // `Dog` class name starts at character 6 ("class Dog:")
+    let start = &parsed["result"]["range"]["start"];
+    assert_eq!(
+        start["line"], 0,
+        "cross-file goto-def should land on line 0 of models.py: {resp}"
+    );
+    assert_eq!(
+        start["character"], 6,
+        "cross-file goto-def should land at char 6 where 'Dog' is defined: {resp}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
     Ok(())
 }

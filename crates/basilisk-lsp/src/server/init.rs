@@ -49,6 +49,9 @@ pub(super) async fn initialize(
         &roots,
     );
 
+    // Store workspace roots for later use by import resolution.
+    *server.workspace_roots.write().await = roots.clone();
+
     // Build the workspace index now so `initialized()` can scan immediately.
     let index = WorkspaceIndex::new(roots, mode);
     *server.index.write().await = Some(index);
@@ -170,6 +173,21 @@ pub(super) async fn initialized(server: &LspServer) {
             crate::import_resolver::resolve_workspace_imports(index, &search_paths);
             drop(roots);
 
+            // Cross-module: populate imported symbols and rebuild import graph.
+            if matches!(index.mode, AnalysisMode::CrossModule) {
+                crate::cross_module::populate_cross_module_symbols(index);
+                index.build_import_graph();
+                info!("cross-module symbol population complete");
+
+                // Re-check all files now that cross-module symbols are available.
+                let cross_results = recheck_with_cross_module_symbols(index);
+                drop(guard);
+                for (uri, diags) in cross_results {
+                    server.client.publish_diagnostics(uri, diags, None).await;
+                }
+                return;
+            }
+
             drop(guard);
             for (uri, diags) in results {
                 server.client.publish_diagnostics(uri, diags, None).await;
@@ -254,10 +272,24 @@ async fn run_workspace_scan(server: &LspServer, _mode: AnalysisMode) {
     crate::import_resolver::resolve_workspace_imports(index, &search_paths);
     drop(roots);
 
-    drop(guard);
-    for (uri, diags) in results {
-        server.client.publish_diagnostics(uri, diags, None).await;
+    // Cross-module: populate imported symbols and rebuild import graph.
+    if matches!(index.mode, AnalysisMode::CrossModule) {
+        crate::cross_module::populate_cross_module_symbols(index);
+        index.build_import_graph();
+        info!("cross-module symbol population complete (config change)");
+
+        let cross_results = recheck_with_cross_module_symbols(index);
+        drop(guard);
+        for (uri, diags) in cross_results {
+            server.client.publish_diagnostics(uri, diags, None).await;
+        }
+    } else {
+        drop(guard);
+        for (uri, diags) in results {
+            server.client.publish_diagnostics(uri, diags, None).await;
+        }
     }
+
     server
         .client
         .log_message(
@@ -283,6 +315,37 @@ async fn clear_non_open_diagnostics(server: &LspServer) {
     for uri in to_clear {
         server.client.publish_diagnostics(uri, vec![], None).await;
     }
+}
+
+/// Re-check all workspace files using their current `ResolvedModule` (which now
+/// contains cross-module `imported_symbols`). Returns fresh LSP diagnostics.
+///
+/// This is called after `populate_cross_module_symbols()` so that checker rules
+/// can see imported symbols from other modules.
+fn recheck_with_cross_module_symbols(
+    index: &WorkspaceIndex,
+) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
+    let mut results = Vec::new();
+
+    for mut entry in index.files.iter_mut() {
+        let Some(resolved) = &entry.resolved else {
+            continue;
+        };
+
+        let checker_diags = basilisk_checker::check(resolved);
+        let lsp_diags: Vec<tower_lsp::lsp_types::Diagnostic> = checker_diags
+            .iter()
+            .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &entry.text))
+            .collect();
+
+        entry.diagnostics = checker_diags;
+
+        if let Some(uri) = crate::workspace_scan::path_to_uri(entry.key()) {
+            results.push((uri, lsp_diags));
+        }
+    }
+
+    results
 }
 
 /// Handle the `shutdown` request: stop all debug sessions.

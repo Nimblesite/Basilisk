@@ -20,6 +20,12 @@ pub fn goto_definition(
 ) -> Option<GotoDefinitionResponse> {
     // First, check if cursor is directly on a known symbol definition.
     if let Some(hit) = find_symbol_at_offset(resolved, byte_offset) {
+        // Imports with resolved paths should be handled by cross-file lookup.
+        if let SymbolHit::Import(imp) = &hit {
+            if imp.resolved_path.is_some() {
+                return None;
+            }
+        }
         let range = span_to_range(source, definition_span(&hit));
         return Some(GotoDefinitionResponse::Scalar(Location {
             uri: uri.clone(),

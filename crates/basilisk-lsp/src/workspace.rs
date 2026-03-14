@@ -281,13 +281,11 @@ impl WorkspaceIndex {
             let version = self
                 .files
                 .get(&importer_path)
-                .map(|e| e.version)
-                .unwrap_or(0);
+                .map_or(0, |e| e.version);
             let is_open = self
                 .files
                 .get(&importer_path)
-                .map(|e| e.is_open)
-                .unwrap_or(false);
+                .is_some_and(|e| e.is_open);
             let mut entry = new_entry;
             entry.version = version;
             entry.is_open = is_open;

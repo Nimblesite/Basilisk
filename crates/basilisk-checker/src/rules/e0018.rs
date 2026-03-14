@@ -44,6 +44,7 @@ impl Rule for UndefinedVariable {
                 func,
                 &module.functions,
                 &import_names,
+                &module.imported_symbols,
                 &module.path,
                 diagnostics,
             );
@@ -74,6 +75,7 @@ fn check_function(
     func: &FunctionInfo,
     all_functions: &[FunctionInfo],
     import_names: &[&str],
+    imported_symbols: &std::collections::HashMap<String, basilisk_resolver::scope::ExternalSymbol>,
     path: &str,
     out: &mut Vec<Diagnostic>,
 ) {
@@ -86,6 +88,7 @@ fn check_function(
             || func.kwarg.as_ref().is_some_and(|k| k.name == name_str)
             || func.all_local_assigns.iter().any(|a| a == name)
             || import_names.contains(&name_str)
+            || imported_symbols.contains_key(name_str)
             || is_in_enclosing_scope(name_str, func, all_functions)
         {
             continue;

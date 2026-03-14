@@ -36,19 +36,19 @@ impl ImportGraph {
     }
 
     /// Add an import edge: `importer` imports `imported`.
-    pub fn add_edge(&mut self, importer: &Path, imported: &Path) {
+    pub fn add_edge(&mut self, importer: &Path, dependency: &Path) {
         let _ = self
             .forward
             .entry(importer.to_path_buf())
             .or_default()
-            .insert(imported.to_path_buf());
+            .insert(dependency.to_path_buf());
         let _ = self
             .reverse
-            .entry(imported.to_path_buf())
+            .entry(dependency.to_path_buf())
             .or_default()
             .insert(importer.to_path_buf());
         // Ensure both nodes exist in both maps for consistent traversal.
-        let _ = self.forward.entry(imported.to_path_buf()).or_default();
+        let _ = self.forward.entry(dependency.to_path_buf()).or_default();
         let _ = self.reverse.entry(importer.to_path_buf()).or_default();
     }
 
@@ -173,71 +173,7 @@ impl ImportGraph {
     /// Uses DFS with coloring (white/gray/black) to find back edges.
     /// Returns a list of detected cycles.
     pub fn detect_cycles(&mut self) -> &[ImportCycle] {
-        #[derive(Clone, Copy, PartialEq, Eq)]
-        enum Color {
-            White,
-            Gray,
-            Black,
-        }
-
-        let mut colors: HashMap<PathBuf, Color> = self
-            .forward
-            .keys()
-            .map(|k| (k.clone(), Color::White))
-            .collect();
-        let mut path_stack: Vec<PathBuf> = Vec::new();
-        let mut cycles: Vec<ImportCycle> = Vec::new();
-
-        fn dfs(
-            node: &Path,
-            forward: &HashMap<PathBuf, HashSet<PathBuf>>,
-            colors: &mut HashMap<PathBuf, Color>,
-            path_stack: &mut Vec<PathBuf>,
-            cycles: &mut Vec<ImportCycle>,
-        ) {
-            if let Some(color) = colors.get_mut(&node.to_path_buf()) {
-                *color = Color::Gray;
-            }
-            path_stack.push(node.to_path_buf());
-
-            if let Some(deps) = forward.get(node) {
-                for dep in deps {
-                    match colors.get(dep).copied() {
-                        Some(Color::White) => {
-                            dfs(dep, forward, colors, path_stack, cycles);
-                        }
-                        Some(Color::Gray) => {
-                            // Back edge — cycle found. Extract the cycle from path_stack.
-                            if let Some(cycle_start) = path_stack.iter().position(|p| p == dep) {
-                                let chain: Vec<PathBuf> = path_stack[cycle_start..].to_vec();
-                                cycles.push(ImportCycle { chain });
-                            }
-                        }
-                        Some(Color::Black) | None => {}
-                    }
-                }
-            }
-
-            let _ = path_stack.pop();
-            if let Some(color) = colors.get_mut(&node.to_path_buf()) {
-                *color = Color::Black;
-            }
-        }
-
-        let nodes: Vec<PathBuf> = self.forward.keys().cloned().collect();
-        for node in &nodes {
-            if colors.get(node).copied() == Some(Color::White) {
-                dfs(
-                    node,
-                    &self.forward,
-                    &mut colors,
-                    &mut path_stack,
-                    &mut cycles,
-                );
-            }
-        }
-
-        self.cycles = cycles;
+        self.cycles = detect_cycles_inner(&self.forward);
         &self.cycles
     }
 
@@ -252,7 +188,7 @@ impl ImportGraph {
     /// Walks all files in the index, extracts `ImportInfo.resolved_path` from
     /// each `ResolvedModule`, and adds edges to the graph.
     pub fn build_from_index(&mut self, index: &crate::workspace::WorkspaceIndex) {
-        for entry in index.files.iter() {
+        for entry in &index.files {
             let importer_path = entry.key().clone();
             self.add_node(&importer_path);
 

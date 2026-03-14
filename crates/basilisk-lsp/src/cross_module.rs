@@ -115,7 +115,7 @@ pub fn populate_cross_module_symbols(index: &WorkspaceIndex) {
     let mut all_exports: std::collections::HashMap<PathBuf, Vec<(String, ExternalSymbol)>> =
         std::collections::HashMap::new();
 
-    for entry in index.files.iter() {
+    for entry in &index.files {
         let path = entry.key().clone();
         if let Some(resolved) = &entry.resolved {
             let exports = extract_exports(resolved, &path);
