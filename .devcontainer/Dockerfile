@@ -3,12 +3,27 @@
 FROM rust:1.94.0-bookworm
 
 # System deps (pinned to Debian bookworm repository versions)
+# VS Code test runner requires: libnspr4, libnss3, libgbm1, libxkbfile1, libsecret-1-0,
+# libgtk-3-0, libxss1, libxtst6, libasound2, libatk-bridge2.0-0 (Electron/Chromium stack)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     software-properties-common \
     xvfb \
     xauth \
     curl \
     ca-certificates \
+    libnspr4 \
+    libnss3 \
+    libgbm1 \
+    libxkbfile1 \
+    libsecret-1-0 \
+    libgtk-3-0 \
+    libxss1 \
+    libxtst6 \
+    libasound2 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libgdk-pixbuf2.0-0 \
+    libdbus-1-3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Python 3.12 (matches CI: actions/setup-python@v5 with python-version: "3.12")

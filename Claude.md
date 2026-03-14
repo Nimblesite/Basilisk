@@ -42,6 +42,7 @@ OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK MESSAGES AND COMPLY
    **aggressively remove** allow from the code!!!
 - Zero duplication. DRY AF!!! Check for existing code before writing new code
 - Aggressively move code that can be shared out to shared crates/modules/packages
+- Keep the dependencies and versions in these two files in sync at all times: .github/workflows/ci.yml, .devcontainer/Dockerfile
 - Ignore compiler code (except clippy fixes)
 - Do not use Git unless asked
 - There is NO SUCH THING AS LEGACY CODE in this codebase. Legacy = DELETED
