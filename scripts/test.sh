@@ -84,8 +84,8 @@ ok "basilisk binary ready: $BASILISK_BIN"
 header "Running tests with coverage instrumentation"
 # Limit parallel jobs to prevent linker OOM (Bus error / signal 7)
 # on memory-constrained CI runners during coverage-instrumented linking.
-# Override with CARGO_BUILD_JOBS env var; defaults to 2 for CI safety.
-COV_JOBS="${CARGO_BUILD_JOBS:-2}"
+# Override with CARGO_BUILD_JOBS env var; defaults to 1 for CI safety.
+COV_JOBS="${CARGO_BUILD_JOBS:-1}"
 set +e
 cargo llvm-cov \
     -j "$COV_JOBS" \
