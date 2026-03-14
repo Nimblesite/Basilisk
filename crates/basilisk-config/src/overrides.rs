@@ -100,9 +100,9 @@ pub fn path_matches_pattern(file_path: &std::path::Path, pattern: &str) -> bool 
 ///
 /// Returns the override configuration if any per-module pattern matches.
 #[must_use]
-pub fn find_module_override<'a>(
+pub fn find_module_override<'a, S: std::hash::BuildHasher>(
     module_name: &str,
-    overrides: &'a HashMap<String, ModuleOverride>,
+    overrides: &'a HashMap<String, ModuleOverride, S>,
 ) -> Option<&'a ModuleOverride> {
     // Exact match first, then wildcard patterns.
     if let Some(entry) = overrides.get(module_name) {
@@ -118,9 +118,9 @@ pub fn find_module_override<'a>(
 ///
 /// Returns the override configuration if any per-path pattern matches.
 #[must_use]
-pub fn find_path_override<'a>(
+pub fn find_path_override<'a, S: std::hash::BuildHasher>(
     file_path: &std::path::Path,
-    overrides: &'a HashMap<String, PathOverride>,
+    overrides: &'a HashMap<String, PathOverride, S>,
 ) -> Option<&'a PathOverride> {
     overrides
         .iter()
@@ -130,10 +130,10 @@ pub fn find_path_override<'a>(
 
 /// Check whether a rule is disabled for a given file path.
 #[must_use]
-pub fn is_rule_disabled_for_path(
+pub fn is_rule_disabled_for_path<S: std::hash::BuildHasher>(
     rule_code: &str,
     file_path: &std::path::Path,
-    overrides: &HashMap<String, PathOverride>,
+    overrides: &HashMap<String, PathOverride, S>,
 ) -> bool {
     find_path_override(file_path, overrides)
         .is_some_and(|o| o.disabled_rules.iter().any(|r| r == rule_code))

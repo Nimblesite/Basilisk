@@ -151,6 +151,10 @@ pub(super) async fn signature_help(
 }
 
 /// Handle `textDocument/references`.
+///
+/// Finds single-file references first, then searches cross-file via the
+/// import graph — checking all importers of the current file for usage of
+/// the symbol, and the source file if the symbol is imported.
 pub(super) async fn references(
     server: &LspServer,
     params: ReferenceParams,
@@ -158,17 +162,83 @@ pub(super) async fn references(
     let uri = params.text_document_position.text_document.uri;
     let pos = params.text_document_position.position;
     let include_decl = params.context.include_declaration;
-    server
-        .at_position(uri, pos, |resolved, text, offset, uri, _| {
-            none_if_empty(references::find_references(
-                resolved,
-                text,
-                offset,
-                uri,
-                include_decl,
-            ))
+    Ok(server
+        .with_index(|idx| {
+            let (text, resolved, _) = idx.get_by_uri(&uri)?;
+            let byte_offset = crate::util::position_to_byte_offset(&text, pos);
+
+            // Single-file references.
+            let mut locations = references::find_references(
+                &resolved, &text, byte_offset, &uri, include_decl,
+            );
+
+            // Extract the symbol name for cross-file search.
+            let name = crate::util::identifier_at_offset(&text, byte_offset)?;
+            let current_path = uri.to_file_path().ok()?;
+
+            // Cross-file: search importers of this file for the symbol.
+            if let Ok(graph) = idx.import_graph.lock() {
+                for importer_path in graph.importers_of(&current_path) {
+                    if let Some(entry) = idx.files.get(&importer_path) {
+                        // Only search if the importer has this symbol in imported_symbols.
+                        if let Some(ref res) = entry.resolved {
+                            if res.imported_symbols.contains_key(&name) {
+                                if let Some(importer_uri) =
+                                    crate::workspace_scan::path_to_uri(&importer_path)
+                                {
+                                    let ranges = references::find_identifier_occurrences(
+                                        &entry.text, &name,
+                                    );
+                                    for range in ranges {
+                                        locations.push(Location {
+                                            uri: importer_uri.clone(),
+                                            range,
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // If the symbol is imported, also search the source file for its definition.
+            if let Some(ext_sym) = resolved.imported_symbols.get(&name) {
+                if ext_sym.source_path != current_path {
+                    if let Some(entry) = idx.files.get(&ext_sym.source_path) {
+                        if let Some(source_uri) =
+                            crate::workspace_scan::path_to_uri(&ext_sym.source_path)
+                        {
+                            if include_decl {
+                                let def_range = crate::util::span_to_range(
+                                    &entry.text,
+                                    ext_sym.source_span,
+                                );
+                                locations.push(Location {
+                                    uri: source_uri.clone(),
+                                    range: def_range,
+                                });
+                            }
+                            // Also find usage references in the source file.
+                            let ranges =
+                                references::find_identifier_occurrences(&entry.text, &name);
+                            for range in ranges {
+                                let loc = Location {
+                                    uri: source_uri.clone(),
+                                    range,
+                                };
+                                if !locations.contains(&loc) {
+                                    locations.push(loc);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            none_if_empty(locations)
         })
-        .await
+        .await)
 }
 
 /// Handle `textDocument/documentHighlight`.

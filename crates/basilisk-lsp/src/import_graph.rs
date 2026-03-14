@@ -203,6 +203,69 @@ impl ImportGraph {
     }
 }
 
+/// DFS-based cycle detection extracted as a free function to satisfy
+/// `clippy::items_after_statements`.
+fn detect_cycles_inner(forward: &HashMap<PathBuf, HashSet<PathBuf>>) -> Vec<ImportCycle> {
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum Color {
+        White,
+        Gray,
+        Black,
+    }
+
+    fn dfs(
+        node: &Path,
+        forward: &HashMap<PathBuf, HashSet<PathBuf>>,
+        colors: &mut HashMap<PathBuf, Color>,
+        path_stack: &mut Vec<PathBuf>,
+        cycles: &mut Vec<ImportCycle>,
+    ) {
+        if let Some(color) = colors.get_mut(&node.to_path_buf()) {
+            *color = Color::Gray;
+        }
+        path_stack.push(node.to_path_buf());
+
+        if let Some(deps) = forward.get(node) {
+            for dep in deps {
+                match colors.get(dep).copied() {
+                    Some(Color::White) => {
+                        dfs(dep, forward, colors, path_stack, cycles);
+                    }
+                    Some(Color::Gray) => {
+                        if let Some(cycle_start) = path_stack.iter().position(|p| p == dep) {
+                            let chain: Vec<PathBuf> =
+                                path_stack.get(cycle_start..).map_or_else(Vec::new, <[PathBuf]>::to_vec);
+                            cycles.push(ImportCycle { chain });
+                        }
+                    }
+                    Some(Color::Black) | None => {}
+                }
+            }
+        }
+
+        let _ = path_stack.pop();
+        if let Some(color) = colors.get_mut(&node.to_path_buf()) {
+            *color = Color::Black;
+        }
+    }
+
+    let mut colors: HashMap<PathBuf, Color> = forward
+        .keys()
+        .map(|k| (k.clone(), Color::White))
+        .collect();
+    let mut path_stack: Vec<PathBuf> = Vec::new();
+    let mut cycles: Vec<ImportCycle> = Vec::new();
+
+    let nodes: Vec<PathBuf> = forward.keys().cloned().collect();
+    for node in &nodes {
+        if colors.get(node).copied() == Some(Color::White) {
+            dfs(node, forward, &mut colors, &mut path_stack, &mut cycles);
+        }
+    }
+
+    cycles
+}
+
 #[cfg(test)]
 #[expect(
     clippy::unwrap_used,

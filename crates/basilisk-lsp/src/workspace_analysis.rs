@@ -38,6 +38,18 @@ pub(crate) fn analyse(
     text: &str,
     path: &Path,
 ) -> (FileEntry, Vec<tower_lsp::lsp_types::Diagnostic>) {
+    analyse_with_config(text, path, &basilisk_config::BasiliskConfig::default())
+}
+
+/// Run the full parse → resolve → check pipeline with project-level config.
+///
+/// Applies per-module, per-path, and global rule severity overrides from
+/// the provided [`BasiliskConfig`].
+pub(crate) fn analyse_with_config(
+    text: &str,
+    path: &Path,
+    config: &basilisk_config::BasiliskConfig,
+) -> (FileEntry, Vec<tower_lsp::lsp_types::Diagnostic>) {
     let path_str = path.to_string_lossy().into_owned();
     let hash = fnv1a(text);
 
@@ -53,7 +65,7 @@ pub(crate) fn analyse(
         return (make_entry(hash, text, None, vec![]), vec![]);
     };
 
-    let checker_diags = basilisk_checker::check(&resolved);
+    let checker_diags = basilisk_checker::check_with_config(&resolved, config);
     let lsp_diags = checker_diags.iter().map(|d| bsk_to_lsp(d, text)).collect();
 
     (

@@ -6,7 +6,7 @@
 //! - Per-path overrides (`per-path-overrides."vendor/**".rules.disabled = [...]`)
 //! - Stub path directories (`stub-paths = ["stubs/"]`)
 
-mod overrides;
+pub mod overrides;
 mod parse;
 
 pub use overrides::{ModuleOverride, PathOverride, RuleSeverity};

@@ -156,7 +156,7 @@ uv integration is additive to cross-module analysis — it accelerates Phases 1 
 - [x] Implement `ModuleOverride` + `module_matches_pattern()` with `django.*` wildcard in `crates/basilisk-config/src/overrides.rs`
 - [x] Implement `PathOverride` + `path_matches_pattern()` with `vendor/**` glob in `crates/basilisk-config/src/overrides.rs`
 - [x] `.pyi` file parsing — extract signatures, class defs, variable annotations, `@overload` support
-- [ ] Wire `basilisk-config` overrides into checker — apply per-module/per-path overrides during `check()`
+- [x] Wire `basilisk-config` overrides into checker — apply per-module/per-path overrides during `check()`
 - [ ] "Disable in project config" code action in `code_actions.rs` — opens/edits `pyproject.toml`
 - [ ] Python env detection — `python3 -c "import sys; print(sys.path)"` fallback for site-packages discovery
 
@@ -175,9 +175,9 @@ uv integration is additive to cross-module analysis — it accelerates Phases 1 
 - [x] Wire `imported_symbols` into checker rules — e0018 checks cross-module symbols, init.rs calls `populate_cross_module_symbols()` + `recheck_with_cross_module_symbols()`
 
 ### Phase 3: Cross-File LSP Features
-- [WIP] Cross-file Go to Definition — follow `resolved_path`, find symbol's `name_span` in target `ResolvedModule`
+- [x] Cross-file Go to Definition — follow `resolved_path`, find symbol's `name_span` in target `ResolvedModule`
 - [ ] Handle re-exports in Go to Definition — follow import chain across modules
-- [ ] Cross-file Find All References — use import graph reverse edges, search all importers for symbol usage
+- [x] Cross-file Find All References — use import graph reverse edges, search all importers for symbol usage
 - [ ] Cross-file Rename — multi-file `WorkspaceEdit`: definition site + import sites + usage sites
 - [ ] Import statement updates for Rename — `from module import old_name` → `from module import new_name`
 - [ ] Build workspace symbol index in `auto_import.rs` — index all exported symbols from all workspace files

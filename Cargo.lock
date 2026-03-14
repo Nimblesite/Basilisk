@@ -141,6 +141,7 @@ dependencies = [
 name = "basilisk-checker"
 version = "0.1.0"
 dependencies = [
+ "basilisk-config",
  "basilisk-parser",
  "basilisk-resolver",
  "basilisk-stubs",
@@ -202,6 +203,7 @@ version = "0.1.0"
 dependencies = [
  "basilisk-checker",
  "basilisk-common",
+ "basilisk-config",
  "basilisk-parser",
  "basilisk-resolver",
  "basilisk-test-utils",

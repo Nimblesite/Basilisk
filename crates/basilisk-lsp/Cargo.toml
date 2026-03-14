@@ -6,6 +6,7 @@ edition.workspace    = true
 license.workspace    = true
 
 [dependencies]
+basilisk-config.workspace   = true
 basilisk-parser.workspace   = true
 basilisk-resolver.workspace = true
 basilisk-checker.workspace  = true
