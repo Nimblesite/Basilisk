@@ -1,11 +1,3 @@
-#![allow(
-    clippy::allow_attributes,
-    clippy::indexing_slicing,
-    clippy::expect_used,
-    clippy::unwrap_used,
-    clippy::panic,
-    clippy::as_conversions
-)]
 //! Coverage boost tests batch 5: exercising deep code paths in complex rules.
 //! Focuses on rules that walk calls, function bodies, and class hierarchies.
 #![allow(

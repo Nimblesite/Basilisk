@@ -1,11 +1,3 @@
-#![allow(
-    clippy::allow_attributes,
-    clippy::indexing_slicing,
-    clippy::expect_used,
-    clippy::unwrap_used,
-    clippy::panic,
-    clippy::as_conversions
-)]
 //! Coverage boost tests batch 13: targeting deep uncovered code paths.
 //! Focuses on: e0140 (protocol/callable compat - varargs, kwargs, positional-only,
 //! kw-only, defaults, Concatenate, param types), e0115 (deprecated - Try/With stmts),

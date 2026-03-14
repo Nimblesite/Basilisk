@@ -1,11 +1,3 @@
-#![allow(
-    clippy::allow_attributes,
-    clippy::indexing_slicing,
-    clippy::expect_used,
-    clippy::unwrap_used,
-    clippy::panic,
-    clippy::as_conversions
-)]
 //! Coverage boost tests batch 12: targeting deeply uncovered code paths.
 //! Focuses heavily on: e0115 (deprecated usage - all stmt visit branches),
 //! e0137 (generic protocol assignments with type checking),

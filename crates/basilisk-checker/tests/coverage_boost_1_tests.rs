@@ -1,11 +1,3 @@
-#![allow(
-    clippy::allow_attributes,
-    clippy::indexing_slicing,
-    clippy::expect_used,
-    clippy::unwrap_used,
-    clippy::panic,
-    clippy::as_conversions
-)]
 //! Coverage boost tests batch 1: targeting rules with highest uncovered line counts.
 //! Covers: e0070, e0072, e0074, e0075, e0076, e0079, e0081, e0082, e0095, e0102,
 //!         e0107, e0110, e0111, e0112, e0113, e0114, e0119, e0120, e0121, e0122

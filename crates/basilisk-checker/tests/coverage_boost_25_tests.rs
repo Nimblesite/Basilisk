@@ -1,11 +1,3 @@
-#![allow(
-    clippy::allow_attributes,
-    clippy::indexing_slicing,
-    clippy::expect_used,
-    clippy::unwrap_used,
-    clippy::panic,
-    clippy::as_conversions
-)]
 //! Coverage boost tests batch 25: ultra-targeted tests for specific uncovered
 //! functions and branches. Focus on `make_diagnostic` paths, deeper rule branches,
 //! and edge cases that trigger specific code paths.

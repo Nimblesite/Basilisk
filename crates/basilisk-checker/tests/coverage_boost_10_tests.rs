@@ -1,11 +1,3 @@
-#![allow(
-    clippy::allow_attributes,
-    clippy::indexing_slicing,
-    clippy::expect_used,
-    clippy::unwrap_used,
-    clippy::panic,
-    clippy::as_conversions
-)]
 //! Coverage boost tests batch 10: targeting medium-coverage rules for maximum improvement.
 //! Focuses on rules 50-90% coverage where more complex test inputs can push coverage higher.
 #![allow(

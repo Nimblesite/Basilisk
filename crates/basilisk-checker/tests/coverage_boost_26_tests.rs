@@ -1,11 +1,3 @@
-#![allow(
-    clippy::allow_attributes,
-    clippy::indexing_slicing,
-    clippy::expect_used,
-    clippy::unwrap_used,
-    clippy::panic,
-    clippy::as_conversions
-)]
 //! Coverage boost tests batch 26: targeting low-coverage rules that depend on
 //! resolver data. Focus: e0103, e0077, e0068, e0065, e0106, e0100, e0083,
 //! e0059, e0037, e0026, e0030, e0092, e0108, e0136, e0125, e0064, e0038,

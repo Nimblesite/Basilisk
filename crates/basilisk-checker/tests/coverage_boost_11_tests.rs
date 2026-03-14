@@ -1,11 +1,3 @@
-#![allow(
-    clippy::allow_attributes,
-    clippy::indexing_slicing,
-    clippy::expect_used,
-    clippy::unwrap_used,
-    clippy::panic,
-    clippy::as_conversions
-)]
 //! Coverage boost tests batch 11: targeting deeply uncovered code paths.
 //! Focuses on: e0014 (literal parsing, tuple reassignment, dataclass attrs),
 //! e0036 (`ClassVar` edge cases), e0047 (invalid annotations), e0111 (constructor errors),

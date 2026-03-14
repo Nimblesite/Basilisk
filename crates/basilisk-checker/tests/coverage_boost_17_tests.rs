@@ -1,11 +1,3 @@
-#![allow(
-    clippy::allow_attributes,
-    clippy::indexing_slicing,
-    clippy::expect_used,
-    clippy::unwrap_used,
-    clippy::panic,
-    clippy::as_conversions
-)]
 //! Coverage boost tests batch 17: targeting long tail of uncovered code paths.
 //! Focus: e0073 tuple compatibility deep, e0116 namedtuple inheritance/fields,
 //! e0137 generic protocol method mismatches, e0140 callable/protocol deep,
