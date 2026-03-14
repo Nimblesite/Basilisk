@@ -255,12 +255,11 @@ pub(super) fn parse_mapping_annotation(ann: &str) -> Option<(String, String)> {
     Some((key_ty, val_ty))
 }
 
-/// Resolve a Mapping annotation, handling custom subclasses with reordered Generic params.
+/// Resolve a `Mapping` annotation, handling custom subclasses with reordered `Generic` params.
 ///
-/// For `MyMap2[int, str]` where `MyMap2(Mapping[K, V], Generic[V, K])`:
-/// - Generic[V, K] → specialization order: V=int, K=str
-/// - Mapping[K, V] → key=K=str, value=V=int
-/// Returns `(key_type, value_type)`.
+/// For `MyMap2[int, str]` where `MyMap2(Mapping[K, V], Generic[V, K])`,
+/// resolves `Generic[V, K]` specialization order (`V=int, K=str`) then maps
+/// `Mapping[K, V]` to `key=K=str, value=V=int`. Returns `(key_type, value_type)`.
 pub(super) fn resolve_mapping_annotation(
     ann: &str,
     class_bases: &HashMap<String, Vec<String>>,

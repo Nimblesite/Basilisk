@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 /// Controls which files the LSP server analyses.
 ///
-/// See `docs/CHECKER-WHOLE-MODULE-ANALYSIS-SPEC.md` for the full specification.
+/// See `docs/LSP-ANALYSIS-MODES-SPEC.md` for the full specification.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AnalysisMode {
     /// Analyse only files currently open in the editor.

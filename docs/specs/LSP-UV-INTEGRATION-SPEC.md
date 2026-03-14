@@ -394,7 +394,7 @@ These are explicitly **out of scope**:
 
 | Spec | Interaction |
 |------|-------------|
-| [CHECKER-WHOLE-MODULE-ANALYSIS-SPEC.md](CHECKER-WHOLE-MODULE-ANALYSIS-SPEC.md) | `PackageRegistry` feeds into import resolution for all analysis modes |
-| [CHECKER-CROSS-MODULE-ANALYSIS-PLAN.md](../plans/CHECKER-CROSS-MODULE-ANALYSIS-PLAN.md) | Phase 1 (stub infrastructure) gains lock-file-aware stub detection |
+| [LSP-ANALYSIS-MODES-SPEC.md](LSP-ANALYSIS-MODES-SPEC.md) | `PackageRegistry` feeds into import resolution for all analysis modes |
+| [CHECKER-CROSS-MODULE-PLAN.md](../plans/CHECKER-CROSS-MODULE-PLAN.md) | Phase 1 (stub infrastructure) gains lock-file-aware stub detection |
 | [LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md) | New commands, settings, and file watchers added |
 | [LSP-MASS-AUTOFIX-SPEC.md](LSP-MASS-AUTOFIX-SPEC.md) | Mass autofix can batch `uv add --dev` for all missing stubs |

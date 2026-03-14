@@ -45,9 +45,15 @@ pub(in crate::server) async fn goto_definition(
             // Cross-file: extract identifier and check imported symbols.
             let name = crate::util::identifier_at_offset(&text, byte_offset)?;
             let ext_sym = resolved.imported_symbols.get(&name)?;
-            let target_entry = idx.files.get(&ext_sym.source_path)?;
-            let range = crate::util::span_to_range(&target_entry.text, ext_sym.source_span);
-            let target_uri = Url::from_file_path(&ext_sym.source_path).ok()?;
+
+            // Follow re-export chain: if the symbol in the target file is itself
+            // imported from another file, follow through to the actual definition.
+            let (final_path, final_span) =
+                follow_reexport_chain(idx, &ext_sym.source_path, &name, ext_sym.source_span);
+
+            let target_entry = idx.files.get(&final_path)?;
+            let range = crate::util::span_to_range(&target_entry.text, final_span);
+            let target_uri = Url::from_file_path(&final_path).ok()?;
 
             Some(GotoDefinitionResponse::Scalar(Location {
                 uri: target_uri,
@@ -55,6 +61,42 @@ pub(in crate::server) async fn goto_definition(
             }))
         })
         .await)
+}
+
+/// Follow re-export chains to find the actual definition site.
+///
+/// If the symbol at `source_path` is itself an import from another file,
+/// follows the chain until a non-imported definition is found. Prevents
+/// infinite loops with a depth limit.
+fn follow_reexport_chain(
+    idx: &crate::workspace::WorkspaceIndex,
+    source_path: &std::path::Path,
+    name: &str,
+    source_span: basilisk_resolver::Span,
+) -> (std::path::PathBuf, basilisk_resolver::Span) {
+    let mut current_path = source_path.to_path_buf();
+    let mut current_span = source_span;
+
+    // Follow up to 10 levels of re-exports to avoid infinite loops.
+    for _ in 0..10 {
+        let Some(entry) = idx.files.get(&current_path) else {
+            break;
+        };
+        let Some(resolved) = &entry.resolved else {
+            break;
+        };
+
+        // Check if this symbol is imported from yet another file.
+        if let Some(ext_sym) = resolved.imported_symbols.get(name) {
+            current_path = ext_sym.source_path.clone();
+            current_span = ext_sym.source_span;
+        } else {
+            // Symbol is defined here (not imported) — this is the final definition.
+            break;
+        }
+    }
+
+    (current_path, current_span)
 }
 
 /// Handle `textDocument/declaration`.

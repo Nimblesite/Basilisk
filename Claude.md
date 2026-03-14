@@ -105,74 +105,16 @@ Testing is absolutely critical. We aim for 100% test coverage and a high mutatio
 - Name classes after what the element IS, not what section it's in
 - **Do not use common LLM colors like purple** — use RNG and color wheels
 
-## What Basilisk Is
+## Architecture
 
-Strict-by-default Python type checker and comprehensive LSP. Built in **Rust** — no runtime required.
-
-Mojo-inspired but different goals. Includes early-stage Python compiler (compiled subset of Python, GPU support), but the core aim is the type checker and LSP. Basilisk remains a typed subset of Python — it will not deviate from the language, only remove dynamic typing.
-
-## Goal
-
-Make the Python dev experience amazing in any LSP-based IDE. Users can turn it on any time, flick errors down to warnings, and incrementally move towards type safety. Or just use the LSP for autofixes, formatting, debugging, and profiling. One-stop-shop — no frankenstein of analyzers. Strict typing can be switched off for basic scripts.
-
-## Key Architecture (from docs/specs/CHECKER-ARCHITECTURE-SPEC.md)
+Strict-by-default Python type checker and comprehensive LSP built in **Rust**. One IDE extension = complete Python dev experience. Users can flick errors down to warnings and incrementally adopt type safety, or just use the LSP for autofixes, formatting, debugging, and profiling.
 
 - **Parser**: `ruff_python_parser` (MIT, same as Ruff)
-- **Incremental**: Salsa framework (same as rust-analyzer) — sub-10ms incremental checks
-- **LSP**: `lsp-server` or `tower-lsp`
+- **Incremental**: Salsa framework — sub-10ms incremental checks
 - **Linting/formatting**: Ruff CLI subprocess — not reimplemented
-- **Plugins**: WASM-based
 - **Parallelism**: Rayon (work-stealing, file-level)
 - **No Pyright/mypy/Node.js** — zero TypeScript or Python runtime
 
-## Diagnostic Code Convention
+Diagnostic codes: `BSK-E####` / `BSK-W####`. Pyright is the gold standard to compare against — NEVER copy from the Pyright codebase.
 
-Error codes: `BSK-E####` / `BSK-W####`, rustc-style output:
-```
-error[BSK-E0001]: Missing parameter type annotation
-  --> src/utils.py:14:5
-   |
-14 | def process(data):
-   |             ^^^^ parameter `data` has no type annotation
-```
-
-Ranges (defined in docs/specs/CHECKER-ARCHITECTURE-SPEC.md):
-- `E0001–E0025`: Core type errors
-- `E003x`: Ownership violations
-- `E004x`: Immutability violations
-- `E005x / E006x`: Structural discipline and implicit coercion
-
-## Alternative Ecosystems
-
-Pyright is the gold standard to compare against. [View code](https://github.com/microsoft/pyright) as reference, but NEVER copy from the Pyright codebase.
-
-## Testing Strategy (per docs/specs/CHECKER-ARCHITECTURE-SPEC.md)
-
-### Layering
-
-1. **E2E** — most tests. Run ACTUAL analyzers, check correct results. LSP and VSIX combined for full user experience testing.
-2. **Integration** — test full components (analyzers etc.) standalone from CLI.
-3. **Unit** — minimal. Only for isolating logic and regression pins.
-
-| Layer | Mechanism | What it checks |
-|---|---|---|
-| **E2E** | `tests/` in `basilisk-cli`; real `.py` fixtures through full stack | Correct diagnostics from full pipeline |
-| **Integration** | `tests/` in each crate | Crates behave correctly wired together |
-| **Unit** | `#[cfg(test)]` modules in `src/` | Edge cases and regression pins only |
-| **Conformance** | Python typing test suite via `cargo test` | PEP compliance (target: 100%) |
-| **Golden file** | Diagnostic snapshots in repo | Silent regression detection |
-| **Mutation** | `cargo-mutants` | Tests actually catch bugs |
-| **Fuzzing** | `cargo-fuzz` (nightly) | No crashes on garbage input |
-| **Benchmarks** | `criterion` | <10ms incremental, <5s cold on 100K LOC |
-
-### PEP Conformance
-
-Currently ~83%. Target 100%, but VSIX/IDE experience is the immediate priority. Conformance tests live in `crates/basilisk-cli/tests/conformance/`.
-
-### Mutation Testing
-
-Run `sh scripts/mutate.sh`. Occasionally run and remove tests that cause hanging.
-
-### Benchmarking
-
-Performance is critical. Keep benchmarks running, improve slow rules, keep pace with Pyrefly. Add rules to benchmarks when fully operational.
+See `docs/specs/CHECKER-ARCHITECTURE-SPEC.md` for full architecture, diagnostic ranges, and testing strategy.

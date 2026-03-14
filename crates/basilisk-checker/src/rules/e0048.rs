@@ -281,8 +281,11 @@ fn collect_runtime_var_names(module: &ResolvedModule) -> std::collections::HashS
             | RhsKind::NoneValue
             | RhsKind::EmptyList
             | RhsKind::EmptyDict
-            | RhsKind::Lambda => true,
-            RhsKind::List(_) | RhsKind::Dict(_) | RhsKind::Set(_) | RhsKind::Tuple(_) => true,
+            | RhsKind::Lambda
+            | RhsKind::List(_)
+            | RhsKind::Dict(_)
+            | RhsKind::Set(_)
+            | RhsKind::Tuple(_) => true,
             RhsKind::CallExpr | RhsKind::TypeCall => {
                 // Check if the RHS text looks like a runtime expression
                 var.rhs_span
@@ -346,6 +349,9 @@ struct AliasInfo {
     is_union: bool,
     /// Whether any of the type parameters is a `ParamSpec`.
     has_paramspec: bool,
+    /// Ordered list of `(typevar_name, bound_type_name)` for each type parameter.
+    /// `bound_type_name` is `None` if the `TypeVar` has no bound.
+    typevar_bounds: Vec<(String, Option<String>)>,
 }
 
 /// Build a map from alias name to its `AliasInfo`.
@@ -386,9 +392,10 @@ fn build_alias_info_map(
         let typevar_count = count_typevar_refs(rhs, &typevar_names);
         let is_union = has_top_level_token(rhs, " | ");
         let has_paramspec = has_paramspec_ref(rhs, &module.typevar_calls);
+        let typevar_bounds = collect_typevar_bounds(rhs, &module.typevar_calls);
         let _ = map.insert(
             var.name.clone(),
-            AliasInfo { typevar_count, is_union, has_paramspec },
+            AliasInfo { typevar_count, is_union, has_paramspec, typevar_bounds },
         );
     }
 
@@ -422,9 +429,10 @@ fn build_alias_info_map(
             let typevar_count = count_typevar_refs(rhs, &typevar_names);
             let is_union = has_top_level_token(rhs, " | ");
             let has_paramspec = has_paramspec_ref(rhs, &module.typevar_calls);
+            let typevar_bounds = collect_typevar_bounds(rhs, &module.typevar_calls);
             let _ = map.insert(
                 var.name.clone(),
-                AliasInfo { typevar_count, is_union, has_paramspec },
+                AliasInfo { typevar_count, is_union, has_paramspec, typevar_bounds },
             );
         }
     }
@@ -478,6 +486,48 @@ fn has_paramspec_ref(
         }
     }
     !current.is_empty() && paramspec_names.contains(current.as_str())
+}
+
+/// Collect ordered `TypeVar` bounds for type parameters in a type alias RHS.
+///
+/// Scans the RHS for `TypeVar` names in order of first appearance and pairs
+/// each with its bound (if any) from the `TypeVarCallInfo` list.
+fn collect_typevar_bounds(
+    rhs: &str,
+    typevar_calls: &[basilisk_resolver::TypeVarCallInfo],
+) -> Vec<(String, Option<String>)> {
+    let tv_info: std::collections::HashMap<&str, Option<&str>> = typevar_calls
+        .iter()
+        .map(|tv| (tv.name.as_str(), tv.bound_type_name.as_deref()))
+        .collect();
+
+    let mut seen = std::collections::HashSet::new();
+    let mut result = Vec::new();
+    let mut current = String::new();
+
+    for ch in rhs.chars() {
+        if ch.is_alphanumeric() || ch == '_' {
+            current.push(ch);
+        } else {
+            if !current.is_empty() {
+                if let Some(bound) = tv_info.get(current.as_str()) {
+                    if seen.insert(current.clone()) {
+                        result.push((current.clone(), bound.map(String::from)));
+                    }
+                }
+            }
+            current.clear();
+        }
+    }
+    if !current.is_empty() {
+        if let Some(bound) = tv_info.get(current.as_str()) {
+            if seen.insert(current.clone()) {
+                result.push((current.clone(), bound.map(String::from)));
+            }
+        }
+    }
+
+    result
 }
 
 /// Returns `true` if the text looks like a type expression (for implicit alias detection).
@@ -609,8 +659,114 @@ fn check_single_annotation(
                 )),
                 note: None,
             });
+        } else if info.has_paramspec && arg_count == info.typevar_count {
+            // Check if a simple type is used where a ParamSpec expects a
+            // parameter specification (list of types or `...`).
+            // E.g. `Alias[int, int]` where the alias has `P: ParamSpec`
+            // and `R: TypeVar` — `int` is not a valid ParamSpec argument.
+            let bracket_start = ann_text.find('[').unwrap_or(ann_text.len());
+            if ann_text.ends_with(']') {
+                let inner = &ann_text[bracket_start + 1..ann_text.len() - 1];
+                let args: Vec<&str> = split_top_level_args(inner);
+                // If all args are simple types (no `[...]` or `...`),
+                // the ParamSpec arg is probably wrong
+                let all_simple = args.iter().all(|arg| {
+                    let trimmed = arg.trim();
+                    !trimmed.contains('[') && trimmed != "..."
+                });
+                if all_simple && args.len() > 1 {
+                    diagnostics.push(Diagnostic {
+                        code: CODE.clone(),
+                        severity: Severity::Error,
+                        message: format!(
+                            "Invalid type argument for `ParamSpec` parameter in `{base}`"
+                        ),
+                        span: ann_span,
+                        path: path.to_owned(),
+                        help: Some(
+                            "ParamSpec arguments must be a list of parameter types \
+                             (e.g. `[int, str]`) or `...`"
+                                .to_owned(),
+                        ),
+                        note: None,
+                    });
+                }
+            }
+        }
+
+        // Check TypeVar bounds: if a type arg doesn't satisfy the bound
+        if !info.typevar_bounds.is_empty() {
+            let bracket_start = ann_text.find('[').unwrap_or(ann_text.len());
+            if ann_text.ends_with(']') {
+                let inner = &ann_text[bracket_start + 1..ann_text.len() - 1];
+                let args: Vec<&str> = split_top_level_args(inner);
+                for (idx, arg) in args.iter().enumerate() {
+                    if let Some((tv_name, Some(bound))) = info.typevar_bounds.get(idx) {
+                        let arg_trimmed = arg.trim();
+                        if !is_assignable_to_bound(arg_trimmed, bound) {
+                            diagnostics.push(Diagnostic {
+                                code: CODE.clone(),
+                                severity: Severity::Error,
+                                message: format!(
+                                    "Type argument `{arg_trimmed}` does not satisfy \
+                                     bound `{bound}` of TypeVar `{tv_name}` in `{base}`"
+                                ),
+                                span: ann_span,
+                                path: path.to_owned(),
+                                help: Some(format!(
+                                    "TypeVar `{tv_name}` requires a type that is a \
+                                     subtype of `{bound}`"
+                                )),
+                                note: None,
+                            });
+                        }
+                    }
+                }
+            }
         }
     }
+}
+
+/// Check if a type argument is assignable to a `TypeVar` bound.
+///
+/// Uses simple subtype rules: `int` and `bool` are subtypes of `float`,
+/// `bool` is a subtype of `int`, etc.
+fn is_assignable_to_bound(arg: &str, bound: &str) -> bool {
+    if arg == bound {
+        return true;
+    }
+    match bound {
+        "float" => matches!(arg, "int" | "bool" | "float"),
+        "int" => matches!(arg, "int" | "bool"),
+        "complex" => matches!(arg, "int" | "float" | "bool" | "complex"),
+        _ => {
+            // For unknown bounds, accept conservatively
+            true
+        }
+    }
+}
+
+/// Split arguments at top-level commas, respecting bracket nesting.
+fn split_top_level_args(inner: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut depth = 0i32;
+    let mut start = 0;
+    for (idx, ch) in inner.char_indices() {
+        match ch {
+            '[' | '(' | '{' => depth += 1,
+            ']' | ')' | '}' => depth -= 1,
+            ',' if depth == 0 => {
+                parts.push(&inner[start..idx]);
+                start = idx + 1;
+            }
+            _ => {}
+        }
+    }
+    let remainder = &inner[start..];
+    if !remainder.trim().is_empty() {
+        parts.push(remainder);
+    }
+    parts
 }
 
 /// Check for calls to union type aliases (e.g. `ListOrSetAlias()`).
