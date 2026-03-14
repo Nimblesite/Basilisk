@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::guards::is_protocol_class;
 use super::Rule;
@@ -61,7 +62,7 @@ fn extract_callable_return_type(ann_text: &str) -> Option<&str> {
     }
 
     let comma_pos = last_comma_at_depth_0?;
-    let return_type = inner[comma_pos + 1..].trim();
+    let return_type = inner.get(comma_pos + 1..)?.trim();
     if return_type.is_empty() {
         return None;
     }
@@ -86,9 +87,7 @@ fn find_protocol_call_return_type<'a>(
         .find(|f| f.class_name.as_deref() == Some(cls.name.as_str()) && f.name == "__call__")?;
 
     let ann_span = call_method.return_annotation_span?;
-    let ann_text = module
-        .source
-        .get(ann_span.start as usize..ann_span.end as usize)?;
+    let ann_text = slice_span(&module.source, ann_span)?;
     Some(ann_text.trim())
 }
 
@@ -152,7 +151,7 @@ fn build_typeguard_func_map(module: &ResolvedModule) -> HashMap<&str, &str> {
         let Some(ann_span) = func.return_annotation_span else {
             continue;
         };
-        let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+        let Some(ann_text) = slice_span(source, ann_span) else {
             continue;
         };
         if is_typeguard_or_typeis(ann_text) {
@@ -254,8 +253,7 @@ impl Rule for TypeGuardCallableReturnMismatch {
             };
 
             for (arg_idx, (_rhs_kind, arg_span)) in call.args.iter().enumerate() {
-                let Some(arg_text) = source.get(arg_span.start as usize..arg_span.end as usize)
-                else {
+                let Some(arg_text) = slice_span(source, *arg_span) else {
                     continue;
                 };
                 let arg_name = arg_text.trim();
@@ -270,9 +268,7 @@ impl Rule for TypeGuardCallableReturnMismatch {
                 let Some(param_ann_span) = param.annotation_span else {
                     continue;
                 };
-                let Some(param_ann_text) =
-                    source.get(param_ann_span.start as usize..param_ann_span.end as usize)
-                else {
+                let Some(param_ann_text) = slice_span(source, param_ann_span) else {
                     continue;
                 };
                 let param_ann = param_ann_text.trim();

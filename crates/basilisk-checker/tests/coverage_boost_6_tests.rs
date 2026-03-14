@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Coverage boost tests batch 6: targeting highest-uncovered rules.
 //! Focus: e0115, e0072, e0107, e0070, e0079, e0047, e0014, e0036
 #![allow(missing_docs)]
@@ -12,7 +20,7 @@ fn run(source: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::e
     Ok(check(&resolved))
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 fn codes(diags: &[basilisk_checker::Diagnostic]) -> Vec<String> {
     diags.iter().map(|d| d.code.code.to_string()).collect()
 }

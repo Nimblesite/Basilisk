@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Coverage boost tests batch 18: ultra-targeted tests for remaining uncovered lines.
 //! Targets: e0144 kwarg/positional type checking, e0145 special form + union type args,
 //! e0147 tuple starred unpack mixed/literal/var compat, e0146 class-satisfies-protocol,

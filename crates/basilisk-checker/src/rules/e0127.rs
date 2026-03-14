@@ -15,6 +15,7 @@
 use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -39,7 +40,7 @@ impl Rule for TupleIndexOutOfRange {
                 let Some(ann_span) = param.annotation_span else {
                     continue;
                 };
-                let Some(ann) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+                let Some(ann) = slice_span(source, ann_span) else {
                     continue;
                 };
                 let ann = ann.trim();
@@ -57,8 +58,12 @@ impl Rule for TupleIndexOutOfRange {
 
             // Scan lines in the function body for subscript expressions.
             // We look for patterns like `name[index]` on each source line.
-            let func_start = func.def_span.start as usize;
-            let body_source = &source[func_start..];
+            let Some(func_start) = usize::try_from(func.def_span.start).ok() else {
+                continue;
+            };
+            let Some(body_source) = source.get(func_start..) else {
+                continue;
+            };
 
             // Find lines belonging to this function body (indented lines after the def line).
             for line in body_source.lines().skip(1) {
@@ -91,7 +96,10 @@ impl Rule for TupleIndexOutOfRange {
 }
 
 /// Check a single source line for out-of-range subscript access on a tuple parameter.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "tuple subscript check requires full source context"
+)]
 fn check_subscript_on_line(
     trimmed: &str,
     tuple_name: &str,
@@ -107,13 +115,19 @@ fn check_subscript_on_line(
     let search_pattern = format!("{tuple_name}[");
     let mut search_from = 0usize;
 
-    while let Some(pos) = trimmed[search_from..].find(&search_pattern) {
+    while let Some(pos) = trimmed
+        .get(search_from..)
+        .and_then(|s| s.find(&search_pattern))
+    {
         let abs_pos = search_from + pos;
         let bracket_pos = abs_pos + tuple_name.len();
 
         // Ensure this is not part of a longer identifier
         if abs_pos > 0 {
-            let prev_char = trimmed.as_bytes()[abs_pos - 1];
+            let Some(&prev_char) = trimmed.as_bytes().get(abs_pos - 1) else {
+                search_from = bracket_pos + 1;
+                continue;
+            };
             if prev_char.is_ascii_alphanumeric() || prev_char == b'_' {
                 search_from = bracket_pos + 1;
                 continue;
@@ -121,12 +135,19 @@ fn check_subscript_on_line(
         }
 
         // Extract the index expression between [ and matching ]
-        let after_bracket = &trimmed[bracket_pos + 1..];
+        let Some(after_bracket) = trimmed.get(bracket_pos + 1..) else {
+            search_from = bracket_pos + 1;
+            continue;
+        };
         let Some(close_bracket) = find_matching_bracket(after_bracket) else {
             search_from = bracket_pos + 1;
             continue;
         };
-        let index_expr = after_bracket[..close_bracket].trim();
+        let Some(index_slice) = after_bracket.get(..close_bracket) else {
+            search_from = bracket_pos + 1;
+            continue;
+        };
+        let index_expr = index_slice.trim();
 
         // Determine the integer index value
         let index_value = if let Some(val) = parse_int_literal(index_expr) {
@@ -139,27 +160,34 @@ fn check_subscript_on_line(
                 .map(|(_, val)| *val)
         };
 
-        #[allow(clippy::cast_possible_wrap)]
         if let Some(idx) = index_value {
-            let tuple_len_i64 = tuple_len as i64;
+            let Some(tuple_len_i64) = i64::try_from(tuple_len).ok() else {
+                search_from = bracket_pos + 1;
+                continue;
+            };
             let out_of_range = if idx >= 0 {
                 idx >= tuple_len_i64
             } else {
                 idx < -tuple_len_i64
             };
 
-            #[allow(clippy::cast_possible_truncation)]
             if out_of_range {
                 // Compute the span: find this line in the full source
-                let line_offset_in_source =
-                    raw_line.as_ptr() as usize - full_source.as_ptr() as usize;
+                let line_offset_in_source = raw_line
+                    .as_ptr()
+                    .addr()
+                    .saturating_sub(full_source.as_ptr().addr());
                 let expr_start_in_line = raw_line.find(trimmed).unwrap_or(0);
-                let span_start = (line_offset_in_source + expr_start_in_line + abs_pos) as u32;
+                let span_start =
+                    u32::try_from(line_offset_in_source + expr_start_in_line + abs_pos)
+                        .unwrap_or(u32::MAX);
                 // Span covers `name[index]`
-                let span_end = span_start + (bracket_pos + 1 + close_bracket + 1 - abs_pos) as u32;
+                let span_end = span_start.saturating_add(
+                    u32::try_from(bracket_pos + 1 + close_bracket + 1 - abs_pos)
+                        .unwrap_or(u32::MAX),
+                );
 
-                #[allow(clippy::cast_possible_wrap)]
-                let max_pos = tuple_len as i64 - 1;
+                let max_pos = tuple_len_i64 - 1;
 
                 diagnostics.push(Diagnostic {
                     code: CODE.clone(),
@@ -201,7 +229,9 @@ fn parse_fixed_tuple_length(ann: &str) -> Option<usize> {
     if elements.iter().any(|e| e.trim() == "...") {
         return None;
     }
-    if elements.is_empty() || (elements.len() == 1 && elements[0].trim().is_empty()) {
+    if elements.is_empty()
+        || (elements.len() == 1 && elements.first().is_some_and(|e| e.trim().is_empty()))
+    {
         // `tuple[()]` — empty tuple
         return Some(0);
     }

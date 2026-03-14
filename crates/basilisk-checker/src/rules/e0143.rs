@@ -101,7 +101,7 @@ impl ModuleContext {
         for stmt in stmts {
             if let Stmt::Assign(assign) = stmt {
                 if assign.targets.len() == 1 {
-                    if let Some(var_name) = expr_simple_name(&assign.targets[0]) {
+                    if let Some(var_name) = assign.targets.first().and_then(expr_simple_name) {
                         if let Some(class_name) = call_class_name(&assign.value) {
                             if namedtuple_classes.contains_key(class_name) {
                                 let _ = var_to_nt_class
@@ -248,7 +248,9 @@ fn check_tuple_unpack(
     if assign.targets.len() != 1 {
         return;
     }
-    let target = &assign.targets[0];
+    let Some(target) = assign.targets.first() else {
+        return;
+    };
 
     // The target must be a tuple of simple names.
     let target_count = match target {
@@ -478,7 +480,14 @@ fn check_expr_recursive(expr: &Expr, ctx: &ModuleContext, path: &str, diag: &mut
 }
 
 /// Returns true when `idx` is out of range for a tuple with `field_count` elements.
-#[allow(clippy::cast_possible_wrap)]
+#[expect(
+    clippy::cast_possible_wrap,
+    reason = "field_count is always small enough for i64"
+)]
+#[expect(
+    clippy::as_conversions,
+    reason = "field_count is always small enough for i64; no safe alternative for signed cast"
+)]
 fn is_out_of_bounds(idx: i64, field_count: usize) -> bool {
     let len = field_count as i64;
     idx >= len || idx < -len

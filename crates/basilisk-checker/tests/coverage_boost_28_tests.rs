@@ -612,7 +612,7 @@ def bad_noreturn() -> NoReturn:
 // =============================================================================
 
 #[test]
-#[allow(clippy::too_many_lines)]
+#[expect(clippy::too_many_lines)]
 fn mega_coverage_final() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import (

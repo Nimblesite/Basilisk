@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Coverage boost tests batch 29: final push to 89%.
 //! Targeting e0147 (tuple starred unpack), e0149 (PEP695 scoping),
 //! e0107 (variance alias paths), e0137 (generic protocol), e0139 (`TypeVarTuple`),

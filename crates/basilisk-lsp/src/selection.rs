@@ -165,13 +165,13 @@ fn collect_containing_spans(resolved: &ResolvedModule, offset: usize) -> Vec<Spa
 
 /// Check whether a byte offset falls within a span.
 fn contains(span: Span, offset: usize) -> bool {
-    (span.start as usize) <= offset && offset < (span.end as usize)
+    span.start_usize() <= offset && offset < span.end_usize()
 }
 
 /// Convert a resolver `Span` to an LSP `Range`.
 fn span_to_range(source: &str, span: Span) -> Range {
     Range {
-        start: byte_offset_to_position(source, span.start as usize),
-        end: byte_offset_to_position(source, span.end as usize),
+        start: byte_offset_to_position(source, span.start_usize()),
+        end: byte_offset_to_position(source, span.end_usize()),
     }
 }

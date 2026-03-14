@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{ClassInfo, ResolvedModule};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -100,7 +101,7 @@ fn check_default_ordering(
 
         // Skip ClassVar fields - they are not NamedTuple fields.
         if let Some(ann_span) = attr.annotation_span {
-            if let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) {
+            if let Some(ann_text) = slice_span(source, ann_span) {
                 if ann_text.trim().starts_with("ClassVar") {
                     continue;
                 }
@@ -142,8 +143,8 @@ fn check_multiple_inheritance(class: &ClassInfo, path: &str, diagnostics: &mut V
     let non_namedtuple_bases: Vec<&str> = class
         .bases
         .iter()
-        .map(|b| b.split('[').next().unwrap_or(b.as_str()))
-        .filter(|b| *b != "NamedTuple" && *b != "Generic" && *b != "object")
+        .map(|b| b.split('[').next().unwrap_or_default())
+        .filter(|b| !b.is_empty() && *b != "NamedTuple" && *b != "Generic" && *b != "object")
         .collect();
 
     if !non_namedtuple_bases.is_empty() {
@@ -224,8 +225,12 @@ fn collect_base_namedtuple_fields<'a>(
 ) -> Vec<&'a str> {
     let mut field_names = Vec::new();
     for base_name in &class.bases {
-        let stripped = base_name.split('[').next().unwrap_or(base_name.as_str());
-        if stripped == "NamedTuple" || stripped == "Generic" || stripped == "object" {
+        let stripped = base_name.split('[').next().unwrap_or_default();
+        if stripped.is_empty()
+            || stripped == "NamedTuple"
+            || stripped == "Generic"
+            || stripped == "object"
+        {
             continue;
         }
         if let Some(base_class) = class_map.get(stripped) {
@@ -247,7 +252,7 @@ fn collect_base_namedtuple_fields<'a>(
 /// Check if a class transitively inherits from `NamedTuple`.
 fn is_transitive_namedtuple(class: &ClassInfo, class_map: &HashMap<&str, &ClassInfo>) -> bool {
     for base_name in &class.bases {
-        let stripped = base_name.split('[').next().unwrap_or(base_name.as_str());
+        let stripped = base_name.split('[').next().unwrap_or_default();
         if stripped == "NamedTuple" {
             return true;
         }

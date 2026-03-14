@@ -55,7 +55,7 @@ fn extract_base_subscripts(
     source: &str,
     class: &basilisk_resolver::ClassInfo,
 ) -> Vec<BaseSubscript> {
-    let name_end = class.name_span.end as usize;
+    let name_end = class.name_span.end_usize();
 
     // Find the opening `(` after the class name.
     let after_name = source.get(name_end..).unwrap_or("");
@@ -187,8 +187,11 @@ fn check_class(
         if mappings.len() < 2 {
             continue;
         }
-        let first_args = &mappings[0].0;
-        for other in &mappings[1..] {
+        let Some(first_mapping) = mappings.first() else {
+            continue;
+        };
+        let first_args = &first_mapping.0;
+        for other in mappings.get(1..).unwrap_or_default() {
             if other.0 != *first_args {
                 diagnostics.push(Diagnostic {
                     code: CODE.clone(),

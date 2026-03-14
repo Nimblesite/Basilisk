@@ -23,6 +23,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{ClassInfo, ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::{guards::is_enum_class, Rule};
 
@@ -56,7 +57,7 @@ impl Rule for EnumNonMemberInLiteral {
             let Some(ann_span) = var.annotation_span else {
                 continue;
             };
-            let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+            let Some(ann_text) = slice_span(source, ann_span) else {
                 continue;
             };
             // Parse `Literal[ClassName.member]` from the annotation text.

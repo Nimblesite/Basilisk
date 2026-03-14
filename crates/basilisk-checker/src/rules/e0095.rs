@@ -30,6 +30,7 @@ use std::collections::{HashMap, HashSet};
 use basilisk_resolver::{ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -56,7 +57,7 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
 
 fn span_text(source: &str, span: Option<Span>) -> Option<&str> {
     let span = span?;
-    source.get(span.start as usize..span.end as usize)
+    slice_span(source, span)
 }
 
 /// Extract the inner type from an `InitVar[T]` annotation text.
@@ -200,7 +201,7 @@ fn check_initvar_attribute_access(module: &ResolvedModule, diagnostics: &mut Vec
         .filter(|v| v.rhs_kind == basilisk_resolver::RhsKind::CallExpr)
         .filter_map(|v| {
             let rhs_span = v.rhs_span?;
-            let rhs_text = source.get(rhs_span.start as usize..rhs_span.end as usize)?;
+            let rhs_text = slice_span(source, rhs_span)?;
             let class_name = extract_callee_name(rhs_text)?;
             if initvar_field_map.contains_key(class_name) {
                 Some((v.name.as_str(), class_name))

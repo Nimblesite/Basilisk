@@ -26,6 +26,7 @@
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -73,7 +74,7 @@ fn check_local_assignments(
         .iter()
         .filter_map(|param| {
             let ann_span = param.annotation_span?;
-            let ann_text = source.get(ann_span.start as usize..ann_span.end as usize)?;
+            let ann_text = slice_span(source, ann_span)?;
             Some((param.name.as_str(), ann_text.trim()))
         })
         .collect();
@@ -167,7 +168,7 @@ fn check_return_stmts(
     let Some(ann_span) = func.return_annotation_span else {
         return;
     };
-    let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+    let Some(ann_text) = slice_span(source, ann_span) else {
         return;
     };
     let ann_text = ann_text.trim();
@@ -182,8 +183,7 @@ fn check_return_stmts(
         if !ret_stmt.has_value {
             continue;
         }
-        let Some(ret_full) = source.get(ret_stmt.span.start as usize..ret_stmt.span.end as usize)
-        else {
+        let Some(ret_full) = slice_span(source, ret_stmt.span) else {
             continue;
         };
         let ret_full = ret_full.trim();
@@ -257,14 +257,15 @@ fn extract_generic_inner(text: &str) -> Option<&str> {
     if close_bracket <= bracket_pos {
         return None;
     }
-    Some(text[bracket_pos + 1..close_bracket].trim())
+    Some(text.get(bracket_pos + 1..close_bracket)?.trim())
 }
 
 /// Extract the base name from a generic annotation.
 ///
 /// `"list[int]"` -> `"list"`, `"ClassC[Never]"` -> `"ClassC"`
 fn extract_generic_base(text: &str) -> &str {
-    text.find('[').map_or(text, |pos| text[..pos].trim())
+    text.find('[')
+        .map_or(text, |pos| text.get(..pos).unwrap_or(text).trim())
 }
 
 /// Strip trailing `()` call from an expression.
@@ -276,7 +277,7 @@ fn strip_call_parens(text: &str) -> &str {
         return stripped;
     }
     if let Some(pos) = text.find("](") {
-        return &text[..=pos];
+        return text.get(..=pos).unwrap_or(text);
     }
     text
 }

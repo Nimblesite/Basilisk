@@ -53,7 +53,7 @@ pub fn hover_at(
 
     // Diagnostic info at this position.
     for d in diagnostics {
-        if (d.span.start as usize) <= byte_offset && byte_offset < (d.span.end as usize) {
+        if d.span.start_usize() <= byte_offset && byte_offset < d.span.end_usize() {
             let mut diag_md = format!("**{}** — {}", d.code.code, d.message);
             if let Some(ref help) = d.help {
                 let _ = write!(diag_md, "\n\n_{help}_");

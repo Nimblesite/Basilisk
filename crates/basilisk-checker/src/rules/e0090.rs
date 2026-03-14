@@ -20,6 +20,7 @@
 use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -45,7 +46,7 @@ impl Rule for InvalidTupleTypeSyntax {
                 continue;
             };
 
-            let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) else {
+            let Some(ann_text) = slice_span(source, ann_span) else {
                 continue;
             };
 
@@ -69,8 +70,7 @@ impl Rule for InvalidTupleTypeSyntax {
         // Also check function return type annotations
         for func in &module.functions {
             if let Some(ret_span) = func.return_annotation_span {
-                let Some(ret_text) = source.get(ret_span.start as usize..ret_span.end as usize)
-                else {
+                let Some(ret_text) = slice_span(source, ret_span) else {
                     continue;
                 };
 
@@ -104,13 +104,17 @@ fn split_top_level(s: &str) -> Vec<&str> {
             '[' | '(' | '{' => depth += 1,
             ']' | ')' | '}' => depth -= 1,
             ',' if depth == 0 => {
-                parts.push(s[start..i].trim());
+                if let Some(part) = s.get(start..i) {
+                    parts.push(part.trim());
+                }
                 start = i + 1;
             }
             _ => {}
         }
     }
-    parts.push(s[start..].trim());
+    if let Some(part) = s.get(start..) {
+        parts.push(part.trim());
+    }
     parts
 }
 
@@ -124,7 +128,9 @@ fn check_tuple_syntax(annotation: &str) -> Option<&'static str> {
         return None;
     }
 
-    let inner = annotation["tuple[".len()..annotation.len() - 1].trim();
+    let inner = annotation
+        .get("tuple[".len()..annotation.len().checked_sub(1)?)
+        .map_or("", str::trim);
 
     // Check for empty tuple: tuple[()]
     if inner == "()" {
@@ -152,7 +158,7 @@ fn check_tuple_syntax(annotation: &str) -> Option<&'static str> {
         return Some("ellipsis (...) must appear at the end of the tuple type");
     }
 
-    let ellipsis_pos = ellipsis_positions[0];
+    let &ellipsis_pos = ellipsis_positions.first()?;
 
     // `...` must be the very last component.
     if ellipsis_pos != components.len() - 1 {

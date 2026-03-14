@@ -152,9 +152,9 @@ fn collect_transitive_stubs(
 fn is_stub_body(body: &[Stmt]) -> bool {
     // Allow optional leading docstring.
     let effective = if body.len() >= 2 {
-        if let Stmt::Expr(expr_stmt) = &body[0] {
+        if let Some(Stmt::Expr(expr_stmt)) = body.first() {
             if matches!(&*expr_stmt.value, Expr::StringLiteral(_)) {
-                &body[1..]
+                body.get(1..).unwrap_or_default()
             } else {
                 body
             }
@@ -168,7 +168,10 @@ fn is_stub_body(body: &[Stmt]) -> bool {
     if effective.len() != 1 {
         return false;
     }
-    match &effective[0] {
+    let Some(first_effective) = effective.first() else {
+        return false;
+    };
+    match first_effective {
         Stmt::Pass(_) => true,
         Stmt::Expr(expr_stmt) => matches!(&*expr_stmt.value, Expr::EllipsisLiteral(_)),
         _ => false,

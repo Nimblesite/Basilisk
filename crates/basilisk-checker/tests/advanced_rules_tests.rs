@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Integration tests for advanced checker rules with low coverage.
 //! Exercises BSK-E0057 through BSK-E0149 and complex type scenarios.
 #![allow(missing_docs)]

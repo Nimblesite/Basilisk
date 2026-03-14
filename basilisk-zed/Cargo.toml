@@ -7,6 +7,9 @@ publish = false
 [lib]
 crate-type = ["cdylib"]
 
+[lints]
+workspace = true
+
 [dependencies]
 zed_extension_api = "0.7.0"
 # Shared constants with the LSP — zero-dependency, WASM-compatible.

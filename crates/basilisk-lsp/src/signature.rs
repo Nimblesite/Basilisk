@@ -44,7 +44,7 @@ fn find_call_context(source: &str, offset: usize) -> Option<(String, u32)> {
             '(' => {
                 if depth == 0 {
                     // Found the opening paren. Extract callee name before it.
-                    let before_paren = &before[..idx];
+                    let before_paren = before.get(..idx)?;
                     let callee = extract_callee(before_paren)?;
                     return Some((callee, commas));
                 }
@@ -148,7 +148,7 @@ fn display_params(func: &FunctionInfo, source: &str) -> Vec<String> {
             .is_some_and(|p| p.name == "self" || p.name == "cls");
 
     let params = if skip_self {
-        &func.parameters[1..]
+        func.parameters.get(1..).unwrap_or(&[])
     } else {
         &func.parameters
     };
@@ -157,7 +157,7 @@ fn display_params(func: &FunctionInfo, source: &str) -> Vec<String> {
         .iter()
         .map(|p| {
             if let Some(ann_span) = p.annotation_span {
-                if let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize) {
+                if let Some(ann_text) = ann_span.slice_source(source) {
                     return format!("{}: {}", p.name, ann_text.trim());
                 }
             }
@@ -167,12 +167,10 @@ fn display_params(func: &FunctionInfo, source: &str) -> Vec<String> {
 
     if let Some(ref va) = func.vararg {
         let s = if let Some(ann_span) = va.annotation_span {
-            source
-                .get(ann_span.start as usize..ann_span.end as usize)
-                .map_or_else(
-                    || format!("*{}", va.name),
-                    |ann| format!("*{}: {}", va.name, ann.trim()),
-                )
+            ann_span.slice_source(source).map_or_else(
+                || format!("*{}", va.name),
+                |ann| format!("*{}: {}", va.name, ann.trim()),
+            )
         } else {
             format!("*{}", va.name)
         };
@@ -181,12 +179,10 @@ fn display_params(func: &FunctionInfo, source: &str) -> Vec<String> {
 
     if let Some(ref kw) = func.kwarg {
         let s = if let Some(ann_span) = kw.annotation_span {
-            source
-                .get(ann_span.start as usize..ann_span.end as usize)
-                .map_or_else(
-                    || format!("**{}", kw.name),
-                    |ann| format!("**{}: {}", kw.name, ann.trim()),
-                )
+            ann_span.slice_source(source).map_or_else(
+                || format!("**{}", kw.name),
+                |ann| format!("**{}: {}", kw.name, ann.trim()),
+            )
         } else {
             format!("**{}", kw.name)
         };
@@ -209,7 +205,7 @@ fn build_label(func: &FunctionInfo, params: &[String], source: &str) -> String {
         ReturnAnnotationKind::Any => label.push_str(" -> Any"),
         _ => {
             if let Some(span) = func.return_annotation_span {
-                if let Some(text) = source.get(span.start as usize..span.end as usize) {
+                if let Some(text) = span.slice_source(source) {
                     label.push_str(" -> ");
                     label.push_str(text.trim());
                 }

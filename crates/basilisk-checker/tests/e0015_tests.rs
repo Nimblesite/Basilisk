@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Tests for BSK-E0015: Invalid type argument count for generic type.
 //!
 //! This rule detects when a generic type is subscripted with the wrong number

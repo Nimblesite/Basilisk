@@ -12,6 +12,7 @@ members = [
     "crates/basilisk-mojo",
     "crates/basilisk-compiler",
     "crates/basilisk-common",
+    "crates/basilisk-test-utils",
     "basilisk-zed",
 ]
 exclude = []
@@ -48,19 +49,23 @@ basilisk-resolver = { path = "crates/basilisk-resolver" }
 basilisk-checker  = { path = "crates/basilisk-checker" }
 basilisk-lsp      = { path = "crates/basilisk-lsp" }
 basilisk-compiler = { path = "crates/basilisk-compiler" }
-basilisk-common   = { path = "crates/basilisk-common" }
+basilisk-common     = { path = "crates/basilisk-common" }
+basilisk-test-utils = { path = "crates/basilisk-test-utils" }
 
 [workspace.lints.rust]
 unsafe_code  = "deny"
-missing_docs = "warn"
+missing_docs = "deny"
 unused_imports = "deny"
 dead_code = "deny"
 unused_variables = "deny"
 unused_mut = "deny"
 unused_assignments = "deny"
 unused_results = "deny"
+# Stale #[expect] attributes must be errors, not warnings — no dead suppressions
+unfulfilled_lint_expectations = "deny"
 
 [workspace.lints.clippy]
+# all + pedantic at maximum — restriction & nursery cherry-picked (contain contradictions)
 all                  = { level = "deny", priority = -1 }
 pedantic             = { level = "deny", priority = -1 }
 unwrap_used          = "deny"
@@ -68,3 +73,36 @@ expect_used          = "deny"
 panic                = "deny"
 todo                 = "deny"
 unimplemented        = "deny"
+# Implicit panics from out-of-bounds indexing — use .get() instead
+indexing_slicing     = "deny"
+# Silent lossy type conversions via `as` — use .into()/.try_into() instead
+as_conversions       = "deny"
+# Forgotten debug macros leaking info to stderr
+dbg_macro            = "deny"
+# Resource leaks from skipped destructors — use ManuallyDrop if needed
+mem_forget           = "deny"
+# From impls that can panic should be TryFrom instead
+fallible_impl_from   = "deny"
+# Catch needless implicit clones — use .clone() for explicit intent
+implicit_clone       = "deny"
+# Require SAFETY comments on any unsafe block — defense in depth for allowed exceptions
+undocumented_unsafe_blocks = "deny"
+# Prevent silent precision loss in float literals — critical for numeric type correctness
+lossy_float_literal  = "deny"
+# Prevent stack overflow from oversized local variables — critical for recursive AST walking
+large_stack_frames   = "deny"
+# Force #[expect] over #[allow] so stale lint suppressions don't hide new violations
+allow_attributes     = "deny"
+too_many_lines       = "deny"
+too_many_arguments   = "deny"
+cast_possible_truncation = "deny"
+# Catch accidental infinite loops — require `-> !` return type for intentional ones
+infinite_loop        = "deny"
+# Prevent silent error cause discarding in .map_err(|_| ...) — preserve error provenance
+map_err_ignore       = "deny"
+# Prevent process::exit() — use proper error propagation, exit only via main() return
+exit                 = "deny"
+# Catch struct destructures that silently ignore new fields — critical during refactoring
+rest_pat_in_fully_bound_structs = "deny"
+# Require Arc::clone(&x) syntax — make ref-counted pointer cloning visually distinct
+clone_on_ref_ptr     = "deny"

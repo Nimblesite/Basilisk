@@ -17,6 +17,7 @@
 use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -48,12 +49,10 @@ impl Rule for DataclassFieldDefaultFactoryMismatch {
                 let Some(rhs_span) = attr.rhs_span else {
                     continue;
                 };
-                let Some(ann_text) = source.get(ann_span.start as usize..ann_span.end as usize)
-                else {
+                let Some(ann_text) = slice_span(source, ann_span) else {
                     continue;
                 };
-                let Some(rhs_text) = source.get(rhs_span.start as usize..rhs_span.end as usize)
-                else {
+                let Some(rhs_text) = slice_span(source, rhs_span) else {
                     continue;
                 };
 
@@ -99,14 +98,14 @@ fn extract_default_factory_type(rhs_text: &str) -> Option<&str> {
 
     // Find "default_factory="
     let factory_idx = inner.find("default_factory=")?;
-    let after = &inner[factory_idx + "default_factory=".len()..];
+    let after = inner.get(factory_idx + "default_factory=".len()..)?;
 
     // Extract value until the first comma or closing paren.
     let end = after
         .find(',')
         .or_else(|| after.find(')'))
         .unwrap_or(after.len());
-    let factory_val = after[..end].trim();
+    let factory_val = after.get(..end)?.trim();
 
     // Only accept simple identifiers (no dots, brackets, parens, spaces).
     if factory_val.is_empty()

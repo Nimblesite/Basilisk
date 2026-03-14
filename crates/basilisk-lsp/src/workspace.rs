@@ -3,14 +3,16 @@
 //!
 //! See `docs/WHOLE-MODULE-ANALYSIS-SPEC.md` for the full specification.
 
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use dashmap::DashMap;
 use tower_lsp::lsp_types::Url;
 
-use crate::config::{AnalysisMode, WorkspaceConfig};
+use crate::config::AnalysisMode;
+
+use crate::workspace_analysis::{analyse, fnv1a};
+use crate::workspace_scan::{collect_python_files, deduplicate_by_stem, path_to_uri};
 
 // ── FileEntry ────────────────────────────────────────────────────────────────
 
@@ -232,236 +234,27 @@ impl WorkspaceIndex {
     }
 }
 
-// ── Analysis helpers ─────────────────────────────────────────────────────────
-
-/// Build a `FileEntry` with the given analysis results.
-fn make_entry(
-    hash: u64,
-    text: &str,
-    resolved: Option<Arc<basilisk_resolver::ResolvedModule>>,
-    checker_diags: Vec<basilisk_checker::Diagnostic>,
-) -> FileEntry {
-    FileEntry {
-        source_hash: hash,
-        text: text.to_owned(),
-        resolved,
-        diagnostics: checker_diags,
-        version: 0,
-        is_open: false,
-    }
-}
-
-/// Run the full parse → resolve → check pipeline on `text`.
-///
-/// Always returns a `FileEntry` (resolved may be `None` on failure) and the
-/// corresponding LSP diagnostics.
-fn analyse(text: &str, path: &Path) -> (FileEntry, Vec<tower_lsp::lsp_types::Diagnostic>) {
-    let path_str = path.to_string_lossy().into_owned();
-    let hash = fnv1a(text);
-
-    let parsed = match basilisk_parser::parse_source(text.to_owned(), path_str) {
-        Ok(p) => p,
-        Err(e) => {
-            let lsp_diag = parse_error_diagnostic(&e.to_string());
-            return (make_entry(hash, text, None, vec![]), vec![lsp_diag]);
-        }
-    };
-
-    let Ok(resolved) = basilisk_resolver::resolve(&parsed) else {
-        return (make_entry(hash, text, None, vec![]), vec![]);
-    };
-
-    let checker_diags = basilisk_checker::check(&resolved);
-    let lsp_diags = checker_diags.iter().map(|d| bsk_to_lsp(d, text)).collect();
-
-    (
-        make_entry(hash, text, Some(Arc::new(resolved)), checker_diags),
-        lsp_diags,
-    )
-}
-
-// ── File collection ──────────────────────────────────────────────────────────
-
-/// Recursively collect all `.py` / `.pyi` files under `dir`, skipping hidden
-/// dirs, common non-source directories, and user-configured exclude paths.
-pub fn collect_python_files(
-    dir: &Path,
-    out: &mut Vec<PathBuf>,
-    exclude: &[PathBuf],
-    workspace_root: &Path,
-) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            let name = entry.file_name();
-            let name_str = name.to_string_lossy();
-            if name_str.starts_with('.')
-                || name_str == "__pycache__"
-                || name_str == "node_modules"
-                || name_str == "venv"
-                || name_str == ".tox"
-                || name_str == ".mypy_cache"
-                || name_str == ".ruff_cache"
-            {
-                continue;
-            }
-            if is_excluded(&path, exclude, workspace_root) {
-                continue;
-            }
-            collect_python_files(&path, out, exclude, workspace_root);
-        } else if path
-            .extension()
-            .is_some_and(|ext| ext == "py" || ext == "pyi")
-        {
-            out.push(path);
-        }
-    }
-}
-
-/// Check if a path matches any configured exclude patterns.
-#[must_use]
-pub fn is_excluded(path: &Path, exclude: &[PathBuf], workspace_root: &Path) -> bool {
-    let relative = path.strip_prefix(workspace_root).unwrap_or(path);
-    exclude.iter().any(|exc| relative.starts_with(exc))
-}
-
-/// Deduplicate a list of Python files by stem, preferring `.pyi` over `.py`.
-fn deduplicate_by_stem(files: Vec<PathBuf>) -> Vec<PathBuf> {
-    let mut by_stem: HashMap<String, PathBuf> = HashMap::new();
-    for path in files {
-        let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
-            continue;
-        };
-        let ext = path.extension().and_then(|s| s.to_str());
-        let key = stem.to_owned();
-        match by_stem.get(&key) {
-            Some(existing) => {
-                if existing.extension().and_then(|s| s.to_str()) == Some("py") && ext == Some("pyi")
-                {
-                    let _ = by_stem.insert(key, path);
-                }
-            }
-            None => {
-                let _ = by_stem.insert(key, path);
-            }
-        }
-    }
-    by_stem.into_values().collect()
-}
-
-/// Convert a filesystem path to an LSP `Url`.
-#[must_use]
-pub fn path_to_uri(path: &Path) -> Option<Url> {
-    Url::from_file_path(path).ok()
-}
-
-// ── Diagnostic conversion ────────────────────────────────────────────────────
-
-const FALLBACK_DOCS_URL: &str = "https://www.basilisk-python.dev";
-
-fn bsk_to_lsp(d: &basilisk_checker::Diagnostic, text: &str) -> tower_lsp::lsp_types::Diagnostic {
-    use crate::util::byte_offset_to_position;
-    use tower_lsp::lsp_types::{
-        CodeDescription, Diagnostic, DiagnosticSeverity, NumberOrString, Range, Url,
-    };
-
-    let start = byte_offset_to_position(text, d.span.start as usize);
-    let end = byte_offset_to_position(text, d.span.end as usize);
-    let severity = match d.severity {
-        basilisk_checker::Severity::Error | basilisk_checker::Severity::SafetyViolation => {
-            DiagnosticSeverity::ERROR
-        }
-        basilisk_checker::Severity::Warning => DiagnosticSeverity::WARNING,
-        basilisk_checker::Severity::Info => DiagnosticSeverity::INFORMATION,
-    };
-    let Ok(fallback) = Url::parse(FALLBACK_DOCS_URL) else {
-        return Diagnostic {
-            range: Range { start, end },
-            severity: Some(severity),
-            code: Some(NumberOrString::String(d.code.code.to_owned())),
-            source: Some("basilisk".to_owned()),
-            message: d.message.clone(),
-            ..Default::default()
-        };
-    };
-    Diagnostic {
-        range: Range { start, end },
-        severity: Some(severity),
-        code: Some(NumberOrString::String(d.code.code.to_owned())),
-        code_description: Some(CodeDescription {
-            href: Url::parse(d.code.docs_url).unwrap_or(fallback),
-        }),
-        source: Some("basilisk".to_owned()),
-        message: d.message.clone(),
-        ..Default::default()
-    }
-}
-
-fn parse_error_diagnostic(message: &str) -> tower_lsp::lsp_types::Diagnostic {
-    use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, NumberOrString, Position, Range};
-    Diagnostic {
-        range: Range {
-            start: Position::new(0, 0),
-            end: Position::new(0, 0),
-        },
-        severity: Some(DiagnosticSeverity::ERROR),
-        code: Some(NumberOrString::String("BSK-PARSE".to_owned())),
-        source: Some("basilisk".to_owned()),
-        message: format!("Parse error: {message}"),
-        ..Default::default()
-    }
-}
-
-// ── Hash ─────────────────────────────────────────────────────────────────────
-
-/// FNV-1a 64-bit hash of a string slice.
-fn fnv1a(s: &str) -> u64 {
-    const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
-    const PRIME: u64 = 0x0000_0100_0000_01b3;
-    s.bytes().fold(OFFSET, |acc, byte| {
-        (acc ^ u64::from(byte)).wrapping_mul(PRIME)
-    })
-}
-
-// ── WorkspaceConfig helper ───────────────────────────────────────────────────
-
-/// Extract `AnalysisMode` from `InitializationOptions` JSON, falling back to
-/// workspace config file, then the hard default (`WholeModule`).
-#[must_use]
-pub fn resolve_analysis_mode(
-    init_options: Option<&serde_json::Value>,
-    roots: &[PathBuf],
-) -> AnalysisMode {
-    // 1. InitializationOptions (highest priority — set by VS Code setting).
-    if let Some(mode_str) = init_options
-        .and_then(|o| o.get("analysisMode"))
-        .and_then(|v| v.as_str())
-    {
-        return AnalysisMode::parse(mode_str);
-    }
-
-    // 2. Workspace config file.
-    if let Some(root) = roots.first() {
-        let cfg: WorkspaceConfig = crate::config::load_config(root);
-        if cfg.analysis_mode != AnalysisMode::WholeModule {
-            return cfg.analysis_mode;
-        }
-        // WholeModule is also the default, but an explicit file config of WholeModule
-        // is indistinguishable from the default. Either way the result is correct.
-        return cfg.analysis_mode;
-    }
-
-    // 3. Hard default.
-    AnalysisMode::WholeModule
-}
-
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
+#[expect(
+    clippy::unwrap_used,
+    reason = "test-only code: unwrap acceptable in unit tests"
+)]
 mod tests {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
     use super::*;
+    use crate::config::AnalysisMode;
+    use crate::workspace_analysis::fnv1a;
+    use crate::workspace_analysis::resolve_analysis_mode;
+    use crate::workspace_scan::{deduplicate_by_stem, is_excluded};
+
+    static TEST_CTR: AtomicU64 = AtomicU64::new(0);
+
+    /// Generate a unique temp dir path to avoid races between parallel tests.
+    fn unique_tmp(prefix: &str) -> std::path::PathBuf {
+        let n = TEST_CTR.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir().join(format!("{prefix}_{n}_{}", std::process::id()))
+    }
 
     #[test]
     fn test_fnv1a_differs_for_different_strings() {
@@ -659,7 +452,7 @@ mod tests {
     fn test_set_closed_existing_file_re_analyses() {
         let idx = make_index();
         // Write a real temp file.
-        let dir = std::env::temp_dir().join("bsk_set_closed_test");
+        let dir = unique_tmp("bsk_set_closed");
         std::fs::create_dir_all(&dir).unwrap();
         let file_path = dir.join("test.py");
         std::fs::write(&file_path, "x: int = 1\n").unwrap();
@@ -690,7 +483,7 @@ mod tests {
 
     #[test]
     fn test_reload_from_disk_skips_unchanged_hash() {
-        let dir = std::env::temp_dir().join("bsk_reload_test");
+        let dir = unique_tmp("bsk_reload");
         std::fs::create_dir_all(&dir).unwrap();
         let file_path = dir.join("unchanged.py");
         let src = "x: int = 1\n";
@@ -721,7 +514,7 @@ mod tests {
 
     #[test]
     fn test_scan_collects_python_files() {
-        let dir = std::env::temp_dir().join("bsk_scan_test");
+        let dir = unique_tmp("bsk_scan");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("a.py"), "x: int = 1\n").unwrap();
         std::fs::write(dir.join("b.py"), "y: str = 'hi'\n").unwrap();
@@ -736,7 +529,7 @@ mod tests {
 
     #[test]
     fn test_scan_skips_open_files() {
-        let dir = std::env::temp_dir().join("bsk_scan_skip_open");
+        let dir = unique_tmp("bsk_scan_skip_open");
         std::fs::create_dir_all(&dir).unwrap();
         let file_path = dir.join("open.py");
         std::fs::write(&file_path, "x: int = 1\n").unwrap();

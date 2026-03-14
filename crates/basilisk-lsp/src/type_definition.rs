@@ -40,7 +40,7 @@ pub fn goto_type_definition(
     };
 
     let span = annotation_span?;
-    let type_text = source.get(span.start as usize..span.end as usize)?;
+    let type_text = span.slice_source(source)?;
     let type_name = extract_base_type(type_text.trim());
 
     // Find the class definition for this type name.
@@ -84,7 +84,7 @@ fn extract_base_type(annotation: &str) -> &str {
 
     // Strip generic parameters `X[...]` → `X`.
     if let Some(bracket_pos) = trimmed.find('[') {
-        return trimmed[..bracket_pos].trim();
+        return trimmed.get(..bracket_pos).map_or(trimmed, str::trim);
     }
 
     trimmed

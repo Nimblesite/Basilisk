@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Deep coverage tests - exercises as many checker code paths as possible.
 //! Focused on rules with < 30% line coverage that have significant implementation.
 #![allow(missing_docs)]
@@ -786,7 +794,7 @@ type StrPair = Pair[str, str]
 // ============================================================================
 
 #[test]
-#[allow(clippy::too_many_lines)]
+#[expect(clippy::too_many_lines)]
 fn comprehensive_python_features() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import (

@@ -36,7 +36,7 @@ fn variable_type_hints(resolved: &ResolvedModule, source: &str, hints: &mut Vec<
             continue;
         }
         hints.push(InlayHint {
-            position: byte_offset_to_position(source, var.name_span.end as usize),
+            position: byte_offset_to_position(source, var.name_span.end_usize()),
             label: InlayHintLabel::String(format!(": {type_name}")),
             kind: Some(InlayHintKind::TYPE),
             text_edits: None,
@@ -58,7 +58,7 @@ fn variable_type_hints(resolved: &ResolvedModule, source: &str, hints: &mut Vec<
                 continue;
             }
             hints.push(InlayHint {
-                position: byte_offset_to_position(source, var.name_span.end as usize),
+                position: byte_offset_to_position(source, var.name_span.end_usize()),
                 label: InlayHintLabel::String(format!(": {type_name}")),
                 kind: Some(InlayHintKind::TYPE),
                 text_edits: None,
@@ -87,7 +87,7 @@ fn parameter_name_hints(resolved: &ResolvedModule, source: &str, hints: &mut Vec
                 .first()
                 .is_some_and(|p| p.name == "self" || p.name == "cls")
         {
-            &func.parameters[1..]
+            func.parameters.get(1..).unwrap_or(&[])
         } else {
             &func.parameters
         };
@@ -97,14 +97,14 @@ fn parameter_name_hints(resolved: &ResolvedModule, source: &str, hints: &mut Vec
                 break;
             };
             // Don't add hints for args that already have keyword= syntax.
-            let arg_text = source.get(arg_span.start as usize..arg_span.end as usize);
+            let arg_text = source.get(arg_span.as_range());
             if let Some(text) = arg_text {
                 if text.contains('=') {
                     continue;
                 }
             }
             hints.push(InlayHint {
-                position: byte_offset_to_position(source, arg_span.start as usize),
+                position: byte_offset_to_position(source, arg_span.start_usize()),
                 label: InlayHintLabel::String(format!("{}=", param.name)),
                 kind: Some(InlayHintKind::PARAMETER),
                 text_edits: None,
@@ -133,7 +133,7 @@ fn function_return_type_hints(resolved: &ResolvedModule, source: &str, hints: &m
         // Find the closing `)` of the parameter list by scanning from after the
         // function name.  We track parenthesis nesting so nested default-value
         // expressions (e.g. `def f(x=(1,2)):`) do not fool us.
-        let Some(paren_close) = find_closing_paren(source, func.name_span.end as usize) else {
+        let Some(paren_close) = find_closing_paren(source, func.name_span.end_usize()) else {
             continue;
         };
 
@@ -183,7 +183,7 @@ fn find_closing_paren(source: &str, start: usize) -> Option<usize> {
     let bytes = source.as_bytes();
     // First, find the opening `(`.
     let mut pos = start;
-    while pos < bytes.len() && bytes[pos] != b'(' {
+    while pos < bytes.len() && bytes.get(pos).copied() != Some(b'(') {
         pos += 1;
     }
     if pos >= bytes.len() {
@@ -216,7 +216,7 @@ fn generic_type_param_hints(resolved: &ResolvedModule, source: &str, hints: &mut
             continue;
         }
         hints.push(InlayHint {
-            position: byte_offset_to_position(source, tv.span.end as usize),
+            position: byte_offset_to_position(source, tv.span.end_usize()),
             label: InlayHintLabel::String(format!("  {label}")),
             kind: Some(InlayHintKind::TYPE),
             text_edits: None,
@@ -240,7 +240,7 @@ fn generic_type_param_hints(resolved: &ResolvedModule, source: &str, hints: &mut
             .collect();
         let label = format!("[{}]", params.join(", "));
         hints.push(InlayHint {
-            position: byte_offset_to_position(source, class.name_span.end as usize),
+            position: byte_offset_to_position(source, class.name_span.end_usize()),
             label: InlayHintLabel::String(label),
             kind: Some(InlayHintKind::TYPE),
             text_edits: None,

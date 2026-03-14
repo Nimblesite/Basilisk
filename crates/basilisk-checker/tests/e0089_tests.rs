@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Tests for BSK-E0089: Invalid PEP 695 type parameter bound.
 //!
 //! PEP 695 introduced a compact syntax for declaring generic classes:

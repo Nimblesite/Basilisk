@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Coverage boost tests batch 7: targeting more uncovered rules.
 //! Focus: e0149, e0144, e0111, e0120, e0138, e0131, e0119, e0122, e0143,
 //!        e0121, e0095, e0139, e0126, e0063, e0073, e0112, e0096

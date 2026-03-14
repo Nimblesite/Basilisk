@@ -34,6 +34,7 @@ use std::collections::{HashMap, HashSet};
 use basilisk_resolver::{FinalViolationKind, ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -58,7 +59,7 @@ fn make_diagnostic(message: String, span: Span, path: &str, help: &str) -> Diagn
 
 fn span_text(source: &str, span: Option<Span>) -> Option<&str> {
     let sp = span?;
-    source.get(sp.start as usize..sp.end as usize)
+    slice_span(source, sp)
 }
 
 fn annotation_text_is_final(text: &str) -> bool {
@@ -248,10 +249,7 @@ fn check_class_attr_assignments(
         .iter()
         .filter_map(|v| {
             let span = v.annotation_span?;
-            let ann = module
-                .source
-                .get(span.start as usize..span.end as usize)?
-                .trim();
+            let ann = slice_span(&module.source, span)?.trim();
             Some((v.name.as_str(), ann))
         })
         .collect();
@@ -264,7 +262,7 @@ fn check_class_attr_assignments(
         .iter()
         .filter_map(|v| {
             let rhs_span = v.rhs_span?;
-            let rhs = source.get(rhs_span.start as usize..rhs_span.end as usize)?;
+            let rhs = slice_span(source, rhs_span)?;
             let callee = rhs.split(['(', '[']).next()?.trim();
             if callee.is_empty() {
                 return None;
