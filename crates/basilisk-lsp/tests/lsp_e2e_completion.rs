@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-//! LSP E2E tests — Completion (IntelliSense).
+//! LSP E2E tests — Completion (`IntelliSense`).
 
 mod lsp_e2e_common;
 use lsp_e2e_common::{request_completion, LspTestFixture, TestResult};

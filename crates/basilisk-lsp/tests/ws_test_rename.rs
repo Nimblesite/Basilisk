@@ -28,6 +28,8 @@ async fn test_ws_prepare_rename() -> TestResult<()> {
     Ok(())
 }
 
+/// # Panics
+/// Panics if `file_edits` is `None` (the response did not contain edits for the URI).
 #[tokio::test]
 async fn test_ws_rename_symbol() -> TestResult<()> {
     let uri = "file:///rename_symbol.py";
@@ -62,7 +64,9 @@ async fn test_ws_rename_symbol() -> TestResult<()> {
     let file_edits = changes[uri].as_array();
     assert!(file_edits.is_some(), "file edits must not be null: {resp}");
 
-    let edits = file_edits.expect("already asserted");
+    let Some(edits) = file_edits else {
+        panic!("file edits must not be null: {resp}");
+    };
     assert!(!edits.is_empty(), "edits must be non-empty: {resp}");
 
     for edit in edits {
@@ -113,6 +117,8 @@ async fn test_ws_rename_non_symbol_position_returns_null() -> TestResult<()> {
     Ok(())
 }
 
+/// # Panics
+/// Panics if `changes[uri]` is not an array (the response did not contain edits for the URI).
 #[tokio::test]
 async fn test_ws_rename_multiple_occurrences() -> TestResult<()> {
     let uri = "file:///rename_multi.py";
@@ -135,9 +141,9 @@ async fn test_ws_rename_multiple_occurrences() -> TestResult<()> {
     let changes = &parsed["result"]["changes"];
     assert!(!changes.is_null(), "changes must not be null: {resp}");
 
-    let file_edits = changes[uri]
-        .as_array()
-        .expect("file edits must be an array");
+    let Some(file_edits) = changes[uri].as_array() else {
+        panic!("file edits must be an array: {resp}");
+    };
 
     assert!(
         file_edits.len() >= 4,

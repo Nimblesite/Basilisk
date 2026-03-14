@@ -26,7 +26,7 @@ async fn test_ws_inlay_hints_variable_types() -> TestResult<()> {
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
     let hints = parsed["result"]
         .as_array()
-        .expect("result should be an array");
+        .ok_or("result should be an array")?;
 
     assert_eq!(hints.len(), 3, "expected exactly 3 hints: {resp}");
 
@@ -97,7 +97,7 @@ async fn test_ws_inlay_hints_fully_annotated_returns_empty() -> TestResult<()> {
     let result = &parsed["result"];
 
     assert!(
-        result.is_null() || result.as_array().map_or(false, |a| a.is_empty()),
+        result.is_null() || result.as_array().is_some_and(Vec::is_empty),
         "fully annotated code should return null or empty hints: {resp}"
     );
 
@@ -127,7 +127,7 @@ async fn test_ws_inlay_hint_return_type_inferred() -> TestResult<()> {
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
     let hints = parsed["result"]
         .as_array()
-        .expect("result should be an array");
+        .ok_or("result should be an array")?;
 
     let has_return_hint = hints
         .iter()
@@ -203,7 +203,7 @@ async fn test_ws_inlay_hint_parameter_names_at_call_site() -> TestResult<()> {
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
     let hints = parsed["result"]
         .as_array()
-        .expect("result should be an array");
+        .ok_or("result should be an array")?;
 
     let all_labels: String = hints
         .iter()
@@ -246,7 +246,7 @@ async fn test_ws_inlay_hint_no_hints_for_annotated_vars() -> TestResult<()> {
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
     let hints = parsed["result"]
         .as_array()
-        .expect("result should be an array");
+        .ok_or("result should be an array")?;
 
     let all_labels: String = hints
         .iter()
@@ -297,7 +297,7 @@ async fn test_ws_inlay_hint_return_type_multiple_returns() -> TestResult<()> {
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
     let hints = parsed["result"]
         .as_array()
-        .expect("result should be an array");
+        .ok_or("result should be an array")?;
 
     let has_return_hint = hints
         .iter()
@@ -335,7 +335,7 @@ async fn test_ws_inlay_hint_method_return_type() -> TestResult<()> {
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
     let hints = parsed["result"]
         .as_array()
-        .expect("result should be an array");
+        .ok_or("result should be an array")?;
 
     let has_return_hint = hints
         .iter()

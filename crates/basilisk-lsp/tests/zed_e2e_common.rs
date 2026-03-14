@@ -22,14 +22,21 @@ pub const READ_TIMEOUT: Duration = Duration::from_secs(5);
 /// Mirrors the exact spawn-and-communicate pattern that the Zed extension uses
 /// (binary + "lsp" arg, stdio JSON-RPC).
 pub struct ZedLspFixture {
+    /// The LSP server child process.
     pub child: Child,
+    /// Stdin handle for sending JSON-RPC messages.
     pub stdin: ChildStdin,
+    /// Channel receiving parsed JSON-RPC response bodies.
     pub responses: Receiver<String>,
+    /// Auto-incrementing request ID counter.
     pub next_id: i64,
 }
 
 impl ZedLspFixture {
     /// Spawn the LSP server exactly as the Zed extension would.
+    ///
+    /// # Errors
+    /// Returns an error if the binary cannot be spawned or stdio handles are unavailable.
     pub fn new() -> TestResult<Self> {
         let mut child = Command::new(basilisk_binary())
             .arg("lsp")
@@ -100,6 +107,9 @@ impl ZedLspFixture {
     }
 
     /// Send a JSON-RPC message.
+    ///
+    /// # Errors
+    /// Returns an error if writing to stdin or flushing fails.
     pub fn send_json(&mut self, value: &serde_json::Value) -> TestResult<()> {
         let body = value.to_string();
         let frame = format!("Content-Length: {}\r\n\r\n{}", body.len(), body);
@@ -114,6 +124,7 @@ impl ZedLspFixture {
     }
 
     /// Allocate the next request ID.
+    #[must_use]
     pub fn next_id(&mut self) -> i64 {
         let id = self.next_id;
         self.next_id += 1;
@@ -123,6 +134,9 @@ impl ZedLspFixture {
     /// Initialize with Zed-style `initializationOptions` (workspaceRoot).
     ///
     /// This is exactly what `language_server_initialization_options()` sends.
+    ///
+    /// # Errors
+    /// Returns an error if writing the init request fails or no response is received.
     pub fn initialize_zed_style(&mut self) -> TestResult<String> {
         let id = self.next_id();
         self.send_json(&serde_json::json!({
@@ -167,6 +181,9 @@ impl ZedLspFixture {
     }
 
     /// Send `textDocument/didOpen`.
+    ///
+    /// # Errors
+    /// Returns an error if writing to stdin fails.
     pub fn did_open(&mut self, uri: &str, text: &str) -> TestResult<()> {
         self.send_json(&serde_json::json!({
             "jsonrpc": "2.0",
@@ -183,6 +200,7 @@ impl ZedLspFixture {
     }
 
     /// Wait for a `publishDiagnostics` notification, skipping unrelated messages.
+    #[must_use]
     pub fn wait_for_diagnostics(&self) -> Option<String> {
         for _ in 0..10 {
             let msg = self.recv()?;
@@ -194,6 +212,9 @@ impl ZedLspFixture {
     }
 
     /// Send a request and wait for the response with the matching ID.
+    ///
+    /// # Errors
+    /// Returns an error if writing the request fails or no matching response is received.
     pub fn request(
         &mut self,
         method: &str,

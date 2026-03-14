@@ -20,12 +20,14 @@ pub const RECV_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Test fixture that runs the LSP WebSocket server in-process.
 pub struct WsTestFixture {
+    /// The write half of the WebSocket connection.
     pub ws_write: futures_util::stream::SplitSink<
         tokio_tungstenite::WebSocketStream<
             tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
         >,
         Message,
     >,
+    /// The read half of the WebSocket connection.
     pub ws_read: futures_util::stream::SplitStream<
         tokio_tungstenite::WebSocketStream<
             tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
@@ -36,6 +38,10 @@ pub struct WsTestFixture {
 
 impl WsTestFixture {
     /// Start the LSP server on a random port and connect via WebSocket.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if binding, accepting, or connecting fails.
     pub async fn new() -> TestResult<Self> {
         let listener = TcpListener::bind("127.0.0.1:0").await?;
         let port = listener.local_addr()?.port();
@@ -63,6 +69,10 @@ impl WsTestFixture {
     }
 
     /// Send a JSON-RPC message as a WebSocket text frame.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the WebSocket send fails.
     pub async fn send_json(&mut self, value: &serde_json::Value) -> TestResult<()> {
         let text = value.to_string();
         self.ws_write.send(Message::Text(text)).await?;
@@ -78,6 +88,10 @@ impl WsTestFixture {
     }
 
     /// Perform the full initialize / initialized handshake.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if sending or receiving the handshake messages fails.
     pub async fn initialize(&mut self) -> TestResult<String> {
         self.send_json(&serde_json::json!({
             "jsonrpc": "2.0",
@@ -108,6 +122,10 @@ impl WsTestFixture {
     }
 
     /// Send `textDocument/didOpen`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if sending the notification fails.
     pub async fn did_open(&mut self, uri: &str, text: &str) -> TestResult<()> {
         self.send_json(&serde_json::json!({
             "jsonrpc": "2.0",
@@ -136,6 +154,10 @@ impl WsTestFixture {
     }
 
     /// Send a `textDocument/didClose` notification for `uri`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if sending the notification fails.
     pub async fn did_close(&mut self, uri: &str) -> TestResult<()> {
         self.send_json(&serde_json::json!({
             "jsonrpc": "2.0",
@@ -148,6 +170,10 @@ impl WsTestFixture {
     }
 
     /// Send a request and wait for a response with a matching id.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if sending the request fails.
     pub async fn request(
         &mut self,
         id: u64,
@@ -176,6 +202,10 @@ impl WsTestFixture {
 // ── Shared helper functions ─────────────────────────────────────────────────
 
 /// Initialize + open a file + wait for diagnostics. Returns the fixture.
+///
+/// # Errors
+///
+/// Returns an error if initialization, opening, or diagnostics retrieval fails.
 pub async fn open_and_diagnose(uri: &str, code: &str) -> TestResult<(WsTestFixture, String)> {
     let mut fixture = WsTestFixture::new().await?;
     let _ = fixture.initialize().await?;
@@ -188,6 +218,10 @@ pub async fn open_and_diagnose(uri: &str, code: &str) -> TestResult<(WsTestFixtu
 }
 
 /// Initialize + open a file + wait for diagnostics + send a request. Returns the response.
+///
+/// # Errors
+///
+/// Returns an error if any step of the open-diagnose-request pipeline fails.
 pub async fn open_and_request(
     uri: &str,
     code: &str,
@@ -205,6 +239,10 @@ pub async fn open_and_request(
 
 /// Parse published diagnostics and request code actions for a specific
 /// diagnostic code. Returns the raw JSON-RPC response string.
+///
+/// # Errors
+///
+/// Returns an error if diagnostics parsing or the code action request fails.
 pub async fn code_action_for(
     fixture: &mut WsTestFixture,
     uri: &str,
@@ -241,6 +279,7 @@ pub async fn code_action_for(
 }
 
 /// Parse semantic token data into Vec of (deltaLine, deltaStart, length, tokenType, modifiers).
+#[must_use]
 pub fn parse_semantic_tokens(data: &[serde_json::Value]) -> Vec<Vec<u64>> {
     data.chunks(5)
         .map(|chunk| chunk.iter().map(|v| v.as_u64().unwrap_or(0)).collect())
@@ -248,6 +287,10 @@ pub fn parse_semantic_tokens(data: &[serde_json::Value]) -> Vec<Vec<u64>> {
 }
 
 /// Assert that semantic token data is well-formed (multiple of 5, non-negative values).
+///
+/// # Panics
+///
+/// Panics if the token data length is not a multiple of 5 or contains negative values.
 pub fn assert_valid_semantic_token_data(data: &[serde_json::Value], resp: &str) {
     assert_eq!(
         data.len() % 5,
@@ -264,6 +307,7 @@ pub fn assert_valid_semantic_token_data(data: &[serde_json::Value], resp: &str) 
 }
 
 /// Create a uniquely-named temporary directory.
+#[must_use]
 pub fn unique_temp_dir(prefix: &str) -> std::path::PathBuf {
     use std::time::{SystemTime, UNIX_EPOCH};
     let nanos = SystemTime::now()
@@ -273,7 +317,11 @@ pub fn unique_temp_dir(prefix: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!("{prefix}_{nanos}"))
 }
 
-/// Initialize the server with a rootUri and analysis mode.
+/// Initialize the server with a `rootUri` and analysis mode.
+///
+/// # Errors
+///
+/// Returns an error if sending or receiving the handshake messages fails.
 pub async fn initialize_with_root(
     fixture: &mut WsTestFixture,
     root_uri: &str,
@@ -309,7 +357,11 @@ pub async fn initialize_with_root(
     Ok(response)
 }
 
-/// Helper for hover requests: opens a file and sends textDocument/hover.
+/// Helper for hover requests: opens a file and sends `textDocument/hover`.
+///
+/// # Errors
+///
+/// Returns an error if opening or the hover request fails.
 pub async fn hover_at(
     uri: &str,
     code: &str,
@@ -332,6 +384,10 @@ pub async fn hover_at(
 }
 
 /// Helper for semantic token requests.
+///
+/// # Errors
+///
+/// Returns an error if opening or the semantic tokens request fails.
 pub async fn semantic_tokens_for(
     uri: &str,
     code: &str,
@@ -357,6 +413,14 @@ pub async fn semantic_tokens_for(
 }
 
 /// Helper for diagnostic rule tests: opens code, checks that `rule_code` fires.
+///
+/// # Errors
+///
+/// Returns an error if opening or diagnostics retrieval fails.
+///
+/// # Panics
+///
+/// Panics if the diagnostic message does not contain any of the expected keywords.
 pub async fn assert_rule_fires(
     uri: &str,
     code: &str,
@@ -378,6 +442,14 @@ pub async fn assert_rule_fires(
 }
 
 /// Helper for diagnostic rule tests: opens code, checks that `rule_code` does NOT fire.
+///
+/// # Errors
+///
+/// Returns an error if opening or diagnostics retrieval fails.
+///
+/// # Panics
+///
+/// Panics if the given rule code is unexpectedly present in the diagnostics.
 pub async fn assert_rule_clean(uri: &str, code: &str, rule_code: &str) -> TestResult<()> {
     let (_fixture, raw) = open_and_diagnose(uri, code).await?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;

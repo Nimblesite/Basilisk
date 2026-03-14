@@ -33,6 +33,9 @@ pub struct LspStdioFixture {
 
 impl LspStdioFixture {
     /// Spawn the LSP server and start background reader threads.
+    ///
+    /// # Errors
+    /// Returns an error if the server process fails to spawn.
     pub fn new() -> TestResult<Self> {
         let mut child = Command::new(basilisk_binary())
             .arg("lsp")
@@ -103,6 +106,9 @@ impl LspStdioFixture {
     }
 
     /// Send a JSON-RPC message.
+    ///
+    /// # Errors
+    /// Returns an error if writing to stdin fails.
     pub fn send_json(&mut self, value: &serde_json::Value) -> TestResult<()> {
         let body = value.to_string();
         let frame = format!("Content-Length: {}\r\n\r\n{}", body.len(), body);
@@ -112,6 +118,7 @@ impl LspStdioFixture {
     }
 
     /// Read the next message (with timeout).
+    #[must_use]
     pub fn recv(&self) -> Option<String> {
         self.responses.recv_timeout(READ_TIMEOUT).ok()
     }
@@ -124,6 +131,9 @@ impl LspStdioFixture {
     }
 
     /// Perform the standard initialize / initialized handshake.
+    ///
+    /// # Errors
+    /// Returns an error if the handshake fails or no response is received.
     pub fn initialize(&mut self) -> TestResult<String> {
         self.send_json(&serde_json::json!({
             "jsonrpc": "2.0",
@@ -154,6 +164,9 @@ impl LspStdioFixture {
     /// Initialize with Zed-style `initializationOptions` (workspaceRoot).
     ///
     /// This is exactly what `language_server_initialization_options()` sends.
+    ///
+    /// # Errors
+    /// Returns an error if the handshake fails or no response is received.
     pub fn initialize_zed_style(&mut self) -> TestResult<String> {
         let id = self.next_id();
         self.send_json(&serde_json::json!({
@@ -198,6 +211,9 @@ impl LspStdioFixture {
     }
 
     /// Send `textDocument/didOpen`.
+    ///
+    /// # Errors
+    /// Returns an error if writing to stdin fails.
     pub fn did_open(&mut self, uri: &str, text: &str) -> TestResult<()> {
         self.send_json(&serde_json::json!({
             "jsonrpc": "2.0",
@@ -214,6 +230,7 @@ impl LspStdioFixture {
     }
 
     /// Wait for a `publishDiagnostics` notification, skipping unrelated messages.
+    #[must_use]
     pub fn wait_for_diagnostics(&self) -> Option<String> {
         for _ in 0..10 {
             let msg = self.recv()?;
@@ -227,6 +244,9 @@ impl LspStdioFixture {
     /// Send a request with an explicit ID and wait for the matching response.
     ///
     /// Returns `None` if the response is not received within the timeout.
+    ///
+    /// # Errors
+    /// Returns an error if writing the request fails.
     #[allow(clippy::needless_pass_by_value)]
     pub fn send_request(
         &mut self,
@@ -252,6 +272,9 @@ impl LspStdioFixture {
     }
 
     /// Send a request with auto-incremented ID and return parsed JSON.
+    ///
+    /// # Errors
+    /// Returns an error if the request fails or no response is received.
     pub fn request(
         &mut self,
         method: &str,
@@ -278,6 +301,9 @@ impl LspStdioFixture {
     }
 
     /// Send a `textDocument/completion` request and wait for the response.
+    ///
+    /// # Errors
+    /// Returns an error if the request fails.
     pub fn request_completion(
         &mut self,
         uri: &str,

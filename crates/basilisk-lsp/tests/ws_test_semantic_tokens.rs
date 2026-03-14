@@ -169,7 +169,7 @@ class Animal:
     )
     .await?;
 
-    assert!(tokens.len() >= 1, "should have at least 1 token: {resp}");
+    assert!(!tokens.is_empty(), "should have at least 1 token: {resp}");
 
     // Token type 2 = class. The first token should be "Animal" at line 0.
     // data layout: [deltaLine, deltaStart, length, tokenType, tokenModifiers]
