@@ -26,6 +26,7 @@
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -73,7 +74,7 @@ fn check_local_assignments(
         .iter()
         .filter_map(|param| {
             let ann_span = param.annotation_span?;
-            let ann_text = ann_span.slice_source(source)?;
+            let ann_text = slice_span(source, ann_span)?;
             Some((param.name.as_str(), ann_text.trim()))
         })
         .collect();
@@ -167,7 +168,7 @@ fn check_return_stmts(
     let Some(ann_span) = func.return_annotation_span else {
         return;
     };
-    let Some(ann_text) = ann_span.slice_source(source) else {
+    let Some(ann_text) = slice_span(source, ann_span) else {
         return;
     };
     let ann_text = ann_text.trim();
@@ -182,7 +183,7 @@ fn check_return_stmts(
         if !ret_stmt.has_value {
             continue;
         }
-        let Some(ret_full) = ret_stmt.span.slice_source(source) else {
+        let Some(ret_full) = slice_span(source, ret_stmt.span) else {
             continue;
         };
         let ret_full = ret_full.trim();

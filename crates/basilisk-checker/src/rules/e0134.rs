@@ -53,7 +53,7 @@ impl Rule for InvariantGenericArgMismatch {
             for param in &func.parameters {
                 let ann_text = param
                     .annotation_span
-                    .and_then(|span| span.slice_source(source));
+                    .and_then(|span| slice_span(source, span));
                 if let Some(ann) = ann_text {
                     params.push((param.name.as_str(), ann.trim()));
                 }
@@ -91,7 +91,7 @@ fn build_class_base_map(module: &ResolvedModule) -> HashMap<&str, (&str, Vec<&st
             if !is_builtin_generic(&entry.base_name) {
                 continue;
             }
-            let span_text = entry.span.slice_source(source);
+            let span_text = slice_span(source, entry.span);
             if let Some(text) = span_text {
                 if let Some(type_args) = extract_subscript_args(text) {
                     let _ = map.insert(cls.name.as_str(), (entry.base_name.as_str(), type_args));
@@ -219,7 +219,7 @@ fn build_param_type_map(
 
 /// Check a statement inside a function body for calls with invariant
 /// mismatches.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "context parameters needed for type checking")]
 fn check_body_stmt(
     stmt: &ruff_python_ast::Stmt,
     _source: &str,
@@ -337,7 +337,7 @@ fn check_body_stmt(
 }
 
 /// Emit the invariant generic argument mismatch diagnostic.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "diagnostic formatting requires all context")]
 fn emit_diagnostic(
     callee_name: &str,
     param_name: &str,

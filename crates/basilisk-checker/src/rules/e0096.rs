@@ -98,14 +98,14 @@ fn extract_default_factory_type(rhs_text: &str) -> Option<&str> {
 
     // Find "default_factory="
     let factory_idx = inner.find("default_factory=")?;
-    let after = &inner[factory_idx + "default_factory=".len()..];
+    let after = inner.get(factory_idx + "default_factory=".len()..)?;
 
     // Extract value until the first comma or closing paren.
     let end = after
         .find(',')
         .or_else(|| after.find(')'))
         .unwrap_or(after.len());
-    let factory_val = after[..end].trim();
+    let factory_val = after.get(..end)?.trim();
 
     // Only accept simple identifiers (no dots, brackets, parens, spaces).
     if factory_val.is_empty()

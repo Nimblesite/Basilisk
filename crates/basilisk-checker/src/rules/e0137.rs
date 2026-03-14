@@ -177,7 +177,7 @@ fn check_protocol_generic_combined(
 /// - The annotation is a subscripted generic protocol (`Proto[A, B]`)
 /// - The RHS is a concrete class constructor call
 /// - The concrete class's methods are incompatible with the substituted type args.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "protocol checking requires full context")]
 fn check_generic_protocol_assignments(
     module: &ResolvedModule,
     source: &str,
@@ -199,7 +199,7 @@ fn check_generic_protocol_assignments(
             continue;
         };
 
-        let Some(ann_text) = ann_span.slice_source(source) else {
+        let Some(ann_text) = slice_span(source, ann_span) else {
             continue;
         };
         let ann_text = ann_text.trim();
@@ -243,7 +243,7 @@ fn check_generic_protocol_assignments(
             .collect();
 
         // Extract RHS class name.
-        let Some(rhs_text) = rhs_span.slice_source(source) else {
+        let Some(rhs_text) = slice_span(source, rhs_span) else {
             continue;
         };
         let rhs_text = rhs_text.trim();
@@ -350,8 +350,8 @@ fn check_return_type_mismatch(
         return None;
     };
 
-    let proto_ret = proto_ret_span.slice_source(source).map_or("", str::trim);
-    let concrete_ret = concrete_ret_span.slice_source(source).map_or("", str::trim);
+    let proto_ret = slice_span(source, proto_ret_span).map_or("", str::trim);
+    let concrete_ret = slice_span(source, concrete_ret_span).map_or("", str::trim);
 
     let expected_ret = substitute_typevars(proto_ret, substitution, typevar_info);
 
@@ -383,8 +383,8 @@ fn check_param_type_mismatch(
         if let (Some(proto_ann_span), Some(concrete_ann_span)) =
             (proto_param.annotation_span, concrete_param.annotation_span)
         {
-            let proto_ann = proto_ann_span.slice_source(source).map_or("", str::trim);
-            let concrete_ann = concrete_ann_span.slice_source(source).map_or("", str::trim);
+            let proto_ann = slice_span(source, proto_ann_span).map_or("", str::trim);
+            let concrete_ann = slice_span(source, concrete_ann_span).map_or("", str::trim);
 
             let expected_ann = substitute_typevars(proto_ann, substitution, typevar_info);
 
@@ -429,7 +429,7 @@ fn check_self_typed_protocol_assignments(
             continue;
         };
 
-        let Some(ann_text) = ann_span.slice_source(source) else {
+        let Some(ann_text) = slice_span(source, ann_span) else {
             continue;
         };
         let ann_name = ann_text.trim();
@@ -455,7 +455,7 @@ fn check_self_typed_protocol_assignments(
         }
 
         // Extract RHS class name.
-        let Some(rhs_text) = rhs_span.slice_source(source) else {
+        let Some(rhs_text) = slice_span(source, rhs_span) else {
             continue;
         };
         let rhs_text = rhs_text.trim();
@@ -728,7 +728,7 @@ fn get_self_typevar_name(method: &FunctionInfo, source: &str) -> Option<String> 
         return None;
     }
     let ann_span = first_param.annotation_span?;
-    let ann_text = ann_span.slice_source(source)?.trim();
+    let ann_text = slice_span(source, ann_span)?.trim();
     // The TypeVar name is a simple identifier.
     if ann_text.chars().all(|c| c.is_alphanumeric() || c == '_') {
         Some(ann_text.to_owned())
@@ -757,19 +757,19 @@ fn check_self_typed_method_incompatibility(
         .first()
         .filter(|p| p.name == "self")
         .and_then(|p| p.annotation_span)
-        .and_then(|span| span.slice_source(source))
+        .and_then(|span| slice_span(source, span))
         .map(str::trim);
 
     // Get the proto method's return type.
     let proto_ret = proto_method
         .return_annotation_span
-        .and_then(|span| span.slice_source(source))
+        .and_then(|span| slice_span(source, span))
         .map(str::trim);
 
     // Get the concrete method's return type.
     let concrete_ret = concrete_method
         .return_annotation_span
-        .and_then(|span| span.slice_source(source))
+        .and_then(|span| slice_span(source, span))
         .map(str::trim);
 
     // If the protocol return type is the TypeVar itself (T returns T),
@@ -820,7 +820,7 @@ fn check_self_typed_method_incompatibility(
     for (proto_param, concrete_param) in proto_params.iter().zip(concrete_params.iter()) {
         let proto_ann = proto_param
             .annotation_span
-            .and_then(|span| span.slice_source(source))
+            .and_then(|span| slice_span(source, span))
             .map_or("", str::trim);
 
         if proto_ann != tv_name {
@@ -832,7 +832,7 @@ fn check_self_typed_method_incompatibility(
         // The concrete method must use the same type consistently.
         let concrete_ann = concrete_param
             .annotation_span
-            .and_then(|span| span.slice_source(source))
+            .and_then(|span| slice_span(source, span))
             .map_or("", str::trim);
 
         // The concrete parameter type must match what is inferred from the self type.
@@ -872,7 +872,7 @@ fn _collect_class_methods<'a>(
 }
 
 /// Compute the byte span of a line in the source for diagnostic anchoring.
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::cast_possible_truncation, reason = "byte offsets fit u32 for source files")]
 fn _line_span(source: &str, line_number: usize) -> Option<Span> {
     let mut current_line = 1;
     let mut start = 0;

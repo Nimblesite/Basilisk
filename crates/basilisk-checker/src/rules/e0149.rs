@@ -57,7 +57,7 @@ fn leading_indent(line: &str) -> usize {
 }
 
 /// Return the byte offset (as u32) of the start of the given 1-based line.
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::cast_possible_truncation, reason = "byte offsets fit u32 for source files")]
 fn line_start_offset(source: &str, target_line: usize) -> u32 {
     let mut current = 1usize;
     for (byte_idx, ch) in source.char_indices() {
@@ -72,16 +72,15 @@ fn line_start_offset(source: &str, target_line: usize) -> u32 {
 }
 
 /// Build a `Span` covering the trimmed content of a given 1-based line.
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::as_conversions, clippy::cast_possible_truncation, reason = "u32<->usize safe on 32-bit+")]
 fn span_for_line(source: &str, line_number: usize) -> Span {
-    let start = usize::from(line_start_offset(source, line_number));
+    let start = line_start_offset(source, line_number) as usize;
     let line_text = source
         .get(start..)
         .and_then(|s| s.lines().next())
         .unwrap_or("");
     let trimmed_start = start + (line_text.len() - line_text.trim_start().len());
     let trimmed_end = start + line_text.trim_end().len();
-    #[allow(clippy::cast_possible_truncation)]
     Span {
         start: trimmed_start as u32,
         end: trimmed_end as u32,
@@ -612,7 +611,7 @@ fn check_method_redefines_class_type_param(
 // ---------------------------------------------------------------------------
 
 impl Rule for Pep695TypeParamScopingViolation {
-    #[allow(clippy::too_many_lines)]
+    #[expect(clippy::too_many_lines, reason = "PEP 695 scoping requires many checks")]
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         let source = &module.source;
         let path = &module.path;

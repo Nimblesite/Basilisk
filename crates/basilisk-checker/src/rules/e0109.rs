@@ -42,6 +42,8 @@ fn bound_incompatible(bound: &str, arg_type: &str) -> bool {
 
 impl Rule for TypeVarBoundCallViolation {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+        let source = &module.source;
+
         // Build map: TypeVar name → bound type name
         let typevar_bounds: HashMap<&str, &str> = module
             .typevar_calls
@@ -82,7 +84,7 @@ impl Rule for TypeVarBoundCallViolation {
                 let Some(ann_span) = param.annotation_span else {
                     continue;
                 };
-                let Some(ann_text) = module.ann_span.slice_source(source) else {
+                let Some(ann_text) = slice_span(source, ann_span) else {
                     continue;
                 };
                 let ann_trimmed = ann_text.trim();
@@ -93,7 +95,7 @@ impl Rule for TypeVarBoundCallViolation {
                 };
 
                 // Get the argument source text to identify what's being passed
-                let Some(arg_text) = module.arg_span.slice_source(source) else {
+                let Some(arg_text) = slice_span(source, *arg_span) else {
                     continue;
                 };
                 let arg_name = arg_text.trim();
@@ -101,7 +103,7 @@ impl Rule for TypeVarBoundCallViolation {
                 // Try to find the type of the argument by looking at:
                 // 1. Enclosing function parameters (using call span containment)
                 // 2. Module-level annotated variables
-                let arg_type = find_arg_type(arg_name, call.span, module);
+                let arg_type = find_arg_type(arg_name, call.span, module, source);
 
                 if let Some(arg_type_str) = arg_type {
                     if bound_incompatible(bound_type, arg_type_str) {
@@ -134,6 +136,7 @@ fn find_arg_type<'a>(
     name: &str,
     call_span: basilisk_resolver::Span,
     module: &'a ResolvedModule,
+    source: &'a str,
 ) -> Option<&'a str> {
     // Find the enclosing function (the one whose def_span contains the call)
     let enclosing_func = module
@@ -146,7 +149,7 @@ fn find_arg_type<'a>(
         for param in &func.parameters {
             if param.name == name {
                 let ann_span = param.annotation_span?;
-                let ann_text = module.ann_span.slice_source(source)?;
+                let ann_text = slice_span(source, ann_span)?;
                 return Some(ann_text.trim());
             }
         }
@@ -156,7 +159,7 @@ fn find_arg_type<'a>(
     for var in &module.module_vars {
         if var.name == name && var.has_annotation {
             let ann_span = var.annotation_span?;
-            let ann_text = module.ann_span.slice_source(source)?;
+            let ann_text = slice_span(source, ann_span)?;
             return Some(ann_text.trim());
         }
     }

@@ -123,7 +123,7 @@ fn extract_classvar_inner(ann: &str) -> Option<&str> {
         }
     }
 
-    end_idx.map(|end| &ann[prefix_len..end])
+    end_idx.and_then(|end| ann.get(prefix_len..end))
 }
 
 /// Count the number of top-level comma-separated arguments in a bracket body.
@@ -238,13 +238,17 @@ fn contains_word(text: &str, word: &str) -> bool {
     }
 
     for start_idx in 0..=text_bytes.len().saturating_sub(word_len) {
-        if &text_bytes[start_idx..start_idx + word_len] == word_bytes {
+        if text_bytes.get(start_idx..start_idx + word_len) == Some(word_bytes) {
             // Check that the character before (if any) is not alphanumeric or underscore
-            let before_ok =
-                start_idx == 0 || !is_ident_char(text_bytes[start_idx.saturating_sub(1)]);
+            let before_ok = start_idx == 0
+                || !text_bytes
+                    .get(start_idx.saturating_sub(1))
+                    .is_some_and(|&b| is_ident_char(b));
             // Check that the character after (if any) is not alphanumeric or underscore
             let after_ok = start_idx + word_len >= text_bytes.len()
-                || !is_ident_char(text_bytes[start_idx + word_len]);
+                || !text_bytes
+                    .get(start_idx + word_len)
+                    .is_some_and(|&b| is_ident_char(b));
             if before_ok && after_ok {
                 return true;
             }
@@ -277,13 +281,13 @@ fn find_self_classvar_annotations(source: &str) -> Vec<(String, Span)> {
     let mut idx = 0;
     while idx + self_dot.len() < source_len {
         // Find "self."
-        if &bytes[idx..idx + self_dot.len()] != self_dot {
+        if bytes.get(idx..idx + self_dot.len()) != Some(self_dot.as_slice()) {
             idx += 1;
             continue;
         }
 
         // Check that "self." is preceded by whitespace/newline/start (not part of a larger name)
-        if idx > 0 && is_ident_char(bytes[idx - 1]) {
+        if idx > 0 && bytes.get(idx - 1).is_some_and(|&b| is_ident_char(b)) {
             idx += 1;
             continue;
         }
@@ -292,7 +296,7 @@ fn find_self_classvar_annotations(source: &str) -> Vec<(String, Span)> {
 
         // Collect the attribute name
         let mut attr_end = attr_start;
-        while attr_end < source_len && is_ident_char(bytes[attr_end]) {
+        while bytes.get(attr_end).is_some_and(|&b| is_ident_char(b)) {
             attr_end += 1;
         }
         if attr_end == attr_start {
@@ -300,7 +304,11 @@ fn find_self_classvar_annotations(source: &str) -> Vec<(String, Span)> {
             continue;
         }
 
-        let attr_name = if let Ok(name) = std::str::from_utf8(&bytes[attr_start..attr_end]) {
+        let Some(attr_bytes) = bytes.get(attr_start..attr_end) else {
+            idx += 1;
+            continue;
+        };
+        let attr_name = if let Ok(name) = std::str::from_utf8(attr_bytes) {
             name.to_owned()
         } else {
             idx += 1;
@@ -309,32 +317,31 @@ fn find_self_classvar_annotations(source: &str) -> Vec<(String, Span)> {
 
         // Skip whitespace after the attribute name
         let mut colon_idx = attr_end;
-        while colon_idx < source_len && bytes[colon_idx] == b' ' {
+        while bytes.get(colon_idx) == Some(&b' ') {
             colon_idx += 1;
         }
 
         // Check for ":"
-        if colon_idx >= source_len || bytes[colon_idx] != b':' {
+        if bytes.get(colon_idx) != Some(&b':') {
             idx = attr_end;
             continue;
         }
 
         // Skip whitespace after ":"
         let mut ann_start = colon_idx + 1;
-        while ann_start < source_len && bytes[ann_start] == b' ' {
+        while bytes.get(ann_start) == Some(&b' ') {
             ann_start += 1;
         }
 
         // Check if annotation starts with "ClassVar" or "CV"
         let has_cv =
-            if ann_start + 8 <= source_len && &bytes[ann_start..ann_start + 8] == b"ClassVar" {
+            if bytes.get(ann_start..ann_start + 8) == Some(b"ClassVar") {
                 true
             } else {
-                ann_start + 2 <= source_len
-                    && &bytes[ann_start..ann_start + 2] == b"CV"
+                bytes.get(ann_start..ann_start + 2) == Some(b"CV")
                     && (ann_start + 2 >= source_len
-                        || bytes[ann_start + 2] == b'['
-                        || bytes[ann_start + 2] == b' ')
+                        || bytes.get(ann_start + 2) == Some(&b'[')
+                        || bytes.get(ann_start + 2) == Some(&b' '))
             };
 
         if has_cv {
@@ -363,7 +370,7 @@ fn find_self_classvar_annotations(source: &str) -> Vec<(String, Span)> {
 pub(crate) struct ClassVarInvalidContext;
 
 impl Rule for ClassVarInvalidContext {
-    #[allow(clippy::too_many_lines)]
+    #[expect(clippy::too_many_lines, reason = "ClassVar validation covers many distinct contexts")]
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         let source = &module.source;
         let path = &module.path;
@@ -744,7 +751,10 @@ fn check_instance_classvar_assignments(module: &ResolvedModule, diagnostics: &mu
         if let Some(rhs) = span_text(source, var.rhs_span) {
             // Check if RHS is a constructor call: ClassName(...)
             if let Some(paren_idx) = rhs.find('(') {
-                let class_name = rhs[..paren_idx].trim();
+                let Some(class_name) = rhs.get(..paren_idx) else {
+                    continue;
+                };
+                let class_name = class_name.trim();
                 if !class_name.is_empty()
                     && class_name
                         .chars()
@@ -878,7 +888,10 @@ fn check_protocol_classvar_conformance(module: &ResolvedModule, diagnostics: &mu
         let Some(paren_idx) = rhs_trimmed.find('(') else {
             continue;
         };
-        let impl_class_name = rhs_trimmed[..paren_idx].trim();
+        let Some(impl_class_name) = rhs_trimmed.get(..paren_idx) else {
+            continue;
+        };
+        let impl_class_name = impl_class_name.trim();
         if impl_class_name.is_empty()
             || !impl_class_name
                 .chars()

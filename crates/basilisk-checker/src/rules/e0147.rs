@@ -121,7 +121,7 @@ fn check_function_bodies(
         let mut param_annotations: Vec<(String, String)> = Vec::new();
         for param in &func.parameters {
             if let Some(ann_span) = param.annotation_span {
-                if let Some(ann_text) = ann_span.slice_source(source) {
+                if let Some(ann_text) = slice_span(source, ann_span) {
                     param_annotations.push((param.name.clone(), ann_text.trim().to_owned()));
                 }
             }
@@ -285,7 +285,7 @@ fn check_literal_against_annotation(elems: &[String], annotation: &str) -> Optio
 
 /// Check a tuple literal against a mixed starred-unpack annotation
 /// like `tuple[int, *tuple[str, ...], int]`.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "tuple type checking requires all context")]
 fn check_literal_against_mixed(
     elems: &[String],
     fixed_prefix: usize,
@@ -801,7 +801,7 @@ fn func_body_lines(source: &str, def_offset: usize) -> Vec<LineInfo<'_>> {
 }
 
 /// Compute a `Span` for an entire source line given the line's byte offset.
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::cast_possible_truncation, reason = "byte offsets fit u32 for source files")]
 fn line_span(source: &str, line_offset: usize) -> Span {
     let start = line_offset as u32;
     let end = source[line_offset..]

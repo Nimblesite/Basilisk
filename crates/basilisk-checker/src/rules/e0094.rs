@@ -76,11 +76,19 @@ fn contains_self(text: &str) -> bool {
     let target = b"Self";
     let mut i = 0;
     while i + 4 <= bytes.len() {
-        if bytes[i..i + 4] == *target {
-            let before_ok =
-                i == 0 || (!bytes[i - 1].is_ascii_alphanumeric() && bytes[i - 1] != b'_');
+        let Some(slice) = bytes.get(i..i + 4) else {
+            i += 1;
+            continue;
+        };
+        if slice == target {
+            let before_ok = i == 0
+                || bytes
+                    .get(i - 1)
+                    .is_none_or(|&b| !b.is_ascii_alphanumeric() && b != b'_');
             let after_ok = i + 4 >= bytes.len()
-                || (!bytes[i + 4].is_ascii_alphanumeric() && bytes[i + 4] != b'_');
+                || bytes
+                    .get(i + 4)
+                    .is_none_or(|&b| !b.is_ascii_alphanumeric() && b != b'_');
             if before_ok && after_ok {
                 return true;
             }

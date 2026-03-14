@@ -22,6 +22,7 @@ use std::collections::HashMap;
 use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -91,7 +92,7 @@ fn build_func_param_bounds<'a>(
             let Some(ann_span) = param.annotation_span else {
                 continue;
             };
-            let Some(ann_text) = ann_span.slice_source(source) else {
+            let Some(ann_text) = slice_span(source, ann_span) else {
                 continue;
             };
             let ann_text = ann_text.trim();
@@ -157,7 +158,7 @@ fn check_function_call(
         .enumerate()
         .filter_map(|(idx, param)| {
             let ann_span = param.annotation_span?;
-            let ann_text = ann_span.slice_source(source)?;
+            let ann_text = slice_span(source, ann_span)?;
             let ann_text = ann_text.trim();
             typevar_bounds
                 .get(ann_text)
@@ -211,9 +212,9 @@ fn check_function_call(
 
 /// Extract the bound text from a `TypeVar("Name", bound=X)` call in source.
 fn extract_bound_text(source: &str, span: basilisk_resolver::Span) -> Option<String> {
-    let call_text = span.slice_source(source)?;
+    let call_text = slice_span(source, span)?;
     let bound_idx = call_text.find("bound=")?;
-    let after_bound = &call_text[bound_idx + "bound=".len()..];
+    let after_bound = call_text.get(bound_idx + "bound=".len()..)?;
 
     // The bound value extends until the next `,` or `)` at depth 0.
     let mut depth = 0u32;
@@ -235,7 +236,7 @@ fn extract_bound_text(source: &str, span: basilisk_resolver::Span) -> Option<Str
             _ => {}
         }
     }
-    let bound_text = after_bound[..end].trim();
+    let bound_text = after_bound.get(..end)?.trim();
     // Strip quotes for string-form bounds (e.g. bound="int").
     let bound_text = bound_text
         .strip_prefix('"')

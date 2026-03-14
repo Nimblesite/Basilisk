@@ -40,7 +40,7 @@ impl Rule for TupleIndexOutOfRange {
                 let Some(ann_span) = param.annotation_span else {
                     continue;
                 };
-                let Some(ann) = ann_span.slice_source(source) else {
+                let Some(ann) = slice_span(source, ann_span) else {
                     continue;
                 };
                 let ann = ann.trim();

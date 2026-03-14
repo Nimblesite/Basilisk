@@ -265,7 +265,7 @@ fn resolve_inherited_settings<'a>(
 }
 
 /// Return the byte offset of the start of a 1-based line.
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::cast_possible_truncation, reason = "byte offsets fit u32 for source files")]
 fn line_start_offset(source: &str, line: usize) -> u32 {
     let mut current = 1usize;
     for (idx, ch) in source.char_indices() {
@@ -280,16 +280,15 @@ fn line_start_offset(source: &str, line: usize) -> u32 {
 }
 
 /// Return a span covering the trimmed content of a source line (1-based).
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::as_conversions, clippy::cast_possible_truncation, reason = "u32<->usize safe on 32-bit+")]
 fn span_for_source_line(source: &str, line: usize) -> Span {
-    let start = usize::from(line_start_offset(source, line));
+    let start = line_start_offset(source, line) as usize;
     let line_text = source
         .get(start..)
         .and_then(|s| s.lines().next())
         .unwrap_or("");
     let trim_leading = line_text.len() - line_text.trim_start().len();
     let trimmed = line_text.trim();
-    #[allow(clippy::cast_possible_truncation)]
     Span {
         start: (start + trim_leading) as u32,
         end: (start + trim_leading + trimmed.len()) as u32,
@@ -300,7 +299,7 @@ fn span_for_source_line(source: &str, line: usize) -> Span {
 pub(crate) struct DataclassTransformClassViolation;
 
 impl Rule for DataclassTransformClassViolation {
-    #[allow(clippy::too_many_lines)]
+    #[expect(clippy::too_many_lines, reason = "dataclass_transform checking requires many steps")]
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         let transform_bases = collect_transform_base_classes(module);
         if transform_bases.is_empty() {
@@ -323,7 +322,7 @@ impl Rule for DataclassTransformClassViolation {
             let Some(rhs_span) = var.rhs_span else {
                 continue;
             };
-            let Some(rhs_text) = rhs_span.slice_source(source) else {
+            let Some(rhs_text) = slice_span(source, rhs_span) else {
                 continue;
             };
             // Extract the callee name: `Customer1(...)` -> `"Customer1"`.
@@ -526,7 +525,7 @@ fn check_kw_only_positional_args(
         let Some(rhs_span) = var.rhs_span else {
             continue;
         };
-        let Some(rhs_text) = rhs_span.slice_source(source) else {
+        let Some(rhs_text) = slice_span(source, rhs_span) else {
             continue;
         };
 

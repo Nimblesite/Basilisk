@@ -76,7 +76,7 @@ fn annotated_inner(ann: &str) -> Option<&str> {
     if inner_end <= inner_start {
         return None;
     }
-    Some(&ann[inner_start..inner_end])
+    ann.get(inner_start..inner_end)
 }
 
 /// Extract just the first argument from the inner content of `Annotated[T, ...]`.

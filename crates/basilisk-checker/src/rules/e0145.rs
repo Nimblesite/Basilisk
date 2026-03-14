@@ -425,7 +425,7 @@ fn check_func_stmt(
     }
 }
 
-#[allow(clippy::only_used_in_recursion)]
+#[expect(clippy::only_used_in_recursion, reason = "param_anns is passed through recursive calls")]
 fn check_func_expr(
     expr: &Expr,
     ctx: &ModuleCtx,

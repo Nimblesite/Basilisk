@@ -643,7 +643,7 @@ fn check_subscripted_class_calls(
                 let Some(ann_span) = param.annotation_span else {
                     continue;
                 };
-                let Some(ann_text) = module.ann_span.slice_source(source) else {
+                let Some(ann_text) = slice_span(&module.source, ann_span) else {
                     continue;
                 };
 

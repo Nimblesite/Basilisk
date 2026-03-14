@@ -774,7 +774,7 @@ impl tower_lsp::LanguageServer for LspServer {
 
     // ── Workspace Symbols ─────────────────────────────────────────────────────
 
-    #[allow(deprecated)]
+    #[expect(deprecated, reason = "SymbolInformation is deprecated but required by the LSP trait")]
     async fn symbol(
         &self,
         params: WorkspaceSymbolParams,

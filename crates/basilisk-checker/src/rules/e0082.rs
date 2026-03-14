@@ -23,6 +23,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -83,7 +84,7 @@ impl Rule for TypeVarTupleCallableMismatch {
 }
 
 /// Walk statements to find constructor calls with TypeVarTuple-linked parameters.
-#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+#[expect(clippy::too_many_arguments, clippy::too_many_lines)]
 fn check_stmt_for_tvt_mismatch(
     stmt: &ruff_python_ast::Stmt,
     source: &str,
@@ -162,7 +163,7 @@ fn check_stmt_for_tvt_mismatch(
         .iter()
         .filter_map(|p| {
             let ann_span = p.annotation_span?;
-            ann_span.slice_source(source).map(|s| s.trim().to_owned())
+            slice_span(source, ann_span).map(|s| s.trim().to_owned())
         })
         .collect();
 
@@ -236,7 +237,7 @@ fn find_linked_tvt_params(func: &FunctionInfo, source: &str) -> Option<(String, 
         let Some(ann_span) = param.annotation_span else {
             continue;
         };
-        let Some(ann_text) = ann_span.slice_source(source) else {
+        let Some(ann_text) = slice_span(source, ann_span) else {
             continue;
         };
         let ann_text = ann_text.trim();
@@ -273,7 +274,7 @@ fn extract_tvt_from_callable(ann: &str) -> Option<String> {
     // Find the parameter list: `[*Ts]` or `[int, *Ts, str]`
     let param_start = inner.find('[')?;
     let param_end = inner.find(']')?;
-    let param_list = &inner[param_start + 1..param_end];
+    let param_list = inner.get(param_start + 1..param_end)?;
 
     // Look for `*Ts` pattern.
     for part in param_list.split(',') {

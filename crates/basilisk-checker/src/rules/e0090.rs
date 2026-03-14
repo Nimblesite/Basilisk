@@ -104,13 +104,17 @@ fn split_top_level(s: &str) -> Vec<&str> {
             '[' | '(' | '{' => depth += 1,
             ']' | ')' | '}' => depth -= 1,
             ',' if depth == 0 => {
-                parts.push(s[start..i].trim());
+                if let Some(part) = s.get(start..i) {
+                    parts.push(part.trim());
+                }
                 start = i + 1;
             }
             _ => {}
         }
     }
-    parts.push(s[start..].trim());
+    if let Some(part) = s.get(start..) {
+        parts.push(part.trim());
+    }
     parts
 }
 
@@ -124,7 +128,9 @@ fn check_tuple_syntax(annotation: &str) -> Option<&'static str> {
         return None;
     }
 
-    let inner = annotation["tuple[".len()..annotation.len() - 1].trim();
+    let inner = annotation
+        .get("tuple[".len()..annotation.len().checked_sub(1)?)
+        .map_or("", str::trim);
 
     // Check for empty tuple: tuple[()]
     if inner == "()" {
@@ -152,7 +158,9 @@ fn check_tuple_syntax(annotation: &str) -> Option<&'static str> {
         return Some("ellipsis (...) must appear at the end of the tuple type");
     }
 
-    let ellipsis_pos = ellipsis_positions[0];
+    let Some(&ellipsis_pos) = ellipsis_positions.first() else {
+        return None;
+    };
 
     // `...` must be the very last component.
     if ellipsis_pos != components.len() - 1 {

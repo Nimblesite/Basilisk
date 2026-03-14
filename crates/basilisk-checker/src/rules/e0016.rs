@@ -131,7 +131,7 @@ fn skip_self_param(
     params: &[basilisk_resolver::ParameterInfo],
 ) -> &[basilisk_resolver::ParameterInfo] {
     match params.first() {
-        Some(p) if p.name == "self" || p.name == "cls" => &params[1..],
+        Some(p) if p.name == "self" || p.name == "cls" => params.get(1..).unwrap_or_default(),
         _ => params,
     }
 }

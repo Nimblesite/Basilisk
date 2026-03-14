@@ -478,7 +478,7 @@ fn check_expr_recursive(expr: &Expr, ctx: &ModuleContext, path: &str, diag: &mut
 }
 
 /// Returns true when `idx` is out of range for a tuple with `field_count` elements.
-#[allow(clippy::cast_possible_wrap)]
+#[expect(clippy::cast_possible_wrap, reason = "field_count is always small enough for i64")]
 fn is_out_of_bounds(idx: i64, field_count: usize) -> bool {
     let len = field_count as i64;
     idx >= len || idx < -len

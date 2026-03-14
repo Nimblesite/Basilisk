@@ -140,7 +140,7 @@ fn build_typevar_bound_map<'src>(
 
 /// Check all call expressions inside a function whose parameters include
 /// `type[X]`-typed variables.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "type checking requires full context")]
 fn check_function(
     func: &ast::StmtFunctionDef,
     source: &str,
@@ -234,7 +234,7 @@ struct CheckCtx<'a> {
     typevar_bounds: &'a HashMap<&'a str, &'a str>,
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "type checking requires full context")]
 fn check_stmt(
     stmt: &Stmt,
     source: &str,
@@ -329,7 +329,7 @@ fn check_expr_inner(expr: &Expr, cctx: &CheckCtx<'_>, diagnostics: &mut Vec<Diag
 // ---------------------------------------------------------------------------
 
 /// Validate a call `cls(...)` where `cls: type[inner_type]`.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "type checking requires full context")]
 fn check_type_call(
     call: &ast::ExprCall,
     inner_type: &str,
@@ -408,7 +408,7 @@ fn check_unbound_typevar_call(
 }
 
 /// Check a constructor call against its resolved signature.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "type checking requires full context")]
 fn check_constructor_call(
     call: &ast::ExprCall,
     class_name: &str,
@@ -619,7 +619,7 @@ fn class_bases(class_info: &basilisk_resolver::ClassInfo) -> Vec<&str> {
 // ---------------------------------------------------------------------------
 
 /// Check that keyword arguments match the expected parameter types.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "type checking requires full context")]
 fn check_kwarg_types(
     call: &ast::ExprCall,
     class_name: &str,
@@ -645,7 +645,7 @@ fn check_kwarg_types(
         let Some(ann_span) = param.annotation_span else {
             continue;
         };
-        let Some(ann_text) = ann_span.slice_source(source) else {
+        let Some(ann_text) = slice_span(source, ann_span) else {
             continue;
         };
         let expected_type = ann_text.trim();
@@ -674,7 +674,7 @@ fn check_kwarg_types(
 }
 
 /// Check positional arguments against the constructor parameter types.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "type checking requires full context")]
 fn check_positional_arg_types(
     call: &ast::ExprCall,
     class_name: &str,
@@ -695,7 +695,7 @@ fn check_positional_arg_types(
         let Some(ann_span) = param.annotation_span else {
             continue;
         };
-        let Some(ann_text) = ann_span.slice_source(source) else {
+        let Some(ann_text) = slice_span(source, ann_span) else {
             continue;
         };
         let expected_type = ann_text.trim();

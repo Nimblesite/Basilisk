@@ -24,6 +24,7 @@ use std::collections::{HashMap, HashSet};
 use basilisk_resolver::{ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -111,8 +112,7 @@ fn extract_return_type(func: &basilisk_resolver::FunctionInfo, source: &str) -> 
         basilisk_resolver::ReturnAnnotationKind::NoneType => "None".to_owned(),
         basilisk_resolver::ReturnAnnotationKind::Other => {
             if let Some(ann_span) = func.return_annotation_span {
-                ann_span
-                    .slice_source(source)
+                slice_span(source, ann_span)
                     .map_or_else(|| "object".to_owned(), |s| s.trim().to_owned())
             } else {
                 "object".to_owned()
@@ -301,8 +301,7 @@ fn check_protocol_compatibility(
 
         // Get the protocol's declared type for this attribute.
         let protocol_type = if let Some(ann_span) = attr.annotation_span {
-            ann_span
-                .slice_source(source)
+            slice_span(source, ann_span)
                 .map_or_else(|| "object".to_owned(), |s| s.trim().to_owned())
         } else {
             "object".to_owned()

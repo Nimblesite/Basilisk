@@ -21,6 +21,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -263,7 +264,7 @@ fn check_expr_for_overload_call(
             let matches_any = arity_matches.iter().any(|overload| {
                 if let Some(param) = overload.parameters.get(arg_idx) {
                     if let Some(ann_span) = param.annotation_span {
-                        if let Some(ann_text) = ann_span.slice_source(source) {
+                        if let Some(ann_text) = slice_span(source, ann_span) {
                             return is_type_assignable(member, ann_text);
                         }
                     }

@@ -85,7 +85,7 @@ impl Rule for InstanceAttrOnClass {
             .iter()
             .filter_map(|var| {
                 let rhs_span = var.rhs_span?;
-                let rhs_text = rhs_span.slice_source(source)?;
+                let rhs_text = slice_span(source, rhs_span)?;
                 let callee = rhs_text.split(['(', '[']).next()?.trim();
                 let callee = callee.rsplit('.').next().unwrap_or(callee);
                 if class_names.contains(callee) {
@@ -126,7 +126,7 @@ fn is_classvar_annotation(source: &str, annotation_span: Option<Span>) -> bool {
     let Some(span) = annotation_span else {
         return false;
     };
-    span.slice_source(source).is_some_and(|text| {
+    slice_span(source, span).is_some_and(|text| {
         let trimmed = text.trim();
         trimmed == "ClassVar" || trimmed.starts_with("ClassVar[")
     })

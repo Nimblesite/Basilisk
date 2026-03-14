@@ -21,6 +21,7 @@ use ruff_text_size::Ranged as _;
 
 use super::Rule;
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0085",
@@ -76,7 +77,7 @@ impl Rule for TypeVarTupleArgCountMismatch {
                 // Check if any parameter annotation contains a TypeVarTuple reference.
                 let has_tvt_param = func.parameters.iter().any(|p| {
                     if let Some(ref ann_span) = p.annotation_span {
-                        let ann_text = module.ann_span.slice_source(source).unwrap_or("");
+                        let ann_text = slice_span(&module.source, ann_span).unwrap_or("");
                         tvt_names.iter().any(|tvt| ann_text.contains(tvt))
                     } else {
                         false

@@ -459,7 +459,7 @@ pub fn resolve_analysis_mode(
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
+#[expect(clippy::unwrap_used, reason = "test-only code: unwrap acceptable in unit tests")]
 mod tests {
     use super::*;
 

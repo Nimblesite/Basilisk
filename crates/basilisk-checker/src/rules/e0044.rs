@@ -102,7 +102,9 @@ fn has_final_multiple_type_args(ann: &str) -> bool {
     if inner_end <= inner_start {
         return false;
     }
-    let inner = &ann[inner_start..inner_end];
+    let Some(inner) = ann.get(inner_start..inner_end) else {
+        return false;
+    };
     // Count top-level commas (depth 0 = inside Final[...] but not nested further)
     let mut depth = 0i32;
     let mut top_commas = 0u32;

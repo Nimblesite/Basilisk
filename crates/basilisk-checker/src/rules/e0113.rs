@@ -24,7 +24,7 @@ fn extract_inner_type(ann_text: &str) -> Option<&str> {
     let prefix = "TypeIs[";
     let start = ann_text.find(prefix)?;
     let inner_start = start + prefix.len();
-    let rest = &ann_text[inner_start..];
+    let rest = ann_text.get(inner_start..)?;
     // Find matching closing bracket (handle nested brackets)
     let mut depth = 1u32;
     let mut end_pos = 0;
@@ -42,7 +42,7 @@ fn extract_inner_type(ann_text: &str) -> Option<&str> {
         }
     }
     if depth == 0 {
-        Some(&rest[..end_pos])
+        rest.get(..end_pos)
     } else {
         None
     }
@@ -139,8 +139,8 @@ fn is_consistent(narrowed: &str, input: &str) -> bool {
 /// Split a generic type `Base[Args]` into `(base, args)` text.
 fn split_generic(type_text: &str) -> Option<(&str, &str)> {
     let bracket = type_text.find('[')?;
-    let base = &type_text[..bracket];
-    let rest = &type_text[bracket + 1..];
+    let base = type_text.get(..bracket)?;
+    let rest = type_text.get(bracket + 1..)?;
     // Find the matching close
     let mut depth = 1u32;
     let mut end = 0;
@@ -158,7 +158,7 @@ fn split_generic(type_text: &str) -> Option<(&str, &str)> {
         }
     }
     if depth == 0 {
-        Some((base, &rest[..end]))
+        Some((base, rest.get(..end)?))
     } else {
         None
     }
@@ -175,7 +175,7 @@ impl Rule for TypeIsInconsistentNarrowing {
             };
 
             // Extract annotation text.
-            let Some(ann_text) = ann_span.slice_source(source) else {
+            let Some(ann_text) = slice_span(source, ann_span) else {
                 continue;
             };
 
@@ -204,7 +204,7 @@ impl Rule for TypeIsInconsistentNarrowing {
                 continue;
             };
 
-            let Some(param_type) = param_ann_span.slice_source(source) else {
+            let Some(param_type) = slice_span(source, param_ann_span) else {
                 continue;
             };
 

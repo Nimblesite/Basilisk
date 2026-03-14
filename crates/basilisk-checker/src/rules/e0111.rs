@@ -134,7 +134,7 @@ fn check_class_scoped_typevars_in_self(
                 continue;
             };
 
-            let Some(ann_text) = ann_span.slice_source(source) else {
+            let Some(ann_text) = slice_span(source, ann_span) else {
                 continue;
             };
 
@@ -148,12 +148,17 @@ fn check_class_scoped_typevars_in_self(
                 continue;
             };
 
-            let ann_class_name = resolved[..bracket_start].trim();
+            let Some(ann_class_name) = resolved.get(..bracket_start) else {
+                continue;
+            };
+            let ann_class_name = ann_class_name.trim();
             if ann_class_name != class.name {
                 continue;
             }
 
-            let args_str = &resolved[bracket_start + 1..bracket_end];
+            let Some(args_str) = resolved.get(bracket_start + 1..bracket_end) else {
+                continue;
+            };
             let ann_args: Vec<&str> = args_str.split(',').map(str::trim).collect();
 
             // Check if all annotation args are class-scoped TypeVars.
@@ -201,7 +206,7 @@ fn check_class_scoped_typevars_in_self(
 }
 
 /// Walk a statement looking for constructor call expressions.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 fn check_stmt(
     stmt: &ruff_python_ast::Stmt,
     source: &str,
@@ -283,7 +288,7 @@ fn check_stmt(
 }
 
 /// Recursively check expressions for constructor call errors.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 fn check_expr_recursive(
     expr: &ruff_python_ast::Expr,
     source: &str,
@@ -322,7 +327,7 @@ fn check_expr_recursive(
 }
 
 /// Check a single call expression for constructor call errors.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 fn check_constructor_call(
     call: &ruff_python_ast::ExprCall,
     source: &str,
@@ -415,7 +420,7 @@ fn check_constructor_call(
 }
 
 /// Check 5: Classes without custom `__init__` that receive arguments.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 fn check_no_init_with_args(
     call: &ruff_python_ast::ExprCall,
     class_name: &str,
@@ -519,7 +524,7 @@ fn has_custom_init_in_bases(
 ///
 /// When `__init__` has `self: Self | None`, passing a base-class instance
 /// where `Self` expects the subclass is an error.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 fn check_self_type_incompatibility(
     call: &ruff_python_ast::ExprCall,
     class_name: &str,
@@ -543,7 +548,7 @@ fn check_self_type_incompatibility(
         let has_self_annotation = init_func.parameters.iter().skip(1).any(|param| {
             param
                 .annotation_span
-                .and_then(|span| span.slice_source(source))
+                .and_then(|span| slice_span(source, span))
                 .is_some_and(|ann_text| {
                     let resolved = resolve_string_annotation(ann_text.trim());
                     resolved.contains("Self")
@@ -655,7 +660,7 @@ fn is_subclass(
 }
 
 /// Check arguments to `__init__` after type parameter substitution.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 fn check_init_method_args(
     init_func: &basilisk_resolver::FunctionInfo,
     substitutions: &HashMap<&str, &str>,
@@ -673,7 +678,7 @@ fn check_init_method_args(
     // Check 3: Explicit self annotation mismatch.
     if let Some(self_param) = init_func.parameters.first() {
         if let Some(ann_span) = self_param.annotation_span {
-            if let Some(ann_text) = ann_span.slice_source(source) {
+            if let Some(ann_text) = slice_span(source, ann_span) {
                 let resolved = resolve_string_annotation(ann_text.trim());
                 check_self_param_init_mismatch(
                     &resolved,
@@ -706,7 +711,7 @@ fn check_init_method_args(
         let Some(ann_span) = param.annotation_span else {
             continue;
         };
-        let Some(ann_text) = ann_span.slice_source(source) else {
+        let Some(ann_text) = slice_span(source, ann_span) else {
             continue;
         };
 
@@ -764,7 +769,7 @@ fn check_init_method_args(
 
 /// Check if the `self` parameter annotation in `__init__` is incompatible with
 /// the provided type arguments.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 fn check_self_param_init_mismatch(
     self_annotation: &str,
     class_name: &str,
@@ -785,12 +790,17 @@ fn check_self_param_init_mismatch(
         return;
     };
 
-    let ann_class_name = self_annotation[..bracket_start].trim();
+    let Some(ann_class_name) = self_annotation.get(..bracket_start) else {
+        return;
+    };
+    let ann_class_name = ann_class_name.trim();
     if ann_class_name != class_name {
         return;
     }
 
-    let args_str = &self_annotation[bracket_start + 1..bracket_end];
+    let Some(args_str) = self_annotation.get(bracket_start + 1..bracket_end) else {
+        return;
+    };
     let ann_type_args: Vec<&str> = args_str.split(',').map(str::trim).collect();
 
     // Check if annotation args contain class-scoped or function-scoped type vars.
@@ -881,7 +891,10 @@ fn resolve_string_annotation(annotation: &str) -> String {
     if (annotation.starts_with('"') && annotation.ends_with('"'))
         || (annotation.starts_with('\'') && annotation.ends_with('\''))
     {
-        annotation[1..annotation.len() - 1].to_owned()
+        annotation
+            .get(1..annotation.len().saturating_sub(1))
+            .unwrap_or(annotation)
+            .to_owned()
     } else {
         annotation.to_owned()
     }

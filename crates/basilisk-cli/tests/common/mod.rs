@@ -14,7 +14,7 @@ use basilisk_parser::parse_file;
 use basilisk_resolver::resolve;
 
 // Re-export shared helpers from the test-utils crate.
-#[allow(unused_imports)]
+#[expect(unused_imports, reason = "re-exported for test files that need checker helpers")]
 pub use basilisk_test_utils::{assert_diagnostics, Expected};
 
 pub fn fixture(rel: &str) -> String {

@@ -137,7 +137,7 @@ struct FileResult {
     /// Lines Basilisk flagged that had no annotation (false positives).
     false_positives: usize,
     /// `# E?` optional lines where Basilisk did fire.
-    #[allow(dead_code)]
+    #[expect(dead_code, reason = "tracked for future reporting")]
     optional_caught: usize,
     /// `# E[tag]` groups satisfied.
     tagged_exact_satisfied: usize,
@@ -433,10 +433,11 @@ fn collect_results(files: &[std::fs::DirEntry]) -> (Totals, CategoryMap, DetailL
     (totals, by_category, detail_lines)
 }
 
-#[allow(
+#[expect(
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
-    clippy::cast_sign_loss
+    clippy::cast_sign_loss,
+    reason = "percentage display requires float conversion from counters"
 )]
 fn print_scorecard(t: &Totals, by_category: &CategoryMap, detail_lines: &DetailLines) {
     let pct = if t.files > 0 {

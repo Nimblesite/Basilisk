@@ -99,13 +99,13 @@ fn check_class(
         .iter()
         .filter_map(|param| {
             let ann_span = param.annotation_span?;
-            let ann_text = ann_span.slice_source(source)?;
+            let ann_text = slice_span(source, ann_span)?;
             Some((param.name.as_str(), ann_text))
         })
         .collect();
 
     // Scan the function body source text for `self.attr = expr` patterns.
-    let Some(func_source) = init_func.def_span.slice_source(source) else {
+    let Some(func_source) = slice_span(source, init_func.def_span) else {
         return;
     };
     let func_offset = usize::try_from(init_func.def_span.start).unwrap_or(0);
@@ -131,7 +131,7 @@ fn check_class(
                 continue;
             };
 
-            let Some(ann_text) = ann_span.slice_source(source) else {
+            let Some(ann_text) = slice_span(source, ann_span) else {
                 continue;
             };
 

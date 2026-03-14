@@ -40,7 +40,7 @@ struct FuncSig {
     has_kwargs: bool,
     kwargs_type: String,
     kw_only_params: Vec<ParamInfo>,
-    #[allow(dead_code)]
+    #[expect(dead_code, reason = "return_type will be used for future type checking")]
     return_type: String,
 }
 
@@ -355,12 +355,12 @@ fn check_assignment(
     }
 }
 
-#[allow(dead_code)]
+#[expect(dead_code, reason = "struct will be used for future type checking")]
 struct CallableTypeInfo {
     param_types: Option<Vec<String>>,
     concatenate_prefix: Vec<String>,
     is_open_ended: bool,
-    #[allow(dead_code)]
+    #[expect(dead_code, reason = "return_type will be used for future type checking")]
     return_type: String,
 }
 

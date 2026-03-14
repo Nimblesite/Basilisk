@@ -95,19 +95,21 @@ fn extract_names_from_annotation(annotation_text: &str) -> Vec<&str> {
                 start = Some(idx);
             }
         } else if let Some(s) = start {
-            let token = &annotation_text[s..idx];
-            // Skip numeric-only tokens and common type keywords.
-            if !token.chars().next().is_some_and(|c| c.is_ascii_digit()) {
-                names.push(token);
+            if let Some(token) = annotation_text.get(s..idx) {
+                // Skip numeric-only tokens and common type keywords.
+                if !token.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+                    names.push(token);
+                }
             }
             start = None;
         }
     }
     // Handle token at end of string.
     if let Some(s) = start {
-        let token = &annotation_text[s..];
-        if !token.chars().next().is_some_and(|c| c.is_ascii_digit()) {
-            names.push(token);
+        if let Some(token) = annotation_text.get(s..) {
+            if !token.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+                names.push(token);
+            }
         }
     }
     names
@@ -115,7 +117,7 @@ fn extract_names_from_annotation(annotation_text: &str) -> Vec<&str> {
 
 /// Get the annotation text from source given a span.
 fn annotation_text(source: &str, span: basilisk_resolver::Span) -> Option<&str> {
-    span.slice_source(source)
+    slice_span(source, span)
 }
 
 /// Find `TypeVar` references in an annotation that are NOT in the allowed set.
@@ -286,7 +288,7 @@ fn check_class_attributes(
         // Check each attribute annotation.
         for attr in &cls.attributes {
             if let Some(ref ann_span) = attr.annotation_span {
-                let ann_text = annotation_text(&module.source, *ann_span).unwrap_or("");
+                let ann_text = annotation_text(&module.source, *ann_span).unwrap_or_default();
 
                 // Skip method definitions (they have their own scope).
                 // Skip TypeAlias annotations (handled separately).
@@ -368,7 +370,7 @@ fn check_inner_class_typevars(
         // Check class-level TypeAlias using class TypeVars.
         for attr in &cls.attributes {
             if let Some(ref ann_span) = attr.annotation_span {
-                let ann_text = annotation_text(&module.source, *ann_span).unwrap_or("");
+                let ann_text = annotation_text(&module.source, *ann_span).unwrap_or_default();
                 if ann_text == "TypeAlias" {
                     // The RHS of a TypeAlias at class level using the class's
                     // own TypeVars is an error.

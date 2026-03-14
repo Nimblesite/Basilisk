@@ -24,6 +24,7 @@ use basilisk_resolver::{
 };
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -110,7 +111,9 @@ fn check_plain_function_calls(module: &ResolvedModule, diagnostics: &mut Vec<Dia
             });
         } else if !has_matching_overload {
             // Single function case (no overloads)
-            let func = funcs[0];
+            let Some(func) = funcs.first() else {
+                continue;
+            };
             if func.vararg.is_some() {
                 continue; // *args accepts any number
             }
@@ -176,7 +179,7 @@ fn annotation_is_classvar(source: &str, span: Option<Span>) -> bool {
     let Some(span) = span else {
         return false;
     };
-    let Some(text) = span.slice_source(source) else {
+    let Some(text) = slice_span(source, span) else {
         return false;
     };
     let t = text.trim();
@@ -268,7 +271,7 @@ fn check_dataclass_arg_types(
         let Some(ann_span) = field.annotation_span else {
             continue;
         };
-        let Some(ann_text) = ann_span.slice_source(source) else {
+        let Some(ann_text) = slice_span(source, ann_span) else {
             continue;
         };
         if is_clearly_incompatible(arg_type, ann_text) {

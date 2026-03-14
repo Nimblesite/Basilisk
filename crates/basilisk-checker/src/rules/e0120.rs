@@ -132,7 +132,7 @@ fn check_yield_types(func: &FunctionInfo, module: &ResolvedModule, out: &mut Vec
     let Some(ann_span) = func.return_annotation_span else {
         return;
     };
-    let Some(ann_text) = module.ann_span.slice_source(source) else {
+    let Some(ann_text) = slice_span(&module.source, ann_span) else {
         return;
     };
 
@@ -215,7 +215,7 @@ fn check_return_in_generator(
     let Some(ann_span) = func.return_annotation_span else {
         return;
     };
-    let Some(ann_text) = module.ann_span.slice_source(source) else {
+    let Some(ann_text) = slice_span(&module.source, ann_span) else {
         return;
     };
 
@@ -396,7 +396,7 @@ fn check_yield_from_call(
     let Some(callee_ann_span) = callee_func.return_annotation_span else {
         return;
     };
-    let Some(callee_ann) = module.callee_ann_span.slice_source(source) else {
+    let Some(callee_ann) = slice_span(&module.source, callee_ann_span) else {
         return;
     };
 
@@ -462,22 +462,27 @@ fn check_send_type_compat(
         return;
     }
 
+    let outer_bracket = outer_ann.find('[').unwrap_or(0);
     let outer_inner = outer_ann
-        .get(outer_ann.find('[').unwrap_or(0) + 1..outer_ann.len() - 1)
-        .unwrap_or("");
+        .get(outer_bracket + 1..outer_ann.len().saturating_sub(1))
+        .unwrap_or_default();
+    let callee_bracket = callee_ann.find('[').unwrap_or(0);
     let callee_inner = callee_ann
-        .get(callee_ann.find('[').unwrap_or(0) + 1..callee_ann.len() - 1)
-        .unwrap_or("");
+        .get(callee_bracket + 1..callee_ann.len().saturating_sub(1))
+        .unwrap_or_default();
 
     let outer_args = split_top_level_comma(outer_inner);
     let callee_args = split_top_level_comma(callee_inner);
 
-    if outer_args.len() < 2 || callee_args.len() < 2 {
+    let Some(outer_send_str) = outer_args.get(1) else {
         return;
-    }
+    };
+    let Some(callee_send_str) = callee_args.get(1) else {
+        return;
+    };
 
-    let outer_send = InferredType::from_annotation(outer_args[1].trim());
-    let callee_send = InferredType::from_annotation(callee_args[1].trim());
+    let outer_send = InferredType::from_annotation(outer_send_str.trim());
+    let callee_send = InferredType::from_annotation(callee_send_str.trim());
 
     if matches!(outer_send, InferredType::Unknown | InferredType::Any)
         || matches!(callee_send, InferredType::Unknown | InferredType::Any)
@@ -522,7 +527,8 @@ fn infer_yield_type(rhs: &RhsKind, call_name: Option<&String>) -> InferredType {
 fn base_type_name(annotation: &str) -> &str {
     annotation
         .find('[')
-        .map_or(annotation, |idx| &annotation[..idx])
+        .and_then(|idx| annotation.get(..idx))
+        .unwrap_or(annotation)
         .trim()
 }
 
@@ -536,7 +542,7 @@ fn base_type_name(annotation: &str) -> &str {
 /// - `AsyncIterable[A]` -> `Some("A")`
 fn extract_yield_type(annotation: &str, base: &str) -> Option<String> {
     let bracket_pos = annotation.find('[')?;
-    let inner = annotation.get(bracket_pos + 1..annotation.len() - 1)?;
+    let inner = annotation.get(bracket_pos + 1..annotation.len().checked_sub(1)?)?;
 
     match base {
         "Generator" | "AsyncGenerator" => {
@@ -555,7 +561,7 @@ fn extract_yield_type(annotation: &str, base: &str) -> Option<String> {
 /// Extract the return type (3rd parameter) from `Generator[Y, S, R]`.
 fn extract_return_type_from_generator(annotation: &str) -> Option<String> {
     let bracket_pos = annotation.find('[')?;
-    let inner = annotation.get(bracket_pos + 1..annotation.len() - 1)?;
+    let inner = annotation.get(bracket_pos + 1..annotation.len().checked_sub(1)?)?;
     let args = split_top_level_comma(inner);
     if args.len() >= 3 {
         Some(args[2].trim().to_owned())
@@ -575,13 +581,15 @@ fn split_top_level_comma(inner: &str) -> Vec<&str> {
             '[' => depth += 1,
             ']' => depth = depth.saturating_sub(1),
             ',' if depth == 0 => {
-                parts.push(&inner[start..idx]);
+                if let Some(part) = inner.get(start..idx) {
+                    parts.push(part);
+                }
                 start = idx + 1;
             }
             _ => {}
         }
     }
-    let remainder = &inner[start..];
+    let remainder = inner.get(start..).unwrap_or_default();
     if !remainder.trim().is_empty() {
         parts.push(remainder);
     }

@@ -174,7 +174,7 @@ fn annotation_text(source: &str, span: Option<Span>) -> Option<&str> {
     slice_span(source, span?)
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "diagnostic builder needs all context params")]
 fn make_diagnostic(
     attr: &AttributeInfo,
     attr_name: &str,

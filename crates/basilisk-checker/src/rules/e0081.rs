@@ -22,6 +22,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -39,8 +40,6 @@ impl Rule for TypeVarTupleUnpackViolation {
         let source = &module.source;
         let path = &module.path;
 
-        // Step 1: Find functions with TypeVarTuple unpack parameters.
-        // Build map: function_name -> list of (param_index, base_class, min_args).
         let mut variadic_params: HashMap<&str, Vec<VariadicParam>> = HashMap::new();
         for func in &module.functions {
             if func.class_name.is_some() {
@@ -50,7 +49,7 @@ impl Rule for TypeVarTupleUnpackViolation {
                 let Some(ann_span) = param.annotation_span else {
                     continue;
                 };
-                let Some(ann_text) = ann_span.slice_source(source) else {
+                let Some(ann_text) = slice_span(source, ann_span) else {
                     continue;
                 };
                 if let Some(vparam) = parse_variadic_annotation(ann_text.trim(), idx) {
@@ -66,65 +65,42 @@ impl Rule for TypeVarTupleUnpackViolation {
             return;
         }
 
-        // Step 2: Re-parse and walk function bodies for calls.
         let Ok(parsed) = basilisk_parser::parse_source(source.clone(), path.clone()) else {
             return;
         };
 
         for stmt in &parsed.ast.body {
             visit_stmt_for_variadic_calls(
-                stmt,
-                source,
-                path,
-                &variadic_params,
-                &module.functions,
-                diagnostics,
+                stmt, source, path, &variadic_params, &module.functions, diagnostics,
             );
         }
     }
 }
 
-/// A parameter with a `TypeVarTuple` unpack pattern.
 struct VariadicParam {
-    /// Index of the parameter in the function signature.
     param_idx: usize,
-    /// The base class name (e.g. `"Array"`).
     base_class: String,
-    /// Minimum number of type arguments required.
     min_type_args: usize,
 }
 
-/// Parse an annotation like `Array[Batch, *tuple[Any, ...], Channels]` to
-/// extract the base class and minimum required type arguments.
-///
-/// Returns `None` if the annotation does not contain a `TypeVarTuple` unpack.
 fn parse_variadic_annotation(ann: &str, param_idx: usize) -> Option<VariadicParam> {
-    // Must contain `*tuple[` to indicate a TypeVarTuple unpack.
     if !ann.contains("*tuple[") {
         return None;
     }
-
-    // Extract base class: text before first `[`.
     let bracket_pos = ann.find('[')?;
-    let base_class = ann[..bracket_pos].trim().to_owned();
+    let base_class = ann.get(..bracket_pos)?.trim().to_owned();
     if base_class.is_empty() {
         return None;
     }
-
-    // Count fixed type arguments (those that are NOT the `*tuple[...]` part).
     let inner = ann.get(bracket_pos + 1..ann.len().checked_sub(1)?)?;
-
-    // Split the inner type arguments at top-level commas.
     let args = split_type_args_at_commas(inner);
     let fixed_count = args
         .iter()
         .filter(|arg| !arg.trim().starts_with("*tuple["))
         .count();
-
     if fixed_count == 0 {
         return None;
     }
-
     Some(VariadicParam {
         param_idx,
         base_class,
@@ -132,7 +108,6 @@ fn parse_variadic_annotation(ann: &str, param_idx: usize) -> Option<VariadicPara
     })
 }
 
-/// Split type arguments at top-level commas (respecting bracket nesting).
 fn split_type_args_at_commas(inner: &str) -> Vec<&str> {
     let mut parts = Vec::new();
     let mut depth = 0u32;
@@ -142,17 +117,20 @@ fn split_type_args_at_commas(inner: &str) -> Vec<&str> {
             '[' | '(' => depth = depth.saturating_add(1),
             ']' | ')' => depth = depth.saturating_sub(1),
             ',' if depth == 0 => {
-                parts.push(&inner[start..idx]);
+                if let Some(part) = inner.get(start..idx) {
+                    parts.push(part);
+                }
                 start = idx + 1;
             }
             _ => {}
         }
     }
-    parts.push(&inner[start..]);
+    if let Some(part) = inner.get(start..) {
+        parts.push(part);
+    }
     parts
 }
 
-/// Walk statements to find function definitions and check their bodies.
 fn visit_stmt_for_variadic_calls(
     stmt: &ruff_python_ast::Stmt,
     source: &str,
@@ -162,43 +140,27 @@ fn visit_stmt_for_variadic_calls(
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     use ruff_python_ast::Stmt;
-
     if let Stmt::FunctionDef(func_def) = stmt {
-        // Build parameter type map for this function.
         let param_types = build_param_type_map(func_def, source);
-
         for body_stmt in &func_def.body {
             check_body_stmt(
-                body_stmt,
-                source,
-                path,
-                variadic_params,
-                &param_types,
-                functions,
-                diagnostics,
+                body_stmt, source, path, variadic_params, &param_types, functions, diagnostics,
             );
         }
     } else if let Stmt::ClassDef(cls) = stmt {
         for body_stmt in &cls.body {
             visit_stmt_for_variadic_calls(
-                body_stmt,
-                source,
-                path,
-                variadic_params,
-                functions,
-                diagnostics,
+                body_stmt, source, path, variadic_params, functions, diagnostics,
             );
         }
     }
 }
 
-/// Build a map from parameter name to its annotation text.
 fn build_param_type_map(
     func_def: &ruff_python_ast::StmtFunctionDef,
     source: &str,
 ) -> HashMap<String, String> {
     use ruff_text_size::Ranged as _;
-
     let mut map = HashMap::new();
     for param_with_default in &func_def.parameters.args {
         let param = &param_with_default.parameter;
@@ -212,8 +174,7 @@ fn build_param_type_map(
     map
 }
 
-/// Check a statement inside a function body for calls to variadic-param functions.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 fn check_body_stmt(
     stmt: &ruff_python_ast::Stmt,
     _source: &str,
@@ -225,101 +186,56 @@ fn check_body_stmt(
 ) {
     use ruff_python_ast::{Expr, Stmt};
     use ruff_text_size::Ranged as _;
-
     let call = match stmt {
         Stmt::Expr(expr_stmt) => {
-            if let Expr::Call(c) = expr_stmt.value.as_ref() {
-                c
-            } else {
-                return;
-            }
+            if let Expr::Call(c) = expr_stmt.value.as_ref() { c } else { return; }
         }
         Stmt::Assign(assign) => {
-            if let Expr::Call(c) = assign.value.as_ref() {
-                c
-            } else {
-                return;
-            }
+            if let Expr::Call(c) = assign.value.as_ref() { c } else { return; }
         }
         _ => return,
     };
-
     let callee_name = match call.func.as_ref() {
         Expr::Name(name) => name.id.as_str(),
         _ => return,
     };
-
-    let Some(vparams) = variadic_params.get(callee_name) else {
-        return;
-    };
-
-    // For each variadic parameter, check the corresponding argument.
+    let Some(vparams) = variadic_params.get(callee_name) else { return; };
     for vparam in vparams {
-        let Some(arg_expr) = call.arguments.args.get(vparam.param_idx) else {
-            continue;
-        };
-
-        // The argument must be a name referencing a parameter with a known type.
-        let Expr::Name(arg_name) = arg_expr else {
-            continue;
-        };
-
-        let Some(arg_type) = param_types.get(arg_name.id.as_str()) else {
-            continue;
-        };
-
-        // Count the type arguments in the argument's type.
+        let Some(arg_expr) = call.arguments.args.get(vparam.param_idx) else { continue; };
+        let Expr::Name(arg_name) = arg_expr else { continue; };
+        let Some(arg_type) = param_types.get(arg_name.id.as_str()) else { continue; };
         let arg_type_arg_count = count_type_args(arg_type, &vparam.base_class);
-
         if let Some(count) = arg_type_arg_count {
             if count < vparam.min_type_args {
                 let range = call.range();
-                let span = Span {
-                    start: range.start().to_u32(),
-                    end: range.end().to_u32(),
-                };
-                let _ = functions; // reserved for future overload resolution
+                let span = Span { start: range.start().to_u32(), end: range.end().to_u32() };
+                let _ = functions;
                 diagnostics.push(Diagnostic {
                     code: CODE.clone(),
                     severity: Severity::Error,
                     message: format!(
-                        "`{arg_type}` has {count} type argument{}, but \
-                         `{callee_name}` requires at least {} for the \
-                         `TypeVarTuple` unpack pattern",
+                        "`{arg_type}` has {count} type argument{}, but `{callee_name}` requires at least {} for the `TypeVarTuple` unpack pattern",
                         if count == 1 { "" } else { "s" },
                         vparam.min_type_args
                     ),
                     span,
                     path: path.to_owned(),
                     help: Some(format!(
-                        "The parameter expects `{}[...]` with at least {} \
-                         fixed type argument{}",
-                        vparam.base_class,
-                        vparam.min_type_args,
+                        "The parameter expects `{}[...]` with at least {} fixed type argument{}",
+                        vparam.base_class, vparam.min_type_args,
                         if vparam.min_type_args == 1 { "" } else { "s" }
                     )),
-                    note: Some(
-                        "A `TypeVarTuple` unpack like `*tuple[Any, ...]` absorbs \
-                         zero or more type arguments, but the fixed parts must be present"
-                            .to_owned(),
-                    ),
+                    note: Some("A `TypeVarTuple` unpack like `*tuple[Any, ...]` absorbs zero or more type arguments, but the fixed parts must be present".to_owned()),
                 });
             }
         }
     }
 }
 
-/// Count the type arguments in a type annotation like `Array[Batch]` or
-/// `Array[Batch, Height, Width, Channels]`.
-///
-/// Returns `Some(count)` if the annotation uses the expected base class,
-/// `None` otherwise.
 fn count_type_args(annotation: &str, expected_base: &str) -> Option<usize> {
     let bracket_pos = annotation.find('[')?;
-    let base = annotation[..bracket_pos].trim();
-    if base != expected_base {
-        return None;
-    }
+    let base = annotation.get(..bracket_pos)?.trim();
+    if base != expected_base { return None; }
     let inner = annotation.get(bracket_pos + 1..annotation.len().checked_sub(1)?)?;
     let args = split_type_args_at_commas(inner);
     Some(args.iter().filter(|a| !a.trim().is_empty()).count())

@@ -81,7 +81,7 @@ fn collect_namedtuple_classes(module: &ResolvedModule) -> HashMap<&str, Vec<&str
                 .filter(|attr| attr.has_annotation)
                 .filter_map(|attr| {
                     let ann_span = attr.annotation_span?;
-                    ann_span.slice_source(&module.source)
+                    slice_span(&module.source, ann_span)
                 })
                 .collect();
             (cls.name.as_str(), field_types)
@@ -100,7 +100,7 @@ fn build_var_to_nt_map<'a>(
         .filter(|v| v.rhs_kind == RhsKind::CallExpr)
         .filter_map(|v| {
             let rhs_span = v.rhs_span?;
-            let rhs_text = rhs_span.slice_source(&module.source)?;
+            let rhs_text = slice_span(&module.source, rhs_span)?;
             let class_name = rhs_text.split('(').next()?.trim();
             if namedtuple_classes.contains_key(class_name) {
                 Some((v.name.as_str(), class_name))
@@ -126,7 +126,7 @@ fn check_variable(
     let Some(ann_span) = var.annotation_span else {
         return;
     };
-    let Some(ann_text) = ann_span.slice_source(source) else {
+    let Some(ann_text) = slice_span(source, ann_span) else {
         return;
     };
     let Some(tuple_element_types) = parse_fixed_tuple_annotation(ann_text) else {
@@ -135,7 +135,7 @@ fn check_variable(
     let Some(rhs_span) = var.rhs_span else {
         return;
     };
-    let Some(rhs_text) = rhs_span.slice_source(source) else {
+    let Some(rhs_text) = slice_span(source, rhs_span) else {
         return;
     };
     let rhs_name = rhs_text.trim();
@@ -221,24 +221,28 @@ fn split_type_args(inner: &str) -> Vec<&str> {
             '[' => depth = depth.saturating_add(1),
             ']' => depth = depth.saturating_sub(1),
             ',' if depth == 0 => {
-                let part = inner[start..idx].trim();
-                if !part.is_empty() {
-                    parts.push(part);
+                if let Some(part) = inner.get(start..idx) {
+                    let part = part.trim();
+                    if !part.is_empty() {
+                        parts.push(part);
+                    }
                 }
                 start = idx + 1;
             }
             _ => {}
         }
     }
-    let remainder = inner[start..].trim();
-    if !remainder.is_empty() {
-        parts.push(remainder);
+    if let Some(remainder) = inner.get(start..) {
+        let remainder = remainder.trim();
+        if !remainder.is_empty() {
+            parts.push(remainder);
+        }
     }
     parts
 }
 
 /// Check each element type in the tuple annotation against the `NamedTuple` field type.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "diagnostic context requires many parameters")]
 fn check_element_types(
     tuple_types: &[&str],
     nt_field_types: &[&str],

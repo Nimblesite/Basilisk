@@ -44,7 +44,7 @@ impl Rule for GeneratorTypeMismatch {
             .iter()
             .filter_map(|func| {
                 let ann_span = func.return_annotation_span?;
-                let ann_text = module.ann_span.slice_source(source)?;
+                let ann_text = slice_span(&module.source, ann_span)?;
                 Some((func.name.as_str(), ann_text.trim()))
             })
             .collect();
@@ -62,7 +62,7 @@ impl Rule for GeneratorTypeMismatch {
 }
 
 /// Parsed generator return annotation.
-#[allow(clippy::struct_field_names)]
+#[expect(clippy::struct_field_names, reason = "field names intentionally mirror the type parameter names")]
 struct GeneratorAnnotation {
     /// The yield type (first type parameter).
     yield_type: String,
@@ -166,7 +166,7 @@ struct YieldExpr {
 }
 
 /// Find all yield expressions in a function body substring.
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::cast_possible_truncation, reason = "byte offsets fit u32 for source files")]
 fn find_yield_expressions(body: &str, body_offset: usize) -> Vec<YieldExpr> {
     let mut results = Vec::new();
     let bytes = body.as_bytes();
@@ -427,7 +427,7 @@ fn check_function(
     let Some(ann_span) = func.return_annotation_span else {
         return;
     };
-    let Some(ann_text) = ann_span.slice_source(source) else {
+    let Some(ann_text) = slice_span(source, ann_span) else {
         return;
     };
     let ann_text = ann_text.trim();

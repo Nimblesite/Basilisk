@@ -25,6 +25,7 @@ use std::collections::{HashMap, HashSet};
 use basilisk_resolver::{ClassInfo, ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -77,7 +78,7 @@ fn check_self_attr_assignments(module: &ResolvedModule, diagnostics: &mut Vec<Di
         };
 
         // Extract the class body source text.
-        let Some(class_source) = cls.def_span.slice_source(source) else {
+        let Some(class_source) = slice_span(source, cls.def_span) else {
             continue;
         };
         let class_start = usize::try_from(cls.def_span.start).ok();

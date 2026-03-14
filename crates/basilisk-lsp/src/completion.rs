@@ -538,7 +538,7 @@ fn add_import_completions(
     }
 }
 
-#[allow(clippy::too_many_lines)]
+#[expect(clippy::too_many_lines, reason = "contains large const arrays of Python builtins that cannot be split")]
 fn add_builtin_completions(
     items: &mut Vec<CompletionItem>,
     seen: &mut HashSet<String>,
@@ -689,7 +689,7 @@ fn add_builtin_group(
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
+#[expect(clippy::unwrap_used, reason = "test-only code: unwrap acceptable in unit tests")]
 mod tests {
     use super::*;
 

@@ -33,7 +33,7 @@ const CODE: ErrorCode = ErrorCode {
 
 /// Extract text from source at the given span.
 fn span_text(source: &str, span: Span) -> Option<&str> {
-    span.slice_source(source)
+    slice_span(source, span)
 }
 
 /// Check whether `name` appears as a standalone type reference in `text`.

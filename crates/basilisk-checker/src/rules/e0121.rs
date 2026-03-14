@@ -101,13 +101,13 @@ impl Rule for ProtocolAssignmentConformance {
             };
 
             // Extract annotation text (the type name).
-            let Some(ann_text) = ann_span.slice_source(source) else {
+            let Some(ann_text) = slice_span(source, ann_span) else {
                 continue;
             };
             let ann_name = ann_text.trim();
 
             // Extract RHS text and check if it's a constructor call `ClassName()`.
-            let Some(rhs_text) = rhs_span.slice_source(source) else {
+            let Some(rhs_text) = slice_span(source, rhs_span) else {
                 continue;
             };
             let rhs_trimmed = rhs_text.trim();

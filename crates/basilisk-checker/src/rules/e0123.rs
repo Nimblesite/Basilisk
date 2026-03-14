@@ -25,6 +25,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -101,7 +102,7 @@ fn check_class(
                 continue;
             }
 
-            let Some(stmt_text) = ret_stmt.span.slice_source(source) else {
+            let Some(stmt_text) = slice_span(source, ret_stmt.span) else {
                 continue;
             };
 

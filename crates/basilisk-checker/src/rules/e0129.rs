@@ -47,7 +47,7 @@ impl Rule for LiteralValueIncompatible {
                 .iter()
                 .filter_map(|param| {
                     let ann_span = param.annotation_span?;
-                    let ann = ann_span.slice_source(source)?;
+                    let ann = slice_span(source, ann_span)?;
                     let ann = ann.trim();
                     // Only interested in Literal[...] annotations (including L[...] alias).
                     if contains_literal_subscript(ann) {

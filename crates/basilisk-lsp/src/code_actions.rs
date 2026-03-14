@@ -256,7 +256,7 @@ pub(crate) fn add_dunder_all(uri: &Url, source: &str) -> Option<CodeAction> {
     for (idx, line) in source.lines().enumerate() {
         let trimmed = line.trim();
         if trimmed.starts_with("import ") || trimmed.starts_with("from ") {
-            #[allow(clippy::cast_possible_truncation)]
+            #[expect(clippy::cast_possible_truncation, reason = "line index from enumerate fits in u32 for any real source file")]
             {
                 insert_line = (idx + 1) as u32;
             }
@@ -488,7 +488,7 @@ fn disable_for_file(uri: &Url, diag: &Diagnostic, _source: &str, code: &str) -> 
 /// Get the end-of-line position for a diagnostic's line.
 fn line_end_position(diag: &Diagnostic, source: &str) -> Position {
     let line_idx = diag.range.start.line as usize;
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(clippy::cast_possible_truncation, reason = "line character count fits in u32 for any real source line")]
     let line_char_len = source
         .lines()
         .nth(line_idx)
@@ -504,7 +504,7 @@ fn line_end_position(diag: &Diagnostic, source: &str) -> Position {
 /// Append `  # type: ignore` at the end of the diagnostic's source line.
 fn suppress_with_type_ignore(uri: &Url, diag: &Diagnostic, source: &str) -> CodeAction {
     let line_idx = diag.range.start.line as usize;
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(clippy::cast_possible_truncation, reason = "line character count fits in u32 for any real source line")]
     let line_char_len = source
         .lines()
         .nth(line_idx)
@@ -596,9 +596,9 @@ pub(crate) fn organize_imports(uri: &Url, source: &str) -> Option<CodeAction> {
 
 /// Compute the LSP range covering the entire document.
 fn full_document_range(source: &str) -> Range {
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(clippy::cast_possible_truncation, reason = "line count fits in u32 for any real source file")]
     let line_count = source.lines().count() as u32;
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(clippy::cast_possible_truncation, reason = "line character count fits in u32 for any real source line")]
     let last_line_len = source.lines().last().map_or(0, |l| l.chars().count()) as u32;
     Range {
         start: Position {
@@ -645,7 +645,7 @@ fn single_insert(
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
+#[expect(clippy::unwrap_used, reason = "test-only code: unwrap acceptable in unit tests")]
 mod tests {
     use super::*;
     use tower_lsp::lsp_types::{Diagnostic, NumberOrString, Position, Range, Url};

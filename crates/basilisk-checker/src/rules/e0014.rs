@@ -16,6 +16,7 @@
 use std::collections::HashMap;
 
 use crate::inference::infer_rhs;
+use crate::span_util::slice_span;
 use crate::types::{InferredType, LiteralValue};
 use basilisk_resolver::{ResolvedModule, RhsKind, Span, VariableInfo};
 
@@ -75,7 +76,7 @@ fn check_vars(
             // name, use the parameter's declared type instead.
             if matches!(inferred_type, InferredType::Unknown) {
                 if let Some(rhs_span) = var.rhs_span {
-                    if let Some(rhs_text) = rhs_span.slice_source(source) {
+                    if let Some(rhs_text) = slice_span(source, rhs_span) {
                         let rhs_name = rhs_text.trim();
                         if let Some(param_type) = param_types.get(rhs_name) {
                             inferred_type = param_type.clone();
@@ -125,7 +126,7 @@ fn infer_with_literal_value(
     let Some(rhs_span) = var.rhs_span else {
         return base;
     };
-    let rhs_text = match rhs_span.slice_source(source) {
+    let rhs_text = match slice_span(source, rhs_span) {
         Some(text) => text.trim(),
         None => return base,
     };
@@ -241,7 +242,7 @@ fn build_param_type_map(
         let Some(ann_span) = param.annotation_span else {
             continue;
         };
-        let Some(ann_text) = ann_span.slice_source(source) else {
+        let Some(ann_text) = slice_span(source, ann_span) else {
             continue;
         };
         let inferred = InferredType::from_annotation(ann_text.trim());
@@ -332,7 +333,7 @@ fn check_tuple_reassignments(module: &ResolvedModule, diagnostics: &mut Vec<Diag
         let Some(ann_span) = var.annotation_span else {
             continue;
         };
-        let Some(ann_text) = ann_span.slice_source(source) else {
+        let Some(ann_text) = slice_span(source, ann_span) else {
             continue;
         };
         let ann_trimmed = ann_text.trim();
@@ -356,7 +357,7 @@ fn check_tuple_reassignments(module: &ResolvedModule, diagnostics: &mut Vec<Diag
         let Some(rhs_span) = var.rhs_span else {
             continue;
         };
-        let Some(rhs_text) = rhs_span.slice_source(source) else {
+        let Some(rhs_text) = slice_span(source, rhs_span) else {
             continue;
         };
         let rhs_trimmed = rhs_text.trim();
@@ -599,7 +600,7 @@ fn check_dataclass_attr_assignments(module: &ResolvedModule, diagnostics: &mut V
         let mut fields = HashMap::new();
         for attr in &cls.attributes {
             if let Some(ann_span) = attr.annotation_span {
-                if let Some(ann_text) = ann_span.slice_source(&module.source) {
+                if let Some(ann_text) = slice_span(&module.source, ann_span) {
                     let _ = fields.insert(attr.name.as_str(), ann_text.trim());
                 }
             }
@@ -618,7 +619,7 @@ fn check_dataclass_attr_assignments(module: &ResolvedModule, diagnostics: &mut V
         .iter()
         .filter_map(|var| {
             let rhs_span = var.rhs_span?;
-            let rhs_text = rhs_span.slice_source(source)?;
+            let rhs_text = slice_span(source, rhs_span)?;
             let callee = rhs_text.split(['(', '[']).next()?.trim();
             let callee = callee.rsplit('.').next().unwrap_or(callee);
             if class_field_types.contains_key(callee) {
@@ -677,7 +678,8 @@ fn check_dataclass_attr_assignments(module: &ResolvedModule, diagnostics: &mut V
 /// portion and determines the literal kind.
 fn extract_rhs_kind_from_assign(source: &str, target_span: Span) -> Option<RhsKind> {
     let target_end = target_span.end_usize();
-    let line_end = source[target_end..]
+    let line_end = source
+        .get(target_end..)?
         .find('\n')
         .map_or(source.len(), |pos| target_end + pos);
     let after_target = source.get(target_end..line_end)?;
