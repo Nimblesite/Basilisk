@@ -72,9 +72,7 @@ pub fn check_with_config(
             }
 
             // 2. Per-module: suppress BSK-E0010 for modules with ignore-missing-stubs.
-            if code == "BSK-E0010"
-                && should_suppress_e0010_for_module(module, config)
-            {
+            if code == "BSK-E0010" && should_suppress_e0010_for_module(module, config) {
                 return None;
             }
 

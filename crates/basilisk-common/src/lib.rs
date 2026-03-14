@@ -16,9 +16,16 @@ pub mod commands {
     pub const START_DEBUG_SESSION: &str = "basilisk.startDebugSession";
     /// Stop an active debug session by session ID.
     pub const STOP_DEBUG_SESSION: &str = "basilisk.stopDebugSession";
+    /// Disable a diagnostic rule in the project configuration (`pyproject.toml`).
+    pub const DISABLE_RULE: &str = "basilisk.disableRule";
 
     /// All registered command names, for capability advertisement.
-    pub const ALL: &[&str] = &[ORGANIZE_IMPORTS, START_DEBUG_SESSION, STOP_DEBUG_SESSION];
+    pub const ALL: &[&str] = &[
+        ORGANIZE_IMPORTS,
+        START_DEBUG_SESSION,
+        STOP_DEBUG_SESSION,
+        DISABLE_RULE,
+    ];
 }
 
 /// Slash command names used in the Zed extension's AI assistant panel.

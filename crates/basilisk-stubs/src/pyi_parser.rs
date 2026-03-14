@@ -70,12 +70,11 @@ pub fn parse_pyi_source(
     source: StubSource,
     tier: StubTier,
 ) -> Result<StubModule, StubParseError> {
-    let parsed = ruff_python_parser::parse_module(content).map_err(|err| {
-        StubParseError::Syntax {
+    let parsed =
+        ruff_python_parser::parse_module(content).map_err(|err| StubParseError::Syntax {
             path: path.to_path_buf(),
             message: err.to_string(),
-        }
-    })?;
+        })?;
 
     let module_ast = parsed.into_syntax();
     let mut extractor = StubExtractor::new(module_name, path, source, tier);
@@ -139,10 +138,7 @@ impl StubExtractor {
         let decorators = extract_decorator_names(&func.decorator_list);
         let is_overload = decorators.iter().any(|d| d == "overload");
         let params = extract_params(&func.parameters, class_name.is_some());
-        let return_type = func
-            .returns
-            .as_ref()
-            .map(|ret| expr_to_annotation(ret));
+        let return_type = func.returns.as_ref().map(|ret| expr_to_annotation(ret));
 
         let stub_fn = StubFunction {
             name: func.name.to_string(),
@@ -156,10 +152,7 @@ impl StubExtractor {
 
         let name = func.name.to_string();
         if is_overload {
-            self.overloads
-                .entry(name)
-                .or_default()
-                .push(stub_fn);
+            self.overloads.entry(name).or_default().push(stub_fn);
         } else {
             let _ = self.functions.insert(name, stub_fn);
         }
@@ -169,12 +162,7 @@ impl StubExtractor {
         let bases = class
             .arguments
             .as_ref()
-            .map(|args| {
-                args.args
-                    .iter()
-                    .map(expr_to_annotation)
-                    .collect()
-            })
+            .map(|args| args.args.iter().map(expr_to_annotation).collect())
             .unwrap_or_default();
 
         let mut methods = Vec::new();
@@ -186,12 +174,8 @@ impl StubExtractor {
                     let class_name = class.name.to_string();
                     let decorators = extract_decorator_names(&func.decorator_list);
                     let is_overload = decorators.iter().any(|d| d == "overload");
-                    let params =
-                        extract_params(&func.parameters, true);
-                    let return_type = func
-                        .returns
-                        .as_ref()
-                        .map(|ret| expr_to_annotation(ret));
+                    let params = extract_params(&func.parameters, true);
+                    let return_type = func.returns.as_ref().map(|ret| expr_to_annotation(ret));
 
                     methods.push(StubFunction {
                         name: func.name.to_string(),
@@ -370,10 +354,7 @@ fn extract_params(params: &Parameters, is_method: bool) -> Vec<StubParam> {
         if is_method && idx == 0 && result.is_empty() {
             continue;
         }
-        result.push(param_to_stub_param(
-            param,
-            StubParamKind::PositionalOnly,
-        ));
+        result.push(param_to_stub_param(param, StubParamKind::PositionalOnly));
     }
 
     // Regular parameters
@@ -407,10 +388,7 @@ fn extract_params(params: &Parameters, is_method: bool) -> Vec<StubParam> {
     if let Some(kwarg) = &params.kwarg {
         result.push(StubParam {
             name: kwarg.name.to_string(),
-            annotation: kwarg
-                .annotation
-                .as_ref()
-                .map(|ann| expr_to_annotation(ann)),
+            annotation: kwarg.annotation.as_ref().map(|ann| expr_to_annotation(ann)),
             has_default: false,
             kind: StubParamKind::Kwarg,
         });
@@ -420,10 +398,7 @@ fn extract_params(params: &Parameters, is_method: bool) -> Vec<StubParam> {
 }
 
 /// Convert a `ruff_python_ast::ParameterWithDefault` to a [`StubParam`].
-fn param_to_stub_param(
-    param: &ast::ParameterWithDefault,
-    kind: StubParamKind,
-) -> StubParam {
+fn param_to_stub_param(param: &ast::ParameterWithDefault, kind: StubParamKind) -> StubParam {
     StubParam {
         name: param.parameter.name.to_string(),
         annotation: param

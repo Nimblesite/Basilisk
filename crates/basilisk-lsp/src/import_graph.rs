@@ -233,8 +233,9 @@ fn detect_cycles_inner(forward: &HashMap<PathBuf, HashSet<PathBuf>>) -> Vec<Impo
                     }
                     Some(Color::Gray) => {
                         if let Some(cycle_start) = path_stack.iter().position(|p| p == dep) {
-                            let chain: Vec<PathBuf> =
-                                path_stack.get(cycle_start..).map_or_else(Vec::new, <[PathBuf]>::to_vec);
+                            let chain: Vec<PathBuf> = path_stack
+                                .get(cycle_start..)
+                                .map_or_else(Vec::new, <[PathBuf]>::to_vec);
                             cycles.push(ImportCycle { chain });
                         }
                     }
@@ -249,10 +250,8 @@ fn detect_cycles_inner(forward: &HashMap<PathBuf, HashSet<PathBuf>>) -> Vec<Impo
         }
     }
 
-    let mut colors: HashMap<PathBuf, Color> = forward
-        .keys()
-        .map(|k| (k.clone(), Color::White))
-        .collect();
+    let mut colors: HashMap<PathBuf, Color> =
+        forward.keys().map(|k| (k.clone(), Color::White)).collect();
     let mut path_stack: Vec<PathBuf> = Vec::new();
     let mut cycles: Vec<ImportCycle> = Vec::new();
 

@@ -13,7 +13,7 @@ basilisk-checker.workspace  = true
 basilisk-common.workspace   = true
 
 tower-lsp         = "0.20"
-tokio             = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "io-util", "net", "sync", "time", "process"] }
+tokio             = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "io-util", "net", "sync", "time", "process", "fs"] }
 tokio-tungstenite = "0.24"
 futures-util      = "0.3"
 serde             = { version = "1", features = ["derive"] }

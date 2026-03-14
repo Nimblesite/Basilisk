@@ -263,14 +263,33 @@ pub fn has_stub_package(module_name: &str, site_packages: &Path) -> bool {
     site_packages.join(format!("{root}-stubs")).is_dir()
 }
 
-/// Detect site-packages directory from venv config.
+/// Detect site-packages directory from venv config, then fall back to
+/// `python3 -c "import sys; ..."` subprocess for system Python discovery.
 fn resolve_site_packages(
     roots: &[PathBuf],
     config: &crate::config::WorkspaceConfig,
 ) -> Option<PathBuf> {
+    // 1. Try venv-based discovery first.
+    if let Some(sp) = resolve_venv_site_packages(roots, config) {
+        return Some(sp);
+    }
+    // 2. Fall back to Python subprocess discovery.
+    detect_python_site_packages()
+}
+
+/// Find site-packages from a virtual environment directory.
+fn resolve_venv_site_packages(
+    roots: &[PathBuf],
+    config: &crate::config::WorkspaceConfig,
+) -> Option<PathBuf> {
     let venv_dir = find_venv_dir(roots, config)?;
+    site_packages_in_dir(&venv_dir)
+}
+
+/// Search a Python installation directory for its site-packages path.
+fn site_packages_in_dir(base: &Path) -> Option<PathBuf> {
     // Unix: lib/pythonX.Y/site-packages
-    let lib = venv_dir.join("lib");
+    let lib = base.join("lib");
     if lib.is_dir() {
         if let Ok(entries) = std::fs::read_dir(&lib) {
             for entry in entries.flatten() {
@@ -286,9 +305,39 @@ fn resolve_site_packages(
         }
     }
     // Windows: Lib/site-packages
-    let win_sp = venv_dir.join("Lib").join("site-packages");
+    let win_sp = base.join("Lib").join("site-packages");
     if win_sp.is_dir() {
         return Some(win_sp);
+    }
+    None
+}
+
+/// Detect site-packages by running `python3 -c "import sys; ..."`.
+///
+/// Searches `sys.path` entries for directories ending in `site-packages`.
+/// Returns the first valid site-packages directory found.
+fn detect_python_site_packages() -> Option<PathBuf> {
+    let output = std::process::Command::new("python3")
+        .args(["-c", "import sys; print('\\n'.join(sys.path))"])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let path = PathBuf::from(trimmed);
+        if path.ends_with("site-packages") && path.is_dir() {
+            return Some(path);
+        }
     }
     None
 }

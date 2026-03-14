@@ -20,9 +20,7 @@ use ws_test_common::{initialize_with_root, unique_temp_dir, WsTestFixture};
 type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
 
 /// Write test files to a temp directory and return the root URI.
-fn setup_cross_module_workspace(
-    files: &[(&str, &str)],
-) -> (std::path::PathBuf, String) {
+fn setup_cross_module_workspace(files: &[(&str, &str)]) -> (std::path::PathBuf, String) {
     let dir = unique_temp_dir("bsk_cross_module");
     std::fs::create_dir_all(&dir).unwrap();
     for (name, content) in files {
@@ -65,10 +63,7 @@ async fn collect_all_diagnostics(
 #[tokio::test]
 async fn cross_module_imported_symbol_suppresses_e0018() -> TestResult<()> {
     let (dir, root_uri) = setup_cross_module_workspace(&[
-        (
-            "utils.py",
-            "def helper(x: int) -> int:\n    return x * 2\n",
-        ),
+        ("utils.py", "def helper(x: int) -> int:\n    return x * 2\n"),
         (
             "main.py",
             "from utils import helper\n\ndef run() -> int:\n    return helper(42)\n",
@@ -89,10 +84,7 @@ async fn cross_module_imported_symbol_suppresses_e0018() -> TestResult<()> {
             .unwrap_or(&empty);
         let e0018_for_helper = diagnostics.iter().any(|d| {
             d["code"].as_str() == Some("BSK-E0018")
-                && d["message"]
-                    .as_str()
-                    .unwrap_or("")
-                    .contains("helper")
+                && d["message"].as_str().unwrap_or("").contains("helper")
         });
         assert!(
             !e0018_for_helper,
@@ -110,12 +102,10 @@ async fn cross_module_imported_symbol_suppresses_e0018() -> TestResult<()> {
 
 #[tokio::test]
 async fn cross_module_undefined_variable_still_fires() -> TestResult<()> {
-    let (dir, root_uri) = setup_cross_module_workspace(&[
-        (
-            "main.py",
-            "def run() -> int:\n    return nonexistent_thing\n",
-        ),
-    ]);
+    let (dir, root_uri) = setup_cross_module_workspace(&[(
+        "main.py",
+        "def run() -> int:\n    return nonexistent_thing\n",
+    )]);
 
     let mut fixture = WsTestFixture::new().await?;
     let _ = initialize_with_root(&mut fixture, &root_uri, "crossModule").await?;
@@ -188,10 +178,7 @@ async fn cross_module_import_graph_built() -> TestResult<()> {
             .unwrap_or(&empty);
         let e0018_for_base = diagnostics.iter().any(|d| {
             d["code"].as_str() == Some("BSK-E0018")
-                && d["message"]
-                    .as_str()
-                    .unwrap_or("")
-                    .contains("BASE_VALUE")
+                && d["message"].as_str().unwrap_or("").contains("BASE_VALUE")
         });
         assert!(
             !e0018_for_base,
@@ -423,12 +410,33 @@ async fn cross_module_goto_definition() -> TestResult<()> {
     assert!(resp.is_some(), "should get a definition response");
 
     let resp_json: serde_json::Value = serde_json::from_str(&resp.unwrap())?;
-    // When cross-file goto-def is fully working, this should point to definitions.py
-    // For now we just assert we got a valid response without crash
     assert!(
         resp_json.get("result").is_some(),
         "definition response should have a result field: {resp_json}"
     );
+
+    // When cross-file goto-def is working, result should point to definitions.py line 0.
+    let result = &resp_json["result"];
+    if !result.is_null() {
+        // Result may be a single Location or an array of Locations.
+        let location = if result.is_array() {
+            result.as_array().and_then(|arr| arr.first())
+        } else {
+            Some(result)
+        };
+        if let Some(loc) = location {
+            let target_uri = loc["uri"].as_str().unwrap_or("");
+            assert!(
+                target_uri.contains("definitions.py"),
+                "goto-def should point to definitions.py, got: {target_uri}"
+            );
+            assert_eq!(
+                loc["range"]["start"]["line"].as_u64(),
+                Some(0),
+                "goto-def should point to line 0 of definitions.py"
+            );
+        }
+    }
 
     let _ = std::fs::remove_dir_all(&dir);
     Ok(())
@@ -492,11 +500,35 @@ async fn cross_module_find_references() -> TestResult<()> {
     // When cross-file references is working, result should include locations
     // in shared.py, user1.py, and user2.py
     if let Some(locations) = resp_json["result"].as_array() {
-        // At minimum the definition itself should be found
         assert!(
             !locations.is_empty(),
             "should find at least the definition itself"
         );
+
+        // Verify the definition site (shared.py) is included.
+        let has_shared = locations
+            .iter()
+            .any(|loc| loc["uri"].as_str().unwrap_or("").contains("shared.py"));
+        assert!(
+            has_shared,
+            "references should include definition in shared.py, got: {locations:#?}"
+        );
+
+        // When cross-file refs fully works, user1.py and user2.py should appear.
+        let has_user1 = locations
+            .iter()
+            .any(|loc| loc["uri"].as_str().unwrap_or("").contains("user1.py"));
+        let has_user2 = locations
+            .iter()
+            .any(|loc| loc["uri"].as_str().unwrap_or("").contains("user2.py"));
+        // These may not pass yet — documenting expected behavior.
+        if has_user1 && has_user2 {
+            assert!(
+                locations.len() >= 3,
+                "should find at least 3 references (def + 2 usage sites), got: {}",
+                locations.len()
+            );
+        }
     }
 
     let _ = std::fs::remove_dir_all(&dir);

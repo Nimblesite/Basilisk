@@ -278,14 +278,8 @@ impl WorkspaceIndex {
             };
 
             let (new_entry, lsp_diags) = analyse(&text, &importer_path);
-            let version = self
-                .files
-                .get(&importer_path)
-                .map_or(0, |e| e.version);
-            let is_open = self
-                .files
-                .get(&importer_path)
-                .is_some_and(|e| e.is_open);
+            let version = self.files.get(&importer_path).map_or(0, |e| e.version);
+            let is_open = self.files.get(&importer_path).is_some_and(|e| e.is_open);
             let mut entry = new_entry;
             entry.version = version;
             entry.is_open = is_open;

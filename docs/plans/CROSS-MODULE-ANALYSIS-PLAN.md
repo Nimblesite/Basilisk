@@ -157,8 +157,8 @@ uv integration is additive to cross-module analysis — it accelerates Phases 1 
 - [x] Implement `PathOverride` + `path_matches_pattern()` with `vendor/**` glob in `crates/basilisk-config/src/overrides.rs`
 - [x] `.pyi` file parsing — extract signatures, class defs, variable annotations, `@overload` support
 - [x] Wire `basilisk-config` overrides into checker — apply per-module/per-path overrides during `check()`
-- [ ] "Disable in project config" code action in `code_actions.rs` — opens/edits `pyproject.toml`
-- [ ] Python env detection — `python3 -c "import sys; print(sys.path)"` fallback for site-packages discovery
+- [x] "Disable in project config" code action — `suppress.rs` offers code action, `commands.rs` handles `basilisk.disableRule` to edit `pyproject.toml`
+- [x] Python env detection — `python3 -c "import sys; print(sys.path)"` fallback for site-packages discovery via `detect_python_site_packages()` in `import_resolver.rs`
 
 ### Phase 2: Import Graph
 - [x] Create `ImportGraph` struct in `crates/basilisk-lsp/src/import_graph.rs` — `HashMap<PathBuf, HashSet<PathBuf>>` forward + reverse edges

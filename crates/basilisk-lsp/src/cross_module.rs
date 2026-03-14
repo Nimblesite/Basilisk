@@ -130,7 +130,6 @@ pub fn populate_cross_module_symbols(index: &WorkspaceIndex) {
         };
 
         let mut resolved = Arc::try_unwrap(resolved_arc).unwrap_or_else(|arc| (*arc).clone());
-        let mut changed = false;
 
         for import in &resolved.imports {
             let Some(resolved_path) = &import.resolved_path else {
@@ -148,7 +147,6 @@ pub fn populate_cross_module_symbols(index: &WorkspaceIndex) {
                     let _ = resolved
                         .imported_symbols
                         .insert(name.clone(), symbol.clone());
-                    changed = true;
                 }
             } else {
                 // `from foo import bar, baz` — only import named symbols.
@@ -159,26 +157,20 @@ pub fn populate_cross_module_symbols(index: &WorkspaceIndex) {
                         let _ = resolved
                             .imported_symbols
                             .insert(import_name.clone(), symbol.clone());
-                        changed = true;
                     }
                 }
             }
         }
 
-        // Only create a new Arc if we actually added symbols.
-        if changed {
-            entry.value_mut().resolved = Some(Arc::new(resolved));
-        } else {
-            // Reconstruct the Arc without modification.
-            entry.value_mut().resolved = Some(Arc::new(resolved));
-        }
+        entry.value_mut().resolved = Some(Arc::new(resolved));
     }
 }
 
 #[cfg(test)]
 #[expect(
     clippy::unwrap_used,
-    reason = "test-only code: unwrap acceptable in unit tests"
+    clippy::expect_used,
+    reason = "test-only code: unwrap/expect acceptable in unit tests"
 )]
 mod tests {
     use super::*;
@@ -230,7 +222,10 @@ mod tests {
             resolved_b.imported_symbols.contains_key("greet"),
             "greet should be in imported_symbols"
         );
-        let greet_sym = &resolved_b.imported_symbols["greet"];
+        let greet_sym = resolved_b
+            .imported_symbols
+            .get("greet")
+            .expect("greet should exist");
         assert_eq!(greet_sym.kind, ExternalSymbolKind::Function);
         assert_eq!(greet_sym.source_path, path_a);
     }
@@ -269,7 +264,10 @@ mod tests {
         let entry_b = index.files.get(&path_b).unwrap();
         let resolved_b = entry_b.resolved.as_ref().unwrap();
         assert!(resolved_b.imported_symbols.contains_key("Dog"));
-        let dog_sym = &resolved_b.imported_symbols["Dog"];
+        let dog_sym = resolved_b
+            .imported_symbols
+            .get("Dog")
+            .expect("Dog should exist");
         assert_eq!(dog_sym.kind, ExternalSymbolKind::Class);
     }
 }

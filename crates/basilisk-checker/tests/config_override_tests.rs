@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Tests for project-level configuration overrides via `check_with_config`.
 
 use std::collections::HashMap;
@@ -5,7 +13,11 @@ use std::collections::HashMap;
 use basilisk_config::{BasiliskConfig, ModuleOverride, PathOverride, RuleSeverity};
 
 /// Parse source and check with the given config, returning diagnostics.
-fn check_with(source: &str, path: &str, config: &BasiliskConfig) -> Vec<basilisk_checker::Diagnostic> {
+fn check_with(
+    source: &str,
+    path: &str,
+    config: &BasiliskConfig,
+) -> Vec<basilisk_checker::Diagnostic> {
     let parsed = basilisk_parser::parse_source(source.to_owned(), path.to_owned())
         .expect("source should parse");
     let resolved = basilisk_resolver::resolve(&parsed).expect("source should resolve");
@@ -21,7 +33,10 @@ fn check_default(source: &str, path: &str) -> Vec<basilisk_checker::Diagnostic> 
 fn global_rule_severity_override_disables_rule() {
     let source = "def foo(x):\n    return x\n";
     let default_diags = check_default(source, "test.py");
-    let e0001_count = default_diags.iter().filter(|d| d.code.code == "BSK-E0001").count();
+    let e0001_count = default_diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0001")
+        .count();
     assert!(e0001_count > 0, "E0001 should fire without config override");
 
     let config = BasiliskConfig {
@@ -41,7 +56,10 @@ fn global_rule_severity_override_demotes_to_warning() {
         ..Default::default()
     };
     let diags = check_with(source, "test.py", &config);
-    let e0001_diags: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-E0001").collect();
+    let e0001_diags: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0001")
+        .collect();
     assert!(!e0001_diags.is_empty(), "E0001 should still fire");
     for diag in &e0001_diags {
         assert_eq!(
@@ -60,7 +78,10 @@ fn global_rule_severity_override_demotes_to_info() {
         ..Default::default()
     };
     let diags = check_with(source, "test.py", &config);
-    let e0001_diags: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-E0001").collect();
+    let e0001_diags: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0001")
+        .collect();
     assert!(!e0001_diags.is_empty(), "E0001 should still fire");
     for diag in &e0001_diags {
         assert_eq!(
