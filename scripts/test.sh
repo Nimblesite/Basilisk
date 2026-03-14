@@ -2,8 +2,9 @@
 # Run the full Basilisk test suite with coverage.
 #
 # Usage:
-#   ./scripts/test.sh          # run everything
-#   ./scripts/test.sh --open   # open HTML report after
+#   ./scripts/test.sh                  # run everything
+#   ./scripts/test.sh --skip-build     # skip the initial cargo build step
+#   ./scripts/test.sh --open           # open HTML report after
 
 set -euo pipefail
 
@@ -22,9 +23,11 @@ ok()     { echo -e "${GREEN}✓ $*${RESET}"; }
 warn()   { echo -e "${YELLOW}⚠ $*${RESET}"; }
 
 OPEN_REPORT=0
+SKIP_BUILD=0
 for arg in "$@"; do
     case "$arg" in
         --open) OPEN_REPORT=1 ;;
+        --skip-build) SKIP_BUILD=1 ;;
     esac
 done
 
@@ -70,24 +73,22 @@ ok "All dependencies present"
 
 # ── Build ────────────────────────────────────────────────────────────────────
 
-header "Building basilisk binary"
-cargo build --release -p basilisk-cli
 BASILISK_BIN="$REPO_ROOT/target/release/basilisk"
+if [[ "$SKIP_BUILD" -eq 0 ]]; then
+    header "Building basilisk binary"
+    cargo build --release -p basilisk-cli
+    ok "basilisk binary ready: $BASILISK_BIN"
+fi
 if [[ ! -x "$BASILISK_BIN" ]]; then
-    echo -e "${RED}${BOLD}FATAL: basilisk binary not found at $BASILISK_BIN after build.${RESET}"
+    echo -e "${RED}${BOLD}FATAL: basilisk binary not found at $BASILISK_BIN. Build first or drop --skip-build.${RESET}"
     exit 1
 fi
-ok "basilisk binary ready: $BASILISK_BIN"
 
 # ── Rust tests with coverage ─────────────────────────────────────────────────
 
 header "Running tests with coverage instrumentation"
-# Use release profile to produce smaller object files and prevent
-# linker OOM (Bus error / signal 7) on memory-constrained CI runners.
-COV_JOBS="${CARGO_BUILD_JOBS:-2}"
 set +e
 cargo llvm-cov \
-    -j "$COV_JOBS" \
     --release \
     --workspace \
     --exclude basilisk-compiler \

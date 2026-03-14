@@ -1,5 +1,2 @@
 [alias]
 c = "clippy --all-targets"
-
-[build]
-jobs = 4

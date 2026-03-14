@@ -15,31 +15,8 @@ env:
   RUSTFLAGS: "-D warnings"
 
 jobs:
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-
-      - name: cargo fmt --check
-        run: cargo fmt --all --check
-
-      - name: clippy (workspace)
-        run: cargo clippy --all-targets
-
-      - name: clippy (zed extension)
-        run: cargo clippy --all-targets --manifest-path basilisk-zed/Cargo.toml
-
-  test:
-    name: Test
+  ci:
+    name: Build, Lint & Test
     runs-on: ubuntu-latest
     env:
       TEST_COVERAGE_BASILISK_CHECKER: ${{ vars.TEST_COVERAGE_BASILISK_CHECKER || '89' }}
@@ -54,7 +31,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # ── Toolchains ──────────────────────────────────────────────────────────
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy, llvm-tools-preview
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -76,7 +56,6 @@ jobs:
       - name: Install xvfb and VS Code test dependencies
         run: |
           sudo apt-get update
-          # Core xvfb + Electron/Chromium stack required by the VS Code test runner
           sudo apt-get install -y \
             xvfb \
             libnspr4 \
@@ -94,16 +73,26 @@ jobs:
           # libasound2 was renamed to libasound2t64 on Ubuntu 24.04+
           sudo apt-get install -y libasound2 2>/dev/null || sudo apt-get install -y libasound2t64
 
-      - name: Add swap space
-        uses: actionhippie/swap-space@v1
-        with:
-          size: 8G
-
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
+      # ── Build ───────────────────────────────────────────────────────────────
+      - name: Build workspace (release)
+        run: cargo build --release --workspace --exclude basilisk-compiler
+
+      # ── Lint ────────────────────────────────────────────────────────────────
+      - name: cargo fmt --check
+        run: cargo fmt --all --check
+
+      - name: clippy (workspace)
+        run: cargo clippy --all-targets
+
+      - name: clippy (zed extension)
+        run: cargo clippy --all-targets --manifest-path basilisk-zed/Cargo.toml
+
+      # ── Test ────────────────────────────────────────────────────────────────
       - name: Run all tests
-        run: ./scripts/test.sh
+        run: ./scripts/test.sh --skip-build
 
       - name: Upload coverage report artifact
         if: always()
