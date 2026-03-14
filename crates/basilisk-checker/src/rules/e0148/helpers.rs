@@ -148,7 +148,7 @@ impl ModuleContext {
                     let bases: Vec<String> = args
                         .args
                         .iter()
-                        .filter_map(|arg| Some(ann_str(arg)))
+                        .map(|arg| ann_str(arg))
                         .collect();
                     if !bases.is_empty() {
                         let _ = class_bases.insert(cls.name.to_string(), bases);

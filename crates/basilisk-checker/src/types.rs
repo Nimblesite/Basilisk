@@ -45,7 +45,7 @@ pub enum InferredType {
     LiteralString,
     /// Named type (`ClassName`) - fallback for named types not yet resolved
     Named(String),
-    /// TypeForm[T] — represents a type form object for type T (PEP 747).
+    /// `TypeForm[T]` — represents a type form object for type `T` (PEP 747).
     /// The inner type is what the type form represents (e.g. `TypeForm[int]`
     /// means a type form that represents `int`).
     TypeForm(Box<InferredType>),

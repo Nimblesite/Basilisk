@@ -1,4 +1,4 @@
-//! TypeForm validation for BSK-E0014.
+//! `TypeForm` validation for BSK-E0014.
 //!
 //! When the declared type is `TypeForm[T]`, the RHS must be a valid type
 //! expression whose represented type is assignable to `T`.  This module
@@ -15,7 +15,7 @@ use basilisk_resolver::{FunctionInfo, ResolvedModule, VariableInfo};
 
 use super::CODE;
 
-/// Special forms that are NOT valid type expressions in a TypeForm context.
+/// Special forms that are NOT valid type expressions in a `TypeForm` context.
 ///
 /// Per PEP 747, `Self`, `ClassVar`, `Final`, `Unpack`, and bare `Optional`
 /// (without type argument) are not valid type form objects.
@@ -26,23 +26,8 @@ const REQUIRES_PARAMETERISATION: &[&str] = &["Optional"];
 
 /// Builtin type constructors — calling these creates an instance, not a type form.
 const BUILTIN_TYPE_CONSTRUCTORS: &[&str] = &[
-    "tuple",
-    "list",
-    "dict",
-    "set",
-    "frozenset",
-    "int",
-    "str",
-    "float",
-    "bool",
-    "bytes",
-    "complex",
-    "bytearray",
-    "memoryview",
-    "object",
-    "range",
-    "slice",
-    "type",
+    "tuple", "list", "dict", "set", "frozenset", "int", "str", "float", "bool", "bytes",
+    "complex", "bytearray", "memoryview", "object", "range", "slice", "type",
 ];
 
 /// Check whether a RHS expression is a valid type form assignable to `inner`.
@@ -63,14 +48,14 @@ pub(super) fn is_valid_typeform_assignment(
     };
     let rhs_text = rhs_text.trim();
 
-    // Check the RhsKind first for obviously invalid values
+    // Check the `RhsKind` first for obviously invalid values
     match &var.rhs_kind {
         basilisk_resolver::RhsKind::IntLiteral
         | basilisk_resolver::RhsKind::FloatLiteral
         | basilisk_resolver::RhsKind::BoolLiteral
-        | basilisk_resolver::RhsKind::BytesLiteral => return false,
-        basilisk_resolver::RhsKind::Tuple(_) => return false,
-        basilisk_resolver::RhsKind::TypeCall => return false,
+        | basilisk_resolver::RhsKind::BytesLiteral
+        | basilisk_resolver::RhsKind::Tuple(_)
+        | basilisk_resolver::RhsKind::TypeCall => return false,
         basilisk_resolver::RhsKind::CallExpr => {
             return is_valid_call_typeform(rhs_text, inner, functions, source);
         }
@@ -78,17 +63,17 @@ pub(super) fn is_valid_typeform_assignment(
             return is_valid_string_typeform(rhs_text, inner);
         }
         basilisk_resolver::RhsKind::NoneValue => {
-            // None is a valid type expression representing NoneType.
+            // `None` is a valid type expression representing `NoneType`.
             return InferredType::None_.is_assignable_to(inner);
         }
         _ => {}
     }
 
-    // For Other/Lambda/etc., parse the RHS text as a type expression
+    // For `Other`/`Lambda`/etc., parse the RHS text as a type expression
     is_valid_rhs_type_expression(rhs_text, inner)
 }
 
-/// Check whether a function call result is a valid TypeForm assignment.
+/// Check whether a function call result is a valid `TypeForm` assignment.
 ///
 /// Builtin type constructors (`tuple()`, `list()`) create instances, not type
 /// forms. User-defined functions are checked by looking up their return
@@ -110,19 +95,20 @@ fn is_valid_call_typeform(
     }
 
     // Look up user-defined function return types
-    if let Some(func) = functions.iter().find(|f| f.name == callee) {
+    if let Some(func) = functions.iter().find(|func| func.name == callee) {
         if let Some(ret_span) = func.return_annotation_span {
             if let Some(ret_text) = slice_span(source, ret_span) {
                 let ret_type = InferredType::from_annotation(ret_text.trim());
-                // If the function returns TypeForm[S], check S assignable to inner
+                // If the function returns `TypeForm[S]`, check S assignable to inner
                 if let InferredType::TypeForm(ref ret_inner) = ret_type {
                     return ret_inner.is_assignable_to(inner);
                 }
-                // If the function returns type[S], check S assignable to inner
-                // (type[T] is a subtype of TypeForm[T])
+                // If the function returns `type[S]`, check S assignable to inner
+                // (`type[T]` is a subtype of `TypeForm[T]`)
                 let ret_text_trimmed = ret_text.trim().to_ascii_lowercase();
                 if ret_text_trimmed.starts_with("type[") && ret_text_trimmed.ends_with(']') {
-                    let type_inner = &ret_text_trimmed["type[".len()..ret_text_trimmed.len() - 1];
+                    let type_inner =
+                        &ret_text_trimmed["type[".len()..ret_text_trimmed.len() - 1];
                     let type_inner_type = InferredType::from_annotation(type_inner);
                     return type_inner_type.is_assignable_to(inner);
                 }
@@ -170,13 +156,8 @@ fn is_parseable_type_expression(text: &str) -> bool {
     }
 
     // Reject expressions containing operators that aren't `|` (union)
-    for ch in text.chars() {
-        if matches!(
-            ch,
-            '+' | '-' | '*' | '/' | '%' | '(' | ')' | '!' | '~' | '^' | '&'
-        ) {
-            return false;
-        }
+    if text.contains(['+', '-', '*', '/', '%', '(', ')', '!', '~', '^', '&']) {
+        return false;
     }
 
     // Validate each `|`-separated component is a plausible type name.
@@ -190,12 +171,7 @@ fn is_parseable_type_expression(text: &str) -> bool {
         }
         // Strip any trailing `[...]` subscript
         let base = part.split('[').next().unwrap_or(part).trim();
-        if base.is_empty() {
-            return false;
-        }
-        // A type name must be a dotted identifier (e.g. `int`, `typing.List`)
-        // — no spaces allowed within a single type name
-        if base.contains(' ') {
+        if base.is_empty() || base.contains(' ') {
             return false;
         }
     }
@@ -204,7 +180,7 @@ fn is_parseable_type_expression(text: &str) -> bool {
 }
 
 /// Check if a non-string, non-literal RHS is a valid type expression
-/// assignable to the TypeForm's inner type.
+/// assignable to the `TypeForm`'s inner type.
 fn is_valid_rhs_type_expression(rhs_text: &str, inner: &InferredType) -> bool {
     let rhs_text = rhs_text.trim();
 
@@ -239,27 +215,25 @@ fn is_valid_rhs_type_expression(rhs_text: &str, inner: &InferredType) -> bool {
 
     // Parse the RHS as a type annotation and check assignability
     let represented = InferredType::from_annotation(rhs_text);
-
-    // If it parsed as a known type, check assignability to inner
     represented.is_assignable_to(inner)
 }
 
-/// Check TypeForm constructor calls and function calls with TypeForm parameters.
+/// Check `TypeForm` constructor calls and function calls with `TypeForm` parameters.
 ///
 /// This catches:
-/// - `TypeForm("type(1)")` — invalid type expression as TypeForm constructor arg
-/// - `func1("not a type")` — invalid type expression passed to TypeForm param
+/// - `TypeForm("type(1)")` — invalid type expression as `TypeForm` constructor arg
+/// - `func1("not a type")` — invalid type expression passed to `TypeForm` param
 pub(super) fn check_typeform_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
     let source = &module.source;
 
     for call in &module.calls {
-        // Check TypeForm() constructor calls
+        // Check `TypeForm()` constructor calls
         if call.callee == "TypeForm" {
             check_typeform_constructor(call, source, &module.path, diagnostics);
             continue;
         }
 
-        // Check function calls where parameters have TypeForm annotations
+        // Check function calls where parameters have `TypeForm` annotations
         check_typeform_param_args(call, &module.functions, source, &module.path, diagnostics);
     }
 }
@@ -271,13 +245,15 @@ fn check_typeform_constructor(
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    // TypeForm() takes exactly one argument
+    // `TypeForm()` takes exactly one argument
+    let Some((ref rhs_kind, arg_span)) = call.args.first() else {
+        return;
+    };
     if call.args.len() != 1 {
         return;
     }
 
-    let (ref rhs_kind, arg_span) = call.args[0];
-    let Some(arg_text) = slice_span(source, arg_span) else {
+    let Some(arg_text) = slice_span(source, *arg_span) else {
         return;
     };
     let arg_text = arg_text.trim();
@@ -286,12 +262,13 @@ fn check_typeform_constructor(
         basilisk_resolver::RhsKind::StrLiteral => {
             !is_valid_string_typeform(arg_text, &InferredType::Any)
         }
-        basilisk_resolver::RhsKind::CallExpr | basilisk_resolver::RhsKind::TypeCall => true,
-        basilisk_resolver::RhsKind::IntLiteral
+        basilisk_resolver::RhsKind::CallExpr
+        | basilisk_resolver::RhsKind::TypeCall
+        | basilisk_resolver::RhsKind::IntLiteral
         | basilisk_resolver::RhsKind::FloatLiteral
         | basilisk_resolver::RhsKind::BoolLiteral
-        | basilisk_resolver::RhsKind::BytesLiteral => true,
-        basilisk_resolver::RhsKind::Tuple(_) => true,
+        | basilisk_resolver::RhsKind::BytesLiteral
+        | basilisk_resolver::RhsKind::Tuple(_) => true,
         _ => false,
     };
 
@@ -305,7 +282,9 @@ fn check_typeform_constructor(
             span: call.span,
             path: path.to_owned(),
             help: Some(
-                "TypeForm() requires a valid type expression such as `int`, `str | None`, or `list[int]`".to_owned(),
+                "TypeForm() requires a valid type expression such as `int`, `str | None`, \
+                 or `list[int]`"
+                    .to_owned(),
             ),
             note: Some(
                 "TypeForm acts as a function that can be called with a single valid type expression"
@@ -315,7 +294,7 @@ fn check_typeform_constructor(
     }
 }
 
-/// Check function call arguments against TypeForm parameter annotations.
+/// Check function call arguments against `TypeForm` parameter annotations.
 fn check_typeform_param_args(
     call: &basilisk_resolver::CallSite,
     functions: &[FunctionInfo],
@@ -324,7 +303,7 @@ fn check_typeform_param_args(
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     // Find the function definition
-    let Some(func) = functions.iter().find(|f| f.name == call.callee) else {
+    let Some(func) = functions.iter().find(|func| func.name == call.callee) else {
         return;
     };
 
@@ -350,19 +329,21 @@ fn check_typeform_param_args(
             continue;
         };
 
-        // This parameter expects a TypeForm — validate the argument
+        // This parameter expects a `TypeForm` — validate the argument
         let Some(arg_text) = slice_span(source, *arg_span) else {
             continue;
         };
         let arg_text = arg_text.trim();
 
         let is_invalid = match rhs_kind {
-            basilisk_resolver::RhsKind::StrLiteral => !is_valid_string_typeform(arg_text, inner),
+            basilisk_resolver::RhsKind::StrLiteral => {
+                !is_valid_string_typeform(arg_text, inner)
+            }
             basilisk_resolver::RhsKind::IntLiteral
             | basilisk_resolver::RhsKind::FloatLiteral
             | basilisk_resolver::RhsKind::BoolLiteral
-            | basilisk_resolver::RhsKind::BytesLiteral => true,
-            basilisk_resolver::RhsKind::Tuple(_) => true,
+            | basilisk_resolver::RhsKind::BytesLiteral
+            | basilisk_resolver::RhsKind::Tuple(_) => true,
             _ => false,
         };
 
@@ -371,7 +352,8 @@ fn check_typeform_param_args(
                 code: CODE.clone(),
                 severity: Severity::Error,
                 message: format!(
-                    "Argument `{arg_text}` is not a valid type expression for parameter `{}` of type `{param_type}`",
+                    "Argument `{arg_text}` is not a valid type expression for \
+                     parameter `{}` of type `{param_type}`",
                     param.name
                 ),
                 span: *arg_span,
