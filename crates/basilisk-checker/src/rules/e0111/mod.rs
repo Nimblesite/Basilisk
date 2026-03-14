@@ -29,12 +29,9 @@ use super::Rule;
 mod helpers;
 
 use helpers::{
-    all_base_names, check_init_method_args, check_self_param_init_mismatch,
-    check_self_type_incompatibility, classify_literal_type, extract_type_args_text,
-    find_init_in_hierarchy, has_custom_init_in_bases, is_namedtuple_class, is_subclass,
-    is_type_compatible, resolve_string_annotation, CODE,
+    check_init_method_args, check_self_type_incompatibility, extract_type_args_text,
+    has_custom_init_in_bases, is_namedtuple_class, resolve_string_annotation, CODE,
 };
-
 
 /// Emits BSK-E0111 for constructor call errors involving `__init__`.
 pub(crate) struct ConstructorCallError;
@@ -474,4 +471,3 @@ fn check_no_init_with_args(
         note: None,
     });
 }
-

@@ -42,7 +42,9 @@ use super::Rule;
 
 use checkers::check_stmts;
 use helpers::{ann_str, expr_name, split_top_level};
-use typevar::{ConstrainedFunc, ConstrainedTypeVar, try_parse_constrained_func, try_parse_constrained_typevar};
+use typevar::{
+    try_parse_constrained_func, try_parse_constrained_typevar, ConstrainedFunc, ConstrainedTypeVar,
+};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0148",

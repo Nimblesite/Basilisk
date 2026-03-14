@@ -15,7 +15,10 @@ use super::CODE;
 ///
 /// For example, `t1: tuple[int]` declared, then `t1 = (1, 2)` assigned — error because
 /// `(1, 2)` has 2 elements but `tuple[int]` requires exactly 1.
-pub(super) fn check_tuple_reassignments(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+pub(super) fn check_tuple_reassignments(
+    module: &ResolvedModule,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
     let source = &module.source;
     let path = &module.path;
 

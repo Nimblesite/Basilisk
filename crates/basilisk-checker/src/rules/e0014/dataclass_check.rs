@@ -15,7 +15,10 @@ use super::CODE;
 
 /// Returns `Some(description)` when the annotation text and RHS kind are
 /// clearly incompatible; `None` when the pairing is acceptable or unknown.
-pub(super) fn annotation_rhs_mismatch_simple(annotation: &str, rhs: &RhsKind) -> Option<&'static str> {
+pub(super) fn annotation_rhs_mismatch_simple(
+    annotation: &str,
+    rhs: &RhsKind,
+) -> Option<&'static str> {
     // Normalise: strip generic parameters and whitespace, lower-case.
     let base = annotation
         .split('[')
@@ -35,7 +38,10 @@ pub(super) fn annotation_rhs_mismatch_simple(annotation: &str, rhs: &RhsKind) ->
 
 /// Checks module-level attribute assignments (`instance.field = value`) against
 /// the declared field types of `dataclass`/`dataclass_transform` classes.
-pub(super) fn check_dataclass_attr_assignments(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+pub(super) fn check_dataclass_attr_assignments(
+    module: &ResolvedModule,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
     if module.module_attr_assignments.is_empty() {
         return;
     }

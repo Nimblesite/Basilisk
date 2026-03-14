@@ -243,10 +243,10 @@ mod tests {
     use std::sync::atomic::{AtomicU64, Ordering};
 
     use super::*;
-    use crate::workspace_analysis::fnv1a;
-    use crate::workspace_scan::{deduplicate_by_stem, is_excluded};
-    use crate::workspace_analysis::resolve_analysis_mode;
     use crate::config::AnalysisMode;
+    use crate::workspace_analysis::fnv1a;
+    use crate::workspace_analysis::resolve_analysis_mode;
+    use crate::workspace_scan::{deduplicate_by_stem, is_excluded};
 
     static TEST_CTR: AtomicU64 = AtomicU64::new(0);
 

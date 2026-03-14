@@ -14,7 +14,6 @@ pub(super) const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/BSK-E0111",
 };
 
-
 /// Collect all base class names (simple and subscripted) for a class.
 pub(super) fn all_base_names(class_info: &ClassInfo) -> Vec<&str> {
     let mut names: Vec<&str> = class_info
@@ -219,8 +218,7 @@ pub(super) fn extract_type_args_text(slice: &ruff_python_ast::Expr, source: &str
     }
 }
 
-
-fn check_self_type_incompatibility(
+pub(super) fn check_self_type_incompatibility(
     call: &ruff_python_ast::ExprCall,
     class_name: &str,
     class_info: &basilisk_resolver::ClassInfo,
@@ -301,7 +299,7 @@ fn check_self_type_incompatibility(
 
 /// Find `__init__` methods for a class, searching up the MRO.
 
-fn check_init_method_args(
+pub(super) fn check_init_method_args(
     init_func: &basilisk_resolver::FunctionInfo,
     substitutions: &HashMap<&str, &str>,
     call: &ruff_python_ast::ExprCall,
@@ -409,9 +407,11 @@ fn check_init_method_args(
 
 /// Check if the `self` parameter annotation in `__init__` is incompatible with
 /// the provided type arguments.
-#[allow(clippy::too_many_arguments)]
-
-fn check_self_param_init_mismatch(
+#[expect(
+    clippy::too_many_arguments,
+    reason = "all args needed for mismatch check"
+)]
+pub(super) fn check_self_param_init_mismatch(
     self_annotation: &str,
     class_name: &str,
     type_args: &[String],

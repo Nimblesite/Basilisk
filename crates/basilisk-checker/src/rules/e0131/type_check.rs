@@ -8,7 +8,6 @@ use std::collections::HashMap;
 use basilisk_resolver::{FunctionInfo, Span};
 
 use crate::diagnostic::{Diagnostic, Severity};
-use crate::span_util::slice_span;
 
 use super::annotation::{parse_generator_annotation, split_top_level_args, GeneratorAnnotation};
 use super::yield_scan::YieldExpr;
@@ -194,7 +193,6 @@ pub(super) fn check_yield_from(
     func: &FunctionInfo,
     path: &str,
     func_return_annotations: &HashMap<&str, &str>,
-    source: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     let expr_text = &yield_expr.expr_text;
@@ -262,16 +260,7 @@ pub(super) fn check_yield_from(
     }
 
     // Case 2: yield from [literal_list]
-    // Resolve the expr_text against source to get the actual text
-    let expr_for_list = slice_span(source, Span {
-        start: yield_expr.offset + 11,
-        end: yield_expr.offset + 11 + u32::try_from(expr_text.len()).unwrap_or(0),
-    })
-    .unwrap_or(expr_text.as_str());
-
-    if let Some(elem_type) = infer_list_element_type(expr_for_list)
-        .or_else(|| infer_list_element_type(expr_text))
-    {
+    if let Some(elem_type) = infer_list_element_type(expr_text) {
         if !is_type_compatible(elem_type, &gen_ann.yield_type) {
             diagnostics.push(Diagnostic {
                 code: CODE.clone(),

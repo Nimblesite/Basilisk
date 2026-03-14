@@ -2,9 +2,12 @@
 
 use crate::diagnostic::{Diagnostic, Severity};
 
-use super::{CODE, helpers::{
-    contains_name, extract_bound, extract_pep695_type_params, leading_indent, span_for_line,
-}};
+use super::{
+    helpers::{
+        contains_name, extract_bound, extract_pep695_type_params, leading_indent, span_for_line,
+    },
+    CODE,
+};
 
 // ---------------------------------------------------------------------------
 // Shared: collect PEP 695 type params across the file

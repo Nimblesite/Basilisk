@@ -156,9 +156,7 @@ fn check_function_bodies(
             // type has a starred unpack but the target is a plain fixed-length tuple.
             if let Some((name, annotation)) = parse_annotated_decl(trimmed) {
                 if annotation.starts_with("tuple[") {
-                    if let Some(existing) =
-                        local_annotations.iter_mut().find(|(n, _)| n == &name)
-                    {
+                    if let Some(existing) = local_annotations.iter_mut().find(|(n, _)| n == &name) {
                         existing.1 = annotation;
                     } else {
                         local_annotations.push((name, annotation));

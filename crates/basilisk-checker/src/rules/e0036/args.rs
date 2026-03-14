@@ -5,7 +5,7 @@ use basilisk_resolver::Span;
 
 use crate::diagnostic::Diagnostic;
 
-use super::helpers::{TypeParamKind, contains_word, make_diagnostic};
+use super::helpers::{contains_word, make_diagnostic, TypeParamKind};
 
 /// Extract the content between the outer `[...]` of a `ClassVar[...]` or `CV[...]`
 /// annotation text.  Returns `None` when there is no subscript.

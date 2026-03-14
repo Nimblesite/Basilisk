@@ -5,8 +5,8 @@ use basilisk_resolver::Span;
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
 use super::types::{
-    CallableTypeInfo, FuncSig, ModuleContext, ProtocolInfo, ann_str, extract_base_name,
-    expr_name, parse_callable_type, types_compat,
+    ann_str, expr_name, extract_base_name, parse_callable_type, types_compat, CallableTypeInfo,
+    FuncSig, ModuleContext, ProtocolInfo,
 };
 
 use ruff_python_ast::{Expr, Stmt};
@@ -505,11 +505,7 @@ fn check_protocol_param_types(
                     severity: Severity::Error,
                     message: format!(
                         "Function `{}` incompatible with `{}`: param `{}` type `{}` vs `{}`",
-                        func.name,
-                        proto.name,
-                        sp.name,
-                        sp.type_annotation,
-                        tp.type_annotation
+                        func.name, proto.name, sp.name, sp.type_annotation, tp.type_annotation
                     ),
                     span,
                     path: path.to_owned(),

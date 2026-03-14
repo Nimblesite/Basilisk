@@ -11,7 +11,7 @@ use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, Severity};
 
-use super::helpers::{CODE, span_text};
+use super::helpers::{span_text, CODE};
 
 /// Returns `true` when the annotation text looks like a `ClassVar` annotation.
 fn is_classvar_annotation(ann: &str) -> bool {

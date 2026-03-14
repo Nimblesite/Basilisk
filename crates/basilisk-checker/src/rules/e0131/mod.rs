@@ -32,9 +32,7 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 use annotation::parse_generator_annotation;
-use type_check::{
-    check_missing_generator_return, check_yield_from, check_yield_value,
-};
+use type_check::{check_missing_generator_return, check_yield_from, check_yield_value};
 use yield_scan::find_yield_expressions;
 
 pub(crate) const CODE: ErrorCode = ErrorCode {
@@ -123,7 +121,6 @@ fn check_function(
                 func,
                 path,
                 func_return_annotations,
-                source,
                 diagnostics,
             );
         } else {

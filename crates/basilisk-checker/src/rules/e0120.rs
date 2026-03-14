@@ -25,11 +25,11 @@
 use basilisk_resolver::scope::GeneratorViolationKind;
 use basilisk_resolver::{FunctionInfo, ResolvedModule};
 
-use super::Rule;
 use super::e0120_helpers::{
-    ASYNC_GENERATOR_TYPES, CODE, SYNC_GENERATOR_TYPES, base_type_name, check_yield_from,
-    extract_return_type_from_generator, extract_yield_type, infer_yield_type,
+    base_type_name, check_yield_from, extract_return_type_from_generator, extract_yield_type,
+    infer_yield_type, ASYNC_GENERATOR_TYPES, CODE, SYNC_GENERATOR_TYPES,
 };
+use super::Rule;
 use crate::diagnostic::{Diagnostic, Severity};
 use crate::inference::infer_rhs;
 use crate::span_util::slice_span;

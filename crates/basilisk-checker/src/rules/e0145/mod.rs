@@ -51,7 +51,9 @@ use crate::diagnostic::{Diagnostic, ErrorCode};
 
 use super::Rule;
 
-use helpers::{expr_simple_name, expr_to_str, is_type_annotation, is_typevar_call, strip_type_bracket};
+use helpers::{
+    expr_simple_name, expr_to_str, is_type_annotation, is_typevar_call, strip_type_bracket,
+};
 use walkers::check_stmts;
 
 const CODE: ErrorCode = ErrorCode {

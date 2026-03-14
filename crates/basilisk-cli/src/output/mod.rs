@@ -60,8 +60,8 @@ mod tests {
     use json::JsonDiagnostic;
     use text::{byte_offset_to_line_col, render_one, render_snippet};
 
-    use basilisk_checker::{ErrorCode, Severity};
     use basilisk_checker::Diagnostic;
+    use basilisk_checker::{ErrorCode, Severity};
     use basilisk_resolver::Span;
 
     fn make_diag(help: Option<&str>, note: Option<&str>) -> Diagnostic {

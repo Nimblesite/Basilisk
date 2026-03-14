@@ -10,11 +10,11 @@ use basilisk_resolver::Span;
 use crate::diagnostic::{Diagnostic, Severity};
 
 use super::{
-    CODE, ModuleCtx,
     helpers::{
         expr_simple_name, expr_to_str, is_any_type_annotation, is_concrete_type_annotation,
         is_known_type_attr, strip_type_bracket,
     },
+    ModuleCtx, CODE,
 };
 
 /// Walk all top-level statements dispatching to per-statement checks.

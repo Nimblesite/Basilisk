@@ -370,7 +370,11 @@ fn check_constraint_compat(
         return;
     }
     let info_set: HashSet<&str> = info.constraint_names.iter().map(String::as_str).collect();
-    let ref_set: HashSet<&str> = ref_info.constraint_names.iter().map(String::as_str).collect();
+    let ref_set: HashSet<&str> = ref_info
+        .constraint_names
+        .iter()
+        .map(String::as_str)
+        .collect();
     if !ref_set.is_subset(&info_set) {
         diagnostics.push(Diagnostic {
             code: CODE.clone(),
@@ -407,8 +411,11 @@ fn check_subscripted_class_calls(
     info_map: &HashMap<&str, &TypeVarInfo>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let class_map: HashMap<&str, &basilisk_resolver::ClassInfo> =
-        module.classes.iter().map(|c| (c.name.as_str(), c)).collect();
+    let class_map: HashMap<&str, &basilisk_resolver::ClassInfo> = module
+        .classes
+        .iter()
+        .map(|c| (c.name.as_str(), c))
+        .collect();
     let init_map: HashMap<&str, &basilisk_resolver::FunctionInfo> = module
         .functions
         .iter()
@@ -423,15 +430,25 @@ fn check_subscripted_class_calls(
         }
         for (class_name, class_info) in &class_map {
             check_subscripted_class_on_line(
-                module, info_map, diagnostics, &init_map, line_idx, line, trimmed,
-                class_name, class_info,
+                module,
+                info_map,
+                diagnostics,
+                &init_map,
+                line_idx,
+                line,
+                trimmed,
+                class_name,
+                class_info,
             );
         }
     }
 }
 
 /// Check a single class pattern on a single source line.
-#[expect(clippy::too_many_arguments, reason = "all args needed for line-level check")]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "all args needed for line-level check"
+)]
 fn check_subscripted_class_on_line(
     module: &ResolvedModule,
     info_map: &HashMap<&str, &TypeVarInfo>,
@@ -473,7 +490,11 @@ fn check_subscripted_class_on_line(
     let Some(init_fn) = init_map.get(class_name) else {
         return;
     };
-    let init_params: Vec<_> = init_fn.parameters.iter().filter(|p| p.name != "self").collect();
+    let init_params: Vec<_> = init_fn
+        .parameters
+        .iter()
+        .filter(|p| p.name != "self")
+        .collect();
     let call_args = split_top_level_args(call_args_str);
     for (arg_idx, call_arg) in call_args.iter().enumerate() {
         let call_arg = call_arg.trim();
@@ -486,10 +507,17 @@ fn check_subscripted_class_on_line(
         let Some(ann_text) = slice_span(&module.source, ann_span) else {
             continue;
         };
-        let resolved_type = resolved_types.get(ann_text).map_or(ann_text, String::as_str);
+        let resolved_type = resolved_types
+            .get(ann_text)
+            .map_or(ann_text, String::as_str);
         if let Some(mismatch) = literal_type_mismatch(call_arg, resolved_type) {
             let byte_offset: u32 = u32::try_from(
-                module.source.lines().take(line_idx).map(|l| l.len() + 1).sum::<usize>(),
+                module
+                    .source
+                    .lines()
+                    .take(line_idx)
+                    .map(|l| l.len() + 1)
+                    .sum::<usize>(),
             )
             .unwrap_or(u32::MAX);
             let line_len = u32::try_from(line.len()).unwrap_or(u32::MAX);

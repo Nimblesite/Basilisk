@@ -7,7 +7,6 @@ use std::collections::HashSet;
 
 use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind};
 
-
 /// Return `param=` completion items when the cursor is inside a call, or
 /// `None` if the context does not match a function call.
 pub(super) fn kwarg_completions(
@@ -158,4 +157,3 @@ fn already_provided_kwargs(text: &str, byte_offset: usize) -> HashSet<String> {
 fn is_self_or_cls(name: &str) -> bool {
     name == "self" || name == "cls"
 }
-

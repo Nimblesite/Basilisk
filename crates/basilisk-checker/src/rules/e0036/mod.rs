@@ -47,8 +47,8 @@ use super::Rule;
 
 use args::{check_classvar_args, check_classvar_type_mismatch, extract_classvar_inner};
 use helpers::{
-    TypeParamKind, has_classvar, has_classvar_or_alias, has_nested_classvar, make_diagnostic,
-    span_text,
+    has_classvar, has_classvar_or_alias, has_nested_classvar, make_diagnostic, span_text,
+    TypeParamKind,
 };
 use instance::{check_instance_classvar_assignments, check_self_classvar_annotations};
 use protocol::check_protocol_classvar_conformance;

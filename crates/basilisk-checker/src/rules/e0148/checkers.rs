@@ -9,7 +9,10 @@ use basilisk_resolver::Span;
 
 use crate::diagnostic::{Diagnostic, Severity};
 
-use super::{CODE, ModuleContext, helpers::{call_span, expr_name, infer_literal_type, types_compatible}};
+use super::{
+    helpers::{call_span, expr_name, infer_literal_type, types_compatible},
+    ModuleContext, CODE,
+};
 
 // ---------------------------------------------------------------------------
 // Statement walking
@@ -47,9 +50,6 @@ pub(super) fn check_func_body(
     diag: &mut Vec<Diagnostic>,
 ) {
     use super::helpers::ann_str;
-    use super::helpers::split_top_level as _;
-    use super::ModuleContext;
-    use super::helpers::infer_literal_type as _;
 
     // Build a local var-type map from this function's parameters.
     let mut local_types = ctx.var_types.clone();

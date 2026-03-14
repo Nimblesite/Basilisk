@@ -44,8 +44,8 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 use scope::{
-    PYTHON_BUILTIN_TYPE_NAMES, build_module_scope_names, is_bare_identifier,
-    is_circular_string_annotation,
+    build_module_scope_names, is_bare_identifier, is_circular_string_annotation,
+    PYTHON_BUILTIN_TYPE_NAMES,
 };
 use type_checks::{
     collect_non_type_names, is_invalid_type_annotation, is_non_type_name,

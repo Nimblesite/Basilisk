@@ -9,7 +9,7 @@ use basilisk_resolver::{ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, Severity};
 
-use super::helpers::{CODE, is_ident_char, make_diagnostic, span_text};
+use super::helpers::{is_ident_char, make_diagnostic, span_text, CODE};
 
 /// Scan source text for `self.<name>: ClassVar` or `self.<name>: CV` patterns
 /// and return the spans and names of violations.

@@ -37,8 +37,10 @@ pub(super) fn check_generic_instance_method_calls(
     }
 
     // Build a map: var_name -> (class_def, typevar_substitution_map)
-    let mut var_substitutions: HashMap<String, (&super::types::GenericClassDef, HashMap<String, String>)> =
-        HashMap::new();
+    let mut var_substitutions: HashMap<
+        String,
+        (&super::types::GenericClassDef, HashMap<String, String>),
+    > = HashMap::new();
 
     for instance in &instances {
         if let Some(class_def) = generic_classes

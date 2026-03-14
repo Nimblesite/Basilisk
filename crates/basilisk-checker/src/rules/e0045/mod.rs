@@ -37,9 +37,8 @@ use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 use super::Rule;
 
 use helpers::{
-    annotated_inner, annotation_is_type_subscript, collect_defined_names,
-    collect_type_alias_names, count_args, first_arg, is_invalid_type_expr, is_undefined_bare_name,
-    span_text,
+    annotated_inner, annotation_is_type_subscript, collect_defined_names, collect_type_alias_names,
+    count_args, first_arg, is_invalid_type_expr, is_undefined_bare_name, span_text,
 };
 
 const CODE: ErrorCode = ErrorCode {
