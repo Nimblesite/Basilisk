@@ -76,23 +76,19 @@ jobs:
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
-      # ── Build ───────────────────────────────────────────────────────────────
-      - name: Build workspace (release)
-        run: cargo build --release --workspace --exclude basilisk-compiler
-
-      # ── Lint ────────────────────────────────────────────────────────────────
+      # ── Lint (clippy --release doubles as the build step) ──────────────────
       - name: cargo fmt --check
         run: cargo fmt --all --check
 
       - name: clippy (workspace)
-        run: cargo clippy --all-targets
+        run: cargo clippy --release --all-targets
 
       - name: clippy (zed extension)
-        run: cargo clippy --all-targets --manifest-path basilisk-zed/Cargo.toml
+        run: cargo clippy --release --all-targets --manifest-path basilisk-zed/Cargo.toml
 
       # ── Test ────────────────────────────────────────────────────────────────
       - name: Run all tests
-        run: ./scripts/test.sh --skip-build
+        run: ./scripts/test.sh
 
       - name: Upload coverage report artifact
         if: always()
