@@ -23,9 +23,9 @@ OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK MESSAGES AND COMPLY
 
 # Documentation Structure
 
-- `docs/specs/` — All specifications
-- `docs/plans/` — Implementation plans
-- `docs/` — Standalone docs (PEP conformance, stub strategy, etc.)
+- `docs/INDEX.md` — Full index of all docs
+- `docs/specs/` — Specifications (naming: `[COMPONENT]-[FEATURE]-SPEC.md`)
+- `docs/plans/` — Implementation plans (naming: `[COMPONENT]-[FEATURE]-PLAN.md`)
 
 `docs/specs/LSP-ARCHITECTURE-SPEC.md` is the **single source of truth** for all shared LSP/DAP/config/commands. Editor-specific specs point back to it.
 

@@ -33,9 +33,3 @@ Plans are implementation roadmaps. They track phasing, priorities, and progress 
 | [LSP-UV-INTEGRATION-PLAN.md](plans/LSP-UV-INTEGRATION-PLAN.md) | Strategy for integrating uv project detection, lock file parsing, and dependency intelligence. |
 | [CHECKER-CROSS-MODULE-ANALYSIS-PLAN.md](plans/CHECKER-CROSS-MODULE-ANALYSIS-PLAN.md) | Cross-module and whole-workspace type analysis with PEP 561 stub resolution and import graph infrastructure. |
 | [ZED-PLAN.md](plans/ZED-PLAN.md) | Phased implementation of the Zed extension including LSP scaffolding, tree-sitter queries, and DAP support. |
-
-## Standalone
-
-| File | Description |
-|---|---|
-| [CHECKER-PEP-CONFORMANCE.md](CHECKER-PEP-CONFORMANCE.md) | Tracks Basilisk's accuracy against the official python/typing conformance test suite. Target: 100%. |

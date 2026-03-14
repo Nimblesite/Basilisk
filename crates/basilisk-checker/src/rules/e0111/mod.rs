@@ -864,3 +864,65 @@ fn collect_dataclass_fields<'a>(
         }
     }
 }
+
+/// Check generic `NamedTuple` constructor arg types with type substitutions.
+///
+/// For `Property[str]("", 3.1)` where `Property(NamedTuple, Generic[T])` has
+/// field `value: T`, substitutes `T=str` and checks that `3.1` is not `str`.
+#[expect(clippy::too_many_arguments, reason = "constructor check requires full context")]
+fn check_generic_nt_arg_types(
+    call: &ruff_python_ast::ExprCall,
+    class_name: &str,
+    class_info: &basilisk_resolver::ClassInfo,
+    class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
+    substitutions: &HashMap<&str, &str>,
+    source: &str,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    use ruff_text_size::Ranged as _;
+
+    if !is_namedtuple_class(class_info, class_map) || substitutions.is_empty() {
+        return;
+    }
+
+    let fields: Vec<&basilisk_resolver::AttributeInfo> = class_info
+        .attributes
+        .iter()
+        .filter(|a| a.has_annotation)
+        .collect();
+
+    for (idx, arg) in call.arguments.args.iter().enumerate() {
+        let Some(field) = fields.get(idx) else {
+            break;
+        };
+        let ann = field
+            .annotation_span
+            .and_then(|sp| crate::span_util::slice_span(source, sp));
+        let Some(ann) = ann else {
+            continue;
+        };
+        let ann = ann.trim();
+        // Apply type substitutions (e.g. T → str).
+        let resolved_ann = substitutions.get(ann).unwrap_or(&ann);
+        let arg_type = infer_literal_type(arg);
+        let Some(arg_type_name) = arg_type else {
+            continue;
+        };
+        if !is_type_compatible(&arg_type_name, resolved_ann) {
+            diagnostics.push(Diagnostic {
+                code: CODE.clone(),
+                severity: Severity::Error,
+                message: format!(
+                    "Argument {idx} to `{class_name}[...]()` has type `{arg_type_name}`, \
+                     expected `{resolved_ann}` for field `{}`",
+                    field.name
+                ),
+                span: crate::span_util::text_range_to_span(arg.range()),
+                path: path.to_owned(),
+                help: None,
+                note: None,
+            });
+        }
+    }
+}

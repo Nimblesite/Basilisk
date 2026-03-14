@@ -384,9 +384,12 @@ fn build_alias_info_map(
 
         // Count unique TypeVar references in the RHS
         let typevar_count = count_typevar_refs(rhs, &typevar_names);
-
         let is_union = has_top_level_token(rhs, " | ");
-        let _ = map.insert(var.name.clone(), AliasInfo { typevar_count, is_union });
+        let has_paramspec = has_paramspec_ref(rhs, &module.typevar_calls);
+        let _ = map.insert(
+            var.name.clone(),
+            AliasInfo { typevar_count, is_union, has_paramspec },
+        );
     }
 
     // Also handle implicit aliases (no TypeAlias annotation):
@@ -418,7 +421,11 @@ fn build_alias_info_map(
         {
             let typevar_count = count_typevar_refs(rhs, &typevar_names);
             let is_union = has_top_level_token(rhs, " | ");
-        let _ = map.insert(var.name.clone(), AliasInfo { typevar_count, is_union });
+            let has_paramspec = has_paramspec_ref(rhs, &module.typevar_calls);
+            let _ = map.insert(
+                var.name.clone(),
+                AliasInfo { typevar_count, is_union, has_paramspec },
+            );
         }
     }
 
@@ -444,6 +451,33 @@ fn count_typevar_refs(rhs: &str, typevar_names: &std::collections::HashSet<&str>
         let _ = seen.insert(current);
     }
     seen.len()
+}
+
+/// Returns `true` if the RHS text references any `ParamSpec` name.
+fn has_paramspec_ref(
+    rhs: &str,
+    typevar_calls: &[basilisk_resolver::TypeVarCallInfo],
+) -> bool {
+    let paramspec_names: std::collections::HashSet<&str> = typevar_calls
+        .iter()
+        .filter(|tv| tv.is_paramspec)
+        .map(|tv| tv.name.as_str())
+        .collect();
+    if paramspec_names.is_empty() {
+        return false;
+    }
+    let mut current = String::new();
+    for ch in rhs.chars() {
+        if ch.is_alphanumeric() || ch == '_' {
+            current.push(ch);
+        } else {
+            if !current.is_empty() && paramspec_names.contains(current.as_str()) {
+                return true;
+            }
+            current.clear();
+        }
+    }
+    !current.is_empty() && paramspec_names.contains(current.as_str())
 }
 
 /// Returns `true` if the text looks like a type expression (for implicit alias detection).
