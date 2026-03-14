@@ -26,8 +26,23 @@ const REQUIRES_PARAMETERISATION: &[&str] = &["Optional"];
 
 /// Builtin type constructors — calling these creates an instance, not a type form.
 const BUILTIN_TYPE_CONSTRUCTORS: &[&str] = &[
-    "tuple", "list", "dict", "set", "frozenset", "int", "str", "float", "bool", "bytes",
-    "complex", "bytearray", "memoryview", "object", "range", "slice", "type",
+    "tuple",
+    "list",
+    "dict",
+    "set",
+    "frozenset",
+    "int",
+    "str",
+    "float",
+    "bool",
+    "bytes",
+    "complex",
+    "bytearray",
+    "memoryview",
+    "object",
+    "range",
+    "slice",
+    "type",
 ];
 
 /// Check whether a RHS expression is a valid type form assignable to `inner`.
@@ -107,8 +122,7 @@ fn is_valid_call_typeform(
                 // (`type[T]` is a subtype of `TypeForm[T]`)
                 let ret_text_trimmed = ret_text.trim().to_ascii_lowercase();
                 if ret_text_trimmed.starts_with("type[") && ret_text_trimmed.ends_with(']') {
-                    let type_inner =
-                        &ret_text_trimmed["type[".len()..ret_text_trimmed.len() - 1];
+                    let type_inner = &ret_text_trimmed["type[".len()..ret_text_trimmed.len() - 1];
                     let type_inner_type = InferredType::from_annotation(type_inner);
                     return type_inner_type.is_assignable_to(inner);
                 }
@@ -336,9 +350,7 @@ fn check_typeform_param_args(
         let arg_text = arg_text.trim();
 
         let is_invalid = match rhs_kind {
-            basilisk_resolver::RhsKind::StrLiteral => {
-                !is_valid_string_typeform(arg_text, inner)
-            }
+            basilisk_resolver::RhsKind::StrLiteral => !is_valid_string_typeform(arg_text, inner),
             basilisk_resolver::RhsKind::IntLiteral
             | basilisk_resolver::RhsKind::FloatLiteral
             | basilisk_resolver::RhsKind::BoolLiteral

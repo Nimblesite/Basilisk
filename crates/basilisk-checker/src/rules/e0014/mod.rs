@@ -76,7 +76,7 @@ fn collect_typeddict_names(module: &ResolvedModule) -> std::collections::HashSet
                 )
             })
         })
-        .map(|c| c.name.clone())
+        .map(|c| c.name.to_ascii_lowercase())
         .collect();
 
     names

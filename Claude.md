@@ -46,14 +46,19 @@ OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK MESSAGES AND COMPLY
 - Ignore compiler code (except clippy fixes)
 - Do not use Git unless asked
 - There is NO SUCH THING AS LEGACY CODE in this codebase. Legacy = DELETED
+- Regex = ⛔️ ILLEGAL. Use the proper parsing mechanism - usually ruff
+- Keep files under 500 LOC. Break up larger files.
+- Copying files is illegal. MOVE them instead.
+
+## Testing
+
+Testing is absolutely critical. We aim for 100% test coverage and a high mutation score at all times. Focus on assertions; not just coverage
+
 - NEVER DELETE FAILING TESTS
 - NEVER REMOVE ASSERTIONS THAT CAUSE TEST FAILURES
-- Regex = ⛔️ ILLEGAL. Use the proper parsing mechanism - usually ruff
 - ADD more failing tests for broken/missing functionality — NEVER remove them
-- Keep files under 500 LOC. Break up larger files.
 - REDUCING TEST ASSERTIVENESS = DATA CENTER DISMANTLED
 - Ignoring tests = ILLEGAL
-- Copying files is illegal. MOVE them instead.
 
 ## Core Principles
 

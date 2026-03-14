@@ -188,36 +188,37 @@ uv integration is additive to cross-module analysis — it accelerates Phases 1 
 - [ ] Per-root config — each workspace folder gets its own config resolution
 - [ ] Merged index for multi-root — single `WorkspaceIndex` spans all roots, imports cross root boundaries
 
-### Phase 3.5: PEP Conformance Push — TARGET 85% (currently 82.2%, 120/146)
+### Phase 3.5: PEP Conformance Push — TARGET 85% (currently 82.9%, 121/146)
 
 > **BLOCKING.** Conformance regression must be fixed before Phase 4.
 > These are single-file type system improvements, not cross-module features.
+> FPs reduced from 435 → 274.
 
 #### Tier 1 — Medium complexity, high impact (flip 1-2 files each)
 
-| Task | Files it flips | Missed | FP | Rule(s) | Status |
-|------|---------------|--------|-----|---------|--------|
-| NamedTuple constructor arg count + type validation | namedtuples_define_class.py | 5 | 1 | E0111 | IN PROGRESS — arg count done, type checking TODO |
-| TypedDict `extra_items` kwarg handling in resolver | typeddicts_extra_items.py | 18 | 19 | E0093, E0014 | TODO |
-| Class inheritance in constrained TypeVar resolution | generics_basic.py | 2 | 0 | E0148 | TODO |
-| Protocol structural subtyping — attrs satisfy properties | protocols_definition.py | 17 | 13 | E0121 | TODO |
+| Task | Files it flips | Missed | FP | Rule(s) | Status | Owner |
+|------|---------------|--------|-----|---------|--------|-------|
+| NamedTuple constructor arg count + type validation | namedtuples_define_class.py | 5 | 1 | E0111 | DONE — arg count + type checking | bottomfeeder |
+| TypedDict `extra_items` kwarg handling in resolver | typeddicts_extra_items.py | 18 | 19 | E0093, E0014 | DONE — extra_items skip in resolver | bottomfeeder |
+| Class inheritance in constrained TypeVar resolution | generics_basic.py | 2 | 0 | E0148 | DONE — ClassInfo.bases walk | bottomfeeder |
+| Protocol structural subtyping — attrs satisfy properties | protocols_definition.py | 17 | 13 | E0121 | IN PROGRESS | Reviewer |
 
 #### Tier 2 — High complexity, high impact (flip 1-6 files each)
 
 | Task | Files it flips | Rule(s) | Status |
 |------|---------------|---------|--------|
-| TypeVarTuple semantics (unpack, concat, specialization) | 6-8 generics files | E0092, E0130, E0139 | TODO |
-| ParamSpec semantics (components, specialization) | 2-3 generics files | NEW | TODO |
-| Variance tracking (covariant/contravariant) in type assignability | protocols_generic.py, others | E0014 | TODO |
-| Dead branch elimination (`sys.version_info`, `sys.platform`) | directives_version_platform.py | E0018 / NEW | TODO |
+| TypeVarTuple semantics (unpack, concat, specialization) | 6-8 generics files | E0092, E0130, E0139 | TODO | UNASSIGNED |
+| ParamSpec semantics (components, specialization) | 2-3 generics files | NEW | TODO | UNASSIGNED |
+| Variance tracking (covariant/contravariant) in type assignability | protocols_generic.py, others | E0014 | TODO | UNASSIGNED |
+| Dead branch elimination (`sys.version_info`, `sys.platform`) | directives_version_platform.py | E0018 / NEW | TODO | UNASSIGNED |
 
 #### Tier 3 — Medium complexity, lower impact
 
 | Task | Files it flips | Status |
 |------|---------------|--------|
-| TypeVar defaults in generic constructors | generics_defaults_referential.py | TODO |
-| `type` statement aliases (PEP 695) | aliases_type_statement.py | TODO |
-| `TypeAliasType` call-based aliases | aliases_typealiastype.py | TODO |
+| TypeVar defaults in generic constructors | generics_defaults_referential.py | TODO | UNASSIGNED |
+| `type` statement aliases (PEP 695) | aliases_type_statement.py | IN PROGRESS | TypeVars |
+| `TypeAliasType` call-based aliases | aliases_typealiastype.py | IN PROGRESS | TypeVars |
 | Callable `**kwargs` type checking | callables_kwargs.py | TODO |
 | Callable protocol assignability | callables_protocol.py | TODO |
 | Callable as constructor (`__init_subclass__`) | constructors_callable.py | TODO |

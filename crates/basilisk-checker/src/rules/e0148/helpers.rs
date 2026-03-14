@@ -145,11 +145,7 @@ impl ModuleContext {
         for stmt in stmts {
             if let Stmt::ClassDef(cls) = stmt {
                 if let Some(args) = &cls.arguments {
-                    let bases: Vec<String> = args
-                        .args
-                        .iter()
-                        .map(|arg| ann_str(arg))
-                        .collect();
+                    let bases: Vec<String> = args.args.iter().map(ann_str).collect();
                     if !bases.is_empty() {
                         let _ = class_bases.insert(cls.name.to_string(), bases);
                     }
