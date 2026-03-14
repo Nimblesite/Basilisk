@@ -161,8 +161,8 @@ fn check_class(
                     let line_offset = find_line_offset(func_source, line);
                     let absolute_offset = func_offset + line_offset;
                     let span = Span {
-                        start: absolute_offset as u32,
-                        end: (absolute_offset + line.len()) as u32,
+                        start: u32::try_from(absolute_offset).unwrap_or(0),
+                        end: u32::try_from(absolute_offset + line.len()).unwrap_or(0),
                     };
 
                     out.push(Diagnostic {
@@ -208,8 +208,8 @@ fn parse_self_attr_assignment(line: &str) -> Option<SelfAttrAssignment<'_>> {
         return None;
     }
 
-    let attr_name = line[..eq_idx].trim();
-    let rhs = line[eq_idx + 1..].trim();
+    let attr_name = line.get(..eq_idx)?.trim();
+    let rhs = line.get(eq_idx + 1..)?.trim();
 
     // Strip trailing comments.
     let rhs = rhs.split('#').next().map(str::trim)?;
@@ -268,9 +268,10 @@ fn types_compatible(actual: &str, expected: &str) -> bool {
 }
 
 /// Find the byte offset of a line within a larger text.
+///
+/// Uses the fact that `line` is a sub-slice of `text` (produced by
+/// `str::lines()`), so we can compute the offset via pointer addresses
+/// without `as` conversions.
 fn find_line_offset(text: &str, line: &str) -> usize {
-    // Use pointer arithmetic to find the offset.
-    let text_start = text.as_ptr() as usize;
-    let line_start = line.as_ptr() as usize;
-    line_start - text_start
+    line.as_ptr().addr().saturating_sub(text.as_ptr().addr())
 }

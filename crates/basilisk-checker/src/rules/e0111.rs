@@ -520,6 +520,7 @@ fn has_custom_init_in_bases(
 ///
 /// When `__init__` has `self: Self | None`, passing a base-class instance
 /// where `Self` expects the subclass is an error.
+#[expect(clippy::too_many_arguments, reason = "constructor validation requires full context")]
 fn check_self_type_incompatibility(
     call: &ruff_python_ast::ExprCall,
     class_name: &str,
@@ -655,6 +656,7 @@ fn is_subclass(
 }
 
 /// Check arguments to `__init__` after type parameter substitution.
+#[expect(clippy::too_many_arguments, reason = "init method validation requires full context")]
 fn check_init_method_args(
     init_func: &basilisk_resolver::FunctionInfo,
     substitutions: &HashMap<&str, &str>,
@@ -763,6 +765,7 @@ fn check_init_method_args(
 
 /// Check if the `self` parameter annotation in `__init__` is incompatible with
 /// the provided type arguments.
+#[expect(clippy::too_many_arguments, reason = "self parameter validation requires full context")]
 fn check_self_param_init_mismatch(
     self_annotation: &str,
     class_name: &str,

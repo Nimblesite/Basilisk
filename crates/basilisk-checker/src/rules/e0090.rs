@@ -158,9 +158,7 @@ fn check_tuple_syntax(annotation: &str) -> Option<&'static str> {
         return Some("ellipsis (...) must appear at the end of the tuple type");
     }
 
-    let Some(&ellipsis_pos) = ellipsis_positions.first() else {
-        return None;
-    };
+    let &ellipsis_pos = ellipsis_positions.first()?;
 
     // `...` must be the very last component.
     if ellipsis_pos != components.len() - 1 {

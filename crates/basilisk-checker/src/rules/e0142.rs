@@ -265,31 +265,27 @@ fn resolve_inherited_settings<'a>(
 }
 
 /// Return the byte offset of the start of a 1-based line.
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "byte offsets fit u32 for source files"
-)]
-fn line_start_offset(source: &str, line: usize) -> u32 {
+fn line_start_offset(source: &str, line: usize) -> Option<u32> {
     let mut current = 1usize;
     for (idx, ch) in source.char_indices() {
         if current == line {
-            return idx as u32;
+            return u32::try_from(idx).ok();
         }
         if ch == '\n' {
             current += 1;
         }
     }
-    source.len() as u32
+    u32::try_from(source.len()).ok()
 }
 
 /// Return a span covering the trimmed content of a source line (1-based).
-#[expect(
-    clippy::as_conversions,
-    clippy::cast_possible_truncation,
-    reason = "u32<->usize safe on 32-bit+"
-)]
 fn span_for_source_line(source: &str, line: usize) -> Span {
-    let start = line_start_offset(source, line) as usize;
+    let Some(start_u32) = line_start_offset(source, line) else {
+        return Span { start: 0, end: 0 };
+    };
+    let Ok(start) = usize::try_from(start_u32) else {
+        return Span { start: 0, end: 0 };
+    };
     let line_text = source
         .get(start..)
         .and_then(|s| s.lines().next())
@@ -297,8 +293,8 @@ fn span_for_source_line(source: &str, line: usize) -> Span {
     let trim_leading = line_text.len() - line_text.trim_start().len();
     let trimmed = line_text.trim();
     Span {
-        start: (start + trim_leading) as u32,
-        end: (start + trim_leading + trimmed.len()) as u32,
+        start: u32::try_from(start + trim_leading).unwrap_or(start_u32),
+        end: u32::try_from(start + trim_leading + trimmed.len()).unwrap_or(start_u32),
     }
 }
 

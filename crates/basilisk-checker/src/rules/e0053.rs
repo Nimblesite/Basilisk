@@ -17,7 +17,6 @@ use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
 use super::Rule;
 
-#[expect(dead_code)]
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0053",
     docs_url: "https://www.basilisk-python.dev/errors/BSK-E0053",

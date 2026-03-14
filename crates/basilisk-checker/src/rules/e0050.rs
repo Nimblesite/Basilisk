@@ -119,10 +119,10 @@ fn has_top_level_union(s: &str) -> bool {
     let bytes = s.as_bytes();
     let mut i = 0;
     while i < bytes.len() {
-        match bytes[i] {
-            b'[' | b'(' | b'{' => depth += 1,
-            b']' | b')' | b'}' => depth -= 1,
-            b'|' if depth == 0 => return true,
+        match bytes.get(i).copied() {
+            Some(b'[' | b'(' | b'{') => depth += 1,
+            Some(b']' | b')' | b'}') => depth -= 1,
+            Some(b'|') if depth == 0 => return true,
             _ => {}
         }
         i += 1;

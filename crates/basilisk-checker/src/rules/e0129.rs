@@ -74,7 +74,9 @@ impl Rule for LiteralValueIncompatible {
             let Some(colon_offset) = func_source.find(':') else {
                 continue;
             };
-            let body_text = &func_source[colon_offset + 1..];
+            let Some(body_text) = func_source.get(colon_offset + 1..) else {
+                continue;
+            };
             let body_byte_start = body_start + colon_offset + 1;
 
             // Determine function body indentation from first non-empty line.
@@ -135,21 +137,29 @@ fn check_annotated_assignment(
     let Some(colon_pos) = trimmed.find(':') else {
         return;
     };
-    let var_name = trimmed[..colon_pos].trim();
+    let Some(var_name) = trimmed.get(..colon_pos).map(str::trim) else {
+        return;
+    };
     if !is_simple_identifier(var_name) {
         return;
     }
 
-    let after_colon = &trimmed[colon_pos + 1..];
+    let Some(after_colon) = trimmed.get(colon_pos + 1..) else {
+        return;
+    };
     let Some(eq_pos) = find_top_level_eq(after_colon) else {
         return;
     };
 
-    let annotation = after_colon[..eq_pos].trim();
-    let rhs = after_colon[eq_pos + 1..].trim();
+    let Some(annotation) = after_colon.get(..eq_pos).map(str::trim) else {
+        return;
+    };
+    let Some(rhs) = after_colon.get(eq_pos + 1..).map(str::trim) else {
+        return;
+    };
 
     // Strip trailing comments from rhs.
-    let rhs = rhs.split('#').next().unwrap_or(rhs).trim();
+    let rhs = rhs.split_once('#').map_or(rhs, |(before, _)| before).trim();
 
     // Both annotation and the param must be Literal types.
     if !contains_literal_subscript(annotation) {
@@ -178,6 +188,12 @@ fn check_annotated_assignment(
     // that int 0 ≠ bool False, int 1 ≠ bool True).
     if !literal_values_assignable(&source_values, &target_values) {
         let var_byte_start = find_var_in_line(trimmed, var_name, line_byte_offset);
+        let Some(span_start) = u32::try_from(var_byte_start).ok() else {
+            return;
+        };
+        let Some(span_end) = u32::try_from(var_byte_start + var_name.len()).ok() else {
+            return;
+        };
 
         diagnostics.push(Diagnostic {
             code: CODE.clone(),
@@ -187,8 +203,8 @@ fn check_annotated_assignment(
                  parameter `{rhs}` with type `{param_ann}`"
             ),
             span: basilisk_resolver::Span {
-                start: var_byte_start as u32,
-                end: (var_byte_start + var_name.len()) as u32,
+                start: span_start,
+                end: span_end,
             },
             path: path.to_owned(),
             help: Some("`Literal[0]` and `Literal[False]` are not equivalent (PEP 586)".to_owned()),
@@ -240,6 +256,12 @@ fn check_augmented_assignment(
     };
 
     let var_byte_start = find_var_in_line(trimmed, target_name, line_byte_offset);
+    let Some(span_start) = u32::try_from(var_byte_start).ok() else {
+        return;
+    };
+    let Some(span_end) = u32::try_from(var_byte_start + target_name.len()).ok() else {
+        return;
+    };
 
     diagnostics.push(Diagnostic {
         code: CODE.clone(),
@@ -249,8 +271,8 @@ fn check_augmented_assignment(
              declared type `{param_ann}`"
         ),
         span: basilisk_resolver::Span {
-            start: var_byte_start as u32,
-            end: (var_byte_start + target_name.len()) as u32,
+            start: span_start,
+            end: span_end,
         },
         path: path.to_owned(),
         help: Some(format!(
@@ -302,15 +324,15 @@ fn extract_literal_inner(ann: &str) -> Option<&str> {
     let bytes = ann.as_bytes();
     let mut idx = start_bracket;
     while idx < bytes.len() {
-        match bytes[idx] {
-            b'[' => depth += 1,
-            b']' => {
+        match bytes.get(idx) {
+            Some(b'[') => depth += 1,
+            Some(b']') => {
                 depth -= 1;
                 if depth == 0 {
-                    return Some(&ann[start_bracket..idx]);
+                    return ann.get(start_bracket..idx);
                 }
             }
-            _ => {}
+            Some(_) | None => {}
         }
         idx += 1;
     }
@@ -443,7 +465,7 @@ impl<'a> Iterator for LineIter<'a> {
         if self.remaining.is_empty() {
             return None;
         }
-        let newline_pos = self.remaining.find('\n').unwrap_or(self.remaining.len());
+        let newline_pos = self.remaining.find('\n').map_or(self.remaining.len(), |p| p);
         let line = &self.remaining[..newline_pos];
         let info = LineInfo {
             text: line,

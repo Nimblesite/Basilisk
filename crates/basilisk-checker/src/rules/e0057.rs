@@ -92,10 +92,10 @@ fn has_top_level_token(s: &str, token: &str) -> bool {
     let tok_len = tok.len();
     let mut i = 0;
     while i < bytes.len() {
-        match bytes[i] {
-            b'[' | b'(' | b'{' => depth += 1,
-            b']' | b')' | b'}' => depth -= 1,
-            _ if depth == 0 => {
+        match bytes.get(i).copied() {
+            Some(b'[' | b'(' | b'{') => depth += 1,
+            Some(b']' | b')' | b'}') => depth -= 1,
+            Some(_) if depth == 0 => {
                 if bytes.get(i..i + tok_len) == Some(tok) {
                     return true;
                 }

@@ -27,7 +27,9 @@ impl Rule for InvalidCastCall {
             let arg_count = call.args.len();
             if arg_count == 2 {
                 // Exactly 2 args: check that first arg is not a plain value literal.
-                let (first_kind, first_span) = &call.args[0];
+                let Some((first_kind, first_span)) = call.args.first() else {
+                    continue;
+                };
                 if matches!(
                     first_kind,
                     RhsKind::IntLiteral

@@ -412,7 +412,7 @@ fn parse_tuple_annotation(ann: &str) -> Option<TupleAnnotation> {
 
     // Homogeneous unbounded: `tuple[T, ...]`
     if components.len() == 2 && components.get(1).copied() == Some("...") {
-        let element_type = components.first()?.to_owned();
+        let element_type = (*components.first()?).to_string();
         return Some(TupleAnnotation::Homogeneous { element_type });
     }
 
@@ -455,7 +455,7 @@ fn parse_tuple_annotation(ann: &str) -> Option<TupleAnnotation> {
 
     if unpack_parts.len() == 2 && unpack_parts.get(1).copied() == Some("...") {
         // `*tuple[T, ...]` — unbounded middle.
-        let middle_type = Some(unpack_parts.first()?.to_owned());
+        let middle_type = Some((*unpack_parts.first()?).to_string());
         Some(TupleAnnotation::Mixed {
             fixed_prefix,
             fixed_suffix,

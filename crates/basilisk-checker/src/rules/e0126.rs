@@ -199,7 +199,13 @@ fn parse_single_annotated_assign<'a>(
     }
 
     // Calculate source offset for the name.
-    let line_offset_in_body = raw_line.as_ptr() as usize - body.as_ptr() as usize;
+    // SAFETY: both pointers come from substrings of the same source,
+    // so the difference is always non-negative and fits in usize.
+    let line_offset_in_body = raw_line
+        .as_ptr()
+        .addr()
+        .checked_sub(body.as_ptr().addr())
+        .unwrap_or(0);
     let name_start_in_line = raw_line.len() - raw_line.trim_start().len();
     let name_offset = body_offset + line_offset_in_body + name_start_in_line;
 
@@ -231,7 +237,8 @@ fn find_top_level_eq(source: &str) -> Option<usize> {
     let bytes = source.as_bytes();
     let mut idx = 0;
     while idx < bytes.len() {
-        match bytes[idx] {
+        let Some(&byte) = bytes.get(idx) else { break };
+        match byte {
             b'[' | b'(' | b'{' => depth += 1,
             b']' | b')' | b'}' => depth -= 1,
             b'=' if depth == 0 => {
@@ -241,7 +248,11 @@ fn find_top_level_eq(source: &str) -> Option<usize> {
                     continue;
                 }
                 // Skip `!=`, `<=`, `>=` — the `=` is part of a comparison
-                if idx > 0 && matches!(bytes[idx - 1], b'!' | b'<' | b'>') {
+                if idx > 0
+                    && bytes
+                        .get(idx - 1)
+                        .is_some_and(|&b| matches!(b, b'!' | b'<' | b'>'))
+                {
                     idx += 1;
                     continue;
                 }

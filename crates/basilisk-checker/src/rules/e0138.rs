@@ -78,6 +78,7 @@ struct TransformDesc {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
+#[expect(clippy::struct_excessive_bools, reason = "mirrors dataclass_transform keyword flags")]
 struct TransformClassDesc {
     name: String,
     /// `frozen=True/False` from the class keyword args (overrides `frozen_default`).
@@ -166,6 +167,7 @@ impl MetaTransformCtx {
     // Frozen inheritance
     // -----------------------------------------------------------------------
 
+    #[expect(clippy::unused_self, reason = "method on MetaTransformCtx for consistency")]
     fn check_frozen_inheritance(
         &self,
         stmts: &[Stmt],
@@ -231,6 +233,7 @@ impl MetaTransformCtx {
     // Frozen attribute assignment
     // -----------------------------------------------------------------------
 
+    #[expect(clippy::unused_self, reason = "method on MetaTransformCtx for consistency")]
     fn check_frozen_assign(
         &self,
         stmts: &[Stmt],

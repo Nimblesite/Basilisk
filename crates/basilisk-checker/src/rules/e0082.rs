@@ -84,6 +84,7 @@ impl Rule for TypeVarTupleCallableMismatch {
 }
 
 /// Walk statements to find constructor calls with TypeVarTuple-linked parameters.
+#[expect(clippy::too_many_lines, reason = "TypeVarTuple mismatch detection requires extensive AST traversal")]
 fn check_stmt_for_tvt_mismatch(
     stmt: &ruff_python_ast::Stmt,
     source: &str,

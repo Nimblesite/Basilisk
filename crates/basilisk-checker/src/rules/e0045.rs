@@ -225,10 +225,10 @@ fn has_top_level_if(s: &str) -> bool {
     let bytes = s.as_bytes();
     let mut i = 0;
     while i < bytes.len() {
-        match bytes[i] {
-            b'[' | b'(' | b'{' => depth += 1,
-            b']' | b')' | b'}' => depth -= 1,
-            b'i' if depth == 0 => {
+        match bytes.get(i).copied() {
+            Some(b'[' | b'(' | b'{') => depth += 1,
+            Some(b']' | b')' | b'}') => depth -= 1,
+            Some(b'i') if depth == 0 => {
                 // Check for ` if ` at this position
                 if bytes.get(i..i + 4) == Some(b" if ")
                     || (i > 0 && bytes.get(i - 1..i + 3) == Some(b" if"))
@@ -250,7 +250,7 @@ fn has_top_level_if(s: &str) -> bool {
             Some(']' | ')' | '}') => depth2 -= 1,
             Some(_) if depth2 == 0 => {
                 // Look for " if " starting at j
-                let rest: String = chars[j..].iter().collect();
+                let rest: String = chars.get(j..).unwrap_or_default().iter().collect();
                 if rest.starts_with(" if ") {
                     return true;
                 }
@@ -272,7 +272,7 @@ fn has_top_level_bool_op(s: &str) -> bool {
             Some('[' | '(' | '{') => depth += 1,
             Some(']' | ')' | '}') => depth -= 1,
             Some(_) if depth == 0 => {
-                let rest: String = chars[i..].iter().collect();
+                let rest: String = chars.get(i..).unwrap_or_default().iter().collect();
                 if rest.starts_with(" or ") || rest.starts_with(" and ") {
                     return true;
                 }

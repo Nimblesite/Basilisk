@@ -196,9 +196,9 @@ fn has_string_literal_in_pipe_union(s: &str) -> bool {
     let mut parts: Vec<&str> = Vec::new();
     let mut i = 0;
     while i < bytes.len() {
-        let ch = bytes[i];
+        let Some(&ch) = bytes.get(i) else { break };
         if in_string {
-            if ch == string_char && (i == 0 || bytes[i - 1] != b'\\') {
+            if ch == string_char && (i == 0 || bytes.get(i.wrapping_sub(1)).copied() != Some(b'\\')) {
                 in_string = false;
             }
         } else {
@@ -238,10 +238,10 @@ fn has_top_level_token(s: &str, token: &str) -> bool {
     let tok_len = tok.len();
     let mut i = 0;
     while i < bytes.len() {
-        match bytes[i] {
-            b'[' | b'(' | b'{' => depth += 1,
-            b']' | b')' | b'}' => depth -= 1,
-            _ if depth == 0 => {
+        match bytes.get(i).copied() {
+            Some(b'[' | b'(' | b'{') => depth += 1,
+            Some(b']' | b')' | b'}') => depth -= 1,
+            Some(_) if depth == 0 => {
                 if bytes.get(i..i + tok_len) == Some(tok) {
                     return true;
                 }
@@ -384,10 +384,13 @@ fn is_paramspec_invalid_annotation(ann: &str, paramspec_names: &HashSet<&str>) -
                     if ann[start..].starts_with(name) {
                         let end = start + name_len;
                         let before_ok = start == 0
-                            || !ann_bytes[start - 1].is_ascii_alphanumeric()
-                                && ann_bytes[start - 1] != b'_';
+                            || ann_bytes.get(start - 1).map_or(true, |&b| {
+                                !b.is_ascii_alphanumeric() && b != b'_'
+                            });
                         let after_ok = end >= ann.len()
-                            || !ann_bytes[end].is_ascii_alphanumeric() && ann_bytes[end] != b'_';
+                            || ann_bytes.get(end).map_or(true, |&b| {
+                                !b.is_ascii_alphanumeric() && b != b'_'
+                            });
                         if before_ok && after_ok {
                             return true;
                         }

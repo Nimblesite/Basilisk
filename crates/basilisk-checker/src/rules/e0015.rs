@@ -181,9 +181,7 @@ fn check_callable_form(inner: &str) -> Option<Violation> {
 
     // List form — check for `[...]` (ellipsis inside brackets is invalid).
     if first.starts_with('[') && first.ends_with(']') {
-        let Some(list_inner) = first.get(1..first.len().saturating_sub(1)) else {
-            return None;
-        };
+        let list_inner = first.get(1..first.len().saturating_sub(1))?;
         let list_inner = list_inner.trim();
         if list_inner == "..." {
             return Some(Violation::CallableEllipsisInBrackets);

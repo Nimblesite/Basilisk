@@ -70,9 +70,9 @@ fn extract_literal_inner(ann: &str) -> Option<&str> {
     let bytes = ann.as_bytes();
     let mut i = start_bracket;
     while i < bytes.len() {
-        match bytes[i] {
-            b'[' => depth += 1,
-            b']' => {
+        match bytes.get(i).copied() {
+            Some(b'[') => depth += 1,
+            Some(b']') => {
                 depth -= 1;
                 if depth == 0 {
                     return Some(&ann[start_bracket..i]);

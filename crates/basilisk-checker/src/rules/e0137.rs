@@ -177,10 +177,6 @@ fn check_protocol_generic_combined(
 /// - The annotation is a subscripted generic protocol (`Proto[A, B]`)
 /// - The RHS is a concrete class constructor call
 /// - The concrete class's methods are incompatible with the substituted type args.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "protocol checking requires full context"
-)]
 fn check_generic_protocol_assignments(
     module: &ResolvedModule,
     source: &str,
@@ -627,10 +623,17 @@ fn substitute_typevars(
         let mut remaining = result.as_str();
 
         while let Some(pos) = remaining.find(tv_name) {
-            let before_ok = pos == 0 || !is_ident_char(remaining.as_bytes()[pos - 1]);
+            let before_ok = pos == 0
+                || remaining
+                    .as_bytes()
+                    .get(pos - 1)
+                    .is_none_or(|&b| !is_ident_char(b));
             let after_pos = pos + tv_name.len();
-            let after_ok =
-                after_pos >= remaining.len() || !is_ident_char(remaining.as_bytes()[after_pos]);
+            let after_ok = after_pos >= remaining.len()
+                || remaining
+                    .as_bytes()
+                    .get(after_pos)
+                    .is_none_or(|&b| !is_ident_char(b));
 
             if before_ok && after_ok {
                 new_result.push_str(&remaining[..pos]);
@@ -703,12 +706,11 @@ const fn is_ident_char(byte: u8) -> bool {
 fn skip_self_param(
     params: &[basilisk_resolver::ParameterInfo],
 ) -> &[basilisk_resolver::ParameterInfo] {
-    if params.is_empty() {
+    let Some(first) = params.first() else {
         return params;
-    }
-    let first = &params[0].name;
-    if first == "self" || first == "cls" {
-        &params[1..]
+    };
+    if first.name == "self" || first.name == "cls" {
+        params.get(1..).unwrap_or(&[])
     } else {
         params
     }
@@ -875,19 +877,15 @@ fn _collect_class_methods<'a>(
 }
 
 /// Compute the byte span of a line in the source for diagnostic anchoring.
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "byte offsets fit u32 for source files"
-)]
 fn _line_span(source: &str, line_number: usize) -> Option<Span> {
     let mut current_line = 1;
     let mut start = 0;
     for (i, ch) in source.char_indices() {
         if current_line == line_number {
-            let end = source[i..].find('\n').map_or(source.len(), |j| i + j);
+            let end = source.get(i..).and_then(|s| s.find('\n')).map_or(source.len(), |j| i + j);
             return Some(Span {
-                start: start as u32,
-                end: end as u32,
+                start: u32::try_from(start).ok()?,
+                end: u32::try_from(end).ok()?,
             });
         }
         if ch == '\n' {

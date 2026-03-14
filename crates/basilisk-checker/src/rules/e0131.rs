@@ -201,30 +201,30 @@ fn find_yield_expressions(body: &str, body_offset: usize) -> Vec<YieldExpr> {
         if pos + 5 <= bytes.len() && body.get(pos..pos + 5) == Some("yield") {
             // Make sure it's a standalone keyword (not part of a larger identifier)
             let before_ok =
-                pos == 0 || bytes.get(pos.wrapping_sub(1)).map_or(true, |&b| !is_identifier_char(b));
+                pos == 0 || bytes.get(pos.wrapping_sub(1)).is_none_or(|&b| !is_identifier_char(b));
             let after_pos = pos + 5;
 
             if before_ok && after_pos <= bytes.len() {
                 // Check for `yield from`
                 let is_yield_from = after_pos + 5 <= bytes.len()
                     && body.get(after_pos..after_pos + 5) == Some(" from")
-                    && bytes.get(after_pos + 5).map_or(true, |&b| !is_identifier_char(b));
+                    && bytes.get(after_pos + 5).is_none_or(|&b| !is_identifier_char(b));
 
                 if is_yield_from {
                     let expr_start = after_pos + 5;
                     let expr_text = extract_yield_expr(body, expr_start);
-                    if let Some(offset) = u32::try_from(body_offset + pos).ok() {
+                    if let Ok(offset) = u32::try_from(body_offset + pos) {
                         results.push(YieldExpr {
                             offset,
                             expr_text,
                             is_yield_from: true,
                         });
                     }
-                } else if bytes.get(after_pos).map_or(false, |&b| {
+                } else if bytes.get(after_pos).is_some_and(|&b| {
                     (b == b' ' || b == b'\n') && !is_identifier_char(b)
                 }) {
                     let expr_text = extract_yield_expr(body, after_pos);
-                    if let Some(offset) = u32::try_from(body_offset + pos).ok() {
+                    if let Ok(offset) = u32::try_from(body_offset + pos) {
                         results.push(YieldExpr {
                             offset,
                             expr_text,

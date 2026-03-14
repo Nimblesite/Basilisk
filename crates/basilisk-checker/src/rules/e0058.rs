@@ -49,9 +49,9 @@ fn is_annotated_single_arg(ann: &str) -> bool {
     let mut i = start;
     let mut end = start;
     while i < bytes.len() {
-        match bytes[i] {
-            b'[' => depth += 1,
-            b']' => {
+        match bytes.get(i).copied() {
+            Some(b'[') => depth += 1,
+            Some(b']') => {
                 depth -= 1;
                 if depth == 0 {
                     end = i;
