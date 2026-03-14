@@ -17,7 +17,8 @@
       "extensions": [
         "rust-lang.rust-analyzer",
         "vadimcn.vscode-lldb",
-        "anthropic.claude-code"
+        "anthropic.claude-code",
+        "nimblesite.commandtree"
       ],
       "settings": {
         "rust-analyzer.check.command": "clippy",

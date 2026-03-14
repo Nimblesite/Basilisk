@@ -25,6 +25,9 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 # Rust components (matches CI: dtolnay/rust-toolchain@stable with components)
 RUN rustup component add rustfmt clippy
 
+# Rust cargo tools (pinned)
+RUN cargo install cargo-llvm-cov --version 0.8.4 --locked
+
 # Python packages (pinned — matches CI: pip install debugpy ruff)
 RUN pip install --break-system-packages debugpy==1.8.14 ruff==0.11.2
 

@@ -10,7 +10,6 @@
 //!
 //! Iterates every `.py` file in `tests/e2e/`, compiles and runs it,
 //! then asserts stdout matches the corresponding `-expectedoutput.txt`.
-#![allow(clippy::panic)]
 
 use std::path::Path;
 

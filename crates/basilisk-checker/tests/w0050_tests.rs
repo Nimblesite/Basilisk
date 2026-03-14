@@ -7,7 +7,6 @@
     clippy::as_conversions
 )]
 //! E2E tests for BSK-W0050: Redundant annotation warning
-#![allow(clippy::unwrap_used)]
 
 use basilisk_checker::check;
 use basilisk_parser::parse_source;
