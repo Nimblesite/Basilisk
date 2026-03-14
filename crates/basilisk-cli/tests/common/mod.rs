@@ -14,9 +14,15 @@ use basilisk_parser::parse_file;
 use basilisk_resolver::resolve;
 
 // Re-export shared helpers from the test-utils crate — used by sibling test modules.
-#[expect(unused_imports, reason = "re-exported for sibling test files via `use common::assert_diagnostics`")]
+#[expect(
+    unused_imports,
+    reason = "re-exported for sibling test files via `use common::assert_diagnostics`"
+)]
 pub use basilisk_test_utils::assert_diagnostics;
-#[expect(unused_imports, reason = "re-exported for sibling test files via `use common::Expected`")]
+#[expect(
+    unused_imports,
+    reason = "re-exported for sibling test files via `use common::Expected`"
+)]
 pub use basilisk_test_utils::Expected;
 
 pub fn fixture(rel: &str) -> String {
