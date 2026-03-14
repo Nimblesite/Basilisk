@@ -46,7 +46,7 @@ use helpers::leading_indent;
 use violations::{
     check_decorator_uses_class_type_param, check_method_redefines_class_type_param,
     check_module_level_type_param_use, check_pep695_bound_cross_references,
-    collect_pep695_type_params,
+    check_type_stmt_in_function, check_type_stmt_uses_old_typevar, collect_pep695_type_params,
 };
 
 const CODE: ErrorCode = ErrorCode {
@@ -65,6 +65,14 @@ impl Rule for Pep695TypeParamScopingViolation {
 
         // Collect all PEP 695 type params defined anywhere in the file.
         let all_pep695_params = collect_pep695_type_params(source);
+
+        // Collect old-style TypeVar names (from TypeVar() calls) for
+        // old/new mixing detection.
+        let old_typevar_names: Vec<&str> = module
+            .typevar_calls
+            .iter()
+            .map(|tv| tv.name.as_str())
+            .collect();
 
         for (line_idx, &line) in lines.iter().enumerate() {
             let line_number = line_idx + 1;
@@ -110,6 +118,23 @@ impl Rule for Pep695TypeParamScopingViolation {
                     path,
                     diagnostics,
                 );
+            }
+
+            // --- Violation 4: `type` statement uses old-style TypeVar ---
+            if trimmed.starts_with("type ") && !old_typevar_names.is_empty() {
+                check_type_stmt_uses_old_typevar(
+                    line,
+                    line_number,
+                    &old_typevar_names,
+                    source,
+                    path,
+                    diagnostics,
+                );
+            }
+
+            // --- Violation 5: `type` statement inside function body ---
+            if trimmed.starts_with("type ") {
+                check_type_stmt_in_function(line, line_number, source, path, diagnostics);
             }
         }
     }

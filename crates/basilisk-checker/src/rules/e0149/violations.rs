@@ -348,6 +348,153 @@ pub(super) fn check_module_level_type_param_use(
 }
 
 // ---------------------------------------------------------------------------
+// Violation 4: PEP 695 `type` statement uses old-style TypeVar
+// ---------------------------------------------------------------------------
+
+/// Check whether a PEP 695 `type` statement's RHS references an old-style
+/// `TypeVar` (defined via `TypeVar()` call, not PEP 695 brackets).
+///
+/// Per PEP 695: "Type aliases defined using the `type` statement must not
+/// reference `TypeVar`, `ParamSpec`, or `TypeVarTuple` objects that are
+/// created outside of the `type` statement's scope."
+pub(super) fn check_type_stmt_uses_old_typevar(
+    line: &str,
+    line_number: usize,
+    old_typevar_names: &[&str],
+    source: &str,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let trimmed = line.trim();
+    if !trimmed.starts_with("type ") {
+        return;
+    }
+
+    // Get the RHS (after `=`)
+    let Some(eq_pos) = trimmed.find('=') else {
+        return;
+    };
+    let rhs = &trimmed[eq_pos + 1..];
+    // Strip comment
+    let rhs = rhs.split_once('#').map_or(rhs, |(code, _)| code).trim();
+
+    // Collect the new-style type param names between `type Name[` and `]`
+    // by looking at the text BEFORE the `=`.
+    let before_eq = &trimmed[..eq_pos];
+    let new_params: Vec<String> = if let Some(bracket_pos) = before_eq.find('[') {
+        // Extract text between `[` and `]` before `=`
+        let after = &before_eq[bracket_pos + 1..];
+        if let Some(close) = after.rfind(']') {
+            after[..close]
+                .split(',')
+                .map(|p| {
+                    p.trim()
+                        .split(':')
+                        .next()
+                        .unwrap_or("")
+                        .trim()
+                        .trim_start_matches('*')
+                        .to_owned()
+                })
+                .filter(|s| !s.is_empty())
+                .collect()
+        } else {
+            Vec::new()
+        }
+    } else {
+        Vec::new()
+    };
+
+    for old_tv_name in old_typevar_names {
+        // Skip if this old-style TypeVar name is also a new-style param
+        // on this same statement
+        if new_params.iter().any(|p| p == old_tv_name) {
+            continue;
+        }
+        if contains_name(rhs, old_tv_name) {
+            diagnostics.push(Diagnostic {
+                code: CODE.clone(),
+                severity: Severity::Error,
+                message: format!(
+                    "PEP 695 `type` statement uses old-style TypeVar `{old_tv_name}`"
+                ),
+                span: span_for_line(source, line_number),
+                path: path.to_owned(),
+                help: Some(format!(
+                    "Use PEP 695 type parameter syntax instead: \
+                     `type Alias[{old_tv_name}] = ...`"
+                )),
+                note: Some(
+                    "PEP 695: type aliases defined with `type` must not reference \
+                     TypeVars created outside the statement's scope"
+                        .to_owned(),
+                ),
+            });
+            // One diagnostic per type statement is enough
+            return;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Violation 5: `type` statement inside function body
+// ---------------------------------------------------------------------------
+
+/// Check whether a `type` statement appears inside a function body.
+///
+/// PEP 695 type aliases defined with `type` are only valid at module or
+/// class scope, not inside functions.
+pub(super) fn check_type_stmt_in_function(
+    line: &str,
+    line_number: usize,
+    source: &str,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let trimmed = line.trim();
+    if !trimmed.starts_with("type ") {
+        return;
+    }
+
+    // If the line has indentation, it might be inside a function.
+    // We need to check if any enclosing scope is a function (not a class).
+    let indent = leading_indent(line);
+    if indent == 0 {
+        return; // Module level — OK
+    }
+
+    // Walk backwards to find the enclosing def/class
+    let lines: Vec<&str> = source.lines().collect();
+    for scan_idx in (0..line_number.saturating_sub(1)).rev() {
+        let scan_line = lines.get(scan_idx).copied().unwrap_or("");
+        let scan_indent = leading_indent(scan_line);
+        let scan_trimmed = scan_line.trim();
+
+        if scan_indent < indent && !scan_trimmed.is_empty() {
+            if scan_trimmed.starts_with("def ") || scan_trimmed.starts_with("async def ") {
+                diagnostics.push(Diagnostic {
+                    code: CODE.clone(),
+                    severity: Severity::Error,
+                    message: "PEP 695 `type` statement is not allowed inside a function body"
+                        .to_owned(),
+                    span: span_for_line(source, line_number),
+                    path: path.to_owned(),
+                    help: Some(
+                        "Move the type alias to module or class scope".to_owned(),
+                    ),
+                    note: Some(
+                        "PEP 695: type aliases defined with `type` are only valid at \
+                         module or class scope"
+                            .to_owned(),
+                    ),
+                });
+            }
+            return;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Violation 3: method re-defines class type param with its own [T]
 // ---------------------------------------------------------------------------
 
