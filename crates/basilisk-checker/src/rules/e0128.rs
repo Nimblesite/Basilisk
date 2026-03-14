@@ -277,125 +277,123 @@ fn check_bound_constraint_compat(
         let Some(ref default_name) = info.default_typevar_name else {
             continue;
         };
-
-        // The default must reference a known TypeVar
         if !typevar_names.contains(default_name.as_str()) {
             continue;
         }
-
         let Some(ref_info) = info_map.get(default_name.as_str()) else {
             continue;
         };
-
         let Some(tv) = span_map.get(info.name.as_str()) else {
             continue;
         };
+        check_one_bound_compat(info, ref_info, default_name, tv.span, path, diagnostics);
+    }
+}
 
-        // Check bound compatibility: ref_info's bound must be subtype of info's bound
-        if let Some(ref info_bound) = info.bound_name {
-            if let Some(ref ref_bound) = ref_info.bound_name {
-                if !is_numeric_subtype(ref_bound, info_bound) {
-                    diagnostics.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
-                            "TypeVar `{}` has default `{}` with bound `{}` which is not a \
-                             subtype of `{}`'s bound `{}`",
-                            info.name, default_name, ref_bound, info.name, info_bound
-                        ),
-                        span: tv.span,
-                        path: path.to_owned(),
-                        help: Some(
-                            "The referenced TypeVar's bound must be a subtype of this TypeVar's \
-                             bound"
-                                .to_owned(),
-                        ),
-                        note: Some(
-                            "PEP 696: T1's bound must be a subtype of T2's bound when T2 \
-                             defaults to T1"
-                                .to_owned(),
-                        ),
-                    });
-                }
+/// Check bound and constraint compatibility for a single TypeVar pair.
+fn check_one_bound_compat(
+    info: &TypeVarInfo,
+    ref_info: &TypeVarInfo,
+    default_name: &str,
+    span: basilisk_resolver::Span,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    if let Some(ref info_bound) = info.bound_name {
+        if let Some(ref ref_bound) = ref_info.bound_name {
+            if !is_numeric_subtype(ref_bound, info_bound) {
+                diagnostics.push(Diagnostic {
+                    code: CODE.clone(),
+                    severity: Severity::Error,
+                    message: format!(
+                        "TypeVar `{}` has default `{}` with bound `{}` which is not a \
+                         subtype of `{}`'s bound `{}`",
+                        info.name, default_name, ref_bound, info.name, info_bound
+                    ),
+                    span,
+                    path: path.to_owned(),
+                    help: Some(
+                        "The referenced TypeVar's bound must be a subtype of this TypeVar's bound"
+                            .to_owned(),
+                    ),
+                    note: Some(
+                        "PEP 696: T1's bound must be a subtype of T2's bound when T2 defaults to T1"
+                            .to_owned(),
+                    ),
+                });
             }
         }
+    }
+    if info.constraint_names.is_empty() {
+        return;
+    }
+    check_constraint_compat(info, ref_info, default_name, span, path, diagnostics);
+}
 
-        // Check constraint compatibility when info has constraints:
-        // info's constraints must be a superset of ref_info's constraints.
-        // Also check: if ref_info has a bound but info has constraints,
-        // the bound must be compatible with the constraints.
-        if !info.constraint_names.is_empty() {
-            if let Some(ref ref_bound) = ref_info.bound_name {
-                // ref has a bound, info has constraints — for TypeVar constraints,
-                // the bound must exactly match one of the constraints (constraints
-                // are an exact set, not a subtype hierarchy)
-                let compatible = info.constraint_names.iter().any(|c| c == ref_bound);
-                if !compatible {
-                    diagnostics.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
-                            "TypeVar `{}` has default `{}` with upper bound `{}` which is \
-                             incompatible with constraints `{}`",
-                            info.name,
-                            default_name,
-                            ref_bound,
-                            info.constraint_names.join(", ")
-                        ),
-                        span: tv.span,
-                        path: path.to_owned(),
-                        help: Some(
-                            "The referenced TypeVar's bound must be compatible with this \
-                             TypeVar's constraints"
-                                .to_owned(),
-                        ),
-                        note: Some(
-                            "PEP 696: the upper bound of the default TypeVar must be compatible \
-                             with the constrained TypeVar's constraint types"
-                                .to_owned(),
-                        ),
-                    });
-                }
-            }
-
-            if !ref_info.constraint_names.is_empty() {
-                // Both have constraints — info's must be a superset
-                let info_set: HashSet<&str> =
-                    info.constraint_names.iter().map(String::as_str).collect();
-                let ref_set: HashSet<&str> = ref_info
-                    .constraint_names
-                    .iter()
-                    .map(String::as_str)
-                    .collect();
-
-                if !ref_set.is_subset(&info_set) {
-                    diagnostics.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
-                            "TypeVar `{}`'s constraints `{{{}}}` are not a superset of \
-                             default TypeVar `{}`'s constraints `{{{}}}`",
-                            info.name,
-                            info.constraint_names.join(", "),
-                            default_name,
-                            ref_info.constraint_names.join(", ")
-                        ),
-                        span: tv.span,
-                        path: path.to_owned(),
-                        help: Some(
-                            "The constrained TypeVar's constraints must include all of the \
-                             default TypeVar's constraints"
-                                .to_owned(),
-                        ),
-                        note: Some(
-                            "PEP 696: the constraints of T2 must be a superset of the \
-                             constraints of T1 when T2 defaults to T1"
-                                .to_owned(),
-                        ),
-                    });
-                }
-            }
+/// Check constraint-specific compatibility (called when `info` has constraints).
+fn check_constraint_compat(
+    info: &TypeVarInfo,
+    ref_info: &TypeVarInfo,
+    default_name: &str,
+    span: basilisk_resolver::Span,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    if let Some(ref ref_bound) = ref_info.bound_name {
+        let compatible = info.constraint_names.iter().any(|c| c == ref_bound);
+        if !compatible {
+            diagnostics.push(Diagnostic {
+                code: CODE.clone(),
+                severity: Severity::Error,
+                message: format!(
+                    "TypeVar `{}` has default `{}` with upper bound `{}` which is \
+                     incompatible with constraints `{}`",
+                    info.name,
+                    default_name,
+                    ref_bound,
+                    info.constraint_names.join(", ")
+                ),
+                span,
+                path: path.to_owned(),
+                help: Some(
+                    "The referenced TypeVar's bound must be compatible with this TypeVar's constraints"
+                        .to_owned(),
+                ),
+                note: Some(
+                    "PEP 696: the upper bound of the default TypeVar must be compatible with the constrained TypeVar's constraint types"
+                        .to_owned(),
+                ),
+            });
         }
+    }
+    if ref_info.constraint_names.is_empty() {
+        return;
+    }
+    let info_set: HashSet<&str> = info.constraint_names.iter().map(String::as_str).collect();
+    let ref_set: HashSet<&str> = ref_info.constraint_names.iter().map(String::as_str).collect();
+    if !ref_set.is_subset(&info_set) {
+        diagnostics.push(Diagnostic {
+            code: CODE.clone(),
+            severity: Severity::Error,
+            message: format!(
+                "TypeVar `{}`'s constraints `{{{}}}` are not a superset of \
+                 default TypeVar `{}`'s constraints `{{{}}}`",
+                info.name,
+                info.constraint_names.join(", "),
+                default_name,
+                ref_info.constraint_names.join(", ")
+            ),
+            span,
+            path: path.to_owned(),
+            help: Some(
+                "The constrained TypeVar's constraints must include all of the default TypeVar's constraints"
+                    .to_owned(),
+            ),
+            note: Some(
+                "PEP 696: the constraints of T2 must be a superset of the constraints of T1 when T2 defaults to T1"
+                    .to_owned(),
+            ),
+        });
     }
 }
 
@@ -409,14 +407,8 @@ fn check_subscripted_class_calls(
     info_map: &HashMap<&str, &TypeVarInfo>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    // Build class info map: name -> (generic_params, init_params)
-    let class_map: HashMap<&str, &basilisk_resolver::ClassInfo> = module
-        .classes
-        .iter()
-        .map(|c| (c.name.as_str(), c))
-        .collect();
-
-    // Build method info: class_name -> init function info
+    let class_map: HashMap<&str, &basilisk_resolver::ClassInfo> =
+        module.classes.iter().map(|c| (c.name.as_str(), c)).collect();
     let init_map: HashMap<&str, &basilisk_resolver::FunctionInfo> = module
         .functions
         .iter()
@@ -424,125 +416,102 @@ fn check_subscripted_class_calls(
         .filter_map(|f| f.class_name.as_deref().map(|cn| (cn, f)))
         .collect();
 
-    // Scan source for `ClassName[args](call_args)` patterns
     for (line_idx, line) in module.source.lines().enumerate() {
         let trimmed = line.trim();
-
-        // Skip comments and empty lines
         if trimmed.starts_with('#') || trimmed.is_empty() {
             continue;
         }
-
-        // Look for patterns: Name[type_args](call_args)
         for (class_name, class_info) in &class_map {
-            if class_info.generic_params.is_empty() {
-                continue;
-            }
+            check_subscripted_class_on_line(
+                module, info_map, diagnostics, &init_map, line_idx, line, trimmed,
+                class_name, class_info,
+            );
+        }
+    }
+}
 
-            let pattern = format!("{class_name}[");
-            let Some(start) = trimmed.find(&pattern) else {
-                continue;
-            };
-
-            let after_name = &trimmed[start + pattern.len()..];
-            let Some(bracket_end) = find_matching_bracket(after_name, '[', ']') else {
-                continue;
-            };
-
-            let type_args_str = &after_name[..bracket_end];
-            let after_bracket = &after_name[bracket_end + 1..];
-
-            // Must be followed by (
-            if !after_bracket.starts_with('(') {
-                continue;
-            }
-
-            let call_args_str = &after_bracket[1..];
-            let Some(paren_end) = find_matching_bracket(call_args_str, '(', ')') else {
-                continue;
-            };
-            let call_args_str = &call_args_str[..paren_end];
-
-            // Parse type args
-            let type_args_owned: Vec<String> = split_top_level_args(type_args_str)
-                .iter()
-                .map(|s| s.trim().to_owned())
-                .collect();
-            let type_args: Vec<&str> = type_args_owned.iter().map(String::as_str).collect();
-
-            // Resolve generic params from type args + defaults
-            let resolved_types =
-                resolve_generic_params(&class_info.generic_params, &type_args, info_map);
-
-            // Get __init__ params (skip self)
-            let Some(init_fn) = init_map.get(class_name) else {
-                continue;
-            };
-            let init_params: Vec<_> = init_fn
-                .parameters
-                .iter()
-                .filter(|p| p.name != "self")
-                .collect();
-
-            // Parse call args and check against resolved types
-            let call_args = split_top_level_args(call_args_str);
-            for (arg_idx, call_arg) in call_args.iter().enumerate() {
-                let call_arg = call_arg.trim();
-                let Some(param) = init_params.get(arg_idx) else {
-                    break;
-                };
-
-                // Get the param's annotation text
-                let Some(ann_span) = param.annotation_span else {
-                    continue;
-                };
-                let Some(ann_text) = slice_span(&module.source, ann_span) else {
-                    continue;
-                };
-
-                // Resolve the annotation through the generic mapping
-                let resolved_type = resolved_types
-                    .get(ann_text)
-                    .map_or(ann_text, String::as_str);
-
-                // Check literal arg compatibility
-                if let Some(mismatch) = literal_type_mismatch(call_arg, resolved_type) {
-                    let byte_offset: u32 = u32::try_from(
-                        module
-                            .source
-                            .lines()
-                            .take(line_idx)
-                            .map(|l| l.len() + 1)
-                            .sum::<usize>(),
-                    )
-                    .unwrap_or(u32::MAX);
-                    let line_len = u32::try_from(line.len()).unwrap_or(u32::MAX);
-
-                    diagnostics.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
-                            "{class_name}[{type_args_str}].__init__ parameter `{}` expects \
-                             `{resolved_type}` but received {mismatch}",
-                            param.name
-                        ),
-                        span: basilisk_resolver::Span {
-                            start: byte_offset,
-                            end: byte_offset + line_len,
-                        },
-                        path: module.path.clone(),
-                        help: Some(format!(
-                            "Pass a value of type `{resolved_type}` for parameter `{}`",
-                            param.name
-                        )),
-                        note: Some(
-                            "PEP 696: TypeVar defaults are resolved when the class is \
-                             subscripted with fewer type arguments"
-                                .to_owned(),
-                        ),
-                    });
-                }
-            }
+/// Check a single class pattern on a single source line.
+#[expect(clippy::too_many_arguments, reason = "all args needed for line-level check")]
+fn check_subscripted_class_on_line(
+    module: &ResolvedModule,
+    info_map: &HashMap<&str, &TypeVarInfo>,
+    diagnostics: &mut Vec<Diagnostic>,
+    init_map: &HashMap<&str, &basilisk_resolver::FunctionInfo>,
+    line_idx: usize,
+    line: &str,
+    trimmed: &str,
+    class_name: &&str,
+    class_info: &&basilisk_resolver::ClassInfo,
+) {
+    if class_info.generic_params.is_empty() {
+        return;
+    }
+    let pattern = format!("{class_name}[");
+    let Some(start) = trimmed.find(&pattern) else {
+        return;
+    };
+    let after_name = &trimmed[start + pattern.len()..];
+    let Some(bracket_end) = find_matching_bracket(after_name, '[', ']') else {
+        return;
+    };
+    let type_args_str = &after_name[..bracket_end];
+    let after_bracket = &after_name[bracket_end + 1..];
+    if !after_bracket.starts_with('(') {
+        return;
+    }
+    let call_args_str = &after_bracket[1..];
+    let Some(paren_end) = find_matching_bracket(call_args_str, '(', ')') else {
+        return;
+    };
+    let call_args_str = &call_args_str[..paren_end];
+    let type_args_owned: Vec<String> = split_top_level_args(type_args_str)
+        .iter()
+        .map(|s| s.trim().to_owned())
+        .collect();
+    let type_args: Vec<&str> = type_args_owned.iter().map(String::as_str).collect();
+    let resolved_types = resolve_generic_params(&class_info.generic_params, &type_args, info_map);
+    let Some(init_fn) = init_map.get(class_name) else {
+        return;
+    };
+    let init_params: Vec<_> = init_fn.parameters.iter().filter(|p| p.name != "self").collect();
+    let call_args = split_top_level_args(call_args_str);
+    for (arg_idx, call_arg) in call_args.iter().enumerate() {
+        let call_arg = call_arg.trim();
+        let Some(param) = init_params.get(arg_idx) else {
+            break;
+        };
+        let Some(ann_span) = param.annotation_span else {
+            continue;
+        };
+        let Some(ann_text) = slice_span(&module.source, ann_span) else {
+            continue;
+        };
+        let resolved_type = resolved_types.get(ann_text).map_or(ann_text, String::as_str);
+        if let Some(mismatch) = literal_type_mismatch(call_arg, resolved_type) {
+            let byte_offset: u32 = u32::try_from(
+                module.source.lines().take(line_idx).map(|l| l.len() + 1).sum::<usize>(),
+            )
+            .unwrap_or(u32::MAX);
+            let line_len = u32::try_from(line.len()).unwrap_or(u32::MAX);
+            diagnostics.push(Diagnostic {
+                code: CODE.clone(),
+                severity: Severity::Error,
+                message: format!(
+                    "{class_name}[{type_args_str}].__init__ parameter `{}` expects \
+                     `{resolved_type}` but received {mismatch}",
+                    param.name
+                ),
+                span: basilisk_resolver::Span { start: byte_offset, end: byte_offset + line_len },
+                path: module.path.clone(),
+                help: Some(format!(
+                    "Pass a value of type `{resolved_type}` for parameter `{}`",
+                    param.name
+                )),
+                note: Some(
+                    "PEP 696: TypeVar defaults are resolved when the class is subscripted with fewer type arguments"
+                        .to_owned(),
+                ),
+            });
         }
     }
 }

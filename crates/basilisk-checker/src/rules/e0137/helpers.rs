@@ -381,7 +381,7 @@ pub(super) fn check_self_typed_method_incompatibility(
     check_self_typed_param_consistency(proto_method, concrete_method, tv_name, source, concrete_ret)
 }
 
-/// Check non-self parameters for TypeVar consistency in self-typed methods.
+/// Check non-self parameters for `TypeVar` consistency in self-typed methods.
 fn check_self_typed_param_consistency(
     proto_method: &FunctionInfo,
     concrete_method: &FunctionInfo,

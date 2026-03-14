@@ -45,7 +45,7 @@ pub(super) async fn initialize(
 
     // Determine analysis mode from InitializationOptions then config files.
     let mode =
-        crate::workspace::resolve_analysis_mode(params.initialization_options.as_ref(), &roots);
+        crate::workspace_analysis::resolve_analysis_mode(params.initialization_options.as_ref(), &roots);
 
     // Build the workspace index now so `initialized()` can scan immediately.
     let index = WorkspaceIndex::new(roots, mode);

@@ -1,133 +1,143 @@
-//! BSK-E0131: Generator yield/send/return type mismatch.
+//! Type checking helpers for BSK-E0131.
 //!
-//! When a function is annotated with `Generator[Y, S, R]`, `Iterator[Y]`,
-//! or `Iterable[Y]`, the yield expressions must produce values compatible
-//! with `Y`, and `yield from` expressions must delegate to generators whose
-//! yield and send types are compatible.
-//!
-//! ```python
-//! from typing import Generator, Iterator
-//!
-//! class A: ...
-//! class B: ...
-//!
-//! def bad() -> Generator[A, None, None]:
-//!     yield 3          # E: incompatible yield type
-//!
-//! def bad2() -> Iterator[A]:
-//!     yield B()        # E: incompatible yield type
-//! ```
+//! Contains compatibility checks for yield/send/return types and the
+//! diagnostic-emitting functions for individual yield expressions.
 
 use std::collections::HashMap;
 
-use basilisk_resolver::{FunctionInfo, ResolvedModule, ReturnAnnotationKind, Span};
+use basilisk_resolver::{FunctionInfo, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, Severity};
 use crate::span_util::slice_span;
 
-use super::Rule;
-use super::e0131_helpers::{
-    GeneratorAnnotation, YieldExpr, extract_call_name, find_body_end, find_yield_expressions,
-    get_constructor_name, infer_expr_type, infer_list_element_type, is_send_type_compatible,
-    is_type_compatible, parse_generator_annotation,
-};
+use super::annotation::{parse_generator_annotation, split_top_level_args, GeneratorAnnotation};
+use super::yield_scan::YieldExpr;
+use super::CODE;
 
-const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0131",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0131",
-};
+/// Infer a simple type name from an expression text.
+///
+/// Returns the inferred type name for simple expressions:
+/// - Integer literal (`3`, `-1`) -> `"int"`
+/// - Float literal (`3.14`) -> `"float"`
+/// - String literal (`"hello"`) -> `"str"`
+/// - Boolean literal (`True`/`False`) -> `"bool"`
+/// - `None` -> `"None"`
+///
+/// Returns `None` if the type cannot be inferred.
+pub(super) fn infer_expr_type(expr: &str) -> Option<&str> {
+    let expr = expr.trim();
 
-/// Emits BSK-E0131 for generator yield/send/return type mismatches.
-pub(crate) struct GeneratorTypeMismatch;
+    if expr.is_empty() {
+        return None;
+    }
 
-impl Rule for GeneratorTypeMismatch {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        // Build a map of function name -> return annotation text for cross-referencing
-        // yield-from targets.
-        let func_return_annotations: HashMap<&str, &str> = module
-            .functions
-            .iter()
-            .filter_map(|func| {
-                let ann_span = func.return_annotation_span?;
-                let ann_text = slice_span(&module.source, ann_span)?;
-                Some((func.name.as_str(), ann_text.trim()))
-            })
-            .collect();
+    if expr == "True" || expr == "False" {
+        return Some("bool");
+    }
 
-        for func in &module.functions {
-            check_function(
-                func,
-                &module.source,
-                &module.path,
-                &func_return_annotations,
-                diagnostics,
-            );
-        }
+    if expr == "None" {
+        return Some("None");
+    }
+
+    // Integer literal
+    if expr.chars().all(|c| c.is_ascii_digit())
+        || (expr.starts_with('-')
+            && expr.len() > 1
+            && expr
+                .get(1..)
+                .unwrap_or("")
+                .chars()
+                .all(|c| c.is_ascii_digit()))
+    {
+        return Some("int");
+    }
+
+    // Float literal
+    if expr.contains('.')
+        && expr
+            .chars()
+            .all(|c| c.is_ascii_digit() || c == '.' || c == '-')
+    {
+        return Some("float");
+    }
+
+    // String literal
+    if (expr.starts_with('"') && expr.ends_with('"'))
+        || (expr.starts_with('\'') && expr.ends_with('\''))
+    {
+        return Some("str");
+    }
+
+    None
+}
+
+/// Get the constructor name from an expression like `ClassName(...)`.
+pub(super) fn get_constructor_name(expr: &str) -> Option<&str> {
+    let expr = expr.trim();
+    let paren_pos = expr.find('(')?;
+    let name = expr.get(..paren_pos)?.trim();
+
+    if name
+        .chars()
+        .next()
+        .is_some_and(|c| c.is_uppercase() || c == '_')
+        && name.chars().all(|c| c.is_alphanumeric() || c == '_')
+    {
+        Some(name)
+    } else {
+        None
     }
 }
 
-fn check_function(
-    func: &FunctionInfo,
-    source: &str,
-    path: &str,
-    func_return_annotations: &HashMap<&str, &str>,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    if func.return_annotation == ReturnAnnotationKind::Missing {
-        return;
+/// Check if a type name is compatible with an expected type.
+///
+/// This is a conservative check: it returns `true` (compatible) when
+/// we cannot determine incompatibility.
+pub(super) fn is_type_compatible(actual: &str, expected: &str) -> bool {
+    if expected == "Any" || actual == "Any" || expected == "object" || actual == expected {
+        return true;
     }
-
-    let Some(ann_span) = func.return_annotation_span else {
-        return;
-    };
-    let Some(ann_text) = slice_span(source, ann_span) else {
-        return;
-    };
-    let ann_text = ann_text.trim();
-
-    let Some(gen_ann) = parse_generator_annotation(ann_text) else {
-        return;
-    };
-
-    // Find the function body.
-    let def_start = func.def_span.start_usize();
-    let Some(colon_rel) = source.get(def_start..).and_then(|s| s.find(':')) else {
-        return;
-    };
-    let body_start = def_start + colon_rel + 1;
-
-    let def_line_start = source
-        .get(..def_start)
-        .and_then(|s| s.rfind('\n'))
-        .map_or(0, |idx| idx + 1);
-    let def_indent = def_start - def_line_start;
-
-    let body_end = find_body_end(source, body_start, def_indent);
-    let Some(body) = source.get(body_start..body_end) else {
-        return;
-    };
-
-    let yields = find_yield_expressions(body, body_start);
-
-    for yield_expr in &yields {
-        if yield_expr.is_yield_from {
-            check_yield_from(
-                yield_expr,
-                &gen_ann,
-                func,
-                path,
-                func_return_annotations,
-                diagnostics,
-            );
-        } else {
-            check_yield_value(yield_expr, &gen_ann, func, path, diagnostics);
-        }
+    // int is compatible with float
+    if expected == "float" && actual == "int" {
+        return true;
     }
-
-    check_missing_generator_return(func, &gen_ann, &yields, path, diagnostics);
+    // bool is compatible with int
+    if expected == "int" && actual == "bool" {
+        return true;
+    }
+    false
 }
 
-fn check_yield_value(
+/// Extract the function name from a call expression like `generator17()`.
+pub(super) fn extract_call_name(expr: &str) -> Option<&str> {
+    let expr = expr.trim();
+    let paren_pos = expr.find('(')?;
+    let name = expr.get(..paren_pos)?.trim();
+
+    if !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+        Some(name)
+    } else {
+        None
+    }
+}
+
+/// Infer the element type of a list literal like `[1]`, `[1, 2, 3]`.
+pub(super) fn infer_list_element_type(expr: &str) -> Option<&str> {
+    let expr = expr.trim();
+    if !expr.starts_with('[') || !expr.ends_with(']') {
+        return None;
+    }
+    let inner = expr.get(1..expr.len().saturating_sub(1))?.trim();
+    if inner.is_empty() {
+        return None;
+    }
+
+    let first_elem = split_top_level_args(inner);
+    infer_expr_type(first_elem.first()?.trim())
+}
+
+/// Check a single `yield` expression for type compatibility with the generator annotation.
+pub(super) fn check_yield_value(
     yield_expr: &YieldExpr,
     gen_ann: &GeneratorAnnotation,
     func: &FunctionInfo,
@@ -177,12 +187,14 @@ fn check_yield_value(
     }
 }
 
-fn check_yield_from(
+/// Check a `yield from` expression for type compatibility with the generator annotation.
+pub(super) fn check_yield_from(
     yield_expr: &YieldExpr,
     gen_ann: &GeneratorAnnotation,
     func: &FunctionInfo,
     path: &str,
     func_return_annotations: &HashMap<&str, &str>,
+    source: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     let expr_text = &yield_expr.expr_text;
@@ -250,7 +262,16 @@ fn check_yield_from(
     }
 
     // Case 2: yield from [literal_list]
-    if let Some(elem_type) = infer_list_element_type(expr_text) {
+    // Resolve the expr_text against source to get the actual text
+    let expr_for_list = slice_span(source, Span {
+        start: yield_expr.offset + 11,
+        end: yield_expr.offset + 11 + u32::try_from(expr_text.len()).unwrap_or(0),
+    })
+    .unwrap_or(expr_text.as_str());
+
+    if let Some(elem_type) = infer_list_element_type(expr_for_list)
+        .or_else(|| infer_list_element_type(expr_text))
+    {
         if !is_type_compatible(elem_type, &gen_ann.yield_type) {
             diagnostics.push(Diagnostic {
                 code: CODE.clone(),
@@ -274,11 +295,29 @@ fn check_yield_from(
     }
 }
 
+/// Check send type compatibility.
+///
+/// For `yield from`, the outer generator's send type flows to the inner.
+/// The outer's send type must be assignable to the inner's send type.
+fn is_send_type_compatible(outer_send: &str, inner_send: &str) -> bool {
+    if outer_send == inner_send {
+        return true;
+    }
+    if inner_send == "None" || outer_send == "None" {
+        return true;
+    }
+    // float accepts int
+    if inner_send == "float" && (outer_send == "int" || outer_send == "float") {
+        return true;
+    }
+    false
+}
+
 /// Check for missing return in generator with non-None return type.
 ///
 /// If a function is annotated `Generator[Y, S, R]` where `R` is not `None` and not `Any`,
 /// and the function has no return statements that could validly produce `R`, flag the def line.
-fn check_missing_generator_return(
+pub(super) fn check_missing_generator_return(
     func: &FunctionInfo,
     gen_ann: &GeneratorAnnotation,
     yields: &[YieldExpr],

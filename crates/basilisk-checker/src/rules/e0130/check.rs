@@ -2,8 +2,6 @@
 
 use std::collections::{HashMap, HashSet};
 
-use basilisk_resolver::Span;
-
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
 use super::collect::{collect_generic_classes, collect_generic_instances};

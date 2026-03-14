@@ -345,9 +345,9 @@ pub(super) fn class_keyword_bool(cls: &ruff_python_ast::StmtClassDef, key: &str)
 
 /// Build a map from variable name → class name for module-level assignments
 /// where the RHS is a call to a transform class.
-pub(super) fn build_instance_class_map<'a>(
+pub(super) fn build_instance_class_map(
     stmts: &[Stmt],
-    class_map: &HashMap<&str, &'a TransformClassDesc>,
+    class_map: &HashMap<&str, &TransformClassDesc>,
 ) -> HashMap<String, String> {
     let mut out = HashMap::new();
     for stmt in stmts {

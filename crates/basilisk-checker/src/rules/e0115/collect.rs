@@ -175,7 +175,7 @@ pub(super) fn collect_imported_deprecated(
 
 /// Collect deprecated members from imported module classes.
 ///
-/// Returns a map: `module_alias` -> member_key -> `DeprecatedInfo`.
+/// Returns a map: `module_alias` -> `member_key` -> `DeprecatedInfo`.
 /// Member keys look like `"norwegian_blue"` (top-level) or `"Spam.__add__"` (class member).
 pub(super) fn collect_imported_deprecated_members(
     stmts: &[Stmt],

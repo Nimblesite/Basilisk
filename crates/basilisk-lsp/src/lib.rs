@@ -51,6 +51,8 @@ pub mod type_hierarchy;
 pub mod util;
 pub mod websocket;
 pub mod workspace;
+pub mod workspace_analysis;
+pub mod workspace_scan;
 
 /// Run the Basilisk checker on a Python source string.
 ///

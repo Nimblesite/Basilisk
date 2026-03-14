@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use super::types::{GenericClassDef, GenericInstance};
 use super::utils::{
-    extract_typevar_params_from_generic, parse_generic_annotation, split_top_level_type_args,
+    extract_typevar_params_from_generic, parse_generic_annotation,
 };
 
 /// Scan source text to collect generic class definitions.
