@@ -11,7 +11,10 @@ fn annotation_flags_none_is_not_any() -> Result<(), Box<dyn std::error::Error>> 
     use basilisk_resolver::ReturnAnnotationKind;
     let src = "def f() -> None: pass\n".to_owned();
     let resolved = resolve_src(&src)?;
-    let func = resolved.functions.first().expect("expected at least one function");
+    let func = resolved
+        .functions
+        .first()
+        .expect("expected at least one function");
     assert!(
         matches!(func.return_annotation, ReturnAnnotationKind::NoneType),
         "None annotation must be NoneType, not Any — got {:?}",
@@ -25,7 +28,10 @@ fn annotation_flags_any_is_any() -> Result<(), Box<dyn std::error::Error>> {
     use basilisk_resolver::ReturnAnnotationKind;
     let src = "from typing import Any\ndef f() -> Any: pass\n".to_owned();
     let resolved = resolve_src(&src)?;
-    let func = resolved.functions.first().expect("expected at least one function");
+    let func = resolved
+        .functions
+        .first()
+        .expect("expected at least one function");
     assert!(
         matches!(func.return_annotation, ReturnAnnotationKind::Any),
         "Any annotation must be ReturnAnnotationKind::Any — got {:?}",

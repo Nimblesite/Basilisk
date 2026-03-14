@@ -15,7 +15,10 @@ fn collects_return_name_from_for_else() -> Result<(), Box<dyn std::error::Error>
     )
     .to_owned();
     let resolved = resolve_src(&src)?;
-    let func = resolved.functions.first().expect("expected at least one function");
+    let func = resolved
+        .functions
+        .first()
+        .expect("expected at least one function");
     assert!(
         func.return_name_refs
             .iter()
@@ -36,7 +39,10 @@ fn collects_return_name_from_while_else() -> Result<(), Box<dyn std::error::Erro
     )
     .to_owned();
     let resolved = resolve_src(&src)?;
-    let func = resolved.functions.first().expect("expected at least one function");
+    let func = resolved
+        .functions
+        .first()
+        .expect("expected at least one function");
     assert!(
         func.return_name_refs
             .iter()
@@ -57,7 +63,10 @@ fn collects_return_from_for_else_clause() -> Result<(), Box<dyn std::error::Erro
     )
     .to_owned();
     let resolved = resolve_src(&src)?;
-    let func = resolved.functions.first().expect("expected at least one function");
+    let func = resolved
+        .functions
+        .first()
+        .expect("expected at least one function");
     assert_eq!(
         func.return_stmts.len(),
         1,
@@ -83,7 +92,10 @@ fn collects_return_from_while_else_clause() -> Result<(), Box<dyn std::error::Er
     )
     .to_owned();
     let resolved = resolve_src(&src)?;
-    let func = resolved.functions.first().expect("expected at least one function");
+    let func = resolved
+        .functions
+        .first()
+        .expect("expected at least one function");
     assert_eq!(
         func.return_stmts.len(),
         1,

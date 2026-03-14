@@ -9,7 +9,10 @@ fn annotation_attribute_detected_as_any() -> Result<(), Box<dyn std::error::Erro
     let src = "import typing\ndef foo(x: typing.Any) -> typing.Any:\n    pass\n".to_owned();
     let resolved = resolve_src(&src)?;
     assert_eq!(resolved.functions.len(), 1);
-    let func = resolved.functions.first().expect("expected at least one function");
+    let func = resolved
+        .functions
+        .first()
+        .expect("expected at least one function");
     assert!(
         func.parameters
             .first()

@@ -115,7 +115,7 @@ mod tests {
         let changes = edit.changes.unwrap();
         let text_edits = changes.get(&uri).unwrap();
         assert_eq!(text_edits.len(), 1);
-        let text_edit = &text_edits[0];
+        let text_edit = text_edits.first().expect("expected at least one text edit");
         assert_eq!(text_edit.new_text, "");
         assert_eq!(text_edit.range.start.line, 0);
         assert_eq!(text_edit.range.start.character, 1); // colon position

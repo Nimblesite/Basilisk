@@ -9,7 +9,10 @@ fn class_assign_without_annotation_collected() -> Result<(), Box<dyn std::error:
     let src = "class Foo:\n    x = 1\n".to_owned();
     let resolved = resolve_src(&src)?;
     assert_eq!(resolved.classes.len(), 1);
-    let cls = resolved.classes.first().expect("expected at least one class");
+    let cls = resolved
+        .classes
+        .first()
+        .expect("expected at least one class");
     assert!(cls
         .attributes
         .iter()

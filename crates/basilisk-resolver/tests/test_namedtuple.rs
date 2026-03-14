@@ -13,7 +13,10 @@ fn namedtuple_typing_form_collected() -> Result<(), Box<dyn std::error::Error>> 
     .to_owned();
     let resolved = resolve_src(&src)?;
     assert_eq!(resolved.namedtuple_defs.len(), 1);
-    let nt = resolved.namedtuple_defs.first().expect("expected at least one namedtuple def");
+    let nt = resolved
+        .namedtuple_defs
+        .first()
+        .expect("expected at least one namedtuple def");
     assert_eq!(nt.lhs_name, "Point");
     assert_eq!(nt.field_names, vec!["x", "y"]);
     assert!(nt.has_types);
@@ -29,7 +32,10 @@ fn namedtuple_collections_form_string_arg() -> Result<(), Box<dyn std::error::Er
     .to_owned();
     let resolved = resolve_src(&src)?;
     assert_eq!(resolved.namedtuple_defs.len(), 1);
-    let nt = resolved.namedtuple_defs.first().expect("expected at least one namedtuple def");
+    let nt = resolved
+        .namedtuple_defs
+        .first()
+        .expect("expected at least one namedtuple def");
     assert_eq!(nt.field_names, vec!["x", "y"]);
     assert!(!nt.has_types);
     Ok(())
@@ -142,7 +148,10 @@ fn namedtuple_typing_list_of_pairs() -> Result<(), Box<dyn std::error::Error>> {
         !resolved.namedtuple_defs.is_empty(),
         "NamedTuple def should be collected"
     );
-    let nt = resolved.namedtuple_defs.first().expect("expected at least one namedtuple def");
+    let nt = resolved
+        .namedtuple_defs
+        .first()
+        .expect("expected at least one namedtuple def");
     assert_eq!(nt.field_names, vec!["x", "y"]);
     assert!(nt.has_types);
     Ok(())
@@ -177,7 +186,10 @@ fn namedtuple_collections_string_arg() -> Result<(), Box<dyn std::error::Error>>
     .to_owned();
     let resolved = resolve_src(&src)?;
     assert!(!resolved.namedtuple_defs.is_empty());
-    let nt = resolved.namedtuple_defs.first().expect("expected at least one namedtuple def");
+    let nt = resolved
+        .namedtuple_defs
+        .first()
+        .expect("expected at least one namedtuple def");
     assert_eq!(nt.field_names, vec!["x", "y"]);
     assert!(!nt.has_types);
     Ok(())

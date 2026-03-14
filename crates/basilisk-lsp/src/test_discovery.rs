@@ -311,9 +311,16 @@ class TestMyCase(unittest.TestCase):
         let items = discover_tests_in_file(path, source);
 
         assert_eq!(items.len(), 1);
-        assert_eq!(items[0].name, "TestMyCase");
-        assert_eq!(items[0].kind, TestItemKind::Class);
-        assert_eq!(items[0].children.len(), 1);
-        assert_eq!(items[0].children[0].name, "test_something");
+        let item = items.first().expect("expected at least one test item");
+        assert_eq!(item.name, "TestMyCase");
+        assert_eq!(item.kind, TestItemKind::Class);
+        assert_eq!(item.children.len(), 1);
+        assert_eq!(
+            item.children
+                .first()
+                .expect("expected at least one child")
+                .name,
+            "test_something"
+        );
     }
 }
