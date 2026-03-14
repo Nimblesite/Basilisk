@@ -97,7 +97,7 @@ jobs:
       - name: Add swap space
         uses: actionhippie/swap-space@v1
         with:
-          size: 10G
+          size: 8G
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
