@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Tests for BSK-E0080: `TypeVar` upper bound violation at call site.
 //!
 //! This rule detects when a call site passes a value whose type does not satisfy

@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Coverage boost tests batch 24: targeting suppression.rs, types.rs,
 //! `collection_inference.rs`, and many more deeper rule paths.
 #![allow(

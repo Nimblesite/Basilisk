@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Shared test infrastructure for WebSocket LSP E2E tests.
 //!
 //! Every WS test file imports this module via `mod ws_test_common;` to get

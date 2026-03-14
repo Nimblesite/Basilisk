@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Coverage boost tests batch 22: targeting e0129, e0014 deeper paths,
 //! more e0107, e0137, e0139, e0140, e0047, e0015, e0113, e0111, e0036, e0075.
 #![allow(missing_docs)]

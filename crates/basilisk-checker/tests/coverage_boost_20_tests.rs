@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Coverage boost tests batch 20: broad coverage push across many rule files.
 //! Targets files with 40-70 uncovered lines: e0067, e0072, e0113, e0041,
 //! e0142, e0047, e0015, e0126, e0143, e0116, e0076, e0054, e0095,

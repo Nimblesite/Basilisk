@@ -55,6 +55,10 @@ pub struct FileSource {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::indexing_slicing,
+    reason = "test-only code: indexing acceptable in unit tests"
+)]
 mod tests {
     use super::*;
     use json::JsonDiagnostic;
@@ -295,10 +299,10 @@ mod tests {
                     .find(|s| s.path == d.path)
                     .map(|s| s.text.as_str());
                 let (line, col) = source.map_or((1, 1), |src| {
-                    byte_offset_to_line_col(src, d.span.start as usize)
+                    byte_offset_to_line_col(src, usize::try_from(d.span.start).unwrap_or(0))
                 });
                 let (end_line, end_col) = source.map_or((line, col + 1), |src| {
-                    byte_offset_to_line_col(src, d.span.end as usize)
+                    byte_offset_to_line_col(src, usize::try_from(d.span.end).unwrap_or(0))
                 });
                 JsonDiagnostic {
                     code: d.code.code,

@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Coverage boost tests batch 27: final push to 89%. Ultra-diverse Python patterns
 //! targeting remaining uncovered branches across many rules.
 #![allow(

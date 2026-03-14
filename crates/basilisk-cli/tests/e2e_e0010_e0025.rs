@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! E2E tests for error codes E0010 through E0025.
 //!
 //! Includes both exact-diagnostic tests and presence-check tests for

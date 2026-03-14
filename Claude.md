@@ -13,6 +13,8 @@ One IDE extension = COMPLETE PYTHON DEVELOPMENT EXPERIENCE. SEAMLESS, FAST, COMP
 
 # Too Many Cooks - MANDATORY
 
+⚠️ REGISTER IMMEDIATELY!!!
+
 COORDINATOR: dictate orders through plans and messages. DELEGATE!!!
 OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK MESSAGES AND COMPLY!!!
 

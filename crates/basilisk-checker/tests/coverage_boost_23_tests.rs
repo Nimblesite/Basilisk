@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Coverage boost tests batch 23: targeting e0128, e0063, e0048 and deeper paths
 //! in e0107, e0137, e0139, e0140, e0149, e0102, e0147, e0131, e0054, e0148,
 //! e0120, e0138, e0119, e0146, e0143, e0126, e0095, e0130, e0142, e0116, e0072.

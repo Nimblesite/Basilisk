@@ -78,7 +78,8 @@ pub fn code_actions(
 #[cfg(test)]
 #[expect(
     clippy::unwrap_used,
-    reason = "test-only code: unwrap acceptable in unit tests"
+    clippy::expect_used,
+    reason = "test-only code: unwrap/expect acceptable in unit tests"
 )]
 mod tests {
     use super::*;

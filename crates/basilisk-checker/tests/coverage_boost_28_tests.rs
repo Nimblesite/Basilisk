@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Coverage boost tests batch 28: final push to 89%.
 //! Targeting very specific patterns for e0107 variance, e0054 Final,
 //! e0092 too few type args, e0108 slots, and many other rules.

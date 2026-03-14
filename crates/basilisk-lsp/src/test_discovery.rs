@@ -245,9 +245,8 @@ fn collect_test_files(dir: &Path, out: &mut Vec<PathBuf>) {
 
 #[cfg(test)]
 #[expect(
-    clippy::unwrap_used,
     clippy::expect_used,
-    reason = "test-only code: unwrap/expect acceptable in unit tests"
+    reason = "test-only code: expect acceptable in unit tests"
 )]
 mod tests {
     use super::*;

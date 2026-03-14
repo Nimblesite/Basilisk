@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Coverage boost tests batch 3: targeting remaining low-coverage rules.
 //! Covers: e0146, e0147, e0148, e0149, e0036 (deeper), e0047, e0048 (deeper),
 //!         e0050 (deeper), e0063, e0064 (deeper), e0067, e0069, e0073, e0078,

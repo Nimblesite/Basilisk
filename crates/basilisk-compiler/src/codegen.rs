@@ -11,7 +11,6 @@
     clippy::wildcard_enum_match_arm,
     clippy::needless_continue,
     clippy::match_wildcard_for_single_variants,
-    clippy::missing_docs_in_private_items,
     clippy::as_conversions,
     clippy::indexing_slicing
 )]

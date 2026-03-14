@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Clean fixture tests — zero diagnostics expected.
 //!
 //! These tests verify that fully-typed Python files produce no diagnostics.

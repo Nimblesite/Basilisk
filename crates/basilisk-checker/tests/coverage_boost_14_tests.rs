@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions
+)]
 //! Coverage boost tests batch 14: targeting PEP 695 syntax, deeper e0107/e0144/e0115 paths.
 //! Also targets remaining uncovered branches in many other rules with highly specific patterns.
 #![allow(
