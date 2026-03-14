@@ -26,7 +26,6 @@ const CODE: ErrorCode = ErrorCode {
 ///
 /// Currently disabled — requires full type inference to avoid false positives.
 /// Re-enable in `mod.rs` `run_all()` once the type engine is in place.
-#[expect(dead_code)]
 pub(crate) struct AssertTypeMismatch;
 
 impl Rule for AssertTypeMismatch {

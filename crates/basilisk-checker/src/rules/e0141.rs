@@ -79,7 +79,7 @@ impl KwargsContext {
                 }
                 Stmt::Assign(assign) => {
                     if assign.targets.len() == 1 {
-                        if let Some(name) = expr_name(&assign.targets[0]) {
+                        if let Some(name) = assign.targets.first().and_then(expr_name) {
                             if is_typevar_call(&assign.value) {
                                 typevar_names.push(name.to_owned());
                             }

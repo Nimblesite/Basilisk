@@ -99,7 +99,7 @@ pub(crate) struct TransformClassInfo {
 fn extract_bool_kwarg(args_text: &str, key: &str) -> Option<bool> {
     let pattern = format!("{key}=");
     let idx = args_text.find(&pattern)?;
-    let after = args_text[idx + pattern.len()..].trim_start();
+    let after = args_text.get(idx + pattern.len()..)?.trim_start();
     if after.starts_with("True") {
         Some(true)
     } else if after.starts_with("False") {
@@ -216,7 +216,7 @@ pub(crate) fn collect_transform_classes(
                 .as_bytes()
                 .get(after_at_name)
                 .copied()
-                .unwrap_or(b'\n');
+                .map_or(b'\n', |c| c);
             if next_char.is_ascii_alphanumeric() || next_char == b'_' {
                 continue;
             }

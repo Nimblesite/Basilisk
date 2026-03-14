@@ -820,7 +820,10 @@ fn check_instance_classvar_assignments(module: &ResolvedModule, diagnostics: &mu
 ///
 /// e.g. `a: ProtoA = ProtoAImpl()` where `ProtoA` requires `y: ClassVar[str]`
 /// but `ProtoAImpl` only sets `self.y = ""` in `__init__` (instance variable).
-#[expect(clippy::too_many_lines, reason = "protocol ClassVar conformance requires extensive matching logic")]
+#[expect(
+    clippy::too_many_lines,
+    reason = "protocol ClassVar conformance requires extensive matching logic"
+)]
 fn check_protocol_classvar_conformance(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
     let source = &module.source;
     let path = &module.path;

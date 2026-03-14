@@ -61,8 +61,11 @@ unused_variables = "deny"
 unused_mut = "deny"
 unused_assignments = "deny"
 unused_results = "deny"
+# Stale #[expect] attributes must be errors, not warnings — no dead suppressions
+unfulfilled_lint_expectations = "deny"
 
 [workspace.lints.clippy]
+# all + pedantic at maximum — restriction & nursery cherry-picked (contain contradictions)
 all                  = { level = "deny", priority = -1 }
 pedantic             = { level = "deny", priority = -1 }
 unwrap_used          = "deny"
@@ -92,6 +95,14 @@ large_stack_frames   = "deny"
 allow_attributes     = "deny"
 too_many_lines       = "deny"
 too_many_arguments   = "deny"
-dead_code            = "deny"
-
-
+cast_possible_truncation = "deny"
+# Catch accidental infinite loops — require `-> !` return type for intentional ones
+infinite_loop        = "deny"
+# Prevent silent error cause discarding in .map_err(|_| ...) — preserve error provenance
+map_err_ignore       = "deny"
+# Prevent process::exit() — use proper error propagation, exit only via main() return
+exit                 = "deny"
+# Catch struct destructures that silently ignore new fields — critical during refactoring
+rest_pat_in_fully_bound_structs = "deny"
+# Require Arc::clone(&x) syntax — make ref-counted pointer cloning visually distinct
+clone_on_ref_ptr     = "deny"

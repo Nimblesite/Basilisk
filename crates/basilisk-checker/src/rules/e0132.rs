@@ -187,8 +187,11 @@ fn check_class(
         if mappings.len() < 2 {
             continue;
         }
-        let first_args = &mappings[0].0;
-        for other in &mappings[1..] {
+        let Some(first_mapping) = mappings.first() else {
+            continue;
+        };
+        let first_args = &first_mapping.0;
+        for other in mappings.get(1..).unwrap_or_default() {
             if other.0 != *first_args {
                 diagnostics.push(Diagnostic {
                     code: CODE.clone(),

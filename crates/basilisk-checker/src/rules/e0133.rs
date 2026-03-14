@@ -47,9 +47,11 @@ fn contains_typevar(text: &str, name: &str) -> bool {
     while start + name.len() <= text.len() {
         if let Some(pos) = text[start..].find(name) {
             let abs_pos = start + pos;
-            let before_ok = abs_pos == 0 || !is_ident_char(text_bytes[abs_pos - 1]);
+            let before_ok = abs_pos == 0
+                || text_bytes.get(abs_pos - 1).is_none_or(|&b| !is_ident_char(b));
             let after_pos = abs_pos + name_bytes.len();
-            let after_ok = after_pos >= text_bytes.len() || !is_ident_char(text_bytes[after_pos]);
+            let after_ok = after_pos >= text_bytes.len()
+                || text_bytes.get(after_pos).is_none_or(|&b| !is_ident_char(b));
             if before_ok && after_ok {
                 return true;
             }

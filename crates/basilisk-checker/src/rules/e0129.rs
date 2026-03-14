@@ -235,7 +235,9 @@ fn check_augmented_assignment(
     for op in &aug_ops {
         if let Some(pos) = trimmed.find(op) {
             // Make sure the char before the op is not part of another operator.
-            let before = &trimmed[..pos];
+            let Some(before) = trimmed.get(..pos) else {
+                continue;
+            };
             let target = before.trim();
             if is_simple_identifier(target) {
                 found_op = Some((target, *op, pos));
@@ -349,13 +351,17 @@ fn split_top_level_commas(source: &str) -> Vec<&str> {
             b'[' | b'(' | b'{' => depth += 1,
             b']' | b')' | b'}' => depth -= 1,
             b',' if depth == 0 => {
-                result.push(&source[start..idx]);
+                if let Some(segment) = source.get(start..idx) {
+                    result.push(segment);
+                }
                 start = idx + 1;
             }
             _ => {}
         }
     }
-    result.push(&source[start..]);
+    if let Some(tail) = source.get(start..) {
+        result.push(tail);
+    }
     result
 }
 
@@ -465,8 +471,11 @@ impl<'a> Iterator for LineIter<'a> {
         if self.remaining.is_empty() {
             return None;
         }
-        let newline_pos = self.remaining.find('\n').map_or(self.remaining.len(), |p| p);
-        let line = &self.remaining[..newline_pos];
+        let newline_pos = self
+            .remaining
+            .find('\n')
+            .map_or(self.remaining.len(), |p| p);
+        let line = self.remaining.get(..newline_pos)?;
         let info = LineInfo {
             text: line,
             byte_offset: self.offset,
@@ -476,7 +485,7 @@ impl<'a> Iterator for LineIter<'a> {
         } else {
             newline_pos
         };
-        self.remaining = &self.remaining[consumed..];
+        self.remaining = self.remaining.get(consumed..).map_or("", |s| s);
         self.offset += consumed;
         Some(info)
     }

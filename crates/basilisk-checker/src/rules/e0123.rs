@@ -170,12 +170,12 @@ fn is_abstract_method(class: &ClassInfo, method_name: &str) -> bool {
 /// `None` otherwise.
 fn extract_super_call_method(text: &str) -> Option<&str> {
     let super_idx = text.find("super()")?;
-    let after_super = &text[super_idx + "super()".len()..];
+    let after_super = text.get(super_idx + "super()".len()..)?;
     let after_dot = after_super.strip_prefix('.')?;
 
     // Find the method name: everything up to the next '('.
     let paren_idx = after_dot.find('(')?;
-    let method_name = after_dot[..paren_idx].trim();
+    let method_name = after_dot.get(..paren_idx)?.trim();
 
     if method_name.is_empty() {
         return None;

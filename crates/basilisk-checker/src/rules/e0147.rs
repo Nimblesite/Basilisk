@@ -285,10 +285,6 @@ fn check_literal_against_annotation(elems: &[String], annotation: &str) -> Optio
 
 /// Check a tuple literal against a mixed starred-unpack annotation
 /// like `tuple[int, *tuple[str, ...], int]`.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "tuple type checking requires all context"
-)]
 fn check_literal_against_mixed(
     elems: &[String],
     fixed_prefix: usize,
@@ -434,12 +430,14 @@ fn parse_tuple_annotation(ann: &str) -> Option<TupleAnnotation> {
         .and_then(|s| strip_outer_bracket(s))?;
     let unpack_inner = unpack_inner.trim();
 
-    let prefix_types: Vec<String> = components.get(..star_idx)
+    let prefix_types: Vec<String> = components
+        .get(..star_idx)
         .unwrap_or_default()
         .iter()
         .map(|s| (*s).to_owned())
         .collect();
-    let suffix_types: Vec<String> = components.get(star_idx + 1..)
+    let suffix_types: Vec<String> = components
+        .get(star_idx + 1..)
         .unwrap_or_default()
         .iter()
         .map(|s| (*s).to_owned())
@@ -645,22 +643,23 @@ fn parse_bare_assignment(line: &str) -> Option<(String, &str)> {
 fn find_top_level_eq(s: &str) -> Option<usize> {
     let mut depth = 0i32;
     let bytes = s.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        match bytes[i] {
+    for (i, &byte) in bytes.iter().enumerate() {
+        match byte {
             b'[' | b'(' | b'{' => depth += 1,
             b']' | b')' | b'}' => depth -= 1,
             b'=' if depth == 0 => {
                 // Ensure not `==`, `!=`, `<=`, `>=`
-                let prev_ok = i == 0 || !matches!(bytes[i - 1], b'!' | b'<' | b'>' | b'=');
-                let next_ok = i + 1 >= bytes.len() || bytes[i + 1] != b'=';
+                let prev_ok = i == 0
+                    || bytes
+                        .get(i - 1)
+                        .is_none_or(|&b| !matches!(b, b'!' | b'<' | b'>' | b'='));
+                let next_ok = bytes.get(i + 1).is_none_or(|&b| b != b'=');
                 if prev_ok && next_ok {
                     return Some(i);
                 }
             }
             _ => {}
         }
-        i += 1;
     }
     None
 }
@@ -670,21 +669,18 @@ fn strip_trailing_comment(s: &str) -> &str {
     // Walk forward; once we see `#` outside a string, stop.
     let mut in_str = false;
     let mut str_char = b'"';
-    let bytes = s.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        match bytes[i] {
+    for (i, &byte) in s.as_bytes().iter().enumerate() {
+        match byte {
             b'"' | b'\'' if !in_str => {
                 in_str = true;
-                str_char = bytes[i];
+                str_char = byte;
             }
             c if in_str && c == str_char => {
                 in_str = false;
             }
-            b'#' if !in_str => return s[..i].trim_end(),
+            b'#' if !in_str => return s.get(..i).unwrap_or(s).trim_end(),
             _ => {}
         }
-        i += 1;
     }
     s.trim_end()
 }
@@ -818,10 +814,15 @@ fn func_body_lines(source: &str, def_offset: usize) -> Vec<LineInfo<'_>> {
     clippy::cast_possible_truncation,
     reason = "byte offsets fit u32 for source files"
 )]
+#[expect(
+    clippy::as_conversions,
+    reason = "byte offsets fit u32 for source files"
+)]
 fn line_span(source: &str, line_offset: usize) -> Span {
     let start = line_offset as u32;
-    let end = source[line_offset..]
-        .find('\n')
+    let end = source
+        .get(line_offset..)
+        .and_then(|s| s.find('\n'))
         .map_or(source.len(), |i| line_offset + i) as u32;
     Span { start, end }
 }

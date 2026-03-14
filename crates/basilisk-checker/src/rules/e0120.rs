@@ -169,7 +169,6 @@ fn check_yield_types(func: &FunctionInfo, module: &ResolvedModule, out: &mut Vec
                 func,
                 yield_expr,
                 &declared_yield_type,
-                &yield_type_str,
                 ann_text,
                 base,
                 module,
@@ -313,7 +312,6 @@ fn check_yield_from(
     func: &FunctionInfo,
     yield_expr: &basilisk_resolver::YieldExprInfo,
     declared_yield_type: &InferredType,
-    _yield_type_str: &str,
     outer_ann: &str,
     outer_base: &str,
     module: &ResolvedModule,
@@ -443,6 +441,10 @@ fn check_yield_from_call(
 }
 
 /// Check send type compatibility for `yield from` between two `Generator` types.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "send type check requires both generator annotations"
+)]
 fn check_send_type_compat(
     func: &FunctionInfo,
     yield_expr: &basilisk_resolver::YieldExprInfo,
@@ -560,11 +562,7 @@ fn extract_return_type_from_generator(annotation: &str) -> Option<String> {
     let bracket_pos = annotation.find('[')?;
     let inner = annotation.get(bracket_pos + 1..annotation.len().checked_sub(1)?)?;
     let args = split_top_level_comma(inner);
-    if args.len() >= 3 {
-        Some(args[2].trim().to_owned())
-    } else {
-        None
-    }
+    args.get(2).map(|arg| arg.trim().to_owned())
 }
 
 /// Split a string by top-level commas (respecting bracket nesting).

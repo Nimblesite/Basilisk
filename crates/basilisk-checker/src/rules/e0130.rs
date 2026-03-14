@@ -60,10 +60,9 @@ fn contains_typevar_reference(text: &str, typevar_name: &str) -> bool {
                 return false;
             }
             let before_ok = idx == 0
-                || (!haystack[idx - 1].is_ascii_alphanumeric() && haystack[idx - 1] != b'_');
+                || haystack.get(idx - 1).is_some_and(|&b| !b.is_ascii_alphanumeric() && b != b'_');
             let after_ok = idx + needle_len >= haystack.len()
-                || (!haystack[idx + needle_len].is_ascii_alphanumeric()
-                    && haystack[idx + needle_len] != b'_');
+                || haystack.get(idx + needle_len).is_some_and(|&b| !b.is_ascii_alphanumeric() && b != b'_');
             before_ok && after_ok
         })
 }
@@ -282,17 +281,15 @@ fn generic_types_compatible(actual: &str, expected: &str) -> bool {
 }
 
 /// Scan source text to collect generic class definitions.
-#[expect(
-    clippy::too_many_lines,
-    reason = "scanning class bodies requires sequential logic"
-)]
 fn collect_generic_classes(source: &str) -> Vec<GenericClassDef> {
     let lines: Vec<&str> = source.lines().collect();
     let mut classes: Vec<GenericClassDef> = Vec::new();
 
     let mut idx = 0usize;
     while idx < lines.len() {
-        let line = lines[idx];
+        let Some(line) = lines.get(idx).copied() else {
+            break;
+        };
         let trimmed = line.trim();
 
         // Detect class definitions with Generic[...] base.
@@ -314,7 +311,9 @@ fn collect_generic_classes(source: &str) -> Vec<GenericClassDef> {
             let mut methods: HashMap<String, Vec<(String, String)>> = HashMap::new();
             let mut body_idx = idx + 1;
             while body_idx < lines.len() {
-                let body_line = lines[body_idx];
+                let Some(body_line) = lines.get(body_idx).copied() else {
+                    break;
+                };
                 let body_trimmed = body_line.trim();
 
                 if body_trimmed.is_empty() || body_trimmed.starts_with('#') {
@@ -773,7 +772,9 @@ impl Rule for TypeVarScopeViolation {
 
                 if class_scopes.len() >= 2 {
                     // Collect TypeVars from all outer class scopes (all but the last).
-                    let outer_class_tvs: HashSet<String> = class_scopes[..class_scopes.len() - 1]
+                    let outer_class_tvs: HashSet<String> = class_scopes
+                        .get(..class_scopes.len().saturating_sub(1))
+                        .unwrap_or_default()
                         .iter()
                         .flat_map(|scope| scope.bound_typevars.iter().cloned())
                         .collect();
@@ -874,7 +875,9 @@ impl Rule for TypeVarScopeViolation {
                     scope_stack.iter().filter(|scope| scope.is_class).collect();
 
                 if class_scopes.len() == 1 && trimmed.contains("TypeAlias") {
-                    let enclosing_tvs = &class_scopes[0].bound_typevars;
+                    let Some(enclosing_tvs) = class_scopes.first().map(|s| &s.bound_typevars) else {
+                        continue;
+                    };
                     if !enclosing_tvs.is_empty() {
                         // Check the RHS of the TypeAlias assignment for TypeVar refs.
                         let rhs_part = trimmed.split_once('=').map_or("", |(_, rhs)| rhs);

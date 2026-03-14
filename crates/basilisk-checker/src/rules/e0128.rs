@@ -368,7 +368,7 @@ fn check_outer_scope(
                         if !in_nested && outer_class_params.contains(default_name.as_str()) {
                             // Compute byte offset for this line
                             let byte_offset: u32 = u32::try_from(
-                                lines[..line_idx].iter().map(|l| l.len() + 1).sum::<usize>(),
+                                lines.get(..line_idx).map_or(0, |slice| slice.iter().map(|l| l.len() + 1).sum::<usize>()),
                             )
                             .unwrap_or(u32::MAX);
                             let line_len = u32::try_from(line.len()).unwrap_or(u32::MAX);

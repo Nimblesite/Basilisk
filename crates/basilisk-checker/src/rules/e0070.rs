@@ -257,14 +257,15 @@ fn extract_generic_inner(text: &str) -> Option<&str> {
     if close_bracket <= bracket_pos {
         return None;
     }
-    Some(text[bracket_pos + 1..close_bracket].trim())
+    Some(text.get(bracket_pos + 1..close_bracket)?.trim())
 }
 
 /// Extract the base name from a generic annotation.
 ///
 /// `"list[int]"` -> `"list"`, `"ClassC[Never]"` -> `"ClassC"`
 fn extract_generic_base(text: &str) -> &str {
-    text.find('[').map_or(text, |pos| text[..pos].trim())
+    text.find('[')
+        .map_or(text, |pos| text.get(..pos).unwrap_or(text).trim())
 }
 
 /// Strip trailing `()` call from an expression.
@@ -276,7 +277,7 @@ fn strip_call_parens(text: &str) -> &str {
         return stripped;
     }
     if let Some(pos) = text.find("](") {
-        return &text[..=pos];
+        return text.get(..=pos).unwrap_or(text);
     }
     text
 }

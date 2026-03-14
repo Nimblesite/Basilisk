@@ -198,7 +198,8 @@ fn has_string_literal_in_pipe_union(s: &str) -> bool {
     while i < bytes.len() {
         let Some(&ch) = bytes.get(i) else { break };
         if in_string {
-            if ch == string_char && (i == 0 || bytes.get(i.wrapping_sub(1)).copied() != Some(b'\\')) {
+            if ch == string_char && (i == 0 || bytes.get(i.wrapping_sub(1)).copied() != Some(b'\\'))
+            {
                 in_string = false;
             }
         } else {
@@ -210,7 +211,9 @@ fn has_string_literal_in_pipe_union(s: &str) -> bool {
                 b'[' | b'(' | b'{' => depth += 1,
                 b']' | b')' | b'}' => depth -= 1,
                 b'|' if depth == 0 => {
-                    parts.push(s[part_start..i].trim());
+                    if let Some(slice) = s.get(part_start..i) {
+                        parts.push(slice.trim());
+                    }
                     part_start = i + 1;
                 }
                 _ => {}
@@ -221,7 +224,9 @@ fn has_string_literal_in_pipe_union(s: &str) -> bool {
     if parts.is_empty() {
         return false; // no top-level | found
     }
-    parts.push(s[part_start..].trim());
+    if let Some(slice) = s.get(part_start..) {
+        parts.push(slice.trim());
+    }
 
     parts.iter().any(|part| {
         let p = part.trim();
@@ -381,16 +386,16 @@ fn is_paramspec_invalid_annotation(ann: &str, paramspec_names: &HashSet<&str>) -
                 let name_len = name.len();
                 let ann_bytes = ann.as_bytes();
                 for start in 0..ann.len().saturating_sub(name_len - 1) {
-                    if ann[start..].starts_with(name) {
+                    if ann.get(start..).is_some_and(|s| s.starts_with(name)) {
                         let end = start + name_len;
                         let before_ok = start == 0
-                            || ann_bytes.get(start - 1).map_or(true, |&b| {
-                                !b.is_ascii_alphanumeric() && b != b'_'
-                            });
+                            || ann_bytes
+                                .get(start - 1)
+                                .is_none_or(|&b| !b.is_ascii_alphanumeric() && b != b'_');
                         let after_ok = end >= ann.len()
-                            || ann_bytes.get(end).map_or(true, |&b| {
-                                !b.is_ascii_alphanumeric() && b != b'_'
-                            });
+                            || ann_bytes
+                                .get(end)
+                                .is_none_or(|&b| !b.is_ascii_alphanumeric() && b != b'_');
                         if before_ok && after_ok {
                             return true;
                         }

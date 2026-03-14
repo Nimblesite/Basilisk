@@ -57,7 +57,10 @@ fn make_diag(msg: &str, span: basilisk_resolver::Span, path: &str) -> Diagnostic
 pub(crate) struct TypeVarInvalidKwargs;
 
 impl Rule for TypeVarInvalidKwargs {
-    #[expect(clippy::too_many_lines, reason = "TypeVar/TypeVarTuple/ParamSpec keyword validation requires extensive branching")]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "TypeVar/TypeVarTuple/ParamSpec keyword validation requires extensive branching"
+    )]
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         let path = &module.path;
         for tv in &module.typevar_calls {

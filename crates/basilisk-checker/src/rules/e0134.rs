@@ -120,15 +120,18 @@ fn split_top_level_commas(inner: &str) -> Vec<&str> {
             '[' | '(' => depth = depth.saturating_add(1),
             ']' | ')' => depth = depth.saturating_sub(1),
             ',' if depth == 0 => {
-                parts.push(inner[start..idx].trim());
+                if let Some(segment) = inner.get(start..idx) {
+                    parts.push(segment.trim());
+                }
                 start = idx + 1;
             }
             _ => {}
         }
     }
-    let last = inner[start..].trim();
-    if !last.is_empty() {
-        parts.push(last);
+    if let Some(last) = inner.get(start..).map(str::trim) {
+        if !last.is_empty() {
+            parts.push(last);
+        }
     }
     parts
 }
@@ -219,10 +222,6 @@ fn build_param_type_map(
 
 /// Check a statement inside a function body for calls with invariant
 /// mismatches.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "context parameters needed for type checking"
-)]
 fn check_body_stmt(
     stmt: &ruff_python_ast::Stmt,
     _source: &str,
@@ -391,7 +390,7 @@ fn emit_diagnostic(
 fn parse_generic_annotation(ann: &str) -> Option<(&str, Vec<&str>)> {
     let ann = ann.trim();
     let bracket_pos = ann.find('[')?;
-    let name = ann[..bracket_pos].trim();
+    let name = ann.get(..bracket_pos)?.trim();
     let inner = ann.get(bracket_pos + 1..ann.len().checked_sub(1)?)?;
     Some((name, split_top_level_commas(inner)))
 }

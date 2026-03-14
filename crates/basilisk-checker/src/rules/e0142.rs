@@ -302,10 +302,6 @@ fn span_for_source_line(source: &str, line: usize) -> Span {
 pub(crate) struct DataclassTransformClassViolation;
 
 impl Rule for DataclassTransformClassViolation {
-    #[expect(
-        clippy::too_many_lines,
-        reason = "dataclass_transform checking requires many steps"
-    )]
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         let transform_bases = collect_transform_base_classes(module);
         if transform_bases.is_empty() {
@@ -657,13 +653,14 @@ fn contains_identifier(text: &str, name: &str) -> bool {
     let text_bytes = text.as_bytes();
     let mut start = 0;
     while start + name.len() <= text.len() {
-        let Some(pos) = text[start..].find(name) else {
+        let Some(pos) = text.get(start..).and_then(|s| s.find(name)) else {
             break;
         };
         let abs = start + pos;
-        let before_ok = abs == 0 || !is_ident_char(text_bytes[abs - 1]);
+        let before_ok = abs == 0 || text_bytes.get(abs - 1).is_none_or(|&b| !is_ident_char(b));
         let after_end = abs + name_bytes.len();
-        let after_ok = after_end >= text_bytes.len() || !is_ident_char(text_bytes[after_end]);
+        let after_ok = after_end >= text_bytes.len()
+            || text_bytes.get(after_end).is_none_or(|&b| !is_ident_char(b));
         if before_ok && after_ok {
             return true;
         }

@@ -119,9 +119,15 @@ impl FlowUnionTracker {
                 }
 
                 if deduplicated_types.len() == 1 {
-                    deduplicated_types.first().cloned().unwrap_or(InferredType::Unknown)
+                    deduplicated_types
+                        .first()
+                        .cloned()
+                        .unwrap_or(InferredType::Unknown)
                 } else {
-                    let mut union_type = deduplicated_types.first().cloned().unwrap_or(InferredType::Unknown);
+                    let mut union_type = deduplicated_types
+                        .first()
+                        .cloned()
+                        .unwrap_or(InferredType::Unknown);
                     for t in deduplicated_types.get(1..).unwrap_or_default() {
                         union_type = InferredType::union(union_type, t.clone());
                     }

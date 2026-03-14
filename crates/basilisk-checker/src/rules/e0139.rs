@@ -123,7 +123,10 @@ fn build_alias_map<'a>(
         if assign.targets.len() != 1 {
             continue;
         }
-        let Expr::Name(lhs_name) = &assign.targets[0] else {
+        let Some(first_target) = assign.targets.first() else {
+            continue;
+        };
+        let Expr::Name(lhs_name) = first_target else {
             continue;
         };
 

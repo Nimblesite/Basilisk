@@ -75,7 +75,7 @@ fn extract_literal_inner(ann: &str) -> Option<&str> {
             Some(b']') => {
                 depth -= 1;
                 if depth == 0 {
-                    return Some(&ann[start_bracket..i]);
+                    return ann.get(start_bracket..i);
                 }
             }
             _ => {}

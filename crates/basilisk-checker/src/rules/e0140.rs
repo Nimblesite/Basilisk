@@ -243,7 +243,7 @@ fn check_stmts(stmts: &[Stmt], ctx: &ModuleContext, path: &str, diag: &mut Vec<D
             }
             Stmt::Assign(assign) => {
                 if assign.targets.len() == 1 {
-                    if let Some(target_name) = expr_name(&assign.targets[0]) {
+                    if let Some(target_name) = assign.targets.first().and_then(expr_name) {
                         if let Some((_, prev_ann)) =
                             annotations.iter().rev().find(|(n, _)| n == target_name)
                         {
@@ -286,7 +286,7 @@ fn check_stmts_in_func(
             }
             Stmt::Assign(assign) => {
                 if assign.targets.len() == 1 {
-                    if let Some(target_name) = expr_name(&assign.targets[0]) {
+                    if let Some(target_name) = assign.targets.first().and_then(expr_name) {
                         if let Some((_, prev_ann)) = local_annotations
                             .iter()
                             .rev()
@@ -482,8 +482,8 @@ fn check_callable_compat(
             return;
         }
         for (idx, exp) in ci.concatenate_prefix.iter().enumerate() {
-            if idx < func.positional_params.len() {
-                let act = &func.positional_params[idx].type_annotation;
+            if let Some(param) = func.positional_params.get(idx) {
+                let act = &param.type_annotation;
                 if !act.is_empty() && !types_compat(exp, act) {
                     diag.push(Diagnostic { code: CODE.clone(), severity: Severity::Error,
                         message: format!("Function `{}` incompatible with `{ann}`: param {} type `{act}` vs required `{exp}`", func.name, idx+1),

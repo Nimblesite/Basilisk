@@ -882,7 +882,10 @@ fn _line_span(source: &str, line_number: usize) -> Option<Span> {
     let mut start = 0;
     for (i, ch) in source.char_indices() {
         if current_line == line_number {
-            let end = source.get(i..).and_then(|s| s.find('\n')).map_or(source.len(), |j| i + j);
+            let end = source
+                .get(i..)
+                .and_then(|s| s.find('\n'))
+                .map_or(source.len(), |j| i + j);
             return Some(Span {
                 start: u32::try_from(start).ok()?,
                 end: u32::try_from(end).ok()?,

@@ -158,7 +158,7 @@ impl ModuleCtx {
                 Stmt::Assign(assign) => {
                     // Detect `X = TypeVar("X")` or `X = TypeVar("X", bound=...)`.
                     if assign.targets.len() == 1 {
-                        if let Some(name) = expr_simple_name(&assign.targets[0]) {
+                        if let Some(name) = assign.targets.first().and_then(expr_simple_name) {
                             if is_typevar_call(&assign.value) {
                                 typevar_names.push(name.to_owned());
                             }

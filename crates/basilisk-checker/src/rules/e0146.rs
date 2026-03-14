@@ -326,7 +326,7 @@ fn check_stmts(stmts: &[Stmt], ctx: &ModuleCtx, path: &str, diag: &mut Vec<Diagn
             Stmt::Assign(assign) => {
                 // Check plain assignment `var = Proto` where `var: type[Proto]` was declared.
                 if assign.targets.len() == 1 {
-                    if let Some(target_name) = expr_name(&assign.targets[0]) {
+                    if let Some(target_name) = assign.targets.first().and_then(expr_name) {
                         if let Some((_, proto_name)) =
                             type_proto_vars.iter().find(|(n, _)| n == target_name)
                         {

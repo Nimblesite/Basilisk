@@ -59,6 +59,7 @@ fn leading_indent(line: &str) -> usize {
 /// Return the byte offset (as u32) of the start of the given 1-based line.
 #[expect(
     clippy::cast_possible_truncation,
+    clippy::as_conversions,
     reason = "byte offsets fit u32 for source files"
 )]
 fn line_start_offset(source: &str, target_line: usize) -> u32 {
@@ -106,10 +107,13 @@ fn contains_name(text: &str, name: &str) -> bool {
         if window != needle {
             return false;
         }
-        let before_ok =
-            idx == 0 || (!haystack[idx - 1].is_ascii_alphanumeric() && haystack[idx - 1] != b'_');
-        let after_ok = idx + nlen >= haystack.len()
-            || (!haystack[idx + nlen].is_ascii_alphanumeric() && haystack[idx + nlen] != b'_');
+        let before_ok = idx == 0
+            || haystack
+                .get(idx - 1)
+                .is_none_or(|&b| !b.is_ascii_alphanumeric() && b != b'_');
+        let after_ok = haystack
+            .get(idx + nlen)
+            .is_none_or(|&b| !b.is_ascii_alphanumeric() && b != b'_');
         before_ok && after_ok
     })
 }
@@ -293,7 +297,9 @@ fn check_pep695_bound_cross_references(
                 continue;
             }
             if contains_name(bound_text, other_name) {
-                let param_name = &all_names[idx];
+                let Some(param_name) = all_names.get(idx) else {
+                    continue;
+                };
                 diagnostics.push(Diagnostic {
                     code: CODE.clone(),
                     severity: Severity::Error,
@@ -411,7 +417,9 @@ fn check_decorator_uses_class_type_param(
         return;
     };
 
-    let target_trimmed = lines[target_lno - 1].trim();
+    let Some(target_trimmed) = lines.get(target_lno - 1).map(|l| l.trim()) else {
+        return;
+    };
 
     // Collect type params of the target definition.
     let Some(target_params) = extract_pep695_type_params(target_trimmed) else {
@@ -618,10 +626,6 @@ fn check_method_redefines_class_type_param(
 // ---------------------------------------------------------------------------
 
 impl Rule for Pep695TypeParamScopingViolation {
-    #[expect(
-        clippy::too_many_lines,
-        reason = "PEP 695 scoping requires many checks"
-    )]
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         let source = &module.source;
         let path = &module.path;

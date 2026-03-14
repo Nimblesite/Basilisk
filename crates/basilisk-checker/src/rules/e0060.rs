@@ -213,10 +213,6 @@ fn emit_comparison_diagnostics(
 ///
 /// Scans for patterns like `name1 < name2`, `name1 <= name2`, `name1 > name2`,
 /// `name1 >= name2` in module-level code lines (not inside class/function bodies).
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "source lengths always fit in u32"
-)]
 fn extract_comparisons_from_source(source: &str) -> Vec<SourceComparison> {
     let mut results = Vec::new();
     let operators = [" <= ", " >= ", " < ", " > "];

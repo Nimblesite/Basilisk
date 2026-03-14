@@ -106,7 +106,7 @@ fn build_typevar_bound_map<'src>(
         if assign.targets.len() != 1 {
             continue;
         }
-        let Some(var_name) = expr_simple_name(&assign.targets[0]) else {
+        let Some(var_name) = assign.targets.first().and_then(expr_simple_name) else {
             continue;
         };
         if !typevar_names.contains(&var_name) {
@@ -689,10 +689,6 @@ fn check_kwarg_types(
 }
 
 /// Check positional arguments against the constructor parameter types.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "type checking requires full context"
-)]
 fn check_positional_arg_types(
     call: &ast::ExprCall,
     class_name: &str,

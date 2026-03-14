@@ -376,10 +376,6 @@ fn check_new_method_args(
 
 /// Check if the `cls` parameter annotation is incompatible with the provided
 /// type arguments.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "diagnostic context requires many parameters"
-)]
 fn check_cls_param_mismatch(
     cls_annotation: &str,
     class_name: &str,

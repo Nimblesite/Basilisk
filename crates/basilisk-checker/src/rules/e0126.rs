@@ -204,8 +204,7 @@ fn parse_single_annotated_assign<'a>(
     let line_offset_in_body = raw_line
         .as_ptr()
         .addr()
-        .checked_sub(body.as_ptr().addr())
-        .unwrap_or(0);
+        .saturating_sub(body.as_ptr().addr());
     let name_start_in_line = raw_line.len() - raw_line.trim_start().len();
     let name_offset = body_offset + line_offset_in_body + name_start_in_line;
 

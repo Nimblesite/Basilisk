@@ -133,7 +133,7 @@ impl ModuleContext {
         for stmt in stmts {
             if let Stmt::Assign(assign) = stmt {
                 if assign.targets.len() == 1 {
-                    if let Some(lhs_name) = expr_name(&assign.targets[0]) {
+                    if let Some(lhs_name) = assign.targets.first().and_then(expr_name) {
                         if let Some(ctv) = try_parse_constrained_typevar(lhs_name, &assign.value) {
                             let _ = constrained_tvars.insert(lhs_name.to_owned(), ctv);
                         }
@@ -196,7 +196,14 @@ fn try_parse_constrained_typevar(lhs_name: &str, expr: &Expr) -> Option<Constrai
     }
 
     // Collect positional constraint args (skip arg 0 which is the name string).
-    let constraints: Vec<String> = call.arguments.args[1..].iter().map(ann_str).collect();
+    let constraints: Vec<String> = call
+        .arguments
+        .args
+        .get(1..)
+        .unwrap_or_default()
+        .iter()
+        .map(ann_str)
+        .collect();
 
     if constraints.len() < 2 {
         return None;
@@ -264,8 +271,8 @@ fn parse_mapping_annotation(ann: &str) -> Option<(String, String)> {
     if args.len() < 2 {
         return None;
     }
-    let key_ty = args[0].trim().to_owned();
-    let val_ty = args[1].trim().to_owned();
+    let key_ty = args.first()?.trim().to_owned();
+    let val_ty = args.get(1)?.trim().to_owned();
     // Only return for types that are clearly mapping-like (have exactly 2 args
     // and look like type names, not bare TypeVar names by convention).
     if key_ty.is_empty() || val_ty.is_empty() {

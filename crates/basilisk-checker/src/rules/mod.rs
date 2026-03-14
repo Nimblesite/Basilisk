@@ -161,6 +161,7 @@ pub(crate) trait Rule {
 }
 
 /// All registered Phase 1 rules.
+#[expect(clippy::too_many_lines, reason = "rule registry listing is inherently long")]
 fn all_rules() -> &'static [&'static dyn Rule] {
     &[
         &e0001::MissingParameterAnnotation,
