@@ -97,16 +97,12 @@ jobs:
       - name: Add swap space
         uses: actionhippie/swap-space@v1
         with:
-          size: 4G
+          size: 10G
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
       - name: Run all tests
-        env:
-          # Limit parallel linker invocations to avoid OOM (Bus error)
-          # during coverage-instrumented linking on 7GB runners
-          CARGO_BUILD_JOBS: "4"
         run: ./scripts/test.sh
 
       - name: Upload coverage report artifact
