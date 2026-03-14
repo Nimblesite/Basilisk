@@ -464,6 +464,10 @@ pub(super) async fn document_color(
 }
 
 /// Handle `textDocument/colorPresentation`.
+#[expect(
+    clippy::unused_async,
+    reason = "signature must match async trait method in LspServer"
+)]
 pub(super) async fn color_presentation(
     _server: &LspServer,
     params: ColorPresentationParams,
