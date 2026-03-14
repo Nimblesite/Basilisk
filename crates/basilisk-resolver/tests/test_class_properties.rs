@@ -1,3 +1,5 @@
+//! Tests for resolver: test_class_properties.
+
 mod common;
 
 use common::resolve_src;

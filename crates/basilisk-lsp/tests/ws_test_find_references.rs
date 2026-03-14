@@ -1,3 +1,5 @@
+//! Tests for LSP: ws_test_find_references.
+
 #![allow(dead_code)]
 
 mod ws_test_common;

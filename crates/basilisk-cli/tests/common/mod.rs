@@ -13,12 +13,11 @@ use basilisk_checker::{check, Diagnostic};
 use basilisk_parser::parse_file;
 use basilisk_resolver::resolve;
 
-// Re-export shared helpers from the test-utils crate.
-#[expect(
-    unused_imports,
-    reason = "re-exported for test files that need checker helpers"
-)]
-pub use basilisk_test_utils::{assert_diagnostics, Expected};
+// Re-export shared helpers from the test-utils crate — used by sibling test modules.
+#[expect(unused_imports, reason = "re-exported for sibling test files via `use common::assert_diagnostics`")]
+pub use basilisk_test_utils::assert_diagnostics;
+#[expect(unused_imports, reason = "re-exported for sibling test files via `use common::Expected`")]
+pub use basilisk_test_utils::Expected;
 
 pub fn fixture(rel: &str) -> String {
     Path::new(env!("CARGO_MANIFEST_DIR"))

@@ -1,3 +1,5 @@
+//! Tests for LSP: lsp_e2e_code_actions.
+
 #![allow(dead_code)]
 //! LSP E2E tests — Signature Help, Find References, Rename, Inlay Hints,
 //! and Code Actions.

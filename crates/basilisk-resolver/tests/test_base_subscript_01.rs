@@ -1,3 +1,5 @@
+//! Tests for resolver: test_base_subscript_01.
+
 mod common;
 
 use common::resolve_src;

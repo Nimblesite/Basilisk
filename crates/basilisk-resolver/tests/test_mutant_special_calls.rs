@@ -1,3 +1,5 @@
+//! Tests for resolver: test_mutant_special_calls.
+
 mod common;
 
 use common::resolve_src;

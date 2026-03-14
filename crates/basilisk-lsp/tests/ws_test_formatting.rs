@@ -1,3 +1,5 @@
+//! Tests for LSP: ws_test_formatting.
+
 #![allow(dead_code)]
 
 mod ws_test_common;

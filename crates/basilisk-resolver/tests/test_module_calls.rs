@@ -1,3 +1,5 @@
+//! Tests for resolver: test_module_calls.
+
 mod common;
 
 use common::resolve_src;

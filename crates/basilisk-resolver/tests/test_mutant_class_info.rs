@@ -1,3 +1,5 @@
+//! Tests for resolver: test_mutant_class_info.
+
 mod common;
 
 use common::resolve_src;

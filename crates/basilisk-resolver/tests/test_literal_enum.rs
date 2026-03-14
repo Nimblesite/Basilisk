@@ -1,3 +1,5 @@
+//! Tests for resolver: test_literal_enum.
+
 mod common;
 
 use common::resolve_src;

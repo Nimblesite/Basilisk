@@ -1,3 +1,5 @@
+//! Tests for resolver: test_collect_from_stmt.
+
 mod common;
 
 use common::resolve_src;

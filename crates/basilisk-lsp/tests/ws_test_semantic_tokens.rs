@@ -1,3 +1,5 @@
+//! Tests for LSP: ws_test_semantic_tokens.
+
 #![allow(dead_code)]
 
 mod ws_test_common;

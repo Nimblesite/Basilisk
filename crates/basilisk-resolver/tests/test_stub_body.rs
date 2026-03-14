@@ -1,3 +1,5 @@
+//! Tests for resolver: test_stub_body.
+
 mod common;
 
 use common::resolve_src;

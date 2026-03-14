@@ -1,3 +1,5 @@
+//! Tests for resolver: test_mutant_generic_params.
+
 mod common;
 
 use common::resolve_src;

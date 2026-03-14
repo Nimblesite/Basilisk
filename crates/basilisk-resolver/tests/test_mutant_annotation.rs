@@ -1,3 +1,5 @@
+//! Tests for resolver: test_mutant_annotation.
+
 mod common;
 
 use basilisk_parser::parse_source;

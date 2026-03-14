@@ -1,3 +1,5 @@
+//! Tests for resolver: test_coverage.
+
 mod common;
 
 use common::resolve_src;

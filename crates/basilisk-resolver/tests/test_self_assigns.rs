@@ -1,3 +1,5 @@
+//! Tests for resolver: test_self_assigns.
+
 mod common;
 
 use common::resolve_src;

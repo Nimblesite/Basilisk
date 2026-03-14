@@ -1,3 +1,5 @@
+//! Tests for resolver: test_newtype.
+
 mod common;
 
 use common::resolve_src;

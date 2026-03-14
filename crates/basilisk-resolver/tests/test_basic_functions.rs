@@ -1,3 +1,5 @@
+//! Tests for resolver: test_basic_functions.
+
 mod common;
 
 use basilisk_parser::parse_source;

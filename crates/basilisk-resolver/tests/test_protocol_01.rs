@@ -1,3 +1,5 @@
+//! Tests for resolver: test_protocol_01.
+
 mod common;
 
 use common::resolve_src;

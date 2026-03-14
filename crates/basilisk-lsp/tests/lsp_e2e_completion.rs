@@ -1,3 +1,5 @@
+//! Tests for LSP: lsp_e2e_completion.
+
 #![allow(dead_code)]
 //! LSP E2E tests — Completion (`IntelliSense`).
 

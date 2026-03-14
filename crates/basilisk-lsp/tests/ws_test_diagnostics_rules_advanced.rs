@@ -1,3 +1,5 @@
+//! Tests for LSP: ws_test_diagnostics_rules_advanced.
+
 #![allow(dead_code)]
 //! WebSocket LSP E2E tests — Diagnostic rules E0026–E0054 and multi-rule pipeline.
 

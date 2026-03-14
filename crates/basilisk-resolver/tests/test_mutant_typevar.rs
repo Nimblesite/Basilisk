@@ -1,3 +1,5 @@
+//! Tests for resolver: test_mutant_typevar.
+
 mod common;
 
 use common::resolve_src;

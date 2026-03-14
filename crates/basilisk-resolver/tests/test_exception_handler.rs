@@ -1,3 +1,5 @@
+//! Tests for resolver: test_exception_handler.
+
 mod common;
 
 use common::resolve_src;

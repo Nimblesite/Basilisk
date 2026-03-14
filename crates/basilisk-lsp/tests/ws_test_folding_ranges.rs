@@ -1,3 +1,5 @@
+//! Tests for LSP: ws_test_folding_ranges.
+
 #![allow(dead_code, unused_imports)]
 
 mod ws_test_common;

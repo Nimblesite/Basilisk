@@ -1,3 +1,5 @@
+//! Tests for resolver: test_multiple_unbounded.
+
 mod common;
 
 use common::resolve_src;

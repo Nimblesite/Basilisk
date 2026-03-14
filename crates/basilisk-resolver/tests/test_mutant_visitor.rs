@@ -1,3 +1,5 @@
+//! Tests for resolver: test_mutant_visitor.
+
 mod common;
 
 use common::resolve_src;

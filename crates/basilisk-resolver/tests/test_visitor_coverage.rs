@@ -1,3 +1,5 @@
+//! Tests for resolver: test_visitor_coverage.
+
 mod common;
 
 use common::resolve_src;

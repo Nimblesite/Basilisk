@@ -1,3 +1,5 @@
+//! Tests for resolver: test_float_param.
+
 mod common;
 
 use common::resolve_src;

@@ -1,3 +1,5 @@
+//! Tests for resolver: test_isinstance.
+
 mod common;
 
 use common::resolve_src;

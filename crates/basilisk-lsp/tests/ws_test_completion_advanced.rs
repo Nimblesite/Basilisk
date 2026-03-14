@@ -1,3 +1,5 @@
+//! Tests for LSP: ws_test_completion_advanced.
+
 #![allow(dead_code)]
 //! WebSocket LSP E2E tests — Keyword argument completions, kind values, docstrings.
 

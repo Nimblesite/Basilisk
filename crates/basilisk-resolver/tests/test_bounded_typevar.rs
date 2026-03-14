@@ -1,3 +1,5 @@
+//! Tests for resolver: test_bounded_typevar.
+
 mod common;
 
 use common::resolve_src;

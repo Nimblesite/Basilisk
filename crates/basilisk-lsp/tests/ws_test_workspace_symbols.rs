@@ -1,3 +1,5 @@
+//! Tests for LSP: ws_test_workspace_symbols.
+
 #![allow(dead_code)]
 
 mod ws_test_common;

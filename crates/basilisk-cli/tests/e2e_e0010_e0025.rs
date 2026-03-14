@@ -5,7 +5,8 @@
 
 mod common;
 
-use common::{assert_diagnostics, fixture, run, Expected};
+use basilisk_test_utils::{assert_diagnostics, Expected};
+use common::{fixture, run};
 
 // ---------------------------------------------------------------------------
 // E0010 — import from untyped module

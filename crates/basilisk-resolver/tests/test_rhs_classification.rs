@@ -1,3 +1,5 @@
+//! Tests for resolver: test_rhs_classification.
+
 mod common;
 
 use common::resolve_src;
