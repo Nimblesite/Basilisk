@@ -32,4 +32,11 @@ RUN pip install --break-system-packages debugpy==1.8.14 ruff==0.11.2
 ENV CARGO_TERM_COLOR=always
 ENV RUSTFLAGS="-D warnings"
 
+# Create a non-root user so Claude Code can use --dangerously-skip-permissions
+RUN useradd -m -s /bin/bash -u 1000 dev \
+    && mkdir -p /workspace \
+    && chown -R dev:dev /workspace /usr/local/cargo /usr/local/rustup
+
+USER dev
+
 WORKDIR /workspace
