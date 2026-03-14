@@ -67,7 +67,7 @@ All features listed here follow standard Python 3.12 semantics. For the definiti
 - Closures with captured variables
 
 **Type System**
-- All PEPs listed in [SPEC.md Section 4.2](SPEC.md) (PEP 484, 526, 544, 585, 586, 589, 591, 604, 612, 613, 634, 646, 647, 673, 675, 681, 692, 695, 696, 698, 702, 742)
+- All PEPs listed in [CHECKER-ARCHITECTURE-SPEC.md Section 4.2](CHECKER-ARCHITECTURE-SPEC.md) (PEP 484, 526, 544, 585, 586, 589, 591, 604, 612, 613, 634, 646, 647, 673, 675, 681, 692, 695, 696, 698, 702, 742)
 - `Union`, `Optional`, `Literal`, `Final`, `ClassVar`
 - `TypeVar`, `TypeVarTuple`, `ParamSpec` (PEP 612)
 - `Protocol` (structural subtyping, PEP 544)
@@ -179,8 +179,8 @@ The compiler extends Basilisk's existing analysis pipeline. The type checker is 
 ```
 
 For the existing parser, resolver, and checker stages, see:
-- [SPEC.md Section 7](SPEC.md) for architecture details
-- [TYPE_INFERENCE.md](TYPE_INFERENCE.md) for inference rules
+- [CHECKER-ARCHITECTURE-SPEC.md Section 7](CHECKER-ARCHITECTURE-SPEC.md) for architecture details
+- [CHECKER-TYPE-INFERENCE-SPEC.md](CHECKER-TYPE-INFERENCE-SPEC.md) for inference rules
 
 ### 3.1 The HIR Stage
 
@@ -328,7 +328,7 @@ The compiler performs escape analysis: if a value is never stored into a heap ob
 
 ### 5.5 Ownership Annotations as Optimization Hints
 
-The ownership annotations from [SPEC.md Section 5](SPEC.md) (`Borrowed`, `Owned`, `InOut`) are optimization hints that work across **all** memory backends:
+The ownership annotations from [CHECKER-ARCHITECTURE-SPEC.md Section 5](CHECKER-ARCHITECTURE-SPEC.md) (`Borrowed`, `Owned`, `InOut`) are optimization hints that work across **all** memory backends:
 
 | Annotation | Compiler Effect |
 |---|---|
@@ -852,7 +852,7 @@ print(p.distance())
 
 ### 15.3 Test Layers
 
-The compiler follows the same testing philosophy as the analyzer (see [SPEC.md Section 17](SPEC.md)):
+The compiler follows the same testing philosophy as the analyzer (see [CHECKER-ARCHITECTURE-SPEC.md Section 17](CHECKER-ARCHITECTURE-SPEC.md)):
 
 | Layer | Location | What It Tests |
 |---|---|---|
@@ -883,8 +883,8 @@ The test runner asserts that compilation fails and the error output contains the
 
 ## 16. References
 
-- [SPEC.md](SPEC.md) -- Basilisk type system specification
-- [TYPE_INFERENCE.md](TYPE_INFERENCE.md) -- Type inference rules
+- [CHECKER-ARCHITECTURE-SPEC.md](CHECKER-ARCHITECTURE-SPEC.md) -- Basilisk type system specification
+- [CHECKER-TYPE-INFERENCE-SPEC.md](CHECKER-TYPE-INFERENCE-SPEC.md) -- Type inference rules
 - [stub-strategy.md](stub-strategy.md) -- Stub resolution and type provenance
 - [Python Language Reference (3.12)](https://docs.python.org/3.12/reference/)
 - [Python Typing Specification](https://typing.python.org/en/latest/spec/index.html)

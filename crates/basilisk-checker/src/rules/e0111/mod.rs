@@ -428,6 +428,18 @@ fn check_constructor_call(
                     );
                 }
             }
+
+            // Check generic NamedTuple constructor arg types with substitution.
+            check_generic_nt_arg_types(
+                call,
+                class_name,
+                class_info,
+                class_map,
+                &substitutions,
+                source,
+                path,
+                diagnostics,
+            );
         }
         _ => {}
     }

@@ -1,7 +1,7 @@
 # Whole-Module & Cross-Module Analysis — Specification
 
 > **Scope**: LSP analysis modes — from open-files-only to whole-workspace to cross-module
-> **Plan**: [CROSS-MODULE-ANALYSIS-PLAN.md](../plans/CROSS-MODULE-ANALYSIS-PLAN.md)
+> **Plan**: [CHECKER-CROSS-MODULE-ANALYSIS-PLAN.md](../plans/CHECKER-CROSS-MODULE-ANALYSIS-PLAN.md)
 
 ---
 

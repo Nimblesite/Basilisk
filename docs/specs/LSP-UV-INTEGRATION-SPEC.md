@@ -2,9 +2,9 @@
 
 > **Goal**: Make Basilisk the first type checker that deeply understands uv projects — zero-config, instant, always in sync.
 >
-> **Plan**: [UV-INTEGRATION-PLAN.md](../plans/UV-INTEGRATION-PLAN.md)
+> **Plan**: [LSP-UV-INTEGRATION-PLAN.md](../plans/LSP-UV-INTEGRATION-PLAN.md)
 >
-> **LSP Spec**: [LSP-SPEC.md](LSP-SPEC.md) — configuration, commands, binary resolution
+> **LSP Spec**: [LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md) — configuration, commands, binary resolution
 
 ---
 
@@ -328,7 +328,7 @@ All commands:
 
 ## 10. Configuration
 
-New settings added to the shared LSP configuration (extends [LSP-SPEC.md](LSP-SPEC.md)):
+New settings added to the shared LSP configuration (extends [LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md)):
 
 | Setting Key | Type | Default | Description |
 |---|---|---|---|
@@ -394,7 +394,7 @@ These are explicitly **out of scope**:
 
 | Spec | Interaction |
 |------|-------------|
-| [WHOLE-MODULE-ANALYSIS-SPEC.md](WHOLE-MODULE-ANALYSIS-SPEC.md) | `PackageRegistry` feeds into import resolution for all analysis modes |
-| [CROSS-MODULE-ANALYSIS-PLAN.md](../plans/CROSS-MODULE-ANALYSIS-PLAN.md) | Phase 1 (stub infrastructure) gains lock-file-aware stub detection |
-| [LSP-SPEC.md](LSP-SPEC.md) | New commands, settings, and file watchers added |
-| [MASS-AUTOFIX-SPEC.md](MASS-AUTOFIX-SPEC.md) | Mass autofix can batch `uv add --dev` for all missing stubs |
+| [CHECKER-WHOLE-MODULE-ANALYSIS-SPEC.md](CHECKER-WHOLE-MODULE-ANALYSIS-SPEC.md) | `PackageRegistry` feeds into import resolution for all analysis modes |
+| [CHECKER-CROSS-MODULE-ANALYSIS-PLAN.md](../plans/CHECKER-CROSS-MODULE-ANALYSIS-PLAN.md) | Phase 1 (stub infrastructure) gains lock-file-aware stub detection |
+| [LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md) | New commands, settings, and file watchers added |
+| [LSP-MASS-AUTOFIX-SPEC.md](LSP-MASS-AUTOFIX-SPEC.md) | Mass autofix can batch `uv add --dev` for all missing stubs |

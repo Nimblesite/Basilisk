@@ -6,7 +6,7 @@
 //! ## Suppression and Mode Override
 //!
 //! Basilisk supports a rich set of inline directives for controlling diagnostic
-//! severity. See SPEC.md Section 4.1.3 for the full specification.
+//! severity. See CHECKER-ARCHITECTURE-SPEC.md Section 4.1.3 for the full specification.
 //!
 //! - `# type: ignore` — suppress all diagnostics (PEP 484 compatible)
 //! - `# type: ignore[BSK-E0010]` — suppress specific codes

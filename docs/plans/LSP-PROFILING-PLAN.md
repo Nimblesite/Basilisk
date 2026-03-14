@@ -1,6 +1,6 @@
 # Basilisk Profiling — Implementation Plan
 
-See [BASILISK-PROFILING-SPEC.md](../specs/BASILISK-PROFILING-SPEC.md) for the full technical specification.
+See [LSP-PROFILING-SPEC.md](../specs/LSP-PROFILING-SPEC.md) for the full technical specification.
 
 ---
 

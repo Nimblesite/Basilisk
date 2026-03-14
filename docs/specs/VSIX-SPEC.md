@@ -6,7 +6,7 @@ A first-class VS Code extension that connects to the `basilisk lsp` binary. The 
 
 **CRITICAL: AIMING FOR FEATURE PARITY BETWEEN VS CODE, ZED, AND NEOVIM EXTENSIONS**
 
-All LSP features, DAP integration, custom commands, configuration settings, and binary resolution are defined in **`LSP-SPEC.md`** — the single source of truth. This spec only documents **VS Code-specific implementation details**.
+All LSP features, DAP integration, custom commands, configuration settings, and binary resolution are defined in **`LSP-ARCHITECTURE-SPEC.md`** — the single source of truth. This spec only documents **VS Code-specific implementation details**.
 
 ## Critical Docs
 
@@ -27,7 +27,7 @@ All LSP features, DAP integration, custom commands, configuration settings, and 
 │  LanguageClient          │◄───────►│  basilisk lsp            │
 │  (vscode-languageclient) │  stdio  │  (JSON-RPC)              │
 │                          │  JSON   │                          │
-│  All 21 LSP features     │  RPC    │  See LSP-SPEC.md   │
+│  All 21 LSP features     │  RPC    │  See LSP-ARCHITECTURE-SPEC.md   │
 │  via LanguageClient      │         │  for all features        │
 │                          │         │                          │
 │  DAP Proxy (TypeScript)  │◄───────►│  debugpy (spawned by     │
@@ -61,11 +61,11 @@ vscode-extension/
 
 ## LSP Client Configuration
 
-> See `LSP-SPEC.md` for all LSP features, custom commands, and shared configuration settings.
+> See `LSP-ARCHITECTURE-SPEC.md` for all LSP features, custom commands, and shared configuration settings.
 
 ```typescript
 const serverOptions: ServerOptions = {
-  command: resolvedBinaryPath,  // resolved via binary resolution cascade (LSP-SPEC.md)
+  command: resolvedBinaryPath,  // resolved via binary resolution cascade (LSP-ARCHITECTURE-SPEC.md)
   args: ["lsp"],
 };
 
@@ -100,7 +100,7 @@ client.start();
 
 ## Configuration Settings (`package.json` contribution)
 
-> Shared settings (sent to LSP server) are defined in `LSP-SPEC.md` § Shared Configuration Settings. Below is their `package.json` schema representation plus VS Code-only settings.
+> Shared settings (sent to LSP server) are defined in `LSP-ARCHITECTURE-SPEC.md` § Shared Configuration Settings. Below is their `package.json` schema representation plus VS Code-only settings.
 
 ```json
 {
@@ -194,7 +194,7 @@ client.start();
 | `basilisk.useLsp` | `true` | Use LSP mode vs subprocess fallback |
 | `basilisk.trace.server` | `"off"` | LSP communication trace level |
 
-All other settings are shared across editors (see `LSP-SPEC.md`).
+All other settings are shared across editors (see `LSP-ARCHITECTURE-SPEC.md`).
 
 ---
 
@@ -224,7 +224,7 @@ Additional indicators (future):
 
 ## Test Explorer Integration
 
-> See `LSP-SPEC.md` § Shared Configuration Settings for test explorer settings shared across all editors.
+> See `LSP-ARCHITECTURE-SPEC.md` § Shared Configuration Settings for test explorer settings shared across all editors.
 
 Discover and run Python tests (pytest, unittest) directly from VS Code's Test Explorer.
 
@@ -271,8 +271,8 @@ tests/
 
 ## Python Debugger (DAP)
 
-> See `LSP-SPEC.md` § Custom LSP Commands for `basilisk/startDebugSession` and `basilisk/stopDebugSession`.
-> See `LSP-SPEC.md` § DapTcpProxy for the shared proxy specification that all editors implement.
+> See `LSP-ARCHITECTURE-SPEC.md` § Custom LSP Commands for `basilisk/startDebugSession` and `basilisk/stopDebugSession`.
+> See `LSP-ARCHITECTURE-SPEC.md` § DapTcpProxy for the shared proxy specification that all editors implement.
 
 ### VS Code-Specific DAP Architecture
 
@@ -302,7 +302,7 @@ VS Code's `activeDebugSession` may not be cleared when `onDidTerminateDebugSessi
 
 ### DAP Features
 
-> See `LSP-SPEC.md` § DapTcpProxy for the full shared feature list.
+> See `LSP-ARCHITECTURE-SPEC.md` § DapTcpProxy for the full shared feature list.
 
 | Feature | Description |
 |---------|-------------|
@@ -351,7 +351,7 @@ VS Code's `activeDebugSession` may not be cleared when `onDidTerminateDebugSessi
 
 ## Binary Resolution
 
-> See `LSP-SPEC.md` § Binary Resolution Order for the shared cascade.
+> See `LSP-ARCHITECTURE-SPEC.md` § Binary Resolution Order for the shared cascade.
 
 VS Code-specific resolution order:
 1. VS Code setting: `basilisk.executablePath`

@@ -1,8 +1,8 @@
 # Cross-Module Analysis Plan
 
-> **Spec**: `docs/specs/WHOLE-MODULE-ANALYSIS-SPEC.md` — sections 2.3, 5.3, 8
-> **LSP Spec**: `docs/specs/LSP-SPEC.md` — stub strategy, type provenance
-> **Future**: `docs/specs/UV-INTEGRATION-SPEC.md` — uv lock file intelligence, package registry, environment detection
+> **Spec**: `docs/specs/CHECKER-WHOLE-MODULE-ANALYSIS-SPEC.md` — sections 2.3, 5.3, 8
+> **LSP Spec**: `docs/specs/LSP-ARCHITECTURE-SPEC.md` — stub strategy, type provenance
+> **Future**: `docs/specs/LSP-UV-INTEGRATION-SPEC.md` — uv lock file intelligence, package registry, environment detection
 > **Depends on**: Whole-module analysis (complete), import resolver (complete)
 > **Branch**: `crossmodule`
 
@@ -126,7 +126,7 @@ A project adopting Basilisk with third-party imports:
 
 ### With uv Integration (Future)
 
-For projects using uv, the migration path becomes significantly smoother — see `docs/specs/UV-INTEGRATION-SPEC.md` and `docs/plans/UV-INTEGRATION-PLAN.md`:
+For projects using uv, the migration path becomes significantly smoother — see `docs/specs/LSP-UV-INTEGRATION-SPEC.md` and `docs/plans/LSP-UV-INTEGRATION-PLAN.md`:
 
 1. **Zero config**: Basilisk auto-detects `uv.lock`, reads `.python-version`, understands the full dependency graph without any configuration.
 2. **Actionable diagnostics**: BSK-E0010 says "run `uv add requests`" instead of a generic "module not found". One-click code actions execute the command.

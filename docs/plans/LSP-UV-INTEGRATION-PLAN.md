@@ -1,7 +1,7 @@
 # uv Integration Plan
 
-> **Spec**: `docs/specs/UV-INTEGRATION-SPEC.md`
-> **LSP Spec**: `docs/specs/LSP-SPEC.md` — commands, config, file watchers
+> **Spec**: `docs/specs/LSP-UV-INTEGRATION-SPEC.md`
+> **LSP Spec**: `docs/specs/LSP-ARCHITECTURE-SPEC.md` — commands, config, file watchers
 > **Depends on**: Import resolver (working), config system (working), file watchers (working)
 > **Branch**: `uv-integration`
 
@@ -336,15 +336,15 @@ When `uv.lock` changes:
 | Read from `basilisk.json` | `crates/basilisk-lsp/src/config.rs` | Deserialize `uv` key |
 | Read from `pyproject.toml` | `crates/basilisk-lsp/src/config.rs` | `[tool.basilisk.uv]` section |
 | uv binary resolution | `crates/basilisk-uv/src/binary.rs` | Resolution cascade from spec section 10.1 |
-| Update LSP-SPEC.md | `docs/specs/LSP-SPEC.md` | Add uv settings to shared configuration table |
+| Update LSP-ARCHITECTURE-SPEC.md | `docs/specs/LSP-ARCHITECTURE-SPEC.md` | Add uv settings to shared configuration table |
 
 ### 7.2 Editor Extension Updates
 
 | Task | File | Description |
 |------|------|-------------|
 | VS Code settings | VS Code extension `package.json` | Add `basilisk.uv.*` settings |
-| Neovim config docs | `docs/specs/BASILISK-NEOVIM-EXTENSION-SPEC.md` | Document uv settings |
-| Zed config docs | `docs/specs/BASILISK-ZED-EXTENSION-SPEC.md` | Document uv settings |
+| Neovim config docs | `docs/specs/NEOVIM-SPEC.md` | Document uv settings |
+| Zed config docs | `docs/specs/ZED-SPEC.md` | Document uv settings |
 
 ### 7.3 Tests
 

@@ -910,11 +910,11 @@ Disk-backed cache between sessions. On startup, Basilisk loads the cache and onl
 
 Basilisk is an LSP server first, CLI tool second. The LSP server is the primary product. The CLI is a batch-mode wrapper around the same engine. This ensures interactive and CI experiences are always consistent.
 
-> For the complete LSP specification — all 21 features, custom commands, configuration settings, binary resolution, DAP integration, and DapTcpProxy — see **`LSP-SPEC.md`**.
+> For the complete LSP specification — all 21 features, custom commands, configuration settings, binary resolution, DAP integration, and DapTcpProxy — see **`LSP-ARCHITECTURE-SPEC.md`**.
 
 ### 9.2 Supported LSP Methods
 
-See `LSP-SPEC.md` § LSP Features for the complete specification. Summary:
+See `LSP-ARCHITECTURE-SPEC.md` § LSP Features for the complete specification. Summary:
 
 | Method | Description |
 |---|---|
@@ -934,7 +934,7 @@ See `LSP-SPEC.md` § LSP Features for the complete specification. Summary:
 
 ### 9.3 Custom LSP Commands
 
-See `LSP-SPEC.md` § Custom LSP Commands for the complete specification.
+See `LSP-ARCHITECTURE-SPEC.md` § Custom LSP Commands for the complete specification.
 
 ---
 
@@ -944,9 +944,9 @@ Each editor has a dedicated specification document:
 
 | Editor | Spec | Status |
 |---|---|---|
-| **VS Code** | [`BASILISK-VSCODE-EXTENSION-SPEC.md`](BASILISK-VSCODE-EXTENSION-SPEC.md) | Primary integration |
-| **Zed** | [`BASILISK-ZED-EXTENSION-SPEC.md`](BASILISK-ZED-EXTENSION-SPEC.md) | First-class Zed extension |
-| **Neovim** | [`BASILISK-NEOVIM-EXTENSION-SPEC.md`](BASILISK-NEOVIM-EXTENSION-SPEC.md) | basilisk.nvim plugin |
+| **VS Code** | [`VSIX-SPEC.md`](VSIX-SPEC.md) | Primary integration |
+| **Zed** | [`ZED-SPEC.md`](ZED-SPEC.md) | First-class Zed extension |
+| **Neovim** | [`NEOVIM-SPEC.md`](NEOVIM-SPEC.md) | basilisk.nvim plugin |
 | **Helix** | Built-in LSP support. Language configuration provided. | Config only |
 | **Emacs** | `eglot` / `lsp-mode` configuration. | Config only |
 

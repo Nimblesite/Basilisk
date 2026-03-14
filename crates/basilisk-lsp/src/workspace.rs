@@ -1,7 +1,7 @@
 //! Workspace index — persistent per-file analysis state for whole-module and
 //! cross-module analysis modes.
 //!
-//! See `docs/WHOLE-MODULE-ANALYSIS-SPEC.md` for the full specification.
+//! See `docs/CHECKER-WHOLE-MODULE-ANALYSIS-SPEC.md` for the full specification.
 
 use std::path::PathBuf;
 use std::sync::Arc;

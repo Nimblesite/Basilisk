@@ -1,6 +1,6 @@
 # LSP Implementation Plan
 
-> **Spec**: `docs/specs/LSP-SPEC.md` — read before touching any code.
+> **Spec**: `docs/specs/LSP-ARCHITECTURE-SPEC.md` — read before touching any code.
 
 ---
 
@@ -229,7 +229,7 @@ Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE 
 
 > Pylance supports: 484, 487, 526, 544, 561, 563, 570, 585, 586, 589, 591, 593, 604, 612, 613, 635, 646, 647, 655, 673, 675, 681, 692, 695, 696, 698, 702, 705, 728, 742.
 
-See Phase 3.5 in `docs/plans/CROSS-MODULE-ANALYSIS-PLAN.md` for the detailed conformance push plan.
+See Phase 3.5 in `docs/plans/CHECKER-CROSS-MODULE-ANALYSIS-PLAN.md` for the detailed conformance push plan.
 
 ---
 

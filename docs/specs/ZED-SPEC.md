@@ -9,7 +9,7 @@ Share code between the Zed extension and the other crates AMAP - even if just sh
 
 **CRITICAL: AIMING FOR FEATURE PARITY BETWEEN ZED, VS CODE, AND NEOVIM EXTENSIONS**
 
-All LSP features, DAP integration, custom commands, configuration settings, and binary resolution are defined in **`LSP-SPEC.md`** — the single source of truth. This spec only documents **Zed-specific implementation details**.
+All LSP features, DAP integration, custom commands, configuration settings, and binary resolution are defined in **`LSP-ARCHITECTURE-SPEC.md`** — the single source of truth. This spec only documents **Zed-specific implementation details**.
 
 CRITICAL: We only target Wasm 64 bit. We don't need to support 32 bit wasm for now
 
@@ -227,13 +227,13 @@ zed::register_extension!(BasiliskExtension);
 
 ### Language Intelligence (via LSP)
 
-> All 21 LSP features are defined in `LSP-SPEC.md` § LSP Features. Zed supports all of them natively via its built-in LSP client. Zero work needed in the Zed extension — the LSP protocol handles everything.
+> All 21 LSP features are defined in `LSP-ARCHITECTURE-SPEC.md` § LSP Features. Zed supports all of them natively via its built-in LSP client. Zero work needed in the Zed extension — the LSP protocol handles everything.
 
 **Zed-specific note**: Semantic tokens require `"semantic_tokens": "combined"` in Zed settings.
 
 ### Debugging (via DAP)
 
-> See `LSP-SPEC.md` § Custom LSP Commands for `basilisk/startDebugSession` and § DapTcpProxy for the shared proxy specification.
+> See `LSP-ARCHITECTURE-SPEC.md` § Custom LSP Commands for `basilisk/startDebugSession` and § DapTcpProxy for the shared proxy specification.
 
 Zed has native DAP support. The debug flow:
 
@@ -268,7 +268,7 @@ The `debug_adapter_schemas/basilisk-debug.json` schema defines the Zed-specific 
 
 ### Profiling
 
-> See `LSP-SPEC.md` § Custom LSP Commands for the profiling and memory command specifications shared across all editors.
+> See `LSP-ARCHITECTURE-SPEC.md` § Custom LSP Commands for the profiling and memory command specifications shared across all editors.
 
 Zed has no webview support, so profiling visualization works differently than VS Code:
 
@@ -330,7 +330,7 @@ Target assets:
 
 ## Zed Settings
 
-> Shared configuration settings are defined in `LSP-SPEC.md` § Shared Configuration Settings. Below shows how to map them into Zed's `settings.json` structure.
+> Shared configuration settings are defined in `LSP-ARCHITECTURE-SPEC.md` § Shared Configuration Settings. Below shows how to map them into Zed's `settings.json` structure.
 
 ```json
 {
@@ -343,7 +343,7 @@ Target assets:
         "python": "/path/to/python3"
       },
       "settings": {
-        // All keys from LSP-SPEC.md "Shared Configuration Settings"
+        // All keys from LSP-ARCHITECTURE-SPEC.md "Shared Configuration Settings"
         // nested under the "basilisk" key
         "inlayHints": {
           "parameterNames": true,
@@ -400,7 +400,7 @@ The entire backend is shared. Only thin editor-specific glue differs.
 
 ## TODO List
 
-See [BASILISK-ZED-EXTENSION-PLAN.md](../plans/BASILISK-ZED-EXTENSION-PLAN.md) for the full implementation plan with phasing.
+See [ZED-PLAN.md](../plans/ZED-PLAN.md) for the full implementation plan with phasing.
 
 ### Extension Scaffolding
 - [ ] Create `basilisk-zed/` directory with `extension.toml`, `Cargo.toml`, `src/lib.rs`

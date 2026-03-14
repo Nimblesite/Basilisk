@@ -8,7 +8,7 @@
 - Mass Autofix spec: EXISTS (but Phase 5 AI Typing Hooks not yet implemented)
 - AI provider code: NOTHING exists
 
-**This plan expands:** `MASS-AUTOFIX-PLAN.md` Phase 5 (AI Typing Hooks — stubs only). That phase was designed as a stub. This plan upgrades the stubs to a full provider abstraction. Mass Autofix Phases 1-4 are **completely independent of this plan** — they are deterministic features that work without AI. AI is an optional enhancement layer that plugs in after deterministic fixes for diagnostics that can't be fixed otherwise.
+**This plan expands:** `LSP-MASS-AUTOFIX-PLAN.md` Phase 5 (AI Typing Hooks — stubs only). That phase was designed as a stub. This plan upgrades the stubs to a full provider abstraction. Mass Autofix Phases 1-4 are **completely independent of this plan** — they are deterministic features that work without AI. AI is an optional enhancement layer that plugs in after deterministic fixes for diagnostics that can't be fixed otherwise.
 
 **Dependency:** Mass Autofix Phase 1 (Fix Metadata Infrastructure) must land first. AI fixes use the same `Fix` struct.
 
@@ -169,7 +169,7 @@
    - Alternative (simpler): make AI code actions on-demand only — user triggers `basilisk/ai/suggestFix` command explicitly.
 
 3. **Mass autofix AI enhancement** (optional layer on top of deterministic mass autofix):
-   - Mass autofix runs first — deterministic, independent of AI, as defined in `MASS-AUTOFIX-SPEC.md`.
+   - Mass autofix runs first — deterministic, independent of AI, as defined in `LSP-MASS-AUTOFIX-SPEC.md`.
    - After deterministic fixes are applied, if AI is enabled:
      - Collect remaining unfixed diagnostics (those with no deterministic fix).
      - Batch them to `suggest_fixes_batch`.

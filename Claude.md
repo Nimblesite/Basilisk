@@ -27,7 +27,7 @@ OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK MESSAGES AND COMPLY
 - `docs/plans/` — Implementation plans
 - `docs/` — Standalone docs (PEP conformance, stub strategy, etc.)
 
-`docs/specs/LSP-SPEC.md` is the **single source of truth** for all shared LSP/DAP/config/commands. Editor-specific specs point back to it.
+`docs/specs/LSP-ARCHITECTURE-SPEC.md` is the **single source of truth** for all shared LSP/DAP/config/commands. Editor-specific specs point back to it.
 
 # Critical Docs
 
@@ -115,7 +115,7 @@ Mojo-inspired but different goals. Includes early-stage Python compiler (compile
 
 Make the Python dev experience amazing in any LSP-based IDE. Users can turn it on any time, flick errors down to warnings, and incrementally move towards type safety. Or just use the LSP for autofixes, formatting, debugging, and profiling. One-stop-shop — no frankenstein of analyzers. Strict typing can be switched off for basic scripts.
 
-## Key Architecture (from docs/specs/SPEC.md)
+## Key Architecture (from docs/specs/CHECKER-ARCHITECTURE-SPEC.md)
 
 - **Parser**: `ruff_python_parser` (MIT, same as Ruff)
 - **Incremental**: Salsa framework (same as rust-analyzer) — sub-10ms incremental checks
@@ -136,7 +136,7 @@ error[BSK-E0001]: Missing parameter type annotation
    |             ^^^^ parameter `data` has no type annotation
 ```
 
-Ranges (defined in docs/specs/SPEC.md):
+Ranges (defined in docs/specs/CHECKER-ARCHITECTURE-SPEC.md):
 - `E0001–E0025`: Core type errors
 - `E003x`: Ownership violations
 - `E004x`: Immutability violations
@@ -146,7 +146,7 @@ Ranges (defined in docs/specs/SPEC.md):
 
 Pyright is the gold standard to compare against. [View code](https://github.com/microsoft/pyright) as reference, but NEVER copy from the Pyright codebase.
 
-## Testing Strategy (per docs/specs/SPEC.md)
+## Testing Strategy (per docs/specs/CHECKER-ARCHITECTURE-SPEC.md)
 
 ### Layering
 

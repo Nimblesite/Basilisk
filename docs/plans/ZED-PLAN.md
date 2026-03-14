@@ -1,6 +1,6 @@
 # Basilisk Zed Extension — Plan
 
-See [BASILISK-ZED-EXTENSION-SPEC.md](../specs/BASILISK-ZED-EXTENSION-SPEC.md) for the full technical specification.
+See [ZED-SPEC.md](../specs/ZED-SPEC.md) for the full technical specification.
 
 ---
 

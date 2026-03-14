@@ -251,20 +251,28 @@ impl Rule for TypeAliasInvalidRhs {
         // Check type alias parameterization (wrong number of type args)
         let alias_map = build_alias_info_map(module, &type_alias_names);
         check_alias_parameterization(module, &alias_map, diagnostics);
+        check_union_alias_instantiation(module, &alias_map, diagnostics);
+
+        // Check annotations that reference runtime (non-type) names
+        check_runtime_name_annotations(module, &runtime_var_names, diagnostics);
     }
 }
 
 /// Collect names of module-level variables that hold runtime values (not types).
 ///
-/// A name is considered a runtime variable if its RHS is a literal value
-/// (int, str, float, bool, etc.) or a call expression that isn't a type
-/// constructor. This detects patterns like `var1 = 3` so that
-/// `BadAlias: TypeAlias = var1` can be flagged.
+/// A name is considered a runtime variable if its RHS is a literal value,
+/// a collection, or an expression that `is_invalid_rhs` would reject as a
+/// `TypeAlias` RHS (call, ternary, bool-op, lambda, etc.).
 fn collect_runtime_var_names(module: &ResolvedModule) -> std::collections::HashSet<String> {
     use basilisk_resolver::RhsKind;
+    let source = &module.source;
     let mut names = std::collections::HashSet::new();
     for var in &module.module_vars {
-        match &var.rhs_kind {
+        // Skip TypeAlias-annotated variables (handled separately)
+        if var.has_annotation {
+            continue;
+        }
+        let is_runtime = match &var.rhs_kind {
             RhsKind::IntLiteral
             | RhsKind::FloatLiteral
             | RhsKind::StrLiteral
@@ -273,15 +281,44 @@ fn collect_runtime_var_names(module: &ResolvedModule) -> std::collections::HashS
             | RhsKind::NoneValue
             | RhsKind::EmptyList
             | RhsKind::EmptyDict
-            | RhsKind::Lambda => {
-                let _ = names.insert(var.name.clone());
+            | RhsKind::Lambda => true,
+            RhsKind::List(_) | RhsKind::Dict(_) | RhsKind::Set(_) | RhsKind::Tuple(_) => true,
+            RhsKind::CallExpr | RhsKind::TypeCall => {
+                // Check if the RHS text looks like a runtime expression
+                var.rhs_span
+                    .and_then(|sp| slice_span(source, sp))
+                    .is_some_and(|rhs| is_invalid_rhs(rhs.trim()))
             }
-            RhsKind::List(_) | RhsKind::Dict(_) | RhsKind::Set(_) | RhsKind::Tuple(_) => {
-                let _ = names.insert(var.name.clone());
+            RhsKind::Other => {
+                // Check text for ternary, bool-op, subscript-of-list, etc.
+                var.rhs_span
+                    .and_then(|sp| slice_span(source, sp))
+                    .is_some_and(|rhs| is_invalid_rhs(rhs.trim()))
             }
-            _ => {}
+        };
+        if is_runtime {
+            let _ = names.insert(var.name.clone());
         }
     }
+
+    // Second pass: catch transitive references (`BadAlias = var1` where
+    // `var1` is already known to be a runtime variable).
+    for var in &module.module_vars {
+        if var.has_annotation || names.contains(&var.name) {
+            continue;
+        }
+        if let Some(rhs_span) = var.rhs_span {
+            if let Some(rhs_text) = slice_span(source, rhs_span) {
+                let rhs_trimmed = rhs_text.trim();
+                if !rhs_trimmed.contains(['[', ']', '|', '.', '(', ')'])
+                    && names.contains(rhs_trimmed)
+                {
+                    let _ = names.insert(var.name.clone());
+                }
+            }
+        }
+    }
+
     names
 }
 
@@ -307,6 +344,8 @@ struct AliasInfo {
     typevar_count: usize,
     /// Whether the alias RHS contains a top-level `|` (union alias).
     is_union: bool,
+    /// Whether any of the type parameters is a `ParamSpec`.
+    has_paramspec: bool,
 }
 
 /// Build a map from alias name to its `AliasInfo`.
@@ -536,6 +575,89 @@ fn check_single_annotation(
                 )),
                 note: None,
             });
+        }
+    }
+}
+
+/// Check for calls to union type aliases (e.g. `ListOrSetAlias()`).
+///
+/// Union aliases like `X = list | set` cannot be instantiated because the
+/// runtime doesn't know which branch to construct.
+fn check_union_alias_instantiation(
+    module: &ResolvedModule,
+    alias_map: &std::collections::HashMap<String, AliasInfo>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for call in &module.calls {
+        let Some(info) = alias_map.get(&call.callee) else {
+            continue;
+        };
+        if info.is_union {
+            diagnostics.push(Diagnostic {
+                code: CODE.clone(),
+                severity: Severity::Error,
+                message: format!(
+                    "Cannot instantiate union type alias `{}`",
+                    call.callee
+                ),
+                span: call.span,
+                path: module.path.clone(),
+                help: Some(format!(
+                    "`{}` is a union of types; instantiate one of the union members directly",
+                    call.callee
+                )),
+                note: None,
+            });
+        }
+    }
+}
+
+/// Check function parameter annotations that reference runtime (non-type) names.
+///
+/// When a module-level name like `BadTypeAlias1 = eval(...)` is used as a
+/// type annotation (`p1: BadTypeAlias1`), this is an error because the name
+/// does not resolve to a type.
+fn check_runtime_name_annotations(
+    module: &ResolvedModule,
+    runtime_var_names: &std::collections::HashSet<String>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let source = &module.source;
+    let path = &module.path;
+
+    for func in &module.functions {
+        for param in &func.parameters {
+            if !param.has_annotation {
+                continue;
+            }
+            let Some(ann_span) = param.annotation_span else {
+                continue;
+            };
+            let Some(ann_text) = slice_span(source, ann_span) else {
+                continue;
+            };
+            let ann_text = ann_text.trim();
+            // Simple name reference to a runtime variable
+            if runtime_var_names.contains(ann_text) {
+                diagnostics.push(Diagnostic {
+                    code: CODE.clone(),
+                    severity: Severity::Error,
+                    message: format!(
+                        "Variable `{ann_text}` is not a valid type and \
+                         cannot be used as an annotation"
+                    ),
+                    span: ann_span,
+                    path: path.to_owned(),
+                    help: Some(format!(
+                        "`{ann_text}` is assigned a runtime value, not a type expression"
+                    )),
+                    note: Some(
+                        "Only type expressions (classes, type aliases, typing constructs) \
+                         are valid annotations"
+                            .to_owned(),
+                    ),
+                });
+            }
         }
     }
 }

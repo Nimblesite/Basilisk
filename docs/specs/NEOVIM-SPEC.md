@@ -6,7 +6,7 @@ A first-class Neovim plugin that connects to the same `basilisk lsp` binary as t
 
 **CRITICAL: AIMING FOR FEATURE PARITY BETWEEN NEOVIM, VS CODE, AND ZED EXTENSIONS**
 
-All LSP features, DAP integration, custom commands, configuration settings, and binary resolution are defined in **`LSP-SPEC.md`** — the single source of truth. This spec only documents **Neovim-specific implementation details**.
+All LSP features, DAP integration, custom commands, configuration settings, and binary resolution are defined in **`LSP-ARCHITECTURE-SPEC.md`** — the single source of truth. This spec only documents **Neovim-specific implementation details**.
 
 ## Critical Docs
 
@@ -44,7 +44,7 @@ All LSP features, DAP integration, custom commands, configuration settings, and 
 │  vim.lsp (built-in)      │◄───────►│  basilisk lsp            │
 │  ─────────────────────   │  stdio  │  (JSON-RPC)              │
 │  All 21 LSP features     │  JSON   │                          │
-│  native in Neovim 0.10+  │  RPC    │  See LSP-SPEC.md   │
+│  native in Neovim 0.10+  │  RPC    │  See LSP-ARCHITECTURE-SPEC.md   │
 │                          │         │  for all features        │
 │  nvim-dap (optional)     │◄───────►│                          │
 │  ─────────────────────   │  TCP    │  debugpy (spawned by     │
@@ -69,12 +69,12 @@ basilisk.nvim/
 │   └── basilisk/
 │       ├── init.lua              # setup() entry, config merge, module orchestration
 │       ├── config.lua            # Defaults + LuaCATS type annotations + validation
-│       ├── binary.lua            # Binary resolution (see LSP-SPEC.md for cascade)
+│       ├── binary.lua            # Binary resolution (see LSP-ARCHITECTURE-SPEC.md for cascade)
 │       ├── lsp.lua               # LSP client config, lifecycle, error recovery
 │       ├── dap.lua               # nvim-dap adapter, configs, DapTcpProxy
 │       ├── commands.lua          # :Basilisk* user commands
-│       ├── profiling.lua         # Profiling commands (see LSP-SPEC.md for LSP commands)
-│       ├── memory.lua            # Memory commands (see LSP-SPEC.md for LSP commands)
+│       ├── profiling.lua         # Profiling commands (see LSP-ARCHITECTURE-SPEC.md for LSP commands)
+│       ├── memory.lua            # Memory commands (see LSP-ARCHITECTURE-SPEC.md for LSP commands)
 │       ├── testing.lua           # Test discovery, tree UI, run/debug
 │       ├── statusline.lua        # Status line component (lualine compat)
 │       ├── health.lua            # :checkhealth basilisk
@@ -108,7 +108,7 @@ vim.lsp.config('basilisk', {
   root_markers = { 'pyproject.toml', 'setup.py', 'setup.cfg', '.git' },
   settings = {
     basilisk = {
-      -- All settings from LSP-SPEC.md "Shared Configuration Settings"
+      -- All settings from LSP-ARCHITECTURE-SPEC.md "Shared Configuration Settings"
       python = config.python,
       analysisMode = config.analysis_mode,
       inlayHints = {
@@ -128,7 +128,7 @@ vim.lsp.enable('basilisk')
 
 ### Neovim API Mappings for LSP Features
 
-All 21 core LSP features (defined in LSP-SPEC.md) are native in Neovim 0.10+ — zero custom implementation needed:
+All 21 core LSP features (defined in LSP-ARCHITECTURE-SPEC.md) are native in Neovim 0.10+ — zero custom implementation needed:
 
 | LSP Feature | Neovim API |
 |------------|------------|
@@ -151,7 +151,7 @@ All 21 core LSP features (defined in LSP-SPEC.md) are native in Neovim 0.10+ —
 
 ### Custom LSP Command Registration
 
-Register handlers for custom commands (defined in LSP-SPEC.md):
+Register handlers for custom commands (defined in LSP-ARCHITECTURE-SPEC.md):
 
 ```lua
 vim.lsp.commands['basilisk.organizeImports'] = function(cmd, ctx)
@@ -170,7 +170,7 @@ end
 
 ## DAP Integration
 
-> See LSP-SPEC.md for DAP features, launch configurations, and DapTcpProxy specification.
+> See LSP-ARCHITECTURE-SPEC.md for DAP features, launch configurations, and DapTcpProxy specification.
 
 Detects `nvim-dap` at runtime via `pcall(require, 'dap')`. Degrades gracefully if absent.
 
@@ -188,11 +188,11 @@ end
 
 ### DapTcpProxy (Lua/libuv)
 
-Port of VS Code's `dap-proxy.ts` using `vim.uv` (libuv bindings). See LSP-SPEC.md for the full proxy specification. Implementation uses:
+Port of VS Code's `dap-proxy.ts` using `vim.uv` (libuv bindings). See LSP-ARCHITECTURE-SPEC.md for the full proxy specification. Implementation uses:
 
 - `vim.uv.new_tcp()` — TCP socket creation
 - Content-Length header framing for DAP messages
-- All interception rules from LSP-SPEC.md
+- All interception rules from LSP-ARCHITECTURE-SPEC.md
 
 ### Default Configurations
 
@@ -225,9 +225,9 @@ dap.configurations.python = {
 
 ## Neovim User Commands
 
-All profiling/memory/test LSP commands (defined in LSP-SPEC.md) surface as Neovim user commands:
+All profiling/memory/test LSP commands (defined in LSP-ARCHITECTURE-SPEC.md) surface as Neovim user commands:
 
-| Neovim Command | LSP Command (from LSP-SPEC.md) | UI |
+| Neovim Command | LSP Command (from LSP-ARCHITECTURE-SPEC.md) | UI |
 |---------------|-------------------------------|-----|
 | `:BasiliskRestart` | — (client-side) | Restart LSP server |
 | `:BasiliskInfo` | — (client-side) | Show server status |
@@ -260,7 +260,7 @@ All profiling/memory/test LSP commands (defined in LSP-SPEC.md) surface as Neovi
 
 ## Test Explorer
 
-> See LSP-SPEC.md for test discovery features, supported frameworks, and configuration.
+> See LSP-ARCHITECTURE-SPEC.md for test discovery features, supported frameworks, and configuration.
 
 ### Neovim-Specific Implementation
 
@@ -335,7 +335,7 @@ Set via `LspAttach` autocmd in `ftplugin/python.lua`. All configurable, can be d
 
 ## Neovim-Only Configuration
 
-These settings are Neovim-specific (not in LSP-SPEC.md):
+These settings are Neovim-specific (not in LSP-ARCHITECTURE-SPEC.md):
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -346,7 +346,7 @@ These settings are Neovim-specific (not in LSP-SPEC.md):
 | `test_explorer.width` | `40` | Test panel width |
 | `log_level` | `"info"` | Logging verbosity |
 
-All shared settings are defined in LSP-SPEC.md and passed through to the LSP server.
+All shared settings are defined in LSP-ARCHITECTURE-SPEC.md and passed through to the LSP server.
 
 ---
 

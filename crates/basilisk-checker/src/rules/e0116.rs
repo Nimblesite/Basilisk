@@ -40,13 +40,17 @@ impl Rule for NamedTupleDefError {
             .collect();
 
         for class in &module.classes {
-            if !is_namedtuple(class) {
+            let is_nt = is_namedtuple(class)
+                || is_transitive_namedtuple(class, &class_map);
+            if !is_nt {
                 continue;
             }
 
             check_underscore_fields(class, &module.path, diagnostics);
             check_default_ordering(class, &module.path, &module.source, diagnostics);
-            check_multiple_inheritance(class, &module.path, diagnostics);
+            if is_namedtuple(class) {
+                check_multiple_inheritance(class, &module.path, diagnostics);
+            }
             check_subclass_field_conflict(class, &class_map, &module.path, diagnostics);
         }
     }
@@ -144,7 +148,7 @@ fn check_multiple_inheritance(class: &ClassInfo, path: &str, diagnostics: &mut V
         .bases
         .iter()
         .map(|b| b.split('[').next().unwrap_or_default())
-        .filter(|b| !b.is_empty() && *b != "NamedTuple" && *b != "Generic" && *b != "object")
+        .filter(|b| !b.is_empty() && *b != "NamedTuple" && *b != "Generic")
         .collect();
 
     if !non_namedtuple_bases.is_empty() {

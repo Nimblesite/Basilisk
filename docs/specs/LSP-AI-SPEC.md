@@ -883,7 +883,7 @@ The subprocess receives an `AiFixRequest` as JSON on stdin and writes an `AiFixR
 
 ### Feature 3: AI-Enhanced Mass Autofix (Optional Enhancement)
 
-Mass Autofix is a **deterministic feature** defined in `MASS-AUTOFIX-SPEC.md`. It works without AI. AI is an optional second pass that handles the leftovers — diagnostics that deterministic fixers can't resolve.
+Mass Autofix is a **deterministic feature** defined in `LSP-MASS-AUTOFIX-SPEC.md`. It works without AI. AI is an optional second pass that handles the leftovers — diagnostics that deterministic fixers can't resolve.
 
 **When**: User triggers mass autofix, deterministic fixes have already been applied, and there are remaining diagnostics with no deterministic fix available. AI is enabled and a provider is configured.
 
@@ -894,7 +894,7 @@ Mass Autofix is a **deterministic feature** defined in `MASS-AUTOFIX-SPEC.md`. I
 3. If AI is enabled: remaining unfixable diagnostics are batched and sent to the AI provider.
 4. AI-suggested fixes are presented in a review panel — NOT auto-applied. They are always `Unsafe` and always require confirmation.
 5. User reviews each AI fix (accept/reject/modify), with the model's reasoning shown.
-6. If AI is disabled: step 2 is the end. Mass autofix works exactly as specified in `MASS-AUTOFIX-SPEC.md`.
+6. If AI is disabled: step 2 is the end. Mass autofix works exactly as specified in `LSP-MASS-AUTOFIX-SPEC.md`.
 
 **Batch efficiency**: The `suggest_fixes_batch` method lets providers send all remaining diagnostics in one API call. For cloud models, this means one round-trip instead of N.
 
@@ -1020,7 +1020,7 @@ User types "response."
 
 ### Feature 10: AI Stub Generation
 
-**Enhances**: stub resolution (LSP-SPEC.md stub system, `basilisk stubs generate` CLI)
+**Enhances**: stub resolution (LSP-ARCHITECTURE-SPEC.md stub system, `basilisk stubs generate` CLI)
 
 **When**: A user imports from an untyped third-party package and no stubs are available — not from typeshed, not bundled with the package, not in the project's stub directory.
 
@@ -1345,15 +1345,15 @@ Mass Autofix is a **deterministic, standalone feature**. It does not require AI.
 
 | Spec | Relationship |
 |------|-------------|
-| `MASS-AUTOFIX-SPEC.md` Features 1 & 2 | **Untouched.** Mass Autofix and Gradual Adoption are deterministic features that work independently of AI. This spec does not modify them. |
-| `MASS-AUTOFIX-SPEC.md` Feature 3 | This spec **expands** the "AI Typing (Hooks)" section with a full provider abstraction. The `AiTypingProvider` trait becomes the more general `AiProvider` trait defined here. The hook points remain the same — AI slots in after deterministic fixes, never instead of them. |
-| `MASS-AUTOFIX-PLAN.md` Phases 1-4 | **Untouched.** Fix metadata, safe autofixes, mass fix engine, gradual adoption — all deterministic, all independent of AI. |
-| `MASS-AUTOFIX-PLAN.md` Phase 5 | **Expanded** by this spec's implementation plan (`AI-LSP-PLAN.md`). The stubs-only approach is upgraded to full provider abstraction, but the integration point is the same: AI is called only for diagnostics that have no deterministic fix. |
-| `LSP-SPEC.md` | This spec **extends** the LSP spec with 13 new code action kinds, 12 custom commands, and enhanced completion/symbol behavior. The LSP spec remains the single source of truth for non-AI features. AI features enhance — never replace — the deterministic LSP behavior defined there. |
-| `LSP-SPEC.md` completion | Feature 9 (AI-Enhanced Completions) augments the deterministic completion pipeline. AI re-ranks and adds items but never removes or delays the deterministic list. |
-| `LSP-SPEC.md` symbols | Feature 13 (Semantic Search) augments workspace symbol search. Text-based search always works. AI results are additive. |
-| `LSP-SPEC.md` references | Feature 11 (Dead Code Detection) uses reference counting from the existing reference system. AI is consulted only for zero-reference symbols. |
-| `LSP-SPEC.md` code actions | Features 6, 8, 12 add new code action kinds to the existing code action infrastructure. Deterministic code actions always appear first. AI code actions are always labeled with `(AI)` prefix. |
+| `LSP-MASS-AUTOFIX-SPEC.md` Features 1 & 2 | **Untouched.** Mass Autofix and Gradual Adoption are deterministic features that work independently of AI. This spec does not modify them. |
+| `LSP-MASS-AUTOFIX-SPEC.md` Feature 3 | This spec **expands** the "AI Typing (Hooks)" section with a full provider abstraction. The `AiTypingProvider` trait becomes the more general `AiProvider` trait defined here. The hook points remain the same — AI slots in after deterministic fixes, never instead of them. |
+| `LSP-MASS-AUTOFIX-PLAN.md` Phases 1-4 | **Untouched.** Fix metadata, safe autofixes, mass fix engine, gradual adoption — all deterministic, all independent of AI. |
+| `LSP-MASS-AUTOFIX-PLAN.md` Phase 5 | **Expanded** by this spec's implementation plan (`LSP-AI-PLAN.md`). The stubs-only approach is upgraded to full provider abstraction, but the integration point is the same: AI is called only for diagnostics that have no deterministic fix. |
+| `LSP-ARCHITECTURE-SPEC.md` | This spec **extends** the LSP spec with 13 new code action kinds, 12 custom commands, and enhanced completion/symbol behavior. The LSP spec remains the single source of truth for non-AI features. AI features enhance — never replace — the deterministic LSP behavior defined there. |
+| `LSP-ARCHITECTURE-SPEC.md` completion | Feature 9 (AI-Enhanced Completions) augments the deterministic completion pipeline. AI re-ranks and adds items but never removes or delays the deterministic list. |
+| `LSP-ARCHITECTURE-SPEC.md` symbols | Feature 13 (Semantic Search) augments workspace symbol search. Text-based search always works. AI results are additive. |
+| `LSP-ARCHITECTURE-SPEC.md` references | Feature 11 (Dead Code Detection) uses reference counting from the existing reference system. AI is consulted only for zero-reference symbols. |
+| `LSP-ARCHITECTURE-SPEC.md` code actions | Features 6, 8, 12 add new code action kinds to the existing code action infrastructure. Deterministic code actions always appear first. AI code actions are always labeled with `(AI)` prefix. |
 
 ---
 
