@@ -95,11 +95,9 @@ jobs:
           sudo apt-get install -y libasound2 2>/dev/null || sudo apt-get install -y libasound2t64
 
       - name: Add swap space
-        run: |
-          sudo fallocate -l 4G /swapfile
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
+        uses: actionhippie/swap-space@v1
+        with:
+          size: 4G
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
