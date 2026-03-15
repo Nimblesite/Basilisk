@@ -1,6 +1,6 @@
 # PEP Conformance — Plan
 
-> **Score**: 130/146 (89.0%)
+> **Score**: 131/146 (89.7%)
 > **Tests**: `crates/basilisk-cli/tests/conformance/`
 > **Status CSV**: `conformance/conformance_status.csv`
 > **Run**: `./conformance/conformance.sh` or `cargo test --test conformance_tests -- --nocapture`
@@ -20,7 +20,7 @@
 - [x] Aliases category: 6/7 (85.7%)
 - [x] Generics category: 23/30 (76.7%)
 
-## TODO — 16 failing files remaining
+## TODO — 15 failing files remaining
 
 ### Protocols (2 files, 23 missed, 14 FP)
 
