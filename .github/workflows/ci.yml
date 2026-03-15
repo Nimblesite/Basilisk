@@ -101,11 +101,8 @@ jobs:
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
-      - name: Build release binary
-        run: cargo build --release -p basilisk-cli
-
       - name: Run all tests
-        run: ./scripts/test.sh --skip-build
+        run: ./scripts/test.sh
 
       - name: Upload coverage report artifact
         if: always()
