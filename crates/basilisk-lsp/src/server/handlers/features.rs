@@ -81,6 +81,33 @@ pub(in crate::server) async fn code_action(
     params: CodeActionParams,
 ) -> LspResult<Option<CodeActionResponse>> {
     let uri = params.text_document.uri;
+
+    // When VS Code asks for `source.fixAll`, we fetch ALL diagnostics from
+    // the workspace index (not just the ones in the request) and produce a
+    // single combined WorkspaceEdit.
+    let wants_fix_all = params
+        .context
+        .only
+        .as_ref()
+        .is_some_and(|kinds| kinds.iter().any(|k| k.as_str().starts_with("source.fixAll")));
+
+    if wants_fix_all {
+        let result: Option<CodeActionResponse> = server
+            .with_index(|idx| {
+                let (text, _, checker_diags) = idx.get_by_uri(&uri)?;
+                let lsp_diags: Vec<_> = checker_diags
+                    .iter()
+                    .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &text))
+                    .collect();
+                let action = code_actions::fix_all_in_file(&uri, &lsp_diags, &text)?;
+                Some(vec![tower_lsp::lsp_types::CodeActionOrCommand::CodeAction(
+                    action,
+                )])
+            })
+            .await;
+        return Ok(result);
+    }
+
     let source = server
         .with_index(|idx| idx.get_text(&uri))
         .await

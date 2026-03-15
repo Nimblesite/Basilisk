@@ -480,3 +480,121 @@ fn test_lsp_code_action_redundant_annotation_w0050() -> TestResult<()> {
     );
     Ok(())
 }
+
+// ── Mass Autofix (Fix All in File) ──────────────────────────────────────────
+
+#[test]
+fn test_lsp_fix_all_in_file_returns_combined_edit() -> TestResult<()> {
+    let mut fixture = LspTestFixture::new()?;
+    let _ = fixture.initialize()?;
+
+    // Two redundant annotations on separate lines — both fixable.
+    let code = "x: int = 42\ny: str = \"hello\"\n";
+    fixture.did_open("file:///fixall.py", code)?;
+
+    let _ = fixture
+        .wait_for_diagnostics()
+        .ok_or("no diagnostics published")?;
+
+    // Request source.fixAll code actions — the server should return a single
+    // combined action with edits for both W0050 diagnostics.
+    let resp = send_request(
+        &mut fixture,
+        200,
+        "textDocument/codeAction",
+        serde_json::json!({
+            "textDocument": { "uri": "file:///fixall.py" },
+            "range": {
+                "start": { "line": 0, "character": 0 },
+                "end": { "line": 2, "character": 0 }
+            },
+            "context": {
+                "diagnostics": [],
+                "only": ["source.fixAll"]
+            }
+        }),
+    )?
+    .ok_or("no fix-all code action response")?;
+
+    assert!(
+        resp.contains("Fix all auto-fixable issues"),
+        "should return a fix-all action: {resp}"
+    );
+    assert!(
+        resp.contains("source.fixAll.basilisk"),
+        "action kind should be source.fixAll.basilisk: {resp}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_lsp_fix_all_no_fixable_returns_empty() -> TestResult<()> {
+    let mut fixture = LspTestFixture::new()?;
+    let _ = fixture.initialize()?;
+
+    // All annotations are necessary — nothing to fix.
+    let code = "x: list[int] = [1, 2, 3]\n";
+    fixture.did_open("file:///nofixall.py", code)?;
+
+    let _ = fixture
+        .wait_for_diagnostics()
+        .ok_or("no diagnostics published")?;
+
+    let resp = send_request(
+        &mut fixture,
+        201,
+        "textDocument/codeAction",
+        serde_json::json!({
+            "textDocument": { "uri": "file:///nofixall.py" },
+            "range": {
+                "start": { "line": 0, "character": 0 },
+                "end": { "line": 1, "character": 0 }
+            },
+            "context": {
+                "diagnostics": [],
+                "only": ["source.fixAll"]
+            }
+        }),
+    )?
+    .ok_or("no fix-all code action response")?;
+
+    // Should return null result or empty array — no fixable diagnostics.
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let result = &parsed["result"];
+    let is_empty = result.is_null() || result.as_array().is_some_and(|a| a.is_empty());
+    assert!(
+        is_empty,
+        "fix-all should return null/empty when nothing is fixable: {resp}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_lsp_fix_file_command() -> TestResult<()> {
+    let mut fixture = LspTestFixture::new()?;
+    let _ = fixture.initialize()?;
+
+    let code = "x: int = 42\n";
+    fixture.did_open("file:///fixcmd.py", code)?;
+
+    let _ = fixture
+        .wait_for_diagnostics()
+        .ok_or("no diagnostics published")?;
+
+    let resp = send_request(
+        &mut fixture,
+        202,
+        "workspace/executeCommand",
+        serde_json::json!({
+            "command": "basilisk.fixFile",
+            "arguments": ["file:///fixcmd.py"]
+        }),
+    )?
+    .ok_or("no fixFile command response")?;
+
+    assert!(
+        resp.contains("fixed"),
+        "fixFile should return a result with 'fixed' count: {resp}"
+    );
+    Ok(())
+}

@@ -266,3 +266,55 @@ Phases 2 and 5 can run in parallel (both depend only on Phase 1). Phase 3 depend
 Phase 1 ──┬── Phase 2 ── Phase 3 ── Phase 4
            └── Phase 5 (stubs only)
 ```
+
+---
+
+## TODO
+
+### Phase 1: Fix Metadata Infrastructure
+
+- [x] Define `Fix`, `FixSafety`, `FixSource`, `TextEdit` types — *implemented inline in code actions; no separate types needed yet since LSP types suffice*
+- [x] Map fix metadata to LSP `CodeAction` with `kind: quickfix` — *existing `fixes.rs` already does this*
+- [x] Wire up empty fix vectors — *existing diagnostic producers emit no fixes; code actions generate them on demand*
+
+### Phase 2: Implement Safe Autofixes for Core Rules
+
+- [x] `BSK-E0001` Missing parameter type → insert `: Any` — `code_actions/fixes.rs`
+- [x] `BSK-E0002` Missing return type → insert `-> None` — `code_actions/fixes.rs`
+- [x] `BSK-E0003` Missing variable type → insert `: <inferred>` — `code_actions/fixes.rs`
+- [x] `BSK-W0050` Redundant annotation → remove annotation — `code_actions/fixes.rs`
+- [ ] `BSK-E0005` Explicit `Any` required → insert `Any` with import
+- [ ] Heuristic fixes for ambiguous `BSK-E0001` / `BSK-E0002`
+- [ ] `FixProvider` trait — deferred until fix count justifies abstraction
+
+### Phase 3: Mass Autofix Engine
+
+- [x] Create `mass_fix.rs` — conflict resolution, greedy non-overlapping edit selection
+- [x] `fix_all_in_file()` — collect all fixes, resolve conflicts, return single `WorkspaceEdit`
+- [x] Advertise `source.fixAll.basilisk` code action kind in server capabilities
+- [x] LSP handler detects `source.fixAll` requests, fetches all diagnostics from workspace index
+- [x] VS Code extension: `basilisk.fixFile` command + keybinding
+- [x] VS Code extension: `editor.codeActionsOnSave` support for `source.fixAll.basilisk`
+- [ ] VS Code extension: `basilisk.fixWorkspace` — iterate all workspace files
+- [ ] CLI: `basilisk fix <path>` — safe fixes only
+- [ ] CLI: `basilisk fix --unsafe <path>` — all fixes
+- [ ] Undo integration verified (single `WorkspaceEdit` = single undo unit)
+
+### Phase 4: Gradual Adoption Mode
+
+- [ ] Define `adoptions.toml` schema
+- [ ] Create `AdoptionStore` — load/save/query/auto-graduate
+- [ ] Integrate `AdoptionStore` into diagnostic pipeline (demote severity)
+- [ ] Implement "Adopt" action — autofix + record remaining errors
+- [ ] Auto-graduation — remove codes with zero remaining instances
+- [ ] VS Code commands: `basilisk.adoptFile`, `basilisk.adoptWorkspace`, `basilisk.unadoptFile`
+- [ ] Status bar: "Basilisk: Adopted (N rules demoted)"
+- [ ] CLI: `basilisk adopt <path>`, `basilisk unadopt <path>`, `basilisk adopt --status`
+
+### Phase 5: AI Typing Hooks (Stubs Only)
+
+- [ ] Define `AiTypingProvider` trait
+- [ ] Define `AiTypingRequest` / `AiTypingResponse` types
+- [ ] Implement `NoOpAiTypingProvider`
+- [ ] Wire into fix pipeline (check `is_available()`, call `suggest_fix()`)
+- [ ] VS Code settings stubs: `basilisk.aiTyping.enabled`, `basilisk.aiTyping.provider`

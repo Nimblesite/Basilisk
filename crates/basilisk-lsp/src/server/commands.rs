@@ -40,6 +40,9 @@ pub(super) async fn dispatch_execute_command(
         basilisk_common::commands::DISABLE_RULE => {
             execute_disable_rule(server, &params.arguments).await
         }
+        basilisk_common::commands::FIX_FILE => {
+            execute_fix_file(server, &params.arguments).await
+        }
         unknown => {
             server
                 .client
@@ -251,6 +254,61 @@ async fn execute_disable_rule(
         "severity": severity,
         "path": pyproject_path.display().to_string(),
     })))
+}
+
+/// Handle `basilisk.fixFile`.
+///
+/// Collects all fixable diagnostics for the given file URI, resolves conflicts,
+/// and applies a single `WorkspaceEdit` so the user can undo in one step.
+async fn execute_fix_file(
+    server: &LspServer,
+    args: &[serde_json::Value],
+) -> LspResult<Option<serde_json::Value>> {
+    let Some(uri_str) = args.first().and_then(|v| v.as_str()) else {
+        return Ok(None);
+    };
+    let Ok(uri) = tower_lsp::lsp_types::Url::parse(uri_str) else {
+        return Ok(None);
+    };
+
+    let action: Option<tower_lsp::lsp_types::CodeAction> = server
+        .with_index(|idx| {
+            let (text, _, checker_diags) = idx.get_by_uri(&uri)?;
+            let lsp_diags: Vec<_> = checker_diags
+                .iter()
+                .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &text))
+                .collect();
+            crate::code_actions::fix_all_in_file(&uri, &lsp_diags, &text)
+        })
+        .await;
+
+    let Some(action) = action else {
+        info!(uri = %uri, "fixFile: no fixable diagnostics");
+        return Ok(Some(serde_json::json!({ "fixed": 0 })));
+    };
+
+    let edit_count: usize = action
+        .edit
+        .as_ref()
+        .and_then(|e| e.changes.as_ref())
+        .map_or(0, |changes| {
+            changes.values().map(Vec::len).sum::<usize>()
+        });
+
+    if let Some(edit) = action.edit {
+        let _ = server.client.apply_edit(edit).await;
+    }
+
+    info!(uri = %uri, edit_count, "fixFile: applied fixes");
+    server
+        .client
+        .log_message(
+            tower_lsp::lsp_types::MessageType::INFO,
+            format!("Basilisk: fixed {edit_count} issues in {uri}"),
+        )
+        .await;
+
+    Ok(Some(serde_json::json!({ "fixed": edit_count })))
 }
 
 /// Insert or update a rule override in `pyproject.toml` content.

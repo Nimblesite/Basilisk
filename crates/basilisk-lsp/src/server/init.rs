@@ -83,6 +83,7 @@ fn build_capabilities() -> ServerCapabilities {
                 CodeActionKind::QUICKFIX,
                 CodeActionKind::SOURCE_ORGANIZE_IMPORTS,
                 CodeActionKind::REFACTOR,
+                crate::code_actions::mass_fix::fix_all_kind(),
             ]),
             ..Default::default()
         })),

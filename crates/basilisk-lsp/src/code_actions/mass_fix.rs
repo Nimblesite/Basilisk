@@ -1,0 +1,212 @@
+//! Mass autofix engine — apply all fixable diagnostics in a single action.
+//!
+//! Collects per-diagnostic fixes, resolves overlapping edits (keeping the
+//! earlier fix when ranges conflict), and returns a single `WorkspaceEdit`
+//! that VS Code can undo in one step.
+
+use std::collections::HashMap;
+
+use tower_lsp::lsp_types::{
+    CodeAction, CodeActionKind, Diagnostic, NumberOrString, Range, TextEdit, Url, WorkspaceEdit,
+};
+
+use super::fixes;
+
+/// Custom `CodeActionKind` for "fix all safe diagnostics in this file".
+///
+/// VS Code triggers this when the user runs `source.fixAll.basilisk` from
+/// the command palette or a keybinding.
+pub(crate) fn fix_all_kind() -> CodeActionKind {
+    CodeActionKind::new("source.fixAll.basilisk")
+}
+
+/// Build a single code action that fixes every fixable diagnostic in the file.
+///
+/// Returns `None` if no diagnostics have applicable fixes.
+pub(crate) fn fix_all_in_file(
+    uri: &Url,
+    diagnostics: &[Diagnostic],
+    source: &str,
+) -> Option<CodeAction> {
+    let edits = collect_non_overlapping_edits(uri, diagnostics, source);
+    if edits.is_empty() {
+        return None;
+    }
+
+    let count = edits.len();
+    let mut changes = HashMap::new();
+    let _ = changes.insert(uri.clone(), edits);
+
+    Some(CodeAction {
+        title: format!("Fix all auto-fixable issues ({count} fixes)"),
+        kind: Some(fix_all_kind()),
+        diagnostics: Some(diagnostics.to_vec()),
+        edit: Some(WorkspaceEdit {
+            changes: Some(changes),
+            ..Default::default()
+        }),
+        is_preferred: Some(true),
+        ..Default::default()
+    })
+}
+
+/// Collect text edits for all fixable diagnostics, discarding any that
+/// overlap with an earlier (by start position) edit.
+fn collect_non_overlapping_edits(
+    uri: &Url,
+    diagnostics: &[Diagnostic],
+    source: &str,
+) -> Vec<TextEdit> {
+    // 1. Generate candidate edits from each fixable diagnostic.
+    let mut candidates: Vec<TextEdit> = diagnostics
+        .iter()
+        .filter_map(|diag| single_fix_edit(uri, diag, source))
+        .collect();
+
+    // 2. Sort by start position (line, then character).
+    candidates.sort_by(|a, b| {
+        a.range
+            .start
+            .line
+            .cmp(&b.range.start.line)
+            .then(a.range.start.character.cmp(&b.range.start.character))
+    });
+
+    // 3. Greedily keep non-overlapping edits.
+    let mut accepted: Vec<TextEdit> = Vec::with_capacity(candidates.len());
+    for edit in candidates {
+        if let Some(last) = accepted.last() {
+            if ranges_overlap(&last.range, &edit.range) {
+                continue; // Skip — conflicts with an already-accepted edit.
+            }
+        }
+        accepted.push(edit);
+    }
+
+    accepted
+}
+
+/// Extract the single `TextEdit` from a per-diagnostic fix, if one exists.
+fn single_fix_edit(uri: &Url, diag: &Diagnostic, source: &str) -> Option<TextEdit> {
+    let code = match &diag.code {
+        Some(NumberOrString::String(s)) => s.as_str(),
+        _ => return None,
+    };
+
+    let action = match code {
+        "BSK-E0001" => fixes::fix_missing_param_annotation(uri, diag),
+        "BSK-E0002" => fixes::fix_missing_return_annotation(uri, diag),
+        "BSK-E0003" => fixes::fix_missing_variable_annotation(uri, diag),
+        "BSK-W0050" => fixes::fix_remove_redundant_annotation(uri, diag, source),
+        _ => return None,
+    };
+
+    // Each of our fix functions produces exactly one TextEdit.
+    action
+        .edit
+        .and_then(|ws| ws.changes)
+        .and_then(|mut map| map.remove(uri))
+        .and_then(|mut edits| {
+            if edits.len() == 1 {
+                Some(edits.remove(0))
+            } else {
+                None
+            }
+        })
+}
+
+/// Two ranges overlap if one starts before the other ends.
+fn ranges_overlap(a: &Range, b: &Range) -> bool {
+    let a_before_b = position_le(a.end, b.start);
+    let b_before_a = position_le(b.end, a.start);
+    !(a_before_b || b_before_a)
+}
+
+/// `a <= b` in terms of document position.
+fn position_le(a: tower_lsp::lsp_types::Position, b: tower_lsp::lsp_types::Position) -> bool {
+    a.line < b.line || (a.line == b.line && a.character <= b.character)
+}
+
+#[cfg(test)]
+#[expect(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test-only code: unwrap/expect acceptable in unit tests"
+)]
+mod tests {
+    use super::*;
+    use tower_lsp::lsp_types::{DiagnosticSeverity, NumberOrString, Position};
+
+    fn make_diag(code: &str, start_line: u32, start_char: u32, end_char: u32) -> Diagnostic {
+        Diagnostic {
+            range: Range {
+                start: Position::new(start_line, start_char),
+                end: Position::new(start_line, end_char),
+            },
+            severity: Some(DiagnosticSeverity::WARNING),
+            code: Some(NumberOrString::String(code.to_owned())),
+            source: Some("basilisk".to_owned()),
+            message: String::new(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_fix_all_no_fixable_diagnostics() {
+        let uri = Url::parse("file:///test.py").unwrap();
+        let diag = make_diag("BSK-E9999", 0, 0, 5); // Unknown code — no fix.
+        let result = fix_all_in_file(&uri, &[diag], "x = 42\n");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_fix_all_single_w0050() {
+        let uri = Url::parse("file:///test.py").unwrap();
+        let diag = make_diag("BSK-W0050", 0, 0, 1);
+        let source = "x: int = 42\n";
+        let action = fix_all_in_file(&uri, &[diag], source);
+        assert!(action.is_some());
+        let action = action.unwrap();
+        assert!(action.title.contains("1 fixes"));
+        assert_eq!(action.kind, Some(fix_all_kind()));
+        let changes = action.edit.unwrap().changes.unwrap();
+        let edits = changes.get(&uri).unwrap();
+        assert_eq!(edits.len(), 1);
+    }
+
+    #[test]
+    fn test_fix_all_multiple_non_overlapping() {
+        let uri = Url::parse("file:///test.py").unwrap();
+        let source = "x: int = 42\ny: str = 'hello'\n";
+        let diags = vec![
+            make_diag("BSK-W0050", 0, 0, 1),
+            make_diag("BSK-W0050", 1, 0, 1),
+        ];
+        let action = fix_all_in_file(&uri, &diags, source);
+        assert!(action.is_some());
+        let changes = action.unwrap().edit.unwrap().changes.unwrap();
+        let edits = changes.get(&uri).unwrap();
+        assert_eq!(edits.len(), 2);
+    }
+
+    #[test]
+    fn test_ranges_overlap_no_overlap() {
+        let a = Range::new(Position::new(0, 0), Position::new(0, 5));
+        let b = Range::new(Position::new(0, 5), Position::new(0, 10));
+        assert!(!ranges_overlap(&a, &b));
+    }
+
+    #[test]
+    fn test_ranges_overlap_yes() {
+        let a = Range::new(Position::new(0, 0), Position::new(0, 6));
+        let b = Range::new(Position::new(0, 5), Position::new(0, 10));
+        assert!(ranges_overlap(&a, &b));
+    }
+
+    #[test]
+    fn test_ranges_overlap_different_lines() {
+        let a = Range::new(Position::new(0, 0), Position::new(0, 10));
+        let b = Range::new(Position::new(1, 0), Position::new(1, 10));
+        assert!(!ranges_overlap(&a, &b));
+    }
+}

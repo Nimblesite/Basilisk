@@ -6,6 +6,7 @@ use tower_lsp::lsp_types::{CodeActionOrCommand, Diagnostic, NumberOrString, Url}
 
 mod fixes;
 mod imports;
+pub(crate) mod mass_fix;
 mod suppress;
 
 /// Monotonic counter for unique temp-file names.
@@ -13,6 +14,7 @@ pub(super) static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 // Re-export pub(crate) items that the server module calls directly.
 pub(crate) use imports::organize_imports;
+pub(crate) use mass_fix::fix_all_in_file;
 
 /// Generate code actions for the given diagnostics.
 ///

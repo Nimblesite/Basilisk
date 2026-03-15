@@ -18,6 +18,8 @@ pub mod commands {
     pub const STOP_DEBUG_SESSION: &str = "basilisk.stopDebugSession";
     /// Disable a diagnostic rule in the project configuration (`pyproject.toml`).
     pub const DISABLE_RULE: &str = "basilisk.disableRule";
+    /// Fix all auto-fixable diagnostics in the current file (safe fixes only).
+    pub const FIX_FILE: &str = "basilisk.fixFile";
 
     /// All registered command names, for capability advertisement.
     pub const ALL: &[&str] = &[
@@ -25,6 +27,7 @@ pub mod commands {
         START_DEBUG_SESSION,
         STOP_DEBUG_SESSION,
         DISABLE_RULE,
+        FIX_FILE,
     ];
 }
 
