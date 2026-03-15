@@ -16,7 +16,8 @@ use super::fixes;
 ///
 /// VS Code triggers this when the user runs `source.fixAll.basilisk` from
 /// the command palette or a keybinding.
-pub(crate) fn fix_all_kind() -> CodeActionKind {
+#[cfg(test)]
+fn fix_all_kind() -> CodeActionKind {
     CodeActionKind::new("source.fixAll.basilisk")
 }
 
@@ -24,12 +25,13 @@ pub(crate) fn fix_all_kind() -> CodeActionKind {
 ///
 /// Returns `None` if no diagnostics have applicable fixes.
 /// Uses `source.fixAll.basilisk` kind (for on-save / command palette).
-pub(crate) fn fix_all_in_file(
+#[cfg(test)]
+fn fix_all_in_file(
     uri: &Url,
     diagnostics: &[Diagnostic],
     source: &str,
 ) -> Option<CodeAction> {
-    build_fix_all(uri, diagnostics, source, fix_all_kind())
+    build_fix_all(uri, diagnostics, source, CodeActionKind::new("source.fixAll.basilisk"))
 }
 
 /// Build a "Fix all" code action with `quickfix` kind so it appears
