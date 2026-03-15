@@ -15,8 +15,33 @@ env:
   RUSTFLAGS: "-D warnings"
 
 jobs:
-  ci:
-    name: Build, Lint & Test
+  # ── Lint (runs in parallel with test) ────────────────────────────────────
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: cargo fmt --check
+        run: cargo fmt --all --check
+
+      - name: clippy (workspace)
+        run: cargo clippy --release --all-targets
+
+      - name: clippy (zed extension)
+        run: cargo clippy --release --all-targets --manifest-path basilisk-zed/Cargo.toml
+
+  # ── Test (runs in parallel with lint) ────────────────────────────────────
+  test:
+    name: Build & Test
     runs-on: ubuntu-latest
     env:
       TEST_COVERAGE_BASILISK_CHECKER: ${{ vars.TEST_COVERAGE_BASILISK_CHECKER || '89' }}
@@ -32,10 +57,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ── Toolchains ──────────────────────────────────────────────────────────
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy, llvm-tools-preview
+          components: llvm-tools-preview
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -77,21 +101,9 @@ jobs:
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
-      # ── Lint (clippy --release doubles as the build step) ──────────────────
-      - name: cargo fmt --check
-        run: cargo fmt --all --check
-
-      - name: clippy (workspace)
-        run: cargo clippy --release --all-targets
-
-      - name: clippy (zed extension)
-        run: cargo clippy --release --all-targets --manifest-path basilisk-zed/Cargo.toml
-
-      # ── Build ───────────────────────────────────────────────────────────────
       - name: Build release binary
         run: cargo build --release -p basilisk-cli
 
-      # ── Test ────────────────────────────────────────────────────────────────
       - name: Run all tests
         run: ./scripts/test.sh --skip-build
 
