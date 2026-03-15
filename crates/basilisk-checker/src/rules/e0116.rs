@@ -40,8 +40,7 @@ impl Rule for NamedTupleDefError {
             .collect();
 
         for class in &module.classes {
-            let is_nt = is_namedtuple(class)
-                || is_transitive_namedtuple(class, &class_map);
+            let is_nt = is_namedtuple(class) || is_transitive_namedtuple(class, &class_map);
             if !is_nt {
                 continue;
             }

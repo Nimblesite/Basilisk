@@ -395,7 +395,12 @@ fn build_alias_info_map(
         let typevar_bounds = collect_typevar_bounds(rhs, &module.typevar_calls);
         let _ = map.insert(
             var.name.clone(),
-            AliasInfo { typevar_count, is_union, has_paramspec, typevar_bounds },
+            AliasInfo {
+                typevar_count,
+                is_union,
+                has_paramspec,
+                typevar_bounds,
+            },
         );
     }
 
@@ -432,7 +437,12 @@ fn build_alias_info_map(
             let typevar_bounds = collect_typevar_bounds(rhs, &module.typevar_calls);
             let _ = map.insert(
                 var.name.clone(),
-                AliasInfo { typevar_count, is_union, has_paramspec, typevar_bounds },
+                AliasInfo {
+                    typevar_count,
+                    is_union,
+                    has_paramspec,
+                    typevar_bounds,
+                },
             );
         }
     }
@@ -462,10 +472,7 @@ fn count_typevar_refs(rhs: &str, typevar_names: &std::collections::HashSet<&str>
 }
 
 /// Returns `true` if the RHS text references any `ParamSpec` name.
-fn has_paramspec_ref(
-    rhs: &str,
-    typevar_calls: &[basilisk_resolver::TypeVarCallInfo],
-) -> bool {
+fn has_paramspec_ref(rhs: &str, typevar_calls: &[basilisk_resolver::TypeVarCallInfo]) -> bool {
     let paramspec_names: std::collections::HashSet<&str> = typevar_calls
         .iter()
         .filter(|tv| tv.is_paramspec)
@@ -786,10 +793,7 @@ fn check_union_alias_instantiation(
             diagnostics.push(Diagnostic {
                 code: CODE.clone(),
                 severity: Severity::Error,
-                message: format!(
-                    "Cannot instantiate union type alias `{}`",
-                    call.callee
-                ),
+                message: format!("Cannot instantiate union type alias `{}`", call.callee),
                 span: call.span,
                 path: module.path.clone(),
                 help: Some(format!(

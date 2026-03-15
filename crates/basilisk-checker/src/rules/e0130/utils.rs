@@ -176,6 +176,45 @@ pub(super) fn span_for_line(source: &str, line_number: usize) -> Span {
     }
 }
 
+/// Extract PEP 695 type parameters from a class definition like `class Foo[T, S](bases):`.
+///
+/// Returns an empty set if the class does not use PEP 695 syntax.
+pub(super) fn extract_pep695_type_params(class_line: &str) -> std::collections::HashSet<String> {
+    let trimmed = class_line.trim();
+    if !trimmed.starts_with("class ") {
+        return std::collections::HashSet::new();
+    }
+    let after_class = &trimmed[6..];
+
+    let Some(bracket_pos) = after_class.find('[') else {
+        return std::collections::HashSet::new();
+    };
+
+    // If `(` appears before `[`, this is traditional `Generic[T]` syntax, not PEP 695
+    if let Some(paren_pos) = after_class.find('(') {
+        if paren_pos < bracket_pos {
+            return std::collections::HashSet::new();
+        }
+    }
+    // If `:` appears before `[`, there are no type params
+    if let Some(colon_pos) = after_class.find(':') {
+        if colon_pos < bracket_pos {
+            return std::collections::HashSet::new();
+        }
+    }
+
+    let inner = &after_class[bracket_pos + 1..];
+    let Some(close) = inner.find(']') else {
+        return std::collections::HashSet::new();
+    };
+
+    inner[..close]
+        .split(',')
+        .map(|s| s.trim().to_owned())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
 /// Extract the `TypeVar` names from a `Generic[T, S]` base expression.
 pub(super) fn extract_typevar_params_from_generic(source_line: &str) -> Vec<String> {
     let Some(start) = source_line.find("Generic[") else {

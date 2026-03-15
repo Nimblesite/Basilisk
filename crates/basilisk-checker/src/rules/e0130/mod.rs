@@ -19,6 +19,7 @@ mod check;
 mod collect;
 mod types;
 mod utils;
+mod variance;
 
 use std::collections::HashSet;
 
@@ -31,9 +32,11 @@ use super::Rule;
 use check::check_generic_instance_method_calls;
 use types::ScopeInfo;
 use utils::{
-    collect_full_signature, contains_typevar_reference, extract_typevars_from_function_sig,
-    extract_typevars_from_generic_base, is_simple_assignment, leading_indent, span_for_line,
+    collect_full_signature, contains_typevar_reference, extract_pep695_type_params,
+    extract_typevars_from_function_sig, extract_typevars_from_generic_base,
+    is_simple_assignment, leading_indent, span_for_line,
 };
+use variance::check_variance_assignments;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0130",
@@ -87,7 +90,9 @@ impl Rule for TypeVarScopeViolation {
 
             // Detect class definitions.
             if trimmed.starts_with("class ") {
-                let bound_tvs = extract_typevars_from_generic_base(trimmed);
+                let mut bound_tvs = extract_typevars_from_generic_base(trimmed);
+                // PEP 695 type params (class Foo[T, S]:) also bind TypeVars
+                bound_tvs.extend(extract_pep695_type_params(trimmed));
 
                 // Check: does this class's base reference a TypeVar from an outer scope?
                 let outer_bound: HashSet<String> = scope_stack
@@ -361,5 +366,8 @@ impl Rule for TypeVarScopeViolation {
             diagnostics,
             &module.path,
         );
+
+        // Check variance-related assignment violations (PEP 695 + infer_variance).
+        check_variance_assignments(module, diagnostics);
     }
 }

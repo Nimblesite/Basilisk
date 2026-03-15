@@ -95,7 +95,7 @@ pub fn build_symbol_index(index: &WorkspaceIndex) -> SymbolIndex {
     let mut symbols: HashMap<String, Vec<ExportedSymbol>> = HashMap::new();
     let mut count = 0usize;
 
-    for entry in index.files.iter() {
+    for entry in &index.files {
         let file_path = entry.key();
         let Some(resolved) = &entry.value().resolved else {
             continue;

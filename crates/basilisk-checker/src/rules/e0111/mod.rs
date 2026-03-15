@@ -869,7 +869,10 @@ fn collect_dataclass_fields<'a>(
 ///
 /// For `Property[str]("", 3.1)` where `Property(NamedTuple, Generic[T])` has
 /// field `value: T`, substitutes `T=str` and checks that `3.1` is not `str`.
-#[expect(clippy::too_many_arguments, reason = "constructor check requires full context")]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "constructor check requires full context"
+)]
 fn check_generic_nt_arg_types(
     call: &ruff_python_ast::ExprCall,
     class_name: &str,

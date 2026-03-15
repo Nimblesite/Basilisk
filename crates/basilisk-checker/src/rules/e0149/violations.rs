@@ -415,9 +415,7 @@ pub(super) fn check_type_stmt_uses_old_typevar(
             diagnostics.push(Diagnostic {
                 code: CODE.clone(),
                 severity: Severity::Error,
-                message: format!(
-                    "PEP 695 `type` statement uses old-style TypeVar `{old_tv_name}`"
-                ),
+                message: format!("PEP 695 `type` statement uses old-style TypeVar `{old_tv_name}`"),
                 span: span_for_line(source, line_number),
                 path: path.to_owned(),
                 help: Some(format!(
@@ -479,9 +477,7 @@ pub(super) fn check_type_stmt_in_function(
                         .to_owned(),
                     span: span_for_line(source, line_number),
                     path: path.to_owned(),
-                    help: Some(
-                        "Move the type alias to module or class scope".to_owned(),
-                    ),
+                    help: Some("Move the type alias to module or class scope".to_owned()),
                     note: Some(
                         "PEP 695: type aliases defined with `type` are only valid at \
                          module or class scope"
@@ -490,6 +486,128 @@ pub(super) fn check_type_stmt_in_function(
                 });
             }
             return;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Violation 6: circular type alias definition
+// ---------------------------------------------------------------------------
+
+/// Check whether a PEP 695 `type` statement has a circular self-reference.
+///
+/// A `type` statement is circular if the alias name appears in its own RHS
+/// in a way that doesn't go through a type parameter (legitimate recursion
+/// goes through `TypeAlias[T]` where `T` is a param of the same statement).
+pub(super) fn check_type_stmt_circular(
+    line: &str,
+    line_number: usize,
+    source: &str,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let trimmed = line.trim();
+    if !trimmed.starts_with("type ") {
+        return;
+    }
+
+    // Extract alias name: `type Name[...] = ...` or `type Name = ...`
+    let after_type = &trimmed["type ".len()..];
+    let name_end = after_type
+        .find(['[', '=', ' ', ':'])
+        .unwrap_or(after_type.len());
+    let alias_name = after_type[..name_end].trim();
+    if alias_name.is_empty() {
+        return;
+    }
+
+    // Get the RHS
+    let Some(eq_pos) = trimmed.find('=') else {
+        return;
+    };
+    let rhs = &trimmed[eq_pos + 1..];
+    let rhs = rhs.split_once('#').map_or(rhs, |(code, _)| code).trim();
+
+    // Check if the alias name appears in its own RHS
+    if !contains_name(rhs, alias_name) {
+        return;
+    }
+
+    // Collect type params of this `type` statement
+    let before_eq = &trimmed[..eq_pos];
+    let has_type_params = before_eq.contains('[');
+
+    if !has_type_params {
+        // No type params — any self-reference is circular
+        diagnostics.push(Diagnostic {
+            code: CODE.clone(),
+            severity: Severity::Error,
+            message: format!("Circular type alias definition: `{alias_name}` references itself"),
+            span: span_for_line(source, line_number),
+            path: path.to_owned(),
+            help: Some("A type alias cannot reference itself without type parameters".to_owned()),
+            note: None,
+        });
+        return;
+    }
+
+    // Has type params — check if the self-reference uses DIFFERENT type args
+    // than the params (making it circular rather than recursive).
+    // E.g. `type Foo[T] = T | Foo[str]` — Foo[str] uses concrete `str`,
+    // not the type param `T`, so this is a circular definition.
+    // But `type Foo[T] = T | list[Foo[T]]` is legitimate recursion.
+
+    // Find the self-reference subscript in the RHS
+    let param_text = if let Some(bracket_pos) = before_eq.find('[') {
+        let after = &before_eq[bracket_pos + 1..];
+        after.rfind(']').map_or("", |close| &after[..close])
+    } else {
+        ""
+    };
+    let params: Vec<&str> = param_text
+        .split(',')
+        .map(|p| {
+            p.trim()
+                .split(':')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .trim_start_matches('*')
+        })
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    // Find self-reference in RHS and check its args
+    if let Some(self_ref_pos) = rhs.find(alias_name) {
+        let after_name = &rhs[self_ref_pos + alias_name.len()..];
+        if let Some(bracket_content) = after_name.strip_prefix('[') {
+            if let Some(close) = bracket_content.find(']') {
+                let args: Vec<&str> = bracket_content[..close].split(',').map(str::trim).collect();
+                // If the args don't exactly match the params, it's circular
+                let is_identity = args.len() == params.len()
+                    && args
+                        .iter()
+                        .zip(params.iter())
+                        .all(|(arg, param)| arg == param);
+                if !is_identity {
+                    diagnostics.push(Diagnostic {
+                        code: CODE.clone(),
+                        severity: Severity::Error,
+                        message: format!(
+                            "Circular type alias definition: `{alias_name}` references \
+                             itself with different type arguments"
+                        ),
+                        span: span_for_line(source, line_number),
+                        path: path.to_owned(),
+                        help: Some(
+                            "Recursive type aliases must reference themselves with the \
+                             same type parameters"
+                                .to_owned(),
+                        ),
+                        note: None,
+                    });
+                }
+            }
         }
     }
 }

@@ -417,25 +417,23 @@ fn check_too_few_args_for_tvt_alias(
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    // Count only the plain (non-starred) arguments, because a starred
-    // TypeVarTuple argument can satisfy multiple TypeVar slots.
-    // If the caller uses `*Ts` we cannot statically determine the count, so
-    // skip the check.
-    let has_starred = args.iter().any(|a| !matches!(a, SliceArg::Plain));
-    if has_starred {
-        return;
-    }
-
+    // Count only the plain (non-starred) arguments. A starred TypeVarTuple
+    // unpack (`*Ts`) absorbs variadic positions but cannot fill regular TypeVar
+    // slots.  Therefore, the number of *plain* arguments must still be at
+    // least `min_required`.
+    let plain_count = args.iter().filter(|a| matches!(a, SliceArg::Plain)).count();
     let provided = args.len();
-    if provided < min_required {
+
+    if plain_count < min_required {
         diagnostics.push(Diagnostic {
             code: CODE.clone(),
             severity: Severity::Error,
             message: format!(
-                "`{alias_name}` requires at least {min_required} type argument{} \
-                 (one per regular `TypeVar`), but {provided} {} provided",
+                "`{alias_name}` requires at least {min_required} plain type argument{} \
+                 (one per regular `TypeVar`), but {plain_count} {} provided \
+                 (out of {provided} total)",
                 if min_required == 1 { "" } else { "s" },
-                if provided == 1 { "was" } else { "were" },
+                if plain_count == 1 { "was" } else { "were" },
             ),
             span,
             path: path.to_owned(),
