@@ -87,6 +87,10 @@ jobs:
       - name: clippy (zed extension)
         run: cargo clippy --release --all-targets --manifest-path basilisk-zed/Cargo.toml
 
+      # ── Build ───────────────────────────────────────────────────────────────
+      - name: Build release binary
+        run: cargo build --release -p basilisk-cli
+
       # ── Test ────────────────────────────────────────────────────────────────
       - name: Run all tests
         run: ./scripts/test.sh --skip-build
