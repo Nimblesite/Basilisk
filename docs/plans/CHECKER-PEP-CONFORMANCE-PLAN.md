@@ -1,68 +1,66 @@
 # PEP Conformance — Plan
 
-> **Score**: 125/146 (85.6%)
+> **Score**: 130/146 (89.0%)
 > **Tests**: `crates/basilisk-cli/tests/conformance/`
 > **Status CSV**: `conformance/conformance_status.csv`
 > **Run**: `./conformance/conformance.sh` or `cargo test --test conformance_tests -- --nocapture`
 
 ---
 
-## TODO
+## COMPLETED
 
-### Protocols
+- [x] E0083: TypeVarTuple inside `tuple[...]` annotations + return annotations
+- [x] E0086: Multiple unpacks in `tuple[...]` type aliases (lines 121,122)
+- [x] E0139: `TA11[*Ts2]` invalid specialization — FLIPPED `generics_typevartuple_specialization.py`
+- [x] E0149: isinstance in if-test condition — FLIPPED `aliases_type_statement.py`
+- [x] E0150: Dead branch variables for version/platform guards — FLIPPED `directives_version_platform.py`
+- [x] E0130: Variance inference (PEP 695 + `infer_variance`) — FLIPPED `generics_variance_inference.py` + `generics_syntax_infer_variance.py`
+- [x] Directives category: 100% (10/10)
+- [x] TypeForms category: 100% (1/1)
+- [x] Aliases category: 6/7 (85.7%)
+- [x] Generics category: 23/30 (76.7%)
 
-- [ ] Implement structural subtyping for protocols — attrs satisfy properties, method signature compatibility
-- [ ] Add variance tracking in generic protocol type assignability
+## TODO — 16 failing files remaining
 
-### Generics — TypeVarTuple
+### Protocols (2 files, 23 missed, 14 FP)
 
-- [ ] Implement unpack semantics and TypeVarTuple in generic classes
-- [ ] Support `*args` typing with TypeVarTuple
-- [ ] Handle TypeVarTuple concrete specialization
+- [ ] `protocols_definition.py` (17 missed, 13 FP) — structural subtyping, method signature compat
+- [ ] `protocols_generic.py` (6 missed, 1 FP) — generic protocol assignability
 
-### Generics — ParamSpec
+### Generics — TypeVarTuple (2 files, 15 missed)
 
-- [ ] Implement `P.args` and `P.kwargs` component access
-- [ ] Add ParamSpec constraint solving
-- [ ] Handle ParamSpec concrete specialization
+- [ ] `generics_typevartuple_basic.py` (6 missed) — deep type inference for TVT matching
+- [ ] `generics_typevartuple_args.py` (9 missed) — `*args` typing with TypeVarTuple
 
-### Generics — Variance
+### Generics — ParamSpec (3 files, 30 missed)
 
-- [ ] Infer variance automatically from covariant/contravariant/invariant positions
-- [ ] Support PEP 695 syntax variance inference
+- [ ] `generics_paramspec_components.py` (16 missed) — `P.args` / `P.kwargs`
+- [ ] `generics_paramspec_semantics.py` (9 missed) — constraint solving
+- [ ] `generics_paramspec_specialization.py` (5 missed, 3 FP) — concrete specialization
 
-### Generics — Defaults
+### Generics — Defaults (1 file, 2 missed)
 
-- [ ] Support TypeVar defaults referencing other TypeVars in generic constructors
+- [ ] `generics_defaults_referential.py` (2 missed) — TypeVar defaults referencing other TypeVars
 
-### Type Aliases
+### Type Aliases (1 file, 22 missed)
 
-- [ ] Implement PEP 695 `type` statement aliases
-- [ ] Support `TypeAliasType` call-based aliases
+- [ ] `aliases_typealiastype.py` (22 missed, 3 FP) — `TypeAliasType` call-based aliases
 
-### Callables
+### Callables (2 files, 15 missed)
 
-- [ ] Type check `**kwargs` in callable signatures
-- [ ] Validate callable protocol assignability
+- [ ] `callables_kwargs.py` (9 missed, 1 FP) — `Unpack[TypedDict]` kwargs validation
+- [ ] `callables_protocol.py` (6 missed, 2 FP) — callback protocol matching
 
-### Constructors
+### Constructors (1 file, 12 missed)
 
-- [ ] Support callable as constructor and `__init_subclass__`
+- [ ] `constructors_callable.py` (12 missed) — callable as constructor
 
-### Dataclasses
+### Dataclasses (1 file, 6 missed)
 
-- [ ] Implement `dataclass_transform` frozen/converter semantics
+- [ ] `dataclasses_transform_converter.py` (6 missed, 3 FP) — `converter` semantics
 
-### TypedDict
+### TypedDict (3 files, 36 missed)
 
-- [ ] Enforce readonly + inheritance rules for TypedDict
-- [ ] Validate TypedDict type consistency
-- [ ] Support `extra_items` kwarg in TypedDict
-
-### Directives
-
-- [ ] Implement dead branch elimination for `sys.version_info` and `sys.platform`
-
-### TypeForm
-
-- [ ] Implement `TypeForm` support (PEP 747)
+- [ ] `typeddicts_extra_items.py` (19 missed, 11 FP) — `extra_items` kwarg
+- [ ] `typeddicts_readonly_inheritance.py` (9 missed, 2 FP) — readonly + inheritance
+- [ ] `typeddicts_type_consistency.py` (8 missed, 2 FP) — type consistency

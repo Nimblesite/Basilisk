@@ -215,6 +215,43 @@ pub(super) fn extract_pep695_type_params(class_line: &str) -> std::collections::
         .collect()
 }
 
+/// Extract PEP 695 type parameters in declaration order (preserving order).
+///
+/// Returns a `Vec` with the order matching the source declaration,
+/// unlike [`extract_pep695_type_params`] which returns an unordered `HashSet`.
+pub(super) fn extract_pep695_type_params_ordered(class_line: &str) -> Vec<String> {
+    let trimmed = class_line.trim();
+    if !trimmed.starts_with("class ") {
+        return Vec::new();
+    }
+    let after_class = &trimmed[6..];
+
+    let Some(bracket_pos) = after_class.find('[') else {
+        return Vec::new();
+    };
+    if let Some(paren_pos) = after_class.find('(') {
+        if paren_pos < bracket_pos {
+            return Vec::new();
+        }
+    }
+    if let Some(colon_pos) = after_class.find(':') {
+        if colon_pos < bracket_pos {
+            return Vec::new();
+        }
+    }
+
+    let inner = &after_class[bracket_pos + 1..];
+    let Some(close) = inner.find(']') else {
+        return Vec::new();
+    };
+
+    inner[..close]
+        .split(',')
+        .map(|s| s.trim().to_owned())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
 /// Extract the `TypeVar` names from a `Generic[T, S]` base expression.
 pub(super) fn extract_typevar_params_from_generic(source_line: &str) -> Vec<String> {
     let Some(start) = source_line.find("Generic[") else {

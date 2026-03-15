@@ -20,6 +20,7 @@ mod collect;
 mod types;
 mod utils;
 mod variance;
+mod variance_check;
 
 use std::collections::HashSet;
 
@@ -29,7 +30,7 @@ use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
 use super::Rule;
 
-use check::check_generic_instance_method_calls;
+use check::{check_generic_constructor_calls, check_generic_instance_method_calls};
 use types::ScopeInfo;
 use utils::{
     collect_full_signature, contains_typevar_reference, extract_pep695_type_params,
@@ -369,5 +370,8 @@ impl Rule for TypeVarScopeViolation {
 
         // Check variance-related assignment violations (PEP 695 + infer_variance).
         check_variance_assignments(module, diagnostics);
+
+        // Check constructor calls with TypeVar default propagation.
+        check_generic_constructor_calls(module, diagnostics);
     }
 }
