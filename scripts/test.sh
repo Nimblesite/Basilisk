@@ -71,6 +71,9 @@ if [[ "$MISSING" -ne 0 ]]; then
 fi
 ok "All dependencies present"
 
+# Ensure llvm-tools-preview is installed so cargo-llvm-cov never prompts.
+rustup component add llvm-tools-preview 2>/dev/null || true
+
 # ── Build ────────────────────────────────────────────────────────────────────
 
 BASILISK_BIN="$REPO_ROOT/target/release/basilisk"
