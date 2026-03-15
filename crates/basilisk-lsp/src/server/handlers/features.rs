@@ -4,12 +4,12 @@
 
 use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::{
-    CodeActionParams, CodeActionResponse, CodeLens, CodeLensParams, ColorInformation,
-    ColorPresentation, ColorPresentationParams, CompletionItem, CompletionParams,
-    CompletionResponse, DocumentColorParams, DocumentFormattingParams, FoldingRange,
-    FoldingRangeParams, Hover, HoverParams, InlayHint, InlayHintParams, SelectionRange,
-    SelectionRangeParams, SemanticTokens, SemanticTokensParams, SemanticTokensResult,
-    SignatureHelpParams, TextEdit,
+    CodeActionOrCommand, CodeActionParams, CodeActionResponse, CodeLens, CodeLensParams,
+    ColorInformation, ColorPresentation, ColorPresentationParams, CompletionItem,
+    CompletionParams, CompletionResponse, DocumentColorParams, DocumentFormattingParams,
+    FoldingRange, FoldingRangeParams, Hover, HoverParams, InlayHint, InlayHintParams,
+    SelectionRange, SelectionRangeParams, SemanticTokens, SemanticTokensParams,
+    SemanticTokensResult, SignatureHelpParams, TextEdit,
 };
 
 use crate::{
@@ -112,11 +112,25 @@ pub(in crate::server) async fn code_action(
         .with_index(|idx| idx.get_text(&uri))
         .await
         .unwrap_or_default();
-    Ok(none_if_empty(code_actions::code_actions(
-        &uri,
-        &params.context.diagnostics,
-        &source,
-    )))
+    let mut actions = code_actions::code_actions(&uri, &params.context.diagnostics, &source);
+
+    // Add a "Fix all in file" quickfix action to the lightbulb menu
+    // when the file has 2+ fixable diagnostics.
+    if let Some(fix_all) = server
+        .with_index(|idx| {
+            let (text, _, checker_diags) = idx.get_by_uri(&uri)?;
+            let lsp_diags: Vec<_> = checker_diags
+                .iter()
+                .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &text))
+                .collect();
+            code_actions::fix_all_quickfix(&uri, &lsp_diags, &text)
+        })
+        .await
+    {
+        actions.insert(0, CodeActionOrCommand::CodeAction(fix_all));
+    }
+
+    Ok(none_if_empty(actions))
 }
 
 /// Handle `textDocument/completion`.

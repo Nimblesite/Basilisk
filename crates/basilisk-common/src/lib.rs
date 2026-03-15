@@ -21,13 +21,17 @@ pub mod commands {
     /// Fix all auto-fixable diagnostics in the current file (safe fixes only).
     pub const FIX_FILE: &str = "basilisk.fixFile";
 
-    /// All registered command names, for capability advertisement.
+    /// Command names advertised via `executeCommandProvider` capabilities.
+    ///
+    /// **Excludes `FIX_FILE`** — that command is registered manually by the
+    /// VS Code extension (it needs the active editor URI), so advertising it
+    /// here would cause a "command already exists" conflict when the LSP
+    /// client's `ExecuteCommandFeature` tries to auto-register it.
     pub const ALL: &[&str] = &[
         ORGANIZE_IMPORTS,
         START_DEBUG_SESSION,
         STOP_DEBUG_SESSION,
         DISABLE_RULE,
-        FIX_FILE,
     ];
 }
 

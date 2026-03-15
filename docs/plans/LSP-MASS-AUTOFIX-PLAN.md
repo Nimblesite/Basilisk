@@ -295,6 +295,7 @@ Phase 1 ──┬── Phase 2 ── Phase 3 ── Phase 4
 - [x] LSP handler detects `source.fixAll` requests, fetches all diagnostics from workspace index
 - [x] VS Code extension: `basilisk.fixFile` command + keybinding
 - [x] VS Code extension: `editor.codeActionsOnSave` support for `source.fixAll.basilisk`
+- [x] VS Code extension: vsix e2e tests for fixFile, source.fixAll, multi-diagnostic fix, no-op, mixed diagnostics
 - [ ] VS Code extension: `basilisk.fixWorkspace` — iterate all workspace files
 - [ ] CLI: `basilisk fix <path>` — safe fixes only
 - [ ] CLI: `basilisk fix --unsafe <path>` — all fixes

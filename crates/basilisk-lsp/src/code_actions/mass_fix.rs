@@ -23,10 +23,44 @@ pub(crate) fn fix_all_kind() -> CodeActionKind {
 /// Build a single code action that fixes every fixable diagnostic in the file.
 ///
 /// Returns `None` if no diagnostics have applicable fixes.
+/// Uses `source.fixAll.basilisk` kind (for on-save / command palette).
 pub(crate) fn fix_all_in_file(
     uri: &Url,
     diagnostics: &[Diagnostic],
     source: &str,
+) -> Option<CodeAction> {
+    build_fix_all(uri, diagnostics, source, fix_all_kind())
+}
+
+/// Build a "Fix all" code action with `quickfix` kind so it appears
+/// in the lightbulb Quick Fix menu alongside per-diagnostic fixes.
+///
+/// Only returned when there are 2+ fixable diagnostics — for a single
+/// fixable diagnostic the per-diagnostic fix is sufficient.
+pub(crate) fn fix_all_quickfix(
+    uri: &Url,
+    diagnostics: &[Diagnostic],
+    source: &str,
+) -> Option<CodeAction> {
+    let action = build_fix_all(uri, diagnostics, source, CodeActionKind::QUICKFIX)?;
+    let edit_count = action
+        .edit
+        .as_ref()
+        .and_then(|ws| ws.changes.as_ref())
+        .and_then(|c| c.get(uri))
+        .map_or(0, Vec::len);
+    if edit_count < 2 {
+        return None;
+    }
+    Some(action)
+}
+
+/// Shared builder for fix-all code actions.
+fn build_fix_all(
+    uri: &Url,
+    diagnostics: &[Diagnostic],
+    source: &str,
+    kind: CodeActionKind,
 ) -> Option<CodeAction> {
     let edits = collect_non_overlapping_edits(uri, diagnostics, source);
     if edits.is_empty() {
@@ -39,7 +73,7 @@ pub(crate) fn fix_all_in_file(
 
     Some(CodeAction {
         title: format!("Fix all auto-fixable issues ({count} fixes)"),
-        kind: Some(fix_all_kind()),
+        kind: Some(kind),
         diagnostics: Some(diagnostics.to_vec()),
         edit: Some(WorkspaceEdit {
             changes: Some(changes),

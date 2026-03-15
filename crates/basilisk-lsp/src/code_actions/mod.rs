@@ -14,7 +14,7 @@ pub(super) static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 // Re-export pub(crate) items that the server module calls directly.
 pub(crate) use imports::organize_imports;
-pub(crate) use mass_fix::fix_all_in_file;
+pub(crate) use mass_fix::{fix_all_in_file, fix_all_quickfix};
 
 /// Generate code actions for the given diagnostics.
 ///
