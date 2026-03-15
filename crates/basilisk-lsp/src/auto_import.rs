@@ -254,10 +254,6 @@ fn derive_module_path(file_path: &Path, roots: &[PathBuf]) -> String {
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
-#[expect(
-    clippy::unwrap_used,
-    reason = "test-only code: unwrap acceptable in unit tests"
-)]
 mod tests {
     use super::*;
 
