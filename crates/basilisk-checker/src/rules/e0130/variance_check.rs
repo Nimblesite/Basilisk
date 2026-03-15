@@ -22,12 +22,7 @@ fn is_numeric_subtype(sub: &str, sup: &str) -> bool {
     }
     matches!(
         (sub, sup),
-        ("bool", "int")
-            | ("bool", "float")
-            | ("bool", "complex")
-            | ("int", "float")
-            | ("int", "complex")
-            | ("float", "complex")
+        ("bool", "int" | "float" | "complex") | ("int", "float" | "complex") | ("float", "complex")
     )
 }
 
@@ -90,13 +85,15 @@ pub(super) fn check_module_assignments(
         }
         if let Some(vars) = known.get(&lhs_cls) {
             emit_violations(
-                &lhs_cls,
-                &lhs_args,
-                &rhs_args,
-                vars,
-                source,
-                path,
-                idx + 1,
+                &ViolationCtx {
+                    class_name: &lhs_cls,
+                    lhs_args: &lhs_args,
+                    rhs_args: &rhs_args,
+                    variances: vars,
+                    source,
+                    path,
+                    line_number: idx + 1,
+                },
                 diagnostics,
             );
         }
@@ -163,13 +160,15 @@ pub(super) fn check_fn_body_assignments(
                 if lhs_cls == *rhs_cls {
                     if let Some(vars) = known.get(&lhs_cls) {
                         emit_violations(
-                            &lhs_cls,
-                            &lhs_args,
-                            rhs_args,
-                            vars,
-                            source,
-                            path,
-                            idx + 1,
+                            &ViolationCtx {
+                                class_name: &lhs_cls,
+                                lhs_args: &lhs_args,
+                                rhs_args,
+                                variances: vars,
+                                source,
+                                path,
+                                line_number: idx + 1,
+                            },
                             diagnostics,
                         );
                     }
@@ -205,19 +204,21 @@ fn extract_rhs_generic(rhs: &str) -> Option<(String, Vec<String>)> {
     }
 }
 
-/// Emit diagnostics for variance violations between LHS and RHS type args.
-fn emit_violations(
-    class_name: &str,
-    lhs_args: &[String],
-    rhs_args: &[String],
-    variances: &[Variance],
-    source: &str,
-    path: &str,
+/// Context for emitting variance violation diagnostics.
+struct ViolationCtx<'a> {
+    class_name: &'a str,
+    lhs_args: &'a [String],
+    rhs_args: &'a [String],
+    variances: &'a [Variance],
+    source: &'a str,
+    path: &'a str,
     line_number: usize,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    for (idx, var) in variances.iter().enumerate() {
-        let (Some(lhs), Some(rhs)) = (lhs_args.get(idx), rhs_args.get(idx)) else {
+}
+
+/// Emit diagnostics for variance violations between LHS and RHS type args.
+fn emit_violations(ctx: &ViolationCtx<'_>, diagnostics: &mut Vec<Diagnostic>) {
+    for (idx, var) in ctx.variances.iter().enumerate() {
+        let (Some(lhs), Some(rhs)) = (ctx.lhs_args.get(idx), ctx.rhs_args.get(idx)) else {
             continue;
         };
         if lhs == rhs {
@@ -240,11 +241,12 @@ fn emit_violations(
             code: CODE.clone(),
             severity: Severity::Error,
             message: format!(
-                "Type `{class_name}[{rhs}]` is not assignable to \
-                 `{class_name}[{lhs}]` (type parameter is {label})"
+                "Type `{}[{rhs}]` is not assignable to \
+                 `{}[{lhs}]` (type parameter is {label})",
+                ctx.class_name, ctx.class_name
             ),
-            span: span_for_line(source, line_number),
-            path: path.to_owned(),
+            span: span_for_line(ctx.source, ctx.line_number),
+            path: ctx.path.to_owned(),
             help: Some(format!(
                 "{label} type parameter requires {}",
                 match var {

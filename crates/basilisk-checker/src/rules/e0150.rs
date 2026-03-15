@@ -40,8 +40,7 @@ pub(crate) struct DeadBranchVariable;
 
 impl Rule for DeadBranchVariable {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let Ok(parsed) =
-            basilisk_parser::parse_source(module.source.clone(), module.path.clone())
+        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
         else {
             return;
         };
@@ -51,11 +50,7 @@ impl Rule for DeadBranchVariable {
 }
 
 /// Recursively walk statements looking for version/platform guard if-statements.
-fn check_stmts_for_dead_branches(
-    stmts: &[Stmt],
-    path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
+fn check_stmts_for_dead_branches(stmts: &[Stmt], path: &str, diagnostics: &mut Vec<Diagnostic>) {
     for stmt in stmts {
         match stmt {
             Stmt::FunctionDef(func) => {
@@ -133,13 +128,7 @@ fn check_function_body(stmts: &[Stmt], path: &str, diagnostics: &mut Vec<Diagnos
             }
             Stmt::AnnAssign(ann_assign) => {
                 if let Some(value) = &ann_assign.value {
-                    check_expr_for_dead_var_usage(
-                        value,
-                        &dead_vars,
-                        &live_vars,
-                        path,
-                        diagnostics,
-                    );
+                    check_expr_for_dead_var_usage(value, &dead_vars, &live_vars, path, diagnostics);
                 }
             }
             Stmt::FunctionDef(func) => {
@@ -171,24 +160,24 @@ fn identify_dead_branch(test: &Expr) -> Option<DeadBranch> {
         return None;
     }
 
-    let op = &cmp.ops[0];
+    let op = cmp.ops.first()?;
     let left = &cmp.left;
-    let right = &cmp.comparators[0];
+    let right = cmp.comparators.first()?;
 
     // Check for `sys.version_info <op> (major, minor[, micro])`.
     if is_version_info_attr(left) {
-        return check_version_guard(op, right);
+        return check_version_guard(*op, right);
     }
     if is_version_info_attr(right) {
-        return check_version_guard(&flip_op(op), left);
+        return check_version_guard(flip_op(*op), left);
     }
 
     // Check for `sys.platform <op> "string"`.
     if is_platform_attr(left) {
-        return check_platform_guard(op, right);
+        return check_platform_guard(*op, right);
     }
     if is_platform_attr(right) {
-        return check_platform_guard(&flip_op(op), left);
+        return check_platform_guard(flip_op(*op), left);
     }
 
     None
@@ -217,7 +206,7 @@ fn is_platform_attr(expr: &Expr) -> bool {
 }
 
 /// Flip a comparison operator (e.g. `<` becomes `>`).
-fn flip_op(op: &CmpOp) -> CmpOp {
+fn flip_op(op: CmpOp) -> CmpOp {
     match op {
         CmpOp::Lt => CmpOp::Gt,
         CmpOp::LtE => CmpOp::GtE,
@@ -225,13 +214,13 @@ fn flip_op(op: &CmpOp) -> CmpOp {
         CmpOp::GtE => CmpOp::LtE,
         CmpOp::Eq => CmpOp::Eq,
         CmpOp::NotEq => CmpOp::NotEq,
-        other => *other,
+        other => other,
     }
 }
 
 /// Parse a version tuple `(major, minor)` or `(major, minor, micro)` from an
 /// expression and determine dead branch.
-fn check_version_guard(op: &CmpOp, version_expr: &Expr) -> Option<DeadBranch> {
+fn check_version_guard(op: CmpOp, version_expr: &Expr) -> Option<DeadBranch> {
     let version = parse_version_tuple(version_expr)?;
 
     // Compare target version against the guard version.
@@ -263,8 +252,8 @@ fn parse_version_tuple(expr: &Expr) -> Option<(u32, u32)> {
     if tup.elts.len() < 2 {
         return None;
     }
-    let major = int_literal_value(&tup.elts[0])?;
-    let minor = int_literal_value(&tup.elts[1])?;
+    let major = int_literal_value(tup.elts.first()?)?;
+    let minor = int_literal_value(tup.elts.get(1)?)?;
     Some((major, minor))
 }
 
@@ -283,7 +272,7 @@ fn int_literal_value(expr: &Expr) -> Option<u32> {
 
 /// Determine dead branch for platform guards (`sys.platform == "..."` or
 /// `sys.platform != "..."`).
-fn check_platform_guard(op: &CmpOp, value_expr: &Expr) -> Option<DeadBranch> {
+fn check_platform_guard(op: CmpOp, value_expr: &Expr) -> Option<DeadBranch> {
     let Expr::StringLiteral(string_lit) = value_expr else {
         return None;
     };
@@ -292,16 +281,15 @@ fn check_platform_guard(op: &CmpOp, value_expr: &Expr) -> Option<DeadBranch> {
     // We assume the target platform is NOT a "bogus" platform.
     // For well-known platforms (linux, darwin, win32), we'd need config.
     // For clearly bogus values, we can safely determine the dead branch.
-    let is_known_bogus = platform_str.starts_with("bogus")
-        || platform_str == "unknown"
-        || platform_str == "test";
+    let is_known_bogus =
+        platform_str.starts_with("bogus") || platform_str == "unknown" || platform_str == "test";
 
     if !is_known_bogus {
         return None;
     }
 
     match op {
-        CmpOp::Eq => Some(DeadBranch::IfBody),   // platform == "bogus" → false
+        CmpOp::Eq => Some(DeadBranch::IfBody), // platform == "bogus" → false
         CmpOp::NotEq => Some(DeadBranch::ElseBody), // platform != "bogus" → true
         _ => None,
     }

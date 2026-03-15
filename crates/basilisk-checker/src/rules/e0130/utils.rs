@@ -254,10 +254,15 @@ pub(super) fn extract_pep695_type_params_ordered(class_line: &str) -> Vec<String
 
 /// Extract the `TypeVar` names from a `Generic[T, S]` base expression.
 pub(super) fn extract_typevar_params_from_generic(source_line: &str) -> Vec<String> {
-    let Some(start) = source_line.find("Generic[") else {
+    // Try `Generic[T, ...]` first, then `Protocol[T, ...]`.
+    let (start, prefix_len) = if let Some(pos) = source_line.find("Generic[") {
+        (pos, 8)
+    } else if let Some(pos) = source_line.find("Protocol[") {
+        (pos, 9)
+    } else {
         return Vec::new();
     };
-    let after = &source_line[start + 8..];
+    let after = &source_line[start + prefix_len..];
     let Some(end) = after.find(']') else {
         return Vec::new();
     };

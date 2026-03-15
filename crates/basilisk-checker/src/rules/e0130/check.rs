@@ -173,7 +173,7 @@ pub(super) fn check_generic_instance_method_calls(
 
 /// Check constructor calls with partially-specialized generic classes.
 ///
-/// Detects `ClassName[TypeArgs](args)` patterns where TypeVar defaults
+/// Detects `ClassName[TypeArgs](args)` patterns where `TypeVar` defaults
 /// fill in missing type arguments, and validates argument types.
 pub(super) fn check_generic_constructor_calls(
     module: &ResolvedModule,
@@ -249,9 +249,7 @@ pub(super) fn check_generic_constructor_calls(
             let after_name = &code_part[start + class_def.name.len()..];
 
             // Parse [TypeArgs]
-            let Some((_, explicit_args)) = parse_generic_annotation(
-                &code_part[start..],
-            ) else {
+            let Some((_, explicit_args)) = parse_generic_annotation(&code_part[start..]) else {
                 continue;
             };
 
@@ -260,11 +258,8 @@ pub(super) fn check_generic_constructor_calls(
                 continue; // fully specialized, no default issues
             }
 
-            let resolved = resolve_with_defaults(
-                &class_def.typevar_params,
-                &explicit_args,
-                &tv_defaults,
-            );
+            let resolved =
+                resolve_with_defaults(&class_def.typevar_params, &explicit_args, &tv_defaults);
 
             // Find the args to the constructor call: after ](
             let bracket_end = after_name.find("](");
@@ -282,14 +277,16 @@ pub(super) fn check_generic_constructor_calls(
             };
 
             check_constructor_args(
-                class_def,
-                init_params,
-                &resolved,
-                &call_args,
-                &fn_param_types,
-                &module.source,
-                &module.path,
-                line_number,
+                &ConstructorCheckCtx {
+                    class_def,
+                    init_params,
+                    resolved: &resolved,
+                    call_args: &call_args,
+                    fn_param_types: &fn_param_types,
+                    source: &module.source,
+                    path: &module.path,
+                    line_number,
+                },
                 diagnostics,
             );
         }
@@ -320,31 +317,34 @@ fn resolve_with_defaults(
     resolved
 }
 
-/// Check constructor arguments against resolved __init__ parameter types.
-fn check_constructor_args(
-    class_def: &super::types::GenericClassDef,
-    init_params: &[(String, String)],
-    resolved: &HashMap<String, String>,
-    call_args: &[String],
-    fn_param_types: &HashMap<String, String>,
-    source: &str,
-    path: &str,
+/// Context for checking constructor arguments against resolved types.
+struct ConstructorCheckCtx<'a> {
+    class_def: &'a super::types::GenericClassDef,
+    init_params: &'a [(String, String)],
+    resolved: &'a HashMap<String, String>,
+    call_args: &'a [String],
+    fn_param_types: &'a HashMap<String, String>,
+    source: &'a str,
+    path: &'a str,
     line_number: usize,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    for (param_idx, (param_name, param_ann)) in init_params.iter().enumerate() {
+}
+
+/// Check constructor arguments against resolved `__init__` parameter types.
+fn check_constructor_args(ctx: &ConstructorCheckCtx<'_>, diagnostics: &mut Vec<Diagnostic>) {
+    for (param_idx, (param_name, param_ann)) in ctx.init_params.iter().enumerate() {
         let typevar_name = param_ann.trim();
-        let Some(expected_type) = resolved.get(typevar_name) else {
+        let Some(expected_type) = ctx.resolved.get(typevar_name) else {
             continue;
         };
 
-        let Some(arg_raw) = call_args.get(param_idx) else {
+        let Some(arg_raw) = ctx.call_args.get(param_idx) else {
             continue;
         };
         let arg_name = arg_raw.trim();
 
         // Try to resolve the argument's type from function params
-        let actual_type = fn_param_types
+        let actual_type = ctx
+            .fn_param_types
             .get(arg_name)
             .map(String::as_str)
             .or_else(|| infer_literal_type(arg_name));
@@ -360,17 +360,17 @@ fn check_constructor_args(
                 message: format!(
                     "Argument `{arg_name}` of type `{actual_type}` is not compatible \
                      with parameter `{param_name}: {expected_type}` in \
-                     `{class_name}.__init__` (TypeVar default propagation)",
-                    class_name = class_def.name
+                     `{class_name}.__init__` (`TypeVar` default propagation)",
+                    class_name = ctx.class_def.name
                 ),
-                span: span_for_line(source, line_number),
-                path: path.to_owned(),
+                span: span_for_line(ctx.source, ctx.line_number),
+                path: ctx.path.to_owned(),
                 help: Some(format!(
-                    "TypeVar `{typevar_name}` resolves to `{expected_type}` \
+                    "`TypeVar` `{typevar_name}` resolves to `{expected_type}` \
                      via default propagation"
                 )),
                 note: Some(
-                    "PEP 696: TypeVar defaults propagate when fewer type \
+                    "PEP 696: `TypeVar` defaults propagate when fewer type \
                      arguments are provided than type parameters"
                         .to_owned(),
                 ),

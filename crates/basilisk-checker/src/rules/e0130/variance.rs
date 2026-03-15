@@ -83,10 +83,7 @@ fn extract_implicit_type_params(
 }
 
 /// Collect all generic classes needing variance inference from source.
-fn collect_classes(
-    lines: &[&str],
-    infer_tvs: &HashMap<String, Variance>,
-) -> Vec<ClassForVariance> {
+fn collect_classes(lines: &[&str], infer_tvs: &HashMap<String, Variance>) -> Vec<ClassForVariance> {
     let mut classes = Vec::new();
 
     for (idx, &raw_line) in lines.iter().enumerate() {
@@ -101,9 +98,7 @@ fn collect_classes(
 
         let (type_params, is_pep695) = if !pep695.is_empty() {
             (pep695, true)
-        } else if !generic.is_empty()
-            && generic.iter().all(|p| infer_tvs.contains_key(p))
-        {
+        } else if !generic.is_empty() && generic.iter().all(|p| infer_tvs.contains_key(p)) {
             (generic, false)
         } else {
             let implicit = extract_implicit_type_params(trimmed, infer_tvs);
@@ -114,7 +109,7 @@ fn collect_classes(
         };
 
         let name_end = after_class
-            .find(|c: char| c == '[' || c == '(' || c == ':')
+            .find(['[', '(', ':'])
             .unwrap_or(after_class.len());
         let name = after_class[..name_end].trim().to_owned();
         let bases = extract_bases(trimmed, is_pep695);
@@ -159,7 +154,9 @@ fn check_decorators(lines: &[&str], class_idx: usize) -> (bool, bool) {
     let mut i = class_idx;
     while i > 0 {
         i -= 1;
-        let prev = lines[i].trim();
+        let Some(prev) = lines.get(i).map(|l| l.trim()) else {
+            break;
+        };
         if prev.starts_with('@') {
             if prev.contains("dataclass") {
                 is_dc = true;
@@ -251,8 +248,8 @@ fn infer_param_variance(
         if line.contains(".setter") {
             has_setter = true;
         }
-        if line.starts_with("def ") {
-            let method = line[4..].split('(').next().unwrap_or("").trim();
+        if let Some(after_def) = line.strip_prefix("def ") {
+            let method = after_def.split('(').next().unwrap_or("").trim();
             let excluded = method == "__init__" || method == "__new__";
             in_init = excluded;
             if !excluded {
@@ -261,10 +258,10 @@ fn infer_param_variance(
             continue;
         }
         // Public attr assignment in __init__ (skip Final and private fields)
-        if in_init && line.starts_with("self.") && line.contains('=') && !line.contains("==") {
-            let attr = line[5..]
-                .split(|c: char| c == '=' || c == '.' || c == ' ')
-                .next()
+        if in_init && line.contains('=') && !line.contains("==") {
+            let attr = line
+                .strip_prefix("self.")
+                .and_then(|rest| rest.split(['=', '.', ' ']).next())
                 .unwrap_or("")
                 .trim();
             if !attr.starts_with('_') && !attr.is_empty() && !final_fields.contains(attr) {
@@ -344,7 +341,7 @@ fn scan_field(
     }
 }
 
-/// Resolve traditional parent classes' Generic TypeVar variances.
+/// Resolve traditional parent classes' Generic `TypeVar` variances.
 fn resolve_parent_variances(
     lines: &[&str],
     tv_declared: &HashMap<String, Variance>,
@@ -352,13 +349,14 @@ fn resolve_parent_variances(
     let mut result = HashMap::new();
     for &line in lines {
         let trimmed = line.trim();
-        if !trimmed.starts_with("class ") || !trimmed.contains("Generic[") {
+        // Match both `Generic[T]` and `Protocol[T]` bases.
+        if !trimmed.starts_with("class ")
+            || (!trimmed.contains("Generic[") && !trimmed.contains("Protocol["))
+        {
             continue;
         }
         let after = &trimmed[6..];
-        let name_end = after
-            .find(|c: char| c == '(' || c == '[' || c == ':')
-            .unwrap_or(after.len());
+        let name_end = after.find(['(', '[', ':']).unwrap_or(after.len());
         let name = after[..name_end].trim().to_owned();
         let params = extract_typevar_params_from_generic(trimmed);
         let vars: Vec<Variance> = params
@@ -399,8 +397,7 @@ pub(super) fn check_variance_assignments(
     }
 
     // Build known variances: parent classes + two passes for dependencies
-    let mut known: HashMap<String, Vec<Variance>> =
-        resolve_parent_variances(&lines, &tv_declared);
+    let mut known: HashMap<String, Vec<Variance>> = resolve_parent_variances(&lines, &tv_declared);
     for _ in 0..2 {
         for class in &classes {
             let vars: Vec<Variance> = class

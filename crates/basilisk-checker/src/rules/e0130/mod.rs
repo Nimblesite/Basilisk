@@ -34,8 +34,8 @@ use check::{check_generic_constructor_calls, check_generic_instance_method_calls
 use types::ScopeInfo;
 use utils::{
     collect_full_signature, contains_typevar_reference, extract_pep695_type_params,
-    extract_typevars_from_function_sig, extract_typevars_from_generic_base,
-    is_simple_assignment, leading_indent, span_for_line,
+    extract_typevars_from_function_sig, extract_typevars_from_generic_base, is_simple_assignment,
+    leading_indent, span_for_line,
 };
 use variance::check_variance_assignments;
 

@@ -39,7 +39,8 @@ fn make_diag(message: String, span: Span, path: &str) -> Diagnostic {
         span,
         path: path.to_owned(),
         help: Some(
-            "A `tuple[...]` type may contain at most one unpacked `TypeVarTuple` (`*Ts`)".to_owned(),
+            "A `tuple[...]` type may contain at most one unpacked `TypeVarTuple` (`*Ts`)"
+                .to_owned(),
         ),
         note: Some(
             "PEP 646: only a single TypeVarTuple is permitted per generic or tuple type".to_owned(),
