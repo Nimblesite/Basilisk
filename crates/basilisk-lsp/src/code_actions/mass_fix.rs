@@ -55,6 +55,45 @@ pub(crate) fn fix_all_quickfix(
     Some(action)
 }
 
+/// Build a "Fix all <rule> in this file" quickfix action for a single rule.
+///
+/// Filters `diagnostics` to only the given `rule_code`, then builds edits.
+/// Returns `None` when fewer than 2 instances of that rule are fixable
+/// (the per-diagnostic fix already covers the single-instance case).
+pub(crate) fn fix_all_by_rule(
+    uri: &Url,
+    diagnostics: &[Diagnostic],
+    source: &str,
+    rule_code: &str,
+) -> Option<CodeAction> {
+    let filtered: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| matches!(&d.code, Some(NumberOrString::String(c)) if c == rule_code))
+        .cloned()
+        .collect();
+
+    let edits = collect_non_overlapping_edits(uri, &filtered, source);
+    if edits.len() < 2 {
+        return None;
+    }
+
+    let count = edits.len();
+    let mut changes = HashMap::new();
+    let _ = changes.insert(uri.clone(), edits);
+
+    Some(CodeAction {
+        title: format!("Fix all `{rule_code}` in this file ({count} fixes)"),
+        kind: Some(CodeActionKind::QUICKFIX),
+        diagnostics: Some(filtered),
+        edit: Some(WorkspaceEdit {
+            changes: Some(changes),
+            ..Default::default()
+        }),
+        is_preferred: Some(false),
+        ..Default::default()
+    })
+}
+
 /// Shared builder for fix-all code actions.
 fn build_fix_all(
     uri: &Url,
@@ -221,6 +260,55 @@ mod tests {
         let changes = action.unwrap().edit.unwrap().changes.unwrap();
         let edits = changes.get(&uri).unwrap();
         assert_eq!(edits.len(), 2);
+    }
+
+    #[test]
+    fn test_fix_all_by_rule_filters_to_single_code() {
+        let uri = Url::parse("file:///test.py").unwrap();
+        let source = "x: int = 42\ny: str = 'hello'\n";
+        let diags = vec![
+            make_diag("BSK-W0050", 0, 0, 1),
+            make_diag("BSK-W0050", 1, 0, 1),
+            make_diag("BSK-E0001", 1, 5, 10), // different rule
+        ];
+        let action = fix_all_by_rule(&uri, &diags, source, "BSK-W0050");
+        assert!(action.is_some());
+        let action = action.unwrap();
+        assert!(
+            action.title.contains("BSK-W0050"),
+            "title should include rule code: {}",
+            action.title
+        );
+        assert!(action.title.contains("2 fixes"), "title: {}", action.title);
+        assert_eq!(action.kind, Some(CodeActionKind::QUICKFIX));
+        // Verify only W0050 diagnostics are attached.
+        let attached = action.diagnostics.unwrap();
+        assert!(attached.iter().all(|d| matches!(
+            &d.code,
+            Some(NumberOrString::String(c)) if c == "BSK-W0050"
+        )));
+    }
+
+    #[test]
+    fn test_fix_all_by_rule_returns_none_for_single_instance() {
+        let uri = Url::parse("file:///test.py").unwrap();
+        let source = "x: int = 42\n";
+        let diags = vec![make_diag("BSK-W0050", 0, 0, 1)];
+        // Only 1 instance — per-diagnostic fix is sufficient.
+        let action = fix_all_by_rule(&uri, &diags, source, "BSK-W0050");
+        assert!(action.is_none());
+    }
+
+    #[test]
+    fn test_fix_all_by_rule_returns_none_for_unfixable_code() {
+        let uri = Url::parse("file:///test.py").unwrap();
+        let source = "x = 42\n";
+        let diags = vec![
+            make_diag("BSK-E9999", 0, 0, 5),
+            make_diag("BSK-E9999", 0, 6, 10),
+        ];
+        let action = fix_all_by_rule(&uri, &diags, source, "BSK-E9999");
+        assert!(action.is_none());
     }
 
     #[test]

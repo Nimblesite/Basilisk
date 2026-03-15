@@ -265,11 +265,14 @@ impl LspStdioFixture {
         }))?;
 
         let id_str = format!("\"id\":{id}");
-        for _ in 0..10 {
+        for _ in 0..20 {
             let Some(msg) = self.recv() else { break };
             if msg.contains(&id_str) {
                 return Ok(Some(msg));
             }
+            // Auto-respond to server-initiated requests (e.g. workspace/applyEdit)
+            // so the server doesn't block waiting for a client response.
+            self.auto_respond_if_server_request(&msg);
         }
         Ok(None)
     }
@@ -299,6 +302,7 @@ impl LspStdioFixture {
             if msg.contains(&id_str) {
                 return Ok(serde_json::from_str(&msg)?);
             }
+            self.auto_respond_if_server_request(&msg);
         }
         Err(format!("no response found for id {id}").into())
     }
@@ -322,6 +326,37 @@ impl LspStdioFixture {
                 "position": { "line": line, "character": character }
             }),
         )
+    }
+
+    /// If `msg` is a server-to-client request (has both "id" and "method"),
+    /// send back a success response so the server doesn't block.
+    ///
+    /// Handles `workspace/applyEdit`, `window/showMessageRequest`, etc.
+    fn auto_respond_if_server_request(&mut self, msg: &str) {
+        let Ok(parsed) = serde_json::from_str::<serde_json::Value>(msg) else {
+            return;
+        };
+        // Server requests have both "id" and "method".
+        let Some(req_id) = parsed.get("id") else {
+            return;
+        };
+        if parsed.get("method").is_none() {
+            return; // It's a response, not a request.
+        }
+
+        // Respond with `{ "applied": true }` for workspace/applyEdit,
+        // or `null` for anything else.
+        let result = if parsed["method"] == "workspace/applyEdit" {
+            serde_json::json!({ "applied": true })
+        } else {
+            serde_json::Value::Null
+        };
+
+        let _ = self.send_json(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": result
+        }));
     }
 }
 

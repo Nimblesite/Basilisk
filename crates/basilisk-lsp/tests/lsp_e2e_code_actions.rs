@@ -598,3 +598,103 @@ fn test_lsp_fix_file_command() -> TestResult<()> {
     );
     Ok(())
 }
+
+// ── Fix All by Rule ─────────────────────────────────────────────────────────
+
+#[test]
+fn test_lsp_fix_all_by_rule_in_quickfix_menu() -> TestResult<()> {
+    let mut fixture = LspTestFixture::new()?;
+    let _ = fixture.initialize()?;
+
+    // Three redundant annotations — requesting code actions for the first
+    // diagnostic should include a "Fix all `BSK-W0050`" quickfix action.
+    let code = "x: int = 42\ny: str = \"hello\"\nz: bool = True\n";
+    fixture.did_open("file:///fixrule.py", code)?;
+
+    let diag_msg = fixture
+        .wait_for_diagnostics()
+        .ok_or("no diagnostics published")?;
+
+    let diag_json: serde_json::Value = serde_json::from_str(&diag_msg)?;
+    let diagnostics = diag_json["params"]["diagnostics"]
+        .as_array()
+        .ok_or("expected diagnostics array")?;
+
+    let w0050 = diagnostics
+        .iter()
+        .find(|d| d["code"].as_str() == Some("BSK-W0050"))
+        .ok_or("no BSK-W0050 diagnostic")?;
+
+    let resp = send_request(
+        &mut fixture,
+        210,
+        "textDocument/codeAction",
+        serde_json::json!({
+            "textDocument": { "uri": "file:///fixrule.py" },
+            "range": w0050["range"],
+            "context": {
+                "diagnostics": [w0050]
+            }
+        }),
+    )?
+    .ok_or("no code action response")?;
+
+    assert!(
+        resp.contains("Fix all `BSK-W0050` in this file"),
+        "should contain per-rule fix-all action: {resp}"
+    );
+    assert!(
+        resp.contains("3 fixes"),
+        "should fix all 3 W0050 instances: {resp}"
+    );
+    // Also verify the global fix-all is present.
+    assert!(
+        resp.contains("Fix all auto-fixable issues"),
+        "should also contain global fix-all action: {resp}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_lsp_fix_all_by_rule_not_shown_for_single_instance() -> TestResult<()> {
+    let mut fixture = LspTestFixture::new()?;
+    let _ = fixture.initialize()?;
+
+    // Only one W0050 — per-rule fix-all should not appear.
+    let code = "x: int = 42\n";
+    fixture.did_open("file:///fixrule1.py", code)?;
+
+    let diag_msg = fixture
+        .wait_for_diagnostics()
+        .ok_or("no diagnostics published")?;
+
+    let diag_json: serde_json::Value = serde_json::from_str(&diag_msg)?;
+    let diagnostics = diag_json["params"]["diagnostics"]
+        .as_array()
+        .ok_or("expected diagnostics array")?;
+
+    let w0050 = diagnostics
+        .iter()
+        .find(|d| d["code"].as_str() == Some("BSK-W0050"))
+        .ok_or("no BSK-W0050 diagnostic")?;
+
+    let resp = send_request(
+        &mut fixture,
+        211,
+        "textDocument/codeAction",
+        serde_json::json!({
+            "textDocument": { "uri": "file:///fixrule1.py" },
+            "range": w0050["range"],
+            "context": {
+                "diagnostics": [w0050]
+            }
+        }),
+    )?
+    .ok_or("no code action response")?;
+
+    assert!(
+        !resp.contains("Fix all `BSK-W0050` in this file"),
+        "per-rule fix-all should NOT appear for single instance: {resp}"
+    );
+    Ok(())
+}

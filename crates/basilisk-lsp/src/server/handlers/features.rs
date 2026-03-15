@@ -6,10 +6,10 @@ use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::{
     CodeActionOrCommand, CodeActionParams, CodeActionResponse, CodeLens, CodeLensParams,
     ColorInformation, ColorPresentation, ColorPresentationParams, CompletionItem,
-    CompletionParams, CompletionResponse, DocumentColorParams, DocumentFormattingParams,
-    FoldingRange, FoldingRangeParams, Hover, HoverParams, InlayHint, InlayHintParams,
-    SelectionRange, SelectionRangeParams, SemanticTokens, SemanticTokensParams,
-    SemanticTokensResult, SignatureHelpParams, TextEdit,
+    CompletionParams, CompletionResponse, Diagnostic, DocumentColorParams,
+    DocumentFormattingParams, FoldingRange, FoldingRangeParams, Hover, HoverParams, InlayHint,
+    InlayHintParams, NumberOrString, SelectionRange, SelectionRangeParams, SemanticTokens,
+    SemanticTokensParams, SemanticTokensResult, SignatureHelpParams, TextEdit,
 };
 
 use crate::{
@@ -114,20 +114,43 @@ pub(in crate::server) async fn code_action(
         .unwrap_or_default();
     let mut actions = code_actions::code_actions(&uri, &params.context.diagnostics, &source);
 
-    // Add a "Fix all in file" quickfix action to the lightbulb menu
-    // when the file has 2+ fixable diagnostics.
-    if let Some(fix_all) = server
+    // Collect the distinct rule codes from the diagnostics at the cursor.
+    let cursor_codes: Vec<String> = params
+        .context
+        .diagnostics
+        .iter()
+        .filter_map(|d| match &d.code {
+            Some(NumberOrString::String(s)) => Some(s.clone()),
+            _ => None,
+        })
+        .collect();
+
+    // Fetch all file diagnostics once for the bulk actions below.
+    let file_diags: Option<(String, Vec<Diagnostic>)> = server
         .with_index(|idx| {
             let (text, _, checker_diags) = idx.get_by_uri(&uri)?;
-            let lsp_diags: Vec<_> = checker_diags
+            let lsp_diags = checker_diags
                 .iter()
                 .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &text))
                 .collect();
-            code_actions::fix_all_quickfix(&uri, &lsp_diags, &text)
+            Some((text, lsp_diags))
         })
-        .await
-    {
-        actions.insert(0, CodeActionOrCommand::CodeAction(fix_all));
+        .await;
+
+    if let Some((text, all_diags)) = file_diags {
+        // Per-rule "Fix all <BSK-XXXX> in this file" actions.
+        for code in &cursor_codes {
+            if let Some(rule_fix) =
+                code_actions::fix_all_by_rule(&uri, &all_diags, &text, code)
+            {
+                actions.insert(0, CodeActionOrCommand::CodeAction(rule_fix));
+            }
+        }
+
+        // Global "Fix all auto-fixable issues" action.
+        if let Some(fix_all) = code_actions::fix_all_quickfix(&uri, &all_diags, &text) {
+            actions.insert(0, CodeActionOrCommand::CodeAction(fix_all));
+        }
     }
 
     Ok(none_if_empty(actions))
