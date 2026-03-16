@@ -2,9 +2,8 @@
 # Run the full Basilisk test suite with coverage.
 #
 # Usage:
-#   ./scripts/test.sh                  # run everything
-#   ./scripts/test.sh --skip-build     # skip the initial cargo build step
-#   ./scripts/test.sh --open           # open HTML report after
+#   ./scripts/test.sh          # run everything
+#   ./scripts/test.sh --open   # open HTML report after
 
 set -euo pipefail
 
@@ -23,11 +22,9 @@ ok()     { echo -e "${GREEN}✓ $*${RESET}"; }
 warn()   { echo -e "${YELLOW}⚠ $*${RESET}"; }
 
 OPEN_REPORT=0
-SKIP_BUILD=0
 for arg in "$@"; do
     case "$arg" in
         --open) OPEN_REPORT=1 ;;
-        --skip-build) SKIP_BUILD=1 ;;
     esac
 done
 
@@ -74,20 +71,9 @@ ok "All dependencies present"
 # Ensure llvm-tools-preview is installed so cargo-llvm-cov never prompts.
 rustup component add llvm-tools-preview 2>/dev/null || true
 
-# ── Build ────────────────────────────────────────────────────────────────────
-
-BASILISK_BIN="$REPO_ROOT/target/release/basilisk"
-if [[ "$SKIP_BUILD" -eq 0 ]]; then
-    header "Building basilisk binary"
-    cargo build --release -p basilisk-cli
-    ok "basilisk binary ready: $BASILISK_BIN"
-fi
-if [[ ! -x "$BASILISK_BIN" ]]; then
-    echo -e "${RED}${BOLD}FATAL: basilisk binary not found at $BASILISK_BIN. Build first or drop --skip-build.${RESET}"
-    exit 1
-fi
-
 # ── Rust tests with coverage ─────────────────────────────────────────────────
+# cargo-llvm-cov builds --release into target/release/ (same target dir),
+# so the basilisk binary is available after this step — no separate build needed.
 
 header "Running tests with coverage instrumentation"
 set +e
@@ -109,6 +95,13 @@ if [[ "$TESTS_EXIT" -ne 0 ]]; then
     exit "$TESTS_EXIT"
 fi
 ok "All workspace tests passed"
+
+BASILISK_BIN="$REPO_ROOT/target/release/basilisk"
+if [[ ! -x "$BASILISK_BIN" ]]; then
+    echo -e "${RED}${BOLD}FATAL: basilisk binary not found at $BASILISK_BIN after coverage build.${RESET}"
+    exit 1
+fi
+ok "basilisk binary ready: $BASILISK_BIN"
 
 cargo llvm-cov report --release --html --output-dir "$HTML_DIR"
 ok "HTML report → $HTML_DIR/index.html"
