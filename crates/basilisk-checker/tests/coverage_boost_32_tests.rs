@@ -33,11 +33,17 @@ result = old_func(5)
 ref = old_func
 "#;
     let diagnostics = run(source)?;
-    let e0115: Vec<_> = diagnostics.iter().filter(|d| d.code.code == "BSK-E0115").collect();
+    let e0115: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0115")
+        .collect();
     assert!(
         !e0115.is_empty(),
         "should flag deprecated function usage: {:?}",
-        diagnostics.iter().map(|d| format!("{}: {}", d.code.code, d.message)).collect::<Vec<_>>()
+        diagnostics
+            .iter()
+            .map(|d| format!("{}: {}", d.code.code, d.message))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -59,11 +65,17 @@ obj = OldClass()
 cls_ref = OldClass
 "#;
     let diagnostics = run(source)?;
-    let e0115: Vec<_> = diagnostics.iter().filter(|d| d.code.code == "BSK-E0115").collect();
+    let e0115: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0115")
+        .collect();
     assert!(
         !e0115.is_empty(),
         "should flag deprecated class usage: {:?}",
-        diagnostics.iter().map(|d| format!("{}: {}", d.code.code, d.message)).collect::<Vec<_>>()
+        diagnostics
+            .iter()
+            .map(|d| format!("{}: {}", d.code.code, d.message))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -610,7 +622,10 @@ BadAlias: TA = [int, str]
 GoodAlias: TA = int | str
 "#;
     let diagnostics = run(source)?;
-    let e0048: Vec<_> = diagnostics.iter().filter(|d| d.code.code == "BSK-E0048").collect();
+    let e0048: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0048")
+        .collect();
     assert!(!e0048.is_empty(), "should flag invalid TA RHS: {e0048:?}");
     Ok(())
 }
@@ -624,7 +639,10 @@ from typing import TypeAlias
 BadAlias: TypeAlias = eval("int")
 "#;
     let diagnostics = run(source)?;
-    let e0048: Vec<_> = diagnostics.iter().filter(|d| d.code.code == "BSK-E0048").collect();
+    let e0048: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0048")
+        .collect();
     assert!(!e0048.is_empty(), "eval() should be flagged");
     Ok(())
 }

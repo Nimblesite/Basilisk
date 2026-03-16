@@ -32,9 +32,8 @@ fn parse_pyi_file_from_disk() {
     let mut tmp = tempfile::NamedTempFile::new().expect("create temp file");
     writeln!(tmp, "def greet(name: str) -> str: ...").expect("write");
     let path = tmp.path();
-    let module =
-        parse_pyi_file(path, "greet_mod", StubSource::UserStub, StubTier::Tier1)
-            .expect("should parse from disk");
+    let module = parse_pyi_file(path, "greet_mod", StubSource::UserStub, StubTier::Tier1)
+        .expect("should parse from disk");
     assert!(module.functions.contains_key("greet"));
     let func = module.functions.get("greet").expect("greet");
     assert_eq!(func.return_type.as_deref(), Some("str"));
@@ -256,9 +255,10 @@ class Config:
     let stub = parse_stub(source);
     let cls = stub.classes.get("Config").expect("Config");
     assert_eq!(cls.attributes.len(), 2);
-    let timeout = cls.attributes.iter().find(|a| a.name == "timeout").expect("timeout");
-    assert_eq!(
-        timeout.annotation.as_deref(),
-        Some("typing.Optional[int]")
-    );
+    let timeout = cls
+        .attributes
+        .iter()
+        .find(|a| a.name == "timeout")
+        .expect("timeout");
+    assert_eq!(timeout.annotation.as_deref(), Some("typing.Optional[int]"));
 }
