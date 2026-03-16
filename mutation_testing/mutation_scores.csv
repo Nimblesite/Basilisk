@@ -1,0 +1,6 @@
+date,crate,total,caught,missed,timeout,unviable,kill_rate
+2026-03-16,checker/e0014,28,13,2,0,13,87%
+2026-03-16,checker/e0048,95,53,9,0,33,85%
+2026-03-16,checker/e0097+e0150,95,25,37,0,33,40%
+2026-03-16,checker/types+collection,21,0,21,0,0,0%
+2026-03-16,parser,2,0,0,0,2,0%
