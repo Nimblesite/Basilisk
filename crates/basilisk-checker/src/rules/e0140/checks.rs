@@ -136,7 +136,15 @@ fn handle_func_body_assign(
         return;
     }
     // Check attribute assignment on protocol-typed variables
-    check_attr_assignment(target, &assign.value, var_proto_types, ctx, path, code, diag);
+    check_attr_assignment(
+        target,
+        &assign.value,
+        var_proto_types,
+        ctx,
+        path,
+        code,
+        diag,
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -185,9 +193,7 @@ fn check_attr_assignment(
         diag.push(Diagnostic {
             code: code.clone(),
             severity: Severity::Error,
-            message: format!(
-                "Protocol `{proto_name}` has no attribute `{attr_name}`"
-            ),
+            message: format!("Protocol `{proto_name}` has no attribute `{attr_name}`"),
             span,
             path: path.to_owned(),
             help: None,

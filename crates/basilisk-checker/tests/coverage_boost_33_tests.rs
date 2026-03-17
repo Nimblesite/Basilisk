@@ -13,9 +13,7 @@ fn run(source: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::e
 }
 
 /// Run checker against a real file on disk so rules that load sibling modules work.
-fn run_file(
-    path: &str,
-) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::error::Error>> {
+fn run_file(path: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::error::Error>> {
     let parsed = basilisk_parser::parse_file(path)?;
     let resolved = resolve(&parsed)?;
     Ok(check(&resolved))
@@ -154,8 +152,18 @@ GoodSubscript: TypeAlias = list[int]
         .collect();
 
     for bad_name in &[
-        "BadList", "BadDict", "BadBool", "BadInt", "BadEval", "BadLambda",
-        "BadFStr", "BadTernary", "BadBoolOp", "BadNeg", "BadTuple", "BadAnd",
+        "BadList",
+        "BadDict",
+        "BadBool",
+        "BadInt",
+        "BadEval",
+        "BadLambda",
+        "BadFStr",
+        "BadTernary",
+        "BadBoolOp",
+        "BadNeg",
+        "BadTuple",
+        "BadAnd",
     ] {
         assert!(
             flagged_names.contains(bad_name),
@@ -598,7 +606,9 @@ x: int = "hello"
         .collect();
     // x should be flagged
     assert!(
-        e0014.iter().any(|d| d.message.contains("int") || d.message.contains("str")),
+        e0014
+            .iter()
+            .any(|d| d.message.contains("int") || d.message.contains("str")),
         "should flag x: int = \"hello\""
     );
     // MyAlias should NOT be flagged by e0014 (it's e0048's job)

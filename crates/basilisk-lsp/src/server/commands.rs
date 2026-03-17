@@ -40,9 +40,7 @@ pub(super) async fn dispatch_execute_command(
         basilisk_common::commands::DISABLE_RULE => {
             execute_disable_rule(server, &params.arguments).await
         }
-        basilisk_common::commands::FIX_FILE => {
-            execute_fix_file(server, &params.arguments).await
-        }
+        basilisk_common::commands::FIX_FILE => execute_fix_file(server, &params.arguments).await,
         unknown => {
             server
                 .client
@@ -291,9 +289,7 @@ async fn execute_fix_file(
         .edit
         .as_ref()
         .and_then(|e| e.changes.as_ref())
-        .map_or(0, |changes| {
-            changes.values().map(Vec::len).sum::<usize>()
-        });
+        .map_or(0, |changes| changes.values().map(Vec::len).sum::<usize>());
 
     if let Some(edit) = action.edit {
         let _ = server.client.apply_edit(edit).await;

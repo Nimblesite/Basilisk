@@ -189,8 +189,7 @@ fn collect_unpack_func(
         return;
     };
     if let Some((_, keys)) = typeddict_keys.iter().find(|(n, _)| n == unpack_type) {
-        let positional_count =
-            func.parameters.posonlyargs.len() + func.parameters.args.len();
+        let positional_count = func.parameters.posonlyargs.len() + func.parameters.args.len();
         let _ = unpack_funcs.insert(
             func.name.to_string(),
             UnpackFuncInfo {
@@ -256,7 +255,9 @@ fn collect_local_var_type(assign: &ast::StmtAssign, ctx: &mut KwargsContext) {
     if let Expr::Call(call) = assign.value.as_ref() {
         if let Some(callee) = expr_name(&call.func) {
             if ctx.typeddict_keys.iter().any(|(n, _)| n == callee) {
-                let _ = ctx.var_annotations.insert(var_name.to_owned(), callee.to_owned());
+                let _ = ctx
+                    .var_annotations
+                    .insert(var_name.to_owned(), callee.to_owned());
             }
         }
     }
@@ -540,7 +541,8 @@ fn resolve_spread_keys<'a>(var_name: &str, ctx: &'a KwargsContext) -> Vec<&'a st
 /// unless wrapped in `NotRequired`, but we simplify to: if there are keys, there
 /// are likely required ones).
 fn has_required_td_keys(td_name: &str, ctx: &KwargsContext) -> bool {
-    ctx.get_td_keys(td_name).is_some_and(|keys| !keys.is_empty())
+    ctx.get_td_keys(td_name)
+        .is_some_and(|keys| !keys.is_empty())
 }
 
 // ---------------------------------------------------------------------------

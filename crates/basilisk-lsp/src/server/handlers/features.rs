@@ -5,11 +5,11 @@
 use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::{
     CodeActionOrCommand, CodeActionParams, CodeActionResponse, CodeLens, CodeLensParams,
-    ColorInformation, ColorPresentation, ColorPresentationParams, CompletionItem,
-    CompletionParams, CompletionResponse, Diagnostic, DocumentColorParams,
-    DocumentFormattingParams, FoldingRange, FoldingRangeParams, Hover, HoverParams, InlayHint,
-    InlayHintParams, NumberOrString, SelectionRange, SelectionRangeParams, SemanticTokens,
-    SemanticTokensParams, SemanticTokensResult, SignatureHelpParams, TextEdit,
+    ColorInformation, ColorPresentation, ColorPresentationParams, CompletionItem, CompletionParams,
+    CompletionResponse, Diagnostic, DocumentColorParams, DocumentFormattingParams, FoldingRange,
+    FoldingRangeParams, Hover, HoverParams, InlayHint, InlayHintParams, NumberOrString,
+    SelectionRange, SelectionRangeParams, SemanticTokens, SemanticTokensParams,
+    SemanticTokensResult, SignatureHelpParams, TextEdit,
 };
 
 use crate::{
@@ -85,11 +85,11 @@ pub(in crate::server) async fn code_action(
     // When VS Code asks for `source.fixAll`, we fetch ALL diagnostics from
     // the workspace index (not just the ones in the request) and produce a
     // single combined WorkspaceEdit.
-    let wants_fix_all = params
-        .context
-        .only
-        .as_ref()
-        .is_some_and(|kinds| kinds.iter().any(|k| k.as_str().starts_with("source.fixAll")));
+    let wants_fix_all = params.context.only.as_ref().is_some_and(|kinds| {
+        kinds
+            .iter()
+            .any(|k| k.as_str().starts_with("source.fixAll"))
+    });
 
     if wants_fix_all {
         let result: Option<CodeActionResponse> = server
@@ -140,9 +140,7 @@ pub(in crate::server) async fn code_action(
     if let Some((text, all_diags)) = file_diags {
         // Per-rule "Fix all <BSK-XXXX> in this file" actions.
         for code in &cursor_codes {
-            if let Some(rule_fix) =
-                code_actions::fix_all_by_rule(&uri, &all_diags, &text, code)
-            {
+            if let Some(rule_fix) = code_actions::fix_all_by_rule(&uri, &all_diags, &text, code) {
                 actions.insert(0, CodeActionOrCommand::CodeAction(rule_fix));
             }
         }

@@ -154,18 +154,19 @@ fn check_protocol_param_counts(
         .count();
     // When the protocol has only keyword-only params (no positional), source positional
     // params that match by name are acceptable (they can be called as keywords).
-    let src_excess_positional = if target.positional_params.is_empty() && !target.kw_only_params.is_empty() {
-        func.positional_params
-            .iter()
-            .filter(|p| {
-                !p.has_default
-                    && !p.is_positional_only
-                    && !target.kw_only_params.iter().any(|tk| tk.name == p.name)
-            })
-            .count()
-    } else {
-        src_req.saturating_sub(target.positional_params.len())
-    };
+    let src_excess_positional =
+        if target.positional_params.is_empty() && !target.kw_only_params.is_empty() {
+            func.positional_params
+                .iter()
+                .filter(|p| {
+                    !p.has_default
+                        && !p.is_positional_only
+                        && !target.kw_only_params.iter().any(|tk| tk.name == p.name)
+                })
+                .count()
+        } else {
+            src_req.saturating_sub(target.positional_params.len())
+        };
     if src_excess_positional > 0 && !target.has_varargs {
         diag.push(Diagnostic {
             code: code.clone(),
@@ -320,7 +321,10 @@ fn check_source_required_kw(
             continue;
         }
         let in_target_kw = target.kw_only_params.iter().any(|tk| tk.name == skw.name);
-        let in_target_pos = target.positional_params.iter().any(|tp| tp.name == skw.name);
+        let in_target_pos = target
+            .positional_params
+            .iter()
+            .any(|tp| tp.name == skw.name);
         if !in_target_kw && !in_target_pos && !target.has_kwargs {
             diag.push(Diagnostic {
                 code: code.clone(),

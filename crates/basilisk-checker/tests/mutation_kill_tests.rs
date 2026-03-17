@@ -12,9 +12,7 @@ fn run(source: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::e
     Ok(check(&resolved))
 }
 
-fn e0014_count(
-    diagnostics: &[basilisk_checker::Diagnostic],
-) -> usize {
+fn e0014_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
     diagnostics
         .iter()
         .filter(|d| d.code.code == "BSK-E0014")
@@ -47,7 +45,11 @@ d: int = None
     assert!(
         e0014 >= 2,
         "at least 2 mismatches expected (c and d), got {e0014}: {:?}",
-        diagnostics.iter().filter(|d| d.code.code == "BSK-E0014").map(|d| &d.message).collect::<Vec<_>>()
+        diagnostics
+            .iter()
+            .filter(|d| d.code.code == "BSK-E0014")
+            .map(|d| &d.message)
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -213,7 +215,11 @@ h: bytes = 42
     assert!(
         e0014 >= 3,
         "at least 3 named type mismatches, got {e0014}: {:?}",
-        diagnostics.iter().filter(|d| d.code.code == "BSK-E0014").map(|d| &d.message).collect::<Vec<_>>()
+        diagnostics
+            .iter()
+            .filter(|d| d.code.code == "BSK-E0014")
+            .map(|d| &d.message)
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -433,7 +439,11 @@ n: bytes = b"data"
     assert!(
         e0014 >= 6,
         "at least 6 type mismatches expected, got {e0014}: {:?}",
-        diagnostics.iter().filter(|d| d.code.code == "BSK-E0014").map(|d| &d.message).collect::<Vec<_>>()
+        diagnostics
+            .iter()
+            .filter(|d| d.code.code == "BSK-E0014")
+            .map(|d| &d.message)
+            .collect::<Vec<_>>()
     );
     Ok(())
 }

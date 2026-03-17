@@ -346,7 +346,7 @@ impl LspStdioFixture {
 
         // Respond with `{ "applied": true }` for workspace/applyEdit,
         // or `null` for anything else.
-        let result = if parsed["method"] == "workspace/applyEdit" {
+        let result = if parsed.get("method") == Some(&serde_json::Value::String("workspace/applyEdit".to_owned())) {
             serde_json::json!({ "applied": true })
         } else {
             serde_json::Value::Null
