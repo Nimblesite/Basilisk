@@ -4,12 +4,12 @@
 
 use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::{
-    CodeActionParams, CodeActionResponse, CodeLens, CodeLensParams, ColorInformation,
-    ColorPresentation, ColorPresentationParams, CompletionItem, CompletionParams,
-    CompletionResponse, DocumentColorParams, DocumentFormattingParams, FoldingRange,
-    FoldingRangeParams, Hover, HoverParams, InlayHint, InlayHintParams, SelectionRange,
-    SelectionRangeParams, SemanticTokens, SemanticTokensParams, SemanticTokensResult,
-    SignatureHelpParams, TextEdit,
+    CodeActionOrCommand, CodeActionParams, CodeActionResponse, CodeLens, CodeLensParams,
+    ColorInformation, ColorPresentation, ColorPresentationParams, CompletionItem,
+    CompletionParams, CompletionResponse, Diagnostic, DocumentColorParams,
+    DocumentFormattingParams, FoldingRange, FoldingRangeParams, Hover, HoverParams, InlayHint,
+    InlayHintParams, NumberOrString, SelectionRange, SelectionRangeParams, SemanticTokens,
+    SemanticTokensParams, SemanticTokensResult, SignatureHelpParams, TextEdit,
 };
 
 use crate::{
@@ -81,15 +81,79 @@ pub(in crate::server) async fn code_action(
     params: CodeActionParams,
 ) -> LspResult<Option<CodeActionResponse>> {
     let uri = params.text_document.uri;
+
+    // When VS Code asks for `source.fixAll`, we fetch ALL diagnostics from
+    // the workspace index (not just the ones in the request) and produce a
+    // single combined WorkspaceEdit.
+    let wants_fix_all = params
+        .context
+        .only
+        .as_ref()
+        .is_some_and(|kinds| kinds.iter().any(|k| k.as_str().starts_with("source.fixAll")));
+
+    if wants_fix_all {
+        let result: Option<CodeActionResponse> = server
+            .with_index(|idx| {
+                let (text, _, checker_diags) = idx.get_by_uri(&uri)?;
+                let lsp_diags: Vec<_> = checker_diags
+                    .iter()
+                    .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &text))
+                    .collect();
+                let action = code_actions::fix_all_in_file(&uri, &lsp_diags, &text)?;
+                Some(vec![tower_lsp::lsp_types::CodeActionOrCommand::CodeAction(
+                    action,
+                )])
+            })
+            .await;
+        return Ok(result);
+    }
+
     let source = server
         .with_index(|idx| idx.get_text(&uri))
         .await
         .unwrap_or_default();
-    Ok(none_if_empty(code_actions::code_actions(
-        &uri,
-        &params.context.diagnostics,
-        &source,
-    )))
+    let mut actions = code_actions::code_actions(&uri, &params.context.diagnostics, &source);
+
+    // Collect the distinct rule codes from the diagnostics at the cursor.
+    let cursor_codes: Vec<String> = params
+        .context
+        .diagnostics
+        .iter()
+        .filter_map(|d| match &d.code {
+            Some(NumberOrString::String(s)) => Some(s.clone()),
+            _ => None,
+        })
+        .collect();
+
+    // Fetch all file diagnostics once for the bulk actions below.
+    let file_diags: Option<(String, Vec<Diagnostic>)> = server
+        .with_index(|idx| {
+            let (text, _, checker_diags) = idx.get_by_uri(&uri)?;
+            let lsp_diags = checker_diags
+                .iter()
+                .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &text))
+                .collect();
+            Some((text, lsp_diags))
+        })
+        .await;
+
+    if let Some((text, all_diags)) = file_diags {
+        // Per-rule "Fix all <BSK-XXXX> in this file" actions.
+        for code in &cursor_codes {
+            if let Some(rule_fix) =
+                code_actions::fix_all_by_rule(&uri, &all_diags, &text, code)
+            {
+                actions.insert(0, CodeActionOrCommand::CodeAction(rule_fix));
+            }
+        }
+
+        // Global "Fix all auto-fixable issues" action.
+        if let Some(fix_all) = code_actions::fix_all_quickfix(&uri, &all_diags, &text) {
+            actions.insert(0, CodeActionOrCommand::CodeAction(fix_all));
+        }
+    }
+
+    Ok(none_if_empty(actions))
 }
 
 /// Handle `textDocument/completion`.

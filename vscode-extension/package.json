@@ -60,6 +60,19 @@
         "command": "basilisk.organizeImports",
         "title": "Basilisk: Organize Imports",
         "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.fixFile",
+        "title": "Basilisk: Fix All in File",
+        "category": "Basilisk"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "basilisk.fixFile",
+        "key": "ctrl+shift+.",
+        "mac": "cmd+shift+.",
+        "when": "editorLangId == python"
       }
     ],
     "breakpoints": [

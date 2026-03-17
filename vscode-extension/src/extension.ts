@@ -167,6 +167,25 @@ export function activate(context: vscode.ExtensionContext): void {
     outputChannel?.show();
   });
 
+  safeRegisterCommand(context, "basilisk.fixFile", async () => {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      return;
+    }
+    const uri = editor.document.uri;
+
+    if (client) {
+      // LSP mode — send executeCommand to the server.
+      await client.sendRequest("workspace/executeCommand", {
+        command: "basilisk.fixFile",
+        arguments: [uri.toString()],
+      });
+    } else {
+      // Fallback — trigger VS Code's built-in "fix all" code action.
+      await vscode.commands.executeCommand("editor.action.fixAll");
+    }
+  });
+
   if (useLsp) {
     // In LSP mode, the LanguageClient automatically registers
     // basilisk.organizeImports via the server's executeCommandProvider.
