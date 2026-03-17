@@ -194,7 +194,7 @@ class SubBuilder(Builder):
 
 #[test]
 fn e0076_overload_union_expansion() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import overload, Union
 
 @overload
@@ -208,7 +208,7 @@ def convert(x):
 
 val: Union[int, str] = 42
 result = convert(val)
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -360,7 +360,7 @@ class MyClass:
 
 #[test]
 fn e0059_match_args_false() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from dataclasses import dataclass
 
 @dataclass(match_args=False)
@@ -375,7 +375,7 @@ class WithMatch:
 
 Point.__match_args__
 WithMatch.__match_args__
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -385,7 +385,7 @@ WithMatch.__match_args__
 
 #[test]
 fn e0060_cross_type_comparison() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from dataclasses import dataclass
 
 @dataclass(order=True)
@@ -404,7 +404,7 @@ b = Point3D(1, 2, 3)
 
 result = a < b
 result2 = a > b
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -414,13 +414,13 @@ result2 = a > b
 
 #[test]
 fn e0065_float_param_int_attr() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 def func(x: float) -> None:
     y = x.numerator
     z = x.denominator
     w = x.bit_length()
     v = x.conjugate()
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -556,7 +556,7 @@ class Bad(Generic[*Ts1, *Ts2]):
 
 #[test]
 fn e0094_self_invalid_location() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Self
 
 def module_func(x: Self) -> Self:
@@ -569,7 +569,7 @@ class MyClass:
     @staticmethod
     def static_method() -> Self:
         pass
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -599,7 +599,7 @@ def func2(x: Literal["hello"]) -> None:
 
 #[test]
 fn e0103_tuple_index() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Tuple
 
 def func(t: tuple[int, str, float]) -> None:
@@ -609,7 +609,7 @@ def func(t: tuple[int, str, float]) -> None:
     w = t[3]
     v = t[-1]
     u = t[-4]
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -636,7 +636,7 @@ C: TypeAlias = list["C"]
 
 #[test]
 fn e0106_protocol_class_object() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Protocol
 
 class P(Protocol):
@@ -646,7 +646,7 @@ def func(cls: type[P]) -> P:
     return cls()
 
 func(P)
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -678,7 +678,7 @@ class WriteOnly(Protocol[T_contra]):
 
 #[test]
 fn e0112_typeguard_return() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import TypeGuard
 
 def is_str(x: object) -> TypeGuard[str]:
@@ -686,7 +686,7 @@ def is_str(x: object) -> TypeGuard[str]:
 
 def bad_guard(x: object) -> TypeGuard[str]:
     return 42
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -696,7 +696,7 @@ def bad_guard(x: object) -> TypeGuard[str]:
 
 #[test]
 fn e0113_typeis_narrowing() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import TypeIs
 
 def is_int(x: object) -> TypeIs[int]:
@@ -704,7 +704,7 @@ def is_int(x: object) -> TypeIs[int]:
 
 def bad_typeis(x: str) -> TypeIs[int]:
     return isinstance(x, int)
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -714,7 +714,7 @@ def bad_typeis(x: str) -> TypeIs[int]:
 
 #[test]
 fn e0118_super_abstract() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Protocol
 from abc import abstractmethod, ABC
 
@@ -733,7 +733,7 @@ class ProtoBase(Protocol):
 class ProtoChild(ProtoBase):
     def compute(self) -> int:
         return super().compute()
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -792,13 +792,13 @@ result2 = apply(my_func, "wrong")
 
 #[test]
 fn e0015_too_many_type_args() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Optional, List, Dict, Tuple
 
 x: Optional[int, str] = None
 y: List[int, str] = []
 z: Dict[int, str, float] = {}
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -873,7 +873,7 @@ b: list[str] = a
 
 #[test]
 fn e0136_callable_subtyping() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Callable
 
 def takes_int(x: int) -> str:
@@ -885,7 +885,7 @@ def takes_object(x: object) -> str:
 # Callable subtyping
 f1: Callable[[object], str] = takes_int
 f2: Callable[[int], str] = takes_object
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -914,7 +914,7 @@ w: tuple[()] = ()
 
 #[test]
 fn e0073_namedtuple_tuple_compat() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import NamedTuple
 
 class Point(NamedTuple):
@@ -925,7 +925,7 @@ p = Point(1, 2)
 t: tuple[int, int] = p
 t2: tuple[int, str] = p
 t3: tuple[int, int, int] = p
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -935,7 +935,7 @@ t3: tuple[int, int, int] = p
 
 #[test]
 fn e0131_generator_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Generator, Iterator, AsyncGenerator
 
 def gen1() -> Generator[int, str, bool]:
@@ -949,7 +949,7 @@ def gen2() -> Iterator[int]:
 async def agen1() -> AsyncGenerator[int, None]:
     yield 1
     yield 2
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -1114,7 +1114,7 @@ W = TypeVar("W", default=int)
 
 #[test]
 fn e0067_enum_non_member() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from enum import Enum
 from typing import Literal
 
@@ -1127,7 +1127,7 @@ def func(s: Literal[Status.ACTIVE]) -> None:
 
 func(Status.ACTIVE)
 func(Status.INACTIVE)
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())

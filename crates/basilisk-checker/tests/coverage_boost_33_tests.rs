@@ -13,7 +13,9 @@ fn run(source: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::e
 }
 
 /// Run checker against a real file on disk so rules that load sibling modules work.
-fn run_file(path: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::error::Error>> {
+fn run_file(
+    path: &str,
+) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::error::Error>> {
     let parsed = basilisk_parser::parse_file(path)?;
     let resolved = resolve(&parsed)?;
     Ok(check(&resolved))
@@ -59,14 +61,14 @@ def good_func() -> int:
     let mut main_file = std::fs::File::create(&main_path)?;
     writeln!(
         main_file,
-        r"import mylib
+        r#"import mylib
 
 result = mylib.old_func()
 obj = mylib.OldClass()
 obj.old_method()
 val = obj.old_prop
 good = mylib.good_func()
-"
+"#
     )?;
 
     let diagnostics = run_file(main_path.to_str().unwrap_or("main.py"))?;
@@ -100,11 +102,11 @@ class OldTool:
     let mut main_file = std::fs::File::create(&main_path)?;
     writeln!(
         main_file,
-        r"from deprecated_lib import old_helper, OldTool
+        r#"from deprecated_lib import old_helper, OldTool
 
 old_helper()
 x = OldTool()
-"
+"#
     )?;
 
     let diagnostics = run_file(main_path.to_str().unwrap_or("consumer.py"))?;
@@ -152,18 +154,8 @@ GoodSubscript: TypeAlias = list[int]
         .collect();
 
     for bad_name in &[
-        "BadList",
-        "BadDict",
-        "BadBool",
-        "BadInt",
-        "BadEval",
-        "BadLambda",
-        "BadFStr",
-        "BadTernary",
-        "BadBoolOp",
-        "BadNeg",
-        "BadTuple",
-        "BadAnd",
+        "BadList", "BadDict", "BadBool", "BadInt", "BadEval", "BadLambda",
+        "BadFStr", "BadTernary", "BadBoolOp", "BadNeg", "BadTuple", "BadAnd",
     ] {
         assert!(
             flagged_names.contains(bad_name),
@@ -183,12 +175,12 @@ GoodSubscript: TypeAlias = list[int]
 
 #[test]
 fn e0048_typealias_alias_name() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import TypeAlias as TA
 
 Bad: TA = [int, str]
 Good: TA = int | str
-";
+"#;
     let diagnostics = run(source)?;
     let e0048: Vec<_> = diagnostics
         .iter()
@@ -203,12 +195,12 @@ Good: TA = int | str
 
 #[test]
 fn e0048_non_generic_alias_cannot_be_parameterized() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import TypeAlias
 
 Simple: TypeAlias = int | str
 x: Simple[int] = 42
-";
+"#;
     let diagnostics = run(source)?;
     let e0048: Vec<_> = diagnostics
         .iter()
@@ -606,9 +598,7 @@ x: int = "hello"
         .collect();
     // x should be flagged
     assert!(
-        e0014
-            .iter()
-            .any(|d| d.message.contains("int") || d.message.contains("str")),
+        e0014.iter().any(|d| d.message.contains("int") || d.message.contains("str")),
         "should flag x: int = \"hello\""
     );
     // MyAlias should NOT be flagged by e0014 (it's e0048's job)
@@ -620,7 +610,7 @@ x: int = "hello"
     Ok(())
 }
 
-/// Kills mutant: line 127 `InferredType::Named` check for "ta".
+/// Kills mutant: line 127 InferredType::Named check for "ta".
 /// `TypeAlias as TA` must be skipped by e0014.
 #[test]
 fn e0014_mutant_ta_alias_skipped() -> Result<(), Box<dyn std::error::Error>> {
@@ -647,15 +637,15 @@ x: int = "hello"
 }
 
 /// Kills mutant: line 220 `!param.has_annotation` → removing `!`.
-/// Annotated params must be included in `param_type_map` for local var checks.
+/// Annotated params must be included in param_type_map for local var checks.
 #[test]
 fn e0014_mutant_annotated_param_type_used() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 def func(x: int, y: str) -> None:
     # Local var assigned from param — type should propagate
     a: str = x
     b: int = y
-";
+"#;
     let diagnostics = run(source)?;
     let e0014: Vec<_> = diagnostics
         .iter()
@@ -672,7 +662,7 @@ def func(x: int, y: str) -> None:
     Ok(())
 }
 
-/// Kills mutants in `has_top_level_token` depth tracking.
+/// Kills mutants in has_top_level_token depth tracking.
 /// Nested brackets must NOT trigger `if`/`or`/`and` detection inside them.
 #[test]
 fn e0048_mutant_nested_brackets_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
@@ -755,7 +745,8 @@ fn e0014_mutant_multiline_annotation_extraction() -> Result<(), Box<dyn std::err
     let has_str_mismatch = messages.iter().any(|m| m.contains("str"));
     assert!(
         has_int_mismatch && has_str_mismatch,
-        "should correctly extract both `int` and `str` annotations: {messages:?}"
+        "should correctly extract both `int` and `str` annotations: {:?}",
+        messages
     );
     Ok(())
 }

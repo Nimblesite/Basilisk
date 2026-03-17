@@ -1,10 +1,12 @@
 //! Compatibility check functions for BSK-E0140.
 
+use std::collections::HashMap;
+
 use basilisk_resolver::Span;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
-use super::callable::{check_callable_compat, parse_callable_type};
+use super::callable::{check_callable_compat, parse_callable_type, types_compat};
 use super::context::{ann_str, expr_name, extract_base_name, ModuleContext};
 use super::protocol::check_protocol_func_compat;
 
@@ -24,6 +26,7 @@ pub(super) fn check_stmts(
     diag: &mut Vec<Diagnostic>,
 ) {
     let mut annotations: Vec<(String, Expr)> = Vec::new();
+    let proto_typed = collect_proto_typed_names(stmts, ctx);
     for stmt in stmts {
         match stmt {
             Stmt::AnnAssign(ann) => {
@@ -31,33 +34,39 @@ pub(super) fn check_stmts(
                     annotations.push((name.to_owned(), (*ann.annotation).clone()));
                 }
                 if let Some(value) = &ann.value {
-                    let span = Span {
-                        start: ann.range().start().to_u32(),
-                        end: ann.range().end().to_u32(),
-                    };
+                    let span = mk_span(ann.range());
                     check_assignment(&ann.annotation, value, ctx, path, code, diag, span);
                 }
             }
-            Stmt::Assign(assign) => {
-                if assign.targets.len() == 1 {
-                    if let Some(target_name) = assign.targets.first().and_then(expr_name) {
-                        if let Some((_, prev_ann)) =
-                            annotations.iter().rev().find(|(n, _)| n == target_name)
-                        {
-                            let span = Span {
-                                start: assign.range().start().to_u32(),
-                                end: assign.range().end().to_u32(),
-                            };
-                            check_assignment(prev_ann, &assign.value, ctx, path, code, diag, span);
-                        }
-                    }
-                }
-            }
+            Stmt::Assign(assign) => check_top_assign(assign, &annotations, ctx, path, code, diag),
             Stmt::FunctionDef(func) => {
                 check_stmts_in_func(&func.body, ctx, path, code, diag);
             }
             Stmt::ClassDef(cls) => check_stmts(&cls.body, ctx, path, code, diag),
+            Stmt::Expr(expr_stmt) => {
+                check_attr_access_in_expr(&expr_stmt.value, &proto_typed, ctx, path, code, diag);
+            }
             _ => {}
+        }
+    }
+}
+
+/// Handle a top-level `Assign` statement for callable/protocol checking.
+fn check_top_assign(
+    assign: &ruff_python_ast::StmtAssign,
+    annotations: &[(String, Expr)],
+    ctx: &ModuleContext,
+    path: &str,
+    code: &ErrorCode,
+    diag: &mut Vec<Diagnostic>,
+) {
+    if assign.targets.len() != 1 {
+        return;
+    }
+    if let Some(target_name) = assign.targets.first().and_then(expr_name) {
+        if let Some((_, prev_ann)) = annotations.iter().rev().find(|(n, _)| n == target_name) {
+            let span = mk_span(assign.range());
+            check_assignment(prev_ann, &assign.value, ctx, path, code, diag, span);
         }
     }
 }
@@ -71,6 +80,7 @@ pub(super) fn check_stmts_in_func(
     diag: &mut Vec<Diagnostic>,
 ) {
     let mut local_annotations: Vec<(String, Expr)> = Vec::new();
+    let mut var_proto_types: HashMap<String, String> = HashMap::new();
     for stmt in stmts {
         match stmt {
             Stmt::AnnAssign(ann) => {
@@ -78,34 +88,210 @@ pub(super) fn check_stmts_in_func(
                     local_annotations.push((name.to_owned(), (*ann.annotation).clone()));
                 }
                 if let Some(value) = &ann.value {
-                    let span = Span {
-                        start: ann.range().start().to_u32(),
-                        end: ann.range().end().to_u32(),
-                    };
+                    let span = mk_span(ann.range());
                     check_assignment(&ann.annotation, value, ctx, path, code, diag, span);
                 }
             }
             Stmt::Assign(assign) => {
-                if assign.targets.len() == 1 {
-                    if let Some(target_name) = assign.targets.first().and_then(expr_name) {
-                        if let Some((_, prev_ann)) = local_annotations
-                            .iter()
-                            .rev()
-                            .find(|(n, _)| n == target_name)
-                        {
-                            let span = Span {
-                                start: assign.range().start().to_u32(),
-                                end: assign.range().end().to_u32(),
-                            };
-                            check_assignment(prev_ann, &assign.value, ctx, path, code, diag, span);
-                        }
-                    }
-                }
+                handle_func_body_assign(
+                    assign,
+                    &local_annotations,
+                    &mut var_proto_types,
+                    ctx,
+                    path,
+                    code,
+                    diag,
+                );
             }
             _ => {}
         }
     }
 }
+
+/// Handle an assignment inside a function body.
+fn handle_func_body_assign(
+    assign: &ruff_python_ast::StmtAssign,
+    local_annotations: &[(String, Expr)],
+    var_proto_types: &mut HashMap<String, String>,
+    ctx: &ModuleContext,
+    path: &str,
+    code: &ErrorCode,
+    diag: &mut Vec<Diagnostic>,
+) {
+    if assign.targets.len() != 1 {
+        return;
+    }
+    let Some(target) = assign.targets.first() else {
+        return;
+    };
+    // Track cast() types
+    if let Some(name) = expr_name(target) {
+        if let Some(proto_name) = extract_cast_proto_type(&assign.value, ctx) {
+            let _ = var_proto_types.insert(name.to_owned(), proto_name);
+        }
+        if let Some((_, prev_ann)) = local_annotations.iter().rev().find(|(n, _)| n == name) {
+            let span = mk_span(assign.range());
+            check_assignment(prev_ann, &assign.value, ctx, path, code, diag, span);
+        }
+        return;
+    }
+    // Check attribute assignment on protocol-typed variables
+    check_attr_assignment(target, &assign.value, var_proto_types, ctx, path, code, diag);
+}
+
+// ---------------------------------------------------------------------------
+// Protocol attribute checking
+// ---------------------------------------------------------------------------
+
+/// Extract the protocol base name from a `cast(ProtoType, expr)` call.
+fn extract_cast_proto_type(value: &Expr, ctx: &ModuleContext) -> Option<String> {
+    let Expr::Call(call) = value else {
+        return None;
+    };
+    if !matches!(call.func.as_ref(), Expr::Name(n) if n.id.as_str() == "cast") {
+        return None;
+    }
+    let type_arg = call.arguments.args.first()?;
+    let type_str = ann_str(type_arg);
+    let base = extract_base_name(&type_str);
+    ctx.find_protocol(&base).map(|_| base)
+}
+
+/// Check an attribute assignment against a protocol-typed variable's attributes.
+fn check_attr_assignment(
+    target: &Expr,
+    value: &Expr,
+    var_proto_types: &HashMap<String, String>,
+    ctx: &ModuleContext,
+    path: &str,
+    code: &ErrorCode,
+    diag: &mut Vec<Diagnostic>,
+) {
+    let Expr::Attribute(attr) = target else {
+        return;
+    };
+    let Some(var_name) = expr_name(&attr.value) else {
+        return;
+    };
+    let Some(proto_name) = var_proto_types.get(var_name) else {
+        return;
+    };
+    let Some(proto) = ctx.find_protocol(proto_name) else {
+        return;
+    };
+    let attr_name = attr.attr.as_str();
+    let span = mk_span(attr.range());
+    let Some(proto_attr) = proto.attrs.iter().find(|a| a.name == attr_name) else {
+        diag.push(Diagnostic {
+            code: code.clone(),
+            severity: Severity::Error,
+            message: format!(
+                "Protocol `{proto_name}` has no attribute `{attr_name}`"
+            ),
+            span,
+            path: path.to_owned(),
+            help: None,
+            note: None,
+        });
+        return;
+    };
+    // Check type compatibility of the assigned value
+    let value_type = infer_literal_type(value);
+    if let Some(vt) = value_type {
+        if !types_compat(&proto_attr.ann, &vt) {
+            diag.push(Diagnostic {
+                code: code.clone(),
+                severity: Severity::Error,
+                message: format!(
+                    "Cannot assign `{vt}` to `{proto_name}.{attr_name}` of type `{}`",
+                    proto_attr.ann
+                ),
+                span,
+                path: path.to_owned(),
+                help: None,
+                note: None,
+            });
+        }
+    }
+}
+
+/// Collect names of decorated functions/variables whose type is a protocol.
+fn collect_proto_typed_names(stmts: &[Stmt], ctx: &ModuleContext) -> HashMap<String, String> {
+    let mut result = HashMap::new();
+    for stmt in stmts {
+        if let Stmt::FunctionDef(func) = stmt {
+            if let Some(proto_name) = infer_decorated_proto_type(func, ctx) {
+                let _ = result.insert(func.name.to_string(), proto_name);
+            }
+        }
+    }
+    result
+}
+
+/// If the function is decorated and the decorator returns a protocol type, return
+/// the protocol base name.
+fn infer_decorated_proto_type(
+    func: &ruff_python_ast::StmtFunctionDef,
+    ctx: &ModuleContext,
+) -> Option<String> {
+    for dec in &func.decorator_list {
+        let dec_name = expr_name(&dec.expression)?;
+        let dec_func = ctx.find_func(dec_name)?;
+        if dec_func.return_type.is_empty() {
+            continue;
+        }
+        let base = extract_base_name(&dec_func.return_type);
+        if ctx.find_protocol(&base).is_some() {
+            return Some(base);
+        }
+    }
+    None
+}
+
+/// Walk an expression tree and check attribute access on protocol-typed names.
+fn check_attr_access_in_expr(
+    expr: &Expr,
+    proto_typed: &HashMap<String, String>,
+    ctx: &ModuleContext,
+    path: &str,
+    code: &ErrorCode,
+    diag: &mut Vec<Diagnostic>,
+) {
+    match expr {
+        Expr::Attribute(attr) => {
+            if let Some(var_name) = expr_name(&attr.value) {
+                if let Some(proto_name) = proto_typed.get(var_name) {
+                    if let Some(proto) = ctx.find_protocol(proto_name) {
+                        let attr_name = attr.attr.as_str();
+                        if !proto.attrs.iter().any(|a| a.name == attr_name) {
+                            diag.push(Diagnostic {
+                                code: code.clone(),
+                                severity: Severity::Error,
+                                message: format!(
+                                    "Protocol `{proto_name}` has no attribute `{attr_name}`"
+                                ),
+                                span: mk_span(attr.range()),
+                                path: path.to_owned(),
+                                help: None,
+                                note: None,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        Expr::Call(call) => {
+            for arg in &call.arguments.args {
+                check_attr_access_in_expr(arg, proto_typed, ctx, path, code, diag);
+            }
+        }
+        _ => {}
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Assignment dispatch
+// ---------------------------------------------------------------------------
 
 /// Dispatch a single annotated assignment to the appropriate compatibility check.
 fn check_assignment(
@@ -158,5 +344,35 @@ fn check_assignment(
                 check_protocol_func_compat(protocol, fsig, path, code, diag, span);
             }
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Utilities
+// ---------------------------------------------------------------------------
+
+/// Infer a simple type string from a literal expression.
+fn infer_literal_type(expr: &Expr) -> Option<String> {
+    match expr {
+        Expr::StringLiteral(_) => Some("str".to_owned()),
+        Expr::NumberLiteral(n) => {
+            if n.value.is_int() {
+                Some("int".to_owned())
+            } else {
+                Some("float".to_owned())
+            }
+        }
+        Expr::BooleanLiteral(_) => Some("bool".to_owned()),
+        Expr::BytesLiteral(_) => Some("bytes".to_owned()),
+        Expr::NoneLiteral(_) => Some("None".to_owned()),
+        _ => None,
+    }
+}
+
+/// Create a [`Span`] from a ruff range.
+fn mk_span(range: ruff_text_size::TextRange) -> Span {
+    Span {
+        start: range.start().to_u32(),
+        end: range.end().to_u32(),
     }
 }

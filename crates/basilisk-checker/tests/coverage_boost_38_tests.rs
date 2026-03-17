@@ -96,7 +96,7 @@ class Outer(Generic[T]):
 
 #[test]
 fn e0078_self_return_deep() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Self
 
 class Builder:
@@ -114,7 +114,7 @@ class Builder:
         for i in range(1):
             return Builder()
         return self
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -124,7 +124,7 @@ class Builder:
 
 #[test]
 fn e0092_type_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Type
 
 a: type[int, str] = int
@@ -132,7 +132,7 @@ b: Type[int, str, float] = int
 
 def func(cls: type[int, str]) -> None:
     pass
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -228,7 +228,7 @@ b3: MathBox[str] = MathBox("bad")
 
 #[test]
 fn e0100_literal_augmented_vararg() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Literal
 
 def func(*args: Literal[1], **kwargs: Literal[0]) -> None:
@@ -236,7 +236,7 @@ def func(*args: Literal[1], **kwargs: Literal[0]) -> None:
         a += 1
     for k, v in kwargs.items():
         v += 1
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())

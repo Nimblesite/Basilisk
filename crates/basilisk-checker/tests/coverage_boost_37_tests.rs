@@ -14,7 +14,7 @@ fn run(source: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::e
 
 #[test]
 fn e0017_classvar_override() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import ClassVar
 
 class Base:
@@ -24,7 +24,7 @@ class Base:
 class Child(Base):
     x: int = 3
     y: ClassVar[int] = 4
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -34,7 +34,7 @@ class Child(Base):
 
 #[test]
 fn e0035_required_in_params() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Required, NotRequired
 
 def func(x: Required[int], y: NotRequired[str]) -> None:
@@ -43,7 +43,7 @@ def func(x: Required[int], y: NotRequired[str]) -> None:
 class MyClass:
     def method(self, a: Required[int]) -> None:
         pass
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -88,7 +88,7 @@ class Bad2[S](Generic[S]):
 
 #[test]
 fn e0052_frozen_hierarchy() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from dataclasses import dataclass
 
 @dataclass(frozen=True)
@@ -102,7 +102,7 @@ class MutableChild(FrozenBase):
 @dataclass(frozen=True)
 class FrozenChild(FrozenBase):
     z: float
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -112,11 +112,11 @@ class FrozenChild(FrozenBase):
 
 #[test]
 fn e0092_type_bracket_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 x: type[int, str] = int
 y: type[int, str, float] = int
 z: type[int] = int
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -126,14 +126,14 @@ z: type[int] = int
 
 #[test]
 fn e0100_literal_augmented_in_function() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Literal
 
 def func(x: Literal[42], *args: Literal[1], **kwargs: Literal[0]) -> None:
     x += 1
     for a in args:
         a += 1
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -143,7 +143,7 @@ def func(x: Literal[42], *args: Literal[1], **kwargs: Literal[0]) -> None:
 
 #[test]
 fn e0078_self_return_elif() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Self
 
 class Builder:
@@ -154,7 +154,7 @@ class Builder:
             return Builder()
         else:
             return Builder()
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -293,7 +293,7 @@ w.upper()
 
 #[test]
 fn e0070_never_various() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Never, NoReturn, Union, Optional
 
 def raises() -> Never:
@@ -313,7 +313,7 @@ b: Optional[Never] = None
 
 # Never return in expression
 c = 1 + raises()
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -355,7 +355,7 @@ func2(Priority.LOW)
 
 #[test]
 fn e0096_field_factory_patterns() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from dataclasses import dataclass, field
 
 @dataclass
@@ -366,7 +366,7 @@ class Config:
     nums: tuple[int, ...] = field(default_factory=tuple)
     bad: list[int] = field(default_factory=int)
     wrong: dict[str, int] = field(default_factory=set)
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -376,13 +376,13 @@ class Config:
 
 #[test]
 fn e0057_type_stmt_nested() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 type Simple = int
 type Union = int | str
 type Generic[T] = list[T]
 type Nested[T] = dict[str, list[T]]
 type Complex[T, S] = tuple[T, S, list[T | S]]
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -484,7 +484,7 @@ c4 = Child(x=1, y="test", z=3.14)
 
 #[test]
 fn protocol_multi_method_conformance() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Protocol, Iterator
 
 class Iterable(Protocol):
@@ -506,7 +506,7 @@ class Incomplete:
 
 x: Iterable = MyList()
 y: Iterable = Incomplete()
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())

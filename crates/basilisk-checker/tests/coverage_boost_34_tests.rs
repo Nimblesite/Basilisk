@@ -531,7 +531,7 @@ t3 = Tensor[str, int, int, int]("", 1, 2, 3)
 
 #[test]
 fn e0119_protocol_isinstance_data_protocol() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Protocol, runtime_checkable
 
 @runtime_checkable
@@ -562,7 +562,7 @@ isinstance(x, MixedProto)
 # issubclass checks
 issubclass(int, DataProto)
 issubclass(str, MethodProto)
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -664,7 +664,7 @@ a.x = 10
 
 #[test]
 fn e0140_callable_protocol_form() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import Callable, Protocol
 
 class Processor(Protocol):
@@ -682,7 +682,7 @@ b: Processor = wrong_func
 # Callable with multiple params
 c: Callable[[int, str, float], bool] = lambda x, y, z: True
 d: Callable[[int, str, float], bool] = lambda x, y: True
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -719,7 +719,7 @@ def gen_async_iter():
 
 #[test]
 fn e0143_namedtuple_delete_and_unpack() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 from typing import NamedTuple
 
 class Vec3(NamedTuple):
@@ -740,7 +740,7 @@ a, b, c, d = v
 # Negative index
 val = v[-1]
 val2 = v[-4]
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -808,7 +808,7 @@ ws.dynamic = True
 
 #[test]
 fn collection_inference_empty_containers() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let source = r#"
 # Empty collection inference
 a: list[int] = []
 b: dict[str, int] = {}
@@ -822,7 +822,7 @@ e: dict[int, str] = {i: str(i) for i in range(10)}
 
 # Set comprehension
 f: set[int] = {i for i in range(10)}
-";
+"#;
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())

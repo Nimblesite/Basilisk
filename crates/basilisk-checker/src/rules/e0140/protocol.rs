@@ -36,6 +36,12 @@ pub(super) fn check_protocol_func_compat(
         return;
     };
 
+    // If protocol has overloads, check source against each overload signature
+    if !proto.overload_sigs.is_empty() {
+        check_overload_compat(&proto.overload_sigs, func, proto, path, code, diag, span);
+        return;
+    }
+
     if check_protocol_varargs_kwargs(target, func, proto, path, code, diag, span) {
         return;
     }
@@ -44,6 +50,44 @@ pub(super) fn check_protocol_func_compat(
     }
     check_protocol_defaults_and_kw(target, func, proto, path, code, diag, span);
     check_protocol_param_types(target, func, proto, path, code, diag, span);
+}
+
+/// Check that a source function can handle all overloaded `__call__` signatures.
+///
+/// For each overload, every parameter type must be accepted by the source function.
+fn check_overload_compat(
+    overloads: &[FuncSig],
+    func: &FuncSig,
+    proto: &ProtocolInfo,
+    path: &str,
+    code: &ErrorCode,
+    diag: &mut Vec<Diagnostic>,
+    span: Span,
+) {
+    for overload in overloads {
+        for (idx, op) in overload.positional_params.iter().enumerate() {
+            if let Some(fp) = func.positional_params.get(idx) {
+                if !op.type_annotation.is_empty()
+                    && !fp.type_annotation.is_empty()
+                    && !types_compat(&op.type_annotation, &fp.type_annotation)
+                {
+                    diag.push(Diagnostic {
+                        code: code.clone(),
+                        severity: Severity::Error,
+                        message: format!(
+                            "Function `{}` incompatible with `{}`: overload param `{}` type `{}` not accepted by `{}`",
+                            func.name, proto.name, op.name, op.type_annotation, fp.type_annotation
+                        ),
+                        span,
+                        path: path.to_owned(),
+                        help: None,
+                        note: None,
+                    });
+                    return;
+                }
+            }
+        }
+    }
 }
 
 /// Check `*args` and `**kwargs` compatibility.
@@ -108,7 +152,21 @@ fn check_protocol_param_counts(
         .iter()
         .filter(|p| !p.has_default)
         .count();
-    if src_req > target.positional_params.len() && !target.has_varargs {
+    // When the protocol has only keyword-only params (no positional), source positional
+    // params that match by name are acceptable (they can be called as keywords).
+    let src_excess_positional = if target.positional_params.is_empty() && !target.kw_only_params.is_empty() {
+        func.positional_params
+            .iter()
+            .filter(|p| {
+                !p.has_default
+                    && !p.is_positional_only
+                    && !target.kw_only_params.iter().any(|tk| tk.name == p.name)
+            })
+            .count()
+    } else {
+        src_req.saturating_sub(target.positional_params.len())
+    };
+    if src_excess_positional > 0 && !target.has_varargs {
         diag.push(Diagnostic {
             code: code.clone(),
             severity: Severity::Error,
@@ -157,7 +215,22 @@ fn check_protocol_defaults_and_kw(
     diag: &mut Vec<Diagnostic>,
     span: Span,
 ) {
-    // Default arg check
+    check_positional_defaults(target, func, proto, path, code, diag, span);
+    check_kw_only_presence_and_defaults(target, func, proto, path, code, diag, span);
+    check_source_required_kw(target, func, proto, path, code, diag, span);
+    check_positional_only_mismatch(target, func, proto, path, code, diag, span);
+}
+
+/// Check positional parameter default requirements.
+fn check_positional_defaults(
+    target: &FuncSig,
+    func: &FuncSig,
+    proto: &ProtocolInfo,
+    path: &str,
+    code: &ErrorCode,
+    diag: &mut Vec<Diagnostic>,
+    span: Span,
+) {
     for (idx, tp) in target.positional_params.iter().enumerate() {
         if tp.has_default {
             if let Some(sp) = func.positional_params.get(idx) {
@@ -178,14 +251,25 @@ fn check_protocol_defaults_and_kw(
             }
         }
     }
-    // Keyword-only params
+}
+
+/// Check keyword-only param presence and defaults against the protocol.
+fn check_kw_only_presence_and_defaults(
+    target: &FuncSig,
+    func: &FuncSig,
+    proto: &ProtocolInfo,
+    path: &str,
+    code: &ErrorCode,
+    diag: &mut Vec<Diagnostic>,
+    span: Span,
+) {
     for tkw in &target.kw_only_params {
-        let has_kw = func.kw_only_params.iter().any(|sk| sk.name == tkw.name);
-        let has_reg = func
+        let matching_kw = func.kw_only_params.iter().find(|sk| sk.name == tkw.name);
+        let matching_reg = func
             .positional_params
             .iter()
-            .any(|sp| sp.name == tkw.name && !sp.is_positional_only);
-        if !has_kw && !has_reg && !func.has_kwargs {
+            .find(|sp| sp.name == tkw.name && !sp.is_positional_only);
+        if matching_kw.is_none() && matching_reg.is_none() && !func.has_kwargs {
             diag.push(Diagnostic {
                 code: code.clone(),
                 severity: Severity::Error,
@@ -198,9 +282,72 @@ fn check_protocol_defaults_and_kw(
                 help: None,
                 note: None,
             });
+            continue;
+        }
+        if tkw.has_default {
+            let source_has_default = matching_kw.is_some_and(|p| p.has_default)
+                || matching_reg.is_some_and(|p| p.has_default);
+            if !source_has_default && !func.has_kwargs {
+                diag.push(Diagnostic {
+                    code: code.clone(),
+                    severity: Severity::Error,
+                    message: format!(
+                        "Function `{}` incompatible with `{}`: keyword param `{}` needs default",
+                        func.name, proto.name, tkw.name
+                    ),
+                    span,
+                    path: path.to_owned(),
+                    help: None,
+                    note: None,
+                });
+            }
         }
     }
-    // Positional-only mismatch
+}
+
+/// Check source required kw-only params not present in the target protocol.
+fn check_source_required_kw(
+    target: &FuncSig,
+    func: &FuncSig,
+    proto: &ProtocolInfo,
+    path: &str,
+    code: &ErrorCode,
+    diag: &mut Vec<Diagnostic>,
+    span: Span,
+) {
+    for skw in &func.kw_only_params {
+        if skw.has_default {
+            continue;
+        }
+        let in_target_kw = target.kw_only_params.iter().any(|tk| tk.name == skw.name);
+        let in_target_pos = target.positional_params.iter().any(|tp| tp.name == skw.name);
+        if !in_target_kw && !in_target_pos && !target.has_kwargs {
+            diag.push(Diagnostic {
+                code: code.clone(),
+                severity: Severity::Error,
+                message: format!(
+                    "Function `{}` incompatible with `{}`: requires keyword `{}` not in protocol",
+                    func.name, proto.name, skw.name
+                ),
+                span,
+                path: path.to_owned(),
+                help: None,
+                note: None,
+            });
+        }
+    }
+}
+
+/// Check positional-only parameter mismatches.
+fn check_positional_only_mismatch(
+    target: &FuncSig,
+    func: &FuncSig,
+    proto: &ProtocolInfo,
+    path: &str,
+    code: &ErrorCode,
+    diag: &mut Vec<Diagnostic>,
+    span: Span,
+) {
     for (idx, tp) in target.positional_params.iter().enumerate() {
         if !tp.is_positional_only {
             if let Some(sp) = func.positional_params.get(idx) {
@@ -247,6 +394,37 @@ fn check_protocol_param_types(
                     message: format!(
                         "Function `{}` incompatible with `{}`: param `{}` type `{}` vs `{}`",
                         func.name, proto.name, sp.name, sp.type_annotation, tp.type_annotation
+                    ),
+                    span,
+                    path: path.to_owned(),
+                    help: None,
+                    note: None,
+                });
+            }
+        }
+    }
+    // Keyword-only param type compat
+    for tkw in &target.kw_only_params {
+        let source_param = func
+            .kw_only_params
+            .iter()
+            .find(|sk| sk.name == tkw.name)
+            .or_else(|| {
+                func.positional_params
+                    .iter()
+                    .find(|sp| sp.name == tkw.name && !sp.is_positional_only)
+            });
+        if let Some(sp) = source_param {
+            if !tkw.type_annotation.is_empty()
+                && !sp.type_annotation.is_empty()
+                && !types_compat(&tkw.type_annotation, &sp.type_annotation)
+            {
+                diag.push(Diagnostic {
+                    code: code.clone(),
+                    severity: Severity::Error,
+                    message: format!(
+                        "Function `{}` incompatible with `{}`: keyword param `{}` type `{}` vs `{}`",
+                        func.name, proto.name, sp.name, sp.type_annotation, tkw.type_annotation
                     ),
                     span,
                     path: path.to_owned(),
