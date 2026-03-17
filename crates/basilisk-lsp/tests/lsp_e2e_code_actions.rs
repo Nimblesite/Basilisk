@@ -561,7 +561,7 @@ fn test_lsp_fix_all_no_fixable_returns_empty() -> TestResult<()> {
     // Should return null result or empty array — no fixable diagnostics.
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
     let result = &parsed["result"];
-    let is_empty = result.is_null() || result.as_array().is_some_and(|a| a.is_empty());
+    let is_empty = result.is_null() || result.as_array().is_some_and(Vec::is_empty);
     assert!(
         is_empty,
         "fix-all should return null/empty when nothing is fixable: {resp}"

@@ -25,5 +25,9 @@ cargo test -p basilisk-lsp --test lsp_tests
 ok "lsp_tests done"
 
 header "Running LSP e2e tests"
-cargo test -p basilisk-lsp --test lsp_e2e_tests
-ok "lsp_e2e_tests done"
+cargo test -p basilisk-lsp --test 'lsp_e2e_*'
+ok "lsp_e2e tests done"
+
+header "Running workspace e2e tests"
+cargo test -p basilisk-lsp --test 'ws_test_*'
+ok "ws_test tests done"

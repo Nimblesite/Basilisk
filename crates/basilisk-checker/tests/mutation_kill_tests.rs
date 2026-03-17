@@ -168,7 +168,7 @@ c: tuple[int, str] = (1,)
 
 #[test]
 fn mutant_callable_assignability() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 def f1(x: int) -> str:
@@ -185,7 +185,7 @@ b: Callable[[int], int] = f1
 
 # Param type mismatch
 c: Callable[[str], str] = f1
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -454,7 +454,7 @@ n: bytes = b"data"
 
 #[test]
 fn mutant_e0014_negative_and_float() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 # Negative int → float: OK
 a: float = -42
 
@@ -466,7 +466,7 @@ c: int = 3.14
 
 # Float → float: OK
 d: float = 3.14
-"#;
+";
     let diagnostics = run(source)?;
     let e0014 = e0014_count(&diagnostics);
     assert!(

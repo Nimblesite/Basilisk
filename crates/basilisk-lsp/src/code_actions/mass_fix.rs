@@ -24,7 +24,11 @@ pub(crate) fn fix_all_kind() -> CodeActionKind {
 ///
 /// Returns `None` if no diagnostics have applicable fixes.
 /// Uses `source.fixAll.basilisk` kind (for on-save / command palette).
-pub(crate) fn fix_all_in_file(uri: &Url, diagnostics: &[Diagnostic], source: &str) -> Option<CodeAction> {
+pub(crate) fn fix_all_in_file(
+    uri: &Url,
+    diagnostics: &[Diagnostic],
+    source: &str,
+) -> Option<CodeAction> {
     build_fix_all(
         uri,
         diagnostics,
@@ -204,8 +208,7 @@ fn position_le(a: tower_lsp::lsp_types::Position, b: tower_lsp::lsp_types::Posit
 #[cfg(test)]
 #[expect(
     clippy::unwrap_used,
-    clippy::expect_used,
-    reason = "test-only code: unwrap/expect acceptable in unit tests"
+    reason = "test-only code: unwrap acceptable in unit tests"
 )]
 mod tests {
     use super::*;

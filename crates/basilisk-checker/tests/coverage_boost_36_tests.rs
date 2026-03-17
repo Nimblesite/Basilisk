@@ -102,7 +102,7 @@ b: tuple[int, str] = (1, "a", 3.14)
 
 #[test]
 fn e0014_dataclass_field_types() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import dataclass
 
 @dataclass
@@ -119,7 +119,7 @@ p1 = Point(1, 2)
 p2 = Point(3, 4)
 l = Line(p1, p2)
 bad_l = Line(1, 2)
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -129,7 +129,7 @@ bad_l = Line(1, 2)
 
 #[test]
 fn e0127_tuple_index_range() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 def func(t: tuple[int, str, float]) -> None:
     a = t[0]
     b = t[1]
@@ -139,7 +139,7 @@ def func(t: tuple[int, str, float]) -> None:
     f = t[-2]
     g = t[-3]
     h = t[-4]
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -189,7 +189,7 @@ w = type("cls", (int, str), {})
 
 #[test]
 fn e0145_type_bracket() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Type
 
 x: type[int] = int
@@ -198,7 +198,7 @@ z: type[int] = str
 
 a: Type[int] = int
 b: Type[str] = int
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -315,7 +315,7 @@ class Status(Enum):
 
 #[test]
 fn e0096_field_default_factory() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from dataclasses import dataclass, field
 
 @dataclass
@@ -325,7 +325,7 @@ class DC:
     name: str = field(default_factory=str)
     count: int = field(default_factory=str)
     data: list = field(default_factory=dict)
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -335,7 +335,7 @@ class DC:
 
 #[test]
 fn e0098_non_protocol_base() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class Regular:
@@ -343,7 +343,7 @@ class Regular:
 
 class MyProto(Protocol, Regular):
     def method(self) -> int: ...
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -353,14 +353,14 @@ class MyProto(Protocol, Regular):
 
 #[test]
 fn e0099_protocol_instantiation() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Protocol
 
 class Drawable(Protocol):
     def draw(self) -> None: ...
 
 x = Drawable()
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -370,12 +370,12 @@ x = Drawable()
 
 #[test]
 fn e0101_typeguard_no_param() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeGuard
 
 def bad_guard() -> TypeGuard[str]:
     return True
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -541,13 +541,13 @@ class Container(Generic[T, S]):
 
 #[test]
 fn w0040_lambda_annotations() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import Callable
 
 f: Callable[[int], str] = lambda x: str(x)
 g = lambda x, y: x + y
 h: Callable[[int, int], int] = lambda a, b: a + b
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
@@ -688,14 +688,14 @@ Bad = TypeVarTuple("Wrong")
 
 #[test]
 fn e0057_type_statement_rhs() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 type Good = int | str
 type Good2 = list[int]
 type Good3[T] = list[T]
 
 type Bad1 = 42
 type Bad2 = [int, str]
-"#;
+";
     let diagnostics = run(source)?;
     let _ = diagnostics;
     Ok(())
