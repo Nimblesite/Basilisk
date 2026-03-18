@@ -110,6 +110,10 @@ pub struct FunctionInfo {
     pub def_span: Span,
     /// The span of the function name identifier.
     pub name_span: Span,
+    /// Byte offset immediately after the closing `)` of the parameter list.
+    ///
+    /// Used by the LSP to know where to insert `-> ReturnType` in autofixes.
+    pub params_end: u32,
     /// The span of the return annotation expression, if present.
     pub return_annotation_span: Option<Span>,
     /// Name of the containing class, if this function is a method.

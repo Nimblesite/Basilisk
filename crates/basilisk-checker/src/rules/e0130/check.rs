@@ -1,13 +1,15 @@
-//! Method-call type checking for BSK-E0130.
+//! Method-call and constructor-call type checking for BSK-E0130.
 
 use std::collections::{HashMap, HashSet};
+
+use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
 use super::collect::{collect_generic_classes, collect_generic_instances};
 use super::utils::{
-    find_matching_close, generic_types_compatible, infer_literal_type, span_for_line,
-    split_top_level_type_args,
+    find_matching_close, generic_types_compatible, infer_literal_type, parse_generic_annotation,
+    span_for_line, split_top_level_type_args,
 };
 
 const CODE: ErrorCode = ErrorCode {
@@ -165,6 +167,214 @@ pub(super) fn check_generic_instance_method_calls(
                     });
                 }
             }
+        }
+    }
+}
+
+/// Check constructor calls with partially-specialized generic classes.
+///
+/// Detects `ClassName[TypeArgs](args)` patterns where `TypeVar` defaults
+/// fill in missing type arguments, and validates argument types.
+pub(super) fn check_generic_constructor_calls(
+    module: &ResolvedModule,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let generic_classes = collect_generic_classes(&module.source);
+    if generic_classes.is_empty() {
+        return;
+    }
+
+    // Build TypeVar default map: name → default_type_name
+    let tv_defaults: HashMap<String, String> = module
+        .typevar_calls
+        .iter()
+        .filter_map(|tv| {
+            tv.default_type_name
+                .as_ref()
+                .map(|d| (tv.name.clone(), d.clone()))
+        })
+        .collect();
+
+    if tv_defaults.is_empty() {
+        return;
+    }
+
+    let lines: Vec<&str> = module.source.lines().collect();
+    let mut fn_param_types: HashMap<String, String> = HashMap::new();
+    let mut in_fn = false;
+    let mut fn_indent = 0usize;
+
+    for (line_idx, &line) in lines.iter().enumerate() {
+        let line_number = line_idx + 1;
+        let trimmed = line.trim();
+        let indent = line.len() - line.trim_start().len();
+
+        // Track function parameter types
+        if trimmed.starts_with("def ") {
+            in_fn = true;
+            fn_indent = indent;
+            fn_param_types.clear();
+            if let (Some(open), Some(close)) = (trimmed.find('('), trimmed.rfind(')')) {
+                for p in trimmed[open + 1..close].split(',') {
+                    let p = p.trim();
+                    if let Some(colon) = p.find(':') {
+                        let name = p[..colon].trim();
+                        let ann = p[colon + 1..].split('=').next().unwrap_or("").trim();
+                        if name != "self" && name != "cls" {
+                            let _ = fn_param_types.insert(name.to_owned(), ann.to_owned());
+                        }
+                    }
+                }
+            }
+            continue;
+        }
+
+        if in_fn && indent <= fn_indent && !trimmed.is_empty() {
+            in_fn = false;
+            fn_param_types.clear();
+        }
+
+        if !in_fn || fn_param_types.is_empty() {
+            continue;
+        }
+
+        // Look for ClassName[TypeArgs](args) pattern
+        // Strip comments to avoid brackets in comments breaking annotation parsing
+        let code_part = trimmed.split('#').next().unwrap_or(trimmed).trim();
+        for class_def in &generic_classes {
+            let pattern = format!("{}[", class_def.name);
+            let Some(start) = code_part.find(pattern.as_str()) else {
+                continue;
+            };
+            let after_name = &code_part[start + class_def.name.len()..];
+
+            // Parse [TypeArgs]
+            let Some((_, explicit_args)) = parse_generic_annotation(&code_part[start..]) else {
+                continue;
+            };
+
+            // Partial specialization: fewer args than type params → fill defaults
+            if explicit_args.len() >= class_def.typevar_params.len() {
+                continue; // fully specialized, no default issues
+            }
+
+            let resolved =
+                resolve_with_defaults(&class_def.typevar_params, &explicit_args, &tv_defaults);
+
+            // Find the args to the constructor call: after ](
+            let bracket_end = after_name.find("](");
+            let Some(bracket_end) = bracket_end else {
+                continue;
+            };
+            let call_args_start = &after_name[bracket_end + 2..];
+            let close_paren = find_matching_close(call_args_start);
+            let call_args_text = &call_args_start[..close_paren];
+            let call_args = split_top_level_type_args(call_args_text);
+
+            // Check __init__ params against call args
+            let Some(init_params) = class_def.methods.get("__init__") else {
+                continue;
+            };
+
+            check_constructor_args(
+                &ConstructorCheckCtx {
+                    class_def,
+                    init_params,
+                    resolved: &resolved,
+                    call_args: &call_args,
+                    fn_param_types: &fn_param_types,
+                    source: &module.source,
+                    path: &module.path,
+                    line_number,
+                },
+                diagnostics,
+            );
+        }
+    }
+}
+
+/// Resolve type args with defaults for a partially-specialized generic class.
+fn resolve_with_defaults(
+    type_params: &[String],
+    explicit_args: &[String],
+    tv_defaults: &HashMap<String, String>,
+) -> HashMap<String, String> {
+    let mut resolved: HashMap<String, String> = HashMap::new();
+
+    for (idx, param) in type_params.iter().enumerate() {
+        if let Some(explicit) = explicit_args.get(idx) {
+            let _ = resolved.insert(param.clone(), explicit.clone());
+        } else if let Some(default_tv) = tv_defaults.get(param) {
+            // Default might reference another TypeVar that's already resolved
+            let resolved_default = resolved
+                .get(default_tv)
+                .cloned()
+                .unwrap_or_else(|| default_tv.clone());
+            let _ = resolved.insert(param.clone(), resolved_default);
+        }
+    }
+
+    resolved
+}
+
+/// Context for checking constructor arguments against resolved types.
+struct ConstructorCheckCtx<'a> {
+    class_def: &'a super::types::GenericClassDef,
+    init_params: &'a [(String, String)],
+    resolved: &'a HashMap<String, String>,
+    call_args: &'a [String],
+    fn_param_types: &'a HashMap<String, String>,
+    source: &'a str,
+    path: &'a str,
+    line_number: usize,
+}
+
+/// Check constructor arguments against resolved `__init__` parameter types.
+fn check_constructor_args(ctx: &ConstructorCheckCtx<'_>, diagnostics: &mut Vec<Diagnostic>) {
+    for (param_idx, (param_name, param_ann)) in ctx.init_params.iter().enumerate() {
+        let typevar_name = param_ann.trim();
+        let Some(expected_type) = ctx.resolved.get(typevar_name) else {
+            continue;
+        };
+
+        let Some(arg_raw) = ctx.call_args.get(param_idx) else {
+            continue;
+        };
+        let arg_name = arg_raw.trim();
+
+        // Try to resolve the argument's type from function params
+        let actual_type = ctx
+            .fn_param_types
+            .get(arg_name)
+            .map(String::as_str)
+            .or_else(|| infer_literal_type(arg_name));
+
+        let Some(actual_type) = actual_type else {
+            continue;
+        };
+
+        if !generic_types_compatible(actual_type, expected_type) {
+            diagnostics.push(Diagnostic {
+                code: CODE.clone(),
+                severity: Severity::Error,
+                message: format!(
+                    "Argument `{arg_name}` of type `{actual_type}` is not compatible \
+                     with parameter `{param_name}: {expected_type}` in \
+                     `{class_name}.__init__` (`TypeVar` default propagation)",
+                    class_name = ctx.class_def.name
+                ),
+                span: span_for_line(ctx.source, ctx.line_number),
+                path: ctx.path.to_owned(),
+                help: Some(format!(
+                    "`TypeVar` `{typevar_name}` resolves to `{expected_type}` \
+                     via default propagation"
+                )),
+                note: Some(
+                    "PEP 696: `TypeVar` defaults propagate when fewer type \
+                     arguments are provided than type parameters"
+                        .to_owned(),
+                ),
+            });
         }
     }
 }

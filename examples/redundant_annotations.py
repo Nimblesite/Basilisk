@@ -131,8 +131,8 @@ class Diamond(Left, Right):
 # ---------------------------------------------------------------------------
 
 class Animal:
-    sound: str = "..."
-    legs: int = 4
+    sound= "..."
+    legs= 4
 
 class Dog(Animal):
     sound = "woof"             # NO E0005
@@ -161,10 +161,10 @@ class ConcreteHandler(AbstractHandler):
 # ---------------------------------------------------------------------------
 
 class DatabaseConfig:
-    host: str = "localhost"
-    port: int = 5432
-    pool_size: int = 10
-    ssl: bool = False
+    host= "localhost"
+    port= 5432
+    pool_size= 10
+    ssl= False
 
 class ProductionDB(DatabaseConfig):
     host = "db.prod.internal"
@@ -293,7 +293,7 @@ def comprehension_annotations() -> None:
 # Lambda: return annotation not possible, but assignment annotation
 # ---------------------------------------------------------------------------
 
-double: int = 2                # W0050 — obviously int (near lambdas for context)
+double= 2                # W0050 — obviously int (near lambdas for context)
 fn = lambda x: x * 2          # NO W0050 — no annotation to be redundant
 
 

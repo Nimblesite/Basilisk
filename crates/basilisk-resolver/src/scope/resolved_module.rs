@@ -2,6 +2,7 @@
 
 use super::{
     class_types::ClassInfo,
+    external_symbol::ExternalSymbol,
     function_types::FunctionInfo,
     import_types::ImportInfo,
     module_types::{
@@ -222,6 +223,11 @@ pub struct ResolvedModule {
     ///
     /// Used by `BSK-E0117`.
     pub unbound_typevar_usages: Vec<UnboundTypeVarUsage>,
+    /// Symbols imported from other modules during cross-module analysis.
+    ///
+    /// Populated by the workspace layer after import resolution, not during
+    /// the initial `resolve()` pass. Maps import name → external symbol info.
+    pub imported_symbols: std::collections::HashMap<String, ExternalSymbol>,
     /// The source file path.
     pub path: String,
     /// The original source text (forwarded from parser for span restoration).

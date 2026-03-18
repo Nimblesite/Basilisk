@@ -348,6 +348,271 @@ pub(super) fn check_module_level_type_param_use(
 }
 
 // ---------------------------------------------------------------------------
+// Violation 4: PEP 695 `type` statement uses old-style TypeVar
+// ---------------------------------------------------------------------------
+
+/// Check whether a PEP 695 `type` statement's RHS references an old-style
+/// `TypeVar` (defined via `TypeVar()` call, not PEP 695 brackets).
+///
+/// Per PEP 695: "Type aliases defined using the `type` statement must not
+/// reference `TypeVar`, `ParamSpec`, or `TypeVarTuple` objects that are
+/// created outside of the `type` statement's scope."
+pub(super) fn check_type_stmt_uses_old_typevar(
+    line: &str,
+    line_number: usize,
+    old_typevar_names: &[&str],
+    source: &str,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let trimmed = line.trim();
+    if !trimmed.starts_with("type ") {
+        return;
+    }
+
+    // Get the RHS (after `=`)
+    let Some(eq_pos) = trimmed.find('=') else {
+        return;
+    };
+    let rhs = &trimmed[eq_pos + 1..];
+    // Strip comment
+    let rhs = rhs.split_once('#').map_or(rhs, |(code, _)| code).trim();
+
+    // Collect the new-style type param names between `type Name[` and `]`
+    // by looking at the text BEFORE the `=`.
+    let before_eq = &trimmed[..eq_pos];
+    let new_params: Vec<String> = if let Some(bracket_pos) = before_eq.find('[') {
+        // Extract text between `[` and `]` before `=`
+        let after = &before_eq[bracket_pos + 1..];
+        if let Some(close) = after.rfind(']') {
+            after[..close]
+                .split(',')
+                .map(|p| {
+                    p.trim()
+                        .split(':')
+                        .next()
+                        .unwrap_or("")
+                        .trim()
+                        .trim_start_matches('*')
+                        .to_owned()
+                })
+                .filter(|s| !s.is_empty())
+                .collect()
+        } else {
+            Vec::new()
+        }
+    } else {
+        Vec::new()
+    };
+
+    for old_tv_name in old_typevar_names {
+        // Skip if this old-style TypeVar name is also a new-style param
+        // on this same statement
+        if new_params.iter().any(|p| p == old_tv_name) {
+            continue;
+        }
+        if contains_name(rhs, old_tv_name) {
+            diagnostics.push(Diagnostic {
+                code: CODE.clone(),
+                severity: Severity::Error,
+                message: format!("PEP 695 `type` statement uses old-style TypeVar `{old_tv_name}`"),
+                span: span_for_line(source, line_number),
+                path: path.to_owned(),
+                help: Some(format!(
+                    "Use PEP 695 type parameter syntax instead: \
+                     `type Alias[{old_tv_name}] = ...`"
+                )),
+                note: Some(
+                    "PEP 695: type aliases defined with `type` must not reference \
+                     TypeVars created outside the statement's scope"
+                        .to_owned(),
+                ),
+            });
+            // One diagnostic per type statement is enough
+            return;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Violation 5: `type` statement inside function body
+// ---------------------------------------------------------------------------
+
+/// Check whether a `type` statement appears inside a function body.
+///
+/// PEP 695 type aliases defined with `type` are only valid at module or
+/// class scope, not inside functions.
+pub(super) fn check_type_stmt_in_function(
+    line: &str,
+    line_number: usize,
+    source: &str,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let trimmed = line.trim();
+    if !trimmed.starts_with("type ") {
+        return;
+    }
+
+    // If the line has indentation, it might be inside a function.
+    // We need to check if any enclosing scope is a function (not a class).
+    let indent = leading_indent(line);
+    if indent == 0 {
+        return; // Module level — OK
+    }
+
+    // Walk backwards to find the enclosing def/class
+    let lines: Vec<&str> = source.lines().collect();
+    for scan_idx in (0..line_number.saturating_sub(1)).rev() {
+        let scan_line = lines.get(scan_idx).copied().unwrap_or("");
+        let scan_indent = leading_indent(scan_line);
+        let scan_trimmed = scan_line.trim();
+
+        if scan_indent < indent && !scan_trimmed.is_empty() {
+            if scan_trimmed.starts_with("def ") || scan_trimmed.starts_with("async def ") {
+                diagnostics.push(Diagnostic {
+                    code: CODE.clone(),
+                    severity: Severity::Error,
+                    message: "PEP 695 `type` statement is not allowed inside a function body"
+                        .to_owned(),
+                    span: span_for_line(source, line_number),
+                    path: path.to_owned(),
+                    help: Some("Move the type alias to module or class scope".to_owned()),
+                    note: Some(
+                        "PEP 695: type aliases defined with `type` are only valid at \
+                         module or class scope"
+                            .to_owned(),
+                    ),
+                });
+            }
+            return;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Violation 6: circular type alias definition
+// ---------------------------------------------------------------------------
+
+/// Check whether a PEP 695 `type` statement has a circular self-reference.
+///
+/// A `type` statement is circular if the alias name appears in its own RHS
+/// in a way that doesn't go through a type parameter (legitimate recursion
+/// goes through `TypeAlias[T]` where `T` is a param of the same statement).
+pub(super) fn check_type_stmt_circular(
+    line: &str,
+    line_number: usize,
+    source: &str,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let trimmed = line.trim();
+    if !trimmed.starts_with("type ") {
+        return;
+    }
+
+    // Extract alias name: `type Name[...] = ...` or `type Name = ...`
+    let after_type = &trimmed["type ".len()..];
+    let name_end = after_type
+        .find(['[', '=', ' ', ':'])
+        .unwrap_or(after_type.len());
+    let alias_name = after_type[..name_end].trim();
+    if alias_name.is_empty() {
+        return;
+    }
+
+    // Get the RHS
+    let Some(eq_pos) = trimmed.find('=') else {
+        return;
+    };
+    let rhs = &trimmed[eq_pos + 1..];
+    let rhs = rhs.split_once('#').map_or(rhs, |(code, _)| code).trim();
+
+    // Check if the alias name appears in its own RHS
+    if !contains_name(rhs, alias_name) {
+        return;
+    }
+
+    // Collect type params of this `type` statement
+    let before_eq = &trimmed[..eq_pos];
+    let has_type_params = before_eq.contains('[');
+
+    if !has_type_params {
+        // No type params — any self-reference is circular
+        diagnostics.push(Diagnostic {
+            code: CODE.clone(),
+            severity: Severity::Error,
+            message: format!("Circular type alias definition: `{alias_name}` references itself"),
+            span: span_for_line(source, line_number),
+            path: path.to_owned(),
+            help: Some("A type alias cannot reference itself without type parameters".to_owned()),
+            note: None,
+        });
+        return;
+    }
+
+    // Has type params — check if the self-reference uses DIFFERENT type args
+    // than the params (making it circular rather than recursive).
+    // E.g. `type Foo[T] = T | Foo[str]` — Foo[str] uses concrete `str`,
+    // not the type param `T`, so this is a circular definition.
+    // But `type Foo[T] = T | list[Foo[T]]` is legitimate recursion.
+
+    // Find the self-reference subscript in the RHS
+    let param_text = if let Some(bracket_pos) = before_eq.find('[') {
+        let after = &before_eq[bracket_pos + 1..];
+        after.rfind(']').map_or("", |close| &after[..close])
+    } else {
+        ""
+    };
+    let params: Vec<&str> = param_text
+        .split(',')
+        .map(|p| {
+            p.trim()
+                .split(':')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .trim_start_matches('*')
+        })
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    // Find self-reference in RHS and check its args
+    if let Some(self_ref_pos) = rhs.find(alias_name) {
+        let after_name = &rhs[self_ref_pos + alias_name.len()..];
+        if let Some(bracket_content) = after_name.strip_prefix('[') {
+            if let Some(close) = bracket_content.find(']') {
+                let args: Vec<&str> = bracket_content[..close].split(',').map(str::trim).collect();
+                // If the args don't exactly match the params, it's circular
+                let is_identity = args.len() == params.len()
+                    && args
+                        .iter()
+                        .zip(params.iter())
+                        .all(|(arg, param)| arg == param);
+                if !is_identity {
+                    diagnostics.push(Diagnostic {
+                        code: CODE.clone(),
+                        severity: Severity::Error,
+                        message: format!(
+                            "Circular type alias definition: `{alias_name}` references \
+                             itself with different type arguments"
+                        ),
+                        span: span_for_line(source, line_number),
+                        path: path.to_owned(),
+                        help: Some(
+                            "Recursive type aliases must reference themselves with the \
+                             same type parameters"
+                                .to_owned(),
+                        ),
+                        note: None,
+                    });
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Violation 3: method re-defines class type param with its own [T]
 // ---------------------------------------------------------------------------
 

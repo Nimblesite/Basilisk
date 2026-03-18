@@ -148,6 +148,30 @@ pub(super) fn suppress_with_type_ignore(uri: &Url, diag: &Diagnostic, source: &s
     }
 }
 
+/// Offer to disable a rule in `pyproject.toml` via `[tool.basilisk.rules]`.
+///
+/// This generates a command-based code action. The LSP client executes the
+/// `basilisk.disableRule` command which writes the override to `pyproject.toml`.
+/// Designed to be extensible for future uv integration (per-module overrides,
+/// uv workspace config).
+pub(super) fn disable_in_project_config(diag: &Diagnostic, code: &str) -> CodeAction {
+    CodeAction {
+        title: format!("Disable `{code}` in project config (pyproject.toml)"),
+        kind: Some(CodeActionKind::QUICKFIX),
+        diagnostics: Some(vec![diag.clone()]),
+        command: Some(tower_lsp::lsp_types::Command {
+            title: format!("Disable {code}"),
+            command: "basilisk.disableRule".to_owned(),
+            arguments: Some(vec![serde_json::json!({
+                "rule": code,
+                "severity": "off",
+            })]),
+        }),
+        is_preferred: Some(false),
+        ..Default::default()
+    }
+}
+
 // ── Helper ────────────────────────────────────────────────────────────────────
 
 /// Get the end-of-line position for a diagnostic's line.

@@ -1,6 +1,6 @@
 //! BSK-E0002: Missing return type annotation.
 
-use basilisk_resolver::{FunctionInfo, ResolvedModule};
+use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
@@ -36,7 +36,10 @@ fn make_diagnostic(func: &FunctionInfo, path: &str) -> Diagnostic {
             "Missing return type annotation for function `{}`",
             func.name
         ),
-        span: func.name_span,
+        span: Span {
+            start: func.name_span.start,
+            end: func.params_end,
+        },
         path: path.to_owned(),
         help: Some(format!(
             "Add a return type: `def {}(...) -> <type>:`",

@@ -19,6 +19,8 @@ mod check;
 mod collect;
 mod types;
 mod utils;
+mod variance;
+mod variance_check;
 
 use std::collections::HashSet;
 
@@ -28,12 +30,14 @@ use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
 use super::Rule;
 
-use check::check_generic_instance_method_calls;
+use check::{check_generic_constructor_calls, check_generic_instance_method_calls};
 use types::ScopeInfo;
 use utils::{
-    contains_typevar_reference, extract_typevars_from_function_sig,
-    extract_typevars_from_generic_base, leading_indent, span_for_line,
+    collect_full_signature, contains_typevar_reference, extract_pep695_type_params,
+    extract_typevars_from_function_sig, extract_typevars_from_generic_base, is_simple_assignment,
+    leading_indent, span_for_line,
 };
+use variance::check_variance_assignments;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0130",
@@ -87,7 +91,9 @@ impl Rule for TypeVarScopeViolation {
 
             // Detect class definitions.
             if trimmed.starts_with("class ") {
-                let bound_tvs = extract_typevars_from_generic_base(trimmed);
+                let mut bound_tvs = extract_typevars_from_generic_base(trimmed);
+                // PEP 695 type params (class Foo[T, S]:) also bind TypeVars
+                bound_tvs.extend(extract_pep695_type_params(trimmed));
 
                 // Check: does this class's base reference a TypeVar from an outer scope?
                 let outer_bound: HashSet<String> = scope_stack
@@ -137,9 +143,12 @@ impl Rule for TypeVarScopeViolation {
                 continue;
             }
 
-            // Detect function definitions.
+            // Detect function definitions. For multi-line signatures, collect
+            // the full signature text so TypeVars in parameter annotations are
+            // correctly recognised as bound.
             if trimmed.starts_with("def ") || trimmed.starts_with("async def ") {
-                let bound_tvs = extract_typevars_from_function_sig(trimmed, &all_typevars);
+                let full_sig = collect_full_signature(&lines, line_idx);
+                let bound_tvs = extract_typevars_from_function_sig(&full_sig, &all_typevars);
                 scope_stack.push(ScopeInfo {
                     indent,
                     bound_typevars: bound_tvs,
@@ -298,25 +307,32 @@ impl Rule for TypeVarScopeViolation {
 
             // Module-level (indent == 0, no enclosing scope): check for TypeVar
             // subscript expressions like `list[T]()`.
+            // Per PEP 484/613, module-level assignments using TypeVars are valid
+            // implicit type aliases (e.g. `Vector = list[T]`), so we only flag
+            // non-assignment expressions.
             if indent == 0 && scope_stack.is_empty() {
-                // Skip class/def definitions, imports, assignments with annotations
-                // (those are already handled by other checks or are valid).
                 let dominated_by_other = trimmed.starts_with("class ")
                     || trimmed.starts_with("def ")
+                    || trimmed.starts_with("async def ")
                     || trimmed.starts_with("import ")
                     || trimmed.starts_with("from ")
                     || trimmed.starts_with('@');
 
                 if !dominated_by_other {
                     let before_comment = trimmed.split_once('#').map_or(trimmed, |(code, _)| code);
-                    for typevar_name in &all_typevars {
-                        // Check for TypeVar in annotations (x: T, x: list[T] = ...)
-                        // and in expressions (list[T]()).
-                        if contains_typevar_reference(before_comment, typevar_name) {
-                            // Skip lines that are TypeVar definitions themselves
-                            // (e.g. `T = TypeVar('T')`)
-                            let is_typevar_def = before_comment.contains("TypeVar");
-                            if !is_typevar_def {
+
+                    // Module-level assignments with TypeVars are implicit type aliases
+                    // (PEP 484): `MyAlias = list[T]` is valid. Also skip TypeVar
+                    // definitions, ParamSpec, TypeVarTuple, and TypeAlias annotations.
+                    let is_type_alias_or_def = is_simple_assignment(before_comment)
+                        || before_comment.contains("TypeVar")
+                        || before_comment.contains("ParamSpec")
+                        || before_comment.contains("TypeVarTuple")
+                        || before_comment.contains("TypeAlias");
+
+                    if !is_type_alias_or_def {
+                        for typevar_name in &all_typevars {
+                            if contains_typevar_reference(before_comment, typevar_name) {
                                 diagnostics.push(Diagnostic {
                                     code: CODE.clone(),
                                     severity: Severity::Error,
@@ -351,5 +367,11 @@ impl Rule for TypeVarScopeViolation {
             diagnostics,
             &module.path,
         );
+
+        // Check variance-related assignment violations (PEP 695 + infer_variance).
+        check_variance_assignments(module, diagnostics);
+
+        // Check constructor calls with TypeVar default propagation.
+        check_generic_constructor_calls(module, diagnostics);
     }
 }

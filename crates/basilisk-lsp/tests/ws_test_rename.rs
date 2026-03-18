@@ -13,6 +13,10 @@
 mod ws_test_common;
 use ws_test_common::*;
 
+use std::time::Duration;
+
+use futures_util::StreamExt;
+
 #[tokio::test]
 async fn test_ws_prepare_rename() -> TestResult<()> {
     let uri = "file:///rename_prepare.py";
@@ -169,5 +173,89 @@ async fn test_ws_rename_multiple_occurrences() -> TestResult<()> {
         );
     }
 
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_rename_cross_file() -> TestResult<()> {
+    // Set up workspace: helpers.py defines `greet`, main.py imports and uses it.
+    let dir = unique_temp_dir("bsk_rename_cross_file");
+    std::fs::create_dir_all(&dir)?;
+
+    std::fs::write(
+        dir.join("helpers.py"),
+        "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n",
+    )?;
+    std::fs::write(
+        dir.join("main.py"),
+        "from helpers import greet\n\nresult: str = greet(\"world\")\n",
+    )?;
+
+    let root_uri = format!("file://{}", dir.display());
+    let helpers_uri = format!("file://{}", dir.join("helpers.py").display());
+    let main_uri = format!("file://{}", dir.join("main.py").display());
+
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = initialize_with_root(&mut fixture, &root_uri, "crossModule").await?;
+
+    // Drain startup messages.
+    for _ in 0..20 {
+        let msg = tokio::time::timeout(Duration::from_millis(500), fixture.ws_read.next()).await;
+        if msg.is_err() {
+            break;
+        }
+    }
+
+    // Rename `greet` at its definition in helpers.py (line 0, char 4) to `say_hello`.
+    let resp = fixture
+        .request(
+            700,
+            "textDocument/rename",
+            serde_json::json!({
+                "textDocument": { "uri": helpers_uri },
+                "position": { "line": 0, "character": 4 },
+                "newName": "say_hello"
+            }),
+        )
+        .await?
+        .ok_or("no response to cross-file rename")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let changes = &parsed["result"]["changes"];
+    assert!(!changes.is_null(), "changes must not be null: {resp}");
+
+    // Should have edits in helpers.py (definition site).
+    let helpers_edits = changes[&helpers_uri]
+        .as_array()
+        .ok_or("expected edits for helpers.py")?;
+    assert!(
+        !helpers_edits.is_empty(),
+        "should have edits in helpers.py: {resp}"
+    );
+    for edit in helpers_edits {
+        assert_eq!(
+            edit["newText"].as_str(),
+            Some("say_hello"),
+            "helpers.py edit newText must be say_hello: {edit}"
+        );
+    }
+
+    // Should have edits in main.py (import + usage sites).
+    let main_edits = changes[&main_uri]
+        .as_array()
+        .ok_or("expected edits for main.py")?;
+    assert!(
+        !main_edits.is_empty(),
+        "should have edits in main.py: {resp}"
+    );
+    for edit in main_edits {
+        assert_eq!(
+            edit["newText"].as_str(),
+            Some("say_hello"),
+            "main.py edit newText must be say_hello: {edit}"
+        );
+    }
+
+    let _ = std::fs::remove_dir_all(&dir);
     Ok(())
 }

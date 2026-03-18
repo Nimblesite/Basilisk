@@ -25,12 +25,9 @@ pub fn collect_python_files(
             let name = entry.file_name();
             let name_str = name.to_string_lossy();
             if name_str.starts_with('.')
-                || name_str == "__pycache__"
-                || name_str == "node_modules"
-                || name_str == "venv"
-                || name_str == ".tox"
-                || name_str == ".mypy_cache"
-                || name_str == ".ruff_cache"
+                || basilisk_config::DEFAULT_EXCLUDES
+                    .iter()
+                    .any(|exc| name_str == *exc)
             {
                 continue;
             }

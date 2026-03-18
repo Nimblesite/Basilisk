@@ -44,3 +44,82 @@ fn lookup_unknown_name_returns_none() {
         "unknown names must return None"
     );
 }
+
+#[test]
+fn lookup_builtin_float_type() {
+    assert_eq!(basilisk_stubs::lookup_builtin("float"), Some("float"));
+}
+
+#[test]
+fn lookup_builtin_bytes_type() {
+    assert_eq!(basilisk_stubs::lookup_builtin("bytes"), Some("bytes"));
+}
+
+#[test]
+fn lookup_builtin_bool_type() {
+    assert_eq!(basilisk_stubs::lookup_builtin("bool"), Some("bool"));
+}
+
+#[test]
+fn lookup_builtin_dict_type() {
+    assert_eq!(basilisk_stubs::lookup_builtin("dict"), Some("dict"));
+}
+
+#[test]
+fn lookup_builtin_set_type() {
+    assert_eq!(basilisk_stubs::lookup_builtin("set"), Some("set"));
+}
+
+#[test]
+fn lookup_builtin_tuple_type() {
+    assert_eq!(basilisk_stubs::lookup_builtin("tuple"), Some("tuple"));
+}
+
+#[test]
+fn lookup_builtin_frozenset_type() {
+    assert_eq!(
+        basilisk_stubs::lookup_builtin("frozenset"),
+        Some("frozenset")
+    );
+}
+
+#[test]
+fn lookup_builtin_type_type() {
+    assert_eq!(basilisk_stubs::lookup_builtin("type"), Some("type"));
+}
+
+#[test]
+fn lookup_builtin_object_type() {
+    assert_eq!(basilisk_stubs::lookup_builtin("object"), Some("object"));
+}
+
+#[test]
+fn lookup_builtin_none_type() {
+    assert_eq!(basilisk_stubs::lookup_builtin("None"), Some("None"));
+}
+
+#[test]
+fn lookup_builtin_complex_type() {
+    assert_eq!(basilisk_stubs::lookup_builtin("complex"), Some("complex"));
+}
+
+#[test]
+fn lookup_builtin_range_type() {
+    assert_eq!(basilisk_stubs::lookup_builtin("range"), Some("range"));
+}
+
+#[test]
+fn lookup_builtin_bytearray_type() {
+    assert_eq!(
+        basilisk_stubs::lookup_builtin("bytearray"),
+        Some("bytearray")
+    );
+}
+
+#[test]
+fn lookup_builtin_memoryview_type() {
+    assert_eq!(
+        basilisk_stubs::lookup_builtin("memoryview"),
+        Some("memoryview")
+    );
+}

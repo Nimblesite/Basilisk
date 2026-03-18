@@ -1,6 +1,7 @@
 //! Scope and function information types produced by the resolver.
 
 mod class_types;
+mod external_symbol;
 mod function_types;
 mod import_types;
 mod module_types;
@@ -11,6 +12,7 @@ mod variable_types;
 mod violations;
 
 pub use class_types::{BaseSubscriptEntry, ClassInfo, GenericParamInfo, TypeArg};
+pub use external_symbol::{ExternalSymbol, ExternalSymbolKind};
 pub use function_types::{
     FunctionInfo, ParameterInfo, ReturnAnnotationKind, ReturnStmtInfo, YieldExprInfo,
 };

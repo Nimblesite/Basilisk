@@ -12,7 +12,7 @@ use basilisk_resolver::Span;
 
 use crate::diagnostic::Diagnostic;
 
-use super::collect::DeprecatedInfo;
+use super::collect::{collect_param_annotation_types, DeprecatedInfo};
 use super::decorators::text_range_to_span;
 use super::types::{DeprecatedUsageContext, VarType};
 use super::visit_expr::{
@@ -113,8 +113,21 @@ pub(super) fn visit_stmt_for_usage(
             }
         }
         Stmt::FunctionDef(func) => {
+            // Create a scoped var_types with parameter annotations so that
+            // e.g. `def foo(f: Deprecated)` resolves `f` to the right class
+            // without polluting the outer scope.
+            let mut scoped_var_types = ctx.var_types.clone();
+            collect_param_annotation_types(func, &mut scoped_var_types);
+            let scoped_ctx = DeprecatedUsageContext {
+                deprecated: ctx.deprecated,
+                module_aliases: ctx.module_aliases,
+                deprecated_members: ctx.deprecated_members,
+                var_types: &scoped_var_types,
+                path: ctx.path,
+                def_spans: ctx.def_spans,
+            };
             for body_stmt in &func.body {
-                visit_stmt_for_usage(body_stmt, ctx, diagnostics);
+                visit_stmt_for_usage(body_stmt, &scoped_ctx, diagnostics);
             }
         }
         Stmt::ClassDef(cls) => {

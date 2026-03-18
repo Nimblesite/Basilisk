@@ -49,6 +49,9 @@ pub(super) async fn initialize(
         &roots,
     );
 
+    // Store workspace roots for later use by import resolution.
+    *server.workspace_roots.write().await = roots.clone();
+
     // Build the workspace index now so `initialized()` can scan immediately.
     let index = WorkspaceIndex::new(roots, mode);
     *server.index.write().await = Some(index);
@@ -80,6 +83,7 @@ fn build_capabilities() -> ServerCapabilities {
                 CodeActionKind::QUICKFIX,
                 CodeActionKind::SOURCE_ORGANIZE_IMPORTS,
                 CodeActionKind::REFACTOR,
+                crate::code_actions::mass_fix::fix_all_kind(),
             ]),
             ..Default::default()
         })),
@@ -157,21 +161,9 @@ pub(super) async fn initialized(server: &LspServer) {
                 .client
                 .log_message(MessageType::INFO, "Basilisk: scanning workspace files...")
                 .await;
-            let (results, file_count, error_count) = index.scan();
-
-            // Resolve imports for all scanned files.
-            let roots = server.workspace_roots.read().await;
-            let config = roots
-                .first()
-                .map(|r| crate::config::load_config(r))
-                .unwrap_or_default();
-            let search_paths =
-                crate::import_resolver::ImportSearchPaths::from_config(&roots, &config);
-            crate::import_resolver::resolve_workspace_imports(index, &search_paths);
-            drop(roots);
-
+            let scan_result = scan_resolve_and_check(server, index).await;
             drop(guard);
-            for (uri, diags) in results {
+            for (uri, diags) in scan_result.diagnostics {
                 server.client.publish_diagnostics(uri, diags, None).await;
             }
             server
@@ -179,7 +171,8 @@ pub(super) async fn initialized(server: &LspServer) {
                 .log_message(
                     MessageType::INFO,
                     format!(
-                        "Basilisk: workspace scan complete — {file_count} files, {error_count} error(s)"
+                        "Basilisk: workspace scan complete — {} files, {} error(s)",
+                        scan_result.file_count, scan_result.error_count
                     ),
                 )
                 .await;
@@ -242,6 +235,38 @@ pub(super) async fn did_change_configuration(
 async fn run_workspace_scan(server: &LspServer, _mode: AnalysisMode) {
     let guard = server.index.read().await;
     let Some(index) = guard.as_ref() else { return };
+    let scan_result = scan_resolve_and_check(server, index).await;
+    drop(guard);
+
+    for (uri, diags) in scan_result.diagnostics {
+        server.client.publish_diagnostics(uri, diags, None).await;
+    }
+    server
+        .client
+        .log_message(
+            MessageType::INFO,
+            format!(
+                "Basilisk: workspace scan complete — {} files, {} error(s)",
+                scan_result.file_count, scan_result.error_count
+            ),
+        )
+        .await;
+}
+
+/// Result of a full workspace scan with import resolution and optional cross-module
+/// symbol population.
+struct ScanResult {
+    diagnostics: Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)>,
+    file_count: usize,
+    error_count: usize,
+}
+
+/// Scan workspace files, resolve imports, and optionally run cross-module symbol
+/// population. Returns diagnostics ready to publish.
+///
+/// This is the single source of truth for the scan+resolve+crossmod pipeline,
+/// used by both `initialized()` and `run_workspace_scan()`.
+async fn scan_resolve_and_check(server: &LspServer, index: &WorkspaceIndex) -> ScanResult {
     let (results, file_count, error_count) = index.scan();
 
     // Resolve imports for all scanned files.
@@ -254,19 +279,21 @@ async fn run_workspace_scan(server: &LspServer, _mode: AnalysisMode) {
     crate::import_resolver::resolve_workspace_imports(index, &search_paths);
     drop(roots);
 
-    drop(guard);
-    for (uri, diags) in results {
-        server.client.publish_diagnostics(uri, diags, None).await;
+    // Cross-module: populate imported symbols and rebuild import graph, then re-check.
+    let diagnostics = if matches!(index.mode, AnalysisMode::CrossModule) {
+        crate::cross_module::populate_cross_module_symbols(index);
+        index.build_import_graph();
+        info!("cross-module symbol population complete");
+        recheck_with_cross_module_symbols(index)
+    } else {
+        results
+    };
+
+    ScanResult {
+        diagnostics,
+        file_count,
+        error_count,
     }
-    server
-        .client
-        .log_message(
-            MessageType::INFO,
-            format!(
-                "Basilisk: workspace scan complete — {file_count} files, {error_count} error(s)"
-            ),
-        )
-        .await;
 }
 
 /// Clear diagnostics for all non-open files (used when switching to `openFilesOnly`).
@@ -283,6 +310,37 @@ async fn clear_non_open_diagnostics(server: &LspServer) {
     for uri in to_clear {
         server.client.publish_diagnostics(uri, vec![], None).await;
     }
+}
+
+/// Re-check all workspace files using their current `ResolvedModule` (which now
+/// contains cross-module `imported_symbols`). Returns fresh LSP diagnostics.
+///
+/// This is called after `populate_cross_module_symbols()` so that checker rules
+/// can see imported symbols from other modules.
+fn recheck_with_cross_module_symbols(
+    index: &WorkspaceIndex,
+) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
+    let mut results = Vec::new();
+
+    for mut entry in index.files.iter_mut() {
+        let Some(resolved) = &entry.resolved else {
+            continue;
+        };
+
+        let checker_diags = basilisk_checker::check(resolved);
+        let lsp_diags: Vec<tower_lsp::lsp_types::Diagnostic> = checker_diags
+            .iter()
+            .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &entry.text))
+            .collect();
+
+        entry.diagnostics = checker_diags;
+
+        if let Some(uri) = crate::workspace_scan::path_to_uri(entry.key()) {
+            results.push((uri, lsp_diags));
+        }
+    }
+
+    results
 }
 
 /// Handle the `shutdown` request: stop all debug sessions.

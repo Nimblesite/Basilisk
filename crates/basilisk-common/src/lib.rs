@@ -16,9 +16,23 @@ pub mod commands {
     pub const START_DEBUG_SESSION: &str = "basilisk.startDebugSession";
     /// Stop an active debug session by session ID.
     pub const STOP_DEBUG_SESSION: &str = "basilisk.stopDebugSession";
+    /// Disable a diagnostic rule in the project configuration (`pyproject.toml`).
+    pub const DISABLE_RULE: &str = "basilisk.disableRule";
+    /// Fix all auto-fixable diagnostics in the current file (safe fixes only).
+    pub const FIX_FILE: &str = "basilisk.fixFile";
 
-    /// All registered command names, for capability advertisement.
-    pub const ALL: &[&str] = &[ORGANIZE_IMPORTS, START_DEBUG_SESSION, STOP_DEBUG_SESSION];
+    /// Command names advertised via `executeCommandProvider` capabilities.
+    ///
+    /// **Excludes `FIX_FILE`** — that command is registered manually by the
+    /// VS Code extension (it needs the active editor URI), so advertising it
+    /// here would cause a "command already exists" conflict when the LSP
+    /// client's `ExecuteCommandFeature` tries to auto-register it.
+    pub const ALL: &[&str] = &[
+        ORGANIZE_IMPORTS,
+        START_DEBUG_SESSION,
+        STOP_DEBUG_SESSION,
+        DISABLE_RULE,
+    ];
 }
 
 /// Slash command names used in the Zed extension's AI assistant panel.

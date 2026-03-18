@@ -15,8 +15,33 @@ env:
   RUSTFLAGS: "-D warnings"
 
 jobs:
-  ci:
-    name: Build, Lint & Test
+  # ── Lint (runs in parallel with test) ────────────────────────────────────
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: cargo fmt --check
+        run: cargo fmt --all --check
+
+      - name: clippy (workspace)
+        run: cargo clippy --release --all-targets
+
+      - name: clippy (zed extension)
+        run: cargo clippy --release --all-targets --manifest-path basilisk-zed/Cargo.toml
+
+  # ── Test (runs in parallel with lint) ────────────────────────────────────
+  test:
+    name: Build & Test
     runs-on: ubuntu-latest
     env:
       TEST_COVERAGE_BASILISK_CHECKER: ${{ vars.TEST_COVERAGE_BASILISK_CHECKER || '89' }}
@@ -28,13 +53,13 @@ jobs:
       TEST_COVERAGE_BASILISK_PLUGIN: ${{ vars.TEST_COVERAGE_BASILISK_PLUGIN || '100' }}
       TEST_COVERAGE_BASILISK_RESOLVER: ${{ vars.TEST_COVERAGE_BASILISK_RESOLVER || '94' }}
       TEST_COVERAGE_BASILISK_STUBS: ${{ vars.TEST_COVERAGE_BASILISK_STUBS || '100' }}
+      TEST_COVERAGE_BASILISK_CONFIG: ${{ vars.TEST_COVERAGE_BASILISK_CONFIG || '80' }}
     steps:
       - uses: actions/checkout@v4
 
-      # ── Toolchains ──────────────────────────────────────────────────────────
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy, llvm-tools-preview
+          components: llvm-tools-preview
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -76,23 +101,8 @@ jobs:
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
-      # ── Build ───────────────────────────────────────────────────────────────
-      - name: Build workspace (release)
-        run: cargo build --release --workspace --exclude basilisk-compiler
-
-      # ── Lint ────────────────────────────────────────────────────────────────
-      - name: cargo fmt --check
-        run: cargo fmt --all --check
-
-      - name: clippy (workspace)
-        run: cargo clippy --all-targets
-
-      - name: clippy (zed extension)
-        run: cargo clippy --all-targets --manifest-path basilisk-zed/Cargo.toml
-
-      # ── Test ────────────────────────────────────────────────────────────────
       - name: Run all tests
-        run: ./scripts/test.sh --skip-build
+        run: ./scripts/test.sh
 
       - name: Upload coverage report artifact
         if: always()

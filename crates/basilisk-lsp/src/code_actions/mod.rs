@@ -6,6 +6,7 @@ use tower_lsp::lsp_types::{CodeActionOrCommand, Diagnostic, NumberOrString, Url}
 
 mod fixes;
 mod imports;
+pub(crate) mod mass_fix;
 mod suppress;
 
 /// Monotonic counter for unique temp-file names.
@@ -13,6 +14,7 @@ pub(super) static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 // Re-export pub(crate) items that the server module calls directly.
 pub(crate) use imports::organize_imports;
+pub(crate) use mass_fix::{fix_all_by_rule, fix_all_in_file, fix_all_quickfix};
 
 /// Generate code actions for the given diagnostics.
 ///
@@ -53,6 +55,10 @@ pub fn code_actions(
         // Fallback: generic suppress-all on this line (PEP 484 compatible).
         actions.push(CodeActionOrCommand::CodeAction(
             suppress::suppress_with_type_ignore(uri, diag, source),
+        ));
+        // Offer to disable the rule in pyproject.toml project config.
+        actions.push(CodeActionOrCommand::CodeAction(
+            suppress::disable_in_project_config(diag, code),
         ));
     }
 

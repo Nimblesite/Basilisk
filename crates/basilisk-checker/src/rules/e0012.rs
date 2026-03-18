@@ -44,6 +44,9 @@ impl Rule for ArgumentTypeMismatch {
         }
 
         for call in &module.calls {
+            // Only check calls to locally-defined functions for now.
+            // Cross-module argument checking requires parsing imported function
+            // signatures from `ExternalSymbol` — future work (Phase 4+).
             let Some(funcs) = func_groups.get(call.callee.as_str()) else {
                 continue;
             };

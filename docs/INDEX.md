@@ -1,0 +1,37 @@
+# Documentation Index
+
+## Specs
+
+Specifications define the target behavior and architecture. They are the source of truth.
+
+| File | Description |
+|---|---|
+| [CHECKER-ARCHITECTURE-SPEC.md](specs/CHECKER-ARCHITECTURE-SPEC.md) | Core type checker architecture — type system, diagnostic codes, error ranges, and design philosophy. |
+| [CHECKER-TYPE-INFERENCE-SPEC.md](specs/CHECKER-TYPE-INFERENCE-SPEC.md) | Bidirectional type inference — variable/collection/generic inference, type narrowing, redundant annotation principle (W0050). |
+| [CHECKER-STUB-RESOLUTION-SPEC.md](specs/CHECKER-STUB-RESOLUTION-SPEC.md) | PEP 561 stub resolution, typeshed bundling, type provenance tracking, suppression system, auto-stub generation. |
+| [COMPILER-ARCHITECTURE-SPEC.md](specs/COMPILER-ARCHITECTURE-SPEC.md) | Python-to-native compiler via LLVM — ownership model, memory backends, GPU support. |
+| [LSP-ARCHITECTURE-SPEC.md](specs/LSP-ARCHITECTURE-SPEC.md) | Single source of truth for LSP features, DAP integration, custom commands, configuration, and binary resolution. |
+| [LSP-ANALYSIS-MODES-SPEC.md](specs/LSP-ANALYSIS-MODES-SPEC.md) | Analysis modes (openFilesOnly, wholeModule, crossModule), workspace index, import graph, cross-file LSP features. |
+| [LSP-AI-SPEC.md](specs/LSP-AI-SPEC.md) | Model-agnostic AI layer — AI-powered fixes, completions, refactoring. Optional; deterministic features work without it. |
+| [LSP-DEBUG-INTEGRATION-SPEC.md](specs/LSP-DEBUG-INTEGRATION-SPEC.md) | Embedded debugpy — Basilisk binary serves as both language server and debug adapter via DAP over TCP. |
+| [LSP-PROFILING-SPEC.md](specs/LSP-PROFILING-SPEC.md) | Embedded Python profiler using py-spy with Speedscope output and inline editor visualization. |
+| [LSP-MASS-AUTOFIX-SPEC.md](specs/LSP-MASS-AUTOFIX-SPEC.md) | Batch autofix across files/workspaces and gradual adoption mode (errors → warnings per-file). |
+| [LSP-UV-INTEGRATION-SPEC.md](specs/LSP-UV-INTEGRATION-SPEC.md) | Zero-config uv workspace detection, lock file parsing, package intelligence, stub resolution. |
+| [VSIX-SPEC.md](specs/VSIX-SPEC.md) | VS Code extension — language intelligence, debugging, profiling, test explorer. |
+| [NEOVIM-SPEC.md](specs/NEOVIM-SPEC.md) | Neovim plugin (basilisk.nvim) — LSP client, DAP proxy, command mappings. |
+| [ZED-SPEC.md](specs/ZED-SPEC.md) | Zed extension (WASM) — LSP integration, tree-sitter grammars, DAP debugging. |
+
+## Plans
+
+Implementation roadmaps tracking phasing, priorities, and progress.
+
+| File | Description |
+|---|---|
+| [LSP-PLAN.md](plans/LSP-PLAN.md) | Overall LSP roadmap — seven phases from core features through cross-module analysis. |
+| [CHECKER-CROSS-MODULE-PLAN.md](plans/CHECKER-CROSS-MODULE-PLAN.md) | Cross-file LSP features, type provenance, Salsa integration, auto-stub generation. |
+| [CHECKER-PEP-CONFORMANCE-PLAN.md](plans/CHECKER-PEP-CONFORMANCE-PLAN.md) | PEP conformance push — target 85%, tiered task list by complexity and impact. |
+| [LSP-AI-PLAN.md](plans/LSP-AI-PLAN.md) | AI provider abstraction — model-agnostic hooks for fixes, completions, refactoring. |
+| [LSP-PROFILING-PLAN.md](plans/LSP-PROFILING-PLAN.md) | Embed py-spy profiler into LSP for CPU profiling and hotspot visualization. |
+| [LSP-MASS-AUTOFIX-PLAN.md](plans/LSP-MASS-AUTOFIX-PLAN.md) | Batch autofix rollout and gradual adoption mode. |
+| [LSP-UV-INTEGRATION-PLAN.md](plans/LSP-UV-INTEGRATION-PLAN.md) | uv project detection, lock file parsing, dependency intelligence. |
+| [ZED-PLAN.md](plans/ZED-PLAN.md) | Zed extension — LSP scaffolding, tree-sitter queries, DAP support. |
