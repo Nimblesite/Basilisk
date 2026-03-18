@@ -440,11 +440,7 @@ fn test_lsp_code_action_missing_return_annotation() -> TestResult<()> {
         .ok_or("expected result array")?;
     let return_fix = actions
         .iter()
-        .find(|a| {
-            a["title"]
-                .as_str()
-                .is_some_and(|t| t.contains("-> None"))
-        })
+        .find(|a| a["title"].as_str().is_some_and(|t| t.contains("-> None")))
         .ok_or("no return type fix action")?;
     let edit = &return_fix["edit"]["changes"]["file:///retact.py"][0];
     let start_line = edit["range"]["start"]["line"].as_u64().unwrap_or(u64::MAX);

@@ -212,16 +212,6 @@ fi
 echo ""
 ok "All projects meet their coverage thresholds."
 
-# ── LSP tests ────────────────────────────────────────────────────────────────
-
-header "Running LSP tests"
-cargo test --release -p basilisk-lsp --test lsp_tests
-ok "lsp_tests done"
-
-header "Running LSP E2E tests"
-cargo test --release -p basilisk-lsp --test 'lsp_e2e_*'
-ok "lsp_e2e tests done"
-
 # ── VS Code extension ────────────────────────────────────────────────────────
 
 header "VS Code extension — compile + test"

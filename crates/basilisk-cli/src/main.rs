@@ -454,8 +454,10 @@ mod tests {
     /// specifically returns Err (not Ok with empty list).
     #[test]
     fn collect_python_files_not_found_returns_err() {
-        let result =
-            collect_python_files(&["/absolutely/does/not/exist/file.py".to_owned()], &test_excludes());
+        let result = collect_python_files(
+            &["/absolutely/does/not/exist/file.py".to_owned()],
+            &test_excludes(),
+        );
         assert!(result.is_err(), "NotFound path must return Err, not Ok");
     }
 
