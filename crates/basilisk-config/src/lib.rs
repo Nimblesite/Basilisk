@@ -14,6 +14,29 @@ pub use parse::BasiliskConfig;
 
 use std::path::Path;
 
+/// Directories excluded from analysis by default.
+///
+/// Users can override this via the `exclude` key in `basilisk.json` or
+/// `pyproject.toml [tool.basilisk]`. Setting `exclude` in config replaces
+/// these defaults entirely — add them back explicitly if still needed.
+pub const DEFAULT_EXCLUDES: &[&str] = &[
+    "__pycache__",
+    "node_modules",
+    "venv",
+    ".venv",
+    "env",
+    ".env",
+    ".tox",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".pytest_cache",
+    "site-packages",
+    "__pypackages__",
+    "build",
+    "dist",
+    ".eggs",
+];
+
 /// Load a `BasiliskConfig` from the first config file found in `root`.
 ///
 /// Search order (highest priority wins):
@@ -56,6 +79,15 @@ mod tests {
         let dir = std::env::temp_dir().join("bsk_cfg_empty_xm");
         fs::create_dir_all(&dir).unwrap();
         let cfg = load_basilisk_config(&dir);
+        assert!(!cfg.exclude.is_empty(), "defaults must include excludes");
+        assert!(
+            cfg.exclude.iter().any(|e| e == "site-packages"),
+            "default excludes must contain site-packages"
+        );
+        assert!(
+            cfg.exclude.iter().any(|e| e == "__pycache__"),
+            "default excludes must contain __pycache__"
+        );
         assert!(cfg.stub_paths.is_empty());
         assert!(cfg.rules.is_empty());
         assert!(cfg.per_module_overrides.is_empty());
@@ -188,5 +220,45 @@ disabled = ["BSK-E0010", "BSK-E0001"]
         assert!(cfg.should_ignore_missing_stubs("fastmcp"));
         assert!(cfg.should_ignore_missing_stubs("fastmcp.server"));
         assert!(!cfg.should_ignore_missing_stubs("flask"));
+    }
+
+    #[test]
+    fn json_exclude_overrides_defaults() {
+        let dir = std::env::temp_dir().join("bsk_cfg_json_exclude_xm");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("basilisk.json"),
+            r#"{ "exclude": ["vendor", "generated"] }"#,
+        )
+        .unwrap();
+
+        let cfg = load_basilisk_config(&dir);
+        assert_eq!(cfg.exclude, vec!["vendor", "generated"]);
+        // Defaults are replaced, not merged.
+        assert!(
+            !cfg.exclude.iter().any(|e| e == "__pycache__"),
+            "custom exclude must replace defaults entirely"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn toml_exclude_overrides_defaults() {
+        let dir = std::env::temp_dir().join("bsk_cfg_toml_exclude_xm");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("pyproject.toml"),
+            r#"
+[tool.basilisk]
+exclude = ["legacy", "third_party"]
+"#,
+        )
+        .unwrap();
+
+        let cfg = load_basilisk_config(&dir);
+        assert_eq!(cfg.exclude, vec!["legacy", "third_party"]);
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }

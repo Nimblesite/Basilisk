@@ -6,10 +6,11 @@
 //! basilisk check [paths...] --output json
 //! ```
 
+use std::collections::HashSet;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
-use tracing::{error, warn};
+use tracing::{error, info, warn};
 
 use crate::output::{render_diagnostics, render_diagnostics_json, FileSource, OutputFormat};
 
@@ -137,7 +138,28 @@ fn run_check(paths: &[String], format: OutputFormat) -> u8 {
 fn collect_and_check(
     paths: &[String],
 ) -> Result<(Vec<basilisk_checker::Diagnostic>, Vec<FileSource>), String> {
-    let python_files = collect_python_files(paths)?;
+    // Load config from the first path's directory (or cwd).
+    let config_root = paths
+        .first()
+        .map(std::path::Path::new)
+        .and_then(|p| {
+            if p.is_dir() {
+                Some(p.to_path_buf())
+            } else {
+                p.parent().map(std::path::Path::to_path_buf)
+            }
+        })
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    let config = basilisk_config::load_basilisk_config(&config_root);
+
+    let excluded: HashSet<&str> = config.exclude.iter().map(String::as_str).collect();
+    info!(
+        excluded_dirs = ?config.exclude,
+        "loaded config from {}",
+        config_root.display()
+    );
+
+    let python_files = collect_python_files(paths, &excluded)?;
 
     let mut all_diagnostics = Vec::new();
     let mut sources = Vec::new();
@@ -165,7 +187,7 @@ fn process_file(path: &str) -> Result<(Vec<basilisk_checker::Diagnostic>, String
     Ok((diags, source))
 }
 
-fn collect_python_files(paths: &[String]) -> Result<Vec<String>, String> {
+fn collect_python_files(paths: &[String], excluded: &HashSet<&str>) -> Result<Vec<String>, String> {
     let mut files = Vec::new();
 
     for root in paths {
@@ -191,6 +213,22 @@ fn collect_python_files(paths: &[String]) -> Result<Vec<String>, String> {
             for entry in walkdir::WalkDir::new(root)
                 .follow_links(false)
                 .into_iter()
+                .filter_entry(|e| {
+                    if !e.file_type().is_dir() {
+                        return true;
+                    }
+                    // Never exclude the root entry (depth 0) — the user
+                    // explicitly asked to check this path (often `.`).
+                    if e.depth() == 0 {
+                        return true;
+                    }
+                    let name = e.file_name().to_string_lossy();
+                    // Hidden directories are always excluded.
+                    if name.starts_with('.') {
+                        return false;
+                    }
+                    !excluded.contains(name.as_ref())
+                })
                 .filter_map(Result::ok)
                 .filter(|e| e.file_type().is_file())
                 .filter(|e| {
@@ -211,11 +249,16 @@ fn collect_python_files(paths: &[String]) -> Result<Vec<String>, String> {
 mod tests {
     use super::*;
 
+    /// Default excludes for test helpers.
+    fn test_excludes() -> HashSet<&'static str> {
+        basilisk_config::DEFAULT_EXCLUDES.iter().copied().collect()
+    }
+
     // ── collect_python_files ──────────────────────────────────────────────────
 
     #[test]
     fn collect_python_files_returns_err_for_nonexistent_path() {
-        let result = collect_python_files(&["/no/such/path/ever.py".to_owned()]);
+        let result = collect_python_files(&["/no/such/path/ever.py".to_owned()], &test_excludes());
         assert!(result.is_err(), "nonexistent path must return Err");
     }
 
@@ -225,7 +268,7 @@ mod tests {
         let txt = dir.join("basilisk_test_skip.txt");
         std::fs::write(&txt, b"hello")?;
         let path = txt.to_string_lossy().into_owned();
-        let files = collect_python_files(&[path])?;
+        let files = collect_python_files(&[path], &test_excludes())?;
         assert!(files.is_empty(), "non-.py file must be skipped");
         let _ = std::fs::remove_file(&txt);
         Ok(())
@@ -264,7 +307,7 @@ mod tests {
         let py = dir.join("basilisk_test_include.py");
         std::fs::write(&py, b"x = 1")?;
         let path = py.to_string_lossy().into_owned();
-        let files = collect_python_files(&[path])?;
+        let files = collect_python_files(&[path], &test_excludes())?;
         let _ = std::fs::remove_file(&py);
         assert_eq!(files.len(), 1, ".py file must be included");
         Ok(())
@@ -280,7 +323,7 @@ mod tests {
         std::fs::write(base.join("a.py"), b"x = 1")?;
         std::fs::write(base.join("b.txt"), b"ignored")?;
         let path = base.to_string_lossy().into_owned();
-        let files = collect_python_files(&[path])?;
+        let files = collect_python_files(&[path], &test_excludes())?;
         let _ = std::fs::remove_dir_all(&base);
         assert_eq!(
             files.len(),
@@ -411,7 +454,8 @@ mod tests {
     /// specifically returns Err (not Ok with empty list).
     #[test]
     fn collect_python_files_not_found_returns_err() {
-        let result = collect_python_files(&["/absolutely/does/not/exist/file.py".to_owned()]);
+        let result =
+            collect_python_files(&["/absolutely/does/not/exist/file.py".to_owned()], &test_excludes());
         assert!(result.is_err(), "NotFound path must return Err, not Ok");
     }
 
@@ -463,10 +507,101 @@ mod tests {
         let txt = dir.join("basilisk_test_guard_complement.txt");
         std::fs::write(&txt, b"hello")?;
         let path = txt.to_string_lossy().into_owned();
-        let result = collect_python_files(&[path]);
+        let result = collect_python_files(&[path], &test_excludes());
         let _ = std::fs::remove_file(&txt);
         assert!(result.is_ok(), "existing non-py file must return Ok");
         assert!(result?.is_empty(), "non-py file must produce empty list");
+        Ok(())
+    }
+
+    // ── directory exclusion ─────────────────────────────────────────────────
+
+    #[test]
+    fn collect_python_files_skips_excluded_directories() -> Result<(), Box<dyn std::error::Error>> {
+        let base = std::env::temp_dir().join("basilisk_test_exclude_dirs");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base)?;
+
+        // File in root — should be found.
+        std::fs::write(base.join("app.py"), b"x = 1")?;
+
+        // Files in default-excluded directories — should be skipped.
+        for excluded in &["__pycache__", "venv", "site-packages", "node_modules"] {
+            let sub = base.join(excluded);
+            std::fs::create_dir_all(&sub)?;
+            std::fs::write(sub.join("hidden.py"), b"x = 1")?;
+        }
+
+        // File in a hidden directory — should be skipped.
+        let hidden = base.join(".hidden");
+        std::fs::create_dir_all(&hidden)?;
+        std::fs::write(hidden.join("secret.py"), b"x = 1")?;
+
+        let path = base.to_string_lossy().into_owned();
+        let files = collect_python_files(&[path], &test_excludes())?;
+        let _ = std::fs::remove_dir_all(&base);
+
+        assert_eq!(
+            files.len(),
+            1,
+            "only root app.py should be found, got: {files:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn collect_python_files_respects_custom_excludes() -> Result<(), Box<dyn std::error::Error>> {
+        let base = std::env::temp_dir().join("basilisk_test_custom_exclude");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base)?;
+
+        std::fs::write(base.join("app.py"), b"x = 1")?;
+        let sub = base.join("vendor");
+        std::fs::create_dir_all(&sub)?;
+        std::fs::write(sub.join("lib.py"), b"x = 1")?;
+
+        // Custom exclude: only "vendor", not the defaults.
+        let custom: HashSet<&str> = ["vendor"].into_iter().collect();
+        let path = base.to_string_lossy().into_owned();
+        let files = collect_python_files(&[path], &custom)?;
+        let _ = std::fs::remove_dir_all(&base);
+
+        assert_eq!(
+            files.len(),
+            1,
+            "vendor should be excluded, only app.py found"
+        );
+        Ok(())
+    }
+
+    /// Regression: `basilisk check .` found zero files because the root
+    /// entry `.` starts with `.` and was rejected by the hidden-dir filter.
+    /// The same bug hits any user-supplied root whose name starts with `.`
+    /// (e.g. `.myproject`).
+    #[test]
+    fn collect_python_files_hidden_root_dir_still_walked() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let base = std::env::temp_dir().join("basilisk_test_hidden_root");
+        let _ = std::fs::remove_dir_all(&base);
+
+        // Root directory whose name starts with `.` — simulates the `.`
+        // case (or any hidden-named project root).
+        let hidden = base.join(".myproject");
+        std::fs::create_dir_all(&hidden)?;
+        std::fs::write(hidden.join("app.py"), b"x = 1")?;
+        let sub = hidden.join("pkg");
+        std::fs::create_dir_all(&sub)?;
+        std::fs::write(sub.join("mod.py"), b"y = 2")?;
+
+        let path = hidden.to_string_lossy().into_owned();
+        let files = collect_python_files(&[path], &test_excludes())?;
+        let _ = std::fs::remove_dir_all(&base);
+
+        assert_eq!(
+            files.len(),
+            2,
+            "user-supplied root starting with '.' must still be walked, got: {files:?}"
+        );
         Ok(())
     }
 }

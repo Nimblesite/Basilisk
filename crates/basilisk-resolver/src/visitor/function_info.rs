@@ -91,6 +91,7 @@ pub(super) fn function_info_from(
         return_stmts,
         def_span: text_range_to_span(func.range),
         name_span: text_range_to_span(func.name.range),
+        params_end: func.parameters.range().end().to_u32(),
         return_annotation_span,
         class_name,
         all_local_assigns,

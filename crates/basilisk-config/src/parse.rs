@@ -10,8 +10,17 @@ use crate::overrides::{ModuleOverride, PathOverride, RuleSeverity};
 /// This is the rich configuration model with per-module and per-path overrides.
 /// It supplements the `WorkspaceConfig` in `basilisk-lsp` which handles
 /// analysis mode, python version, and other LSP-level settings.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct BasiliskConfig {
+    /// Directory names to exclude from file discovery.
+    ///
+    /// Defaults to [`DEFAULT_EXCLUDES`]. Setting this in config replaces
+    /// the defaults — add them back explicitly if still needed.
+    ///
+    /// Hidden directories (starting with `.`) are always excluded
+    /// regardless of this list.
+    pub exclude: Vec<String>,
+
     /// Additional directories to search for `.pyi` stubs.
     pub stub_paths: Vec<PathBuf>,
 
@@ -31,6 +40,21 @@ pub struct BasiliskConfig {
     /// Patterns support `**` for recursive matching
     /// (e.g. `"vendor/**"` matches `vendor/lib/foo.py`).
     pub per_path_overrides: HashMap<String, PathOverride>,
+}
+
+impl Default for BasiliskConfig {
+    fn default() -> Self {
+        Self {
+            exclude: crate::DEFAULT_EXCLUDES
+                .iter()
+                .map(|s| (*s).to_owned())
+                .collect(),
+            stub_paths: Vec::new(),
+            rules: HashMap::new(),
+            per_module_overrides: HashMap::new(),
+            per_path_overrides: HashMap::new(),
+        }
+    }
 }
 
 impl BasiliskConfig {
@@ -61,6 +85,14 @@ pub fn load_from_json(path: &Path) -> Option<BasiliskConfig> {
     let obj = json.as_object()?;
 
     let mut cfg = BasiliskConfig::default();
+
+    // exclude
+    if let Some(arr) = obj.get("exclude").and_then(|v| v.as_array()) {
+        cfg.exclude = arr
+            .iter()
+            .filter_map(|v| v.as_str().map(String::from))
+            .collect();
+    }
 
     // stub-paths / stubPaths
     if let Some(arr) = obj
@@ -120,6 +152,14 @@ pub fn load_from_pyproject(path: &Path) -> Option<BasiliskConfig> {
     let basilisk = tool.get("basilisk")?.as_table()?;
 
     let mut cfg = BasiliskConfig::default();
+
+    // exclude
+    if let Some(arr) = basilisk.get("exclude").and_then(|v| v.as_array()) {
+        cfg.exclude = arr
+            .iter()
+            .filter_map(|v| v.as_str().map(String::from))
+            .collect();
+    }
 
     // stub-paths
     if let Some(arr) = basilisk.get("stub-paths").and_then(|v| v.as_array()) {

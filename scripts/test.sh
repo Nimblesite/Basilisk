@@ -72,8 +72,8 @@ ok "All dependencies present"
 rustup component add llvm-tools-preview 2>/dev/null || true
 
 # ── Rust tests with coverage ─────────────────────────────────────────────────
-# cargo-llvm-cov builds --release into target/release/ (same target dir),
-# so the basilisk binary is available after this step — no separate build needed.
+# cargo-llvm-cov uses target/llvm-cov-target/ as its target directory,
+# so the basilisk binary lands there — not in target/release/.
 
 header "Running tests with coverage instrumentation"
 set +e
@@ -96,9 +96,15 @@ if [[ "$TESTS_EXIT" -ne 0 ]]; then
 fi
 ok "All workspace tests passed"
 
-BASILISK_BIN="$REPO_ROOT/target/release/basilisk"
+# cargo-llvm-cov places binaries under target/llvm-cov-target/release/.
+BASILISK_BIN="$REPO_ROOT/target/llvm-cov-target/release/basilisk"
 if [[ ! -x "$BASILISK_BIN" ]]; then
-    echo -e "${RED}${BOLD}FATAL: basilisk binary not found at $BASILISK_BIN after coverage build.${RESET}"
+    # Fallback to standard target dir in case cargo-llvm-cov behavior changes.
+    BASILISK_BIN="$REPO_ROOT/target/release/basilisk"
+fi
+if [[ ! -x "$BASILISK_BIN" ]]; then
+    echo -e "${RED}${BOLD}FATAL: basilisk binary not found after coverage build.${RESET}"
+    echo -e "${RED}Checked: target/llvm-cov-target/release/basilisk and target/release/basilisk${RESET}"
     exit 1
 fi
 ok "basilisk binary ready: $BASILISK_BIN"
@@ -129,6 +135,7 @@ TEST_COVERAGE_BASILISK_PARSER="${TEST_COVERAGE_BASILISK_PARSER:-100}"
 TEST_COVERAGE_BASILISK_PLUGIN="${TEST_COVERAGE_BASILISK_PLUGIN:-100}"
 TEST_COVERAGE_BASILISK_RESOLVER="${TEST_COVERAGE_BASILISK_RESOLVER:-94}"
 TEST_COVERAGE_BASILISK_STUBS="${TEST_COVERAGE_BASILISK_STUBS:-100}"
+TEST_COVERAGE_BASILISK_CONFIG="${TEST_COVERAGE_BASILISK_CONFIG:-80}"
 COV_FAILED=0
 HTML_ROWS=""
 check_crate() {
@@ -162,6 +169,7 @@ check_crate basilisk-parser   "$TEST_COVERAGE_BASILISK_PARSER"
 check_crate basilisk-plugin   "$TEST_COVERAGE_BASILISK_PLUGIN"
 check_crate basilisk-resolver "$TEST_COVERAGE_BASILISK_RESOLVER"
 check_crate basilisk-stubs    "$TEST_COVERAGE_BASILISK_STUBS"
+check_crate basilisk-config   "$TEST_COVERAGE_BASILISK_CONFIG"
 
 CRATES_HTML="$HTML_DIR/html/crates.html"
 cat > "$CRATES_HTML" <<HTML
@@ -228,7 +236,7 @@ VSCODE_TEST_CMD="npm test -- --coverage"
 if [[ -z "${DISPLAY:-}" ]] && command -v xvfb-run &>/dev/null; then
     VSCODE_TEST_CMD="xvfb-run -a npm test -- --coverage"
 fi
-BASILISK_EXECUTABLE_PATH="$REPO_ROOT/target/release/basilisk" \
+BASILISK_EXECUTABLE_PATH="$BASILISK_BIN" \
 MOCHA_TIMEOUT="120000" \
 $VSCODE_TEST_CMD
 ok "VS Code E2E tests done"

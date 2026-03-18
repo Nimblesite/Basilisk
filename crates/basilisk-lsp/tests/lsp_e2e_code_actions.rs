@@ -431,6 +431,36 @@ fn test_lsp_code_action_missing_return_annotation() -> TestResult<()> {
         resp.contains("quickfix"),
         "code action should be a quickfix: {resp}"
     );
+
+    // Verify the edit inserts AFTER the closing `)`, not at the function name.
+    // Input: `def greet(name: str):`  — `)` is at column 19.
+    let resp_json: serde_json::Value = serde_json::from_str(&resp)?;
+    let actions = resp_json["result"]
+        .as_array()
+        .ok_or("expected result array")?;
+    let return_fix = actions
+        .iter()
+        .find(|a| {
+            a["title"]
+                .as_str()
+                .is_some_and(|t| t.contains("-> None"))
+        })
+        .ok_or("no return type fix action")?;
+    let edit = &return_fix["edit"]["changes"]["file:///retact.py"][0];
+    let start_line = edit["range"]["start"]["line"].as_u64().unwrap_or(u64::MAX);
+    let start_char = edit["range"]["start"]["character"]
+        .as_u64()
+        .unwrap_or(u64::MAX);
+    let new_text = edit["newText"].as_str().unwrap_or("");
+    assert_eq!(start_line, 0, "edit must be on the function def line");
+    assert_eq!(
+        start_char, 20,
+        "edit must insert at column 20 (after closing paren), not at function name"
+    );
+    assert_eq!(
+        new_text, " -> None",
+        "inserted text must be ' -> None' (space before arrow)"
+    );
     Ok(())
 }
 
