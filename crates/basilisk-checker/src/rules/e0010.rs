@@ -15,104 +15,11 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/BSK-E0010",
 };
 
-/// Known-safe standard-library and typing root module names.
-///
-/// Any import whose root (first dotted component) matches one of these strings
-/// is considered to have complete type information and will not trigger E0010.
-const STDLIB_ROOTS: &[&str] = &[
-    "__future__",
-    "abc",
-    "argparse",
-    "array",
-    "ast",
-    "asyncio",
-    "base64",
-    "basilisk",
-    "binascii",
-    "bisect",
-    "builtins",
-    "bz2",
-    "codecs",
-    "collections",
-    "contextlib",
-    "copy",
-    "cmath",
-    "csv",
-    "ctypes",
-    "dataclasses",
-    "datetime",
-    "decimal",
-    "difflib",
-    "dis",
-    "email",
-    "enum",
-    "fnmatch",
-    "fractions",
-    "functools",
-    "gc",
-    "glob",
-    "gzip",
-    "hashlib",
-    "heapq",
-    "hmac",
-    "html",
-    "http",
-    "importlib",
-    "inspect",
-    "io",
-    "itertools",
-    "json",
-    "logging",
-    "lzma",
-    "math",
-    "multiprocessing",
-    "numbers",
-    "operator",
-    "os",
-    "pathlib",
-    "pickle",
-    "pkgutil",
-    "platform",
-    "pprint",
-    "queue",
-    "random",
-    "re",
-    "secrets",
-    "shutil",
-    "signal",
-    "socket",
-    "sqlite3",
-    "ssl",
-    "stat",
-    "statistics",
-    "string",
-    "struct",
-    "sys",
-    "tarfile",
-    "tempfile",
-    "textwrap",
-    "threading",
-    "time",
-    "traceback",
-    "tracemalloc",
-    "types",
-    "typing",
-    "typing_extensions",
-    "unittest",
-    "urllib",
-    "uuid",
-    "warnings",
-    "weakref",
-    "xml",
-    "zipfile",
-    "zlib",
-];
-
 /// Emits BSK-E0010 for imports from modules outside the known stdlib/typing
 /// ecosystem.
 ///
-/// Suppression is handled centrally by the `suppression` module — this rule
-/// does not filter diagnostics itself.
+/// Uses the compiled typeshed index from `basilisk-stubs` for O(1) module
+/// recognition. Suppression is handled centrally by the `suppression` module.
 pub(crate) struct ImportFromUntypedModule;
 
 impl Rule for ImportFromUntypedModule {
@@ -120,15 +27,9 @@ impl Rule for ImportFromUntypedModule {
         module
             .imports
             .iter()
-            .filter(|import| !is_stdlib(&import.module))
+            .filter(|import| !basilisk_stubs::is_stdlib_module(&import.module))
             .for_each(|import| diagnostics.push(make_diagnostic(import, &module.path)));
     }
-}
-
-/// Returns `true` when the module root is a known stdlib or typing package.
-fn is_stdlib(module_name: &str) -> bool {
-    let root = module_name.split('.').next().unwrap_or(module_name);
-    STDLIB_ROOTS.contains(&root)
 }
 
 fn make_diagnostic(import: &ImportInfo, path: &str) -> Diagnostic {

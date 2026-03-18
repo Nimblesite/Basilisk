@@ -24,12 +24,14 @@
 //! - Selection Ranges (Smart Select)
 //! - Semantic Tokens (syntax-aware highlighting)
 
+pub mod auto_import;
 pub mod call_hierarchy;
 pub mod code_actions;
 pub mod code_lens;
 pub mod color;
 pub mod completion;
 pub mod config;
+pub mod cross_module;
 pub mod debug;
 pub mod declaration;
 pub mod definition;
@@ -37,6 +39,7 @@ pub mod folding;
 pub mod formatting;
 pub mod highlight;
 pub mod hover;
+pub mod import_graph;
 pub mod import_resolver;
 pub mod inlay_hints;
 pub mod references;

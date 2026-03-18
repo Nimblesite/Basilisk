@@ -233,6 +233,7 @@ fn build_resolved_module(
         protocol_runtime_checkable_violations: results.protocol_rtc_issues,
         generator_violations: results.generator_issues,
         unbound_typevar_usages: Vec::new(),
+        imported_symbols: std::collections::HashMap::new(),
         path: module.path.clone(),
         source: module.source.clone(),
     }

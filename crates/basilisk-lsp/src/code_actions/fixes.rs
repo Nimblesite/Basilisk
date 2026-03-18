@@ -22,13 +22,13 @@ pub(super) fn fix_missing_param_annotation(uri: &Url, diag: &Diagnostic) -> Code
     )
 }
 
-/// Insert `-> None ` before the colon/body.
+/// Insert ` -> None` after the closing `)` of the parameter list.
 pub(super) fn fix_missing_return_annotation(uri: &Url, diag: &Diagnostic) -> CodeAction {
     single_insert(
         uri,
         diag,
-        diag.range.start,
-        "-> None ",
+        diag.range.end,
+        " -> None",
         "Add `-> None` return type (basilisk)",
     )
 }

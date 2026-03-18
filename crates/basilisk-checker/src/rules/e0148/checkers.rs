@@ -64,7 +64,9 @@ pub(super) fn check_func_body(
         if let Some(ann) = &param.parameter.annotation {
             let ann_text = ann_str(ann);
             let _ = local_types.insert(param.parameter.name.to_string(), ann_text.clone());
-            if let Some((key_ty, val_ty)) = super::parse_mapping_annotation(&ann_text) {
+            if let Some((key_ty, val_ty)) =
+                super::helpers::resolve_mapping_annotation(&ann_text, &ctx.class_bases)
+            {
                 let _ =
                     local_mapping_vars.insert(param.parameter.name.to_string(), (key_ty, val_ty));
             }
@@ -150,7 +152,7 @@ fn check_call(call: &ast::ExprCall, ctx: &ModuleContext, path: &str, diag: &mut 
         }
 
         // Find which constraint group this argument belongs to.
-        let Some(group) = constrained_tv.group_of(&arg_type_str) else {
+        let Some(group) = constrained_tv.group_of(&arg_type_str, &ctx.class_bases) else {
             // Try to resolve via known subtypes: if arg_type_str is a class
             // in this module that inherits from one of the constraints, map
             // to that constraint's group.  We use a conservative heuristic.

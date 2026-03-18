@@ -1,13 +1,17 @@
 ⚠️ CRITICAL: DO NOT USE GIT!!!!
 
+⚠️ CRITICAL: WE TREAT THIS CODEBASE WITH RESPECT. THIS CODE WOULD PASS REVIEW AT Google, Meta and Microsoft. WE DON'T ALLOW BAD CODE. NOT EVEN FOR ONE LINE. THIS CODEBASE RECEIVES A GRADE OF A+. ANYTHING LESS IS ⛔️ILLEGAL AND YOU MUST FIX IT IMMEDIATELY.
+
 Target: 100% PEP conformance. Canonical version: **Python 3.12**. Read the PEP conformance readme carefully.
 
 The project is a Python type checker and comprehensive LSP (test explorer, debugging, profiling, autofixes) built in Rust.
 
 **Overall aim: FIX THE PYTHON DEVELOPER EXPERIENCE.**
-One IDE extension = complete Python development experience. Seamless, fast, complete.
+One IDE extension = COMPLETE PYTHON DEVELOPMENT EXPERIENCE. SEAMLESS, FAST, COMPLETE.
 
 # Too Many Cooks - MANDATORY
+
+⚠️ REGISTER IMMEDIATELY!!!
 
 COORDINATOR: dictate orders through plans and messages. DELEGATE!!!
 OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK MESSAGES AND COMPLY!!!
@@ -31,18 +35,28 @@ OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK MESSAGES AND COMPLY
 
 # Rules
 
+- 
+   allow(clippy = ⛔️ ILLEGAL. If you have to do this, you better add a damn good reason!!! 
+   **aggressively remove** allow from the code!!!
 - Zero duplication. DRY AF!!! Check for existing code before writing new code
 - Aggressively move code that can be shared out to shared crates/modules/packages
+- Keep the dependencies and versions in these two files in sync at all times: .github/workflows/ci.yml, .devcontainer/Dockerfile
 - Ignore compiler code (except clippy fixes)
 - Do not use Git unless asked
+- There is NO SUCH THING AS LEGACY CODE in this codebase. Legacy = DELETED
+- Regex = ⛔️ ILLEGAL. Use the proper parsing mechanism - usually ruff
+- Keep files under 500 LOC. Break up larger files.
+- Copying files is illegal. MOVE them instead.
+
+## Testing
+
+Testing is absolutely critical. We aim for 100% test coverage and a high mutation score at all times. Focus on assertions; not just coverage
+
 - NEVER DELETE FAILING TESTS
 - NEVER REMOVE ASSERTIONS THAT CAUSE TEST FAILURES
-- Regex = ⛔️ ILLEGAL. Use the proper parsing mechanism - usually ruff
 - ADD more failing tests for broken/missing functionality — NEVER remove them
-- Keep files under 500 LOC. Break up larger files.
 - REDUCING TEST ASSERTIVENESS = DATA CENTER DISMANTLED
 - Ignoring tests = ILLEGAL
-- Copying files is illegal. MOVE them instead.
 
 ## Core Principles
 

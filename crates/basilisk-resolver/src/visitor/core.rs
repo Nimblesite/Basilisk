@@ -442,7 +442,7 @@ pub(super) fn check_td_stmts(
                     let Some(class_name) = var_type.get(&var_name) else {
                         continue;
                     };
-                    let Some((_, _, is_total)) = fields.get(class_name.as_str()) else {
+                    let Some((_, _, is_total, _)) = fields.get(class_name.as_str()) else {
                         continue;
                     };
                     if *is_total {

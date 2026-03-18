@@ -26,6 +26,8 @@ pub struct ImportSearchPaths {
     pub roots: Vec<PathBuf>,
     /// Extra module search paths from config (`extraPaths`).
     pub extra_paths: Vec<PathBuf>,
+    /// User-provided stub directories from `stub-paths` config.
+    pub stub_paths: Vec<PathBuf>,
     /// Virtual environment site-packages directory, if detected.
     pub site_packages: Option<PathBuf>,
 }
@@ -38,29 +40,120 @@ impl ImportSearchPaths {
         Self {
             roots: roots.to_vec(),
             extra_paths: config.extra_paths.clone(),
+            stub_paths: config.stub_paths.clone(),
             site_packages,
         }
     }
 }
 
-/// Resolve an absolute import (`import os.path` or `from os import path`).
+/// Resolve an absolute import following PEP 561 resolution order.
+///
+/// 1. **User stubs** — `.pyi` files in `stub-paths` directories
+/// 2. **User source** — `.py`/`.pyi` files in workspace roots and `extraPaths`
+/// 3. **Stub-only packages** — installed `foopkg-stubs` in site-packages
+/// 4. **Inline-typed packages** — installed packages with `py.typed` marker
+/// 5. **Bundled typeshed** — handled externally via `basilisk_stubs::is_stdlib_module()`
 #[must_use]
 pub fn resolve_module(
     module_name: &str,
     search_paths: &ImportSearchPaths,
 ) -> Option<ResolvedImport> {
-    let all_dirs = search_paths
+    // 1. User stubs (stub-paths: only .pyi files)
+    for stub_dir in &search_paths.stub_paths {
+        if let Some(resolved) = try_resolve_stub_only(module_name, stub_dir) {
+            return Some(resolved);
+        }
+    }
+
+    // 2. User source (workspace roots + extraPaths: .pyi preferred over .py)
+    for dir in search_paths
         .roots
         .iter()
         .chain(search_paths.extra_paths.iter())
-        .chain(search_paths.site_packages.iter());
-
-    for dir in all_dirs {
+    {
         if let Some(resolved) = try_resolve_in_dir(module_name, dir) {
             return Some(resolved);
         }
     }
+
+    // 3+4. Site-packages: stub-only packages (-stubs), then inline-typed (py.typed), then plain
+    if let Some(sp) = &search_paths.site_packages {
+        // 3. Check for `<module>-stubs` package first
+        if let Some(resolved) = try_resolve_stub_package(module_name, sp) {
+            return Some(resolved);
+        }
+        // 4. Check for inline-typed packages (py.typed marker) and plain packages
+        if let Some(resolved) = try_resolve_in_dir(module_name, sp) {
+            return Some(resolved);
+        }
+    }
+
     None
+}
+
+/// Try resolving a module in a stub-only directory (only `.pyi` files).
+fn try_resolve_stub_only(module_name: &str, stub_dir: &Path) -> Option<ResolvedImport> {
+    let parts: Vec<&str> = module_name.split('.').collect();
+    let mut current = stub_dir.to_path_buf();
+
+    let (leading, trailing) = parts.split_at(parts.len().saturating_sub(1));
+    for &part in leading {
+        current = current.join(part);
+        if !current.is_dir() {
+            return None;
+        }
+    }
+
+    let last = trailing.first()?;
+
+    // Only look for .pyi files in stub directories
+    let pyi = current.join(format!("{last}.pyi"));
+    if pyi.is_file() {
+        return Some(ResolvedImport {
+            path: pyi,
+            resolution: ImportResolution::StubPyi,
+        });
+    }
+
+    let pkg_pyi = current.join(last).join("__init__.pyi");
+    if pkg_pyi.is_file() {
+        return Some(ResolvedImport {
+            path: pkg_pyi,
+            resolution: ImportResolution::StubPyi,
+        });
+    }
+
+    None
+}
+
+/// Try resolving a PEP 561 stub-only package (`foopkg-stubs/`) in site-packages.
+fn try_resolve_stub_package(module_name: &str, site_packages: &Path) -> Option<ResolvedImport> {
+    let root = module_name.split('.').next()?;
+    let stubs_dir = site_packages.join(format!("{root}-stubs"));
+    if !stubs_dir.is_dir() {
+        return None;
+    }
+
+    // Resolve within the stubs package directory
+    let remainder = module_name.strip_prefix(root);
+    match remainder {
+        // Top-level: look for __init__.pyi in the stubs dir
+        None | Some("") => {
+            let init_pyi = stubs_dir.join("__init__.pyi");
+            if init_pyi.is_file() {
+                return Some(ResolvedImport {
+                    path: init_pyi,
+                    resolution: ImportResolution::StubPyi,
+                });
+            }
+            None
+        }
+        // Sub-module: strip leading dot and resolve within stubs dir
+        Some(sub) => {
+            let sub_name = sub.strip_prefix('.').unwrap_or(sub);
+            try_resolve_stub_only(sub_name, &stubs_dir)
+        }
+    }
 }
 
 /// Resolve a relative import (`from . import X`, `from ..utils import Y`).
@@ -155,14 +248,48 @@ fn try_resolve_init(dir: &Path) -> Option<ResolvedImport> {
     None
 }
 
-/// Detect site-packages directory from venv config.
+/// Check whether an installed package has a `py.typed` marker (PEP 561).
+#[must_use]
+pub fn is_inline_typed_package(module_name: &str, site_packages: &Path) -> bool {
+    let root = module_name.split('.').next().unwrap_or(module_name);
+    let pkg_dir = site_packages.join(root);
+    pkg_dir.join("py.typed").is_file()
+}
+
+/// Check whether a stub-only package exists for a module in site-packages.
+#[must_use]
+pub fn has_stub_package(module_name: &str, site_packages: &Path) -> bool {
+    let root = module_name.split('.').next().unwrap_or(module_name);
+    site_packages.join(format!("{root}-stubs")).is_dir()
+}
+
+/// Detect site-packages directory from venv config, then fall back to
+/// `python3 -c "import sys; ..."` subprocess for system Python discovery.
 fn resolve_site_packages(
     roots: &[PathBuf],
     config: &crate::config::WorkspaceConfig,
 ) -> Option<PathBuf> {
+    // 1. Try venv-based discovery first.
+    if let Some(sp) = resolve_venv_site_packages(roots, config) {
+        return Some(sp);
+    }
+    // 2. Fall back to Python subprocess discovery.
+    detect_python_site_packages()
+}
+
+/// Find site-packages from a virtual environment directory.
+fn resolve_venv_site_packages(
+    roots: &[PathBuf],
+    config: &crate::config::WorkspaceConfig,
+) -> Option<PathBuf> {
     let venv_dir = find_venv_dir(roots, config)?;
+    site_packages_in_dir(&venv_dir)
+}
+
+/// Search a Python installation directory for its site-packages path.
+fn site_packages_in_dir(base: &Path) -> Option<PathBuf> {
     // Unix: lib/pythonX.Y/site-packages
-    let lib = venv_dir.join("lib");
+    let lib = base.join("lib");
     if lib.is_dir() {
         if let Ok(entries) = std::fs::read_dir(&lib) {
             for entry in entries.flatten() {
@@ -178,9 +305,39 @@ fn resolve_site_packages(
         }
     }
     // Windows: Lib/site-packages
-    let win_sp = venv_dir.join("Lib").join("site-packages");
+    let win_sp = base.join("Lib").join("site-packages");
     if win_sp.is_dir() {
         return Some(win_sp);
+    }
+    None
+}
+
+/// Detect site-packages by running `python3 -c "import sys; ..."`.
+///
+/// Searches `sys.path` entries for directories ending in `site-packages`.
+/// Returns the first valid site-packages directory found.
+fn detect_python_site_packages() -> Option<PathBuf> {
+    let output = std::process::Command::new("python3")
+        .args(["-c", "import sys; print('\\n'.join(sys.path))"])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let path = PathBuf::from(trimmed);
+        if path.ends_with("site-packages") && path.is_dir() {
+            return Some(path);
+        }
     }
     None
 }
@@ -259,6 +416,7 @@ mod tests {
         ImportSearchPaths {
             roots,
             extra_paths: vec![],
+            stub_paths: vec![],
             site_packages: None,
         }
     }
@@ -393,6 +551,7 @@ mod tests {
         let paths = ImportSearchPaths {
             roots: vec![root.clone()],
             extra_paths: vec![extra.clone()],
+            stub_paths: vec![],
             site_packages: None,
         };
         let result = resolve_module("libmod", &paths).unwrap();
@@ -413,6 +572,7 @@ mod tests {
         let paths = ImportSearchPaths {
             roots: vec![root.clone()],
             extra_paths: vec![],
+            stub_paths: vec![],
             site_packages: Some(sp.clone()),
         };
         let result = resolve_module("requests", &paths).unwrap();
@@ -434,6 +594,7 @@ mod tests {
         let paths = ImportSearchPaths {
             roots: vec![root.clone()],
             extra_paths: vec![extra.clone()],
+            stub_paths: vec![],
             site_packages: None,
         };
         let result = resolve_module("dup", &paths).unwrap();
@@ -532,5 +693,126 @@ mod tests {
         assert!(result.unwrap().ends_with("site-packages"));
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    // ── Stub-path resolution (Phase 1.2) ────────────────────────────────
+
+    #[test]
+    fn test_stub_paths_searched_before_roots() {
+        let root = unique_tmp("bsk_ir_stubpath_root");
+        let stubs = unique_tmp("bsk_ir_stubpath_stubs");
+        fs::create_dir_all(&root).unwrap();
+        fs::create_dir_all(&stubs).unwrap();
+        fs::write(root.join("mymod.py"), "x = 1\n").unwrap();
+        fs::write(stubs.join("mymod.pyi"), "x: int\n").unwrap();
+
+        let paths = ImportSearchPaths {
+            roots: vec![root.clone()],
+            extra_paths: vec![],
+            stub_paths: vec![stubs.clone()],
+            site_packages: None,
+        };
+        let result = resolve_module("mymod", &paths).unwrap();
+        // Stub-path .pyi should win over root .py
+        assert_eq!(result.resolution, ImportResolution::StubPyi);
+        assert!(result.path.starts_with(&stubs));
+
+        let _ = fs::remove_dir_all(&root);
+        let _ = fs::remove_dir_all(&stubs);
+    }
+
+    #[test]
+    fn test_stub_paths_only_pyi() {
+        let stubs = unique_tmp("bsk_ir_stubpath_pyi_only");
+        fs::create_dir_all(&stubs).unwrap();
+        // Only .py in stub dir — should NOT be found (stubs are .pyi only)
+        fs::write(stubs.join("mymod.py"), "x = 1\n").unwrap();
+
+        let paths = ImportSearchPaths {
+            roots: vec![],
+            extra_paths: vec![],
+            stub_paths: vec![stubs.clone()],
+            site_packages: None,
+        };
+        let result = resolve_module("mymod", &paths);
+        assert!(
+            result.is_none(),
+            "stub-paths should only resolve .pyi files"
+        );
+
+        let _ = fs::remove_dir_all(&stubs);
+    }
+
+    // ── PEP 561 stub-only packages (Phase 1.3) ─────────────────────────
+
+    #[test]
+    fn test_stub_package_resolution() {
+        let root = unique_tmp("bsk_ir_pep561_root");
+        let sp = unique_tmp("bsk_ir_pep561_sp");
+        fs::create_dir_all(&root).unwrap();
+        let stubs_dir = sp.join("requests-stubs");
+        fs::create_dir_all(&stubs_dir).unwrap();
+        fs::write(stubs_dir.join("__init__.pyi"), "").unwrap();
+
+        let paths = ImportSearchPaths {
+            roots: vec![root.clone()],
+            extra_paths: vec![],
+            stub_paths: vec![],
+            site_packages: Some(sp.clone()),
+        };
+        let result = resolve_module("requests", &paths).unwrap();
+        assert_eq!(result.resolution, ImportResolution::StubPyi);
+        assert!(result.path.to_string_lossy().contains("requests-stubs"));
+
+        let _ = fs::remove_dir_all(&root);
+        let _ = fs::remove_dir_all(&sp);
+    }
+
+    #[test]
+    fn test_stub_package_submodule() {
+        let sp = unique_tmp("bsk_ir_pep561_sub");
+        let stubs_dir = sp.join("requests-stubs");
+        fs::create_dir_all(&stubs_dir).unwrap();
+        fs::write(stubs_dir.join("__init__.pyi"), "").unwrap();
+        fs::write(stubs_dir.join("api.pyi"), "def get() -> None: ...\n").unwrap();
+
+        let paths = ImportSearchPaths {
+            roots: vec![],
+            extra_paths: vec![],
+            stub_paths: vec![],
+            site_packages: Some(sp.clone()),
+        };
+        let result = resolve_module("requests.api", &paths).unwrap();
+        assert_eq!(result.resolution, ImportResolution::StubPyi);
+        assert!(result.path.ends_with("api.pyi"));
+
+        let _ = fs::remove_dir_all(&sp);
+    }
+
+    #[test]
+    fn test_py_typed_detection() {
+        let sp = unique_tmp("bsk_ir_pytyped");
+        let pkg = sp.join("rich");
+        fs::create_dir_all(&pkg).unwrap();
+        fs::write(pkg.join("py.typed"), "").unwrap();
+        fs::write(pkg.join("__init__.py"), "").unwrap();
+
+        assert!(is_inline_typed_package("rich", &sp));
+        assert!(!is_inline_typed_package("flask", &sp));
+
+        let _ = fs::remove_dir_all(&sp);
+    }
+
+    #[test]
+    fn test_has_stub_package_detection() {
+        let sp = unique_tmp("bsk_ir_has_stubs");
+        let stubs = sp.join("requests-stubs");
+        fs::create_dir_all(&stubs).unwrap();
+
+        assert!(has_stub_package("requests", &sp));
+        assert!(has_stub_package("requests.api", &sp));
+        assert!(!has_stub_package("flask", &sp));
+
+        let _ = fs::remove_dir_all(&sp);
     }
 }

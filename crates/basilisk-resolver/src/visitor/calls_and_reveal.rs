@@ -84,8 +84,17 @@ pub(super) fn collect_calls_from_stmt(stmt: &Stmt, out: &mut Vec<CallSite>) {
             collect_calls_from_stmts_internal(&cls.body, out);
         }
         Stmt::If(node) => {
+            // Extract calls from the `if` test expression (e.g. `isinstance(x, T)`).
+            if let Some(site) = call_site_from_expr(&node.test) {
+                out.push(site);
+            }
             collect_calls_from_stmts_internal(&node.body, out);
             for clause in &node.elif_else_clauses {
+                if let Some(ref test) = clause.test {
+                    if let Some(site) = call_site_from_expr(test) {
+                        out.push(site);
+                    }
+                }
                 collect_calls_from_stmts_internal(&clause.body, out);
             }
         }
