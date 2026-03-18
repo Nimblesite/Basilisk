@@ -59,6 +59,58 @@ fn span_text(source: &str, span: Option<basilisk_resolver::Span>) -> Option<&str
     slice_span(source, span)
 }
 
+/// Check whether an annotation text contains `tuple[Ts]` where `Ts` is a
+/// `TypeVarTuple` used without the `*` unpack operator.
+///
+/// Returns a diagnostic if the violation is found.
+fn check_tuple_subscript_unpack(
+    ann: &str,
+    tvt_names: &HashSet<&str>,
+    span: basilisk_resolver::Span,
+    path: &str,
+) -> Option<Diagnostic> {
+    // Look for `tuple[` (case-sensitive — Python's builtin is lowercase).
+    let tuple_prefix = "tuple[";
+    let start = ann.find(tuple_prefix)?;
+    let inner_start = start + tuple_prefix.len();
+
+    // Find the matching closing bracket.
+    let inner = &ann[inner_start..];
+    let close = find_matching_bracket(inner)?;
+    let subscript_content = &inner[..close];
+
+    // Check each comma-separated element for a bare TypeVarTuple name.
+    for element in subscript_content.split(',') {
+        let element = element.trim();
+        if tvt_names.contains(element) {
+            return Some(make_diag(
+                format!("`TypeVarTuple` `{element}` must be unpacked with `*` inside `tuple[...]`",),
+                span,
+                path,
+            ));
+        }
+    }
+    None
+}
+
+/// Find the index of the matching `]` for content starting after `[`.
+fn find_matching_bracket(content: &str) -> Option<usize> {
+    let mut depth = 0u32;
+    for (idx, ch) in content.char_indices() {
+        match ch {
+            '[' => depth += 1,
+            ']' => {
+                if depth == 0 {
+                    return Some(idx);
+                }
+                depth -= 1;
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
 /// Emits BSK-E0083 when a `TypeVarTuple` is used without unpacking.
 pub(crate) struct TypeVarTupleUnpackRequired;
 
@@ -98,6 +150,7 @@ impl Rule for TypeVarTupleUnpackRequired {
 
         // Check function parameters and varargs: if a parameter's annotation is exactly
         // a bare TypeVarTuple name (not preceded by `*`), it's an error.
+        // Also check for `tuple[Ts]` — TypeVarTuple inside tuple[] without unpack.
         for func in &module.functions {
             for param in func
                 .parameters
@@ -119,6 +172,34 @@ impl Rule for TypeVarTupleUnpackRequired {
                         param.name_span,
                         path,
                     ));
+                }
+                // Check for `tuple[Ts]` — TypeVarTuple inside tuple subscript without `*`.
+                if let Some(diag) =
+                    check_tuple_subscript_unpack(ann_trimmed, &tvt_names, param.name_span, path)
+                {
+                    diagnostics.push(diag);
+                }
+            }
+
+            // Check return annotation for bare TypeVarTuple or tuple[Ts] without unpack.
+            if let Some(ret_ann) = span_text(source, func.return_annotation_span) {
+                let ret_trimmed = ret_ann.trim();
+                if !ret_trimmed.starts_with('*') && tvt_names.contains(ret_trimmed) {
+                    let span = func.return_annotation_span.unwrap_or(func.name_span);
+                    diagnostics.push(make_diag(
+                        format!(
+                            "`TypeVarTuple` `{ret_trimmed}` must be unpacked with `*` in return annotation",
+                        ),
+                        span,
+                        path,
+                    ));
+                }
+                if let Some(span) = func.return_annotation_span {
+                    if let Some(diag) =
+                        check_tuple_subscript_unpack(ret_trimmed, &tvt_names, span, path)
+                    {
+                        diagnostics.push(diag);
+                    }
                 }
             }
         }

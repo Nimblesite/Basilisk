@@ -2,7 +2,7 @@
 //!
 //! Covers `workspace/executeCommand` dispatch and the individual command
 //! implementations: `basilisk.organizeImports`, `basilisk.startDebugSession`,
-//! and `basilisk.stopDebugSession`.
+//! `basilisk.stopDebugSession`, and `basilisk.disableRule`.
 
 use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::{ExecuteCommandParams, MessageType};
@@ -37,6 +37,10 @@ pub(super) async fn dispatch_execute_command(
         basilisk_common::commands::STOP_DEBUG_SESSION => {
             execute_stop_debug_session(server, &params.arguments).await
         }
+        basilisk_common::commands::DISABLE_RULE => {
+            execute_disable_rule(server, &params.arguments).await
+        }
+        basilisk_common::commands::FIX_FILE => execute_fix_file(server, &params.arguments).await,
         unknown => {
             server
                 .client
@@ -184,4 +188,170 @@ pub(super) async fn execute_stop_debug_session(
     }
 
     Ok(Some(serde_json::json!({ "stopped": stopped })))
+}
+
+/// Handle `basilisk.disableRule`.
+///
+/// Reads the workspace root's `pyproject.toml`, inserts/updates a rule entry
+/// under `[tool.basilisk.rules]`, and applies the edit via `workspace/applyEdit`.
+async fn execute_disable_rule(
+    server: &LspServer,
+    args: &[serde_json::Value],
+) -> LspResult<Option<serde_json::Value>> {
+    let Some(arg) = args.first() else {
+        return Ok(None);
+    };
+    let Some(rule) = arg.get("rule").and_then(|v| v.as_str()) else {
+        warn!("disableRule: missing 'rule' argument");
+        return Ok(None);
+    };
+    let severity = arg
+        .get("severity")
+        .and_then(|v| v.as_str())
+        .unwrap_or("off");
+
+    info!(rule, severity, "disableRule requested");
+
+    let roots = server.workspace_roots.read().await;
+    let Some(root) = roots.first() else {
+        warn!("disableRule: no workspace root available");
+        return Ok(None);
+    };
+
+    let pyproject_path = root.join("pyproject.toml");
+    let existing = std::fs::read_to_string(&pyproject_path).unwrap_or_default();
+
+    let updated = insert_rule_override(&existing, rule, severity);
+
+    if let Err(err) = std::fs::write(&pyproject_path, updated.as_bytes()) {
+        error!(%err, "failed to write pyproject.toml");
+        server
+            .client
+            .log_message(
+                MessageType::ERROR,
+                format!("Basilisk: failed to write pyproject.toml: {err}"),
+            )
+            .await;
+        return Err(tower_lsp::jsonrpc::Error {
+            code: tower_lsp::jsonrpc::ErrorCode::ServerError(-32003),
+            message: format!("Failed to write pyproject.toml: {err}").into(),
+            data: None,
+        });
+    }
+
+    server
+        .client
+        .log_message(
+            MessageType::INFO,
+            format!("Basilisk: disabled rule {rule} in pyproject.toml"),
+        )
+        .await;
+
+    Ok(Some(serde_json::json!({
+        "rule": rule,
+        "severity": severity,
+        "path": pyproject_path.display().to_string(),
+    })))
+}
+
+/// Handle `basilisk.fixFile`.
+///
+/// Collects all fixable diagnostics for the given file URI, resolves conflicts,
+/// and applies a single `WorkspaceEdit` so the user can undo in one step.
+async fn execute_fix_file(
+    server: &LspServer,
+    args: &[serde_json::Value],
+) -> LspResult<Option<serde_json::Value>> {
+    let Some(uri_str) = args.first().and_then(|v| v.as_str()) else {
+        return Ok(None);
+    };
+    let Ok(uri) = tower_lsp::lsp_types::Url::parse(uri_str) else {
+        return Ok(None);
+    };
+
+    let action: Option<tower_lsp::lsp_types::CodeAction> = server
+        .with_index(|idx| {
+            let (text, _, checker_diags) = idx.get_by_uri(&uri)?;
+            let lsp_diags: Vec<_> = checker_diags
+                .iter()
+                .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &text))
+                .collect();
+            crate::code_actions::fix_all_in_file(&uri, &lsp_diags, &text)
+        })
+        .await;
+
+    let Some(action) = action else {
+        info!(uri = %uri, "fixFile: no fixable diagnostics");
+        return Ok(Some(serde_json::json!({ "fixed": 0 })));
+    };
+
+    let edit_count: usize = action
+        .edit
+        .as_ref()
+        .and_then(|e| e.changes.as_ref())
+        .map_or(0, |changes| changes.values().map(Vec::len).sum::<usize>());
+
+    if let Some(edit) = action.edit {
+        let _ = server.client.apply_edit(edit).await;
+    }
+
+    info!(uri = %uri, edit_count, "fixFile: applied fixes");
+    server
+        .client
+        .log_message(
+            tower_lsp::lsp_types::MessageType::INFO,
+            format!("Basilisk: fixed {edit_count} issues in {uri}"),
+        )
+        .await;
+
+    Ok(Some(serde_json::json!({ "fixed": edit_count })))
+}
+
+/// Insert or update a rule override in `pyproject.toml` content.
+///
+/// Adds `[tool.basilisk.rules]` section if missing, then sets `RULE = "severity"`.
+fn insert_rule_override(content: &str, rule: &str, severity: &str) -> String {
+    let section_header = "[tool.basilisk.rules]";
+    let entry = format!("{rule} = \"{severity}\"");
+
+    // Check if the rule already exists — update in place.
+    if content.contains(section_header) {
+        let rule_pattern = format!("{rule} = ");
+        if content.contains(&rule_pattern) {
+            // Replace existing rule line.
+            let mut result = String::with_capacity(content.len());
+            for line in content.lines() {
+                if line.trim_start().starts_with(&rule_pattern) {
+                    result.push_str(&entry);
+                } else {
+                    result.push_str(line);
+                }
+                result.push('\n');
+            }
+            return result;
+        }
+        // Section exists but rule doesn't — append after section header.
+        let mut result = String::with_capacity(content.len() + entry.len() + 2);
+        for line in content.lines() {
+            result.push_str(line);
+            result.push('\n');
+            if line.trim() == section_header {
+                result.push_str(&entry);
+                result.push('\n');
+            }
+        }
+        return result;
+    }
+
+    // No section at all — append at end.
+    let mut result = content.to_owned();
+    if !result.ends_with('\n') && !result.is_empty() {
+        result.push('\n');
+    }
+    result.push('\n');
+    result.push_str(section_header);
+    result.push('\n');
+    result.push_str(&entry);
+    result.push('\n');
+    result
 }

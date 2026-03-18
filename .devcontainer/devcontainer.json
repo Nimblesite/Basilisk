@@ -8,11 +8,12 @@
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
   "containerEnv": {
     "CARGO_TERM_COLOR": "always",
-    "RUSTFLAGS": "-D warnings"
+    "RUSTFLAGS": "-D warnings",
+    "BASILISK_EXECUTABLE_PATH": "/workspace/target/release/basilisk"
   },
   "runArgs": ["--memory=16g", "--memory-swap=16g", "--shm-size=4g"],
   "remoteUser": "dev",
-  "postCreateCommand": "rustc --version && cargo clippy --version && python3 --version && node --version",
+  "postCreateCommand": "rustc --version && cargo clippy --version && python3 --version && node --version && gh --version && cargo build --release -p basilisk-cli && cd vscode-extension && npm ci && npm run compile && cd .. && claude mcp add --transport http too-many-cooks http://localhost:4040/mcp --scope user",
   "customizations": {
     "vscode": {
       "extensions": [

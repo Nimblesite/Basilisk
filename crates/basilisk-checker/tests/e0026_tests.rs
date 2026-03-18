@@ -80,3 +80,80 @@ MyT = TypeVar("T")
     );
     Ok(())
 }
+
+#[test]
+fn e0026_constraints_and_bound_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+from typing import TypeVar
+T = TypeVar("T", int, str, bound=object)
+"#;
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"BSK-E0026"),
+        "TypeVar with constraints and bound should fire E0026, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn e0026_parameterized_constraint_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+from typing import TypeVar
+T = TypeVar("T")
+U = TypeVar("U", list[T], dict[str, T])
+"#;
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"BSK-E0026"),
+        "TypeVar with parameterized constraint should fire E0026, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn e0026_parameterized_bound_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+from typing import TypeVar
+T = TypeVar("T")
+U = TypeVar("U", bound=list[T])
+"#;
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"BSK-E0026"),
+        "TypeVar with parameterized bound should fire E0026, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn e0026_typevartuple_name_mismatch_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+from typing import TypeVarTuple
+WrongName = TypeVarTuple("Ts")
+"#;
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"BSK-E0026"),
+        "TypeVarTuple name mismatch should fire E0026, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn e0026_paramspec_name_mismatch_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+from typing import ParamSpec
+WrongName = ParamSpec("P")
+"#;
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"BSK-E0026"),
+        "ParamSpec name mismatch should fire E0026, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}

@@ -2,6 +2,66 @@
 
 use basilisk_resolver::Span;
 
+/// Check if `line` is a simple assignment (e.g. `X = list[T]`), excluding
+/// comparisons (`==`, `!=`, `<=`, `>=`) and augmented assignments (`+=`, etc.).
+/// Used to identify module-level implicit type aliases per PEP 484.
+pub(super) fn is_simple_assignment(line: &str) -> bool {
+    let bytes = line.as_bytes();
+    for (idx, &byte) in bytes.iter().enumerate() {
+        if byte == b'=' {
+            // Skip `==`
+            if bytes.get(idx + 1) == Some(&b'=') {
+                return false;
+            }
+            // Skip `!=`, `<=`, `>=`
+            if idx > 0
+                && bytes
+                    .get(idx - 1)
+                    .is_some_and(|b| matches!(b, b'!' | b'<' | b'>'))
+            {
+                return false;
+            }
+            // Skip augmented assignments (`+=`, `-=`, `*=`, `/=`, etc.)
+            if idx > 0
+                && bytes.get(idx - 1).is_some_and(|b| {
+                    matches!(b, b'+' | b'-' | b'*' | b'/' | b'%' | b'&' | b'|' | b'^')
+                })
+            {
+                return false;
+            }
+            return true;
+        }
+    }
+    false
+}
+
+/// Collect the full text of a function signature that may span multiple lines.
+/// Starting from the `def` line at `start_idx`, concatenates lines until the
+/// closing `)` and `:` are found (or the end of the slice is reached).
+pub(super) fn collect_full_signature(lines: &[&str], start_idx: usize) -> String {
+    let mut sig = String::new();
+    let mut depth = 0i32;
+    for line in lines.iter().skip(start_idx) {
+        if !sig.is_empty() {
+            sig.push(' ');
+        }
+        sig.push_str(line.trim());
+        for ch in line.chars() {
+            match ch {
+                '(' => depth += 1,
+                ')' => {
+                    depth -= 1;
+                    if depth <= 0 {
+                        return sig;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    sig
+}
+
 /// Check if `name` appears as a whole identifier in `text` (not as part of a longer name).
 pub(super) fn contains_typevar_reference(text: &str, typevar_name: &str) -> bool {
     let needle = typevar_name.as_bytes();
@@ -31,21 +91,26 @@ pub(super) fn contains_typevar_reference(text: &str, typevar_name: &str) -> bool
         })
 }
 
-/// Extract `TypeVar` names from a `Generic[T, S, ...]` or similar parameterized base.
+/// Extract `TypeVar` names from a `Generic[T, S, ...]`, `Protocol[T]`, or
+/// similar parameterized base class. PEP 544 specifies that `Protocol[T]`
+/// implicitly binds `T` as a class-level `TypeVar`.
 pub(super) fn extract_typevars_from_generic_base(line: &str) -> std::collections::HashSet<String> {
     let mut result = std::collections::HashSet::new();
-    if let Some(start) = line.find("Generic[") {
-        let after = &line[start + 8..];
-        if let Some(end) = after.find(']') {
-            let params = &after[..end];
-            for param in params.split(',') {
-                let trimmed = param.trim();
-                if !trimmed.is_empty()
-                    && trimmed
-                        .chars()
-                        .all(|c| c.is_ascii_alphanumeric() || c == '_')
-                {
-                    let _ = result.insert(trimmed.to_owned());
+    // Both `Generic[...]` and `Protocol[...]` bind TypeVars in the class scope.
+    for keyword in &["Generic[", "Protocol["] {
+        if let Some(start) = line.find(keyword) {
+            let after = &line[start + keyword.len()..];
+            if let Some(end) = after.find(']') {
+                let params = &after[..end];
+                for param in params.split(',') {
+                    let trimmed = param.trim();
+                    if !trimmed.is_empty()
+                        && trimmed
+                            .chars()
+                            .all(|c| c.is_ascii_alphanumeric() || c == '_')
+                    {
+                        let _ = result.insert(trimmed.to_owned());
+                    }
                 }
             }
         }
@@ -111,12 +176,93 @@ pub(super) fn span_for_line(source: &str, line_number: usize) -> Span {
     }
 }
 
-/// Extract the `TypeVar` names from a `Generic[T, S]` base expression.
-pub(super) fn extract_typevar_params_from_generic(source_line: &str) -> Vec<String> {
-    let Some(start) = source_line.find("Generic[") else {
+/// Extract PEP 695 type parameters from a class definition like `class Foo[T, S](bases):`.
+///
+/// Returns an empty set if the class does not use PEP 695 syntax.
+pub(super) fn extract_pep695_type_params(class_line: &str) -> std::collections::HashSet<String> {
+    let trimmed = class_line.trim();
+    if !trimmed.starts_with("class ") {
+        return std::collections::HashSet::new();
+    }
+    let after_class = &trimmed[6..];
+
+    let Some(bracket_pos) = after_class.find('[') else {
+        return std::collections::HashSet::new();
+    };
+
+    // If `(` appears before `[`, this is traditional `Generic[T]` syntax, not PEP 695
+    if let Some(paren_pos) = after_class.find('(') {
+        if paren_pos < bracket_pos {
+            return std::collections::HashSet::new();
+        }
+    }
+    // If `:` appears before `[`, there are no type params
+    if let Some(colon_pos) = after_class.find(':') {
+        if colon_pos < bracket_pos {
+            return std::collections::HashSet::new();
+        }
+    }
+
+    let inner = &after_class[bracket_pos + 1..];
+    let Some(close) = inner.find(']') else {
+        return std::collections::HashSet::new();
+    };
+
+    inner[..close]
+        .split(',')
+        .map(|s| s.trim().to_owned())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
+/// Extract PEP 695 type parameters in declaration order (preserving order).
+///
+/// Returns a `Vec` with the order matching the source declaration,
+/// unlike [`extract_pep695_type_params`] which returns an unordered `HashSet`.
+pub(super) fn extract_pep695_type_params_ordered(class_line: &str) -> Vec<String> {
+    let trimmed = class_line.trim();
+    if !trimmed.starts_with("class ") {
+        return Vec::new();
+    }
+    let after_class = &trimmed[6..];
+
+    let Some(bracket_pos) = after_class.find('[') else {
         return Vec::new();
     };
-    let after = &source_line[start + 8..];
+    if let Some(paren_pos) = after_class.find('(') {
+        if paren_pos < bracket_pos {
+            return Vec::new();
+        }
+    }
+    if let Some(colon_pos) = after_class.find(':') {
+        if colon_pos < bracket_pos {
+            return Vec::new();
+        }
+    }
+
+    let inner = &after_class[bracket_pos + 1..];
+    let Some(close) = inner.find(']') else {
+        return Vec::new();
+    };
+
+    inner[..close]
+        .split(',')
+        .map(|s| s.trim().to_owned())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
+/// Extract the `TypeVar` names from a `Generic[T, S]` base expression.
+pub(super) fn extract_typevar_params_from_generic(source_line: &str) -> Vec<String> {
+    // Try `Generic[T, ...]` first, then `Protocol[T, ...]`.
+    let (start, prefix_len) = if let Some(pos) = source_line.find("Generic[") {
+        (pos, 8)
+    } else if let Some(pos) = source_line.find("Protocol[") {
+        (pos, 9)
+    } else {
+        return Vec::new();
+    };
+    let after = &source_line[start + prefix_len..];
     let Some(end) = after.find(']') else {
         return Vec::new();
     };

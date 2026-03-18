@@ -18,13 +18,8 @@ export default defineConfig({
     }],
     coverage: {
         includeAll: true,
-        exclude: ['**/test/**', '**/node_modules/**'],
-        reporter: ['text', 'lcov'],
-    },
-    coverage: {
-        includeAll: true,
-        include: ['out/src/**/*.js'],
-        exclude: ['out/src/test/**'],
+        include: ['out/**/*.js'],
+        exclude: ['out/test/**'],
         reporter: ['text', 'lcov'],
         reportsDirectory: path.join(__dirname, 'coverage'),
     },

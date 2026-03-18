@@ -39,6 +39,13 @@ fn parse_complex_annotation(annotation: &str) -> InferredType {
         let inner = annotation["callable[".len()..annotation.len() - 1].trim();
         return parse_callable_annotation(inner);
     }
+    if annotation == "typeform" {
+        return InferredType::TypeForm(Box::new(InferredType::Any));
+    }
+    if annotation.starts_with("typeform[") && annotation.ends_with(']') {
+        let inner = &annotation["typeform[".len()..annotation.len() - 1];
+        return InferredType::TypeForm(Box::new(InferredType::from_annotation(inner)));
+    }
     if annotation.starts_with("final[") && annotation.ends_with(']') {
         let inner = &annotation["final[".len()..annotation.len() - 1];
         return InferredType::from_annotation(inner);

@@ -30,19 +30,43 @@ pub(super) struct ConstrainedTypeVar {
 impl ConstrainedTypeVar {
     /// Returns the constraint group index (0-based) that `ty` belongs to, or
     /// `None` when `ty` is not a known constraint.
-    pub(super) fn group_of(&self, ty: &str) -> Option<usize> {
+    pub(super) fn group_of(
+        &self,
+        ty: &str,
+        class_bases: &HashMap<String, Vec<String>>,
+    ) -> Option<usize> {
         self.constraints
             .iter()
             .enumerate()
             .find_map(|(idx, constraint)| {
-                (ty == constraint.as_str() || is_subtype_of(ty, constraint)).then_some(idx)
+                (ty == constraint.as_str() || is_subtype_of(ty, constraint, class_bases))
+                    .then_some(idx)
             })
     }
 }
 
-/// Returns `true` when `subtype` is a well-known subtype of `supertype`.
-fn is_subtype_of(subtype: &str, supertype: &str) -> bool {
-    matches!((subtype, supertype), ("bool", "int"))
+/// Returns `true` when `subtype` is a well-known subtype of `supertype`,
+/// or when class inheritance shows `subtype` inherits from `supertype`.
+fn is_subtype_of(
+    subtype: &str,
+    supertype: &str,
+    class_bases: &HashMap<String, Vec<String>>,
+) -> bool {
+    // Built-in subtype relationships.
+    if matches!((subtype, supertype), ("bool", "int")) {
+        return true;
+    }
+    // Check class inheritance chain.
+    if let Some(bases) = class_bases.get(subtype) {
+        if bases.iter().any(|b| b == supertype) {
+            return true;
+        }
+        // Recursive: check if any base is a subtype of supertype.
+        return bases
+            .iter()
+            .any(|b| is_subtype_of(b, supertype, class_bases));
+    }
+    false
 }
 
 /// A function signature with constrained `TypeVar` parameters.
@@ -69,6 +93,9 @@ pub(super) struct ModuleContext {
     /// Classes that represent Mapping types with known key types.
     /// Maps class name -> (`key_type_text`, `value_type_text`).
     pub(super) mapping_vars: HashMap<String, (String, String)>,
+    /// Class inheritance: maps class name -> list of base class names.
+    /// Used for resolving subclass-to-constraint matching in `TypeVar` checks.
+    pub(super) class_bases: HashMap<String, Vec<String>>,
 }
 
 impl ModuleContext {
@@ -113,11 +140,25 @@ impl ModuleContext {
             }
         }
 
+        // Pass 3: collect class inheritance for subtype resolution.
+        let mut class_bases: HashMap<String, Vec<String>> = HashMap::new();
+        for stmt in stmts {
+            if let Stmt::ClassDef(cls) = stmt {
+                if let Some(args) = &cls.arguments {
+                    let bases: Vec<String> = args.args.iter().map(ann_str).collect();
+                    if !bases.is_empty() {
+                        let _ = class_bases.insert(cls.name.to_string(), bases);
+                    }
+                }
+            }
+        }
+
         Self {
             constrained_tvars,
             constrained_funcs,
             var_types,
             mapping_vars,
+            class_bases,
         }
     }
 }
@@ -214,6 +255,72 @@ pub(super) fn parse_mapping_annotation(ann: &str) -> Option<(String, String)> {
     Some((key_ty, val_ty))
 }
 
+/// Resolve a `Mapping` annotation, handling custom subclasses with reordered `Generic` params.
+///
+/// For `MyMap2[int, str]` where `MyMap2(Mapping[K, V], Generic[V, K])`,
+/// resolves `Generic[V, K]` specialization order (`V=int, K=str`) then maps
+/// `Mapping[K, V]` to `key=K=str, value=V=int`. Returns `(key_type, value_type)`.
+pub(super) fn resolve_mapping_annotation(
+    ann: &str,
+    class_bases: &HashMap<String, Vec<String>>,
+) -> Option<(String, String)> {
+    // First try direct Mapping/dict annotation.
+    let bracket = ann.find('[')?;
+    let class_name = ann.get(..bracket)?.trim();
+
+    // Direct Mapping/dict — use first two args directly.
+    if matches!(
+        class_name,
+        "Mapping" | "Dict" | "dict" | "MutableMapping" | "OrderedDict" | "DefaultDict"
+    ) {
+        return parse_mapping_annotation(ann);
+    }
+
+    // Custom class — check if it inherits from Mapping via class_bases.
+    let bases = class_bases.get(class_name)?;
+    let mapping_base = bases
+        .iter()
+        .find(|b| b.starts_with("Mapping[") || b.starts_with("MutableMapping["))?;
+    let generic_base = bases.iter().find(|b| b.starts_with("Generic["));
+
+    // Parse the specialization args from the annotation.
+    let inner = ann.get(bracket + 1..ann.rfind(']')?)?;
+    let spec_args: Vec<String> = split_top_level(inner)
+        .into_iter()
+        .map(|s| s.trim().to_owned())
+        .collect();
+
+    // Parse Generic param order if available.
+    if let Some(generic) = generic_base {
+        let gb = generic.find('[')?;
+        let generic_inner = generic.get(gb + 1..generic.rfind(']')?)?;
+        let generic_params: Vec<&str> = generic_inner.split(',').map(str::trim).collect();
+
+        // Build substitution map: generic_param → specialized_arg
+        let mut subs: HashMap<&str, &str> = HashMap::new();
+        for (idx, param) in generic_params.iter().enumerate() {
+            if let Some(arg) = spec_args.get(idx) {
+                let _ = subs.insert(param, arg.as_str());
+            }
+        }
+
+        // Parse Mapping[K, V] to find key/value param names.
+        let mb = mapping_base.find('[')?;
+        let mapping_inner = mapping_base.get(mb + 1..mapping_base.rfind(']')?)?;
+        let mapping_params: Vec<&str> = mapping_inner.split(',').map(str::trim).collect();
+        let key_param = mapping_params.first()?;
+        let val_param = mapping_params.get(1)?;
+
+        // Substitute.
+        let key_ty = subs.get(key_param).unwrap_or(key_param);
+        let val_ty = subs.get(val_param).unwrap_or(val_param);
+        return Some(((*key_ty).to_owned(), (*val_ty).to_owned()));
+    }
+
+    // No Generic base — assume direct parameter order matches Mapping.
+    parse_mapping_annotation(ann)
+}
+
 // ---------------------------------------------------------------------------
 // Call-site checking (constrained TypeVar)
 // ---------------------------------------------------------------------------
@@ -247,7 +354,7 @@ pub(super) fn check_call(
         if arg_type_str == "Any" {
             continue;
         }
-        let Some(group) = constrained_tv.group_of(&arg_type_str) else {
+        let Some(group) = constrained_tv.group_of(&arg_type_str, &ctx.class_bases) else {
             continue;
         };
 

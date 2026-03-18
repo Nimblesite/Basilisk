@@ -111,7 +111,7 @@ impl Rule for DeprecatedUsage {
             deprecated_members: &deprecated_members,
             var_types: &var_types,
             path: &module.path,
-            _def_spans: &def_spans,
+            def_spans: &def_spans,
         };
         for stmt in &parsed.ast.body {
             visit_stmt_for_usage(stmt, &ctx, diagnostics);

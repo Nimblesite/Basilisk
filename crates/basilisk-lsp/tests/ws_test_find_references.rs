@@ -13,6 +13,10 @@
 mod ws_test_common;
 use ws_test_common::*;
 
+use std::time::Duration;
+
+use futures_util::StreamExt;
+
 #[tokio::test]
 async fn test_ws_find_references() -> TestResult<()> {
     let uri = "file:///ws_refs.py";
@@ -232,5 +236,76 @@ b: str = greeting(\"world\")
         );
     }
 
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_find_references_cross_file() -> TestResult<()> {
+    // Set up workspace: helpers.py defines `greet`, main.py imports and uses it.
+    let dir = unique_temp_dir("bsk_refs_cross_file");
+    std::fs::create_dir_all(&dir)?;
+
+    std::fs::write(
+        dir.join("helpers.py"),
+        "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n",
+    )?;
+    std::fs::write(
+        dir.join("main.py"),
+        "from helpers import greet\n\nresult: str = greet(\"world\")\n",
+    )?;
+
+    let root_uri = format!("file://{}", dir.display());
+    let helpers_uri = format!("file://{}", dir.join("helpers.py").display());
+
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = initialize_with_root(&mut fixture, &root_uri, "crossModule").await?;
+
+    // Drain startup messages.
+    for _ in 0..20 {
+        let msg = tokio::time::timeout(Duration::from_millis(500), fixture.ws_read.next()).await;
+        if msg.is_err() {
+            break;
+        }
+    }
+
+    // Find references for `greet` at its definition in helpers.py (line 0, char 4).
+    let resp = fixture
+        .request(
+            600,
+            "textDocument/references",
+            serde_json::json!({
+                "textDocument": { "uri": helpers_uri },
+                "position": { "line": 0, "character": 4 },
+                "context": { "includeDeclaration": true }
+            }),
+        )
+        .await?
+        .ok_or("no response to cross-file find references")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let refs = parsed["result"]
+        .as_array()
+        .ok_or("references result should be an array")?;
+
+    // Should find references in BOTH helpers.py and main.py.
+    let helpers_count = refs
+        .iter()
+        .filter(|r| r["uri"].as_str().unwrap_or("").contains("helpers.py"))
+        .count();
+    let main_count = refs
+        .iter()
+        .filter(|r| r["uri"].as_str().unwrap_or("").contains("main.py"))
+        .count();
+
+    assert!(
+        helpers_count >= 1,
+        "should find at least 1 reference in helpers.py (definition), got {helpers_count}: {resp}"
+    );
+    assert!(
+        main_count >= 1,
+        "should find at least 1 reference in main.py (usage), got {main_count}: {resp}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
     Ok(())
 }

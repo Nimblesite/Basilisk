@@ -272,6 +272,7 @@ pub(super) fn is_user_defined_type_alias(ty: &str) -> bool {
         "NotRequired",
         "ReadOnly",
         "TypeAlias",
+        "TypeForm",
         "SupportsInt",
         "SupportsFloat",
         "SupportsComplex",

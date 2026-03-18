@@ -91,6 +91,7 @@ pub(super) fn function_info_from(
         return_stmts,
         def_span: text_range_to_span(func.range),
         name_span: text_range_to_span(func.name.range),
+        params_end: func.parameters.range().end().to_u32(),
         return_annotation_span,
         class_name,
         all_local_assigns,
@@ -415,6 +416,7 @@ pub(super) fn collect_name_refs_from_expr(expr: &Expr, out: &mut Vec<String>) {
                 collect_name_refs_from_expr(arg, out);
             }
         }
+        Expr::Starred(starred) => collect_name_refs_from_expr(&starred.value, out),
         _ => {}
     }
 }
@@ -443,6 +445,7 @@ pub(super) fn collect_name_refs_with_spans(expr: &Expr, out: &mut Vec<(String, S
                 collect_name_refs_with_spans(arg, out);
             }
         }
+        Expr::Starred(starred) => collect_name_refs_with_spans(&starred.value, out),
         _ => {}
     }
 }
