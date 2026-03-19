@@ -13,6 +13,7 @@
 //! cross-module symbol population, and diagnostic checking.
 
 #[allow(dead_code)]
+#[path = "lsp/ws_test_common.rs"]
 mod ws_test_common;
 
 use ws_test_common::{initialize_with_root, unique_temp_dir, WsTestFixture};
