@@ -240,14 +240,14 @@ header "VS Code extension — coverage threshold"
 VSIX_LCOV="$REPO_ROOT/vscode-extension/coverage/lcov.info"
 TEST_COVERAGE_VSIX="${TEST_COVERAGE_VSIX:-60}"
 if [[ -f "$VSIX_LCOV" ]]; then
-    vsix_total=$(grep -c "^DA:" "$VSIX_LCOV" || echo 0)
+    vsix_total=$(grep -c "^DA:" "$VSIX_LCOV" || true)
 else
     vsix_total=0
 fi
 if [[ "$vsix_total" -eq 0 ]]; then
     warn "vscode-extension: no LCOV data — V8 coverage cannot instrument the VS Code extension host process. Skipping threshold."
 else
-    vsix_covered=$(grep -c "^DA:[^,]*,[^0]" "$VSIX_LCOV" || echo 0)
+    vsix_covered=$(grep -c "^DA:[^,]*,[^0]" "$VSIX_LCOV" || true)
     vsix_pct=$((vsix_covered * 100 / vsix_total))
     if [[ "$vsix_pct" -lt "$TEST_COVERAGE_VSIX" ]]; then
         echo -e "  ${RED}✗ vscode-extension: ${vsix_pct}% < ${TEST_COVERAGE_VSIX}% threshold — FAIL${RESET}"

@@ -116,9 +116,9 @@ clone_on_ref_ptr     = "deny"
 # Use via `cargo test --profile ci` or `cargo llvm-cov --profile ci`.
 # Trades peak runtime speed for much faster compilation and linking.
 [profile.ci]
-inherits = "release"
+inherits = "dev"
 opt-level = 1
-codegen-units = 256
-lto = "thin"
+codegen-units = 16
+lto = false
 debug = 2
 incremental = false
