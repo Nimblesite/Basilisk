@@ -307,14 +307,21 @@ pub fn assert_valid_semantic_token_data(data: &[serde_json::Value], resp: &str) 
 }
 
 /// Create a uniquely-named temporary directory.
+///
+/// Uses PID (unique across binaries) + atomic counter (unique within a binary)
+/// + subsecond nanos to avoid collisions when tests run in parallel.
 #[must_use]
 pub fn unique_temp_dir(prefix: &str) -> std::path::PathBuf {
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .subsec_nanos();
-    std::env::temp_dir().join(format!("{prefix}_{nanos}"))
+    let pid = std::process::id();
+    let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
+    std::env::temp_dir().join(format!("{prefix}_{pid}_{nanos}_{seq}"))
 }
 
 /// Initialize the server with a `rootUri` and analysis mode.
