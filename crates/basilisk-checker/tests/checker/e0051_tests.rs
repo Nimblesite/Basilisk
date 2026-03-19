@@ -1,0 +1,153 @@
+// Integration tests for BSK-E0051: Invalid Literal parameterization.
+
+use super::common::*;
+
+#[test]
+fn e0051_valid_int_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Literal
+x: Literal[1] = 1
+";
+    let diags = run(source)?;
+
+    let msgs = messages_for(&diags, "BSK-E0051");
+    assert!(msgs.is_empty(), "valid Literal[1] should not fire E0051");
+    Ok(())
+}
+
+#[test]
+fn e0051_valid_str_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+from typing import Literal
+x: Literal["hello"] = "hello"
+"#;
+    let diags = run(source)?;
+
+    let msgs = messages_for(&diags, "BSK-E0051");
+    assert!(
+        msgs.is_empty(),
+        "valid Literal[\"hello\"] should not fire E0051"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0051_valid_bool_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Literal
+x: Literal[True] = True
+";
+    let diags = run(source)?;
+
+    let msgs = messages_for(&diags, "BSK-E0051");
+    assert!(msgs.is_empty(), "valid Literal[True] should not fire E0051");
+    Ok(())
+}
+
+#[test]
+fn e0051_valid_none_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Literal
+x: Literal[None] = None
+";
+    let diags = run(source)?;
+
+    let msgs = messages_for(&diags, "BSK-E0051");
+    assert!(msgs.is_empty(), "valid Literal[None] should not fire E0051");
+    Ok(())
+}
+
+#[test]
+fn e0051_float_literal_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Literal
+x: Literal[3.14] = 3.14
+";
+    let diags = run(source)?;
+
+    let msgs = messages_for(&diags, "BSK-E0051");
+    assert!(
+        !msgs.is_empty(),
+        "Literal[3.14] should fire E0051, got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0051_bare_literal_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Literal
+x: Literal
+";
+    let diags = run(source)?;
+
+    let msgs = messages_for(&diags, "BSK-E0051");
+    assert!(
+        !msgs.is_empty(),
+        "bare Literal should fire E0051, got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0051_type_object_in_literal_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Literal
+x: Literal[int]
+";
+    let diags = run(source)?;
+
+    let msgs = messages_for(&diags, "BSK-E0051");
+    assert!(
+        !msgs.is_empty(),
+        "Literal[int] should fire E0051, got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0051_ellipsis_in_literal_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Literal
+x: Literal[...]
+";
+    let diags = run(source)?;
+
+    let msgs = messages_for(&diags, "BSK-E0051");
+    assert!(
+        !msgs.is_empty(),
+        "Literal[...] should fire E0051, got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0051_valid_negative_int_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Literal
+x: Literal[-1] = -1
+";
+    let diags = run(source)?;
+
+    let msgs = messages_for(&diags, "BSK-E0051");
+    assert!(msgs.is_empty(), "Literal[-1] should not fire E0051");
+    Ok(())
+}
+
+#[test]
+fn e0051_valid_enum_member_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Literal
+from enum import Enum
+
+class Color(Enum):
+    RED = 1
+
+x: Literal[Color.RED]
+";
+    let diags = run(source)?;
+
+    let msgs = messages_for(&diags, "BSK-E0051");
+    assert!(msgs.is_empty(), "Literal[Color.RED] should not fire E0051");
+    Ok(())
+}
