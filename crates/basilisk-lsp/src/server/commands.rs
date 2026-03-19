@@ -317,7 +317,10 @@ async fn execute_fix_file(
         dbg(&format!("applying edit with {edit_count} text edits"));
         match server.client.apply_edit(edit).await {
             Ok(response) => {
-                dbg(&format!("apply_edit response: applied={}, failure_reason={:?}", response.applied, response.failure_reason));
+                dbg(&format!(
+                    "apply_edit response: applied={}, failure_reason={:?}",
+                    response.applied, response.failure_reason
+                ));
                 if response.applied {
                     info!(uri = %uri, edit_count, "fixFile: edits applied successfully");
                     // Clear stale diagnostics immediately — the client confirmed

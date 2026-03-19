@@ -15,13 +15,13 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/BSK-E0130",
 };
 
-/// Check if `sub` is a numeric subtype of `sup` in the Python type hierarchy.
-fn is_numeric_subtype(sub: &str, sup: &str) -> bool {
-    if sub == sup {
+/// Check if `subtype` is a numeric subtype of `supertype` in the Python type hierarchy.
+fn is_numeric_subtype(subtype: &str, supertype: &str) -> bool {
+    if subtype == supertype {
         return true;
     }
     matches!(
-        (sub, sup),
+        (subtype, supertype),
         ("bool", "int" | "float" | "complex") | ("int", "float" | "complex") | ("float", "complex")
     )
 }
