@@ -2,14 +2,6 @@
 
 use super::ws_test_common::*;
 
-use std::time::Duration;
-
-use futures_util::StreamExt;
-
-use std::time::Duration;
-
-use futures_util::StreamExt;
-
 #[tokio::test]
 async fn test_ws_find_references() -> TestResult<()> {
     let uri = "file:///ws_refs.py";

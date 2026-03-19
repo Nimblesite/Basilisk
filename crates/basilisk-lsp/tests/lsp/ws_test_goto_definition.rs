@@ -2,14 +2,6 @@
 
 use super::ws_test_common::*;
 
-use std::time::Duration;
-
-use futures_util::StreamExt;
-
-use std::time::Duration;
-
-use futures_util::StreamExt;
-
 #[tokio::test]
 async fn test_ws_goto_definition_function() -> TestResult<()> {
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n";

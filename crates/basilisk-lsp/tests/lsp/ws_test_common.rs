@@ -3,9 +3,9 @@
 // Every WS test file imports this module via `mod ws_test_common;` to get
 // the fixture, type alias, and common helper functions.
 
-use std::time::Duration;
+pub use std::time::Duration;
 
-use futures_util::{SinkExt, StreamExt};
+pub use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpListener;
 use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::Message;
