@@ -78,7 +78,7 @@ rustup component add llvm-tools-preview 2>/dev/null || true
 header "Running tests with coverage instrumentation"
 set +e
 cargo llvm-cov \
-    --release \
+    --profile ci \
     --workspace \
     --exclude basilisk-compiler \
     --all-targets \
@@ -96,29 +96,34 @@ if [[ "$TESTS_EXIT" -ne 0 ]]; then
 fi
 ok "All workspace tests passed"
 
-# cargo-llvm-cov places binaries under target/llvm-cov-target/release/.
-BASILISK_BIN="$REPO_ROOT/target/llvm-cov-target/release/basilisk"
+# cargo-llvm-cov places binaries under target/llvm-cov-target/<profile>/.
+BASILISK_BIN="$REPO_ROOT/target/llvm-cov-target/ci/basilisk"
 if [[ ! -x "$BASILISK_BIN" ]]; then
-    # Fallback to standard target dir in case cargo-llvm-cov behavior changes.
-    BASILISK_BIN="$REPO_ROOT/target/release/basilisk"
+    # Fallback paths in case cargo-llvm-cov behavior changes.
+    for fallback in "$REPO_ROOT/target/llvm-cov-target/release/basilisk" "$REPO_ROOT/target/ci/basilisk" "$REPO_ROOT/target/release/basilisk"; do
+        if [[ -x "$fallback" ]]; then
+            BASILISK_BIN="$fallback"
+            break
+        fi
+    done
 fi
 if [[ ! -x "$BASILISK_BIN" ]]; then
     echo -e "${RED}${BOLD}FATAL: basilisk binary not found after coverage build.${RESET}"
-    echo -e "${RED}Checked: target/llvm-cov-target/release/basilisk and target/release/basilisk${RESET}"
+    echo -e "${RED}Checked: target/llvm-cov-target/ci/ and fallback paths${RESET}"
     exit 1
 fi
 ok "basilisk binary ready: $BASILISK_BIN"
 
-cargo llvm-cov report --release --html --output-dir "$HTML_DIR"
+cargo llvm-cov report --profile ci --html --output-dir "$HTML_DIR"
 ok "HTML report → $HTML_DIR/index.html"
 
 header "Running passing compiler E2E tests (hello, arithmetic)"
 BASILISK_COMPILER_FILTER="hello,arithmetic" \
-    cargo test --release -p basilisk-compiler --test e2e_tests -- --nocapture
+    cargo test --profile ci -p basilisk-compiler --test e2e_tests -- --nocapture
 ok "Compiler E2E tests passed"
 
 header "Coverage summary"
-REPORT=$(cargo llvm-cov report --release 2>&1)
+REPORT=$(cargo llvm-cov report --profile ci 2>&1)
 echo "$REPORT"
 echo ""
 echo -e "${BOLD}VSCode:${RESET} install 'Coverage Gutters' (ryanluker.vscode-coverage-gutters),"
@@ -235,14 +240,14 @@ header "VS Code extension — coverage threshold"
 VSIX_LCOV="$REPO_ROOT/vscode-extension/coverage/lcov.info"
 TEST_COVERAGE_VSIX="${TEST_COVERAGE_VSIX:-60}"
 if [[ -f "$VSIX_LCOV" ]]; then
-    vsix_total=$(grep -c "^DA:" "$VSIX_LCOV" || echo 0)
+    vsix_total=$(grep -c "^DA:" "$VSIX_LCOV" || true)
 else
     vsix_total=0
 fi
 if [[ "$vsix_total" -eq 0 ]]; then
     warn "vscode-extension: no LCOV data — V8 coverage cannot instrument the VS Code extension host process. Skipping threshold."
 else
-    vsix_covered=$(grep -c "^DA:[^,]*,[^0]" "$VSIX_LCOV" || echo 0)
+    vsix_covered=$(grep -c "^DA:[^,]*,[^0]" "$VSIX_LCOV" || true)
     vsix_pct=$((vsix_covered * 100 / vsix_total))
     if [[ "$vsix_pct" -lt "$TEST_COVERAGE_VSIX" ]]; then
         echo -e "  ${RED}✗ vscode-extension: ${vsix_pct}% < ${TEST_COVERAGE_VSIX}% threshold — FAIL${RESET}"
@@ -256,7 +261,7 @@ cd "$REPO_ROOT"
 
 header "Zed extension — tests"
 cd "$REPO_ROOT/basilisk-zed"
-cargo test --release --all-targets
+cargo test --profile ci --all-targets
 ok "Zed extension done"
 cd "$REPO_ROOT"
 

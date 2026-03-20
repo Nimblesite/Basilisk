@@ -7,6 +7,7 @@ FROM rust:1.94.0-bookworm
 # libgtk-3-0, libxss1, libxtst6, libasound2, libatk-bridge2.0-0 (Electron/Chromium stack)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     software-properties-common \
+    lld \
     xvfb \
     xauth \
     curl \

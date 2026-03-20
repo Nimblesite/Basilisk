@@ -30,6 +30,9 @@ jobs:
         with:
           cache-on-failure: true
 
+      - name: Install lld
+        run: sudo apt-get update && sudo apt-get install -y lld
+
       - name: cargo fmt --check
         run: cargo fmt --all --check
 
@@ -78,10 +81,11 @@ jobs:
       - name: Install Python test dependencies
         run: pip install debugpy ruff
 
-      - name: Install xvfb and VS Code test dependencies
+      - name: Install lld, xvfb, and VS Code test dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            lld \
             xvfb \
             libnspr4 \
             libnss3 \

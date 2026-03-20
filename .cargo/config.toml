@@ -1,2 +1,7 @@
 [alias]
 c = "clippy --all-targets"
+
+# Use lld for faster linking on Linux (CI runners).
+# macOS uses the system linker (already fast); this cfg gate is Linux-only.
+[target.'cfg(target_os = "linux")']
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
