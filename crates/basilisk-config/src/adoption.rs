@@ -492,4 +492,46 @@ demoted = ["BSK-E0001", "BSK-E0002"]
             r#"demoted = ["BSK-E0001", "BSK-E0002", "BSK-E0003"]"#
         );
     }
+
+    #[test]
+    fn read_error_display_includes_io_message() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "access denied");
+        let adoption_err = AdoptionError::ReadError(io_err);
+        let display = adoption_err.to_string();
+        assert!(
+            display.contains("failed to read adoptions.toml"),
+            "ReadError display should mention file: {display}"
+        );
+        assert!(
+            display.contains("access denied"),
+            "ReadError display should include underlying message: {display}"
+        );
+    }
+
+    #[test]
+    fn write_error_display_includes_io_message() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::ReadOnlyFilesystem, "disk full");
+        let adoption_err = AdoptionError::WriteError(io_err);
+        let display = adoption_err.to_string();
+        assert!(
+            display.contains("failed to write adoptions.toml"),
+            "WriteError display should mention file: {display}"
+        );
+        assert!(
+            display.contains("disk full"),
+            "WriteError display should include underlying message: {display}"
+        );
+    }
+
+    #[test]
+    fn adoption_error_is_std_error() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "not found");
+        let adoption_err = AdoptionError::ReadError(io_err);
+        // Verify the error implements std::error::Error by using it as a trait object.
+        let error_ref: &dyn std::error::Error = &adoption_err;
+        assert!(
+            !error_ref.to_string().is_empty(),
+            "error display should produce non-empty string"
+        );
+    }
 }

@@ -980,7 +980,7 @@ function summarizeBody(body: unknown): string {
  * If binding fails with EADDRINUSE, something is listening (returns true).
  * This avoids making a TCP connection that would consume debugpy's single slot.
  */
-function isPortAlive(_host: string, port: number): Promise<boolean> {
+async function isPortAlive(_host: string, port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const server = net.createServer();
     server.once("error", (err: NodeJS.ErrnoException) => {
@@ -1028,14 +1028,14 @@ async function createDebugAdapterDescriptor(
     if (!alive && client) {
       Logger.warn(`[Basilisk Debug] Port ${port} is dead — respawning debugpy adapter`);
       try {
-        const result = await vscode.commands.executeCommand<{
-          host: string;
-          port: number;
-        }>(
-          "basilisk.startDebugSession",
-          { python: (config.python as string | undefined) ?? null }
+        const result = await client.sendRequest<{ host: string; port: number } | null>(
+          "workspace/executeCommand",
+          {
+            command: "basilisk.startDebugSession",
+            arguments: [{ python: (config.python as string | undefined) ?? null }],
+          }
         );
-        if (result !== undefined && typeof result.port === "number") {
+        if (result !== undefined && result !== null && typeof result.port === "number") {
           Logger.info(`[Basilisk Debug] Respawned debugpy on ${result.host}:${result.port}`);
           host = result.host;
           port = result.port;
@@ -1071,11 +1071,16 @@ async function createDebugAdapterDescriptor(
 
   let result: { host: string; port: number; sessionId: string } | null;
   try {
-    // Use vscode.commands.executeCommand which the vscode-languageclient
-    // bridges to workspace/executeCommand on the LSP server automatically.
-    result = await vscode.commands.executeCommand<{ host: string; port: number; sessionId: string } | null>(
-      "basilisk.startDebugSession",
-      { python: configuredPython }
+    // Send workspace/executeCommand directly to the LSP server.
+    // Do NOT use vscode.commands.executeCommand — vscode-languageclient's
+    // auto-registered command handler swallows server errors and returns
+    // undefined instead of propagating the JSON-RPC error.
+    result = await client.sendRequest<{ host: string; port: number; sessionId: string } | null>(
+      "workspace/executeCommand",
+      {
+        command: "basilisk.startDebugSession",
+        arguments: [{ python: configuredPython }],
+      }
     );
 
     if (!result || typeof result.port !== "number") {

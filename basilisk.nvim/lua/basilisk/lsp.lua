@@ -1,6 +1,6 @@
 --- LSP client configuration and lifecycle management.
 ---
---- Uses Neovim 0.10+ built-in LSP client (vim.lsp.config / vim.lsp.enable).
+--- Uses Neovim 0.11+ built-in LSP client (vim.lsp.config / vim.lsp.enable).
 --- All 21 core LSP features are native — zero custom implementation needed.
 
 local binary = require("basilisk.binary")

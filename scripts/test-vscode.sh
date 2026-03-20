@@ -33,6 +33,10 @@ npm ci
 npm run compile
 ok "TypeScript compiled"
 
+header "VS Code extension — ESLint"
+npm run lint
+ok "ESLint passed"
+
 header "VS Code E2E tests"
 VSCODE_TEST_CMD="npm test -- --coverage"
 # On headless CI (no DISPLAY), wrap with xvfb-run so VS Code can start.

@@ -113,7 +113,7 @@ export class DapTcpProxy {
     return this.startServer();
   }
 
-  private connectToDebugpy(): Promise<void> {
+  private async connectToDebugpy(): Promise<void> {
     return new Promise((resolve, reject) => {
       this.debugpySocket = net.createConnection(this.debugpyPort, this.debugpyHost, () => {
         Logger.info(`[DAP Proxy] connected to debugpy at ${this.debugpyHost}:${this.debugpyPort}`);
@@ -130,7 +130,7 @@ export class DapTcpProxy {
     });
   }
 
-  private startServer(): Promise<number> {
+  private async startServer(): Promise<number> {
     return new Promise((resolve, reject) => {
       this.server = net.createServer((socket) => {
         Logger.info("[DAP Proxy] VS Code connected to proxy");

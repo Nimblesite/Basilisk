@@ -2,12 +2,12 @@ import tseslint from 'typescript-eslint';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
-const { masterRules, testOverrides } = require('../eslint-rules.cjs');
+const { masterRules, testOverrides } = require('./eslint-rules.cjs');
 
 export default tseslint.config(
   // Global ignores
   {
-    ignores: ['out/', 'coverage/', 'scripts/', '*.config.*'],
+    ignores: ['out/', 'coverage/', 'scripts/', '*.config.*', '.vscode-test/', 'node_modules/', '.vscode-test.mjs', 'eslint-rules.cjs'],
   },
 
   // Base configs: strict + stylistic type-checked
@@ -29,7 +29,7 @@ export default tseslint.config(
       // Project-specific: VSIX uses function declarations for hoisting
       'func-style': ['error', 'declaration'],
       // Matches CLAUDE.md 500 LOC rule. extension.ts (1120 lines) needs splitting.
-      'max-lines': ['warn', { max: 500, skipBlankLines: true, skipComments: true }],
+      'max-lines': ['error', { max: 500, skipBlankLines: true, skipComments: true }],
       'max-params': ['error', 3],
       // Project-specific: class methods that implement TreeDataProvider
       'class-methods-use-this': ['error', {

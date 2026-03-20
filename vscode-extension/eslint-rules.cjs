@@ -1,12 +1,12 @@
 // Shared ESLint rules for all Basilisk JS/TS projects.
 //
 // Import in each project's eslint.config.mjs:
-//   const { masterRules, testOverrides } = require('../eslint-rules.cjs');
+//   const { masterRules, testOverrides } = require('./eslint-rules.cjs');
 
 /** @type {Record<string, import('eslint').Linter.RuleEntry>} */
 const masterRules = {
   // ── Style & Readability ──────────────────────────────────────────────
-  'no-console': 'warn',
+  'no-console': 'error',
   'no-debugger': 'error',
   'no-eval': 'error',
   'no-implied-eval': 'error',
@@ -77,11 +77,24 @@ const masterRules = {
   }],
   // 12. Switch exhaustiveness — every enum case must be handled
   '@typescript-eslint/switch-exhaustiveness-check': 'error',
+  // 13. No confusing void expression — void only in statements, not values
+  '@typescript-eslint/no-confusing-void-expression': ['error', {
+    ignoreArrowShorthand: true,
+    ignoreVoidOperator: false,
+  }],
+  // 14. No unnecessary type assertion — remove useless `as X` casts
+  '@typescript-eslint/no-unnecessary-type-assertion': 'error',
+  // 15. Await thenable only — catch `await nonPromise` bugs
+  '@typescript-eslint/await-thenable': 'error',
+  // 16. No unsafe enum comparison — prevent enum vs unrelated value comparisons
+  '@typescript-eslint/no-unsafe-enum-comparison': 'error',
+  // 17. Promise function async — if it returns a Promise, mark it async
+  '@typescript-eslint/promise-function-async': 'error',
 
   // ── Complexity limits ────────────────────────────────────────────────
   'max-depth': ['error', 4],
-  'max-lines-per-function': ['warn', { max: 60, skipBlankLines: true, skipComments: true }],
-  'complexity': ['warn', 15],
+  'max-lines-per-function': ['error', { max: 60, skipBlankLines: true, skipComments: true }],
+  'complexity': ['error', 15],
 };
 
 /** @type {Record<string, import('eslint').Linter.RuleEntry>} */
@@ -105,6 +118,8 @@ const testOverrides = {
   '@typescript-eslint/no-require-imports': 'off',
   // Tests don't need explicit member accessibility.
   '@typescript-eslint/explicit-member-accessibility': 'off',
+  // Test helpers return bare promises for chaining.
+  '@typescript-eslint/promise-function-async': 'off',
 };
 
 module.exports = { masterRules, testOverrides };

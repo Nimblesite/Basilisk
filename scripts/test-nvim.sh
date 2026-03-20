@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run Neovim extension real LSP e2e and screenshot regression tests.
 #
-# Requires: nvim 0.10+, basilisk binary.
+# Requires: nvim 0.11+, basilisk binary.
 # Set BASILISK_BIN to override the binary path.
 #
 # Usage:

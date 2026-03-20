@@ -7,6 +7,8 @@ node_modules/.package-lock.json
 out/test/**
 tsconfig.json
 .eslintrc*
+eslint-rules.cjs
+eslint.config.mjs
 **/*.ts
 **/*.map
 .gitignore
