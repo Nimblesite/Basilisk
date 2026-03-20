@@ -62,19 +62,26 @@ ok "All dependencies present"
 "$SCRIPTS/test-rust.sh" $OPEN_FLAG
 
 # ── Phase 2: Extension tests in parallel ───────────────────────────────────
+# Each script's output streams in real-time with a [name] prefix.
+# Exit codes are captured via PIPESTATUS to temp files so a failing script
+# always propagates even if sed exits 0.
 
 header "Running extension tests in parallel"
 PIDS=()
 NAMES=()
-LOGS=()
+RC_FILES=()
 
 run_parallel() {
     local name="$1" script="$2"
-    local log
-    log=$(mktemp)
+    local rc_file
+    rc_file=$(mktemp)
     NAMES+=("$name")
-    LOGS+=("$log")
-    "$script" >"$log" 2>&1 &
+    RC_FILES+=("$rc_file")
+    (
+        set +e
+        "$script" 2>&1 | sed -u "s/^/[${name}] /"
+        echo "${PIPESTATUS[0]}" > "$rc_file"
+    ) &
     PIDS+=($!)
 }
 
@@ -84,15 +91,15 @@ run_parallel "zed"    "$SCRIPTS/test-zed.sh"
 
 FAILED=0
 for i in "${!PIDS[@]}"; do
-    if wait "${PIDS[$i]}"; then
-        ok "${NAMES[$i]} passed"
-    else
-        echo -e "${RED}✗ ${NAMES[$i]} FAILED${RESET}"
+    wait "${PIDS[$i]}" || true
+    rc=$(cat "${RC_FILES[$i]}")
+    if [[ "$rc" -ne 0 ]]; then
+        echo -e "${RED}✗ ${NAMES[$i]} FAILED (exit $rc)${RESET}"
         FAILED=1
+    else
+        ok "${NAMES[$i]} passed"
     fi
-    # Always print the log output so failures are visible.
-    cat "${LOGS[$i]}"
-    rm -f "${LOGS[$i]}"
+    rm -f "${RC_FILES[$i]}"
 done
 
 if [[ "$FAILED" -ne 0 ]]; then
