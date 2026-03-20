@@ -46,21 +46,25 @@ pub mod commands {
 
     /// Command names advertised via `executeCommandProvider` capabilities.
     ///
-    /// **Excludes `FIX_FILE`** — that command is registered manually by the
-    /// VS Code extension (it needs the active editor URI), so advertising it
-    /// here would cause a "command already exists" conflict when the LSP
-    /// client's `ExecuteCommandFeature` tries to auto-register it.
+    /// **Excludes commands registered by editor extensions** (VS Code, Zed)
+    /// on the client side. When a command is registered both here AND by the
+    /// extension's `activate()`, the LSP client's `ExecuteCommandFeature`
+    /// tries to call `registerCommand()` a second time, causing a fatal
+    /// "command already exists" error.
+    ///
+    /// Excluded (registered by VS Code extension in `commands.ts`):
+    /// - `FIX_FILE`, `FIX_WORKSPACE` — need active editor URI
+    /// - `ADOPT_FILE`, `ADOPT_WORKSPACE`, `UNADOPT_FILE` — command palette
+    /// - `ORGANIZE_IMPORTS` — subprocess mode registration
+    /// - `UV_SYNC`, `UV_ADD`, `UV_ADD_DEV`, `UV_REMOVE`, `UV_LOCK`,
+    ///   `UV_CREATE_ENV` — command palette with UI prompts
+    ///
+    /// The server still **handles** all commands via `workspace/executeCommand`
+    /// dispatch; it just must not **advertise** client-registered ones.
     pub const ALL: &[&str] = &[
-        ORGANIZE_IMPORTS,
         START_DEBUG_SESSION,
         STOP_DEBUG_SESSION,
         DISABLE_RULE,
-        UV_SYNC,
-        UV_ADD,
-        UV_ADD_DEV,
-        UV_REMOVE,
-        UV_LOCK,
-        UV_CREATE_ENV,
         MOVE_SYMBOL,
     ];
 }

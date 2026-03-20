@@ -134,7 +134,7 @@ function buildClientOptions(
     },
     middleware: {
       executeCommand: async (command, args, next) => {
-        return next(command, args);
+        return await next(command, args) as unknown;
       },
       workspace: {
         configuration: async (params, token, next) => {
