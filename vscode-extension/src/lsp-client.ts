@@ -133,6 +133,9 @@ function buildClientOptions(
       },
     },
     middleware: {
+      executeCommand: async (command, args, next) => {
+        return next(command, args);
+      },
       workspace: {
         configuration: async (params, token, next) => {
           const results = await next(params, token);
