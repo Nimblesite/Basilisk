@@ -26,6 +26,7 @@ permalink: /readme/
   <a href="https://www.basilisk-python.dev/docs/installation/">Install</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/docs/quick-start/">Quick Start</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/docs/rules/">Rules</a> &nbsp;&bull;&nbsp;
+  <a href="https://www.basilisk-python.dev/docs/refactoring/">Refactoring</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/docs/comparison/">Compare</a>
 </p>
 
@@ -126,6 +127,32 @@ All rules are on by default. There is no way to relax them globally.
 | `BSK-E0023` | `match` statement is not exhaustive |
 | `BSK-E0024` | Type expression is not valid (e.g. `int | 42`) |
 | `BSK-E0025` | Override method is missing the `@override` decorator |
+
+---
+
+## Refactoring
+
+Basilisk ships 16 refactoring code actions — available via the lightbulb menu in VS Code, Zed, and Neovim. No extensions required.
+
+| Action | Kind | What it does |
+|--------|------|-------------|
+| **Extract variable** | `refactor.extract` | Extract expression into a named variable |
+| **Extract variable (replace all)** | `refactor.extract` | Replace all identical occurrences |
+| **Extract constant** | `refactor.extract` | Extract to module-level `SCREAMING_SNAKE` constant |
+| **Extract function** | `refactor.extract` | Extract selected statements into a new function |
+| **Inline variable** | `refactor.inline` | Replace variable with its value, delete assignment |
+| **Inline function** | `refactor.inline` | Replace call with function body (single-expression) |
+| **Move to new file** | `refactor.move` | Move class/function to a new file, leave import behind |
+| **Move to existing file** | `refactor.move` | Move class/function to a chosen file via command |
+| **Rename symbol** | — | Scope-aware rename with keyword arg, `self.attr`, docstring, and `__all__` updates |
+| **Remove parameter** | `refactor.rewrite` | Remove parameter from function + all call sites |
+| **Add parameter** | `refactor.rewrite` | Add `new_param=None` to function signature |
+| **Sort parameters** | `refactor.rewrite` | Alphabetically sort parameters (keeps `self`/`cls` first) |
+| **Implement abstract methods** | `refactor.rewrite` | Generate method stubs for abstract base class |
+| **Convert Union/Optional** | `refactor.rewrite` | `Union[X, Y]` ↔ `X \| Y`, `Optional[X]` ↔ `X \| None` |
+| **Convert constructs** | `refactor.rewrite` | f-string ↔ `.format()`, `dict()` ↔ `{}`, `list()` ↔ `[]`, ternary ↔ if/else, NamedTuple class ↔ functional |
+
+Extract function detects async functions, methods (`self`/`cls`), and rejects selections containing `yield`, `break`, or `continue`.
 
 ---
 
