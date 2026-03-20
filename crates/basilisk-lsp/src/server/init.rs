@@ -349,10 +349,11 @@ async fn scan_resolve_and_check(server: &LspServer, index: &WorkspaceIndex) -> S
         .map(|r| crate::config::load_config(r))
         .unwrap_or_default();
 
-    // Detect uv project and build package registry if applicable.
+    // Detect uv project, build package registry and discover workspace members.
     let registry = build_uv_registry(&roots);
-    let search_paths =
+    let mut search_paths =
         crate::import_resolver::ImportSearchPaths::from_config(&roots, &config, registry);
+    search_paths.workspace_members = discover_workspace_members(&roots);
     crate::import_resolver::resolve_workspace_imports(index, &search_paths);
     drop(roots);
 
@@ -420,6 +421,44 @@ fn recheck_with_cross_module_symbols(
     results
 }
 
+/// Discover uv workspace member source directories.
+///
+/// Parses `[tool.uv.workspace]` from `pyproject.toml` at each workspace root
+/// and returns the resolved member directory paths. For each member, looks for
+/// a `src/` subdirectory (common Python project layout) and adds it; otherwise
+/// adds the member directory itself.
+///
+/// Returns an empty vec if this is not a uv workspace or parsing fails.
+fn discover_workspace_members(roots: &[std::path::PathBuf]) -> Vec<std::path::PathBuf> {
+    let mut members = Vec::new();
+
+    for root in roots {
+        let Ok(Some(workspace)) = basilisk_uv::parse_uv_workspace(root) else {
+            continue;
+        };
+
+        for member_dir in &workspace.members {
+            // Prefer src/ layout if it exists.
+            let src_dir = member_dir.join("src");
+            if src_dir.is_dir() {
+                members.push(src_dir);
+            } else {
+                members.push(member_dir.clone());
+            }
+        }
+
+        if !workspace.members.is_empty() {
+            info!(
+                root = %root.display(),
+                member_count = workspace.members.len(),
+                "discovered uv workspace members"
+            );
+        }
+    }
+
+    members
+}
+
 /// Detect a uv project and build a [`PackageRegistry`] from its lock file.
 ///
 /// Returns `None` if this is not a uv project, if there is no lock file, or
@@ -458,6 +497,59 @@ fn build_uv_registry(roots: &[std::path::PathBuf]) -> Option<Arc<basilisk_uv::Pa
     );
 
     Some(Arc::new(registry))
+}
+
+/// Rebuild the uv package registry and re-resolve all workspace imports.
+///
+/// Called after uv commands complete or when `uv.lock` changes on disk.
+/// Rebuilds the registry from the current `uv.lock`, updates
+/// `WorkspaceIndex.registry`, re-resolves imports, and republishes
+/// diagnostics for all indexed files.
+pub(super) async fn rebuild_registry_and_resolve(server: &LspServer) {
+    let guard = server.index.read().await;
+    let Some(index) = guard.as_ref() else { return };
+
+    let roots = server.workspace_roots.read().await;
+    let config = roots
+        .first()
+        .map(|r| crate::config::load_config(r))
+        .unwrap_or_default();
+
+    let registry = build_uv_registry(&roots);
+    let mut search_paths =
+        crate::import_resolver::ImportSearchPaths::from_config(&roots, &config, registry);
+    search_paths.workspace_members = discover_workspace_members(&roots);
+    crate::import_resolver::resolve_workspace_imports(index, &search_paths);
+    drop(roots);
+
+    // Re-check all files and publish updated diagnostics.
+    let results: Vec<_> = index
+        .files
+        .iter_mut()
+        .filter_map(|mut entry| {
+            let resolved = entry.resolved.as_ref()?;
+            let checker_diags = basilisk_checker::check(resolved);
+            let lsp_diags: Vec<tower_lsp::lsp_types::Diagnostic> = checker_diags
+                .iter()
+                .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &entry.text))
+                .collect();
+            entry.diagnostics = checker_diags;
+            let uri = crate::workspace_scan::path_to_uri(entry.key())?;
+            Some((uri, lsp_diags))
+        })
+        .collect();
+
+    drop(guard);
+
+    let file_count = results.len();
+    for (uri, diags) in results {
+        server.client.publish_diagnostics(uri, diags, None).await;
+    }
+
+    info!(
+        files = file_count,
+        "registry rebuilt — diagnostics refreshed"
+    );
 }
 
 /// Handle the `shutdown` request: stop all debug sessions.

@@ -1,12 +1,8 @@
 //! Ternary expression / if-else block conversion refactoring actions.
 
-use std::collections::HashMap;
+use tower_lsp::lsp_types::{CodeAction, CodeActionKind, Position, Range, Url};
 
-use tower_lsp::lsp_types::{
-    CodeAction, CodeActionKind, Position, Range, TextEdit, Url, WorkspaceEdit,
-};
-
-use super::helpers::leading_indent_of_line;
+use super::helpers::{leading_indent_of_line, WorkspaceEditBuilder};
 
 /// Offer to convert between ternary expressions and if/else blocks.
 ///
@@ -142,12 +138,12 @@ fn ternary_to_if_else(uri: &Url, source: &str, range: &Range) -> Option<CodeActi
         },
     };
 
-    Some(build_action(
+    build_action(
         uri,
         edit_range,
-        replacement,
+        &replacement,
         "Convert ternary to if/else (basilisk)",
-    ))
+    )
 }
 
 /// Parse a simple if/else assignment pattern spanning exactly 4 lines.
@@ -214,34 +210,17 @@ fn if_else_to_ternary(uri: &Url, source: &str, range: &Range) -> Option<CodeActi
         },
     };
 
-    Some(build_action(
+    build_action(
         uri,
         edit_range,
-        replacement,
+        &replacement,
         "Convert if/else to ternary (basilisk)",
-    ))
+    )
 }
 
 /// Build a `CodeAction` with a single text-edit replacement.
-fn build_action(uri: &Url, edit_range: Range, new_text: String, title: &str) -> CodeAction {
-    let mut changes = HashMap::new();
-    let _ = changes.insert(
-        uri.clone(),
-        vec![TextEdit {
-            range: edit_range,
-            new_text,
-        }],
-    );
-
-    CodeAction {
-        title: title.to_owned(),
-        kind: Some(CodeActionKind::REFACTOR_REWRITE),
-        diagnostics: None,
-        edit: Some(WorkspaceEdit {
-            changes: Some(changes),
-            ..Default::default()
-        }),
-        is_preferred: Some(false),
-        ..Default::default()
-    }
+fn build_action(uri: &Url, edit_range: Range, new_text: &str, title: &str) -> Option<CodeAction> {
+    let mut builder = WorkspaceEditBuilder::new(title, CodeActionKind::REFACTOR_REWRITE);
+    builder.edit(uri, edit_range, new_text);
+    builder.build()
 }

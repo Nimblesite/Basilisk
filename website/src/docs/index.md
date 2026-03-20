@@ -24,7 +24,7 @@ Basilisk takes a different position. **It replaces the entire Pylance stack** �
 
 ## What Basilisk is
 
-- A **full-featured language server** (LSP) — autocomplete, go-to-definition, hover, find references, rename, code actions, inlay hints
+- A **full-featured language server** (LSP) — autocomplete, go-to-definition, hover, find references, rename, [16 refactoring actions](/docs/refactoring/), code actions, inlay hints
 - **Editor extensions** for VS Code, Neovim (0.10+), and Zed — install it, disable Pylance, and everything works
 - An **integrated debugger** — press F5 to debug Python with breakpoints, stepping, variable inspection, and watch expressions, all brokered through the Basilisk LSP
 - An **integrated profiler** — py-spy profiling with heatmap visualization directly in your editor
@@ -95,5 +95,6 @@ Basilisk is a Cargo workspace with 14 Rust crates, each owning one layer of the 
 
 - [Install Basilisk](/docs/installation/) — build from source or install via cargo
 - [Quick Start](/docs/quick-start/) — your first type check in under 5 minutes
+- [Refactoring](/docs/refactoring/) — all 16 refactoring code actions (extract, inline, move, rename, convert)
 - [Debugging](/docs/debugging/) — set breakpoints, step through code, inspect variables
 - [All Rules](/docs/rules/) — browse every BSK-E and BSK-W diagnostic code

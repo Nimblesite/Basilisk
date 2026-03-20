@@ -6,7 +6,7 @@
 
 use std::fmt::Write as _;
 
-use basilisk_resolver::{ImportInfo, ImportResolution, ResolvedModule};
+use basilisk_resolver::{ImportInfo, ImportResolution, PackageDepKind, ResolvedModule};
 use tower_lsp::lsp_types::{Hover, HoverContents, MarkupContent, MarkupKind};
 
 use crate::util::{
@@ -113,8 +113,24 @@ fn format_import_hover(import_info: &ImportInfo) -> String {
         }
     }
 
+    // Show dependency classification from uv registry.
+    if let Some(ref dep_kind) = import_info.package_dep_kind {
+        let label = match dep_kind {
+            PackageDepKind::Direct => "direct dependency",
+            PackageDepKind::Dev => "dev dependency",
+            PackageDepKind::Transitive => "transitive dependency",
+        };
+        parts.push(format!("**Dependency**: {label}"));
+    }
+
     if let Some(path) = &import_info.resolved_path {
-        parts.push(format!("**Path**: `{}`", path.display()));
+        // Detect workspace member imports by checking for absence of `site-packages`.
+        let path_str = path.display().to_string();
+        if !path_str.contains("site-packages") && import_info.package_dep_kind.is_none() {
+            parts.push(format!("**Workspace member**: `{path_str}`"));
+        } else {
+            parts.push(format!("**Path**: `{path_str}`"));
+        }
     }
 
     parts.join("\n\n")

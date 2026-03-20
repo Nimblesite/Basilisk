@@ -386,23 +386,25 @@ Phases 1 and 2 are independent and can be parallelized. Phase 3 depends on Phase
   - [x] 1j. Scope limitations (§7.10) — `in_loop` flag, no recursion into nested functions
   - [x] Resolver guard collection — `crates/basilisk-resolver/src/visitor/narrowing.rs` + `narrowing_types.rs`
   - [x] `FunctionInfo.narrowing_guards` field wired into `function_info_from()`
-- [ ] **Phase 2: Expression Type Inference** (~40 FPs)
-  - [ ] 2a. Function call return type resolution (same-module)
-  - [ ] 2b. Constructor call resolution (`ClassName()` → class type)
-  - [ ] 2c. Cross-module function call return types
-  - [ ] 2d. Method call resolution (`obj.method()`)
-  - [ ] 2e. Attribute access type resolution
-  - [ ] 2f. Subscript type resolution (list/dict/TypedDict/tuple)
-  - [ ] 2g. Binary/unary operation return types (builtin table)
-  - [ ] 2h. Conditional expression (`a if cond else b` → union)
-  - [ ] 2i. Walrus operator type propagation
-- [ ] **Phase 3: ConstraintSolver** (~10 FPs)
-  - [ ] 3a. Constraint collection from call arguments
-  - [ ] 3b. Lower-bound join / upper-bound meet solving
-  - [ ] 3c. Bidirectional constraint from expected return type
-  - [ ] 3d. Constrained TypeVar matching (§6.2)
-  - [ ] 3e. Bound TypeVar upper-bound check (§6.3)
-  - [ ] 3f. TypeVar defaults (PEP 696, §6.5)
+- [x] **Phase 2: Expression Type Inference** (~40 FPs) — DONE — `crates/basilisk-checker/src/expr_inference.rs`
+  - [x] 2a. Function call return type resolution (same-module) — `ExpressionInferrer::resolve_call_return_type()`
+  - [x] 2b. Constructor call resolution (`ClassName()` → class type) — via `class_names` lookup
+  - [x] 2c. Cross-module function call return types — via `imported_symbols` + `type_annotation`
+  - [x] 2d. Method call resolution (`obj.method()`) — `resolve_method_return_type()`
+  - [x] 2e. Attribute access type resolution — `resolve_attribute_type()` via class `annotation_span`
+  - [x] 2f. Subscript type resolution (list/dict/TypedDict/tuple) — `resolve_subscript_type()`
+  - [x] 2g. Binary/unary operation return types — `infer_binop_type()` / `infer_unaryop_type()` with builtin tables
+  - [x] 2h. Conditional expression (`a if cond else b` → union) — `infer_conditional_type()`
+  - [x] 2i. Walrus operator type propagation — pass-through (caller passes expr type)
+  - [x] Builtin constructor table — 40+ builtins (`int`, `str`, `len`, `sorted`, `open`, etc.)
+  - [x] Builtin method table — `str`, `list`, `dict`, `set`, `int`, `float`, `bytes`, `tuple` methods
+- [x] **Phase 3: ConstraintSolver** (~10 FPs) — DONE — `crates/basilisk-checker/src/constraint_solver.rs`
+  - [x] 3a. Constraint collection — `add_lower_bound()`, `add_upper_bound()`, `add_one_of()`
+  - [x] 3b. Lower-bound join / upper-bound meet solving — `solve()` + `solve_one()`
+  - [x] 3c. Bidirectional constraint from expected return type — `add_return_constraint()`
+  - [x] 3d. Constrained TypeVar matching (§6.2) — `solve_constrained()` with widening
+  - [x] 3e. Bound TypeVar upper-bound check (§6.3) — validates `is_assignable_to(bound)`
+  - [x] 3f. TypeVar defaults (PEP 696, §6.5) — `set_default()` + fallback in `solve()`
 - [ ] **Phase 4: Class Hierarchy and Structural Subtyping** (~50 FPs)
   - [ ] 4a. `SubtypeContext` data structure with MRO cache, protocol member tables
   - [ ] 4b. Nominal subtyping via C3 MRO resolution (§9.1) + builtin MRO hardcoding

@@ -48,6 +48,10 @@ pub struct ImportSearchPaths {
     pub extra_paths: Vec<PathBuf>,
     /// User-provided stub directories from `stub-paths` config.
     pub stub_paths: Vec<PathBuf>,
+    /// uv workspace member source roots (editable packages).
+    ///
+    /// Searched after workspace roots but before `extra_paths`.
+    pub workspace_members: Vec<PathBuf>,
     /// Virtual environment site-packages directory, if detected.
     pub site_packages: Option<PathBuf>,
     /// Package registry from uv lock file, if available.
@@ -67,6 +71,7 @@ impl ImportSearchPaths {
             roots: roots.to_vec(),
             extra_paths: config.extra_paths.clone(),
             stub_paths: config.stub_paths.clone(),
+            workspace_members: Vec::new(),
             site_packages,
             registry,
         }
@@ -116,10 +121,11 @@ pub fn resolve_module(
         }
     }
 
-    // 2. User source (workspace roots + extraPaths: .pyi preferred over .py)
+    // 2. User source (workspace roots + workspace members + extraPaths: .pyi preferred over .py)
     for dir in search_paths
         .roots
         .iter()
+        .chain(search_paths.workspace_members.iter())
         .chain(search_paths.extra_paths.iter())
     {
         if let Some(resolved) = try_resolve_in_dir(module_name, dir) {
@@ -506,6 +512,7 @@ mod tests {
             roots,
             extra_paths: vec![],
             stub_paths: vec![],
+            workspace_members: vec![],
             site_packages: None,
             registry: None,
         }
@@ -642,6 +649,7 @@ mod tests {
             roots: vec![root.clone()],
             extra_paths: vec![extra.clone()],
             stub_paths: vec![],
+            workspace_members: vec![],
             site_packages: None,
             registry: None,
         };
@@ -664,6 +672,7 @@ mod tests {
             roots: vec![root.clone()],
             extra_paths: vec![],
             stub_paths: vec![],
+            workspace_members: vec![],
             site_packages: Some(sp.clone()),
             registry: None,
         };
@@ -687,6 +696,7 @@ mod tests {
             roots: vec![root.clone()],
             extra_paths: vec![extra.clone()],
             stub_paths: vec![],
+            workspace_members: vec![],
             site_packages: None,
             registry: None,
         };
@@ -803,6 +813,7 @@ mod tests {
             roots: vec![root.clone()],
             extra_paths: vec![],
             stub_paths: vec![stubs.clone()],
+            workspace_members: vec![],
             site_packages: None,
             registry: None,
         };
@@ -826,6 +837,7 @@ mod tests {
             roots: vec![],
             extra_paths: vec![],
             stub_paths: vec![stubs.clone()],
+            workspace_members: vec![],
             site_packages: None,
             registry: None,
         };
@@ -853,6 +865,7 @@ mod tests {
             roots: vec![root.clone()],
             extra_paths: vec![],
             stub_paths: vec![],
+            workspace_members: vec![],
             site_packages: Some(sp.clone()),
             registry: None,
         };
@@ -876,6 +889,7 @@ mod tests {
             roots: vec![],
             extra_paths: vec![],
             stub_paths: vec![],
+            workspace_members: vec![],
             site_packages: Some(sp.clone()),
             registry: None,
         };

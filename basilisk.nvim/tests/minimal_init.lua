@@ -63,6 +63,7 @@ end
 
 -- Add mini.test if available.
 local mini_paths = {
+  "/tmp/mini.nvim",
   vim.fn.expand("~/.local/share/nvim/lazy/mini.nvim"),
   vim.fn.expand("~/.local/share/nvim/lazy/mini.test"),
   vim.fn.stdpath("data") .. "/lazy/mini.nvim",

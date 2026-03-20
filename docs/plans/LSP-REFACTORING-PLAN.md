@@ -280,7 +280,7 @@ After Phase 6, we match Pylance. After Phase 10, we surpass every Python LSP.
 - [x] **Infrastructure**: Scope tree module — `scope_tree.rs` (pre-existing, 599 lines)
 - [x] **Infrastructure**: Data flow analysis module — `extract_function.rs::analyze_data_flow()`
 - [x] **Infrastructure**: Structural text comparison — `extract.rs::find_all_occurrences()`
-- [ ] **Infrastructure**: Workspace edit builder with formatting
+- [x] **Infrastructure**: Workspace edit builder with formatting — `helpers.rs::WorkspaceEditBuilder` (used by inline + ternary)
 - [x] **Infrastructure**: Code generation utilities — `code_actions/refactor/helpers.rs`
 
 ### E2E Test Coverage

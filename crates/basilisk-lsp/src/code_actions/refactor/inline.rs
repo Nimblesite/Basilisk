@@ -1,12 +1,8 @@
 //! Inline variable refactoring action.
 
-use std::collections::HashMap;
+use tower_lsp::lsp_types::{CodeAction, CodeActionKind, Position, Range, Url};
 
-use tower_lsp::lsp_types::{
-    CodeAction, CodeActionKind, Position, Range, TextEdit, Url, WorkspaceEdit,
-};
-
-use super::helpers::leading_indent_of_line;
+use super::helpers::{leading_indent_of_line, WorkspaceEditBuilder};
 
 /// Offer to inline a simple variable assignment by replacing all subsequent
 /// occurrences of the variable name with its assigned expression and deleting
@@ -33,8 +29,19 @@ pub(in crate::code_actions) fn inline_variable(
         return None;
     }
 
-    let edits = build_edits(range.start.line, &replacements, name, expr);
-    Some(build_inline_action(uri, edits))
+    let mut builder = WorkspaceEditBuilder::new(
+        "Inline variable (basilisk)",
+        CodeActionKind::new("refactor.inline.variable"),
+    );
+    add_inline_edits(
+        &mut builder,
+        uri,
+        range.start.line,
+        &replacements,
+        name,
+        expr,
+    );
+    builder.build()
 }
 
 /// Parse a simple `name = expr` from a line. Returns `None` for augmented
@@ -141,70 +148,35 @@ fn find_whole_word_positions(text: &str, name: &str) -> Vec<usize> {
     positions
 }
 
-/// Build the list of text edits: one to delete the assignment line, and one
-/// per occurrence to replace the variable name with the expression.
-fn build_edits(
+/// Add all inline-variable edits to the builder: delete the assignment line
+/// and replace each occurrence of the variable name with the expression.
+fn add_inline_edits(
+    builder: &mut WorkspaceEditBuilder,
+    uri: &Url,
     assignment_line: u32,
     replacements: &[(usize, Vec<usize>)],
     name: &str,
     expr: &str,
-) -> Vec<TextEdit> {
+) {
+    // Delete the assignment line.
+    builder.replace_lines(uri, assignment_line, assignment_line + 1, "");
+
     let name_len = u32::try_from(name.len()).unwrap_or(u32::MAX);
-
-    // Delete the assignment line (including the trailing newline).
-    let mut edits = vec![TextEdit {
-        range: Range {
-            start: Position {
-                line: assignment_line,
-                character: 0,
-            },
-            end: Position {
-                line: assignment_line + 1,
-                character: 0,
-            },
-        },
-        new_text: String::new(),
-    }];
-
-    // Shift all subsequent line numbers down by 1 because the assignment
-    // line is being deleted.
     for &(line_idx, ref positions) in replacements {
         let target_line = u32::try_from(line_idx).unwrap_or(u32::MAX);
         for &col in positions {
             let start_char = u32::try_from(col).unwrap_or(u32::MAX);
-            edits.push(TextEdit {
-                range: Range {
-                    start: Position {
-                        line: target_line,
-                        character: start_char,
-                    },
-                    end: Position {
-                        line: target_line,
-                        character: start_char + name_len,
-                    },
+            let range = Range {
+                start: Position {
+                    line: target_line,
+                    character: start_char,
                 },
-                new_text: expr.to_owned(),
-            });
+                end: Position {
+                    line: target_line,
+                    character: start_char + name_len,
+                },
+            };
+            builder.edit(uri, range, expr);
         }
-    }
-
-    edits
-}
-
-/// Construct the final `CodeAction` from a list of text edits.
-fn build_inline_action(uri: &Url, edits: Vec<TextEdit>) -> CodeAction {
-    let mut changes = HashMap::new();
-    let _ = changes.insert(uri.clone(), edits);
-
-    CodeAction {
-        title: "Inline variable (basilisk)".to_owned(),
-        kind: Some(CodeActionKind::new("refactor.inline.variable")),
-        diagnostics: None,
-        edit: Some(WorkspaceEdit {
-            changes: Some(changes),
-            ..Default::default()
-        }),
-        is_preferred: Some(false),
-        ..Default::default()
     }
 }

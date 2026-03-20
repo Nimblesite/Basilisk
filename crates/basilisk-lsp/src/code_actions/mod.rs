@@ -64,6 +64,9 @@ pub fn code_actions(
                 )));
             }
         }
+        if code == "BSK-W0013" {
+            actions.push(CodeActionOrCommand::CodeAction(make_uv_sync_action(diag)));
+        }
         if let Some(a) = fix {
             actions.push(CodeActionOrCommand::CodeAction(a));
         }
@@ -209,6 +212,21 @@ fn make_uv_add_action(diag: &Diagnostic, module: &str) -> CodeAction {
             title: format!("uv add {module}"),
             command: basilisk_common::commands::UV_ADD.to_owned(),
             arguments: Some(vec![serde_json::Value::String(module.to_owned())]),
+        }),
+        ..CodeAction::default()
+    }
+}
+
+/// Build a code action that runs `uv sync` for a stale lock file.
+fn make_uv_sync_action(diag: &Diagnostic) -> CodeAction {
+    CodeAction {
+        title: "Sync environment (uv sync)".to_owned(),
+        kind: Some(CodeActionKind::QUICKFIX),
+        diagnostics: Some(vec![diag.clone()]),
+        command: Some(Command {
+            title: "uv sync".to_owned(),
+            command: basilisk_common::commands::UV_SYNC.to_owned(),
+            arguments: None,
         }),
         ..CodeAction::default()
     }

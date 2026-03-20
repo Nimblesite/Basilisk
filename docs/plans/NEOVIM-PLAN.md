@@ -7,7 +7,7 @@
 
 ## Status
 
-Phases 1–11 mostly COMPLETE. 183 tests (80 unit + 103 real LSP e2e), 0 failures. All rename tests passing — fixed symlink canonicalization bug in LSP server (macOS `/var` → `/private/var`). Feature parity with VS Code/Zed achieved for all LSP commands.
+Phases 1–11 mostly COMPLETE. 189 tests (80 unit + 103 real LSP e2e + 6 screenshot regression), 0 failures. All rename tests passing — fixed symlink canonicalization bug in LSP server (macOS `/var` → `/private/var`). Feature parity with VS Code/Zed achieved for all LSP commands.
 
 **Remaining gaps**: Version check (warn on outdated binary), binary auto-download from GitHub releases.
 
@@ -261,8 +261,8 @@ Phases 1–11 mostly COMPLETE. 183 tests (80 unit + 103 real LSP e2e), 0 failure
 
 - [x] `:BasiliskInfo` — assert floating window opens with correct content (title, status, binary, version, mode)
 - [x] `:BasiliskTestToggle` — assert side panel opens with correct filetype/width, toggle closes it
-- [ ] Screenshot / snapshot tests with mini.test (future enhancement)
-- [ ] Reference screenshots stored in `tests/ui/screenshots/` for regression comparison
+- [x] Screenshot / snapshot tests with mini.test — 6 tests covering diagnostics, info float, test panel, diagnostic float, statusline
+- [x] Reference screenshots stored in `tests/ui/screenshots/` — 6 reference files for regression comparison
 
 ---
 

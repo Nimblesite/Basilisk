@@ -51,6 +51,45 @@ fn spawn_error(label: &str, err: &std::io::Error) -> tower_lsp::jsonrpc::Error {
     }
 }
 
+/// Run a uv command and trigger registry rebuild on success.
+///
+/// After any successful uv command, the lock file may have changed,
+/// so we rebuild the package registry and re-resolve all imports.
+async fn run_uv_and_refresh<F, Fut>(
+    server: &LspServer,
+    label: &str,
+    command: F,
+) -> LspResult<Option<serde_json::Value>>
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = std::io::Result<crate::uv_commands::UvCommandResult>>,
+{
+    match command().await {
+        Ok(result) => {
+            let msg = if result.success {
+                format!("{label} completed successfully")
+            } else {
+                format!("{label} failed")
+            };
+            server
+                .client
+                .log_message(MessageType::INFO, format!("Basilisk: {msg}"))
+                .await;
+
+            // Rebuild registry and re-resolve imports on success.
+            if result.success {
+                super::init::rebuild_registry_and_resolve(server).await;
+            }
+
+            Ok(Some(uv_result_to_json(&result)))
+        }
+        Err(err) => {
+            error!(%err, "{label} failed to spawn");
+            Err(spawn_error(label, &err))
+        }
+    }
+}
+
 /// Handle `basilisk.uv.sync`.
 pub(super) async fn execute_uv_sync(
     server: &LspServer,
@@ -58,24 +97,7 @@ pub(super) async fn execute_uv_sync(
 ) -> LspResult<Option<serde_json::Value>> {
     let root = get_workspace_root(server).await?;
     info!("uv sync requested");
-    match crate::uv_commands::uv_sync(&root).await {
-        Ok(result) => {
-            let msg = if result.success {
-                "uv sync completed successfully"
-            } else {
-                "uv sync failed"
-            };
-            server
-                .client
-                .log_message(MessageType::INFO, format!("Basilisk: {msg}"))
-                .await;
-            Ok(Some(uv_result_to_json(&result)))
-        }
-        Err(err) => {
-            error!(%err, "uv sync failed to spawn");
-            Err(spawn_error("uv sync", &err))
-        }
-    }
+    run_uv_and_refresh(server, "uv sync", || crate::uv_commands::uv_sync(&root)).await
 }
 
 /// Handle `basilisk.uv.add`.
@@ -89,24 +111,10 @@ pub(super) async fn execute_uv_add(
         return Ok(None);
     };
     info!(package = %package, "uv add requested");
-    match crate::uv_commands::uv_add(&root, &package).await {
-        Ok(result) => {
-            let msg = if result.success {
-                format!("uv add {package} completed successfully")
-            } else {
-                format!("uv add {package} failed")
-            };
-            server
-                .client
-                .log_message(MessageType::INFO, format!("Basilisk: {msg}"))
-                .await;
-            Ok(Some(uv_result_to_json(&result)))
-        }
-        Err(err) => {
-            error!(%err, "uv add failed to spawn");
-            Err(spawn_error("uv add", &err))
-        }
-    }
+    run_uv_and_refresh(server, &format!("uv add {package}"), || {
+        crate::uv_commands::uv_add(&root, &package)
+    })
+    .await
 }
 
 /// Handle `basilisk.uv.addDev`.
@@ -120,24 +128,10 @@ pub(super) async fn execute_uv_add_dev(
         return Ok(None);
     };
     info!(package = %package, "uv add --dev requested");
-    match crate::uv_commands::uv_add_dev(&root, &package).await {
-        Ok(result) => {
-            let msg = if result.success {
-                format!("uv add --dev {package} completed successfully")
-            } else {
-                format!("uv add --dev {package} failed")
-            };
-            server
-                .client
-                .log_message(MessageType::INFO, format!("Basilisk: {msg}"))
-                .await;
-            Ok(Some(uv_result_to_json(&result)))
-        }
-        Err(err) => {
-            error!(%err, "uv add --dev failed to spawn");
-            Err(spawn_error("uv add --dev", &err))
-        }
-    }
+    run_uv_and_refresh(server, &format!("uv add --dev {package}"), || {
+        crate::uv_commands::uv_add_dev(&root, &package)
+    })
+    .await
 }
 
 /// Handle `basilisk.uv.remove`.
@@ -151,24 +145,10 @@ pub(super) async fn execute_uv_remove(
         return Ok(None);
     };
     info!(package = %package, "uv remove requested");
-    match crate::uv_commands::uv_remove(&root, &package).await {
-        Ok(result) => {
-            let msg = if result.success {
-                format!("uv remove {package} completed successfully")
-            } else {
-                format!("uv remove {package} failed")
-            };
-            server
-                .client
-                .log_message(MessageType::INFO, format!("Basilisk: {msg}"))
-                .await;
-            Ok(Some(uv_result_to_json(&result)))
-        }
-        Err(err) => {
-            error!(%err, "uv remove failed to spawn");
-            Err(spawn_error("uv remove", &err))
-        }
-    }
+    run_uv_and_refresh(server, &format!("uv remove {package}"), || {
+        crate::uv_commands::uv_remove(&root, &package)
+    })
+    .await
 }
 
 /// Handle `basilisk.uv.lock`.
@@ -178,24 +158,7 @@ pub(super) async fn execute_uv_lock(
 ) -> LspResult<Option<serde_json::Value>> {
     let root = get_workspace_root(server).await?;
     info!("uv lock requested");
-    match crate::uv_commands::uv_lock(&root).await {
-        Ok(result) => {
-            let msg = if result.success {
-                "uv lock completed successfully"
-            } else {
-                "uv lock failed"
-            };
-            server
-                .client
-                .log_message(MessageType::INFO, format!("Basilisk: {msg}"))
-                .await;
-            Ok(Some(uv_result_to_json(&result)))
-        }
-        Err(err) => {
-            error!(%err, "uv lock failed to spawn");
-            Err(spawn_error("uv lock", &err))
-        }
-    }
+    run_uv_and_refresh(server, "uv lock", || crate::uv_commands::uv_lock(&root)).await
 }
 
 /// Handle `basilisk.uv.createEnv`.
@@ -208,23 +171,10 @@ pub(super) async fn execute_uv_create_env(
         v.as_str()
             .or_else(|| v.get("python").and_then(|p| p.as_str()))
     });
-    info!(python_version = ?python_version, "uv venv requested");
-    match crate::uv_commands::uv_create_env(&root, python_version).await {
-        Ok(result) => {
-            let msg = if result.success {
-                "uv venv completed successfully"
-            } else {
-                "uv venv failed"
-            };
-            server
-                .client
-                .log_message(MessageType::INFO, format!("Basilisk: {msg}"))
-                .await;
-            Ok(Some(uv_result_to_json(&result)))
-        }
-        Err(err) => {
-            error!(%err, "uv venv failed to spawn");
-            Err(spawn_error("uv venv", &err))
-        }
-    }
+    let pv = python_version.map(String::from);
+    info!(python_version = ?pv, "uv venv requested");
+    run_uv_and_refresh(server, "uv venv", || {
+        crate::uv_commands::uv_create_env(&root, pv.as_deref())
+    })
+    .await
 }

@@ -1,6 +1,10 @@
 //! Shared helper functions for refactoring code actions.
 
-use tower_lsp::lsp_types::{Position, Range};
+use std::collections::HashMap;
+
+use tower_lsp::lsp_types::{
+    CodeAction, CodeActionKind, Position, Range, TextEdit, Url, WorkspaceEdit,
+};
 
 /// Extract the selected text from the source using an LSP range.
 pub(super) fn selected_text(source: &str, range: &Range) -> Option<String> {
@@ -188,4 +192,87 @@ pub(super) fn byte_offset_to_line(source: &str, offset: u32) -> u32 {
         .min(source.len());
     let before = source.get(..offset_usize).unwrap_or(source);
     u32::try_from(before.chars().filter(|&c| c == '\n').count()).unwrap_or(u32::MAX)
+}
+
+// ── Workspace edit builder ──────────────────────────────────────────────────
+
+/// Fluent builder for constructing multi-file `WorkspaceEdit`s.
+///
+/// Accumulates text edits per URI and produces a `CodeAction` with the
+/// collected changes.  Ensures trailing-whitespace cleanup and consistent
+/// newline formatting on all inserted text.
+pub(super) struct WorkspaceEditBuilder {
+    changes: HashMap<Url, Vec<TextEdit>>,
+    title: String,
+    kind: CodeActionKind,
+}
+
+impl WorkspaceEditBuilder {
+    /// Create a new builder with the given action title and kind.
+    #[must_use]
+    pub(super) fn new(title: impl Into<String>, kind: CodeActionKind) -> Self {
+        Self {
+            changes: HashMap::new(),
+            title: title.into(),
+            kind,
+        }
+    }
+
+    /// Add a text edit for a specific file URI.
+    pub(super) fn edit(&mut self, uri: &Url, range: Range, new_text: &str) {
+        let formatted = format_inserted_text(new_text);
+        self.changes.entry(uri.clone()).or_default().push(TextEdit {
+            range,
+            new_text: formatted,
+        });
+    }
+
+    /// Replace a range of full lines `[start_line..end_line)`.
+    pub(super) fn replace_lines(&mut self, uri: &Url, start_line: u32, end_line: u32, text: &str) {
+        let range = Range {
+            start: Position {
+                line: start_line,
+                character: 0,
+            },
+            end: Position {
+                line: end_line,
+                character: 0,
+            },
+        };
+        self.edit(uri, range, text);
+    }
+
+    /// Build the final `CodeAction` from accumulated edits.
+    ///
+    /// Returns `None` if no edits were added.
+    #[must_use]
+    pub(super) fn build(self) -> Option<CodeAction> {
+        if self.changes.is_empty() {
+            return None;
+        }
+        Some(CodeAction {
+            title: self.title,
+            kind: Some(self.kind),
+            diagnostics: None,
+            edit: Some(WorkspaceEdit {
+                changes: Some(self.changes),
+                ..Default::default()
+            }),
+            is_preferred: Some(false),
+            ..Default::default()
+        })
+    }
+}
+
+/// Clean up inserted text: strip trailing whitespace from each line.
+fn format_inserted_text(text: &str) -> String {
+    let mut result: String = text
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n");
+    if text.ends_with('\n') {
+        result.push('\n');
+    }
+    result
 }

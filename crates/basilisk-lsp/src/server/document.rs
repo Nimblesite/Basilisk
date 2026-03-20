@@ -151,8 +151,19 @@ pub(super) async fn did_change_watched_files(
         }
     }
 
-    // Log uv-related configuration file changes for staleness detection.
-    log_uv_config_changes(&params);
+    // If uv.lock or pyproject.toml changed, rebuild the package registry and
+    // re-resolve all imports so diagnostics update without an LSP restart.
+    let needs_registry_rebuild = params.changes.iter().any(|change| {
+        let path = change.uri.path();
+        path.ends_with("uv.lock") || path.ends_with("pyproject.toml")
+    });
+
+    if needs_registry_rebuild {
+        log_uv_config_changes(&params);
+        super::init::rebuild_registry_and_resolve(server).await;
+    } else {
+        log_uv_config_changes(&params);
+    }
 
     // Classify the incoming changes, filtering to Python files only.
     let mut reload_targets: Vec<Url> = Vec::new();

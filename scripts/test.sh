@@ -59,6 +59,7 @@ require_cmd node         "Install Node.js 20+: https://nodejs.org"
 require_cmd npm          "Bundled with Node.js"
 require_cmd python3      "Install Python 3.12: https://python.org"
 require_cmd ruff         "Install: pip install ruff"
+require_cmd nvim         "Install Neovim 0.10+: https://neovim.io"
 require_py_module debugpy "Install: pip install debugpy"
 
 if [[ "$MISSING" -ne 0 ]]; then
@@ -254,6 +255,37 @@ else
         exit 1
     fi
     echo -e "  ${GREEN}✓ vscode-extension: ${vsix_pct}% ≥ ${TEST_COVERAGE_VSIX}% threshold${RESET}"
+fi
+cd "$REPO_ROOT"
+
+# ── Neovim extension ─────────────────────────────────────────────────────────
+
+header "Neovim extension — real LSP e2e tests"
+cd "$REPO_ROOT/basilisk.nvim"
+
+# Ensure plenary.nvim is available.
+if [[ ! -d /tmp/plenary.nvim ]]; then
+    git clone --depth 1 https://github.com/nvim-lua/plenary.nvim /tmp/plenary.nvim
+fi
+# Ensure nvim-dap is available.
+if [[ ! -d /tmp/nvim-dap ]]; then
+    git clone --depth 1 https://github.com/mfussenegger/nvim-dap /tmp/nvim-dap
+fi
+# Ensure mini.nvim is available (for screenshot tests).
+if [[ ! -d /tmp/mini.nvim ]]; then
+    git clone --depth 1 https://github.com/echasnovski/mini.nvim /tmp/mini.nvim
+fi
+
+if command -v nvim &>/dev/null; then
+    nvim --headless -u tests/minimal_init.lua \
+        -c "PlenaryBustedDirectory tests/lsp {minimal_init = 'tests/minimal_init.lua'}" 2>&1
+    ok "Neovim LSP e2e tests passed (103 tests)"
+
+    nvim --headless -u tests/minimal_init.lua \
+        -l tests/ui/run_screenshots.lua 2>&1
+    ok "Neovim screenshot regression tests passed (6 tests)"
+else
+    warn "nvim not found — skipping Neovim extension tests"
 fi
 cd "$REPO_ROOT"
 
