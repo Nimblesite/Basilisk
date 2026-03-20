@@ -28,5 +28,7 @@ mod lsp_e2e_hierarchies;
 mod lsp_e2e_hover;
 #[path = "lsp/lsp_e2e_navigation.rs"]
 mod lsp_e2e_navigation;
+#[path = "lsp/lsp_e2e_refactoring.rs"]
+mod lsp_e2e_refactoring;
 #[path = "lsp/lsp_tests.rs"]
 mod lsp_tests;

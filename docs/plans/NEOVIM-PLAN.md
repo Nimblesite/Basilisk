@@ -7,7 +7,7 @@
 
 ## Status
 
-Phases 1–10 COMPLETE. Full feature parity with VS Code extension. 147 tests (80 unit + 21 UI + 46 real LSP integration). 5 rename tests failing — expose real LSP server rename bugs (scope-aware rename, prepareRename not implemented).
+Phases 1–10 COMPLETE. Full feature parity with VS Code extension. 149 tests (80 unit + 23 UI + 46 real LSP integration). All rename tests passing — fixed symlink canonicalization bug in LSP server (macOS `/var` → `/private/var`).
 
 ---
 
@@ -255,9 +255,9 @@ Phases 1–10 COMPLETE. Full feature parity with VS Code extension. 147 tests (8
 - [x] Default status to unknown
 - [x] Memory completion — returns matching types, case-insensitive
 
-#### Remaining UI Tests (need live LSP or nvim-dap)
+#### Live LSP UI Tests (in `tests/lsp/ui_spec.lua`)
 
-- [ ] `:BasiliskInfo` — assert floating window opens with correct content (needs LSP client)
-- [ ] `:BasiliskTestToggle` — assert side panel opens with correct filetype/width
+- [x] `:BasiliskInfo` — assert floating window opens with correct content (title, status, binary, version, mode)
+- [x] `:BasiliskTestToggle` — assert side panel opens with correct filetype/width, toggle closes it
 - [ ] Screenshot / snapshot tests with mini.test (future enhancement)
 - [ ] Reference screenshots stored in `tests/ui/screenshots/` for regression comparison

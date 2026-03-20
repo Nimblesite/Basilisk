@@ -246,4 +246,94 @@ describe("basilisk UI interactions with real LSP", function()
     local cleared = helpers.wait_for_diagnostics_cleared(buf)
     assert.is_true(cleared, "diagnostics should clear after fix")
   end)
+
+  -- :BasiliskInfo floating window with live LSP
+
+  it(":BasiliskInfo opens floating window with correct content", function()
+    local buf = helpers.open_python_file(tmpdir, "test_info_cmd.py", "x: int = 1\n")
+    helpers.wait_for_server_ready(buf)
+
+    -- Register commands manually (normally done by setup()).
+    local basilisk = require("basilisk")
+    basilisk.config = require("basilisk.config").resolve({ binary_path = binary })
+    require("basilisk.commands").register(basilisk.config)
+
+    vim.cmd("BasiliskInfo")
+
+    -- Find the floating window (not the main editor window).
+    local wins = vim.api.nvim_list_wins()
+    local float_win = nil
+    local float_buf = nil
+    for _, win in ipairs(wins) do
+      local win_config = vim.api.nvim_win_get_config(win)
+      if win_config.relative and win_config.relative ~= "" then
+        float_win = win
+        float_buf = vim.api.nvim_win_get_buf(win)
+        break
+      end
+    end
+
+    assert.is_not_nil(float_win, ":BasiliskInfo should open a floating window")
+    assert.is_not_nil(float_buf, "floating window should have a buffer")
+
+    local lines = vim.api.nvim_buf_get_lines(float_buf, 0, -1, false)
+    local text = table.concat(lines, "\n")
+
+    -- Verify content.
+    assert.truthy(text:find("Basilisk LSP Server Info"), "should contain title")
+    assert.truthy(text:find("Status:%s+active"), "should show active status")
+    assert.truthy(text:find("Binary:"), "should show binary path")
+    assert.truthy(text:find("Version:"), "should show version")
+    assert.truthy(text:find("Mode:"), "should show analysis mode")
+
+    -- Close the float.
+    if float_win and vim.api.nvim_win_is_valid(float_win) then
+      vim.api.nvim_win_close(float_win, true)
+    end
+  end)
+
+  -- :BasiliskTestToggle side panel
+
+  it(":BasiliskTestToggle opens and closes test explorer panel", function()
+    local buf = helpers.open_python_file(tmpdir, "test_toggle_cmd.py", "x: int = 1\n")
+    helpers.wait_for_server_ready(buf)
+
+    -- Register commands manually (normally done by setup()).
+    local basilisk = require("basilisk")
+    basilisk.config = require("basilisk.config").resolve({ binary_path = binary })
+    require("basilisk.commands").register(basilisk.config)
+
+    local initial_win_count = #vim.api.nvim_list_wins()
+
+    -- Open the test explorer.
+    vim.cmd("BasiliskTestToggle")
+    vim.wait(500)
+
+    local after_open_wins = vim.api.nvim_list_wins()
+    assert.is_true(#after_open_wins > initial_win_count, "toggle should open a new window")
+
+    -- Find the test explorer window by its buffer filetype.
+    local panel_win = nil
+    for _, win in ipairs(after_open_wins) do
+      local win_buf = vim.api.nvim_win_get_buf(win)
+      local ft = vim.bo[win_buf].filetype
+      if ft == "basilisk-tests" then
+        panel_win = win
+        break
+      end
+    end
+
+    assert.is_not_nil(panel_win, "test explorer panel should have filetype basilisk-tests")
+
+    -- Verify the panel window width is reasonable (side panel).
+    local panel_width = vim.api.nvim_win_get_width(panel_win)
+    assert.is_true(panel_width > 0 and panel_width < vim.o.columns, "panel should be a side split")
+
+    -- Close via toggle.
+    vim.cmd("BasiliskTestToggle")
+    vim.wait(500)
+
+    local after_close_wins = #vim.api.nvim_list_wins()
+    assert.are.equal(initial_win_count, after_close_wins, "toggle again should close the panel")
+  end)
 end)

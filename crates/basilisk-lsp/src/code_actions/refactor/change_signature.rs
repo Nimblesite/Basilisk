@@ -234,6 +234,182 @@ fn split_params(text: &str) -> Vec<&str> {
     parts
 }
 
+/// Offer to add a new parameter with a default value to the function under
+/// the cursor.
+///
+/// Only offered when the cursor is on a `def` line.  The new parameter is
+/// appended at the end with `new_param=None`.
+#[must_use]
+pub(in crate::code_actions) fn add_parameter(
+    uri: &Url,
+    source: &str,
+    _range: &Range,
+    resolved: &basilisk_resolver::ResolvedModule,
+    position_offset: usize,
+) -> Option<CodeAction> {
+    let func = find_func_at_offset(resolved, position_offset)?;
+
+    let def_line_num = line_of_offset(source, func.def_span.start_usize());
+    let line = source.lines().nth(def_line_num)?;
+
+    let paren_start = line.find('(')?;
+    let params_text = line.get(paren_start + 1..)?;
+    let paren_end = find_close_paren(params_text)?;
+    let params_slice = params_text.get(..paren_end)?;
+
+    let new_param = "new_param=None";
+    let new_params = if params_slice.trim().is_empty() {
+        new_param.to_owned()
+    } else {
+        format!("{}, {new_param}", params_slice.trim())
+    };
+
+    let edit = build_params_edit(def_line_num, paren_start, paren_end, &new_params);
+
+    let mut changes = HashMap::new();
+    let _ = changes.insert(uri.clone(), vec![edit]);
+
+    Some(CodeAction {
+        title: "Add parameter (basilisk)".to_owned(),
+        kind: Some(CodeActionKind::new("refactor.rewrite.signature")),
+        diagnostics: None,
+        edit: Some(WorkspaceEdit {
+            changes: Some(changes),
+            ..Default::default()
+        }),
+        is_preferred: Some(false),
+        ..Default::default()
+    })
+}
+
+/// Offer to sort parameters alphabetically (excluding self/cls).
+///
+/// Only offered when the function has 3+ non-self parameters (reordering
+/// 2 is trivial and not worth a code action).
+#[must_use]
+pub(in crate::code_actions) fn reorder_parameters(
+    uri: &Url,
+    source: &str,
+    _range: &Range,
+    resolved: &basilisk_resolver::ResolvedModule,
+    position_offset: usize,
+) -> Option<CodeAction> {
+    let func = find_func_at_offset(resolved, position_offset)?;
+
+    let def_line_num = line_of_offset(source, func.def_span.start_usize());
+    let line = source.lines().nth(def_line_num)?;
+
+    let paren_start = line.find('(')?;
+    let params_text = line.get(paren_start + 1..)?;
+    let paren_end = find_close_paren(params_text)?;
+    let params_slice = params_text.get(..paren_end)?;
+
+    let params = split_params(params_slice);
+    let non_self = non_self_params(&params);
+    // Need at least 3 to make reordering worthwhile.
+    if non_self.len() < 3 {
+        return None;
+    }
+
+    let sorted = sort_params(&params);
+    // Don't offer if already sorted.
+    if sorted == params.join(", ") {
+        return None;
+    }
+
+    let edit = build_params_edit(def_line_num, paren_start, paren_end, &sorted);
+
+    let mut changes = HashMap::new();
+    let _ = changes.insert(uri.clone(), vec![edit]);
+
+    Some(CodeAction {
+        title: "Sort parameters alphabetically (basilisk)".to_owned(),
+        kind: Some(CodeActionKind::new("refactor.rewrite.signature")),
+        diagnostics: None,
+        edit: Some(WorkspaceEdit {
+            changes: Some(changes),
+            ..Default::default()
+        }),
+        is_preferred: Some(false),
+        ..Default::default()
+    })
+}
+
+/// Find the function whose `def_span` contains the given offset.
+fn find_func_at_offset(
+    resolved: &basilisk_resolver::ResolvedModule,
+    offset: usize,
+) -> Option<&basilisk_resolver::FunctionInfo> {
+    let offset_u32 = u32::try_from(offset).unwrap_or(u32::MAX);
+    resolved
+        .functions
+        .iter()
+        .find(|f| f.def_span.start <= offset_u32 && offset_u32 < f.def_span.end)
+}
+
+/// Build a `TextEdit` that replaces the params between parens.
+fn build_params_edit(
+    def_line_num: usize,
+    paren_start: usize,
+    paren_end: usize,
+    new_params: &str,
+) -> TextEdit {
+    let line_u32 = u32::try_from(def_line_num).unwrap_or(u32::MAX);
+    let start_char = u32::try_from(paren_start + 1).unwrap_or(0);
+    let end_char = u32::try_from(paren_start + 1 + paren_end).unwrap_or(0);
+
+    TextEdit {
+        range: Range {
+            start: Position {
+                line: line_u32,
+                character: start_char,
+            },
+            end: Position {
+                line: line_u32,
+                character: end_char,
+            },
+        },
+        new_text: new_params.to_owned(),
+    }
+}
+
+/// Filter out self/cls from parameter list.
+fn non_self_params<'a>(params: &[&'a str]) -> Vec<&'a str> {
+    params
+        .iter()
+        .filter(|p| {
+            let name = p.split('=').next().unwrap_or(p).split(':').next().unwrap_or(p).trim();
+            name != "self" && name != "cls"
+        })
+        .copied()
+        .collect()
+}
+
+/// Sort parameters alphabetically, keeping self/cls first.
+fn sort_params(params: &[&str]) -> String {
+    let mut self_params = Vec::new();
+    let mut other_params = Vec::new();
+
+    for param in params {
+        let name = param
+            .split('=')
+            .next()
+            .unwrap_or(param)
+            .split(':')
+            .next()
+            .unwrap_or(param)
+            .trim();
+        if name == "self" || name == "cls" {
+            self_params.push(*param);
+        } else {
+            other_params.push(*param);
+        }
+    }
+    other_params.sort_unstable();
+    self_params.extend(other_params);
+    self_params.join(", ")
+}
+
 /// Convert a byte offset to a 0-based line number.
 fn line_of_offset(source: &str, offset: usize) -> usize {
     let clamped = offset.min(source.len());

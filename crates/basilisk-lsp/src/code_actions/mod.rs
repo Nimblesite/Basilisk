@@ -116,7 +116,7 @@ fn collect_refactoring_actions(
     resolved: Option<&basilisk_resolver::ResolvedModule>,
     actions: &mut Vec<CodeActionOrCommand>,
 ) {
-    if let Some(action) = refactor::extract_variable(uri, source, range) {
+    for action in refactor::extract_variable(uri, source, range) {
         actions.push(CodeActionOrCommand::CodeAction(action));
     }
     if let Some(action) = refactor::extract_constant(uri, source, range) {
@@ -149,6 +149,9 @@ fn collect_refactoring_actions(
     if let Some(action) = refactor::inline_function_call(uri, source, range) {
         actions.push(CodeActionOrCommand::CodeAction(action));
     }
+    if let Some(action) = refactor::move_symbol_to_new_file(uri, source, range) {
+        actions.push(CodeActionOrCommand::CodeAction(action));
+    }
     if let Some(resolved) = resolved {
         let position_offset = crate::util::position_to_byte_offset(source, range.start);
         if let Some(action) =
@@ -158,6 +161,16 @@ fn collect_refactoring_actions(
         }
         if let Some(action) =
             refactor::remove_parameter(uri, source, range, resolved, position_offset)
+        {
+            actions.push(CodeActionOrCommand::CodeAction(action));
+        }
+        if let Some(action) =
+            refactor::add_parameter(uri, source, range, resolved, position_offset)
+        {
+            actions.push(CodeActionOrCommand::CodeAction(action));
+        }
+        if let Some(action) =
+            refactor::reorder_parameters(uri, source, range, resolved, position_offset)
         {
             actions.push(CodeActionOrCommand::CodeAction(action));
         }

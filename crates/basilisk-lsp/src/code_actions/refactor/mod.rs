@@ -11,18 +11,20 @@ mod helpers;
 mod inline;
 mod inline_function;
 mod literals;
+mod move_symbol;
 mod namedtuple;
 mod ternary;
 mod type_syntax;
 
 pub(super) use abstract_methods::implement_abstract_methods;
-pub(super) use change_signature::remove_parameter;
+pub(super) use change_signature::{add_parameter, remove_parameter, reorder_parameters};
 pub(super) use extract::{extract_constant, extract_variable};
 pub(super) use extract_function::extract_function;
 pub(super) use fstring::convert_fstring;
 pub(super) use inline::inline_variable;
 pub(super) use inline_function::inline_function_call;
 pub(super) use literals::convert_literals;
+pub(super) use move_symbol::move_symbol_to_new_file;
 pub(super) use namedtuple::convert_namedtuple;
 pub(super) use ternary::convert_ternary;
 pub(super) use type_syntax::{convert_optional_syntax, convert_union_syntax};
@@ -59,7 +61,9 @@ mod tests {
             },
         };
         let uri = test_uri();
-        let action = extract_variable(&uri, source, &range).expect("should produce action");
+        let actions = extract_variable(&uri, source, &range);
+        assert!(!actions.is_empty(), "should produce at least one action");
+        let action = &actions[0];
 
         assert_eq!(action.title, "Extract variable (basilisk)");
         assert_eq!(
@@ -67,8 +71,8 @@ mod tests {
             Some("refactor.extract.variable")
         );
 
-        let edit = action.edit.unwrap();
-        let changes = edit.changes.unwrap();
+        let edit = action.edit.as_ref().unwrap();
+        let changes = edit.changes.as_ref().unwrap();
         let edits = changes.get(&uri).unwrap();
         assert_eq!(edits.len(), 2);
 
@@ -84,7 +88,7 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_variable_empty_selection_returns_none() {
+    fn test_extract_variable_empty_selection_returns_empty() {
         let source = "x = 1\n";
         let range = Range {
             start: Position {
@@ -96,11 +100,11 @@ mod tests {
                 character: 2,
             },
         };
-        assert!(extract_variable(&test_uri(), source, &range).is_none());
+        assert!(extract_variable(&test_uri(), source, &range).is_empty());
     }
 
     #[test]
-    fn test_extract_variable_multiline_returns_none() {
+    fn test_extract_variable_multiline_returns_empty() {
         let source = "x = (\n    1 + 2\n)\n";
         let range = Range {
             start: Position {
@@ -112,7 +116,63 @@ mod tests {
                 character: 1,
             },
         };
-        assert!(extract_variable(&test_uri(), source, &range).is_none());
+        assert!(extract_variable(&test_uri(), source, &range).is_empty());
+    }
+
+    #[test]
+    fn test_extract_variable_replace_all_with_multiple_occurrences() {
+        let source = "a = foo(1) + foo(1)\nb = foo(1)\n";
+        // Select the first "foo(1)" at line 0, chars 4..10.
+        let range = Range {
+            start: Position {
+                line: 0,
+                character: 4,
+            },
+            end: Position {
+                line: 0,
+                character: 10,
+            },
+        };
+        let uri = test_uri();
+        let actions = extract_variable(&uri, source, &range);
+
+        assert_eq!(actions.len(), 2, "should have single + replace-all actions");
+        assert_eq!(actions[0].title, "Extract variable (basilisk)");
+        assert_eq!(
+            actions[1].title,
+            "Extract variable \u{2014} replace all (basilisk)"
+        );
+
+        let edit = actions[1].edit.as_ref().unwrap();
+        let changes = edit.changes.as_ref().unwrap();
+        let edits = changes.get(&uri).unwrap();
+
+        // 1 insertion + 3 replacements (three occurrences of "foo(1)").
+        assert_eq!(edits.len(), 4);
+        assert_eq!(edits[0].new_text, "extracted_value = foo(1)\n");
+
+        for replacement in &edits[1..] {
+            assert_eq!(replacement.new_text, "extracted_value");
+        }
+    }
+
+    #[test]
+    fn test_extract_variable_replace_all_not_offered_for_single_occurrence() {
+        let source = "a = unique_expr()\n";
+        let range = Range {
+            start: Position {
+                line: 0,
+                character: 4,
+            },
+            end: Position {
+                line: 0,
+                character: 17,
+            },
+        };
+        let actions = extract_variable(&test_uri(), source, &range);
+
+        assert_eq!(actions.len(), 1, "should only have single action");
+        assert_eq!(actions[0].title, "Extract variable (basilisk)");
     }
 
     // ── Extract Constant ────────────────────────────────────────────────────

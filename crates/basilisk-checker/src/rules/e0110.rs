@@ -32,6 +32,8 @@ const EXEMPT_METHODS: &[&str] = &["__init__", "__new__"];
 const COVARIANT_CONTAINERS: &[&str] = &[
     "type",
     "Type",
+    "tuple",
+    "Tuple",
     "FrozenSet",
     "frozenset",
     "Sequence",

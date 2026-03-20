@@ -370,6 +370,88 @@ pub(super) fn generic_types_compatible(actual: &str, expected: &str) -> bool {
     false
 }
 
+/// Compute a per-line bitmask indicating which lines are inside triple-quoted strings.
+///
+/// Returns a `Vec<bool>` of the same length as `lines` where `true` means the line
+/// is entirely inside (or is) a triple-quoted string. This is a conservative
+/// approximation that handles `"""` and `'''` delimiters.
+pub(super) fn compute_triple_quote_mask(lines: &[&str]) -> Vec<bool> {
+    let mut mask = vec![false; lines.len()];
+    let mut in_triple = false;
+    // Which delimiter we are inside: `true` = `"""`, `false` = `'''`.
+    let mut is_double = true;
+
+    for (idx, &line) in lines.iter().enumerate() {
+        let Some(slot) = mask.get_mut(idx) else {
+            continue;
+        };
+        if in_triple {
+            *slot = true;
+            let closing = if is_double { "\"\"\"" } else { "'''" };
+            if line.contains(closing) {
+                in_triple = false;
+            }
+        } else {
+            // Check if a triple-quote opens on this line without closing on the same line.
+            let (opens_double, opens_single) = triple_quote_opens(line);
+            if opens_double {
+                *slot = true;
+                in_triple = true;
+                is_double = true;
+            } else if opens_single {
+                *slot = true;
+                in_triple = true;
+                is_double = false;
+            }
+        }
+    }
+    mask
+}
+
+/// Check whether `line` opens a triple-quoted string that does NOT close on the same line.
+///
+/// Returns `(opens_double, opens_single)` booleans for `"""` and `'''` respectively.
+fn triple_quote_opens(line: &str) -> (bool, bool) {
+    for delim in ["\"\"\"", "'''"] {
+        let Some(first) = line.find(delim) else {
+            continue;
+        };
+        // Check if there is a matching close on this same line after the opening.
+        let after_open = first + delim.len();
+        if line
+            .get(after_open..)
+            .is_some_and(|rest| !rest.contains(delim))
+        {
+            return (delim == "\"\"\"", delim == "'''");
+        }
+    }
+    (false, false)
+}
+
+/// Compute the 0-based line index where a multi-line function signature ends.
+///
+/// Starting from a `def`/`async def` line at `start_idx`, tracks parenthesis depth
+/// and returns the index of the line containing the closing `)`. If the signature
+/// is entirely on one line, returns `start_idx`.
+pub(super) fn signature_end_line(lines: &[&str], start_idx: usize) -> usize {
+    let mut depth = 0i32;
+    for (offset, &line) in lines.iter().enumerate().skip(start_idx) {
+        for ch in line.chars() {
+            match ch {
+                '(' => depth += 1,
+                ')' => {
+                    depth -= 1;
+                    if depth <= 0 {
+                        return offset;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    start_idx
+}
+
 /// Find the position of the matching close paren/bracket in a string that starts
 /// after an opening delimiter.
 pub(super) fn find_matching_close(text: &str) -> usize {

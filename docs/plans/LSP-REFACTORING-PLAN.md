@@ -241,7 +241,7 @@ After Phase 6, we match Pylance. After Phase 10, we surpass every Python LSP.
 - [ ] **Phase 2**: Module rename e2e tests (blocked on capability registration)
 - [x] **Phase 3**: Selection-to-statements resolver — `extract_function.rs`
 - [x] **Phase 3**: Data flow analysis (reads, writes, locals) — `extract_function.rs::analyze_data_flow()`
-- [ ] **Phase 3**: Context detection (method vs function, async, yield/break rejection)
+- [x] **Phase 3**: Context detection (method vs function, async, yield/break rejection) — `extract_function.rs::detect_enclosing_context()`
 - [x] **Phase 3**: Extract function code generation (def + call site) — `extract_function.rs`
 - [x] **Phase 3**: Extract function placement logic — `extract_function.rs::find_insertion_point()`
 - [ ] **Phase 3**: Post-extraction formatting pass
@@ -249,11 +249,12 @@ After Phase 6, we match Pylance. After Phase 10, we surpass every Python LSP.
 - [x] **Phase 4**: Extract variable code generation and replacement — `code_actions/refactor/extract.rs`
 - [x] **Phase 4**: Extract constant (module-level SCREAMING_SNAKE) — `code_actions/refactor/extract.rs`
 - [x] **Phase 4**: Extract variable/constant tests — 9 tests in `refactor/mod.rs`
-- [ ] **Phase 4**: Structural AST comparison for identical expressions (replace-all-occurrences)
-- [ ] **Phase 5**: Symbol dependency analysis
+- [x] **Phase 4**: Extract variable — replace all identical occurrences — `extract.rs::find_all_occurrences()`
+- [x] **Phase 5**: Move symbol to new file — `code_actions/refactor/move_symbol.rs`
+- [x] **Phase 5**: Symbol body extraction and import collection — `move_symbol.rs`
+- [x] **Phase 5**: `CamelCase` to `snake_case` file naming — `move_symbol.rs::to_snake_case()`
 - [ ] **Phase 5**: Move to existing file (with re-export and importer updates)
-- [ ] **Phase 5**: Move to new file
-- [ ] **Phase 5**: Move symbol tests
+- [x] **Phase 5**: Move symbol tests — 14 tests in `move_symbol.rs`
 - [x] **Phase 6**: Abstract method detection via base class lookup — `code_actions/refactor/abstract_methods.rs`
 - [x] **Phase 6**: Method stub generation (with self parameter) — `code_actions/refactor/abstract_methods.rs`
 - [x] **Phase 6**: Wire as code action (`refactor.rewrite.implement`) — `code_actions/mod.rs`
@@ -270,17 +271,34 @@ After Phase 6, we match Pylance. After Phase 10, we surpass every Python LSP.
 - [x] **Phase 8**: Inline variable validation (reassignment, side effects) — `refactor/inline.rs`
 - [x] **Phase 8**: Inline variable tests — `refactor/mod.rs`
 - [x] **Phase 9**: Change signature — remove parameter with call site updates — `refactor/change_signature.rs`
-- [ ] **Phase 9**: Change signature — add parameter with default value
-- [ ] **Phase 9**: Change signature — reorder parameters
+- [x] **Phase 9**: Change signature — add parameter with default value — `change_signature.rs::add_parameter()`
+- [x] **Phase 9**: Change signature — reorder/sort parameters alphabetically — `change_signature.rs::reorder_parameters()`
 - [x] **Phase 9**: Change signature tests
 - [x] **Phase 10**: Inline function (single-expression bodies) — `refactor/inline_function.rs`
 - [x] **Phase 10**: Argument substitution and precedence handling — `refactor/inline_function.rs`
 - [x] **Phase 10**: Inline function tests
 - [x] **Infrastructure**: Scope tree module — `scope_tree.rs` (pre-existing, 599 lines)
 - [x] **Infrastructure**: Data flow analysis module — `extract_function.rs::analyze_data_flow()`
-- [ ] **Infrastructure**: Structural AST comparison
+- [x] **Infrastructure**: Structural text comparison — `extract.rs::find_all_occurrences()`
 - [ ] **Infrastructure**: Workspace edit builder with formatting
 - [x] **Infrastructure**: Code generation utilities — `code_actions/refactor/helpers.rs`
+
+### E2E Test Coverage
+
+- [x] **E2E**: 19 refactoring e2e tests — `tests/lsp/lsp_e2e_refactoring.rs`
+- [x] **E2E**: Extract variable — offered + edit correctness
+- [x] **E2E**: Extract constant — offered
+- [x] **E2E**: Extract function — offered + yield rejection
+- [x] **E2E**: Union/Optional conversion — offered
+- [x] **E2E**: f-string conversion — offered
+- [x] **E2E**: dict/list conversion — offered
+- [x] **E2E**: Ternary conversion — offered
+- [x] **E2E**: Inline variable — offered + edit correctness
+- [x] **E2E**: Inline function — offered
+- [x] **E2E**: Move symbol — offered + negative case
+- [x] **E2E**: NamedTuple conversion — offered
+- [x] **E2E**: Scope-aware rename — scoped edits verified
+- [x] **E2E**: Negative cases — empty selection, assignment (no false positives)
 
 ### Editor Integration
 

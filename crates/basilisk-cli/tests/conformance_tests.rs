@@ -231,8 +231,15 @@ fn collect_diagnostics(path: &Path, source: &str) -> DiagnosticOutput {
     //          inside match arms but does not require a wildcard `case _:` branch
     // - E0025: missing @override (PEP 698 makes @override optional documentation)
     const STRICTNESS_ONLY: &[&str] = &[
-        "BSK-E0001", "BSK-E0002", "BSK-E0003", "BSK-E0004", "BSK-E0005",
-        "BSK-E0010", "BSK-E0011", "BSK-E0023", "BSK-E0025",
+        "BSK-E0001",
+        "BSK-E0002",
+        "BSK-E0003",
+        "BSK-E0004",
+        "BSK-E0005",
+        "BSK-E0010",
+        "BSK-E0011",
+        "BSK-E0023",
+        "BSK-E0025",
     ];
 
     let mut rules_seen = std::collections::BTreeSet::new();
@@ -262,7 +269,11 @@ fn collect_diagnostics(path: &Path, source: &str) -> DiagnosticOutput {
         Err(_) => HashSet::new(),
     };
 
-    DiagnosticOutput { diag_lines, rules_seen, diag_line_rules }
+    DiagnosticOutput {
+        diag_lines,
+        rules_seen,
+        diag_line_rules,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -278,11 +289,19 @@ fn run_file(path: &Path) -> FileResult {
     let diagnostics = collect_diagnostics(path, &source);
 
     // Score required lines.
-    let caught = annotations.required.iter().filter(|l| diagnostics.diag_lines.contains(l)).count();
+    let caught = annotations
+        .required
+        .iter()
+        .filter(|l| diagnostics.diag_lines.contains(l))
+        .count();
     let missed = annotations.required.len() - caught;
 
     // Score optional lines.
-    let optional_caught = annotations.optional.iter().filter(|l| diagnostics.diag_lines.contains(l)).count();
+    let optional_caught = annotations
+        .optional
+        .iter()
+        .filter(|l| diagnostics.diag_lines.contains(l))
+        .count();
 
     // Score tagged-exact groups: a group passes if at least one line errored.
     let mut tagged_exact_satisfied = 0usize;
@@ -296,7 +315,8 @@ fn run_file(path: &Path) -> FileResult {
     }
 
     // All annotated lines (don't count false positives on annotated lines).
-    let all_annotated: HashSet<usize> = annotations.required
+    let all_annotated: HashSet<usize> = annotations
+        .required
         .iter()
         .chain(annotations.optional.iter())
         .chain(annotations.tagged_exact.values().flatten())
@@ -304,14 +324,16 @@ fn run_file(path: &Path) -> FileResult {
         .copied()
         .collect();
 
-    let false_positives = diagnostics.diag_lines
+    let false_positives = diagnostics
+        .diag_lines
         .iter()
         .filter(|l| !all_annotated.contains(l))
         .count();
 
     let file_name = path.file_name().unwrap_or_default().to_string_lossy();
     if missed > 0 {
-        let missed_lines: Vec<usize> = annotations.required
+        let missed_lines: Vec<usize> = annotations
+            .required
             .iter()
             .filter(|l| !diagnostics.diag_lines.contains(l))
             .copied()
@@ -319,11 +341,13 @@ fn run_file(path: &Path) -> FileResult {
         println!("  DEBUG {file_name}: missed={missed} lines={missed_lines:?}");
     }
     if false_positives > 0 {
-        let mut fp_details: Vec<(usize, String)> = diagnostics.diag_lines
+        let mut fp_details: Vec<(usize, String)> = diagnostics
+            .diag_lines
             .iter()
             .filter(|l| !all_annotated.contains(l))
             .map(|&l| {
-                let rules = diagnostics.diag_line_rules
+                let rules = diagnostics
+                    .diag_line_rules
                     .get(&l)
                     .map_or_else(String::new, |codes| codes.join("|"));
                 (l, rules)

@@ -62,6 +62,10 @@ pub(super) fn check_module_assignments(
             continue;
         }
         let trimmed = line.trim();
+        // Skip comments — they are not executable code.
+        if trimmed.starts_with('#') {
+            continue;
+        }
         let Some(colon) = trimmed.find(':') else {
             continue;
         };

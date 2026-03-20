@@ -17,9 +17,13 @@ use super::helpers::{leading_indent_of_line, selected_text};
 /// Requirements:
 /// - Selection must span one or more complete lines.
 /// - Selection must not be empty.
+/// - Selection must not contain `yield`, `break`, or `continue` (unextractable).
 ///
 /// The extracted function is placed immediately before the current function
-/// (if inside one) or at the current indentation level.
+/// (if inside one) or at the current indentation level.  If the enclosing
+/// function is `async`, the extracted function is also `async` and called
+/// with `await`.  If the selection is inside a method (first param is
+/// `self`/`cls`), the extraction produces a method with `self`/`cls`.
 #[must_use]
 pub(in crate::code_actions) fn extract_function(
     uri: &Url,
@@ -59,6 +63,15 @@ pub(in crate::code_actions) fn extract_function(
         return None;
     }
 
+    // Reject selections containing yield, break, or continue — these cannot
+    // be extracted into a separate function without changing semantics.
+    if contains_unextractable_keyword(&selected_lines) {
+        return None;
+    }
+
+    // Detect context: is the enclosing function async?  Is it a method?
+    let context = detect_enclosing_context(source, start_line);
+
     // Determine the body indentation.
     let body_indent = leading_indent_of_line(source, range.start.line);
     let func_indent = compute_enclosing_indent(source, start_line);
@@ -66,21 +79,26 @@ pub(in crate::code_actions) fn extract_function(
     // Perform data-flow analysis to find parameters and return values.
     let analysis = analyze_data_flow(&selected_lines, &lines, start_line, end_line);
 
+    // Build parameter list, prepending self/cls for methods.
+    let params_str = build_params_string(&analysis.params, &context);
+
     // Build the extracted function.
     let func_name = "extracted_function";
     let func_body = build_function_body(&selected_lines, &body_indent, &func_indent);
-    let params_str = analysis.params.join(", ");
     let return_stmt = build_return_statement(&analysis.returns, &func_indent);
 
-    let mut func_def = format!("{func_indent}def {func_name}({params_str}):\n{func_body}");
+    let async_kw = if context.is_async { "async " } else { "" };
+    let mut func_def =
+        format!("{func_indent}{async_kw}def {func_name}({params_str}):\n{func_body}");
     if !return_stmt.is_empty() {
         func_def.push_str(&return_stmt);
     }
     func_def.push('\n');
 
-    // Build the call expression.
-    let args_str = analysis.params.join(", ");
-    let call_expr = build_call_expression(func_name, &args_str, &analysis.returns, &body_indent);
+    // Build the call expression (with await if async).
+    let args_str = build_args_string(&analysis.params, &context);
+    let call_expr =
+        build_call_expression(func_name, &args_str, &analysis.returns, &body_indent, &context);
 
     // Find insertion point: before the enclosing function/class, or at the
     // start of the selection if at module level.
@@ -338,6 +356,82 @@ fn is_keyword(word: &str) -> bool {
     )
 }
 
+// ── Context detection ────────────────────────────────────────────────────────
+
+/// Information about the enclosing function context.
+struct EnclosingContext {
+    /// Whether the enclosing function is `async def`.
+    is_async: bool,
+    /// The self/cls parameter name if inside a method, or `None`.
+    self_param: Option<String>,
+}
+
+/// Detect whether the selection is inside an async function or a method.
+fn detect_enclosing_context(source: &str, line: usize) -> EnclosingContext {
+    let lines: Vec<&str> = source.lines().collect();
+    for idx in (0..line.min(lines.len())).rev() {
+        let trimmed = lines.get(idx).copied().unwrap_or("").trim_start();
+        if let Some(rest) = trimmed.strip_prefix("def ").or_else(|| {
+            trimmed
+                .strip_prefix("async ")
+                .and_then(|s| s.strip_prefix("def "))
+        }) {
+            let is_async = trimmed.starts_with("async ");
+            let self_param = extract_self_param(rest);
+            return EnclosingContext {
+                is_async,
+                self_param,
+            };
+        }
+    }
+    EnclosingContext {
+        is_async: false,
+        self_param: None,
+    }
+}
+
+/// Extract the first parameter if it is `self` or `cls`.
+fn extract_self_param(after_def_name: &str) -> Option<String> {
+    let paren_content = after_def_name.split('(').nth(1)?;
+    let first_param = paren_content.split(',').next()?.trim();
+    let name = first_param.split(':').next()?.trim();
+    if name == "self" || name == "cls" {
+        return Some(name.to_owned());
+    }
+    None
+}
+
+/// Check if any selected line contains `yield`, `break`, or `continue`.
+fn contains_unextractable_keyword(lines: &[&str]) -> bool {
+    for line in lines {
+        for word in extract_identifiers(line) {
+            if matches!(word.as_str(), "yield" | "break" | "continue") {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Build the parameter string, prepending self/cls for methods.
+fn build_params_string(params: &[String], context: &EnclosingContext) -> String {
+    match &context.self_param {
+        Some(sp) => {
+            if params.is_empty() {
+                sp.clone()
+            } else {
+                format!("{sp}, {}", params.join(", "))
+            }
+        }
+        None => params.join(", "),
+    }
+}
+
+/// Build the arguments string (self/cls is passed implicitly, not as an arg).
+fn build_args_string(params: &[String], _context: &EnclosingContext) -> String {
+    params.join(", ")
+}
+
 // ── Code generation ──────────────────────────────────────────────────────────
 
 /// Build the function body from the selected lines, re-indented to 4 spaces.
@@ -372,8 +466,19 @@ fn build_return_statement(returns: &[String], func_indent: &str) -> String {
 }
 
 /// Build the call expression that replaces the selection.
-fn build_call_expression(func_name: &str, args: &str, returns: &[String], indent: &str) -> String {
-    let call = format!("{func_name}({args})");
+fn build_call_expression(
+    func_name: &str,
+    args: &str,
+    returns: &[String],
+    indent: &str,
+    context: &EnclosingContext,
+) -> String {
+    let await_kw = if context.is_async { "await " } else { "" };
+    let receiver = match &context.self_param {
+        Some(sp) => format!("{sp}."),
+        None => String::new(),
+    };
+    let call = format!("{await_kw}{receiver}{func_name}({args})");
     if returns.is_empty() {
         return format!("{indent}{call}\n");
     }

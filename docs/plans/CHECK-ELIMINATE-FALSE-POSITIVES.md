@@ -159,7 +159,7 @@ After each step:
 
 ## TODO
 
-> **Total: 225 FPs** (down from 251, as of 2026-03-20)
+> **Total: 196 FPs** (down from 251, as of 2026-03-20)
 
 ### FP Breakdown by Rule (from conformance test verbose output)
 
@@ -181,15 +181,21 @@ After each step:
 | BSK-E0104 | 2 | aliases_recursive (2) |
 | Others | ~37 | scattered across E0041, E0047, E0048, E0054, E0060, E0069, E0078, E0092, E0094, E0099, E0112, E0132, E0139, E0140, E0141, E0143 |
 
-### Completed (26 FPs eliminated)
+### Completed (55 FPs eliminated, 251→196)
 
 - [x] Step 0: Add FP verbose reporting to conformance harness — `diag_line_rules` HashMap in `conformance_tests.rs`
 - [x] BSK-E0014: bare generics (`list`, `dict`, `set`, `tuple`) + `complex` type recognition — 7 FPs fixed
 - [x] BSK-E0104: recursive alias cycle detection — allow container-wrapped recursion — 2 FPs fixed
 - [x] BSK-E0061: enum `assert_type` — only flag when first arg is enum-typed param — 8 FPs fixed
 - [x] BSK-E0111: constructor calls — add builtin base classes, dataclass inheritance, `__init_subclass__` — 9 FPs fixed
+- [x] BSK-E0149: PEP 695 type param extraction — fixed `extract_pep695_type_params` to check `=` for `type` statements, preventing RHS subscripts from being treated as type params — 18 FPs fixed
+- [x] BSK-E0093: TypedDict `Required`/`NotRequired`/`ReadOnly` — added `is_field_required()` helper and `strip_td_wrappers()` for value type comparison — 9 FPs fixed
 
-### Remaining (225 FPs)
+- [x] BSK-E0110: protocol variance — treat invariant containers as variance-neutral; add `tuple`/`Tuple` to covariant containers — 5 FPs fixed
+- [x] BSK-E0121: protocol conformance — check class attributes (not just methods) for protocol member satisfaction — 7 FPs fixed
+- [x] BSK-E0130: TypeVar scoping — skip docstrings, comments, and multi-line function signature continuations — 6 FPs fixed
+
+### Remaining (196 FPs)
 
 **Requires type narrowing / full inference** (cannot fix without fundamental engine work):
 - [ ] BSK-E0014 (~98 FP) — Named-to-Named Protocol/class subtyping in assignments
@@ -197,13 +203,12 @@ After each step:
 - [ ] BSK-E0013 (~15 FP) — return type checking with protocol properties, narrowing functions
 
 **Requires domain-specific rule improvements**:
-- [ ] BSK-E0093 (~18 FP) — TypedDict `extra_items` (PEP 728), ReadOnly semantics (PEP 705)
+- [ ] BSK-E0093 (~9 FP remaining) — TypedDict `extra_items` subscript reads, `Final` key access
 - [ ] BSK-E0111 (~6 FP) — remaining: dataclass_transform metaclass, generic NamedTuples
-- [ ] BSK-E0130 (~9 FP) — TypeVar bound violations in various generic contexts
-- [ ] BSK-E0121 (~7 FP) — protocol conformance: inherited methods, builtin dunders
-- [ ] BSK-E0149 (~7 FP) — isinstance checks in type alias / scoping contexts
-- [ ] BSK-E0110 (~5 FP) — protocol variance in recursive/self types
+- [x] BSK-E0130 — TypeVar scoping: docstrings, comments, multi-line signatures — DONE (3 remaining)
+- [x] BSK-E0121 — protocol conformance: class attributes, dataclass/NamedTuple fields — DONE
+- [x] BSK-E0110 — protocol variance: invariant container handling + tuple covariance — DONE
 - [ ] BSK-E0012 (~4 FP) — TypeVarTuple unpacking edge cases
 - [ ] BSK-E0133 (~3 FP) — callable parameter count with *args/**kwargs
 - [ ] BSK-E0115 (~2 FP) — deprecated directive false positives
-- [ ] Remaining scatter (~37 FP) — E0041, E0047, E0048, E0054, E0060, E0069, E0078, E0092, E0094, E0099, E0112, E0132, E0139, E0140, E0141, E0143
+- [ ] Remaining scatter (~28 FP) — E0041, E0047, E0048, E0054, E0060, E0069, E0078, E0092, E0094, E0099, E0112, E0132, E0139, E0140, E0141, E0143

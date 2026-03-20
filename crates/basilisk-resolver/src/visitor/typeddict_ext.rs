@@ -8,6 +8,30 @@ use super::class_info_ext::expr_simple_name;
 use super::core::text_range_to_span;
 use super::typeddict::TdFieldMap;
 
+/// Determine whether a `TypedDict` field is required, accounting for
+/// `Required[...]`, `NotRequired[...]`, and `ReadOnly[...]` wrappers.
+///
+/// - `is_total=true` (default):  all fields are required unless wrapped in `NotRequired`.
+/// - `is_total=false`:  all fields are not-required unless wrapped in `Required`.
+fn is_field_required(
+    field_name: &str,
+    field_types: &std::collections::HashMap<&str, String>,
+    is_total: bool,
+) -> bool {
+    let Some(ann) = field_types.get(field_name) else {
+        return is_total;
+    };
+    let ann_lower = ann.to_ascii_lowercase();
+    // Strip outer wrappers to find Required/NotRequired regardless of nesting.
+    if ann_lower.contains("notrequired") {
+        return false;
+    }
+    if ann_lower.contains("required") {
+        return true;
+    }
+    is_total
+}
+
 pub(super) fn td_check_regular_assign(
     node: &StmtAssign,
     var_type: &std::collections::HashMap<String, String>,
@@ -67,15 +91,12 @@ pub(super) fn td_check_regular_assign(
                 .cloned()
                 .collect()
         };
-        let missing_keys: Vec<String> = if *is_total {
-            all_fields
-                .iter()
-                .filter(|&&f| !literal_keys.iter().any(|k| k == f))
-                .map(|s| (*s).to_owned())
-                .collect()
-        } else {
-            Vec::new()
-        };
+        let missing_keys: Vec<String> = all_fields
+            .iter()
+            .filter(|&&f| !literal_keys.iter().any(|k| k == f))
+            .filter(|&&f| is_field_required(f, field_types, *is_total))
+            .map(|s| (*s).to_owned())
+            .collect();
 
         if !invalid_keys.is_empty() || !missing_keys.is_empty() {
             out.push(TypedDictKeyViolation {
@@ -128,7 +149,7 @@ pub(super) fn td_check_ann_assign(
         return;
     };
     let class_name = ann_name.id.as_str();
-    let Some((all_fields, _, is_total, has_extra_items)) = fields.get(class_name) else {
+    let Some((all_fields, field_types, is_total, has_extra_items)) = fields.get(class_name) else {
         return;
     };
     let Expr::Dict(dict) = value.as_ref() else {
@@ -171,15 +192,12 @@ pub(super) fn td_check_ann_assign(
             .cloned()
             .collect()
     };
-    let missing_keys: Vec<String> = if *is_total {
-        all_fields
-            .iter()
-            .filter(|&&f| !literal_keys.iter().any(|k| k == f))
-            .map(|s| (*s).to_owned())
-            .collect()
-    } else {
-        Vec::new()
-    };
+    let missing_keys: Vec<String> = all_fields
+        .iter()
+        .filter(|&&f| !literal_keys.iter().any(|k| k == f))
+        .filter(|&&f| is_field_required(f, field_types, *is_total))
+        .map(|s| (*s).to_owned())
+        .collect();
 
     if !invalid_keys.is_empty() || !missing_keys.is_empty() {
         out.push(TypedDictKeyViolation {
@@ -332,9 +350,46 @@ pub(super) fn expr_literal_type_name(expr: &Expr) -> Option<&'static str> {
 
 /// Return `true` if an actual literal type is compatible with an expected `TypedDict` field type.
 pub(super) fn typeddict_field_type_compatible(actual: &str, expected: &str) -> bool {
-    actual == expected
-        || (actual == "bool" && expected == "int")
-        || (actual == "int" && expected == "float")
+    let stripped = strip_td_wrappers(expected);
+    actual == stripped
+        || (actual == "bool" && stripped == "int")
+        || (actual == "int" && stripped == "float")
+}
+
+/// Strip `Required[...]`, `NotRequired[...]`, `ReadOnly[...]`, and
+/// `Annotated[..., meta]` wrappers from a `TypedDict` field annotation to
+/// extract the underlying type.
+fn strip_td_wrappers(annotation: &str) -> &str {
+    let mut result = annotation.trim();
+    loop {
+        let lower = result.to_ascii_lowercase();
+        if let Some(inner) = try_strip_wrapper(&lower, result, "required[")
+            .or_else(|| try_strip_wrapper(&lower, result, "notrequired["))
+            .or_else(|| try_strip_wrapper(&lower, result, "readonly["))
+        {
+            result = inner.trim();
+            continue;
+        }
+        // Annotated[T, ...] — keep only the first type arg.
+        if let Some(inner) = try_strip_wrapper(&lower, result, "annotated[") {
+            if let Some(comma) = inner.find(',') {
+                result = inner[..comma].trim();
+                continue;
+            }
+            result = inner.trim();
+            continue;
+        }
+        break;
+    }
+    result
+}
+
+/// Try to strip a wrapper prefix (case-insensitive) and its matching `]`.
+fn try_strip_wrapper<'a>(lower: &str, original: &'a str, prefix: &str) -> Option<&'a str> {
+    if !lower.starts_with(prefix) || !original.ends_with(']') {
+        return None;
+    }
+    Some(&original[prefix.len()..original.len() - 1])
 }
 
 /// Collect `ReadOnly` violations from module-level statements and function bodies.
