@@ -162,40 +162,21 @@ impl FileResult {
 }
 
 // ---------------------------------------------------------------------------
-// Run one conformance file
+// Annotation collection
 // ---------------------------------------------------------------------------
 
-fn run_file(path: &Path) -> FileResult {
-    // Rules that are Basilisk-specific strictness requirements not covered by
-    // the PEP conformance suite.  These codes are excluded from both the
-    // "caught" count and the false-positive count so they do not inflate or
-    // deflate the conformance score:
-    //
-    // - E0001–E0005: annotation completeness (PEP suite fixtures are unannotated)
-    // - E0010, E0011: import strictness and Any warnings
-    // - E0023: non-exhaustive match — PEP conformance suite tests type narrowing
-    //          inside match arms but does not require a wildcard `case _:` branch
-    // - E0025: missing @override (PEP 698 makes @override optional documentation)
-    const STRICTNESS_ONLY: &[&str] = &[
-        "BSK-E0001",
-        "BSK-E0002",
-        "BSK-E0003",
-        "BSK-E0004",
-        "BSK-E0005",
-        "BSK-E0010",
-        "BSK-E0011",
-        "BSK-E0023",
-        "BSK-E0025",
-    ];
+struct Annotations {
+    required: HashSet<usize>,
+    optional: HashSet<usize>,
+    tagged_exact: HashMap<String, HashSet<usize>>,
+    tagged_multi: HashMap<String, HashSet<usize>>,
+}
 
-    let Ok(source) = fs::read_to_string(path) else {
-        return FileResult::default();
-    };
-
-    // Collect annotations by 1-based line number.
+/// Scan source lines and collect all conformance annotations by 1-based line
+/// number.
+fn collect_annotations(source: &str) -> Annotations {
     let mut required: HashSet<usize> = HashSet::new();
     let mut optional: HashSet<usize> = HashSet::new();
-    // tag → set of line numbers
     let mut tagged_exact: HashMap<String, HashSet<usize>> = HashMap::new();
     let mut tagged_multi: HashMap<String, HashSet<usize>> = HashMap::new();
 
@@ -218,10 +199,45 @@ fn run_file(path: &Path) -> FileResult {
         }
     }
 
-    // Run the pipeline.
-    let mut rules_seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    // Map each diagnostic line to the rule codes that fired on it (for FP reporting).
+    Annotations {
+        required,
+        optional,
+        tagged_exact,
+        tagged_multi,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Diagnostic collection
+// ---------------------------------------------------------------------------
+
+struct DiagnosticOutput {
+    diag_lines: HashSet<usize>,
+    rules_seen: std::collections::BTreeSet<String>,
+    diag_line_rules: HashMap<usize, Vec<String>>,
+}
+
+/// Run the Basilisk pipeline on `path` and collect diagnostic lines, filtering
+/// out strictness-only rules.
+fn collect_diagnostics(path: &Path, source: &str) -> DiagnosticOutput {
+    // Rules that are Basilisk-specific strictness requirements not covered by
+    // the PEP conformance suite.  These codes are excluded from both the
+    // "caught" count and the false-positive count so they do not inflate or
+    // deflate the conformance score:
+    //
+    // - E0001–E0005: annotation completeness (PEP suite fixtures are unannotated)
+    // - E0010, E0011: import strictness and Any warnings
+    // - E0023: non-exhaustive match — PEP conformance suite tests type narrowing
+    //          inside match arms but does not require a wildcard `case _:` branch
+    // - E0025: missing @override (PEP 698 makes @override optional documentation)
+    const STRICTNESS_ONLY: &[&str] = &[
+        "BSK-E0001", "BSK-E0002", "BSK-E0003", "BSK-E0004", "BSK-E0005",
+        "BSK-E0010", "BSK-E0011", "BSK-E0023", "BSK-E0025",
+    ];
+
+    let mut rules_seen = std::collections::BTreeSet::new();
     let mut diag_line_rules: HashMap<usize, Vec<String>> = HashMap::new();
+
     let diag_lines: HashSet<usize> = match parse_file(path.to_string_lossy().as_ref()) {
         Ok(parsed) => match resolve(&parsed) {
             Ok(resolved) => {
@@ -232,7 +248,7 @@ fn run_file(path: &Path) -> FileResult {
                     .filter(|d| !STRICTNESS_ONLY.contains(&d.code.code))
                     .map(|d| {
                         let _ = rules_seen.insert(d.code.code.to_owned());
-                        let line = byte_offset_to_line(&source, d.span.start);
+                        let line = byte_offset_to_line(source, d.span.start);
                         diag_line_rules
                             .entry(line)
                             .or_default()
@@ -243,24 +259,36 @@ fn run_file(path: &Path) -> FileResult {
             }
             Err(_) => HashSet::new(),
         },
-        // Parse errors are themselves a form of "diagnostic" — treat the file
-        // as producing no line-level diagnostics (the parse failure is noted).
         Err(_) => HashSet::new(),
     };
 
+    DiagnosticOutput { diag_lines, rules_seen, diag_line_rules }
+}
+
+// ---------------------------------------------------------------------------
+// Run one conformance file
+// ---------------------------------------------------------------------------
+
+fn run_file(path: &Path) -> FileResult {
+    let Ok(source) = fs::read_to_string(path) else {
+        return FileResult::default();
+    };
+
+    let annotations = collect_annotations(&source);
+    let diagnostics = collect_diagnostics(path, &source);
+
     // Score required lines.
-    let caught = required.iter().filter(|l| diag_lines.contains(l)).count();
-    let missed = required.len() - caught;
+    let caught = annotations.required.iter().filter(|l| diagnostics.diag_lines.contains(l)).count();
+    let missed = annotations.required.len() - caught;
 
     // Score optional lines.
-    let optional_caught = optional.iter().filter(|l| diag_lines.contains(l)).count();
+    let optional_caught = annotations.optional.iter().filter(|l| diagnostics.diag_lines.contains(l)).count();
 
-    // Score tagged-exact groups: a group passes if exactly one of its lines errored.
+    // Score tagged-exact groups: a group passes if at least one line errored.
     let mut tagged_exact_satisfied = 0usize;
     let mut tagged_exact_missed = 0usize;
-    for lines in tagged_exact.values() {
-        let hits = lines.iter().filter(|l| diag_lines.contains(l)).count();
-        if hits >= 1 {
+    for lines in annotations.tagged_exact.values() {
+        if lines.iter().any(|l| diagnostics.diag_lines.contains(l)) {
             tagged_exact_satisfied += 1;
         } else {
             tagged_exact_missed += 1;
@@ -268,34 +296,34 @@ fn run_file(path: &Path) -> FileResult {
     }
 
     // All annotated lines (don't count false positives on annotated lines).
-    let all_annotated: HashSet<usize> = required
+    let all_annotated: HashSet<usize> = annotations.required
         .iter()
-        .chain(optional.iter())
-        .chain(tagged_exact.values().flatten())
-        .chain(tagged_multi.values().flatten())
+        .chain(annotations.optional.iter())
+        .chain(annotations.tagged_exact.values().flatten())
+        .chain(annotations.tagged_multi.values().flatten())
         .copied()
         .collect();
 
-    let false_positives = diag_lines
+    let false_positives = diagnostics.diag_lines
         .iter()
         .filter(|l| !all_annotated.contains(l))
         .count();
 
     let file_name = path.file_name().unwrap_or_default().to_string_lossy();
     if missed > 0 {
-        let missed_lines: Vec<usize> = required
+        let missed_lines: Vec<usize> = annotations.required
             .iter()
-            .filter(|l| !diag_lines.contains(l))
+            .filter(|l| !diagnostics.diag_lines.contains(l))
             .copied()
             .collect();
         println!("  DEBUG {file_name}: missed={missed} lines={missed_lines:?}");
     }
     if false_positives > 0 {
-        let mut fp_details: Vec<(usize, String)> = diag_lines
+        let mut fp_details: Vec<(usize, String)> = diagnostics.diag_lines
             .iter()
             .filter(|l| !all_annotated.contains(l))
             .map(|&l| {
-                let rules = diag_line_rules
+                let rules = diagnostics.diag_line_rules
                     .get(&l)
                     .map_or_else(String::new, |codes| codes.join("|"));
                 (l, rules)
@@ -312,7 +340,7 @@ fn run_file(path: &Path) -> FileResult {
         optional_caught,
         tagged_exact_satisfied,
         tagged_exact_missed,
-        rules_fired: rules_seen.into_iter().collect(),
+        rules_fired: diagnostics.rules_seen.into_iter().collect(),
     }
 }
 

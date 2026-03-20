@@ -142,6 +142,9 @@ fn collect_typevars_in_annotation<'a>(
 }
 
 /// Scan all input-position annotations of a method for `TypeVar` occurrences.
+///
+/// `TypeVars` inside invariant containers are variance-neutral and do NOT count
+/// as input usage — only direct (bare or covariant-container) occurrences do.
 fn scan_input_positions<'a>(
     method: &FunctionInfo,
     source: &str,
@@ -158,7 +161,7 @@ fn scan_input_positions<'a>(
                 let mut direct = HashSet::new();
                 let mut nested = HashSet::new();
                 collect_typevars_in_annotation(ann_text, param_names, &mut direct, &mut nested);
-                input_usage.extend(direct.into_iter().chain(nested));
+                input_usage.extend(direct);
             }
         }
     }
@@ -170,18 +173,21 @@ fn scan_input_positions<'a>(
                 let mut direct = HashSet::new();
                 let mut nested = HashSet::new();
                 collect_typevars_in_annotation(ann_text, param_names, &mut direct, &mut nested);
-                input_usage.extend(direct.into_iter().chain(nested));
+                input_usage.extend(direct);
             }
         }
     }
 }
 
 /// Scan the return annotation of a method for `TypeVar` occurrences.
+///
+/// `TypeVars` inside invariant containers are variance-neutral and do NOT count
+/// as either input or output usage — only direct (bare or covariant-container)
+/// occurrences count as output usage.
 fn scan_output_position<'a>(
     method: &FunctionInfo,
     source: &str,
     param_names: &[&'a str],
-    input_usage: &mut HashSet<&'a str>,
     output_usage: &mut HashSet<&'a str>,
 ) {
     let Some(ret_span) = method.return_annotation_span else {
@@ -198,11 +204,7 @@ fn scan_output_position<'a>(
     // Direct usage in return is output.
     output_usage.extend(direct);
 
-    // Usage inside an invariant container in return is both input and output.
-    for tv in nested_invariant {
-        let _ = input_usage.insert(tv);
-        let _ = output_usage.insert(tv);
-    }
+    // TypeVars only inside invariant containers are variance-neutral — skip.
 }
 
 /// Context for emitting variance diagnostics on a single protocol class.
@@ -383,13 +385,7 @@ impl Rule for ProtocolVarianceViolation {
                     continue;
                 }
                 scan_input_positions(method, source, &param_names, &mut input_usage);
-                scan_output_position(
-                    method,
-                    source,
-                    &param_names,
-                    &mut input_usage,
-                    &mut output_usage,
-                );
+                scan_output_position(method, source, &param_names, &mut output_usage);
             }
 
             let ctx = VarianceContext {

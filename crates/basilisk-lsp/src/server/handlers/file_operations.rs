@@ -195,8 +195,12 @@ fn relative_path_to_module(relative: &Path) -> Option<String> {
     let stem = relative.with_extension("").to_str().map(str::to_owned)?;
 
     // Also strip .py from .pyi (which leaves .py after first with_extension(""))
-    let stem = if stem.ends_with(".py") {
-        stem.strip_suffix(".py")?.to_owned()
+    let stem = if std::path::Path::new(&stem)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("py"))
+    {
+        // Strip the ".py" suffix (3 chars: dot + extension)
+        stem[..stem.len() - 3].to_owned()
     } else {
         stem
     };
@@ -338,7 +342,8 @@ fn make_line_edit(line_idx: usize, old_line: &str, new_line: &str) -> TextEdit {
 #[cfg(test)]
 #[expect(
     clippy::unwrap_used,
-    reason = "test-only code: unwrap acceptable in unit tests"
+    clippy::indexing_slicing,
+    reason = "test-only code: unwrap and indexing acceptable in unit tests"
 )]
 mod tests {
     use super::*;
