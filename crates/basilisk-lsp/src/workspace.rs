@@ -6,6 +6,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use basilisk_uv::PackageRegistry;
 use dashmap::DashMap;
 use tower_lsp::lsp_types::Url;
 
@@ -51,6 +52,11 @@ pub struct WorkspaceIndex {
     /// Built during workspace scan in `crossModule` mode.
     /// Protected by a `Mutex` for interior mutability.
     pub import_graph: std::sync::Mutex<ImportGraph>,
+    /// Package registry from uv lock file, if this is a uv project.
+    ///
+    /// Built during workspace initialisation and rebuilt when `uv.lock`
+    /// changes. Used for import classification and dependency diagnostics.
+    pub registry: Option<Arc<PackageRegistry>>,
 }
 
 impl WorkspaceIndex {
@@ -62,6 +68,7 @@ impl WorkspaceIndex {
             files: DashMap::new(),
             mode,
             import_graph: std::sync::Mutex::new(ImportGraph::new()),
+            registry: None,
         }
     }
 

@@ -373,17 +373,19 @@ Phases 1 and 2 are independent and can be parallelized. Phase 3 depends on Phase
 
 ## TODO
 
-- [ ] **Phase 1: NarrowingEngine** (~15 FPs)
-  - [ ] 1a. `NarrowingContext` data structure with push/pop/join
-  - [ ] 1b. isinstance narrowing (§7.1)
-  - [ ] 1c. None narrowing (§7.2)
-  - [ ] 1d. Truthiness narrowing (§7.3)
-  - [ ] 1e. Assignment narrowing (§7.4)
-  - [ ] 1f. Assert narrowing (§7.8)
-  - [ ] 1g. TypeGuard narrowing — positive branch only (§7.6)
-  - [ ] 1h. TypeIs narrowing — bidirectional (§7.7)
-  - [ ] 1i. Pattern match narrowing + exhaustiveness (§7.5)
-  - [ ] 1j. Scope limitations — no narrowing across function boundaries or loops (§7.10)
+- [x] **Phase 1: NarrowingEngine** (~15 FPs) — DONE
+  - [x] 1a. `NarrowingContext` data structure with push/pop/join — `crates/basilisk-checker/src/narrowing.rs`
+  - [x] 1b. isinstance narrowing (§7.1) — positive + complement branches
+  - [x] 1c. None narrowing (§7.2) — `is None` / `is not None` with `remove_none()`
+  - [x] 1d. Truthiness narrowing (§7.3) — `remove_falsy()` / `keep_falsy()`
+  - [x] 1e. Assignment narrowing (§7.4) — narrows to assigned type
+  - [x] 1f. Assert narrowing (§7.8) — unwraps inner guard, applies unconditionally
+  - [x] 1g. TypeGuard narrowing — positive branch only (§7.6)
+  - [x] 1h. TypeIs narrowing — bidirectional (§7.7) — positive + complement
+  - [x] 1i. Pattern match narrowing + exhaustiveness (§7.5) — per-case + wildcard detection
+  - [x] 1j. Scope limitations (§7.10) — `in_loop` flag, no recursion into nested functions
+  - [x] Resolver guard collection — `crates/basilisk-resolver/src/visitor/narrowing.rs` + `narrowing_types.rs`
+  - [x] `FunctionInfo.narrowing_guards` field wired into `function_info_from()`
 - [ ] **Phase 2: Expression Type Inference** (~40 FPs)
   - [ ] 2a. Function call return type resolution (same-module)
   - [ ] 2b. Constructor call resolution (`ClassName()` → class type)

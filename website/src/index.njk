@@ -23,10 +23,11 @@ permalink: /
         </h1>
 
         <p class="hero__subheadline">
-          Basilisk is a complete Python language server and VS Code extension
-          that replaces Pylance and Pyright. Autocomplete, go-to-definition,
-          hover info, refactoring, diagnostics, integrated debugging &mdash;
-          everything you rely on, fully open source. Strict by default. Built in Rust.
+          Basilisk is a complete Python language server that replaces Pylance
+          and Pyright. Autocomplete, go-to-definition, hover info, refactoring,
+          diagnostics, integrated debugging &mdash; everything you rely on,
+          fully open source. Works in VS Code, Neovim, and Zed.
+          Strict by default. Built in Rust.
         </p>
 
         <div class="hero__cta-group">
@@ -49,7 +50,7 @@ permalink: /
           <span>Full <strong>LSP</strong></span>
           <span>Built in <strong>Rust</strong></span>
           <span><strong><10ms</strong> incremental</span>
-          <span>No <strong>Node.js</strong></span>
+          <span><strong>VS Code</strong> &bull; <strong>Neovim</strong> &bull; <strong>Zed</strong></span>
           <span><strong>MIT</strong> License</span>
         </div>
       </div>
@@ -433,12 +434,12 @@ permalink: /
             <td class="check-no">&mdash;</td>
           </tr>
           <tr>
-            <td>VS Code extension</td>
-            <td class="col-basilisk">Open source</td>
+            <td>Editor extensions</td>
+            <td class="col-basilisk">VS Code, Neovim, Zed</td>
             <td><span class="cell-warn">Proprietary (Pylance)</span></td>
             <td class="check-no">&mdash;</td>
-            <td>Open source</td>
-            <td>Open source</td>
+            <td>VS Code</td>
+            <td>VS Code</td>
           </tr>
           <tr>
             <td>License</td>
@@ -648,6 +649,43 @@ permalink: /
 </section>
 
 <!-- ═══════════════════════════════════════════════════════
+     EDITORS — supported editor integrations
+═══════════════════════════════════════════════════════ -->
+<section class="features">
+  <div class="feature-row">
+    <div class="feature-row__text">
+      <p class="feature-row__num">07 &mdash; Editor support</p>
+      <h2 class="feature-row__title">VS Code. Neovim. Zed.<br>One server, every editor.</h2>
+      <p class="feature-row__body">
+        Basilisk ships first-class extensions for VS Code, Neovim (0.10+), and Zed.
+        Same language server, same features, same diagnostics &mdash; regardless of your editor.
+        Zero-config setup for all three. Install and go.
+      </p>
+    </div>
+    <div class="feature-row__visual">
+      <div class="code-window" style="width:100%;max-width:400px">
+        <div class="code-window__chrome">
+          <span class="code-window__dot code-window__dot--close"></span>
+          <span class="code-window__dot code-window__dot--min"></span>
+          <span class="code-window__dot code-window__dot--expand"></span>
+          <span class="code-window__filename">Editor support</span>
+        </div>
+        <div class="code-window__body">
+<pre><span class="tok-cmt"># VS Code</span>
+Install from the <span class="tok-str">Marketplace</span>
+
+<span class="tok-cmt"># Neovim</span>
+<span class="tok-fn">require</span>(<span class="tok-str">"basilisk"</span>).setup()
+
+<span class="tok-cmt"># Zed</span>
+Install from <span class="tok-str">Extensions</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
      CTA — horizontal split, no glowing card
 ═══════════════════════════════════════════════════════ -->
 <section class="cta-section">
@@ -656,8 +694,10 @@ permalink: /
       <h2>Drop Pylance.<br>Pick up Basilisk.</h2>
       <div>
         <p>
-          Basilisk is in alpha. The type checker, LSP, VS Code extension, and integrated debugger are working.
-          Autocomplete, go-to-definition, hover info, diagnostics, F5 debugging &mdash; all shipping today.
+          Basilisk is in alpha. The type checker, LSP, and editor extensions for
+          VS Code, Neovim, and Zed are all working.
+          Autocomplete, go-to-definition, hover info, diagnostics, refactoring,
+          F5 debugging, profiling &mdash; all shipping today.
           Open source. No proprietary lock-in. Early adopters shape the roadmap.
         </p>
         <div class="cta-inner__actions">

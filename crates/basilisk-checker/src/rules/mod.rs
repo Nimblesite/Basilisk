@@ -152,6 +152,8 @@ pub(crate) mod e0149;
 pub(crate) mod e0150;
 pub(crate) mod guards;
 pub(crate) mod w0010;
+pub(crate) mod w0011;
+pub(crate) mod w0012;
 pub(crate) mod w0013;
 pub(crate) mod w0040;
 pub(crate) mod w0050;
@@ -317,6 +319,8 @@ fn all_rules() -> &'static [&'static dyn Rule] {
         &e0149::Pep695TypeParamScopingViolation,
         &e0150::DeadBranchVariable,
         &w0010::MissingTypeStubs,
+        &w0011::UndeclaredDependencyImport,
+        &w0012::UnusedDependency,
         &w0013::StaleLockFile,
         &w0040::LambdaMissingAnnotations,
         &w0050::RedundantAnnotationWarning,

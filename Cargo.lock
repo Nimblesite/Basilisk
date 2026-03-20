@@ -211,6 +211,7 @@ dependencies = [
  "basilisk-config",
  "basilisk-parser",
  "basilisk-resolver",
+ "basilisk-stubs",
  "basilisk-test-utils",
  "basilisk-uv",
  "dashmap 6.1.0",

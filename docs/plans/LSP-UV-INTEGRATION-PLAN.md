@@ -423,19 +423,23 @@ Parallelizable:
 - [x] Add `Option<Arc<PackageRegistry>>` to `ImportSearchPaths`
 - [x] Cross-check resolved imports against registry for metadata enrichment
 - [x] `UnresolvedReason` enum (`NotInstalled`, `NotInDeps`, `NeedsSync`, `NoStubs`, `WrongPythonVersion`, `Unknown`)
-- [ ] `WorkspaceIndex` holds and passes `Arc<PackageRegistry>` to resolver
-- [ ] Startup flow: detect uv → parse lock → build registry → pass to resolver
-- [x] Tests: resolution with registry, unresolved classification, workspace member resolution, non-uv fallback
+- [x] `WorkspaceIndex` holds `Option<Arc<PackageRegistry>>` field
+- [x] Startup flow: detect uv → parse lock → extract pyproject deps → build registry → pass to resolver
+- [x] `PackageDepKind` enum on `ImportInfo` — set during `resolve_workspace_imports` from registry
+- [x] `pyproject.rs` — extract `[project].dependencies` from `pyproject.toml` (PEP 508 specifier parsing)
+- [x] Tests: resolution with registry, unresolved classification, workspace member resolution, non-uv fallback — **77 tests passing**
 
 ### Phase 3 — Enhanced Diagnostics
 
 - [x] BSK-E0010: context-aware messages based on `UnresolvedReason` (not just "unresolved import")
 - [x] BSK-E0010: attach `code_action_data` to diagnostic for quick-fix wiring
 - [x] BSK-W0010: missing stubs diagnostic (package installed but no `.pyi`)
-- [ ] BSK-W0011: undeclared dependency import (transitive dep used directly)
-- [ ] BSK-W0012: unused dependency (in deps but never imported — whole-module only)
+- [x] BSK-W0011: undeclared dependency import (transitive dep used directly) — fires when `package_dep_kind == Transitive`
+- [x] BSK-W0012: unused dependency (in deps but never imported — whole-module only) — skeleton ready, awaits workspace-level aggregate import data
 - [x] BSK-W0013: stale lock (`pyproject.toml` mtime > `uv.lock` mtime) — skeleton ready
-- [ ] Gate W0010–W0013 behind `basilisk.uv.dependencyDiagnostics` config
+- [x] Gate W0010 behind `uv.stubSuggestions` config (default true)
+- [x] Gate W0011–W0013 behind `uv.dependencyDiagnostics` config (default false)
+- [x] Config parsing: `basilisk.json` `uv.stubSuggestions`/`uv.dependencyDiagnostics`, `pyproject.toml` `[tool.basilisk.uv]`
 - [x] Tests: message variants, stub detection, non-uv projects unchanged
 
 ### Phase 4 — Code Actions & LSP Commands (delegate to `uv` CLI)
@@ -470,7 +474,7 @@ Parallelizable:
 ### Phase 7 — Configuration & Editor Integration
 
 - [x] Config key constants in `basilisk-common` (`UV`, `UV_ENABLED`, etc.)
-- [ ] Read from `basilisk.json` and `pyproject.toml [tool.basilisk.uv]`
+- [x] Read from `basilisk.json` (`uv.stubSuggestions`, `uv.dependencyDiagnostics`) and `pyproject.toml` (`[tool.basilisk.uv]`)
 - [ ] `binary.rs` — uv binary resolution cascade (config → PATH → common locations)
 - [x] VS Code: add `basilisk.uv.*` settings + commands to `package.json` and `extension.ts`
 - [x] Neovim: uv config defaults, commands, and tests

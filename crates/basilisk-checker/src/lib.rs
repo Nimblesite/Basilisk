@@ -28,6 +28,7 @@
 pub mod collection_inference;
 pub mod diagnostic;
 pub mod inference;
+pub mod narrowing;
 pub mod rules;
 pub mod span_util;
 pub mod suppression;
@@ -65,6 +66,16 @@ pub fn check_with_config(
     raw.into_iter()
         .filter_map(|mut diag| {
             let code = diag.code.code;
+
+            // 0. Config gating for uv diagnostics.
+            if code == "BSK-W0010" && !config.uv_stub_suggestions {
+                return None;
+            }
+            if matches!(code, "BSK-W0011" | "BSK-W0012" | "BSK-W0013")
+                && !config.uv_dependency_diagnostics
+            {
+                return None;
+            }
 
             // 1. Per-path: check if rule is completely disabled for this file path.
             if config.is_rule_disabled_for_path(code, file_path) {

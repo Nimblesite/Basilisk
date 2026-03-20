@@ -1,7 +1,7 @@
 //! Move symbol to new file refactoring action.
 
 use tower_lsp::lsp_types::{
-    CodeAction, CodeActionKind, CreateFile, CreateFileOptions, DocumentChangeOperation,
+    CodeAction, CodeActionKind, Command, CreateFile, CreateFileOptions, DocumentChangeOperation,
     DocumentChanges, OneOf, OptionalVersionedTextDocumentIdentifier, Position, Range, ResourceOp,
     TextDocumentEdit, TextEdit, Url, WorkspaceEdit,
 };
@@ -68,6 +68,43 @@ pub(in crate::code_actions) fn move_symbol_to_new_file(
         edit: Some(WorkspaceEdit {
             document_changes: Some(DocumentChanges::Operations(operations)),
             ..Default::default()
+        }),
+        is_preferred: Some(false),
+        ..Default::default()
+    })
+}
+
+/// Offer to move the function or class under the cursor to an existing file.
+///
+/// This code action produces a **command** (`basilisk.moveSymbol`) rather
+/// than a direct workspace edit, because the destination file is chosen
+/// by the user at execution time.  The command arguments carry all the
+/// information the server needs to perform the move.
+#[must_use]
+pub(in crate::code_actions) fn move_symbol_to_existing_file(
+    uri: &Url,
+    source: &str,
+    range: &Range,
+) -> Option<CodeAction> {
+    let symbol = find_symbol_at_cursor(source, range)?;
+
+    let start = serde_json::Value::from(u64::try_from(symbol.start_line).unwrap_or(0));
+    let end = serde_json::Value::from(u64::try_from(symbol.end_line).unwrap_or(0));
+
+    Some(CodeAction {
+        title: format!("Move {} to existing file (basilisk)", symbol.kind.label()),
+        kind: Some(CodeActionKind::new("refactor.move")),
+        diagnostics: None,
+        command: Some(Command {
+            title: "Move symbol".to_owned(),
+            command: basilisk_common::commands::MOVE_SYMBOL.to_owned(),
+            arguments: Some(vec![
+                serde_json::Value::String(uri.to_string()),
+                serde_json::Value::Null, // dest_uri — filled by editor
+                serde_json::Value::String(symbol.name),
+                start,
+                end,
+            ]),
         }),
         is_preferred: Some(false),
         ..Default::default()

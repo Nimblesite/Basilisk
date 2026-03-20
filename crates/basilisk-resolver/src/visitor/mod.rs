@@ -16,6 +16,7 @@ mod function_info;
 mod generics;
 mod historical;
 mod module_level;
+mod narrowing;
 mod protocol;
 mod protocol_ext;
 mod type_alias;

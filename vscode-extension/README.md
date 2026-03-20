@@ -5,8 +5,9 @@
 <h1 align="center">Basilisk for VS Code</h1>
 
 <p align="center">
-  <strong>Strict-by-default Python type checking. No escape hatches.</strong><br>
-  Every parameter typed. Every return declared. <code>Any</code> is always explicit.
+  <strong>The open-source Pylance replacement for VS Code.</strong><br>
+  Complete language server: diagnostics, autocomplete, hover, go-to-definition,<br>
+  refactoring, debugging, profiling. Strict by default. Built in Rust.
 </p>
 
 <p align="center">
@@ -19,6 +20,8 @@
 ---
 
 ## What Basilisk does
+
+Basilisk is a **complete Python language server and VS Code extension** that replaces Pylance and Pyright. It is not just a type checker — it provides autocomplete, go-to-definition, hover, code actions, refactoring, integrated debugging, and profiling. All fully open source.
 
 Other type checkers default to permissive and hope you opt into strictness. Basilisk **starts strict** and stays strict. If your code isn't typed, it's an error.
 
@@ -53,16 +56,28 @@ def greet(name: str) -> str:
 
 Errors appear inline as you type — powered by the Basilisk LSP server with sub-10ms incremental analysis via the Salsa framework (same tech as rust-analyzer).
 
+### Autocomplete, hover, go-to-definition
+
+Full language intelligence — completions, hover documentation, go-to-definition, find references, rename symbol.
+
+### Code actions and refactoring
+
+Extract function/variable, rename, move symbol, inline, organize imports — all built into the LSP.
+
+### Integrated debugging
+
+Press F5 to debug Python. Basilisk spawns debugpy and brokers the DAP connection — breakpoints, stepping, variable inspection, watch expressions. No separate debug extension needed.
+
+### Integrated profiling
+
+Profile Python code with py-spy directly from the editor. View heatmaps and identify bottlenecks without leaving VS Code.
+
 ### Inlay hints
 
 See inferred types and parameter names directly in your editor:
 
 - **Parameter names** at call sites
 - **Variable types** for unannotated locals
-
-### Rustc-style error output
-
-Clear, actionable diagnostics with source spans, help text, and direct links to rule documentation. No cryptic messages.
 
 ### Ruff integration
 
@@ -146,6 +161,10 @@ All rules are **on by default**. There is no way to relax them globally.
 | `Basilisk: Restart Language Server` | Restart the LSP server |
 | `Basilisk: Show Output` | Open the Basilisk output channel |
 | `Basilisk: Organize Imports` | Sort and clean imports via Ruff |
+| `Basilisk: Fix File` | Apply all available autofixes to the current file |
+| `Basilisk: Adopt File` | Add type annotations to an untyped file |
+| `Basilisk: uv sync` | Run uv sync in the workspace |
+| `Basilisk: uv add` | Add a package via uv |
 
 ---
 
@@ -160,6 +179,10 @@ cargo install basilisk
 Rust 1.87+ required for building from source.
 
 ---
+
+## Part of Basilisk
+
+This is the VS Code extension for the [Basilisk](https://github.com/MelbourneDeveloper/Basilisk) project. Basilisk also supports [Neovim](https://github.com/MelbourneDeveloper/Basilisk/tree/main/basilisk.nvim) and [Zed](https://github.com/MelbourneDeveloper/Basilisk/tree/main/basilisk-zed).
 
 ## License
 

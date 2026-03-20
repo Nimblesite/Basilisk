@@ -2,6 +2,8 @@
 //!
 //! Covers `initialize`, `initialized`, `shutdown`, and `did_change_configuration`.
 
+use std::sync::Arc;
+
 use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::{
     CallHierarchyServerCapability, CodeActionKind, CodeActionOptions, CodeActionProviderCapability,
@@ -346,8 +348,11 @@ async fn scan_resolve_and_check(server: &LspServer, index: &WorkspaceIndex) -> S
         .first()
         .map(|r| crate::config::load_config(r))
         .unwrap_or_default();
+
+    // Detect uv project and build package registry if applicable.
+    let registry = build_uv_registry(&roots);
     let search_paths =
-        crate::import_resolver::ImportSearchPaths::from_config(&roots, &config, None);
+        crate::import_resolver::ImportSearchPaths::from_config(&roots, &config, registry);
     crate::import_resolver::resolve_workspace_imports(index, &search_paths);
     drop(roots);
 
@@ -413,6 +418,46 @@ fn recheck_with_cross_module_symbols(
     }
 
     results
+}
+
+/// Detect a uv project and build a [`PackageRegistry`] from its lock file.
+///
+/// Returns `None` if this is not a uv project, if there is no lock file, or
+/// if the lock file fails to parse. Errors are logged but never fatal — the
+/// LSP falls back to registry-free resolution.
+fn build_uv_registry(roots: &[std::path::PathBuf]) -> Option<Arc<basilisk_uv::PackageRegistry>> {
+    let uv_info = basilisk_uv::detect_uv_project(roots)?;
+
+    if !uv_info.has_lockfile {
+        info!(root = %uv_info.root.display(), "uv project detected but no uv.lock — skipping registry");
+        return None;
+    }
+
+    let lock_path = uv_info.root.join("uv.lock");
+    let lock_file = match basilisk_uv::parse_lock_file(&lock_path) {
+        Ok(lock) => lock,
+        Err(err) => {
+            tracing::warn!(
+                path = %lock_path.display(),
+                error = %err,
+                "failed to parse uv.lock — package registry unavailable"
+            );
+            return None;
+        }
+    };
+
+    let deps = basilisk_uv::extract_pyproject_deps(&uv_info.root);
+    let registry = basilisk_uv::PackageRegistry::from_lock_file(&lock_file, &deps);
+
+    let pkg_count = registry.all_packages().count();
+    info!(
+        root = %uv_info.root.display(),
+        packages = pkg_count,
+        direct_deps = deps.len(),
+        "built uv package registry"
+    );
+
+    Some(Arc::new(registry))
 }
 
 /// Handle the `shutdown` request: stop all debug sessions.

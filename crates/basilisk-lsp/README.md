@@ -1,0 +1,38 @@
+# basilisk-lsp
+
+Language Server Protocol implementation for Basilisk.
+
+## Role in Basilisk
+
+This is the **editor integration layer**. It implements the LSP specification over `tower-lsp`, providing real-time diagnostics, hover information, go-to-definition, code actions, refactoring, and inlay hints to any LSP-compatible editor (VS Code, Neovim, Zed, Emacs).
+
+```
+Editor ⟷ [basilisk-lsp] ⟷ parser + resolver + checker
+```
+
+## Key concepts
+
+- **Full LSP** — not just a type checker. Provides completions, hover, go-to-definition, find references, rename, code actions, and inlay hints.
+- **Incremental analysis** — integrates with `basilisk-db` (Salsa) for sub-10ms response times on edits.
+- **Integrated debugging** — spawns debugpy and brokers DAP connections so editors get F5-to-debug without separate extensions.
+- **Integrated profiling** — embeds py-spy for performance profiling with heatmap visualization.
+- **Ruff integration** — delegates formatting and import organization to Ruff via subprocess.
+- **Code actions & refactoring** — extract function/variable, rename, move symbol, inline, and more.
+- **uv integration** — detects uv workspaces, parses lock files, and provides package intelligence.
+
+## Dependencies
+
+| Crate | Purpose |
+|-------|---------|
+| `basilisk-parser` | Parsing |
+| `basilisk-resolver` | Name resolution |
+| `basilisk-checker` | Type checking |
+| `basilisk-config` | Configuration |
+| `basilisk-stubs` | Type stubs |
+| `basilisk-db` | Incremental computation |
+| `basilisk-uv` | uv package manager |
+| `tower-lsp` | LSP transport |
+
+## Status
+
+Working — diagnostics, hover, go-to-definition, code actions, inlay hints, debugging, and refactoring are all shipping.

@@ -15,6 +15,7 @@ use super::class_info_ext::{
     body_is_stub, decorator_name, decorator_name_and_span, extract_docstring,
 };
 use super::core::{classify_rhs, source_slice_range, text_range_to_span};
+use super::narrowing::collect_narrowing_guards;
 use super::type_alias::type_param_name;
 use super::unhashable::collect_unhashable_keys_from_stmts;
 use super::yield_exprs::{collect_yield_exprs, stmt_contains_yield};
@@ -79,6 +80,7 @@ pub(super) fn function_info_from(
         .unwrap_or_default();
     let local_vars = collect_local_annotated_vars(&func.body);
     let yield_exprs = collect_yield_exprs(&func.body);
+    let narrowing_guards = collect_narrowing_guards(&func.body);
 
     FunctionInfo {
         name: func.name.to_string(),
@@ -116,6 +118,7 @@ pub(super) fn function_info_from(
         is_async: func.is_async,
         yield_exprs,
         docstring: extract_docstring(&func.body),
+        narrowing_guards,
     }
 }
 

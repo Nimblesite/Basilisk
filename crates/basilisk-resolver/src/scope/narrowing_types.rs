@@ -77,7 +77,7 @@ pub enum NarrowingGuardKind {
         guard_type: String,
         /// Span of the `if` block.
         if_body_span: Span,
-        /// Span of the `else` block (type is NOT narrowed here for TypeGuard).
+        /// Span of the `else` block (type is NOT narrowed here for `TypeGuard`).
         else_body_span: Option<Span>,
     },
     /// `TypeIs[T]` return — narrows bidirectionally: positive branch gets `T`,

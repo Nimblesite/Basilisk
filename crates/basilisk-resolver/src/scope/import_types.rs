@@ -24,6 +24,21 @@ pub enum ImportResolution {
     Unresolved,
 }
 
+/// Classification of an import's dependency relationship, as determined by
+/// the package manager (e.g. from `uv.lock`).
+///
+/// Set during workspace import resolution when a uv package registry is
+/// available. `None` for non-uv projects or stdlib/local imports.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PackageDepKind {
+    /// Declared in `[project.dependencies]`.
+    Direct,
+    /// Declared in dev-dependency groups.
+    Dev,
+    /// Pulled in by another dependency, not declared directly.
+    Transitive,
+}
+
 /// A single import statement.
 #[derive(Debug, Clone)]
 pub struct ImportInfo {
@@ -40,4 +55,9 @@ pub struct ImportInfo {
     pub resolution: ImportResolution,
     /// Filesystem path the import resolved to, if known.
     pub resolved_path: Option<std::path::PathBuf>,
+    /// Dependency classification from the package manager (e.g. uv.lock).
+    ///
+    /// `None` for non-uv projects, stdlib modules, or local imports.
+    /// Set during workspace import resolution.
+    pub package_dep_kind: Option<PackageDepKind>,
 }

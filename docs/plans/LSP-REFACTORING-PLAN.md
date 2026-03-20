@@ -253,7 +253,7 @@ After Phase 6, we match Pylance. After Phase 10, we surpass every Python LSP.
 - [x] **Phase 5**: Move symbol to new file — `code_actions/refactor/move_symbol.rs`
 - [x] **Phase 5**: Symbol body extraction and import collection — `move_symbol.rs`
 - [x] **Phase 5**: `CamelCase` to `snake_case` file naming — `move_symbol.rs::to_snake_case()`
-- [ ] **Phase 5**: Move to existing file (with re-export and importer updates)
+- [x] **Phase 5**: Move to existing file — command `basilisk.moveSymbol` + code action — `refactor_commands.rs`
 - [x] **Phase 5**: Move symbol tests — 14 tests in `move_symbol.rs`
 - [x] **Phase 6**: Abstract method detection via base class lookup — `code_actions/refactor/abstract_methods.rs`
 - [x] **Phase 6**: Method stub generation (with self parameter) — `code_actions/refactor/abstract_methods.rs`

@@ -1,6 +1,8 @@
 //! Function-related types: parameters, return annotations, function info.
 
-use super::{narrowing_types::NarrowingGuard, rhs::RhsKind, span::Span, variable_types::VariableInfo};
+use super::{
+    narrowing_types::NarrowingGuard, rhs::RhsKind, span::Span, variable_types::VariableInfo,
+};
 
 /// Information about a single function parameter.
 #[derive(Debug, Clone)]

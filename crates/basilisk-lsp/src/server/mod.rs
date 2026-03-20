@@ -11,6 +11,7 @@ pub(super) mod commands;
 pub(super) mod document;
 pub(super) mod handlers;
 pub(super) mod init;
+pub(super) mod refactor_commands;
 pub(super) mod rule_override;
 pub(super) mod uv_handlers;
 

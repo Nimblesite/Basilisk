@@ -152,6 +152,9 @@ fn collect_refactoring_actions(
     if let Some(action) = refactor::move_symbol_to_new_file(uri, source, range) {
         actions.push(CodeActionOrCommand::CodeAction(action));
     }
+    if let Some(action) = refactor::move_symbol_to_existing_file(uri, source, range) {
+        actions.push(CodeActionOrCommand::CodeAction(action));
+    }
     if let Some(resolved) = resolved {
         let position_offset = crate::util::position_to_byte_offset(source, range.start);
         if let Some(action) =

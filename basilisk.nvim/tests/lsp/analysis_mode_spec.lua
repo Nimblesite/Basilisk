@@ -133,9 +133,18 @@ describe("analysis mode", function()
     vim.cmd("bwipeout! " .. buf)
     vim.wait(2000)
 
-    -- Diagnostics should be cleared for the wiped buffer.
-    local diags_after = vim.diagnostic.get(buf)
-    assert.are.equal(0, #diags_after, "diagnostics should clear after buffer wipeout")
+    -- Buffer is invalid after wipeout — diagnostics are gone by definition.
+    assert.is_false(vim.api.nvim_buf_is_valid(buf), "buffer should be invalid after wipeout")
+
+    -- Verify no diagnostics remain for any buffer from this namespace.
+    local all_diags = vim.diagnostic.get()
+    local remaining = 0
+    for _, diag in ipairs(all_diags) do
+      if diag.source and diag.source:find("[Bb]asilisk") then
+        remaining = remaining + 1
+      end
+    end
+    assert.are.equal(0, remaining, "no basilisk diagnostics should remain after buffer wipeout")
   end)
 
   -- Tab tracking: reopening a file re-triggers diagnostics

@@ -6,7 +6,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use basilisk_resolver::scope::{ImportKind, ImportResolution};
+use basilisk_resolver::scope::{ImportKind, ImportResolution, PackageDepKind};
 use basilisk_uv::PackageRegistry;
 
 use crate::workspace::WorkspaceIndex;
@@ -428,7 +428,7 @@ fn find_venv_dir(roots: &[PathBuf], config: &crate::config::WorkspaceConfig) -> 
 /// Resolve imports for all files in the workspace index.
 ///
 /// Iterates every file in the index, resolves each `ImportInfo`, and updates
-/// its `resolution` and `resolved_path` fields in place.
+/// its `resolution`, `resolved_path`, and `package_dep_kind` fields in place.
 pub fn resolve_workspace_imports(index: &WorkspaceIndex, search_paths: &ImportSearchPaths) {
     for mut entry in index.files.iter_mut() {
         let Some(resolved_arc) = entry.value_mut().resolved.take() else {
@@ -446,9 +446,38 @@ pub fn resolve_workspace_imports(index: &WorkspaceIndex, search_paths: &ImportSe
                 import.resolution = r.resolution;
                 import.resolved_path = Some(r.path);
             }
+
+            // Annotate with dependency classification from the uv registry.
+            import.package_dep_kind = classify_dep_kind(&import.module, search_paths);
         }
         entry.value_mut().resolved = Some(Arc::new(resolved));
     }
+}
+
+/// Determine the dependency kind for an import using the uv package registry.
+///
+/// Returns `None` for stdlib modules, non-uv projects, or imports not found
+/// in the registry.
+fn classify_dep_kind(
+    module_name: &str,
+    search_paths: &ImportSearchPaths,
+) -> Option<PackageDepKind> {
+    let registry = search_paths.registry.as_ref()?;
+
+    // Skip stdlib modules — they have no package dep kind.
+    if basilisk_stubs::is_stdlib_module(module_name) {
+        return None;
+    }
+
+    let root_module = module_name.split('.').next().unwrap_or(module_name);
+    let import_name = basilisk_uv::import_map::package_to_import_name(root_module);
+
+    let info = registry.lookup(&import_name)?;
+    Some(match info.kind {
+        basilisk_uv::DepKind::Direct => PackageDepKind::Direct,
+        basilisk_uv::DepKind::Dev => PackageDepKind::Dev,
+        basilisk_uv::DepKind::Transitive => PackageDepKind::Transitive,
+    })
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────

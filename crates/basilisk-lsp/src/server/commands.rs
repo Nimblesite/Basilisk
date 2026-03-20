@@ -72,6 +72,9 @@ pub(super) async fn dispatch_execute_command(
         basilisk_common::commands::UV_CREATE_ENV => {
             super::uv_handlers::execute_uv_create_env(server, &params.arguments).await
         }
+        basilisk_common::commands::MOVE_SYMBOL => {
+            super::refactor_commands::execute_move_symbol(server, &params.arguments).await
+        }
         unknown => {
             server
                 .client

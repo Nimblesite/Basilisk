@@ -124,36 +124,13 @@ pub(in crate::code_actions) fn extract_function(
         0
     };
 
-    let edits = vec![
-        // 1. Insert the new function definition.
-        TextEdit {
-            range: Range {
-                start: Position {
-                    line: insert_u32,
-                    character: 0,
-                },
-                end: Position {
-                    line: insert_u32,
-                    character: 0,
-                },
-            },
-            new_text: func_def,
-        },
-        // 2. Replace the selected lines with the call expression.
-        TextEdit {
-            range: Range {
-                start: Position {
-                    line: select_start + shift,
-                    character: 0,
-                },
-                end: Position {
-                    line: select_end + shift + 1,
-                    character: 0,
-                },
-            },
-            new_text: call_expr,
-        },
-    ];
+    let edits = build_extract_edits(
+        insert_u32,
+        func_def,
+        select_start + shift,
+        select_end + shift,
+        call_expr,
+    );
 
     let mut changes = HashMap::new();
     let _ = changes.insert(uri.clone(), edits);
@@ -169,6 +146,46 @@ pub(in crate::code_actions) fn extract_function(
         is_preferred: Some(false),
         ..Default::default()
     })
+}
+
+/// Build the text edits for an extract-function refactoring.
+fn build_extract_edits(
+    insert_line: u32,
+    func_def: String,
+    replace_start: u32,
+    replace_end: u32,
+    call_expr: String,
+) -> Vec<TextEdit> {
+    vec![
+        // Insert the new function definition.
+        TextEdit {
+            range: Range {
+                start: Position {
+                    line: insert_line,
+                    character: 0,
+                },
+                end: Position {
+                    line: insert_line,
+                    character: 0,
+                },
+            },
+            new_text: func_def,
+        },
+        // Replace the selected lines with the call expression.
+        TextEdit {
+            range: Range {
+                start: Position {
+                    line: replace_start,
+                    character: 0,
+                },
+                end: Position {
+                    line: replace_end + 1,
+                    character: 0,
+                },
+            },
+            new_text: call_expr,
+        },
+    ]
 }
 
 // ── Data flow analysis ───────────────────────────────────────────────────────

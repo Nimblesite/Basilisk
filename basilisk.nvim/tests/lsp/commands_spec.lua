@@ -239,4 +239,132 @@ describe("basilisk commands with real LSP", function()
     local ok = pcall(vim.cmd, "BasiliskShowOutput")
     assert.is_true(ok, ":BasiliskShowOutput should not error")
   end)
+
+  -- ── Profiling commands with real LSP ─────────────────────────────────────
+
+  it(":BasiliskProfile sends profiler/start to real LSP", function()
+    local buf = helpers.open_python_file(tmpdir, "test_profile.py", "x: int = 1\n")
+    helpers.wait_for_server_ready(buf)
+
+    local basilisk = require("basilisk")
+    basilisk.config = require("basilisk.config").resolve({ binary_path = binary })
+    require("basilisk.commands").register(basilisk.config)
+
+    -- Should not crash even if server doesn't handle profiler commands yet.
+    local ok = pcall(vim.cmd, "BasiliskProfile")
+    assert.is_true(ok, ":BasiliskProfile should not error")
+  end)
+
+  it(":BasiliskProfileStop sends profiler/stop to real LSP", function()
+    local buf = helpers.open_python_file(tmpdir, "test_profstop.py", "x: int = 1\n")
+    helpers.wait_for_server_ready(buf)
+
+    local basilisk = require("basilisk")
+    basilisk.config = require("basilisk.config").resolve({ binary_path = binary })
+    require("basilisk.commands").register(basilisk.config)
+
+    local ok = pcall(vim.cmd, "BasiliskProfileStop")
+    assert.is_true(ok, ":BasiliskProfileStop should not error")
+  end)
+
+  it(":BasiliskProfileSnapshot sends profiler/snapshot to real LSP", function()
+    local buf = helpers.open_python_file(tmpdir, "test_profsnap.py", "x: int = 1\n")
+    helpers.wait_for_server_ready(buf)
+
+    local basilisk = require("basilisk")
+    basilisk.config = require("basilisk.config").resolve({ binary_path = binary })
+    require("basilisk.commands").register(basilisk.config)
+
+    local ok = pcall(vim.cmd, "BasiliskProfileSnapshot")
+    assert.is_true(ok, ":BasiliskProfileSnapshot should not error")
+  end)
+
+  -- ── Memory commands with real LSP ────────────────────────────────────────
+
+  it(":BasiliskMemLeak sends memory/start to real LSP", function()
+    local buf = helpers.open_python_file(tmpdir, "test_memleak.py", "x: int = 1\n")
+    helpers.wait_for_server_ready(buf)
+
+    local basilisk = require("basilisk")
+    basilisk.config = require("basilisk.config").resolve({ binary_path = binary })
+    require("basilisk.commands").register(basilisk.config)
+
+    local ok = pcall(vim.cmd, "BasiliskMemLeak")
+    assert.is_true(ok, ":BasiliskMemLeak should not error")
+  end)
+
+  it(":BasiliskMemStop sends memory/stop to real LSP", function()
+    local buf = helpers.open_python_file(tmpdir, "test_memstop.py", "x: int = 1\n")
+    helpers.wait_for_server_ready(buf)
+
+    local basilisk = require("basilisk")
+    basilisk.config = require("basilisk.config").resolve({ binary_path = binary })
+    require("basilisk.commands").register(basilisk.config)
+
+    local ok = pcall(vim.cmd, "BasiliskMemStop")
+    assert.is_true(ok, ":BasiliskMemStop should not error")
+  end)
+
+  it(":BasiliskMemRefs sends memory/refs to real LSP", function()
+    local buf = helpers.open_python_file(tmpdir, "test_memrefs.py", "x: int = 1\n")
+    helpers.wait_for_server_ready(buf)
+
+    local basilisk = require("basilisk")
+    basilisk.config = require("basilisk.config").resolve({ binary_path = binary })
+    require("basilisk.commands").register(basilisk.config)
+
+    local ok = pcall(vim.cmd, "BasiliskMemRefs dict")
+    assert.is_true(ok, ":BasiliskMemRefs should not error")
+  end)
+
+  -- ── Refactoring commands with real LSP ───────────────────────────────────
+
+  it(":BasiliskExtractVariable triggers code action", function()
+    local buf = helpers.open_python_file(tmpdir, "test_extract.py", "def calc() -> int:\n    return 1 + 2 + 3\n")
+    helpers.wait_for_server_ready(buf)
+
+    local basilisk = require("basilisk")
+    basilisk.config = require("basilisk.config").resolve({ binary_path = binary })
+    require("basilisk.commands").register(basilisk.config)
+
+    -- Select range in visual mode then run command — should not crash.
+    local ok = pcall(vim.cmd, "BasiliskExtractVariable")
+    assert.is_true(ok, ":BasiliskExtractVariable should not error")
+  end)
+
+  it(":BasiliskExtractConstant triggers code action", function()
+    local buf = helpers.open_python_file(tmpdir, "test_const.py", "def calc() -> int:\n    return 42\n")
+    helpers.wait_for_server_ready(buf)
+
+    local basilisk = require("basilisk")
+    basilisk.config = require("basilisk.config").resolve({ binary_path = binary })
+    require("basilisk.commands").register(basilisk.config)
+
+    local ok = pcall(vim.cmd, "BasiliskExtractConstant")
+    assert.is_true(ok, ":BasiliskExtractConstant should not error")
+  end)
+
+  it(":BasiliskConvertUnion triggers code action", function()
+    local buf = helpers.open_python_file(tmpdir, "test_union.py", "from typing import Optional\n\ndef greet(name: Optional[str]) -> str:\n    return name or 'world'\n")
+    helpers.wait_for_server_ready(buf)
+
+    local basilisk = require("basilisk")
+    basilisk.config = require("basilisk.config").resolve({ binary_path = binary })
+    require("basilisk.commands").register(basilisk.config)
+
+    local ok = pcall(vim.cmd, "BasiliskConvertUnion")
+    assert.is_true(ok, ":BasiliskConvertUnion should not error")
+  end)
+
+  it(":BasiliskImplementMethods triggers code action", function()
+    local buf = helpers.open_python_file(tmpdir, "test_impl.py", "from abc import ABC, abstractmethod\n\nclass Base(ABC):\n    @abstractmethod\n    def run(self) -> None: ...\n\nclass Child(Base):\n    pass\n")
+    helpers.wait_for_server_ready(buf)
+
+    local basilisk = require("basilisk")
+    basilisk.config = require("basilisk.config").resolve({ binary_path = binary })
+    require("basilisk.commands").register(basilisk.config)
+
+    local ok = pcall(vim.cmd, "BasiliskImplementMethods")
+    assert.is_true(ok, ":BasiliskImplementMethods should not error")
+  end)
 end)

@@ -24,7 +24,7 @@ pub(super) use fstring::convert_fstring;
 pub(super) use inline::inline_variable;
 pub(super) use inline_function::inline_function_call;
 pub(super) use literals::convert_literals;
-pub(super) use move_symbol::move_symbol_to_new_file;
+pub(super) use move_symbol::{move_symbol_to_existing_file, move_symbol_to_new_file};
 pub(super) use namedtuple::convert_namedtuple;
 pub(super) use ternary::convert_ternary;
 pub(super) use type_syntax::{convert_optional_syntax, convert_union_syntax};

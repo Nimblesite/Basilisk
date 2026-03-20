@@ -5,9 +5,9 @@
 <h1 align="center">Basilisk</h1>
 
 <p align="center">
-  <strong>Strict-by-default Python type checker. No escape hatches.</strong><br>
-  Every parameter typed. Every return declared. <code>Any</code> is always explicit.<br>
-  Built in <strong>Rust</strong> — ships as a single binary, no runtime required.
+  <strong>The open-source Pylance replacement.</strong><br>
+  Complete Python language server, type checker, debugger, and profiler.<br>
+  VS Code &bull; Neovim &bull; Zed. Built in <strong>Rust</strong> — single binary, no runtime.
 </p>
 
 <p align="center">
@@ -15,7 +15,7 @@
   <a href="https://www.basilisk-python.dev/docs/installation/">Install</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/docs/quick-start/">Quick Start</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/docs/rules/">Rules</a> &nbsp;&bull;&nbsp;
-  <a href="SPEC.md">Spec</a>
+  <a href="https://www.basilisk-python.dev/docs/comparison/">Compare</a>
 </p>
 
 ---
@@ -146,21 +146,46 @@ error[BSK-E0001]: Missing parameter type annotation for `data`
 
 Basilisk is a Cargo workspace. Each crate owns one layer of the analysis pipeline.
 
+> **Pipeline:** source text &rarr; parser &rarr; AST &rarr; resolver &rarr; scopes &rarr; checker &rarr; diagnostics
+>
+> **Incremental:** `basilisk-db` caches ASTs and resolved modules by content hash so only changed files re-run the pipeline.
+
+### Analysis pipeline
+
 | Crate | What it does | Status |
 |-------|-------------|--------|
 | [basilisk-parser](crates/basilisk-parser/) | Wraps `ruff_python_parser` to parse `.py` source into a typed AST | Done |
-| [basilisk-resolver](crates/basilisk-resolver/) | Name resolution and scope analysis — catches undefined names (E0018) and use-before-assignment (E0019) | Done |
+| [basilisk-resolver](crates/basilisk-resolver/) | Name resolution and scope analysis — catches undefined names and use-before-assignment | Done |
 | [basilisk-checker](crates/basilisk-checker/) | Core type checker — implements all E0001-E0025 rules | Done |
 | [basilisk-cli](crates/basilisk-cli/) | The `basilisk` binary — wires the full pipeline together | Done |
-| [basilisk-db](crates/basilisk-db/) | Salsa-based incremental computation for <10ms latency | Phase 2 |
-| [basilisk-lsp](crates/basilisk-lsp/) | LSP server via tower-lsp — diagnostics, hover, go-to-def | Phase 2 |
+
+### LSP and infrastructure
+
+| Crate | What it does | Status |
+|-------|-------------|--------|
+| [basilisk-lsp](crates/basilisk-lsp/) | LSP server — diagnostics, hover, go-to-def, code actions, refactoring, debugging | Working |
+| [basilisk-db](crates/basilisk-db/) | Salsa-based incremental computation for <10ms latency | Working |
+| [basilisk-config](crates/basilisk-config/) | Configuration parsing (`pyproject.toml`, `basilisk.json`) | Done |
+| [basilisk-stubs](crates/basilisk-stubs/) | Bundled type stubs (typeshed) — no internet needed | Working |
+| [basilisk-uv](crates/basilisk-uv/) | uv package manager integration for the LSP | Working |
+| [basilisk-common](crates/basilisk-common/) | Shared constants and types — zero deps, WASM-compatible | Done |
+| [basilisk-test-utils](crates/basilisk-test-utils/) | Shared E2E test helpers | Done |
+
+### Future capabilities
+
+| Crate | What it does | Status |
+|-------|-------------|--------|
 | [basilisk-mojo](crates/basilisk-mojo/) | Mojo-inspired ownership/immutability analysis (`Borrowed`, `InOut`, `Owned`) | Phase 4 |
-| [basilisk-stubs](crates/basilisk-stubs/) | Bundled type stubs (typeshed + community) — no internet needed | Phase 5 |
+| [basilisk-compiler](crates/basilisk-compiler/) | Compiles typed Python to native code | Future |
 | [basilisk-plugin](crates/basilisk-plugin/) | WASM plugin host for Django, Pydantic, SQLAlchemy type extensions | Phase 5 |
 
-> **Pipeline:** source text &rarr; parser &rarr; AST &rarr; resolver &rarr; scopes &rarr; checker &rarr; diagnostics &rarr; CLI output
->
-> **Incremental (Phase 2+):** `basilisk-db` caches ASTs and resolved modules by content hash so only changed files re-run the pipeline.
+### Editor extensions
+
+| Extension | Editor | Status |
+|-----------|--------|--------|
+| [vscode-extension](vscode-extension/) | VS Code | Working |
+| [basilisk.nvim](basilisk.nvim/) | Neovim 0.10+ | Working |
+| [basilisk-zed](basilisk-zed/) | Zed | Phase 2 |
 
 ---
 

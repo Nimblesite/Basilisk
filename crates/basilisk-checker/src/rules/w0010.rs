@@ -95,6 +95,7 @@ mod tests {
             resolved_path: Some(PathBuf::from(
                 "/venv/lib/python3.12/site-packages/flask/__init__.py",
             )),
+            package_dep_kind: None,
         };
         let module = make_module(vec![import]);
         let mut diagnostics = Vec::new();
@@ -112,6 +113,7 @@ mod tests {
             kind: ImportKind::Plain,
             resolution: ImportResolution::SourcePy,
             resolved_path: Some(PathBuf::from("/workspace/myapp/__init__.py")),
+            package_dep_kind: None,
         };
         let module = make_module(vec![import]);
         let mut diagnostics = Vec::new();
@@ -130,6 +132,7 @@ mod tests {
             resolved_path: Some(PathBuf::from(
                 "/venv/lib/python3.12/site-packages/os/__init__.py",
             )),
+            package_dep_kind: None,
         };
         let module = make_module(vec![import]);
         let mut diagnostics = Vec::new();
@@ -148,6 +151,7 @@ mod tests {
             resolved_path: Some(PathBuf::from(
                 "/venv/lib/python3.12/site-packages/requests-stubs/__init__.pyi",
             )),
+            package_dep_kind: None,
         };
         let module = make_module(vec![import]);
         let mut diagnostics = Vec::new();
@@ -164,6 +168,7 @@ mod tests {
             kind: ImportKind::Plain,
             resolution: ImportResolution::Unresolved,
             resolved_path: None,
+            package_dep_kind: None,
         };
         let module = make_module(vec![import]);
         let mut diagnostics = Vec::new();
