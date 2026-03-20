@@ -9,6 +9,10 @@ This is the **single source of truth** for all LSP features, DAP integration, cu
 - **Neovim**: `NEOVIM-SPEC.md`
 - **uv Integration**: `LSP-UV-INTEGRATION-SPEC.md` — environment detection, lock file intelligence, package commands
 
+⚠️ KEY DESIGN PRINCIPLE: LSP DRIVES THE FUNCTIONALITY - NOT THE IDE EXTENSION
+⚠️ IDE EXTENSIONS LISTEN FOR THINGS LIKE COMMANDS FROM THE LSP AND ADJUST ACCORDINGLY
+⚠️ THE IDE EXTENSIONS NEVER REGISTERS COMMANDS ETC THAT THE LSP DOESN'T ADVERTISE
+
 ---
 
 ## Binary Invocation
@@ -59,6 +63,20 @@ These settings are sent to the LSP server via `workspace/configuration` under th
 | `basilisk.uv.autoSync` | `boolean` | `false` | Auto-run `uv sync` when `pyproject.toml` changes |
 | `basilisk.uv.stubSuggestions` | `boolean` | `true` | Suggest installing type stub packages |
 | `basilisk.uv.dependencyDiagnostics` | `boolean` | `false` | Enable BSK-W0011/W0012/W0013 dependency hygiene warnings |
+
+## Command Registration Rule
+
+**The LSP server is the single source of truth for commands.** The server advertises every command it handles via `executeCommandProvider` in its `initialize` response. This is an ironclad rule:
+
+1. **The server MUST advertise ALL commands** it can handle in `executeCommandProvider.commands`. No exceptions. See `basilisk_common::commands::ALL` in `crates/basilisk-common/src/lib.rs`.
+2. **No editor extension may pre-register server commands.** The LSP client library (e.g. `vscode-languageclient`) discovers commands from the server's capabilities and registers them automatically. If an extension also calls `registerCommand()` for the same command, the client crashes with "command already exists".
+3. **Client-side UI logic belongs in middleware**, not in `registerCommand()`. For example, VS Code's `executeCommand` middleware injects editor URIs, shows input prompts, and displays toast messages — all without pre-registering the command.
+4. **Tests must wait for LSP readiness** before asserting command availability. Server-advertised commands only exist after the LSP handshake completes.
+5. **Client-only commands** (e.g. `restartServer`, `showOutput`) that have no server-side handler ARE registered client-side. These are NOT in `executeCommandProvider`.
+
+This rule applies equally to VS Code, Neovim, and Zed extensions.
+
+---
 
 ## Custom LSP Commands (`workspace/executeCommand`)
 

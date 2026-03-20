@@ -51,10 +51,14 @@ async fn test_ws_initialize_advertises_execute_command_provider() -> TestResult<
         response.contains("executeCommandProvider"),
         "initialize response should advertise executeCommandProvider: {response}"
     );
-    assert!(
-        response.contains("basilisk.organizeImports"),
-        "executeCommandProvider should list basilisk.organizeImports command: {response}"
-    );
+    // The server is the single source of truth for commands.
+    // ALL commands must be advertised — see LSP-ARCHITECTURE-SPEC.md § Command Registration Rule.
+    for cmd in basilisk_common::commands::ALL {
+        assert!(
+            response.contains(cmd),
+            "executeCommandProvider must advertise '{cmd}': {response}"
+        );
+    }
     Ok(())
 }
 

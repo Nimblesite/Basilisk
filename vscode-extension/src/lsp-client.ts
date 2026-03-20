@@ -133,9 +133,7 @@ function buildClientOptions(
       },
     },
     middleware: {
-      executeCommand: async (command, args, next) => {
-        return await next(command, args) as unknown;
-      },
+      executeCommand: executeCommandMiddleware,
       workspace: {
         configuration: async (params, token, next) => {
           const results = await next(params, token);
@@ -157,6 +155,74 @@ function buildClientOptions(
     },
   };
 }
+
+/** Commands that need the active editor URI injected as the first arg. */
+const EDITOR_URI_COMMANDS = new Set([
+  "basilisk.fixFile",
+  "basilisk.adoptFile",
+  "basilisk.unadoptFile",
+]);
+
+/** Commands that prompt the user for a package name before execution. */
+const PACKAGE_COMMANDS: Record<string, { prompt: string; placeholder: string }> = {
+  "basilisk.uv.add": { prompt: "Package name to add", placeholder: "e.g. requests" },
+  "basilisk.uv.addDev": { prompt: "Dev package name to add", placeholder: "e.g. pytest" },
+  "basilisk.uv.remove": { prompt: "Package name to remove", placeholder: "e.g. requests" },
+};
+
+/** Post-execution toast messages keyed by command name. */
+const TOAST_MESSAGES: Record<string, string> = {
+  "basilisk.uv.sync": "Basilisk: uv sync complete.",
+  "basilisk.uv.lock": "Basilisk: uv lock complete.",
+  "basilisk.uv.createEnv": "Basilisk: Virtual environment created.",
+};
+
+type NextFn = (command: string, args: unknown[]) => Thenable<unknown>;
+
+/**
+ * Middleware for `workspace/executeCommand`. Injects client-side UI (editor
+ * URI resolution, input prompts, toast notifications) around server-advertised
+ * commands. This is the correct place for client-side behavior — server
+ * commands are never pre-registered with `registerCommand()`.
+ *
+ * See LSP-ARCHITECTURE-SPEC.md § Command Registration Rule.
+ */
+async function executeCommandMiddleware(
+  command: string,
+  args: unknown[],
+  next: NextFn
+): Promise<unknown> {
+  if (EDITOR_URI_COMMANDS.has(command)) {
+    const editor = vscode.window.activeTextEditor;
+    if (editor?.document.uri.scheme !== "file") { return undefined; }
+    args = [editor.document.uri.toString()];
+  }
+
+  const pkgCmd = PACKAGE_COMMANDS[command];
+  if (pkgCmd !== undefined) {
+    const packageName = await vscode.window.showInputBox({
+      prompt: pkgCmd.prompt,
+      placeHolder: pkgCmd.placeholder,
+    });
+    if (packageName === undefined || packageName === "") { return undefined; }
+    args = [{ package: packageName }];
+  }
+
+  const result: unknown = await next(command, args);
+
+  const staticToast = TOAST_MESSAGES[command];
+  if (staticToast !== undefined) {
+    vscode.window.showInformationMessage(staticToast);
+  } else if (pkgCmd !== undefined && args.length > 0) {
+    const pkg = (args[0] as { package: string }).package;
+    const verb = command === "basilisk.uv.remove" ? "Removed" :
+      command === "basilisk.uv.addDev" ? "Added dev dependency" : "Added";
+    vscode.window.showInformationMessage(`Basilisk: ${verb} ${pkg}.`);
+  }
+
+  return result;
+}
+
 
 function registerStateHandler(
   updateStatusBar: StatusBarUpdater

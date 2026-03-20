@@ -46,25 +46,28 @@ pub mod commands {
 
     /// Command names advertised via `executeCommandProvider` capabilities.
     ///
-    /// **Excludes commands registered by editor extensions** (VS Code, Zed)
-    /// on the client side. When a command is registered both here AND by the
-    /// extension's `activate()`, the LSP client's `ExecuteCommandFeature`
-    /// tries to call `registerCommand()` a second time, causing a fatal
-    /// "command already exists" error.
+    /// **The server is the single source of truth for commands.** Every command
+    /// the server can handle MUST be listed here. No editor extension (VS Code,
+    /// Neovim, Zed) is allowed to pre-register these commands — the LSP client
+    /// library discovers and registers them from the server's capabilities.
     ///
-    /// Excluded (registered by VS Code extension in `commands.ts`):
-    /// - `FIX_FILE`, `FIX_WORKSPACE` — need active editor URI
-    /// - `ADOPT_FILE`, `ADOPT_WORKSPACE`, `UNADOPT_FILE` — command palette
-    /// - `ORGANIZE_IMPORTS` — subprocess mode registration
-    /// - `UV_SYNC`, `UV_ADD`, `UV_ADD_DEV`, `UV_REMOVE`, `UV_LOCK`,
-    ///   `UV_CREATE_ENV` — command palette with UI prompts
-    ///
-    /// The server still **handles** all commands via `workspace/executeCommand`
-    /// dispatch; it just must not **advertise** client-registered ones.
+    /// See `LSP-ARCHITECTURE-SPEC.md` § Command Registration Rule.
     pub const ALL: &[&str] = &[
+        ORGANIZE_IMPORTS,
         START_DEBUG_SESSION,
         STOP_DEBUG_SESSION,
         DISABLE_RULE,
+        FIX_FILE,
+        FIX_WORKSPACE,
+        ADOPT_FILE,
+        ADOPT_WORKSPACE,
+        UNADOPT_FILE,
+        UV_SYNC,
+        UV_ADD,
+        UV_ADD_DEV,
+        UV_REMOVE,
+        UV_LOCK,
+        UV_CREATE_ENV,
         MOVE_SYMBOL,
     ];
 }

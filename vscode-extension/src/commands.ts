@@ -1,5 +1,14 @@
 /**
  * Command registration for the Basilisk VS Code extension.
+ *
+ * Only CLIENT-ONLY commands are registered here (restartServer, showOutput).
+ * Server-advertised commands (fix, adopt, uv, organizeImports) are discovered
+ * from the server's executeCommandProvider capabilities — the LSP client
+ * library registers them automatically. Client-side UI for those commands
+ * (editor URI injection, input prompts, toasts) lives in lsp-client.ts
+ * middleware.
+ *
+ * See LSP-ARCHITECTURE-SPEC.md § Command Registration Rule.
  */
 
 import * as vscode from "vscode";
@@ -24,30 +33,8 @@ function safeRegisterCommand(
   registeredCommands.add(commandId);
 }
 
-/** Send an LSP executeCommand if the client is running. */
-async function lspExecute(command: string, args: unknown[] = []): Promise<void> {
-  const lspClient = getClient();
-  if (!lspClient) {
-    vscode.window.showWarningMessage("Basilisk: LSP client is not running.");
-    return;
-  }
-  await lspClient.sendRequest("workspace/executeCommand", {
-    command,
-    arguments: args,
-  });
-}
-
-export function registerAllCommands(
-  context: vscode.ExtensionContext,
-  outputChannel: vscode.OutputChannel | undefined
-): void {
-  registerCoreCommands(context, outputChannel);
-  registerFixCommands(context);
-  registerAdoptCommands(context);
-  registerUvCommands(context);
-}
-
-function registerCoreCommands(
+/** Register client-only commands (not advertised by the LSP server). */
+export function registerClientCommands(
   context: vscode.ExtensionContext,
   outputChannel: vscode.OutputChannel | undefined
 ): void {
@@ -71,92 +58,6 @@ function registerCoreCommands(
 
   safeRegisterCommand(context, "basilisk.showOutput", () => {
     outputChannel?.show();
-  });
-}
-
-function registerFixCommands(context: vscode.ExtensionContext): void {
-  safeRegisterCommand(context, "basilisk.fixFile", async () => {
-    const editor = vscode.window.activeTextEditor;
-    if (editor?.document.uri.scheme !== "file") {return;}
-
-    const lspClient = getClient();
-    if (lspClient) {
-      await lspClient.sendRequest("workspace/executeCommand", {
-        command: "basilisk.fixFile",
-        arguments: [editor.document.uri.toString()],
-      });
-    } else {
-      await vscode.commands.executeCommand("editor.action.fixAll");
-    }
-  });
-
-  safeRegisterCommand(context, "basilisk.fixWorkspace", async () => {
-    await lspExecute("basilisk.fixWorkspace");
-  });
-}
-
-function registerAdoptCommands(context: vscode.ExtensionContext): void {
-  safeRegisterCommand(context, "basilisk.adoptFile", async () => {
-    const editor = vscode.window.activeTextEditor;
-    if (editor?.document.uri.scheme !== "file") {return;}
-    await lspExecute("basilisk.adoptFile", [editor.document.uri.toString()]);
-  });
-
-  safeRegisterCommand(context, "basilisk.adoptWorkspace", async () => {
-    await lspExecute("basilisk.adoptWorkspace");
-  });
-
-  safeRegisterCommand(context, "basilisk.unadoptFile", async () => {
-    const editor = vscode.window.activeTextEditor;
-    if (editor?.document.uri.scheme !== "file") {return;}
-    await lspExecute("basilisk.unadoptFile", [editor.document.uri.toString()]);
-  });
-}
-
-function registerUvCommands(context: vscode.ExtensionContext): void {
-  safeRegisterCommand(context, "basilisk.uv.sync", async () => {
-    await lspExecute("basilisk.uv.sync");
-    vscode.window.showInformationMessage("Basilisk: uv sync complete.");
-  });
-
-  safeRegisterCommand(context, "basilisk.uv.add", async () => {
-    const packageName = await vscode.window.showInputBox({
-      prompt: "Package name to add",
-      placeHolder: "e.g. requests",
-    });
-    if (packageName === undefined || packageName === "") {return;}
-    await lspExecute("basilisk.uv.add", [{ package: packageName }]);
-    vscode.window.showInformationMessage(`Basilisk: Added ${packageName}.`);
-  });
-
-  safeRegisterCommand(context, "basilisk.uv.addDev", async () => {
-    const packageName = await vscode.window.showInputBox({
-      prompt: "Dev package name to add",
-      placeHolder: "e.g. pytest",
-    });
-    if (packageName === undefined || packageName === "") {return;}
-    await lspExecute("basilisk.uv.addDev", [{ package: packageName }]);
-    vscode.window.showInformationMessage(`Basilisk: Added dev dependency ${packageName}.`);
-  });
-
-  safeRegisterCommand(context, "basilisk.uv.remove", async () => {
-    const packageName = await vscode.window.showInputBox({
-      prompt: "Package name to remove",
-      placeHolder: "e.g. requests",
-    });
-    if (packageName === undefined || packageName === "") {return;}
-    await lspExecute("basilisk.uv.remove", [{ package: packageName }]);
-    vscode.window.showInformationMessage(`Basilisk: Removed ${packageName}.`);
-  });
-
-  safeRegisterCommand(context, "basilisk.uv.lock", async () => {
-    await lspExecute("basilisk.uv.lock");
-    vscode.window.showInformationMessage("Basilisk: uv lock complete.");
-  });
-
-  safeRegisterCommand(context, "basilisk.uv.createEnv", async () => {
-    await lspExecute("basilisk.uv.createEnv");
-    vscode.window.showInformationMessage("Basilisk: Virtual environment created.");
   });
 }
 

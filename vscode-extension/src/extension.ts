@@ -13,7 +13,7 @@ import * as os from "os";
 import { Logger, setLogBackend, FileLogSink } from "./logger";
 import type { LogSink } from "./logger";
 import { startLspClient, getClient } from "./lsp-client";
-import { registerAllCommands, registerOrganizeImportsCommand } from "./commands";
+import { registerClientCommands, registerOrganizeImportsCommand } from "./commands";
 import { createDebugAdapterFactory, BasiliskDebugAdapterTrackerFactory } from "./debug-adapter";
 
 let statusBarItem: vscode.StatusBarItem | undefined;
@@ -37,7 +37,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const useLsp = vscode.workspace.getConfiguration("basilisk").get<boolean>("useLsp") ?? true;
   Logger.info(`Basilisk executable: ${executablePath}`);
 
-  registerAllCommands(context, outputChannel);
+  registerClientCommands(context, outputChannel);
 
   if (useLsp) {
     startLspClient({ context, executablePath, outputChannel }, updateStatusBar);

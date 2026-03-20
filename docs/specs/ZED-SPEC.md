@@ -38,7 +38,7 @@ Zed extensions are Rust compiled to WASM. The API surface is deliberately narrow
 | File watchers | **No** | Not available |
 | Terminal control | **No** | Not available |
 
-This means: **all intelligence flows through LSP and DAP.** No client-side tricks. The LSP must be the source of everything.
+This means: **all intelligence flows through LSP and DAP.** No client-side tricks. The LSP must be the source of everything. See `LSP-ARCHITECTURE-SPEC.md` § Command Registration Rule — the server advertises all commands, clients never pre-register them.
 
 ## Architecture
 

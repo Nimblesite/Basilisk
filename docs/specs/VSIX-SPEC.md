@@ -81,7 +81,11 @@ client.start();
 
 ---
 
-## Commands (`package.json` contribution)
+## Commands
+
+> **Command Registration Rule**: See `LSP-ARCHITECTURE-SPEC.md` § Command Registration Rule. The extension MUST NOT call `registerCommand()` for any command the LSP server advertises. Server commands are auto-registered by `vscode-languageclient` from the server's `executeCommandProvider` capabilities. Client-side UI (input prompts, toasts) belongs in the `executeCommand` middleware.
+
+### `package.json` contribution
 
 ```json
 "commands": [
