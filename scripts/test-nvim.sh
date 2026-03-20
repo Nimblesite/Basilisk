@@ -28,6 +28,14 @@ ok "basilisk binary: $BASILISK_BIN"
 
 # ── Dependencies ──────────────────────────────────────────────────────────────
 
+header "Checking dependencies"
+
+if ! command -v pytest &>/dev/null; then
+    echo -e "${RED}${BOLD}FATAL: pytest not found. Install it: pip install pytest${RESET}"
+    exit 1
+fi
+ok "pytest: $(pytest --version 2>&1 | head -1)"
+
 header "Neovim extension — real LSP e2e tests"
 cd "$REPO_ROOT/basilisk.nvim"
 
