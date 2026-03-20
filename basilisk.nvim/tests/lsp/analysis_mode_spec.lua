@@ -109,4 +109,57 @@ describe("analysis mode", function()
     -- Verify the client was configured.
     assert.is_not_nil(client.config)
   end)
+
+  -- Tab tracking: closing a buffer in openFilesOnly mode
+
+  it("openFilesOnly: closing buffer clears diagnostics", function()
+    vim.lsp.config("basilisk", {
+      cmd = { binary, "lsp" },
+      filetypes = { "python" },
+      root_markers = { "pyproject.toml" },
+      settings = { basilisk = { analysisMode = "openFilesOnly" } },
+    })
+    vim.lsp.enable("basilisk")
+
+    local buf = helpers.open_python_file(tmpdir, "test_close.py", "def greet(name):\n    return name\n")
+    helpers.wait_for_server_ready(buf)
+    helpers.wait_for_diagnostics(buf)
+
+    -- Verify we have diagnostics.
+    local diags_before = vim.diagnostic.get(buf)
+    assert.is_true(#diags_before > 0, "should have diagnostics before close")
+
+    -- Close the buffer (wipeout).
+    vim.cmd("bwipeout! " .. buf)
+    vim.wait(2000)
+
+    -- Diagnostics should be cleared for the wiped buffer.
+    local diags_after = vim.diagnostic.get(buf)
+    assert.are.equal(0, #diags_after, "diagnostics should clear after buffer wipeout")
+  end)
+
+  -- Tab tracking: reopening a file re-triggers diagnostics
+
+  it("openFilesOnly: reopening file re-triggers diagnostics", function()
+    vim.lsp.config("basilisk", {
+      cmd = { binary, "lsp" },
+      filetypes = { "python" },
+      root_markers = { "pyproject.toml" },
+      settings = { basilisk = { analysisMode = "openFilesOnly" } },
+    })
+    vim.lsp.enable("basilisk")
+
+    -- Open, get diagnostics, close.
+    local buf1 = helpers.open_python_file(tmpdir, "test_reopen.py", "def greet(name):\n    return name\n")
+    helpers.wait_for_server_ready(buf1)
+    helpers.wait_for_diagnostics(buf1)
+    vim.cmd("bwipeout! " .. buf1)
+    vim.wait(1000)
+
+    -- Reopen the same file.
+    local buf2 = helpers.open_python_file(tmpdir, "test_reopen.py", "def greet(name):\n    return name\n")
+    helpers.wait_for_server_ready(buf2)
+    local diags = helpers.wait_for_diagnostics(buf2)
+    assert.is_true(#diags > 0, "reopened file should get diagnostics again")
+  end)
 end)

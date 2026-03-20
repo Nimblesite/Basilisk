@@ -137,9 +137,11 @@ pub(crate) struct ProtocolVarianceMismatch;
 impl Rule for ProtocolVarianceMismatch {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         // Build a map of TypeVar name -> (is_covariant, is_contravariant).
+        // Skip ParamSpec and TypeVarTuple — they don't have traditional variance.
         let typevar_variance: HashMap<&str, (bool, bool)> = module
             .typevar_calls
             .iter()
+            .filter(|tv| !tv.is_paramspec && !tv.is_typevartuple)
             .map(|tv| (tv.name.as_str(), (tv.is_covariant, tv.is_contravariant)))
             .collect();
 

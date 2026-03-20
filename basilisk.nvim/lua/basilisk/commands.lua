@@ -170,6 +170,19 @@ function M.register(config)
     end)
   end, { desc = "Opt-out current file from type checking" })
 
+  vim.api.nvim_create_user_command("BasiliskDisableRule", function(opts)
+    local rule = opts.args
+    if rule == "" then
+      vim.ui.input({ prompt = "Diagnostic code to disable (e.g. BSK-E0001): " }, function(input)
+        if input and input ~= "" then
+          execute_command("basilisk.disableRule", { { rule = input, severity = "off" } })
+        end
+      end)
+    else
+      execute_command("basilisk.disableRule", { { rule = rule, severity = "off" } })
+    end
+  end, { nargs = "?", desc = "Disable a diagnostic rule in pyproject.toml" })
+
   vim.api.nvim_create_user_command("BasiliskShowOutput", function()
     -- In Neovim, open the LSP log file.
     local logpath = vim.lsp.get_log_path()

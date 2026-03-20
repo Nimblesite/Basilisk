@@ -378,7 +378,14 @@ fn non_self_params<'a>(params: &[&'a str]) -> Vec<&'a str> {
     params
         .iter()
         .filter(|p| {
-            let name = p.split('=').next().unwrap_or(p).split(':').next().unwrap_or(p).trim();
+            let name = p
+                .split('=')
+                .next()
+                .unwrap_or(p)
+                .split(':')
+                .next()
+                .unwrap_or(p)
+                .trim();
             name != "self" && name != "cls"
         })
         .copied()

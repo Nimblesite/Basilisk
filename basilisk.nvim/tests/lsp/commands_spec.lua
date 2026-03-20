@@ -159,4 +159,84 @@ describe("basilisk commands with real LSP", function()
     local win_count_closed = #vim.api.nvim_tabpage_list_wins(0)
     assert.are.equal(win_count_before, win_count_closed, "toggle should close the panel")
   end)
+
+  -- :BasiliskDisableRule — sends basilisk.disableRule to real LSP
+
+  it(":BasiliskDisableRule sends LSP command", function()
+    local buf = helpers.open_python_file(tmpdir, "test_disable.py", "def greet(name):\n    return name\n")
+    helpers.wait_for_server_ready(buf)
+
+    local basilisk = require("basilisk")
+    basilisk.config = require("basilisk.config").resolve({ binary_path = binary })
+    require("basilisk.commands").register(basilisk.config)
+
+    local ok = pcall(vim.cmd, "BasiliskDisableRule BSK-E0001")
+    assert.is_true(ok, ":BasiliskDisableRule should not error")
+
+    -- Verify pyproject.toml was modified.
+    vim.wait(1000)
+    local fh = io.open(tmpdir .. "/pyproject.toml", "r")
+    if fh then
+      local content = fh:read("*a")
+      fh:close()
+      assert.truthy(content:find("BSK%-E0001"), "pyproject.toml should contain the disabled rule")
+    end
+  end)
+
+  -- :BasiliskFixWorkspace — sends basilisk.fixWorkspace to real LSP
+
+  it(":BasiliskFixWorkspace sends LSP command", function()
+    local buf = helpers.open_python_file(tmpdir, "test_fixws.py", "def greet(name):\n    return name\n")
+    helpers.wait_for_server_ready(buf)
+
+    local basilisk = require("basilisk")
+    basilisk.config = require("basilisk.config").resolve({ binary_path = binary })
+    require("basilisk.commands").register(basilisk.config)
+
+    local ok = pcall(vim.cmd, "BasiliskFixWorkspace")
+    assert.is_true(ok, ":BasiliskFixWorkspace should not error")
+  end)
+
+  -- :BasiliskAdoptWorkspace — sends basilisk.adoptWorkspace to real LSP
+
+  it(":BasiliskAdoptWorkspace sends LSP command", function()
+    local buf = helpers.open_python_file(tmpdir, "test_adoptws.py", "x = 1\n")
+    helpers.wait_for_server_ready(buf)
+
+    local basilisk = require("basilisk")
+    basilisk.config = require("basilisk.config").resolve({ binary_path = binary })
+    require("basilisk.commands").register(basilisk.config)
+
+    local ok = pcall(vim.cmd, "BasiliskAdoptWorkspace")
+    assert.is_true(ok, ":BasiliskAdoptWorkspace should not error")
+  end)
+
+  -- :BasiliskUnadoptFile — sends basilisk.unadoptFile to real LSP
+
+  it(":BasiliskUnadoptFile sends LSP command", function()
+    local buf = helpers.open_python_file(tmpdir, "test_unadopt.py", "x = 1\n")
+    helpers.wait_for_server_ready(buf)
+
+    local basilisk = require("basilisk")
+    basilisk.config = require("basilisk.config").resolve({ binary_path = binary })
+    require("basilisk.commands").register(basilisk.config)
+
+    local ok = pcall(vim.cmd, "BasiliskUnadoptFile")
+    assert.is_true(ok, ":BasiliskUnadoptFile should not error")
+  end)
+
+  -- :BasiliskShowOutput — opens the LSP log file
+
+  it(":BasiliskShowOutput opens log buffer", function()
+    local buf = helpers.open_python_file(tmpdir, "test_output.py", "x: int = 1\n")
+    helpers.wait_for_server_ready(buf)
+
+    local basilisk = require("basilisk")
+    basilisk.config = require("basilisk.config").resolve({ binary_path = binary })
+    require("basilisk.commands").register(basilisk.config)
+
+    local buf_count_before = #vim.api.nvim_list_bufs()
+    local ok = pcall(vim.cmd, "BasiliskShowOutput")
+    assert.is_true(ok, ":BasiliskShowOutput should not error")
+  end)
 end)

@@ -164,8 +164,7 @@ fn collect_refactoring_actions(
         {
             actions.push(CodeActionOrCommand::CodeAction(action));
         }
-        if let Some(action) =
-            refactor::add_parameter(uri, source, range, resolved, position_offset)
+        if let Some(action) = refactor::add_parameter(uri, source, range, resolved, position_offset)
         {
             actions.push(CodeActionOrCommand::CodeAction(action));
         }

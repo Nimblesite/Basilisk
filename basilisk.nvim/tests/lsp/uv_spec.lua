@@ -129,3 +129,93 @@ describe("uv integration", function()
     end)
   end)
 end)
+
+-- ── Real LSP e2e tests for uv commands ───────────────────────────────────────
+
+local helpers = require("tests.lsp.helpers")
+
+local binary = helpers.find_binary()
+if not binary then
+  describe("uv commands with real LSP (SKIPPED — no binary)", function()
+    it("skipped", function()
+      pending("basilisk binary not found")
+    end)
+  end)
+  return
+end
+
+local tmpdir
+
+describe("uv commands with real LSP", function()
+  before_each(function()
+    tmpdir = helpers.create_tmpdir()
+    local fh = io.open(tmpdir .. "/pyproject.toml", "w")
+    fh:write('[project]\nname = "test"\nversion = "0.1.0"\n')
+    fh:close()
+
+    vim.lsp.config("basilisk", {
+      cmd = { binary, "lsp" },
+      filetypes = { "python" },
+      root_markers = { "pyproject.toml", ".git" },
+      settings = { basilisk = { analysisMode = "wholeModule" } },
+    })
+    vim.lsp.enable("basilisk")
+  end)
+
+  after_each(function()
+    helpers.stop_clients()
+    helpers.close_all_buffers()
+    helpers.cleanup_tmpdir(tmpdir)
+  end)
+
+  --- Helper: register commands and get client.
+  local function setup_commands(buf)
+    helpers.wait_for_server_ready(buf)
+    local basilisk = require("basilisk")
+    basilisk.config = require("basilisk.config").resolve({ binary_path = binary })
+    require("basilisk.commands").register(basilisk.config)
+    return helpers.wait_for_client(buf)
+  end
+
+  it(":BasiliskUvSync sends real LSP command", function()
+    local buf = helpers.open_python_file(tmpdir, "test_uvsync.py", "x: int = 1\n")
+    setup_commands(buf)
+    local ok = pcall(vim.cmd, "BasiliskUvSync")
+    assert.is_true(ok, ":BasiliskUvSync should not error")
+  end)
+
+  it(":BasiliskUvAdd sends real LSP command", function()
+    local buf = helpers.open_python_file(tmpdir, "test_uvadd.py", "x: int = 1\n")
+    setup_commands(buf)
+    local ok = pcall(vim.cmd, "BasiliskUvAdd requests")
+    assert.is_true(ok, ":BasiliskUvAdd should not error")
+  end)
+
+  it(":BasiliskUvAddDev sends real LSP command", function()
+    local buf = helpers.open_python_file(tmpdir, "test_uvadddev.py", "x: int = 1\n")
+    setup_commands(buf)
+    local ok = pcall(vim.cmd, "BasiliskUvAddDev pytest")
+    assert.is_true(ok, ":BasiliskUvAddDev should not error")
+  end)
+
+  it(":BasiliskUvRemove sends real LSP command", function()
+    local buf = helpers.open_python_file(tmpdir, "test_uvremove.py", "x: int = 1\n")
+    setup_commands(buf)
+    local ok = pcall(vim.cmd, "BasiliskUvRemove requests")
+    assert.is_true(ok, ":BasiliskUvRemove should not error")
+  end)
+
+  it(":BasiliskUvLock sends real LSP command", function()
+    local buf = helpers.open_python_file(tmpdir, "test_uvlock.py", "x: int = 1\n")
+    setup_commands(buf)
+    local ok = pcall(vim.cmd, "BasiliskUvLock")
+    assert.is_true(ok, ":BasiliskUvLock should not error")
+  end)
+
+  it(":BasiliskUvCreateEnv sends real LSP command", function()
+    local buf = helpers.open_python_file(tmpdir, "test_uvenv.py", "x: int = 1\n")
+    setup_commands(buf)
+    local ok = pcall(vim.cmd, "BasiliskUvCreateEnv")
+    assert.is_true(ok, ":BasiliskUvCreateEnv should not error")
+  end)
+end)

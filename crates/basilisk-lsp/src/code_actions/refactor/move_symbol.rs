@@ -233,7 +233,10 @@ fn symbol_line_range(source: &str, symbol: &SymbolInfo) -> Range {
     // Otherwise, start of the next line (character 0).
     let total_lines = source.lines().count();
     let (end_l, end_c) = if symbol.end_line >= total_lines {
-        (u32::try_from(total_lines.saturating_sub(1)).unwrap_or(u32::MAX), last_char)
+        (
+            u32::try_from(total_lines.saturating_sub(1)).unwrap_or(u32::MAX),
+            last_char,
+        )
     } else {
         (end_line, 0)
     };
@@ -477,7 +480,10 @@ mod tests {
                 assert_eq!(ops.len(), 3, "create + write + replace");
 
                 // First op: CreateFile
-                assert!(matches!(&ops[0], DocumentChangeOperation::Op(ResourceOp::Create(_))));
+                assert!(matches!(
+                    &ops[0],
+                    DocumentChangeOperation::Op(ResourceOp::Create(_))
+                ));
 
                 // Second op: write to new file
                 if let DocumentChangeOperation::Edit(edit) = &ops[1] {

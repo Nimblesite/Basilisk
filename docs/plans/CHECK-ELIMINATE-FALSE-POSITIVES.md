@@ -131,19 +131,32 @@ These require per-rule investigation after Step 0 gives us exact FP-to-rule mapp
 
 ---
 
+## Step 7: Type Narrowing and Full Inference Engine (est. ~125 FP eliminated)
+
+> **Full plan**: [CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md](CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md)
+> **Spec**: [CHECKER-TYPE-INFERENCE-SPEC.md](../specs/CHECKER-TYPE-INFERENCE-SPEC.md)
+
+The remaining ~125 FPs cannot be fixed without fundamental engine work. The checker currently uses text-based annotation parsing and literal-only RHS inference. It has no narrowing engine, no TypeVar constraint solver, and no class hierarchy resolution. See the dedicated plan for full details.
+
+---
+
 ## Execution Order
 
-| Step | Est. FPs Fixed | Effort | Risk |
-|------|---------------|--------|------|
-| 0. FP verbose reporting | 0 (tooling) | Low | None |
-| 1. E0104 recursive aliases | ~20 | Low | Low |
-| 2. E0136 callable subtyping | ~25 | Medium | Medium |
-| 3. E0014 assignment mismatch | ~30 | Medium | Medium (risk of false negatives) |
-| 4. E0093 TypedDict | ~15 | Medium | Low |
-| 5. E0121/E0110/E0133 protocols | ~25 | High | Medium |
-| 6. Remaining scatter | ~20 | High | Low |
+### Phase 1: Rule-Specific Fixes (Steps 0-6) — MOSTLY COMPLETE
 
-Steps 1-4 are independent and could be parallelized. Step 0 should be done first as it informs all subsequent steps.
+| Step | Est. FPs Fixed | Effort | Risk | Status |
+|------|---------------|--------|------|--------|
+| 0. FP verbose reporting | 0 (tooling) | Low | None | DONE |
+| 1. E0104 recursive aliases | ~20 | Low | Low | DONE (2 FPs fixed) |
+| 2. E0136 callable subtyping | ~25 | Medium | Medium | Pending |
+| 3. E0014 assignment mismatch | ~30 | Medium | Medium | Partial (7 FPs fixed) |
+| 4. E0093 TypedDict | ~15 | Medium | Low | Partial (9 FPs fixed) |
+| 5. E0121/E0110/E0133 protocols | ~25 | High | Medium | Partial (12 FPs fixed) |
+| 6. Remaining scatter | ~20 | High | Low | Pending |
+
+### Phase 2: Type Narrowing and Full Inference (Step 7) — ~125 FPs
+
+See [CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md](CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md) for execution order and TODO.
 
 ---
 
@@ -159,7 +172,7 @@ After each step:
 
 ## TODO
 
-> **Total: 196 FPs** (down from 251, as of 2026-03-20)
+> **Total: 177 FPs** (down from 251, as of 2026-03-20)
 
 ### FP Breakdown by Rule (from conformance test verbose output)
 
@@ -181,7 +194,7 @@ After each step:
 | BSK-E0104 | 2 | aliases_recursive (2) |
 | Others | ~37 | scattered across E0041, E0047, E0048, E0054, E0060, E0069, E0078, E0092, E0094, E0099, E0112, E0132, E0139, E0140, E0141, E0143 |
 
-### Completed (55 FPs eliminated, 251→196)
+### Completed (55 FPs eliminated, 251 -> 196)
 
 - [x] Step 0: Add FP verbose reporting to conformance harness — `diag_line_rules` HashMap in `conformance_tests.rs`
 - [x] BSK-E0014: bare generics (`list`, `dict`, `set`, `tuple`) + `complex` type recognition — 7 FPs fixed
@@ -190,25 +203,21 @@ After each step:
 - [x] BSK-E0111: constructor calls — add builtin base classes, dataclass inheritance, `__init_subclass__` — 9 FPs fixed
 - [x] BSK-E0149: PEP 695 type param extraction — fixed `extract_pep695_type_params` to check `=` for `type` statements, preventing RHS subscripts from being treated as type params — 18 FPs fixed
 - [x] BSK-E0093: TypedDict `Required`/`NotRequired`/`ReadOnly` — added `is_field_required()` helper and `strip_td_wrappers()` for value type comparison — 9 FPs fixed
-
 - [x] BSK-E0110: protocol variance — treat invariant containers as variance-neutral; add `tuple`/`Tuple` to covariant containers — 5 FPs fixed
 - [x] BSK-E0121: protocol conformance — check class attributes (not just methods) for protocol member satisfaction — 7 FPs fixed
 - [x] BSK-E0130: TypeVar scoping — skip docstrings, comments, and multi-line function signature continuations — 6 FPs fixed
 
-### Remaining (196 FPs)
+### Remaining: Phase 1 — Domain-Specific Rule Improvements (~71 FPs)
 
-**Requires type narrowing / full inference** (cannot fix without fundamental engine work):
-- [ ] BSK-E0014 (~98 FP) — Named-to-Named Protocol/class subtyping in assignments
-- [ ] BSK-E0053 (~12 FP) — `assert_type` after TypeGuard/TypeIs/isinstance narrowing
-- [ ] BSK-E0013 (~15 FP) — return type checking with protocol properties, narrowing functions
-
-**Requires domain-specific rule improvements**:
 - [ ] BSK-E0093 (~9 FP remaining) — TypedDict `extra_items` subscript reads, `Final` key access
 - [ ] BSK-E0111 (~6 FP) — remaining: dataclass_transform metaclass, generic NamedTuples
-- [x] BSK-E0130 — TypeVar scoping: docstrings, comments, multi-line signatures — DONE (3 remaining)
-- [x] BSK-E0121 — protocol conformance: class attributes, dataclass/NamedTuple fields — DONE
-- [x] BSK-E0110 — protocol variance: invariant container handling + tuple covariance — DONE
+- [ ] BSK-E0130 (~3 FP remaining) — generics_defaults, dataclass_transform edge cases
 - [ ] BSK-E0012 (~4 FP) — TypeVarTuple unpacking edge cases
 - [ ] BSK-E0133 (~3 FP) — callable parameter count with *args/**kwargs
 - [ ] BSK-E0115 (~2 FP) — deprecated directive false positives
-- [ ] Remaining scatter (~28 FP) — E0041, E0047, E0048, E0054, E0060, E0069, E0078, E0092, E0094, E0099, E0112, E0132, E0139, E0140, E0141, E0143
+- [ ] BSK-E0136 (~25 FP) — callable subtyping: `object` supertype, Union params, *args/**kwargs
+- [ ] Remaining scatter (~19 FP) — E0041, E0047, E0048, E0054, E0060, E0069, E0078, E0092, E0094, E0099, E0112, E0132, E0139, E0140, E0141, E0143
+
+### Remaining: Phase 2 — Type Narrowing and Full Inference (~125 FPs)
+
+See [CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md](CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md) for the full TODO.

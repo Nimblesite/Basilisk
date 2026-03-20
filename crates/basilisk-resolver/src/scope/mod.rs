@@ -5,6 +5,7 @@ mod external_symbol;
 mod function_types;
 mod import_types;
 mod module_types;
+mod narrowing_types;
 mod resolved_module;
 mod rhs;
 mod span;
@@ -17,6 +18,7 @@ pub use function_types::{
     FunctionInfo, ParameterInfo, ReturnAnnotationKind, ReturnStmtInfo, YieldExprInfo,
 };
 pub use import_types::{ImportInfo, ImportKind, ImportResolution};
+pub use narrowing_types::{MatchCaseNarrowing, NarrowingGuard, NarrowingGuardKind};
 pub use module_types::{
     AnnotatedTooFewArgs, AssertTypeCallInfo, CallSite, CompareOp, FloatParamIntAttrAccess,
     GenericSubscriptSite, LiteralStringEnumMismatch, MatchStmtInfo, ModuleAttrAccessInfo,

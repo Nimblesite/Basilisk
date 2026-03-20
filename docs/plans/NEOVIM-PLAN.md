@@ -7,7 +7,9 @@
 
 ## Status
 
-Phases 1–10 COMPLETE. Full feature parity with VS Code extension. 149 tests (80 unit + 23 UI + 46 real LSP integration). All rename tests passing — fixed symlink canonicalization bug in LSP server (macOS `/var` → `/private/var`).
+Phases 1–10 COMPLETE. Phase 11 IN PROGRESS — closing feature parity gaps and e2e test coverage. 149 tests (80 unit + 23 UI + 46 real LSP integration). All rename tests passing — fixed symlink canonicalization bug in LSP server (macOS `/var` → `/private/var`).
+
+**Gaps vs VS Code/Zed**: 3 missing features (`disableRule`, version check, binary auto-download), ~25 commands lacking real LSP e2e tests (have unit tests only).
 
 ---
 
@@ -261,3 +263,61 @@ Phases 1–10 COMPLETE. Full feature parity with VS Code extension. 149 tests (8
 - [x] `:BasiliskTestToggle` — assert side panel opens with correct filetype/width, toggle closes it
 - [ ] Screenshot / snapshot tests with mini.test (future enhancement)
 - [ ] Reference screenshots stored in `tests/ui/screenshots/` for regression comparison
+
+---
+
+## Phase 11: Feature Parity & E2E Test Coverage Gaps
+
+> Close all feature parity gaps with VS Code/Zed extensions and ensure every command has a real LSP e2e test.
+
+### Missing Features (implement + test)
+
+- [ ] `:BasiliskDisableRule <code>` — send `basilisk.disableRule` via LSP (VS Code/Zed have this)
+- [ ] Version check — warn user if basilisk binary is outdated (Zed has this)
+- [ ] Binary auto-download fallback from GitHub releases (Zed has this)
+
+### Commands Missing Real LSP E2E Tests
+
+> These commands exist but only have unit tests or config tests. Need real LSP e2e tests.
+
+#### Workspace Commands (in `commands_spec.lua`)
+
+- [ ] `:BasiliskFixWorkspace` — send LSP command, verify no error
+- [ ] `:BasiliskAdoptWorkspace` — send LSP command, verify no error
+- [ ] `:BasiliskUnadoptFile` — send LSP command, verify no error
+- [ ] `:BasiliskUnadoptWorkspace` — send LSP command, verify no error
+- [ ] `:BasiliskShowOutput` — verify log buffer opens
+
+#### uv Commands (in `uv_spec.lua` — currently only config tests)
+
+- [ ] `:BasiliskUvSync` — send real LSP command, verify response
+- [ ] `:BasiliskUvAdd <pkg>` — send real LSP command, verify response
+- [ ] `:BasiliskUvAddDev <pkg>` — send real LSP command, verify response
+- [ ] `:BasiliskUvRemove <pkg>` — send real LSP command, verify response
+- [ ] `:BasiliskUvLock` — send real LSP command, verify response
+- [ ] `:BasiliskUvCreateEnv` — send real LSP command, verify response
+
+#### Profiling Commands (need real LSP)
+
+- [ ] `:BasiliskProfile` — send `basilisk/profiler/start` to real server
+- [ ] `:BasiliskProfileStop` — send `basilisk/profiler/stop` to real server
+- [ ] `:BasiliskProfileSnapshot` — send `basilisk/profiler/snapshot` to real server
+
+#### Memory Commands (need real LSP)
+
+- [ ] `:BasiliskMemLeak` — send `basilisk/memory/start` to real server
+- [ ] `:BasiliskMemStop` — send `basilisk/memory/stop` to real server
+- [ ] `:BasiliskMemRefs <type>` — send `basilisk/memory/refs` to real server
+
+#### Tab Tracking (`openFilesOnly` mode)
+
+- [ ] Open file → close tab → verify `didClose` sent to server
+- [ ] Open file → switch to non-Python → verify tracking state
+- [ ] Reopen closed file → verify `didOpen` re-sent
+
+#### Refactoring Commands (need real LSP)
+
+- [ ] `:BasiliskExtractVariable` — trigger code action on selection
+- [ ] `:BasiliskExtractConstant` — trigger code action on selection
+- [ ] `:BasiliskConvertUnion` — trigger code action
+- [ ] `:BasiliskImplementMethods` — trigger code action

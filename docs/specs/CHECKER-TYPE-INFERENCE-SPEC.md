@@ -739,7 +739,171 @@ result: float = parse("3.14")  # selects float overload via expected type
 
 ---
 
-## 9. Special Types
+## 9. Subtyping
+
+Basilisk implements both **nominal** and **structural** subtyping. This is the core of type compatibility — `is_assignable_to(source, target)` must answer "can a value of type `source` be used where type `target` is expected?"
+
+> **Authority**: [PEP 484 §Subtype relationships](https://peps.python.org/pep-0484/), [PEP 544 §Protocols: Structural subtyping](https://peps.python.org/pep-0544/), [Python Typing Spec — Type system concepts](https://typing.readthedocs.io/en/latest/spec/concepts.html)
+
+### 9.1 Nominal Subtyping (Class Hierarchy)
+
+A type `A` is a nominal subtype of `B` if `B` appears in `A.__mro__` (Method Resolution Order). This is Python's standard class inheritance model.
+
+```python
+class Animal: ...
+class Dog(Animal): ...
+
+x: Animal = Dog()  # OK — Dog is a nominal subtype of Animal
+```
+
+**MRO resolution** uses [C3 linearization](https://www.python.org/download/releases/2.3/mro/) (same as CPython). The MRO is computed per class and cached in `ResolvedModule`.
+
+**Builtin type hierarchy** (hardcoded):
+- `bool` <: `int` <: `float` <: `complex`
+- `bytearray` <: `bytes` (for read contexts)
+- All classes <: `object`
+- `Never` <: everything (bottom type)
+
+### 9.2 Protocol Structural Subtyping (PEP 544)
+
+A type `A` structurally satisfies a `Protocol` `P` if `A` provides **all members** declared in `P` with compatible types. No explicit inheritance is required.
+
+```python
+class Drawable(Protocol):
+    def draw(self, x: int, y: int) -> None: ...
+
+class Circle:
+    def draw(self, x: int, y: int) -> None: ...
+
+c: Drawable = Circle()  # OK — Circle structurally satisfies Drawable
+```
+
+**Protocol conformance algorithm**:
+
+1. **Collect protocol members**: methods, properties, class variables, instance attributes from the Protocol class and all its Protocol bases (walk the MRO, stop at `Protocol` itself).
+
+2. **For each protocol member**, check that the candidate class provides a matching member:
+   - **Method**: candidate must have a method with the same name whose signature is **compatible** (see §9.6 Callable subtyping).
+   - **Property (read-only)**: candidate must have a readable attribute or property with a return type that is a **subtype** of the protocol property's return type (covariant).
+   - **Property (read-write)**: candidate must have a writable attribute. The type must be **invariant** (both subtype and supertype of the protocol's declared type).
+   - **Class variable**: candidate must have a class-level attribute with compatible type.
+   - **Instance attribute**: candidate must have an instance attribute (including dataclass fields, `NamedTuple` fields, or `__init__`-assigned attributes) with compatible type.
+
+3. **Attribute vs. property equivalence**: A plain class attribute `val: T` satisfies a protocol's `@property` requirement for `val -> T` (read-only). A mutable attribute satisfies a read-write `@property` requirement.
+
+4. **Inherited members**: Walk the candidate class's full MRO to find members. A method inherited from a base class satisfies the protocol requirement.
+
+5. **`Self` type**: Protocol methods using `Self` in return types are satisfied when the candidate returns `Self` or the candidate's own type.
+
+> **Authority**: [PEP 544 §Protocol members](https://peps.python.org/pep-0544/#protocol-members), [Typing spec — Protocols](https://typing.readthedocs.io/en/latest/spec/protocol.html)
+
+### 9.3 TypedDict Structural Subtyping
+
+TypedDict-to-TypedDict assignability is structural, not nominal:
+
+```python
+class MovieBase(TypedDict):
+    name: str
+
+class Movie(TypedDict):
+    name: str
+    year: int
+
+m: MovieBase = Movie(name="Alien", year=1979)  # OK — Movie has all MovieBase fields
+```
+
+**Rules**:
+- All required fields of the target must exist in the source with compatible types.
+- `ReadOnly` fields are covariant (source field type must be subtype of target).
+- Mutable fields are **invariant** (exact type match required).
+- `NotRequired` fields in the target may be absent in the source.
+- `extra_items` (PEP 728): if the target allows extra items of type `T`, the source's extra fields must have types assignable to `T`.
+
+> **Authority**: [PEP 589 §TypedDict](https://peps.python.org/pep-0589/), [PEP 705 §ReadOnly](https://peps.python.org/pep-0705/), [PEP 728 §extra_items](https://peps.python.org/pep-0728/)
+
+### 9.4 Generic Subtyping
+
+Generic types combine nominal subtyping with variance:
+
+```python
+class Animal: ...
+class Dog(Animal): ...
+
+x: list[Animal] = [Dog()]  # ERROR — list is invariant
+y: Sequence[Animal] = [Dog()]  # OK — Sequence is covariant
+```
+
+**Variance rules** for generic type parameters:
+- **Covariant** (`T_co`): `G[A]` <: `G[B]` if `A` <: `B`. Read-only containers (`Sequence`, `Iterator`, `FrozenSet`, `tuple`).
+- **Contravariant** (`T_contra`): `G[A]` <: `G[B]` if `B` <: `A`. Write-only positions (function parameters in `Callable`).
+- **Invariant** (default): `G[A]` <: `G[B]` only if `A` == `B`. Mutable containers (`list`, `dict`, `set`).
+
+**Generic subtyping algorithm**:
+1. Check nominal subtyping: does source class's MRO include the target's base class?
+2. Find the TypeVar substitution: how does the source specialize the target's TypeVars?
+3. Apply variance rules to each TypeVar position.
+
+### 9.5 Union and Special-Form Subtyping
+
+- `A` <: `A | B` (always — a type is a subtype of any union containing it)
+- `A | B` <: `C` only if `A` <: `C` AND `B` <: `C`
+- `Optional[T]` = `T | None`
+- `Any` is bidirectionally compatible with all types (not a real subtype, an escape hatch)
+- `Never` <: everything (bottom type, assignable to all types)
+- `object` >: everything except `None` in strict mode
+
+### 9.6 Callable Subtyping
+
+Callable subtyping follows **parameter contravariance** and **return covariance**:
+
+```python
+# Callable[[ParamTypes], ReturnType]
+# Parameters are contravariant, return type is covariant
+
+f: Callable[[Animal], Dog]  # accepts Animal, returns Dog
+g: Callable[[Dog], Animal]  # accepts Dog, returns Animal
+
+# f is NOT assignable to g: Dog (param of g) is not supertype of Animal (param of f)
+# g is NOT assignable to f: Animal (return of g) is not subtype of Dog (return of f)
+```
+
+**Callable compatibility rules**:
+- Source return type must be a **subtype** of target return type (covariant).
+- Target parameter types must be **subtypes** of source parameter types (contravariant).
+- Source may have fewer required parameters than target (extra defaults OK).
+- `*args`/`**kwargs` in source accepts any parameter count in target.
+- `Callable[..., R]` (ellipsis params) is compatible with any parameter signature.
+
+> **Authority**: [PEP 484 §Callable](https://peps.python.org/pep-0484/#callable), [Typing spec — Callables](https://typing.readthedocs.io/en/latest/spec/callables.html)
+
+### 9.7 Implementation: `is_subtype_of()`
+
+The current `is_assignable_to()` in `types.rs` handles primitives, containers, unions, optionals, and callables but falls back to name comparison for `Named` types. The full subtyping engine replaces this with:
+
+```rust
+fn is_subtype_of(source: &ResolvedType, target: &ResolvedType, ctx: &SubtypeContext) -> bool {
+    match (source, target) {
+        // Nominal: check MRO
+        (Class(src), Class(tgt)) => ctx.mro_contains(src, tgt),
+        // Protocol: structural check
+        (_, Protocol(proto)) => ctx.satisfies_protocol(source, proto),
+        // Generic: variance-aware
+        (Generic(src_base, src_args), Generic(tgt_base, tgt_args)) =>
+            ctx.check_generic_subtype(src_base, src_args, tgt_base, tgt_args),
+        // TypedDict: field-by-field
+        (TypedDict(src), TypedDict(tgt)) => ctx.check_typeddict_compat(src, tgt),
+        // Callable: contravariant params, covariant return
+        (Callable(src), Callable(tgt)) => ctx.check_callable_subtype(src, tgt),
+        // ... other cases
+    }
+}
+```
+
+`SubtypeContext` holds the MRO cache, protocol member tables, and generic variance info needed for recursive subtype checks.
+
+---
+
+## 10. Special Types
 
 ### 9.1 `Any`
 
@@ -803,7 +967,7 @@ query("SELECT * FROM " + table)    # BSK-E0015 — not LiteralString
 
 ---
 
-## 10. Conformance Test Coverage
+## 11. Conformance Test Coverage
 
 The [Python typing conformance suite](https://github.com/python/typing/tree/main/conformance) is the canonical benchmark. Basilisk targets **100% conformance** (Pass on all 150 test files).
 
@@ -829,7 +993,7 @@ Inference-relevant conformance tests:
 
 ---
 
-## 11. Where Basilisk Exceeds Pyright
+## 12. Where Basilisk Exceeds Pyright
 
 The following capabilities go beyond Pyright's current implementation:
 
@@ -859,7 +1023,7 @@ Pyright infers parameter types from defaults and call-site analysis. Basilisk tr
 
 ---
 
-## 12. Implementation Notes (Rust)
+## 13. Implementation Notes (Rust)
 
 The type inference engine is implemented in the `basilisk-checker` crate using [Salsa](https://github.com/salsa-rs/salsa) for incremental computation.
 

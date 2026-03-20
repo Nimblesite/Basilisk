@@ -244,7 +244,7 @@ After Phase 6, we match Pylance. After Phase 10, we surpass every Python LSP.
 - [x] **Phase 3**: Context detection (method vs function, async, yield/break rejection) — `extract_function.rs::detect_enclosing_context()`
 - [x] **Phase 3**: Extract function code generation (def + call site) — `extract_function.rs`
 - [x] **Phase 3**: Extract function placement logic — `extract_function.rs::find_insertion_point()`
-- [ ] **Phase 3**: Post-extraction formatting pass
+- [x] **Phase 3**: Post-extraction formatting pass — PEP 8 blank-line separation + trailing whitespace cleanup
 - [x] **Phase 3**: Extract function tests — `refactor/mod.rs`
 - [x] **Phase 4**: Extract variable code generation and replacement — `code_actions/refactor/extract.rs`
 - [x] **Phase 4**: Extract constant (module-level SCREAMING_SNAKE) — `code_actions/refactor/extract.rs`

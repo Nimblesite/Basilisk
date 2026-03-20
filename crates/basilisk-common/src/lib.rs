@@ -40,6 +40,9 @@ pub mod commands {
     pub const UV_LOCK: &str = "basilisk.uv.lock";
     /// Run `uv venv` to create a virtual environment.
     pub const UV_CREATE_ENV: &str = "basilisk.uv.createEnv";
+    /// Move a symbol to an existing file (args: source URI, dest URI, symbol
+    /// name, start line, end line).
+    pub const MOVE_SYMBOL: &str = "basilisk.moveSymbol";
 
     /// Command names advertised via `executeCommandProvider` capabilities.
     ///
@@ -58,6 +61,7 @@ pub mod commands {
         UV_REMOVE,
         UV_LOCK,
         UV_CREATE_ENV,
+        MOVE_SYMBOL,
     ];
 }
 

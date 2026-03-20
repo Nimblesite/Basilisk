@@ -36,4 +36,6 @@ Implementation roadmaps tracking phasing, priorities, and progress.
 | [LSP-MASS-AUTOFIX-PLAN.md](plans/LSP-MASS-AUTOFIX-PLAN.md) | Batch autofix rollout and gradual adoption mode. |
 | [LSP-UV-INTEGRATION-PLAN.md](plans/LSP-UV-INTEGRATION-PLAN.md) | uv project detection, lock file parsing, dependency intelligence. |
 | [LSP-REFACTORING-PLAN.md](plans/LSP-REFACTORING-PLAN.md) | Refactoring tools rollout — 10 phases from scope-aware rename to inline function. |
+| [CHECK-ELIMINATE-FALSE-POSITIVES.md](plans/CHECK-ELIMINATE-FALSE-POSITIVES.md) | Eliminate conformance suite false positives — rule-specific fixes and engine work. |
+| [CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md](plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md) | Type narrowing and full inference engine — NarrowingEngine, expression inference, ConstraintSolver, class hierarchy subtyping. |
 | [ZED-PLAN.md](plans/ZED-PLAN.md) | Zed extension — LSP scaffolding, tree-sitter queries, DAP support. |

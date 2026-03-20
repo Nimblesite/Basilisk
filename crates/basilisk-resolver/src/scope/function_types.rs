@@ -1,6 +1,6 @@
 //! Function-related types: parameters, return annotations, function info.
 
-use super::{rhs::RhsKind, span::Span, variable_types::VariableInfo};
+use super::{narrowing_types::NarrowingGuard, rhs::RhsKind, span::Span, variable_types::VariableInfo};
 
 /// Information about a single function parameter.
 #[derive(Debug, Clone)]
@@ -170,4 +170,9 @@ pub struct FunctionInfo {
     pub body_ends_with_return: bool,
     /// The docstring of this function, if present (first statement is a string literal).
     pub docstring: Option<String>,
+    /// Type narrowing guards detected in this function body.
+    ///
+    /// Collected during AST resolution for use by the checker's `NarrowingContext`.
+    /// See `CHECKER-TYPE-INFERENCE-SPEC.md` §7.
+    pub narrowing_guards: Vec<NarrowingGuard>,
 }

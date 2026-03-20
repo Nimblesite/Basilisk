@@ -93,12 +93,20 @@ pub(in crate::code_actions) fn extract_function(
     if !return_stmt.is_empty() {
         func_def.push_str(&return_stmt);
     }
-    func_def.push('\n');
+    // Formatting pass: ensure PEP 8 blank-line separation.
+    // Top-level functions need 2 blank lines; nested need 1.
+    let separator = if func_indent.is_empty() { "\n\n" } else { "\n" };
+    func_def.push_str(separator);
 
     // Build the call expression (with await if async).
     let args_str = build_args_string(&analysis.params, &context);
-    let call_expr =
-        build_call_expression(func_name, &args_str, &analysis.returns, &body_indent, &context);
+    let call_expr = build_call_expression(
+        func_name,
+        &args_str,
+        &analysis.returns,
+        &body_indent,
+        &context,
+    );
 
     // Find insertion point: before the enclosing function/class, or at the
     // start of the selection if at module level.
@@ -435,14 +443,21 @@ fn build_args_string(params: &[String], _context: &EnclosingContext) -> String {
 // ── Code generation ──────────────────────────────────────────────────────────
 
 /// Build the function body from the selected lines, re-indented to 4 spaces.
+///
+/// Blank lines are emitted without trailing whitespace (PEP 8 W291).
 fn build_function_body(selected: &[&str], body_indent: &str, func_indent: &str) -> String {
     let mut body = String::new();
     for line in selected {
         let stripped = strip_prefix_indent(line, body_indent);
-        body.push_str(func_indent);
-        body.push_str("    ");
-        body.push_str(stripped);
-        body.push('\n');
+        if stripped.trim().is_empty() {
+            // Blank line — no trailing whitespace.
+            body.push('\n');
+        } else {
+            body.push_str(func_indent);
+            body.push_str("    ");
+            body.push_str(stripped);
+            body.push('\n');
+        }
     }
     body
 }

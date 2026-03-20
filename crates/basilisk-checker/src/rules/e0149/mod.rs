@@ -75,16 +75,33 @@ impl Rule for Pep695TypeParamScopingViolation {
             .map(|tv| tv.name.as_str())
             .collect();
 
+        // Track multi-line def/class signatures so continuation lines at
+        // indent 0 are not treated as module-level code.
+        let mut skip_module_check_until: usize = 0;
+
         for (line_idx, &line) in lines.iter().enumerate() {
             let line_number = line_idx + 1;
             let trimmed = line.trim();
 
             // --- Violation 1: cross-references in type param bounds ---
-            if trimmed.starts_with("class ")
+            let is_def_or_class = trimmed.starts_with("class ")
                 || trimmed.starts_with("def ")
-                || trimmed.starts_with("async def ")
-            {
+                || trimmed.starts_with("async def ");
+            if is_def_or_class {
                 check_pep695_bound_cross_references(line, line_number, source, path, diagnostics);
+
+                // For multi-line signatures, skip module-level checks on
+                // continuation lines.  Find the `:` that ends the header.
+                let code_before_comment = trimmed.split_once('#').map_or(trimmed, |(c, _)| c);
+                if !code_before_comment.trim_end().ends_with(':') {
+                    for (scan_offset, scan_line) in lines.iter().enumerate().skip(line_idx + 1) {
+                        let scan_code = scan_line.split_once('#').map_or(*scan_line, |(c, _)| c);
+                        if scan_code.contains(':') {
+                            skip_module_check_until = scan_offset + 1;
+                            break;
+                        }
+                    }
+                }
             }
 
             // --- Violation 3: method re-defines class type param ---
@@ -99,7 +116,9 @@ impl Rule for Pep695TypeParamScopingViolation {
             }
 
             // --- Violation 2a: module-level use of PEP 695 type param ---
-            if leading_indent(line) == 0 && !all_pep695_params.is_empty() {
+            // Skip continuation lines of multi-line def/class signatures.
+            let in_multiline_sig = line_idx < skip_module_check_until;
+            if !in_multiline_sig && leading_indent(line) == 0 && !all_pep695_params.is_empty() {
                 check_module_level_type_param_use(
                     line,
                     line_number,

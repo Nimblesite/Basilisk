@@ -45,7 +45,10 @@ fn test_refactor_extract_variable_offered() -> TestResult<()> {
     let resp = request_code_actions(
         &mut fixture,
         "file:///extract_var.py",
-        0, 9, 0, 22, // select `some_func(42)`
+        0,
+        9,
+        0,
+        22, // select `some_func(42)`
         300,
     )?;
 
@@ -74,7 +77,10 @@ fn test_refactor_extract_constant_offered() -> TestResult<()> {
     let resp = request_code_actions(
         &mut fixture,
         "file:///extract_const.py",
-        3, 11, 3, 13, // select `42`
+        3,
+        11,
+        3,
+        13, // select `42`
         301,
     )?;
 
@@ -99,7 +105,10 @@ fn test_refactor_extract_function_offered() -> TestResult<()> {
     let resp = request_code_actions(
         &mut fixture,
         "file:///extract_fn.py",
-        1, 0, 3, 0, // select lines 1-2
+        1,
+        0,
+        3,
+        0, // select lines 1-2
         302,
     )?;
 
@@ -126,7 +135,10 @@ fn test_refactor_extract_function_rejects_yield() -> TestResult<()> {
     let resp = request_code_actions(
         &mut fixture,
         "file:///no_yield.py",
-        1, 0, 3, 0, // select yield lines
+        1,
+        0,
+        3,
+        0, // select yield lines
         303,
     )?;
 
@@ -151,7 +163,10 @@ fn test_refactor_convert_union_offered() -> TestResult<()> {
     let resp = request_code_actions(
         &mut fixture,
         "file:///union.py",
-        1, 3, 1, 3, // cursor on Union
+        1,
+        3,
+        1,
+        3, // cursor on Union
         304,
     )?;
 
@@ -174,7 +189,10 @@ fn test_refactor_convert_optional_offered() -> TestResult<()> {
     let resp = request_code_actions(
         &mut fixture,
         "file:///optional.py",
-        1, 3, 1, 3, // cursor on Optional
+        1,
+        3,
+        1,
+        3, // cursor on Optional
         305,
     )?;
 
@@ -199,7 +217,10 @@ fn test_refactor_convert_fstring_offered() -> TestResult<()> {
     let resp = request_code_actions(
         &mut fixture,
         "file:///fstr.py",
-        1, 9, 1, 9, // cursor on f-string
+        1,
+        9,
+        1,
+        9, // cursor on f-string
         306,
     )?;
 
@@ -224,7 +245,10 @@ fn test_refactor_convert_dict_offered() -> TestResult<()> {
     let resp = request_code_actions(
         &mut fixture,
         "file:///dictconv.py",
-        0, 20, 0, 20, // cursor on dict()
+        0,
+        20,
+        0,
+        20, // cursor on dict()
         307,
     )?;
 
@@ -247,7 +271,10 @@ fn test_refactor_convert_list_offered() -> TestResult<()> {
     let resp = request_code_actions(
         &mut fixture,
         "file:///listconv.py",
-        0, 15, 0, 15, // cursor on list()
+        0,
+        15,
+        0,
+        15, // cursor on list()
         308,
     )?;
 
@@ -272,7 +299,10 @@ fn test_refactor_convert_ternary_offered() -> TestResult<()> {
     let resp = request_code_actions(
         &mut fixture,
         "file:///ternary.py",
-        1, 4, 1, 4, // cursor on ternary line
+        1,
+        4,
+        1,
+        4, // cursor on ternary line
         309,
     )?;
 
@@ -297,7 +327,10 @@ fn test_refactor_inline_variable_offered() -> TestResult<()> {
     let resp = request_code_actions(
         &mut fixture,
         "file:///inline_var.py",
-        1, 4, 1, 4, // cursor on assignment inside function
+        1,
+        4,
+        1,
+        4, // cursor on assignment inside function
         310,
     )?;
 
@@ -322,7 +355,10 @@ fn test_refactor_inline_function_offered() -> TestResult<()> {
     let resp = request_code_actions(
         &mut fixture,
         "file:///inline_fn.py",
-        3, 14, 3, 14, // cursor on call
+        3,
+        14,
+        3,
+        14, // cursor on call
         311,
     )?;
 
@@ -347,7 +383,10 @@ fn test_refactor_move_symbol_offered() -> TestResult<()> {
     let resp = request_code_actions(
         &mut fixture,
         "file:///move.py",
-        2, 0, 2, 0, // cursor on class line
+        2,
+        0,
+        2,
+        0, // cursor on class line
         312,
     )?;
 
@@ -369,14 +408,18 @@ fn test_refactor_convert_namedtuple_offered() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
     let _ = fixture.initialize()?;
 
-    let code = "from typing import NamedTuple\n\nclass Point(NamedTuple):\n    x: int\n    y: int\n";
+    let code =
+        "from typing import NamedTuple\n\nclass Point(NamedTuple):\n    x: int\n    y: int\n";
     fixture.did_open("file:///nt.py", code)?;
     let _ = fixture.wait_for_diagnostics();
 
     let resp = request_code_actions(
         &mut fixture,
         "file:///nt.py",
-        2, 0, 2, 0, // cursor on class line
+        2,
+        0,
+        2,
+        0, // cursor on class line
         313,
     )?;
 
@@ -445,14 +488,15 @@ fn test_refactor_extract_variable_edit_correctness() -> TestResult<()> {
     let resp = request_code_actions(
         &mut fixture,
         "file:///ev_edit.py",
-        0, 14, 0, 27, // select `some_func(42)`
+        0,
+        14,
+        0,
+        27, // select `some_func(42)`
         315,
     )?;
 
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
-    let actions = parsed["result"]
-        .as_array()
-        .ok_or("expected result array")?;
+    let actions = parsed["result"].as_array().ok_or("expected result array")?;
 
     let extract_action = actions
         .iter()
@@ -483,14 +527,15 @@ fn test_refactor_inline_variable_edit_correctness() -> TestResult<()> {
     let resp = request_code_actions(
         &mut fixture,
         "file:///iv_edit.py",
-        1, 4, 1, 4, // cursor on assignment
+        1,
+        4,
+        1,
+        4, // cursor on assignment
         316,
     )?;
 
     let parsed: serde_json::Value = serde_json::from_str(&resp)?;
-    let actions = parsed["result"]
-        .as_array()
-        .ok_or("expected result array")?;
+    let actions = parsed["result"].as_array().ok_or("expected result array")?;
 
     let inline_action = actions
         .iter()
@@ -522,7 +567,10 @@ fn test_refactor_extract_variable_not_offered_for_empty_selection() -> TestResul
     let resp = request_code_actions(
         &mut fixture,
         "file:///ev_empty.py",
-        0, 5, 0, 5, // zero-width selection
+        0,
+        5,
+        0,
+        5, // zero-width selection
         317,
     )?;
 
@@ -542,12 +590,7 @@ fn test_refactor_move_symbol_not_offered_for_assignment() -> TestResult<()> {
     fixture.did_open("file:///no_move.py", code)?;
     let _ = fixture.wait_for_diagnostics();
 
-    let resp = request_code_actions(
-        &mut fixture,
-        "file:///no_move.py",
-        0, 0, 0, 0,
-        318,
-    )?;
+    let resp = request_code_actions(&mut fixture, "file:///no_move.py", 0, 0, 0, 0, 318)?;
 
     assert!(
         !resp.contains("Move") || !resp.contains("new file"),
