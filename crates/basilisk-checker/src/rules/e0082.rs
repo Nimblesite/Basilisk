@@ -23,6 +23,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::rules::shared::infer_expr_literal_type;
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -188,7 +189,7 @@ fn check_stmt_for_tvt_mismatch(
     }
 
     for (idx, (elt, expected)) in tuple_lit.elts.iter().zip(expected_types.iter()).enumerate() {
-        let actual_type = infer_literal_type(elt);
+        let actual_type = infer_expr_literal_type(elt);
         let Some(actual) = actual_type else {
             continue;
         };
@@ -318,25 +319,6 @@ fn is_identifier(text: &str) -> bool {
             .chars()
             .next()
             .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
-}
-
-/// Infer the type of a literal expression.
-fn infer_literal_type(expr: &ruff_python_ast::Expr) -> Option<&'static str> {
-    use ruff_python_ast::Expr;
-    match expr {
-        Expr::NumberLiteral(num) => {
-            if num.value.is_int() {
-                Some("int")
-            } else {
-                Some("float")
-            }
-        }
-        Expr::StringLiteral(_) => Some("str"),
-        Expr::BytesLiteral(_) => Some("bytes"),
-        Expr::BooleanLiteral(_) => Some("bool"),
-        Expr::NoneLiteral(_) => Some("None"),
-        _ => None,
-    }
 }
 
 /// Check basic type compatibility.

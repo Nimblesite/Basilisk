@@ -29,14 +29,14 @@ use basilisk_resolver::ResolvedModule;
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
 use super::Rule;
+use crate::rules::shared::contains_typevar_reference;
 
 use check::{check_generic_constructor_calls, check_generic_instance_method_calls};
 use types::ScopeInfo;
 use utils::{
-    collect_full_signature, compute_triple_quote_mask, contains_typevar_reference,
-    extract_pep695_type_params, extract_typevars_from_function_sig,
-    extract_typevars_from_generic_base, is_simple_assignment, leading_indent, signature_end_line,
-    span_for_line,
+    collect_full_signature, compute_triple_quote_mask, extract_pep695_type_params,
+    extract_typevars_from_function_sig, extract_typevars_from_generic_base, is_simple_assignment,
+    leading_indent, signature_end_line, span_for_line,
 };
 use variance::check_variance_assignments;
 

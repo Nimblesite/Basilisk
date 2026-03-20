@@ -37,26 +37,12 @@ use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
 use super::Rule;
 
+use crate::rules::shared::is_numeric_subtype;
+
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0102",
     docs_url: "https://www.basilisk-python.dev/errors/BSK-E0102",
 };
-
-/// Numeric type subtype hierarchy: `bool <: int <: float <: complex`.
-///
-/// Returns `true` when `child` is a subtype of `parent` in the numeric hierarchy.
-/// For non-numeric types, only equality counts as a subtype relationship.
-fn is_numeric_subtype(child: &str, parent: &str) -> bool {
-    const NUMERIC_ORDER: &[&str] = &["bool", "int", "float", "complex"];
-    let child_pos = NUMERIC_ORDER.iter().position(|&n| n == child);
-    let parent_pos = NUMERIC_ORDER.iter().position(|&n| n == parent);
-    match (child_pos, parent_pos) {
-        // child is at a lower index (more specific), so child <= parent
-        (Some(c), Some(p)) => c <= p,
-        // For non-numeric types, only equality counts.
-        _ => child == parent,
-    }
-}
 
 /// Check if type `t1` is a subtype of type `t2` for bound compatibility.
 fn is_subtype_for_bound(t1: &str, t2: &str) -> bool {

@@ -3,6 +3,8 @@
 //! Provides annotation parsing, yield expression scanning, type inference,
 //! and compatibility checks for generator yield/send/return type analysis.
 
+use crate::rules::shared::is_type_compatible;
+
 // ---------------------------------------------------------------------------
 // Generator annotation
 // ---------------------------------------------------------------------------
@@ -350,25 +352,6 @@ pub(super) fn get_constructor_name(expr: &str) -> Option<&str> {
     } else {
         None
     }
-}
-
-/// Check if a type name is compatible with an expected type.
-///
-/// This is a conservative check: it returns `true` (compatible) when
-/// we cannot determine incompatibility.
-pub(super) fn is_type_compatible(actual: &str, expected: &str) -> bool {
-    if expected == "Any" || actual == "Any" || expected == "object" || actual == expected {
-        return true;
-    }
-    // int is compatible with float
-    if expected == "float" && actual == "int" {
-        return true;
-    }
-    // bool is compatible with int
-    if expected == "int" && actual == "bool" {
-        return true;
-    }
-    false
 }
 
 /// Extract the function name from a call expression like `generator17()`.

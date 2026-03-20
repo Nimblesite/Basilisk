@@ -55,13 +55,57 @@ fi
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
 if command -v nvim &>/dev/null; then
-    nvim --headless -u tests/minimal_init.lua \
-        -c "PlenaryBustedDirectory tests/lsp {minimal_init = 'tests/minimal_init.lua'}" 2>&1
+    # Remove stale luacov data so coverage reflects this run only.
+    rm -f luacov.stats.out luacov.report.out
+
+    # Plenary spawns a child nvim per test file. With coverage enabled,
+    # children must run sequentially so luacov stats files merge correctly
+    # instead of racing on concurrent writes.
+    LUACOV=1 nvim --headless -u tests/minimal_init.lua \
+        -c "PlenaryBustedDirectory tests/lsp {minimal_init = 'tests/minimal_init.lua', sequential = true}" 2>&1
     ok "Neovim LSP e2e tests passed"
 
-    nvim --headless -u tests/minimal_init.lua \
+    LUACOV=1 nvim --headless -u tests/minimal_init.lua \
         -l tests/ui/run_screenshots.lua 2>&1
     ok "Neovim screenshot regression tests passed"
 else
     warn "nvim not found — skipping Neovim extension tests"
 fi
+
+# ── Coverage threshold ────────────────────────────────────────────────────────
+
+header "Neovim extension — coverage threshold"
+TEST_COVERAGE_NVIM="${TEST_COVERAGE_NVIM:-30}"
+
+if [[ ! -f luacov.stats.out ]]; then
+    echo -e "  ${RED}${BOLD}✗ neovim: no luacov stats — coverage collection is broken. FAIL${RESET}"
+    exit 1
+fi
+
+# Generate the luacov report from stats.
+if command -v luacov &>/dev/null; then
+    luacov
+elif lua -e 'require("luacov.runner")' 2>/dev/null; then
+    lua -e 'require("luacov.runner").run_report()'
+else
+    echo -e "  ${RED}${BOLD}✗ neovim: luacov not found — cannot generate coverage report. FAIL${RESET}"
+    exit 1
+fi
+
+if [[ ! -f luacov.report.out ]]; then
+    echo -e "  ${RED}${BOLD}✗ neovim: luacov report generation failed. FAIL${RESET}"
+    exit 1
+fi
+
+# Parse the Total line from the summary: "Total  977  217  81.83%"
+nvim_pct=$(awk '/^Total/ { gsub(/%/, "", $NF); printf "%d", $NF }' luacov.report.out)
+if [[ -z "$nvim_pct" || "$nvim_pct" -eq 0 ]]; then
+    echo -e "  ${RED}${BOLD}✗ neovim: could not parse coverage from luacov report. FAIL${RESET}"
+    exit 1
+fi
+
+if [[ "$nvim_pct" -lt "$TEST_COVERAGE_NVIM" ]]; then
+    echo -e "  ${RED}✗ neovim: ${nvim_pct}% < ${TEST_COVERAGE_NVIM}% threshold — FAIL${RESET}"
+    exit 1
+fi
+echo -e "  ${GREEN}✓ neovim: ${nvim_pct}% ≥ ${TEST_COVERAGE_NVIM}% threshold${RESET}"

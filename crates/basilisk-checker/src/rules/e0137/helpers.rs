@@ -2,60 +2,10 @@
 
 use std::collections::HashMap;
 
-use basilisk_resolver::{FunctionInfo, ParameterInfo, Span};
+use basilisk_resolver::{FunctionInfo, ParameterInfo};
 
+use crate::rules::shared::contains_typevar_reference;
 use crate::span_util::slice_span;
-
-/// Parse a subscript annotation like `Proto[A, B]` into `(proto_name, [A, B])`.
-pub(super) fn parse_subscript_annotation(text: &str) -> Option<(&str, Vec<String>)> {
-    let bracket_pos = text.find('[')?;
-    let proto_name = text[..bracket_pos].trim();
-    if proto_name.is_empty() {
-        return None;
-    }
-
-    let inner_start = bracket_pos + 1;
-    let inner_end = text.rfind(']')?;
-    if inner_end <= inner_start {
-        return None;
-    }
-    let inner = &text[inner_start..inner_end];
-
-    let args = split_top_level_args(inner)
-        .into_iter()
-        .map(|s| s.trim().to_owned())
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>();
-
-    if args.is_empty() {
-        return None;
-    }
-
-    Some((proto_name, args))
-}
-
-/// Split comma-separated type arguments at the top level (respecting bracket nesting).
-pub(super) fn split_top_level_args(inner: &str) -> Vec<&str> {
-    let mut args = Vec::new();
-    let mut depth = 0i32;
-    let mut start = 0;
-
-    for (idx, ch) in inner.char_indices() {
-        match ch {
-            '[' | '(' | '{' => depth += 1,
-            ']' | ')' | '}' => depth -= 1,
-            ',' if depth == 0 => {
-                args.push(&inner[start..idx]);
-                start = idx + 1;
-            }
-            _ => {}
-        }
-    }
-    if start < inner.len() {
-        args.push(&inner[start..]);
-    }
-    args
-}
 
 /// Extract the constructor class name from an expression like `ClassName(...)`.
 pub(super) fn extract_constructor_name(expr: &str) -> Option<&str> {
@@ -167,36 +117,6 @@ pub(super) fn types_compatible(expected: &str, actual: &str) -> bool {
 /// Returns `true` for ASCII alphanumeric or underscore characters.
 pub(super) const fn is_ident_char(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'_'
-}
-
-/// Check whether `text` contains `name` as a whole word (not as a substring
-/// of a longer identifier).
-pub(crate) fn annotation_contains_typevar(text: &str, name: &str) -> bool {
-    let name_bytes = name.as_bytes();
-    let text_bytes = text.as_bytes();
-    let name_len = name_bytes.len();
-
-    if name_len > text_bytes.len() {
-        return false;
-    }
-
-    for start in 0..=(text_bytes.len() - name_len) {
-        let Some(slice) = text_bytes.get(start..start + name_len) else {
-            continue;
-        };
-        if slice != name_bytes {
-            continue;
-        }
-        if start > 0 && text_bytes.get(start - 1).is_some_and(|&b| is_ident_char(b)) {
-            continue;
-        }
-        let end = start + name_len;
-        if end < text_bytes.len() && text_bytes.get(end).is_some_and(|&b| is_ident_char(b)) {
-            continue;
-        }
-        return true;
-    }
-    false
 }
 
 /// Skip the `self` or `cls` parameter from a parameter list.
@@ -483,7 +403,7 @@ pub(super) fn check_typevar_methods_consistency(
         let uses_tv = proto_params.iter().any(|p| {
             p.annotation_span
                 .and_then(|span| slice_span(source, span))
-                .is_some_and(|text| annotation_contains_typevar(text.trim(), tv_name))
+                .is_some_and(|text| contains_typevar_reference(text.trim(), tv_name))
         });
 
         if !uses_tv {
@@ -514,7 +434,7 @@ pub(super) fn check_typevar_methods_consistency(
                 .and_then(|span| slice_span(source, span))
                 .map_or("", str::trim);
 
-            if !annotation_contains_typevar(proto_ann, tv_name) {
+            if !contains_typevar_reference(proto_ann, tv_name) {
                 continue;
             }
 
@@ -528,7 +448,7 @@ pub(super) fn check_typevar_methods_consistency(
             }
 
             // If concrete also uses the TypeVar, method is generic — OK.
-            if annotation_contains_typevar(concrete_ann, tv_name) {
+            if contains_typevar_reference(concrete_ann, tv_name) {
                 concrete_uses_tv = true;
                 continue;
             }
@@ -570,40 +490,6 @@ pub(super) fn check_typevar_methods_consistency(
                     proto_method.name
                 ));
             }
-        }
-    }
-    None
-}
-
-/// Collect all methods belonging to a class from the module's function list.
-pub(super) fn _collect_class_methods<'a>(
-    class_name: &str,
-    functions: &'a [FunctionInfo],
-) -> Vec<&'a FunctionInfo> {
-    functions
-        .iter()
-        .filter(|f| f.class_name.as_deref() == Some(class_name))
-        .collect()
-}
-
-/// Compute the byte span of a line in the source for diagnostic anchoring.
-pub(super) fn _line_span(source: &str, line_number: usize) -> Option<Span> {
-    let mut current_line = 1;
-    let mut start = 0;
-    for (i, ch) in source.char_indices() {
-        if current_line == line_number {
-            let end = source
-                .get(i..)
-                .and_then(|s| s.find('\n'))
-                .map_or(source.len(), |j| i + j);
-            return Some(Span {
-                start: u32::try_from(start).ok()?,
-                end: u32::try_from(end).ok()?,
-            });
-        }
-        if ch == '\n' {
-            current_line += 1;
-            start = i + 1;
         }
     }
     None

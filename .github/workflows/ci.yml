@@ -126,6 +126,8 @@ jobs:
   test-vscode:
     name: VS Code Extension
     runs-on: ubuntu-latest
+    env:
+      TEST_COVERAGE_VSIX: ${{ vars.TEST_COVERAGE_VSIX || '60' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -176,6 +178,8 @@ jobs:
   test-nvim:
     name: Neovim Extension
     runs-on: ubuntu-latest
+    env:
+      TEST_COVERAGE_NVIM: ${{ vars.TEST_COVERAGE_NVIM || '30' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -192,8 +196,11 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install pytest
-        run: pip install pytest
+      - name: Install pytest and luarocks
+        run: |
+          pip install pytest
+          sudo apt-get install -y luarocks
+          luarocks install --local luacov
 
       - name: Install Neovim
         uses: rhysd/action-setup-vim@v1
@@ -202,4 +209,7 @@ jobs:
           version: v0.11.6
 
       - name: Run Neovim extension tests
-        run: ./scripts/test-nvim.sh
+        run: |
+          eval "$(luarocks path)"
+          export PATH="$HOME/.luarocks/bin:$PATH"
+          ./scripts/test-nvim.sh

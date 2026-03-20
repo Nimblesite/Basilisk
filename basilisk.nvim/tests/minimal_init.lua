@@ -13,6 +13,19 @@ if os.getenv("LUACOV") then
   if jit then
     jit.off()
   end
+  -- Disable vim.loader bytecode cache so luacov's debug hook can see
+  -- source files. Without this, cached modules bypass the line hook
+  -- and produce 0% coverage for all basilisk sources.
+  if vim.loader and vim.loader.reset then
+    vim.loader.reset()
+    -- vim.loader.enable(false) disables the cache (Neovim 0.11+).
+    -- Older builds expose vim.loader.disable() instead.
+    if vim.loader.enable then
+      vim.loader.enable(false)
+    elseif vim.loader.disable then
+      vim.loader.disable()
+    end
+  end
   -- Add luarocks paths so we can find luacov.
   local luarocks_path = vim.fn.trim(vim.fn.system("luarocks path --lr-path 2>/dev/null"))
   local luarocks_cpath = vim.fn.trim(vim.fn.system("luarocks path --lr-cpath 2>/dev/null"))

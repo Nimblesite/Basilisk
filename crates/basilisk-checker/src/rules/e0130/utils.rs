@@ -2,6 +2,8 @@
 
 use basilisk_resolver::Span;
 
+use crate::rules::shared::contains_typevar_reference;
+
 /// Check if `line` is a simple assignment (e.g. `X = list[T]`), excluding
 /// comparisons (`==`, `!=`, `<=`, `>=`) and augmented assignments (`+=`, etc.).
 /// Used to identify module-level implicit type aliases per PEP 484.
@@ -60,35 +62,6 @@ pub(super) fn collect_full_signature(lines: &[&str], start_idx: usize) -> String
         }
     }
     sig
-}
-
-/// Check if `name` appears as a whole identifier in `text` (not as part of a longer name).
-pub(super) fn contains_typevar_reference(text: &str, typevar_name: &str) -> bool {
-    let needle = typevar_name.as_bytes();
-    let haystack = text.as_bytes();
-    let needle_len = needle.len();
-
-    if needle_len > haystack.len() {
-        return false;
-    }
-
-    haystack
-        .windows(needle_len)
-        .enumerate()
-        .any(|(idx, window)| {
-            if window != needle {
-                return false;
-            }
-            let before_ok = idx == 0
-                || haystack
-                    .get(idx - 1)
-                    .is_some_and(|&b| !b.is_ascii_alphanumeric() && b != b'_');
-            let after_ok = idx + needle_len >= haystack.len()
-                || haystack
-                    .get(idx + needle_len)
-                    .is_some_and(|&b| !b.is_ascii_alphanumeric() && b != b'_');
-            before_ok && after_ok
-        })
 }
 
 /// Extract `TypeVar` names from a `Generic[T, S, ...]`, `Protocol[T]`, or
@@ -273,44 +246,6 @@ pub(super) fn extract_typevar_params_from_generic(source_line: &str) -> Vec<Stri
         .collect()
 }
 
-/// Parse a subscript annotation like `MyClass[int]` into `("MyClass", ["int"])`.
-pub(super) fn parse_generic_annotation(ann: &str) -> Option<(String, Vec<String>)> {
-    let bracket_pos = ann.find('[')?;
-    let class_name = ann[..bracket_pos].trim().to_owned();
-    if class_name.is_empty() {
-        return None;
-    }
-    let inner = ann.get(bracket_pos + 1..ann.rfind(']')?)?;
-    let type_args = split_top_level_type_args(inner);
-    if type_args.is_empty() {
-        return None;
-    }
-    Some((class_name, type_args))
-}
-
-/// Split comma-separated type args at the top level of brackets.
-pub(super) fn split_top_level_type_args(inner: &str) -> Vec<String> {
-    let mut args = Vec::new();
-    let mut depth = 0i32;
-    let mut start = 0usize;
-    for (idx, ch) in inner.char_indices() {
-        match ch {
-            '[' | '(' => depth += 1,
-            ']' | ')' => depth -= 1,
-            ',' if depth == 0 => {
-                args.push(inner[start..idx].trim().to_owned());
-                start = idx + 1;
-            }
-            _ => {}
-        }
-    }
-    let last = inner[start..].trim();
-    if !last.is_empty() {
-        args.push(last.to_owned());
-    }
-    args
-}
-
 /// Infer a simple Python type name from a literal expression.
 pub(super) fn infer_literal_type(expr: &str) -> Option<&'static str> {
     let expr = expr.trim();
@@ -349,25 +284,6 @@ pub(super) fn infer_literal_type(expr: &str) -> Option<&'static str> {
         return Some("bytes");
     }
     None
-}
-
-/// Check if two type names are compatible.
-pub(super) fn generic_types_compatible(actual: &str, expected: &str) -> bool {
-    if expected == "Any" || actual == "Any" || expected == "object" {
-        return true;
-    }
-    if actual == expected {
-        return true;
-    }
-    // bool is subtype of int
-    if expected == "int" && actual == "bool" {
-        return true;
-    }
-    // int is subtype of float
-    if expected == "float" && (actual == "int" || actual == "bool") {
-        return true;
-    }
-    false
 }
 
 /// Compute a per-line bitmask indicating which lines are inside triple-quoted strings.

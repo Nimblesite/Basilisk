@@ -6,11 +6,10 @@ use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
+use crate::rules::shared::{is_type_compatible, parse_subscript_annotation, split_top_level_commas};
+
 use super::collect::{collect_generic_classes, collect_generic_instances};
-use super::utils::{
-    find_matching_close, generic_types_compatible, infer_literal_type, parse_generic_annotation,
-    span_for_line, split_top_level_type_args,
-};
+use super::utils::{find_matching_close, infer_literal_type, span_for_line};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0130",
@@ -108,7 +107,11 @@ pub(super) fn check_generic_instance_method_calls(
             let args_text = &after_paren[..close_paren];
 
             // Split args at top-level commas.
-            let args = split_top_level_type_args(args_text);
+            let args: Vec<String> = split_top_level_commas(args_text)
+                .iter()
+                .map(|s| s.trim().to_owned())
+                .filter(|s| !s.is_empty())
+                .collect();
 
             // Check each parameter.
             for (param_idx, (param_name, param_ann)) in method_params.iter().enumerate() {
@@ -134,7 +137,7 @@ pub(super) fn check_generic_instance_method_calls(
                     continue;
                 };
 
-                if !generic_types_compatible(actual_type, expected_type) {
+                if !is_type_compatible(actual_type, expected_type) {
                     diagnostics.push(Diagnostic {
                         code: CODE.clone(),
                         severity: Severity::Error,
@@ -249,7 +252,7 @@ pub(super) fn check_generic_constructor_calls(
             let after_name = &code_part[start + class_def.name.len()..];
 
             // Parse [TypeArgs]
-            let Some((_, explicit_args)) = parse_generic_annotation(&code_part[start..]) else {
+            let Some((_, explicit_args)) = parse_subscript_annotation(&code_part[start..]) else {
                 continue;
             };
 
@@ -269,7 +272,11 @@ pub(super) fn check_generic_constructor_calls(
             let call_args_start = &after_name[bracket_end + 2..];
             let close_paren = find_matching_close(call_args_start);
             let call_args_text = &call_args_start[..close_paren];
-            let call_args = split_top_level_type_args(call_args_text);
+            let call_args: Vec<String> = split_top_level_commas(call_args_text)
+                .iter()
+                .map(|s| s.trim().to_owned())
+                .filter(|s| !s.is_empty())
+                .collect();
 
             // Check __init__ params against call args
             let Some(init_params) = class_def.methods.get("__init__") else {
@@ -353,7 +360,7 @@ fn check_constructor_args(ctx: &ConstructorCheckCtx<'_>, diagnostics: &mut Vec<D
             continue;
         };
 
-        if !generic_types_compatible(actual_type, expected_type) {
+        if !is_type_compatible(actual_type, expected_type) {
             diagnostics.push(Diagnostic {
                 code: CODE.clone(),
                 severity: Severity::Error,

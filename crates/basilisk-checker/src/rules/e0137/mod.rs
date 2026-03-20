@@ -37,10 +37,10 @@ use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 use crate::span_util::slice_span;
 
 use super::Rule;
+use crate::rules::shared::parse_subscript_annotation;
 use helpers::{
     check_self_typed_method_incompatibility, check_typevar_methods_consistency,
     extract_constructor_name, find_method_mismatch, get_self_typevar_name, method_has_typed_self,
-    parse_subscript_annotation,
 };
 
 const CODE: ErrorCode = ErrorCode {

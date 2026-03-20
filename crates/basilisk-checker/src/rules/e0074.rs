@@ -30,6 +30,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::rules::shared::{infer_expr_literal_type, is_type_compatible};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -338,7 +339,7 @@ fn check_new_method_args(
         };
 
         // Classify the argument expression type.
-        let Some(arg_type) = classify_literal_type(arg_expr) else {
+        let Some(arg_type) = infer_expr_literal_type(arg_expr) else {
             continue;
         };
 
@@ -494,65 +495,4 @@ fn resolve_string_annotation(annotation: &str) -> String {
     } else {
         annotation.to_owned()
     }
-}
-
-/// Classify the Python type of a literal expression.
-fn classify_literal_type(expr: &ruff_python_ast::Expr) -> Option<&'static str> {
-    use ruff_python_ast::Expr;
-    match expr {
-        Expr::StringLiteral(_) => Some("str"),
-        Expr::NumberLiteral(num) => {
-            if num.value.is_int() {
-                Some("int")
-            } else {
-                Some("float")
-            }
-        }
-        Expr::BooleanLiteral(_) => Some("bool"),
-        Expr::BytesLiteral(_) => Some("bytes"),
-        Expr::NoneLiteral(_) => Some("None"),
-        _ => None,
-    }
-}
-
-/// Check if an argument type is compatible with a parameter type.
-fn is_type_compatible(arg_type: &str, param_type: &str) -> bool {
-    // Direct match.
-    if arg_type == param_type {
-        return true;
-    }
-
-    // `Any` matches everything.
-    if param_type == "Any" {
-        return true;
-    }
-
-    // `object` matches everything.
-    if param_type == "object" {
-        return true;
-    }
-
-    // bool is a subtype of int.
-    if param_type == "int" && arg_type == "bool" {
-        return true;
-    }
-
-    // int is a subtype of float (numeric tower).
-    if param_type == "float" && (arg_type == "int" || arg_type == "bool") {
-        return true;
-    }
-
-    // int is a subtype of complex (numeric tower).
-    if param_type == "complex" && (arg_type == "int" || arg_type == "float" || arg_type == "bool") {
-        return true;
-    }
-
-    // Union types: `X | Y`
-    if param_type.contains('|') {
-        return param_type
-            .split('|')
-            .any(|part| is_type_compatible(arg_type, part.trim()));
-    }
-
-    false
 }

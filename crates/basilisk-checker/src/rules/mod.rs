@@ -151,6 +151,7 @@ pub(crate) mod e0148;
 pub(crate) mod e0149;
 pub(crate) mod e0150;
 pub(crate) mod guards;
+pub(crate) mod shared;
 pub(crate) mod w0010;
 pub(crate) mod w0011;
 pub(crate) mod w0012;

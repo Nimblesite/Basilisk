@@ -59,7 +59,8 @@ else
     vsix_total=0
 fi
 if [[ "$vsix_total" -eq 0 ]]; then
-    warn "vscode-extension: no LCOV data — V8 coverage cannot instrument the VS Code extension host process. Skipping threshold."
+    echo -e "  ${RED}${BOLD}✗ vscode-extension: no LCOV data — coverage collection is broken. FAIL${RESET}"
+    exit 1
 else
     vsix_covered=$(grep -c "^DA:[^,]*,[^0]" "$VSIX_LCOV" || true)
     vsix_pct=$((vsix_covered * 100 / vsix_total))

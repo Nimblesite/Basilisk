@@ -20,6 +20,7 @@
 use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::rules::shared::split_top_level_commas;
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -94,30 +95,6 @@ impl Rule for InvalidTupleTypeSyntax {
     }
 }
 
-/// Split `s` by top-level commas (ignoring commas inside `[]`, `()`, `{}`).
-fn split_top_level(s: &str) -> Vec<&str> {
-    let mut parts = Vec::new();
-    let mut depth = 0i32;
-    let mut start = 0usize;
-    for (i, ch) in s.char_indices() {
-        match ch {
-            '[' | '(' | '{' => depth += 1,
-            ']' | ')' | '}' => depth -= 1,
-            ',' if depth == 0 => {
-                if let Some(part) = s.get(start..i) {
-                    parts.push(part.trim());
-                }
-                start = i + 1;
-            }
-            _ => {}
-        }
-    }
-    if let Some(part) = s.get(start..) {
-        parts.push(part.trim());
-    }
-    parts
-}
-
 /// Returns `Some(error_message)` if the tuple type annotation has invalid syntax.
 ///
 /// Only flags top-level ellipsis misuse; nested `...` inside starred unpacks
@@ -138,7 +115,10 @@ fn check_tuple_syntax(annotation: &str) -> Option<&'static str> {
     }
 
     // Split by top-level commas to get individual components.
-    let components = split_top_level(inner);
+    let components: Vec<&str> = split_top_level_commas(inner)
+        .into_iter()
+        .map(str::trim)
+        .collect();
 
     // Find positions of top-level `...` components.
     let ellipsis_positions: Vec<usize> = components
