@@ -245,18 +245,19 @@ permalink: /
   <div class="feature-row">
     <div class="feature-row__visual">
       <div class="stat-block">
-        <span class="stat-block__number">83.4<span class="stat-block__unit">%</span></span>
+        <span class="stat-block__number">91.8<span class="stat-block__unit">%</span></span>
         <span class="stat-block__label">PEP conformance score</span>
       </div>
     </div>
     <div class="feature-row__text">
       <p class="feature-row__num">04 &mdash; PEP conformance</p>
-      <h2 class="feature-row__title">86 of 145 tests passing.<br>Target: 100%.</h2>
+      <h2 class="feature-row__title">134 of 146 tests passing.<br>Target: 100%.</h2>
       <p class="feature-row__body">
-        Tested against the official Python typing conformance suite &mdash;
-        the same suite used to measure Pyright (~99%), mypy (~58%), and Pyrefly (~86%).
-        Enums, overloads, qualifiers, and directives already at 90&ndash;100%.
-        Generics, protocols, and aliases are next.
+        Tested against the <a href="https://github.com/python/typing/blob/main/conformance/results/results.html" style="color:var(--color-accent)">official Python typing conformance suite</a> &mdash;
+        the same suite used to measure Pyright (~99%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>),
+        mypy (~58%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>),
+        and Pyrefly (~86%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>).
+        18 of 22 categories at 100%. ParamSpec, TypeVarTuple, and TypedDict edge cases are next.
       </p>
     </div>
   </div>
@@ -364,7 +365,7 @@ permalink: /
           </tr>
           <tr>
             <td>PEP conformance <a href="/docs/comparison/#footnotes" style="color:var(--color-text-muted);font-size:0.75rem">¹</a></td>
-            <td class="col-basilisk">59.3% <em style="font-size:0.75rem;color:var(--color-text-muted)">(86/145)</em></td>
+            <td class="col-basilisk">91.8% <em style="font-size:0.75rem;color:var(--color-text-muted)">(134/146)</em></td>
             <td>~99%</td>
             <td>~58% full-pass</td>
             <td>alpha</td>
