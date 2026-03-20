@@ -208,7 +208,7 @@ Persistent item showing server state and diagnostic count:
 
 Additional indicators (future):
 - Type completeness indicator: `"87% typed"`
-- Migration dashboard (sidebar panel)
+- Migration dashboard — see [EXTENSION-ACTIVITY-PANEL-SPEC.md](EXTENSION-ACTIVITY-PANEL-SPEC.md)
 - Ownership visualization (gutter icons: borrowed/owned/inout)
 
 ---

@@ -276,9 +276,10 @@ Validates symbol is renameable, returns `WorkspaceEdit` with `TextEdit` for each
 | (any) | Suppress with `# type: ignore` | Append comment to line |
 | (source) | Organize imports | Delegate to `ruff check --select I --fix` |
 
-| BSK-E0010 (uv) | Add dependency | `uv add <package>` (future, see `LSP-UV-INTEGRATION-SPEC.md`) |
-| BSK-W0010 (uv) | Install type stubs | `uv add --dev types-<package>` (future) |
-| BSK-W0013 (uv) | Sync environment | `uv sync` (future) |
+| BSK-E0010 (uv) | Add dependency | `uv add <package>` via `basilisk.uv.add` command |
+| BSK-W0010 (uv) | Install type stubs | `uv add --dev types-<package>` via `basilisk.uv.addDev` command |
+| BSK-W0011 (uv) | Add dependency | `uv add <package>` — transitive dep used directly |
+| BSK-W0013 (uv) | Sync environment | `uv sync` via `basilisk.uv.sync` command |
 
 Register `codeActionKinds`: `[QUICKFIX, SOURCE_ORGANIZE_IMPORTS, REFACTOR]`
 
@@ -345,6 +346,52 @@ Smart Select: identifier → parameter → parameter list → function → class
 ### Code Lens (`textDocument/codeLens`)
 
 Show "N references" above each function and class definition.
+
+---
+
+## uv Integration Architecture
+
+See [LSP-UV-INTEGRATION-SPEC.md](LSP-UV-INTEGRATION-SPEC.md) for the full specification. Key architectural details:
+
+### Detection & Registry
+
+On startup, the LSP detects uv projects via filesystem signals (`uv.lock`, `[tool.uv]` in `pyproject.toml`, `.venv/pyvenv.cfg` with `uv = true`). If detected:
+
+1. Parse `uv.lock` → `LockFile` (TOML, zero subprocess calls)
+2. Extract `[project].dependencies` from `pyproject.toml` (PEP 508 specifier parsing)
+3. Build `PackageRegistry` — HashMap keyed by normalised import name, classifying each package as `Direct`, `Dev`, or `Transitive`
+4. Discover `[tool.uv.workspace]` members → add source roots to import search paths
+
+The registry feeds into:
+- **Import resolution**: `PackageDepKind` (Direct/Dev/Transitive) annotated on each `ImportInfo`
+- **Diagnostics**: BSK-W0011 fires for transitive dependency imports
+- **Hover**: shows dependency classification and workspace member status
+- **Code actions**: `uv add`, `uv add --dev`, `uv sync` quick fixes
+
+### Hot Reload
+
+All uv commands trigger `rebuild_registry_and_resolve()` on success — re-parses `uv.lock`, rebuilds the registry, re-resolves all imports, and republishes diagnostics for every indexed file. The same function fires when the file watcher detects `uv.lock` or `pyproject.toml` changes. No LSP restart needed.
+
+### uv Binary Resolution
+
+| Priority | Source |
+|----------|--------|
+| 1 | `basilisk.uv.executablePath` setting |
+| 2 | `UV_PATH` environment variable |
+| 3 | `~/.cargo/bin/uv` |
+| 4 | `~/.local/bin/uv` |
+| 5 | OS PATH search |
+
+The uv binary is only needed for **commands** (sync, add, remove). Lock file parsing and environment detection are pure filesystem operations.
+
+### uv Diagnostic Codes
+
+| Code | Severity | Default | Gate | Description |
+|------|----------|---------|------|-------------|
+| BSK-W0010 | Warning | Enabled | `uv.stubSuggestions` | Package installed but no type stubs |
+| BSK-W0011 | Warning | Disabled | `uv.dependencyDiagnostics` | Import of transitive dependency not in `[project.dependencies]` |
+| BSK-W0012 | Info | Disabled | `uv.dependencyDiagnostics` | Declared dependency never imported (whole-module only, skeleton) |
+| BSK-W0013 | Warning | Disabled | `uv.dependencyDiagnostics` | `uv.lock` older than `pyproject.toml` (skeleton) |
 
 ---
 

@@ -21,6 +21,7 @@ Specifications define the target behavior and architecture. They are the source 
 | [NEOVIM-SPEC.md](specs/NEOVIM-SPEC.md) | Neovim plugin (basilisk.nvim) — LSP client, DAP proxy, command mappings. |
 | [LSP-REFACTORING-SPEC.md](specs/LSP-REFACTORING-SPEC.md) | Deterministic refactoring tools — rename, extract, inline, move, convert, change signature. |
 | [ZED-SPEC.md](specs/ZED-SPEC.md) | Zed extension (WASM) — LSP integration, tree-sitter grammars, DAP debugging. |
+| [EXTENSION-ACTIVITY-PANEL-SPEC.md](specs/EXTENSION-ACTIVITY-PANEL-SPEC.md) | Cross-editor activity panel — module explorer, type health, feature dashboard (VS Code, Zed, Neovim). |
 
 ## Plans
 

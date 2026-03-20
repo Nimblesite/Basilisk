@@ -1,0 +1,775 @@
+# Basilisk Activity Panel
+
+## Goal
+
+The Basilisk activity icon opens a sidebar that is **genuinely useful** — not a branding placeholder. It gives Python developers immediate, actionable insight into their codebase: module structure, type coverage, diagnostics, adoption progress, and what Basilisk actually does for them.
+
+Every panel must pass the bar: **"Would I leave this open while coding?"** If not, cut it.
+
+**Cross-editor spec.** The LSP commands and data model are shared. The rendering differs per editor. This spec defines the shared protocol first, then per-editor implementation notes. Only **differences** are documented per-editor — if it's the same, it's in the shared section.
+
+## Critical Docs
+
+- [VS Code TreeView API](https://code.visualstudio.com/api/extension-guides/tree-view)
+- [VS Code Extension API — views](https://code.visualstudio.com/api/references/contribution-points#contributes.views)
+- [Zed Extension API](https://zed.dev/docs/extensions/developing-extensions)
+- [VSIX-SPEC.md](VSIX-SPEC.md) — VS Code extension spec
+- [ZED-SPEC.md](ZED-SPEC.md) — Zed extension spec
+- [NEOVIM-SPEC.md](NEOVIM-SPEC.md) — Neovim plugin spec
+
+---
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Editor (VS Code / Zed / Neovim)                             │
+│                                                              │
+│  ┌── Activity Sidebar ────────────────────────────────────┐  │
+│  │                                                        │  │
+│  │  ┌── Module Explorer ──────────────────────────────┐   │  │
+│  │  │  Semantic tree of workspace Python modules      │   │  │
+│  │  │  with classes, functions, variables, types       │   │  │
+│  │  └─────────────────────────────────────────────────┘   │  │
+│  │                                                        │  │
+│  │  ┌── Type Health ──────────────────────────────────┐   │  │
+│  │  │  Coverage %, adoption status, diagnostics       │   │  │
+│  │  │  per-file and per-module rollup                 │   │  │
+│  │  └─────────────────────────────────────────────────┘   │  │
+│  │                                                        │  │
+│  │  ┌── Basilisk ─────────────────────────────────────┐   │  │
+│  │  │  What is this? Feature status. Quick actions.   │   │  │
+│  │  │  Getting started. Toggle features.              │   │  │
+│  │  └─────────────────────────────────────────────────┘   │  │
+│  └────────────────────────────────────────────────────────┘  │
+│                                                              │
+│       ▲ all data via LSP custom commands ▼                   │
+│                                                              │
+│  ┌── basilisk lsp (Rust) ─────────────────────────────────┐  │
+│  │  basilisk/workspaceModules                             │  │
+│  │  basilisk/moduleChanged                                │  │
+│  │  basilisk/typeHealth                                   │  │
+│  └────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────┘
+```
+
+All data flows from the LSP server via custom commands. The editor extension is a **thin rendering layer**.
+
+---
+
+## Custom LSP Commands (Shared)
+
+These commands are the shared backbone. Every editor uses the same request/response types.
+
+### `basilisk/workspaceModules`
+
+Returns the semantic module tree for the workspace.
+
+- **Direction**: Client -> Server (request)
+- **Params**: `{ scope?: string }` — optional module name prefix filter (e.g. `"myapp.api"`)
+- **Returns**: `WorkspaceModulesResponse`
+- **Trigger**: On panel open, refresh, or after `basilisk/moduleChanged` notification
+
+### `basilisk/moduleChanged`
+
+Server pushes updated module data after re-analysis.
+
+- **Direction**: Server -> Client (notification)
+- **Params**: `{ module: ModuleNode }` — the changed module's updated tree
+- **Trigger**: After file save triggers re-analysis
+
+### `basilisk/typeHealth`
+
+Returns type coverage and diagnostic health for the workspace.
+
+- **Direction**: Client -> Server (request)
+- **Params**: `{}` (whole workspace) or `{ module?: string }` (specific module)
+- **Returns**: `TypeHealthResponse`
+- **Trigger**: On panel open, refresh, diagnostic changes
+
+---
+
+## Shared Data Model
+
+```typescript
+// --- Module Explorer ---
+
+interface WorkspaceModulesResponse {
+    modules: ModuleNode[];
+}
+
+interface ModuleNode {
+    /** Fully qualified module name: "myapp.api.auth" */
+    name: string;
+    /** Absolute file path */
+    path: string;
+    /** Package (directory) or module (file) */
+    kind: "package" | "module";
+    /** Child modules (packages only) */
+    children: ModuleNode[];
+    /** Top-level symbols exported by this module */
+    symbols: SymbolNode[];
+}
+
+interface SymbolNode {
+    name: string;
+    kind: "class" | "function" | "variable" | "constant" | "typeAlias";
+    /** Human-readable type string: "(x: int, y: int) -> Point" */
+    type: string;
+    /** Line number in source */
+    line: number;
+    /** Children (methods for classes, nested classes) */
+    children: SymbolNode[];
+    /** Exported via __all__? */
+    exported: boolean;
+    /** Has type annotation? */
+    annotated: boolean;
+}
+
+// --- Type Health ---
+
+interface TypeHealthResponse {
+    /** Overall workspace stats */
+    workspace: HealthStats;
+    /** Per-module breakdown */
+    modules: ModuleHealth[];
+}
+
+interface HealthStats {
+    totalSymbols: number;
+    annotatedSymbols: number;
+    /** annotatedSymbols / totalSymbols * 100 */
+    coveragePercent: number;
+    errors: number;
+    warnings: number;
+    adoptedFiles: number;
+    totalFiles: number;
+}
+
+interface ModuleHealth {
+    name: string;
+    path: string;
+    coveragePercent: number;
+    errors: number;
+    warnings: number;
+    /** true if file is in adopted (errors-as-warnings) mode */
+    adopted: boolean;
+    /** Unannotated symbol names (for quick-fix suggestions) */
+    unannotated: string[];
+}
+```
+
+---
+
+## Panel 1: Module Explorer
+
+The killer panel. Shows the **semantic** structure of the workspace — not a file tree, a *module* tree. Every Python developer needs to understand their module graph, and the built-in Explorer doesn't show it.
+
+### Tree Structure
+
+```
+myapp/
+  +-- __init__.py          (package)
+  +-- api/                 (package)
+  |   +-- auth.py          (module)
+  |   |   +-- class AuthProvider
+  |   |   |   +-- def authenticate(token: str) -> User
+  |   |   |   +-- def revoke(session_id: str) -> None
+  |   |   |   +-- _secret_key: str
+  |   |   +-- def create_token(user: User) -> str
+  |   |   +-- TOKEN_EXPIRY: int = 3600
+  |   +-- routes.py        (module)
+  |       +-- def get_users() -> list[User]
+  |       +-- def create_user(data: UserCreate) -> User
+  +-- models/              (package)
+  |   +-- user.py
+  |   |   +-- class User
+  |   |   |   +-- id: int
+  |   |   |   +-- name: str
+  |   |   |   +-- email: str
+  |   |   +-- class UserCreate
+  |   +-- base.py
+  |       +-- class BaseModel
+  +-- utils.py             (module)
+      +-- def slugify(text: str) -> str
+      +-- def now() -> datetime
+```
+
+### Tree Item Properties
+
+| Property | Value |
+|----------|-------|
+| Label | Symbol name |
+| Description | Type signature (dimmed, right-aligned) |
+| Icon | Per kind: class, method, variable, constant, namespace (type alias) |
+| Tooltip | Full signature + docstring first line (if available) |
+| Click action | Open file at the symbol's line |
+
+### Decorations
+
+- **Unannotated symbols**: italic label, warning suffix — visual nudge to add types
+- **Private symbols** (`_prefixed`): dimmed
+- **`__all__` exported**: export icon overlay
+- **Classes with errors**: red dot decoration
+
+### Context Menu Actions
+
+| Action | Scope |
+|--------|-------|
+| Go to Definition | Any symbol |
+| Find References | Any symbol |
+| Rename Symbol | Any symbol |
+| Copy Import Path | Module or symbol — copies `from myapp.api.auth import AuthProvider` |
+| Copy Qualified Name | Any symbol — copies `myapp.api.auth.AuthProvider` |
+| Organize Imports | Module |
+| Fix All | Module |
+
+### Toolbar Actions
+
+| Action | Description |
+|--------|-------------|
+| Refresh | Re-fetch module tree from LSP |
+| Collapse All | Standard collapse |
+| Filter | Toggle filter input to search modules/symbols by name |
+| Toggle View | Switch between tree (grouped by module) and flat (all symbols alphabetically) |
+
+### Refresh Strategy
+
+- **On workspace open**: full fetch
+- **On file save**: incremental update via `basilisk/moduleChanged` notification
+- **On file create/delete/rename**: full re-fetch
+- **Manual**: refresh button
+
+---
+
+## Panel 2: Type Health
+
+At-a-glance view of how well-typed the codebase is. Answers: "How much of my code does Basilisk actually understand?"
+
+### Tree Structure
+
+```
+Workspace Health: 73% typed  [========---] 14E 23W
+-------------------------------------------------
+  [pass]  myapp/models/user.py        100%    0E  0W
+  [pass]  myapp/models/base.py        100%    0E  0W
+  [pass]  myapp/api/auth.py            95%    0E  1W
+  [warn]  myapp/api/routes.py          68%    2E  3W
+  [warn]  myapp/utils.py               54%    1E  0W    [adopted]
+  [fail]  myapp/legacy/importer.py     12%   11E 19W    [adopted]
+```
+
+### Tree Item Properties
+
+| Property | Value |
+|----------|-------|
+| Label | Module path (relative to workspace root) |
+| Description | Coverage %, error/warning counts |
+| Icon | Green (>=90%), yellow (50-89%), red (<50%) |
+| Tooltip | "23 of 31 symbols annotated. 2 errors, 3 warnings." |
+| Decoration | `[adopted]` badge if file is in adoption mode |
+| Sort | Worst-first by default (lowest coverage at top). Toggleable. |
+
+### Header Widget
+
+The top-level item is a summary row showing workspace-wide stats:
+
+- **Coverage bar**: progress bar rendered in description
+- **Totals**: errors, warnings, adopted file count
+- **Trend indicator** (future): up/down since last session
+
+### Toolbar Actions
+
+| Action | Description |
+|--------|-------------|
+| Refresh | Re-fetch health data |
+| Sort | Cycle: worst-first -> best-first -> alphabetical |
+| Filter | Show only: errors, warnings, unannotated, adopted |
+
+### Context Menu Actions
+
+| Action | Command |
+|--------|---------|
+| Open File | Open at line 1 |
+| Adopt File | Errors -> warnings for this file |
+| Un-adopt File | Restore full errors |
+| Fix All in File | Run autofix |
+| Add Missing Annotations | AI-powered (future) |
+
+### Refresh Strategy
+
+- **On diagnostic change**: re-compute health stats client-side from diagnostic events + cached annotation data
+- **On adopt/unadopt**: immediate refresh
+- **Full re-fetch**: on workspace open and manual refresh
+
+---
+
+## Panel 3: Basilisk
+
+Helps users understand what Basilisk **is** and what it **does**. Not a static about page — a living dashboard of feature status and quick actions.
+
+### Structure
+
+Tree with grouped sections (top-level nodes are section headers, children are items).
+
+```
+Getting Started
+  +-- What is Basilisk?                     -> opens walkthrough / help
+  +-- Quick Setup Guide                     -> opens walkthrough / help
+  +-- Keyboard Shortcuts                    -> opens keybinding reference
+
+Feature Status
+  +-- Type Checking                         enabled
+  +-- Inlay Hints                           enabled
+  +-- Autofix                               enabled
+  +-- Debugger                              disabled (click to enable)
+  +-- Test Explorer                         enabled
+  +-- Ruff Integration                      enabled
+  +-- AI Suggestions                        disabled
+  +-- Profiler                              not installed
+
+Quick Actions
+  +-- Restart Language Server
+  +-- Organize Imports (Workspace)
+  +-- Fix All (Workspace)
+  +-- Show Output Log
+  +-- Run All Tests
+
+Server Info
+  +-- Version: 0.4.2
+  +-- Binary: /usr/local/bin/basilisk
+  +-- Python: /usr/bin/python3.12
+  +-- Analysis Mode: wholeModule
+  +-- Workspace: /home/user/myapp (142 files)
+```
+
+### Getting Started Section
+
+**Walkthrough: "What is Basilisk?"**
+
+1. **Type Checker** — Basilisk checks your Python types in real-time, like TypeScript does for JavaScript. No mypy, no Pyright, no Node.js. Pure Rust, sub-10ms incremental checks.
+2. **Autofix Engine** — Detected a type error? Basilisk suggests and applies fixes automatically. Organize imports, add annotations, fix common patterns.
+3. **Debugger** — Integrated Python debugging with type-aware features. See both static types and runtime values side-by-side.
+4. **Test Explorer** — Discover and run pytest/unittest tests directly from your editor. No configuration needed.
+5. **Gradual Adoption** — Don't want errors yet? "Adopt" files to downgrade errors to warnings. Incrementally migrate your codebase to full type safety.
+6. **Ruff-Powered Formatting** — Basilisk delegates linting and formatting to Ruff. One extension, complete Python tooling.
+
+**Walkthrough: "Quick Setup"**
+
+1. **Binary Found** — Is `basilisk` on your PATH?
+2. **Python Detected** — Which interpreter is Basilisk using?
+3. **Open a Python File** — See diagnostics appear
+4. **Try an Autofix** — Hover a diagnostic, click the lightbulb
+5. **Run a Test** — Open Test Explorer, click play
+
+### Feature Status Section
+
+Each item reflects a real setting and shows whether the feature is active.
+
+| Feature | Setting | Active Check |
+|---------|---------|--------------|
+| Type Checking | `basilisk.enabled` | boolean |
+| Inlay Hints | `basilisk.inlayHints.*` | any sub-setting true |
+| Autofix | always available | LSP running |
+| Debugger | `basilisk.debugger.enabled` | boolean |
+| Test Explorer | `basilisk.testExplorer.enabled` | boolean |
+| Ruff Integration | `basilisk.ruff.enabled` | boolean |
+| AI Suggestions | `basilisk.ai.enabled` | boolean (future) |
+| Profiler | `basilisk.profiler.enabled` | boolean (future) |
+
+**Click action**: toggles the setting. Disabled -> enabled, enabled -> disabled. Immediate effect.
+
+### Quick Actions Section
+
+Each item triggers an existing command. Convenience surface — users don't have to remember command palette names.
+
+### Server Info Section
+
+Read-only information fetched from:
+- LSP `initialize` response (server version, capabilities)
+- Extension settings (binary path, python path, analysis mode)
+- Workspace stats from `basilisk/typeHealth` (file count)
+
+---
+
+## Editor-Specific Implementation
+
+### VS Code
+
+Full native support via TreeView API. This is the reference implementation.
+
+**Activity bar icon**: `vscode-extension/resources/basilisk-icon.svg` — monochrome, 24x24px, works on light and dark themes.
+
+**package.json contributions**:
+
+```json
+{
+    "viewsContainers": {
+        "activitybar": [
+            {
+                "id": "basilisk",
+                "title": "Basilisk",
+                "icon": "resources/basilisk-icon.svg"
+            }
+        ]
+    },
+    "views": {
+        "basilisk": [
+            {
+                "id": "basilisk.moduleExplorer",
+                "name": "Module Explorer",
+                "icon": "$(symbol-namespace)",
+                "contextualTitle": "Basilisk Module Explorer"
+            },
+            {
+                "id": "basilisk.typeHealth",
+                "name": "Type Health",
+                "icon": "$(pulse)",
+                "contextualTitle": "Basilisk Type Health",
+                "visibility": "visible"
+            },
+            {
+                "id": "basilisk.info",
+                "name": "Basilisk",
+                "icon": "$(info)",
+                "contextualTitle": "Basilisk Info & Actions",
+                "visibility": "collapsed"
+            }
+        ]
+    },
+    "viewsWelcome": [
+        {
+            "view": "basilisk.moduleExplorer",
+            "contents": "No Python modules found.\n[Open a folder](command:vscode.openFolder) containing Python files to see the module tree.",
+            "when": "workbenchState == empty"
+        },
+        {
+            "view": "basilisk.moduleExplorer",
+            "contents": "Basilisk is starting...\nWaiting for the language server to initialize.",
+            "when": "basilisk.serverState == starting"
+        }
+    ],
+    "menus": {
+        "view/title": [
+            {
+                "command": "basilisk.refreshModuleExplorer",
+                "when": "view == basilisk.moduleExplorer",
+                "group": "navigation"
+            },
+            {
+                "command": "basilisk.collapseModuleExplorer",
+                "when": "view == basilisk.moduleExplorer",
+                "group": "navigation"
+            },
+            {
+                "command": "basilisk.toggleModuleExplorerView",
+                "when": "view == basilisk.moduleExplorer",
+                "group": "navigation"
+            },
+            {
+                "command": "basilisk.refreshTypeHealth",
+                "when": "view == basilisk.typeHealth",
+                "group": "navigation"
+            },
+            {
+                "command": "basilisk.sortTypeHealth",
+                "when": "view == basilisk.typeHealth",
+                "group": "navigation"
+            }
+        ],
+        "view/item/context": [
+            {
+                "command": "basilisk.copyImportPath",
+                "when": "viewItem =~ /basilisk\\.(module|class|function|variable)/",
+                "group": "6_copypath@1"
+            },
+            {
+                "command": "basilisk.copyQualifiedName",
+                "when": "viewItem =~ /basilisk\\.(module|class|function|variable)/",
+                "group": "6_copypath@2"
+            },
+            {
+                "command": "basilisk.adoptFile",
+                "when": "viewItem == basilisk.healthModule && !basilisk.adopted",
+                "group": "2_actions@1"
+            },
+            {
+                "command": "basilisk.unadoptFile",
+                "when": "viewItem == basilisk.healthModule && basilisk.adopted",
+                "group": "2_actions@2"
+            },
+            {
+                "command": "basilisk.fixFile",
+                "when": "viewItem == basilisk.healthModule",
+                "group": "2_actions@3"
+            }
+        ]
+    }
+}
+```
+
+**New commands** (VS Code-specific registration):
+
+| Command | Title |
+|---------|-------|
+| `basilisk.refreshModuleExplorer` | Basilisk: Refresh Module Explorer |
+| `basilisk.toggleModuleExplorerView` | Basilisk: Toggle Module View |
+| `basilisk.collapseModuleExplorer` | Basilisk: Collapse Module Explorer |
+| `basilisk.copyImportPath` | Basilisk: Copy Import Path |
+| `basilisk.copyQualifiedName` | Basilisk: Copy Qualified Name |
+| `basilisk.refreshTypeHealth` | Basilisk: Refresh Type Health |
+| `basilisk.sortTypeHealth` | Basilisk: Sort Type Health |
+| `basilisk.openWalkthrough` | Basilisk: Getting Started |
+
+**When clauses / context keys**:
+
+| Context Key | Type | Purpose |
+|-------------|------|---------|
+| `basilisk.serverState` | `"starting" \| "running" \| "stopped" \| "error"` | Welcome content, feature status |
+| `basilisk.hasWorkspace` | `boolean` | Show/hide module explorer content |
+| `basilisk.moduleExplorerView` | `"tree" \| "flat"` | Toggle icon state |
+
+**Walkthroughs**: VS Code's built-in walkthrough system via `contributes.walkthroughs` in package.json. The Getting Started items open these directly.
+
+**Tree icons**: Codicons — `symbol-class`, `symbol-method`, `symbol-variable`, `symbol-constant`, `symbol-namespace`.
+
+**Filter**: Built-in VS Code tree filter plus `basilisk.moduleExplorer.filter` command for glob-style module filtering. Filter state persists in `workspaceState`.
+
+### Zed
+
+Zed does **not** currently support custom sidebar panels (open issue #21208). Until it does, the same data is surfaced through available Zed mechanisms:
+
+**Module Explorer alternative — slash commands**:
+
+| Slash Command | Output |
+|---------------|--------|
+| `/modules` | Markdown tree of all workspace modules with symbols |
+| `/modules myapp.api` | Filtered to a specific package |
+| `/symbols myapp.api.auth` | All symbols in a specific module with types |
+
+These slash commands call `basilisk/workspaceModules` and format the response as markdown in the AI assistant panel.
+
+**Type Health alternative — slash command**:
+
+| Slash Command | Output |
+|---------------|--------|
+| `/health` | Workspace health summary + per-module breakdown as markdown table |
+| `/health myapp.api` | Filtered to specific package |
+
+Calls `basilisk/typeHealth` and formats as markdown.
+
+**Feature Status / Server Info alternative — slash command**:
+
+| Slash Command | Output |
+|---------------|--------|
+| `/basilisk` | Server version, binary path, Python path, analysis mode, feature status |
+
+**When Zed adds panel support**: the Zed extension will implement the same three panels using the same LSP commands. The slash commands remain as a complementary interface. No data model changes needed — the LSP commands are already editor-agnostic.
+
+**Activity bar icon**: Zed uses the extension icon from `extension.toml`. Same SVG, rendered per Zed's theme.
+
+### Neovim
+
+Neovim has no built-in sidebar framework, but the Lua ecosystem has mature tree plugins. `basilisk.nvim` implements the panels as Lua-rendered floating/split windows.
+
+**Module Explorer**: Custom Lua buffer using `vim.api.nvim_buf_set_lines` with foldable tree structure. Keybindings mirror NvimTree / neo-tree conventions:
+
+| Key | Action |
+|-----|--------|
+| `<CR>` | Open file at symbol line |
+| `o` | Toggle expand/collapse |
+| `r` | Refresh |
+| `y` | Copy import path |
+| `Y` | Copy qualified name |
+| `q` | Close panel |
+
+Opened via `:BasiliskModules` command or keymap (default: `<leader>bm`).
+
+**Type Health**: Lua buffer with colored virtual text (highlights via `nvim_buf_add_highlight`). Green/yellow/red per coverage threshold.
+
+Opened via `:BasiliskHealth` command or keymap (default: `<leader>bh`).
+
+**Basilisk Info**: `:BasiliskInfo` opens a floating window with feature status, server info, and quick-toggle keymaps.
+
+**All three panels** call the same `basilisk/workspaceModules` and `basilisk/typeHealth` LSP commands via `vim.lsp.buf_request`.
+
+---
+
+## Accessibility
+
+- All tree items have descriptive accessibility labels
+- Icon + text for all status indicators (never color alone)
+- Keyboard navigable in all editors
+- Screen reader example: "Module myapp.api.auth, 95% typed, 0 errors, 1 warning"
+
+---
+
+## Performance
+
+- **Lazy loading**: Module Explorer fetches children on expand, not upfront. Top-level modules loaded first, symbols loaded when a module is expanded.
+- **Debounced updates**: `basilisk/moduleChanged` notifications are debounced (300ms) to avoid flicker during rapid saves.
+- **Cached state**: Tree state (expanded nodes, scroll position) persisted across sessions (VS Code: `workspaceState`, Neovim: session file, Zed: N/A until panels exist).
+- **Type Health**: Computed server-side using existing diagnostic + resolver data. No additional file I/O.
+- **Large workspaces**: Modules with >100 symbols show a "Show all..." node. Type Health shows top 50 files by default with "Show all..." at bottom.
+
+---
+
+## Implementation Plan
+
+### Phase 1: LSP Backend (Rust)
+
+Implement the three custom LSP commands in `basilisk-lsp`. This unblocks all editors simultaneously.
+
+**`basilisk/workspaceModules`**:
+- Walk the resolver's module graph (already built during analysis)
+- For each module, extract top-level symbols from `ResolvedModule`
+- Build `ModuleNode` / `SymbolNode` tree from resolver data
+- Support `scope` parameter for prefix filtering
+- Lazy: return only top-level modules initially, symbols on demand when `scope` narrows to a single module
+
+**`basilisk/moduleChanged`**:
+- Hook into the file-change -> re-analysis pipeline
+- After a module is re-resolved, diff against previous state
+- If changed, push notification with updated `ModuleNode`
+- Debounce: 300ms after last save before sending
+
+**`basilisk/typeHealth`**:
+- Count annotated vs unannotated symbols per module (resolver already tracks `annotated` on symbols)
+- Aggregate diagnostic counts per module (already computed)
+- Read adoption state per file
+- Return `TypeHealthResponse`
+
+### Phase 2: VS Code Panels (TypeScript)
+
+Reference implementation. All three panels.
+
+1. Register `viewsContainers` and `views` in `package.json`
+2. Implement `ModuleExplorerProvider` (`TreeDataProvider<ModuleNode | SymbolNode>`)
+   - `getTreeItem()`: map to `TreeItem` with codicons, descriptions, tooltips
+   - `getChildren()`: call `basilisk/workspaceModules` with scope
+   - Handle `basilisk/moduleChanged` notifications for incremental refresh
+3. Implement `TypeHealthProvider` (`TreeDataProvider<ModuleHealth>`)
+   - Summary header row with coverage bar
+   - Per-module rows with coverage %, errors, warnings, adoption badge
+   - Sort cycling
+4. Implement `BasiliskInfoProvider` (`TreeDataProvider`)
+   - Static tree: Getting Started, Feature Status, Quick Actions, Server Info
+   - Feature Status items read settings, click toggles them
+   - Quick Actions items fire existing commands
+   - Server Info fetched from LSP init response + `basilisk/typeHealth` stats
+5. Register all new commands (refresh, toggle view, copy import path, etc.)
+6. Wire `basilisk/moduleChanged` notification handler to refresh providers
+7. Add walkthrough contribution to `package.json`
+8. Create `basilisk-icon.svg` for activity bar
+
+### Phase 3: Zed Slash Commands (Rust/WASM)
+
+Surface the same data through Zed's available extension points.
+
+1. Register `/modules`, `/symbols`, `/health`, `/basilisk` slash commands in `run_slash_command()`
+2. Each command calls the corresponding LSP custom command
+3. Format responses as clean markdown tables/trees
+4. Add argument completion (module names for `/modules` and `/symbols`)
+
+### Phase 4: Neovim Panels (Lua)
+
+Lua-rendered buffers using the nvim LSP client.
+
+1. Implement `basilisk.modules` Lua module — renders module tree in a split buffer
+2. Implement `basilisk.health` Lua module — renders type health with colored highlights
+3. Implement `basilisk.info` Lua module — floating window with server info
+4. Register `:BasiliskModules`, `:BasiliskHealth`, `:BasiliskInfo` commands
+5. Default keymaps: `<leader>bm`, `<leader>bh`, `<leader>bi`
+6. Handle `basilisk/moduleChanged` via `vim.lsp.handlers`
+
+### Phase 5: Polish
+
+1. End-to-end tests: open workspace, verify module tree matches actual modules, verify health stats
+2. Performance testing: large workspace (1000+ files), measure LSP response time for `basilisk/workspaceModules`
+3. Accessibility audit: screen reader testing in VS Code
+4. Icon design: commission or create final `basilisk-icon.svg`
+
+---
+
+## TODOs
+
+### LSP Backend
+- [ ] Implement `basilisk/workspaceModules` handler in `basilisk-lsp`
+- [ ] Implement `ModuleNode` / `SymbolNode` construction from `ResolvedModule`
+- [ ] Implement `scope` parameter filtering for `basilisk/workspaceModules`
+- [ ] Implement `basilisk/moduleChanged` notification on re-analysis
+- [ ] Implement 300ms debounce for `basilisk/moduleChanged`
+- [ ] Implement `basilisk/typeHealth` handler
+- [ ] Implement `HealthStats` computation (annotated vs unannotated symbol counting)
+- [ ] Implement `ModuleHealth` per-module breakdown
+- [ ] Wire adoption state into `ModuleHealth.adopted`
+- [ ] Add all three custom commands to `LSP-ARCHITECTURE-SPEC.md`
+- [ ] Unit tests: `basilisk/workspaceModules` returns correct tree for test workspace
+- [ ] Unit tests: `basilisk/typeHealth` returns correct coverage percentages
+- [ ] Unit tests: `basilisk/moduleChanged` fires after file change, not before
+
+### VS Code Extension
+- [ ] Create `basilisk-icon.svg` (monochrome, 24x24, light + dark theme compatible)
+- [ ] Add `viewsContainers` and `views` to `package.json`
+- [ ] Add `viewsWelcome` entries to `package.json`
+- [ ] Add all menu contributions to `package.json`
+- [ ] Add walkthrough contribution to `package.json`
+- [ ] Implement `ModuleExplorerProvider` — `TreeDataProvider` with lazy child loading
+- [ ] Implement module tree item rendering (codicons, descriptions, tooltips, click-to-open)
+- [ ] Implement symbol decorations (unannotated italic, private dimmed, exported overlay, error dot)
+- [ ] Implement `basilisk/moduleChanged` notification handler -> incremental tree refresh
+- [ ] Implement tree/flat view toggle with `workspaceState` persistence
+- [ ] Implement module filter input box with glob support
+- [ ] Implement `TypeHealthProvider` — `TreeDataProvider` with summary header
+- [ ] Implement coverage bar rendering in description field
+- [ ] Implement sort cycling (worst-first / best-first / alphabetical)
+- [ ] Implement `BasiliskInfoProvider` — static tree with four sections
+- [ ] Implement Feature Status toggle-on-click
+- [ ] Implement Server Info section (version, binary, python, analysis mode, file count)
+- [ ] Register `basilisk.refreshModuleExplorer` command
+- [ ] Register `basilisk.toggleModuleExplorerView` command
+- [ ] Register `basilisk.collapseModuleExplorer` command
+- [ ] Register `basilisk.copyImportPath` command (clipboard: `from x.y import Z`)
+- [ ] Register `basilisk.copyQualifiedName` command (clipboard: `x.y.Z`)
+- [ ] Register `basilisk.refreshTypeHealth` command
+- [ ] Register `basilisk.sortTypeHealth` command
+- [ ] Register `basilisk.openWalkthrough` command
+- [ ] Set context keys: `basilisk.serverState`, `basilisk.hasWorkspace`, `basilisk.moduleExplorerView`
+- [ ] E2E test: activity bar icon appears, clicking opens sidebar
+- [ ] E2E test: module explorer shows correct tree for test workspace
+- [ ] E2E test: type health shows correct coverage for test workspace
+- [ ] E2E test: copy import path produces correct `from x import y` string
+- [ ] E2E test: feature toggle click changes setting and updates tree item
+
+### Zed Extension
+- [ ] Register `/modules` slash command
+- [ ] Register `/symbols` slash command
+- [ ] Register `/health` slash command
+- [ ] Register `/basilisk` slash command
+- [ ] Implement markdown tree formatting for module output
+- [ ] Implement markdown table formatting for health output
+- [ ] Implement argument completion for `/modules` and `/symbols` (module names)
+- [ ] Test: `/modules` output matches `basilisk/workspaceModules` data
+- [ ] Test: `/health` output matches `basilisk/typeHealth` data
+- [ ] When Zed adds panel API: implement native panels using same LSP commands
+
+### Neovim Plugin
+- [ ] Implement `basilisk.modules` Lua module (split buffer, foldable tree)
+- [ ] Implement tree rendering with `nvim_buf_set_lines` + virtual text for types
+- [ ] Implement keybindings: `<CR>` open, `o` toggle, `r` refresh, `y` copy import, `q` close
+- [ ] Implement `basilisk.health` Lua module (split buffer, colored highlights)
+- [ ] Implement green/yellow/red highlights via `nvim_buf_add_highlight`
+- [ ] Implement `basilisk.info` Lua module (floating window)
+- [ ] Register `:BasiliskModules`, `:BasiliskHealth`, `:BasiliskInfo` commands
+- [ ] Set default keymaps: `<leader>bm`, `<leader>bh`, `<leader>bi`
+- [ ] Handle `basilisk/moduleChanged` via `vim.lsp.handlers` for live refresh
+- [ ] Test: `:BasiliskModules` renders correct tree for test workspace
+- [ ] Test: `:BasiliskHealth` renders correct coverage stats
+
+### Polish
+- [ ] Performance test: `basilisk/workspaceModules` < 100ms for 1000-file workspace
+- [ ] Performance test: `basilisk/typeHealth` < 50ms for 1000-file workspace
+- [ ] Performance test: `basilisk/moduleChanged` notification < 20ms per file change
+- [ ] Accessibility audit: VS Code screen reader testing
+- [ ] Final icon design for activity bar
+- [ ] Documentation: add panel usage to README / user guide

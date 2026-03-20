@@ -446,10 +446,10 @@ Parallelizable:
 
 - [x] Code action: "Add dependency" on E0010 (NotInstalled) → `uv add <package>`
 - [x] Code action: "Install type stubs" on W0010 → `uv add --dev <stubs-package>`
-- [ ] Code action: "Sync environment" on W0013 → `uv sync`
+- [x] Code action: "Sync environment" on W0013 → `uv sync`
 - [x] `uv_commands.rs` — thin subprocess wrapper: spawn `uv` with args, 30s timeout, stream output
 - [x] LSP commands: `basilisk.uv.sync`, `basilisk.uv.add`, `basilisk.uv.addDev`, `basilisk.uv.remove`, `basilisk.uv.lock`, `basilisk.uv.createEnv`
-- [ ] Post-command hook: re-parse lock → rebuild registry → refresh diagnostics
+- [x] Post-command hook: `run_uv_and_refresh()` — all uv commands trigger `rebuild_registry_and_resolve()` on success
 - [x] Graceful degradation: hide uv commands/actions when `uv` binary not found
 - [x] Tests: code action generation, command execution, binary-not-found handling
 
@@ -458,16 +458,17 @@ Parallelizable:
 - [x] Register `uv.lock` file watcher (`workspace/didChangeWatchedFiles`)
 - [x] Register `.python-version` file watcher
 - [x] Register `pyproject.toml` change handler (staleness detection, workspace member changes)
-- [ ] Incremental registry update: diff old/new packages, re-check only affected files
+- [x] Registry rebuild on `uv.lock`/`pyproject.toml` change: `rebuild_registry_and_resolve()` re-parses lock, re-resolves imports, republishes all diagnostics
 - [ ] Tests: lock change triggers reparse, add/remove package updates diagnostics, Python version change
 
 ### Phase 6 — Hover Enrichment & Workspace Support
 
 - [x] Hover on import: show package version, source, stub status from registry
-- [ ] Hover on workspace member import: show "workspace member" + path
+- [x] Hover on workspace member import: show "Workspace member" + path (detected via non-site-packages path)
+- [x] Hover on imports: show dependency classification (direct/dev/transitive) from uv registry
 - [x] Parse `[tool.uv.workspace]` — extract member paths from glob patterns
 - [x] Workspace member discovery: expand globs → find member `pyproject.toml` → extract package names
-- [ ] Wire workspace members into import resolver (before site-packages in search order)
+- [x] Wire workspace members into import resolver: `discover_workspace_members()` adds member src roots to search paths (after roots, before extraPaths)
 - [ ] Multi-root LSP mapping for workspace members
 - [x] Tests: hover content, workspace glob expansion, cross-member imports
 
@@ -475,9 +476,9 @@ Parallelizable:
 
 - [x] Config key constants in `basilisk-common` (`UV`, `UV_ENABLED`, etc.)
 - [x] Read from `basilisk.json` (`uv.stubSuggestions`, `uv.dependencyDiagnostics`) and `pyproject.toml` (`[tool.basilisk.uv]`)
-- [ ] `binary.rs` — uv binary resolution cascade (config → PATH → common locations)
+- [x] `binary.rs` — uv binary resolution cascade: config path → `UV_PATH` env → `~/.cargo/bin/uv` → `~/.local/bin/uv` → OS PATH
 - [x] VS Code: add `basilisk.uv.*` settings + commands to `package.json` and `extension.ts`
 - [x] Neovim: uv config defaults, commands, and tests
 - [x] Zed: uv settings in `default_workspace_config()` and tests
-- [ ] Update `LSP-ARCHITECTURE-SPEC.md` with uv configuration table
+- [x] Update `LSP-ARCHITECTURE-SPEC.md` with uv integration architecture section, diagnostic codes table, binary resolution cascade, and hot reload docs
 - [x] Tests: VS Code command registration, Neovim config defaults, Zed config wrapping
