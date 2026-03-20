@@ -3,7 +3,8 @@
  *
  * Provides a backend-agnostic `Logger` interface so callers never
  * depend on VS Code APIs, the filesystem, or any concrete sink.
- * Swap the backend by calling `setLogBackend()`.
+ * The active sink is stored in the centralized Store — no global
+ * mutable state lives in this module.
  */
 
 import type FsModule from "fs";
@@ -30,7 +31,7 @@ export interface LogSink {
 // ── Built-in sinks ──────────────────────────────────────────────────────
 
 /** Sink that silently discards all messages. */
-const nullSink: LogSink = {
+export const nullSink: LogSink = {
   trace(): void { /* noop */ },
   debug(): void { /* noop */ },
   info(): void { /* noop */ },
@@ -39,7 +40,7 @@ const nullSink: LogSink = {
 };
 
 /** Sink that fans out to multiple backends. */
-class CompositeSink implements LogSink {
+export class CompositeSink implements LogSink {
   constructor(private readonly sinks: LogSink[]) {}
   public trace(message: string): void { for (const s of this.sinks) {s.trace(message);} }
   public debug(message: string): void { for (const s of this.sinks) {s.debug(message);} }
@@ -70,20 +71,25 @@ export class FileLogSink implements LogSink {
   }
 }
 
-// ── Singleton logger ────────────────────────────────────────────────────
+// ── Logger with injectable sink ─────────────────────────────────────────
 
-let activeSink: LogSink = nullSink;
+/** Sink accessor — set once at startup by extension.ts via bindLogger(). */
+let sinkAccessor: () => LogSink = () => nullSink;
 
-/** Replace the active log backend. Pass an array to fan out to multiple sinks. */
-export function setLogBackend(sink: LogSink | LogSink[]): void {
-  activeSink = Array.isArray(sink) ? new CompositeSink(sink) : sink;
+/**
+ * Bind the Logger to a sink accessor function. Called once during
+ * activate() so the Logger reads from the store without importing it
+ * (avoiding circular deps).
+ */
+export function bindLogger(accessor: () => LogSink): void {
+  sinkAccessor = accessor;
 }
 
 /** The global logger. Always safe to call — defaults to a no-op sink. */
 export const Logger = {
-  trace(message: string): void { activeSink.trace(message); },
-  debug(message: string): void { activeSink.debug(message); },
-  info(message: string): void { activeSink.info(message); },
-  warn(message: string): void { activeSink.warn(message); },
-  error(message: string): void { activeSink.error(message); },
+  trace(message: string): void { sinkAccessor().trace(message); },
+  debug(message: string): void { sinkAccessor().debug(message); },
+  info(message: string): void { sinkAccessor().info(message); },
+  warn(message: string): void { sinkAccessor().warn(message); },
+  error(message: string): void { sinkAccessor().error(message); },
 } as const;

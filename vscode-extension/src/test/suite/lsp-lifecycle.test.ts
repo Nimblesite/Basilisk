@@ -12,6 +12,7 @@
 
 import * as assert from 'assert';
 import * as vscode from 'vscode';
+import { getStore } from '../../extension';
 
 import {
     EXTENSION_ID,
@@ -113,13 +114,12 @@ suite('LSP Lifecycle Tests', () => {
         assert.ok(ext, `Extension ${EXTENSION_ID} should be installed`);
         assert.strictEqual(ext.isActive, true, 'Extension must be active for status bar to exist');
 
-        // The status bar item's command is basilisk.showOutput (set in extension.ts).
-        // Verify the command is registered -- this proves the status bar item was created,
-        // because the status bar item and command registration happen together in activate().
-        const commands = await vscode.commands.getCommands(true);
+        // Verify the showOutput command is available via internal VSIX state.
+        const store = getStore();
+        assert.ok(store, 'Store should be available after activation');
         assert.ok(
-            commands.includes('basilisk.showOutput'),
-            'basilisk.showOutput command should be registered, confirming status bar creation'
+            store.isClientCommandRegistered('basilisk.showOutput'),
+            'basilisk.showOutput should be tracked in internal VSIX state'
         );
 
         // Execute the status bar command to confirm the output channel is alive.

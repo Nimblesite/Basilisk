@@ -1,5 +1,9 @@
 /**
  * LSP client setup and lifecycle for the Basilisk VS Code extension.
+ *
+ * State transitions are handled inside the Store via onDidChangeState.
+ * This module handles IO side effects (logging, config forwarding, tab
+ * tracking) by reacting to the store's lspState signal.
  */
 
 import * as vscode from "vscode";
@@ -10,14 +14,51 @@ import {
   CloseAction,
   ErrorAction,
   RevealOutputChannelOn,
-  State,
 } from "vscode-languageclient/node";
+import { effect } from "@preact/signals-core";
 import { Logger } from "./logger";
+import type { Store, LspState } from "./store";
 
-let client: LanguageClient | undefined;
+/**
+ * Returns a promise that resolves when the LSP client reaches Running state.
+ *
+ * At that point, vscode-languageclient has completed the initialize handshake
+ * and registered all server-advertised commands from executeCommandProvider.
+ * Tests and other code that depends on server commands should await this.
+ */
+export async function whenReady(store: Store): Promise<void> {
+  if (store.client.value?.isRunning() === true) {
+    return;
+  }
+  return store.ensureLspReadyPromise();
+}
 
-export function getClient(): LanguageClient | undefined {
-  return client;
+/**
+ * Wait for the LSP client to reach Running state, then assert a specific
+ * server-advertised command is present in the server's executeCommandProvider
+ * capabilities. Uses internal VSIX state — never calls getCommands().
+ */
+export async function whenCommandReady(
+  store: Store,
+  commandId: string,
+  timeoutMs = 1_000
+): Promise<void> {
+  await Promise.race([
+    whenReady(store),
+    new Promise<never>((_resolve, reject) => {
+      setTimeout(
+        () => reject(new Error(
+          `LSP client did not reach Running state within ${timeoutMs}ms`
+        )),
+        timeoutMs
+      );
+    }),
+  ]);
+  if (!store.isServerCommandAdvertised(commandId)) {
+    throw new Error(
+      `Server command '${commandId}' not advertised by executeCommandProvider`
+    );
+  }
 }
 
 /** Read all Basilisk settings from the VS Code configuration. */
@@ -65,6 +106,7 @@ interface LspClientOptions {
 
 export function startLspClient(
   options: LspClientOptions,
+  store: Store,
   updateStatusBar: StatusBarUpdater
 ): void {
   const { context, executablePath, outputChannel } = options;
@@ -78,19 +120,23 @@ export function startLspClient(
 
   const clientOptions = buildClientOptions(outputChannel, traceChannel, updateStatusBar);
 
-  client = new LanguageClient(
+  const lspClient = new LanguageClient(
     "basilisk",
     "Basilisk Type Checker",
     serverOptions,
     clientOptions
   );
 
-  updateStatusBar("starting");
-  registerStateHandler(updateStatusBar);
-  registerConfigForwarding(context);
-  registerTabTracking(context);
+  // setClient wires up onDidChangeState internally — the store owns
+  // all state transitions (server commands, ready handle, lspState).
+  store.setClient(lspClient);
 
-  client.start().catch((error: unknown) => {
+  updateStatusBar("starting");
+  bindLspStateEffects(store, updateStatusBar);
+  registerConfigForwarding(context, store);
+  registerTabTracking(context, store);
+
+  lspClient.start().catch((error: unknown) => {
     const errorMessage = error instanceof Error ? error.message : String(error);
     const msg =
       `Basilisk: Failed to start language server. ` +
@@ -100,7 +146,36 @@ export function startLspClient(
     updateStatusBar("error");
   });
 
-  context.subscriptions.push(client);
+  context.subscriptions.push(lspClient);
+}
+
+/** Map store lspState to status bar + logging side effects. */
+const LSP_STATE_LOG: Record<LspState, string> = {
+  idle: "",
+  starting: "Basilisk language server is starting...",
+  running: "Basilisk language server is running.",
+  stopped: "Basilisk language server stopped.",
+};
+
+const LSP_STATE_TO_STATUS: Record<LspState, "starting" | "ready" | "stopped" | undefined> = {
+  idle: undefined,
+  starting: "starting",
+  running: "ready",
+  stopped: "stopped",
+};
+
+function bindLspStateEffects(store: Store, updateStatusBar: StatusBarUpdater): void {
+  effect(() => {
+    const state = store.lspState.value;
+    const logMsg = LSP_STATE_LOG[state];
+    if (logMsg !== "") {
+      Logger.info(logMsg);
+    }
+    const statusBarState = LSP_STATE_TO_STATUS[state];
+    if (statusBarState !== undefined) {
+      updateStatusBar(statusBarState);
+    }
+  });
 }
 
 function buildClientOptions(
@@ -223,34 +298,12 @@ async function executeCommandMiddleware(
   return result;
 }
 
-
-function registerStateHandler(
-  updateStatusBar: StatusBarUpdater
-): void {
-  if (!client) {return;}
-  client.onDidChangeState((event) => {
-    switch (event.newState) {
-      case State.Running:
-        Logger.info("Basilisk language server is running.");
-        updateStatusBar("ready");
-        break;
-      case State.Stopped:
-        Logger.info("Basilisk language server stopped.");
-        updateStatusBar("stopped");
-        break;
-      case State.Starting:
-        Logger.info("Basilisk language server is starting...");
-        updateStatusBar("starting");
-        break;
-    }
-  });
-}
-
-function registerConfigForwarding(context: vscode.ExtensionContext): void {
+function registerConfigForwarding(context: vscode.ExtensionContext, store: Store): void {
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration("basilisk") && client?.isRunning()) {
-        void client.sendNotification("workspace/didChangeConfiguration", {
+      const lspClient = store.client.value;
+      if (e.affectsConfiguration("basilisk") && lspClient?.isRunning() === true) {
+        void lspClient.sendNotification("workspace/didChangeConfiguration", {
           settings: buildServerSettings(),
         });
       }
@@ -258,12 +311,13 @@ function registerConfigForwarding(context: vscode.ExtensionContext): void {
   );
 }
 
-function registerTabTracking(context: vscode.ExtensionContext): void {
+function registerTabTracking(context: vscode.ExtensionContext, store: Store): void {
   let knownOpenUris = collectOpenPythonUris();
 
   context.subscriptions.push(
     vscode.window.tabGroups.onDidChangeTabs(() => {
-      if (!client?.isRunning()) {return;}
+      const lspClient = store.client.value;
+      if (lspClient?.isRunning() !== true) {return;}
 
       const currentUris = collectOpenPythonUris();
 
@@ -271,7 +325,7 @@ function registerTabTracking(context: vscode.ExtensionContext): void {
       if (mode === "openFilesOnly") {
         for (const uriStr of knownOpenUris) {
           if (!currentUris.has(uriStr)) {
-            void client.sendNotification("textDocument/didClose", {
+            void lspClient.sendNotification("textDocument/didClose", {
               textDocument: { uri: vscode.Uri.parse(uriStr).toString() },
             });
           }

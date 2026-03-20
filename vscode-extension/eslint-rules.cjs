@@ -91,6 +91,28 @@ const masterRules = {
   // 17. Promise function async — if it returns a Promise, mark it async
   '@typescript-eslint/promise-function-async': 'error',
 
+  // ── No literals — use NAMED CONSTANTS ───────────────────────────────
+  // 18. No magic numbers — every number must be a named constant
+  '@typescript-eslint/no-magic-numbers': ['error', {
+    ignore: [-1, 0, 1, 2],
+    ignoreEnums: true,
+    ignoreNumericLiteralTypes: true,
+    ignoreReadonlyClassProperties: true,
+    ignoreTypeIndexes: true,
+    enforceConst: true,
+    detectObjects: true,
+  }],
+  // 19. Prefer enum member values — no bare string/number enum values
+  '@typescript-eslint/prefer-enum-initializers': 'error',
+  // 20. No duplicate string literals — extract to named constants
+  '@typescript-eslint/no-duplicate-type-constituents': 'error',
+
+  // ── Defensive correctness ─────────────────────────────────────────────
+  // 21. Return-await in try/catch — catch async errors properly
+  '@typescript-eslint/return-await': ['error', 'in-try-catch'],
+  // 22. No unnecessary boolean literal compare — `if (x === true)` is noise
+  '@typescript-eslint/no-unnecessary-boolean-literal-compare': 'error',
+
   // ── Complexity limits ────────────────────────────────────────────────
   'max-depth': ['error', 4],
   'max-lines-per-function': ['error', { max: 60, skipBlankLines: true, skipComments: true }],
@@ -120,6 +142,8 @@ const testOverrides = {
   '@typescript-eslint/explicit-member-accessibility': 'off',
   // Test helpers return bare promises for chaining.
   '@typescript-eslint/promise-function-async': 'off',
+  // Tests use literal values for assertions and fixtures.
+  '@typescript-eslint/no-magic-numbers': 'off',
 };
 
 module.exports = { masterRules, testOverrides };

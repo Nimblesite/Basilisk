@@ -357,6 +357,7 @@
     "package": "vsce package"
   },
   "dependencies": {
+    "@preact/signals-core": "^1.14.0",
     "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {

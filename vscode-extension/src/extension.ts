@@ -10,14 +10,14 @@ import { execFile } from "child_process";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
-import { Logger, setLogBackend, FileLogSink } from "./logger";
+import { Logger, bindLogger, CompositeSink, FileLogSink, nullSink } from "./logger";
 import type { LogSink } from "./logger";
-import { startLspClient, getClient } from "./lsp-client";
+import { startLspClient } from "./lsp-client";
 import { registerClientCommands, registerOrganizeImportsCommand } from "./commands";
 import { createDebugAdapterFactory, BasiliskDebugAdapterTrackerFactory } from "./debug-adapter";
+import { createStore, type Store } from "./store";
 
-let statusBarItem: vscode.StatusBarItem | undefined;
-let outputChannel: vscode.OutputChannel | undefined;
+let store: Store | undefined;
 
 /** Adapts a VS Code LogOutputChannel to our LogSink interface. */
 class VscodeLogSink implements LogSink {
@@ -29,21 +29,27 @@ class VscodeLogSink implements LogSink {
   public error(message: string): void { this.channel.error(message); }
 }
 
+/** Returns the store — available after activate(). Tests use this to query internal state. */
+export function getStore(): Store | undefined {
+  return store;
+}
+
 export function activate(context: vscode.ExtensionContext): void {
-  initLogging(context);
-  initStatusBar(context);
+  store = createStore();
+  initLogging(context, store);
+  initStatusBar(context, store);
 
   const executablePath = resolveExecutablePath(resolveConfiguredPath());
   const useLsp = vscode.workspace.getConfiguration("basilisk").get<boolean>("useLsp") ?? true;
   Logger.info(`Basilisk executable: ${executablePath}`);
 
-  registerClientCommands(context, outputChannel);
+  registerClientCommands(context, store);
 
   if (useLsp) {
-    startLspClient({ context, executablePath, outputChannel }, updateStatusBar);
-    registerDebugSupport(context);
+    startLspClient({ context, executablePath, outputChannel: store.outputChannel.value }, store, updateStatusBar);
+    registerDebugSupport(context, store);
   } else {
-    registerOrganizeImportsCommand(context, workspaceRoot);
+    registerOrganizeImportsCommand(context, store, workspaceRoot);
     startSubprocessMode(context, executablePath);
     updateStatusBar("ready");
   }
@@ -57,28 +63,34 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 export function deactivate(): Promise<void> | undefined {
-  return getClient()?.stop();
+  const result = store?.client.value?.stop();
+  store?.reset();
+  store = undefined;
+  return result;
 }
 
 // ── Initialization helpers ────────────────────────────────────────────────
 
-function initLogging(context: vscode.ExtensionContext): void {
+function initLogging(context: vscode.ExtensionContext, s: Store): void {
   const logChannel = vscode.window.createOutputChannel("Basilisk", { log: true });
-  outputChannel = logChannel;
+  s.setOutputChannel(logChannel);
   const logFilePath = path.join(os.tmpdir(), "basilisk-debug-trace.log");
   const fileSink = new FileLogSink(logFilePath);
-  setLogBackend([new VscodeLogSink(logChannel), fileSink]);
+  const compositeSink = new CompositeSink([new VscodeLogSink(logChannel), fileSink]);
+  s.setLogSink(compositeSink);
+  bindLogger(() => s.logSink.value ?? nullSink);
   logChannel.info(`Log file: ${logFilePath}`);
   context.subscriptions.push(logChannel);
 }
 
-function initStatusBar(context: vscode.ExtensionContext): void {
-  statusBarItem = vscode.window.createStatusBarItem(
+function initStatusBar(context: vscode.ExtensionContext, s: Store): void {
+  const item = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Left,
     100
   );
-  statusBarItem.command = "basilisk.showOutput";
-  context.subscriptions.push(statusBarItem);
+  item.command = "basilisk.showOutput";
+  s.setStatusBarItem(item);
+  context.subscriptions.push(item);
 }
 
 function resolveConfiguredPath(): string {
@@ -88,11 +100,11 @@ function resolveConfiguredPath(): string {
     "basilisk";
 }
 
-function registerDebugSupport(context: vscode.ExtensionContext): void {
+function registerDebugSupport(context: vscode.ExtensionContext, s: Store): void {
   context.subscriptions.push(
     vscode.debug.registerDebugAdapterDescriptorFactory(
       "basilisk-debug",
-      createDebugAdapterFactory(getClient)
+      createDebugAdapterFactory(() => s.client.value)
     )
   );
   context.subscriptions.push(
@@ -131,34 +143,36 @@ function registerDebugLifecycleLogging(context: vscode.ExtensionContext): void {
 // ── Status bar ────────────────────────────────────────────────────────────
 
 function updateStatusBar(state: "starting" | "ready" | "error" | "stopped"): void {
-  if (!statusBarItem) {return;}
+  const item = store?.statusBarItem.value;
+  if (!item) {return;}
   switch (state) {
     case "starting":
-      statusBarItem.text = "$(sync~spin) Basilisk";
-      statusBarItem.tooltip = "Basilisk language server starting...";
-      statusBarItem.backgroundColor = undefined;
+      item.text = "$(sync~spin) Basilisk";
+      item.tooltip = "Basilisk language server starting...";
+      item.backgroundColor = undefined;
       break;
     case "ready":
-      statusBarItem.text = "$(check) Basilisk";
-      statusBarItem.tooltip = "Basilisk language server running";
-      statusBarItem.backgroundColor = undefined;
+      item.text = "$(check) Basilisk";
+      item.tooltip = "Basilisk language server running";
+      item.backgroundColor = undefined;
       break;
     case "error":
-      statusBarItem.text = "$(error) Basilisk";
-      statusBarItem.tooltip = "Basilisk language server error";
-      statusBarItem.backgroundColor = new vscode.ThemeColor("statusBarItem.errorBackground");
+      item.text = "$(error) Basilisk";
+      item.tooltip = "Basilisk language server error";
+      item.backgroundColor = new vscode.ThemeColor("statusBarItem.errorBackground");
       break;
     case "stopped":
-      statusBarItem.text = "$(circle-slash) Basilisk";
-      statusBarItem.tooltip = "Basilisk language server stopped";
-      statusBarItem.backgroundColor = undefined;
+      item.text = "$(circle-slash) Basilisk";
+      item.tooltip = "Basilisk language server stopped";
+      item.backgroundColor = undefined;
       break;
   }
-  statusBarItem.show();
+  item.show();
 }
 
 function updateStatusBarDiagnostics(): void {
-  if (!statusBarItem) {return;}
+  const item = store?.statusBarItem.value;
+  if (!item) {return;}
   const editor = vscode.window.activeTextEditor;
   if (editor?.document.languageId !== "python") {return;}
   const diagnostics = vscode.languages.getDiagnostics(editor.document.uri);
@@ -167,17 +181,17 @@ function updateStatusBarDiagnostics(): void {
   const warnCount = basiliskDiags.filter((d) => d.severity === vscode.DiagnosticSeverity.Warning).length;
 
   if (errorCount > 0) {
-    statusBarItem.text = `$(error) Basilisk (${errorCount})`;
-    statusBarItem.tooltip = `Basilisk: ${errorCount} error(s), ${warnCount} warning(s)`;
-    statusBarItem.backgroundColor = new vscode.ThemeColor("statusBarItem.errorBackground");
+    item.text = `$(error) Basilisk (${errorCount})`;
+    item.tooltip = `Basilisk: ${errorCount} error(s), ${warnCount} warning(s)`;
+    item.backgroundColor = new vscode.ThemeColor("statusBarItem.errorBackground");
   } else if (warnCount > 0) {
-    statusBarItem.text = `$(warning) Basilisk (${warnCount})`;
-    statusBarItem.tooltip = `Basilisk: ${warnCount} warning(s)`;
-    statusBarItem.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
+    item.text = `$(warning) Basilisk (${warnCount})`;
+    item.tooltip = `Basilisk: ${warnCount} warning(s)`;
+    item.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
   } else {
-    statusBarItem.text = "$(check) Basilisk";
-    statusBarItem.tooltip = "Basilisk: No issues";
-    statusBarItem.backgroundColor = undefined;
+    item.text = "$(check) Basilisk";
+    item.tooltip = "Basilisk: No issues";
+    item.backgroundColor = undefined;
   }
 }
 

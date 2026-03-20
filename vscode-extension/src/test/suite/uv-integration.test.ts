@@ -1,82 +1,70 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as path from 'path';
-
-const EXTENSION_ID = 'basilisk-lang.basilisk';
+import { getStore } from '../../extension';
+import {
+    setupLspTestSuite,
+    teardownLspTestSuite,
+} from './test-helpers';
 
 suite('Basilisk uv Integration Tests', () => {
+    let tmpDir: string;
 
-    suiteSetup(async () => {
-        // Ensure the extension is activated by opening a Python file.
+    suiteSetup(async function () {
+        this.timeout(30_000);
+        const result = await setupLspTestSuite('basilisk-uv-test-');
+        tmpDir = result.tmpDir;
+    });
+
+    suiteTeardown(async () => {
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? __dirname;
-        const pyFilePath = path.join(workspaceRoot, '__basilisk_uv_test__.py');
-        const pyUri = vscode.Uri.file(pyFilePath);
-
-        await vscode.workspace.fs.writeFile(pyUri, Buffer.from('x: int = 1\n'));
-        const doc = await vscode.workspace.openTextDocument(pyUri);
-        await vscode.window.showTextDocument(doc);
-
-        const ext = vscode.extensions.getExtension(EXTENSION_ID);
-        if (ext && !ext.isActive) {
-            await ext.activate();
+        const pyUri = vscode.Uri.file(path.join(workspaceRoot, '__basilisk_uv_test__.py'));
+        try {
+            await vscode.workspace.fs.delete(pyUri);
+        } catch {
+            // File may not exist — ignore.
         }
-        const deadline = Date.now() + 5_000;
-        while (Date.now() < deadline) {
-            if (ext?.isActive) {break;}
-            await new Promise<void>(r => setTimeout(r, 100));
-        }
+        teardownLspTestSuite(tmpDir);
     });
 
     // ----------------------------------------------------------------
-    // uv commands are registered
+    // uv commands are advertised by the LSP server
     // ----------------------------------------------------------------
 
-    test('Extension registers basilisk.uv.sync command', async () => {
-        const commands = await vscode.commands.getCommands(true);
-        assert.ok(
-            commands.includes('basilisk.uv.sync'),
-            'basilisk.uv.sync command should be registered'
-        );
+    test('LSP server advertises basilisk.uv.sync command', () => {
+        const store = getStore();
+        assert.ok(store, 'Store should be available after activation');
+        assert.ok(store.isServerCommandAdvertised('basilisk.uv.sync'), 'basilisk.uv.sync should be advertised by the LSP server');
     });
 
-    test('Extension registers basilisk.uv.add command', async () => {
-        const commands = await vscode.commands.getCommands(true);
-        assert.ok(
-            commands.includes('basilisk.uv.add'),
-            'basilisk.uv.add command should be registered'
-        );
+    test('LSP server advertises basilisk.uv.add command', () => {
+        const store = getStore();
+        assert.ok(store, 'Store should be available after activation');
+        assert.ok(store.isServerCommandAdvertised('basilisk.uv.add'), 'basilisk.uv.add should be advertised by the LSP server');
     });
 
-    test('Extension registers basilisk.uv.addDev command', async () => {
-        const commands = await vscode.commands.getCommands(true);
-        assert.ok(
-            commands.includes('basilisk.uv.addDev'),
-            'basilisk.uv.addDev command should be registered'
-        );
+    test('LSP server advertises basilisk.uv.addDev command', () => {
+        const store = getStore();
+        assert.ok(store, 'Store should be available after activation');
+        assert.ok(store.isServerCommandAdvertised('basilisk.uv.addDev'), 'basilisk.uv.addDev should be advertised by the LSP server');
     });
 
-    test('Extension registers basilisk.uv.remove command', async () => {
-        const commands = await vscode.commands.getCommands(true);
-        assert.ok(
-            commands.includes('basilisk.uv.remove'),
-            'basilisk.uv.remove command should be registered'
-        );
+    test('LSP server advertises basilisk.uv.remove command', () => {
+        const store = getStore();
+        assert.ok(store, 'Store should be available after activation');
+        assert.ok(store.isServerCommandAdvertised('basilisk.uv.remove'), 'basilisk.uv.remove should be advertised by the LSP server');
     });
 
-    test('Extension registers basilisk.uv.lock command', async () => {
-        const commands = await vscode.commands.getCommands(true);
-        assert.ok(
-            commands.includes('basilisk.uv.lock'),
-            'basilisk.uv.lock command should be registered'
-        );
+    test('LSP server advertises basilisk.uv.lock command', () => {
+        const store = getStore();
+        assert.ok(store, 'Store should be available after activation');
+        assert.ok(store.isServerCommandAdvertised('basilisk.uv.lock'), 'basilisk.uv.lock should be advertised by the LSP server');
     });
 
-    test('Extension registers basilisk.uv.createEnv command', async () => {
-        const commands = await vscode.commands.getCommands(true);
-        assert.ok(
-            commands.includes('basilisk.uv.createEnv'),
-            'basilisk.uv.createEnv command should be registered'
-        );
+    test('LSP server advertises basilisk.uv.createEnv command', () => {
+        const store = getStore();
+        assert.ok(store, 'Store should be available after activation');
+        assert.ok(store.isServerCommandAdvertised('basilisk.uv.createEnv'), 'basilisk.uv.createEnv should be advertised by the LSP server');
     });
 
     // ----------------------------------------------------------------
@@ -138,16 +126,6 @@ suite('Basilisk uv Integration Tests', () => {
         );
     });
 
-    // ----------------------------------------------------------------
-    // Cleanup
-    // ----------------------------------------------------------------
-    suiteTeardown(async () => {
-        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? __dirname;
-        const pyUri = vscode.Uri.file(path.join(workspaceRoot, '__basilisk_uv_test__.py'));
-        try {
-            await vscode.workspace.fs.delete(pyUri);
-        } catch {
-            // File may not exist — ignore.
-        }
-    });
 });
+
+

@@ -22,6 +22,10 @@ export const NO_DIAGNOSTIC_WAIT_MS = 5_000;
 /** Time (ms) to wait for the LSP server to fully start. */
 export const SERVER_START_WAIT_MS = 10_000;
 
+/** Maximum time (ms) to wait for a server-advertised command to appear. */
+export const COMMAND_WAIT_MS = 1_000;
+
+
 /**
  * Resolves the absolute path to the basilisk binary built from Cargo.
  * Returns undefined if the binary does not exist.

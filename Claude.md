@@ -44,6 +44,8 @@ OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK MESSAGES AND COMPLY
 - TOP PRIORITY: REDUCE CODE DUPLICATION. ALWAYS MERGE SIMILAR CODE. ALWAYS SEARCH FOR CODE BEFORE ADDING NEW CODE. 
 - Zero duplication. DRY AF!!! Check for existing code before writing new code
 - Aggressively move code that can be shared out to shared crates/modules/packages
+- CENTRALIZE ALL GLOBAL STATE
+- Each app has a single file for global state. No state must exit outside this file.
 - allow(clippy = ⛔️ ILLEGAL. 
 - Keep the dependencies and versions in these two files in sync at all times: .github/workflows/ci.yml, .devcontainer/Dockerfile
 - Ignore compiler code (except clippy fixes)
@@ -62,6 +64,10 @@ Testing is absolutely critical. We aim for 100% test coverage and a high mutatio
 - ADD more failing tests for broken/missing functionality — NEVER remove them
 - REDUCING TEST ASSERTIVENESS = DATA CENTER DISMANTLED
 - Ignoring tests = ILLEGAL
+
+## IDE Extension Testing
+
+- VSIX tests must not call things like `whenCommandReady` or `vscode.commands.getCommands(true)` to check the existence. The core code must do this and the tests must assert the command exists through the UI or worst case internal VSIX state
 
 ## Core Principles
 

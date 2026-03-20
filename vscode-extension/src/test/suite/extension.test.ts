@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { getStore } from '../../extension';
 
 const EXTENSION_ID = 'basilisk-lang.basilisk';
 
@@ -47,27 +48,30 @@ suite('Basilisk Extension E2E Tests', () => {
     // ----------------------------------------------------------------
     // 2. Extension registers expected commands
     // ----------------------------------------------------------------
-    test('Extension registers basilisk.restartServer command', async () => {
-        const commands = await vscode.commands.getCommands(true);
+    test('Extension registers basilisk.restartServer command', () => {
+        const store = getStore();
+        assert.ok(store, 'Store should be available after activation');
         assert.ok(
-            commands.includes('basilisk.restartServer'),
-            'basilisk.restartServer command should be registered'
+            store.isClientCommandRegistered('basilisk.restartServer'),
+            'basilisk.restartServer should be tracked in internal VSIX state'
         );
     });
 
-    test('Extension registers basilisk.showOutput command', async () => {
-        const commands = await vscode.commands.getCommands(true);
+    test('Extension registers basilisk.showOutput command', () => {
+        const store = getStore();
+        assert.ok(store, 'Store should be available after activation');
         assert.ok(
-            commands.includes('basilisk.showOutput'),
-            'basilisk.showOutput command should be registered'
+            store.isClientCommandRegistered('basilisk.showOutput'),
+            'basilisk.showOutput should be tracked in internal VSIX state'
         );
     });
 
-    test('Extension registers basilisk.organizeImports command', async () => {
-        const commands = await vscode.commands.getCommands(true);
+    test('LSP server advertises basilisk.organizeImports command', () => {
+        const store = getStore();
+        assert.ok(store, 'Store should be available after activation');
         assert.ok(
-            commands.includes('basilisk.organizeImports'),
-            'basilisk.organizeImports command should be registered'
+            store.isServerCommandAdvertised('basilisk.organizeImports'),
+            'basilisk.organizeImports should be advertised by the LSP server'
         );
     });
 
