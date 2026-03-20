@@ -199,7 +199,7 @@ jobs:
         uses: rhysd/action-setup-vim@v1
         with:
           neovim: true
-          version: stable
+          version: v0.11.6
 
       - name: Run Neovim extension tests
         run: ./scripts/test-nvim.sh
