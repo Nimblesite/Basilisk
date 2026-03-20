@@ -4,7 +4,7 @@
 //! typing ecosystem is imported.  Third-party packages may lack type stubs,
 //! which prevents Basilisk from checking the types of values they produce.
 
-use basilisk_resolver::{ImportInfo, ResolvedModule};
+use basilisk_resolver::{ImportInfo, ImportResolution, ResolvedModule};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
@@ -19,7 +19,9 @@ const CODE: ErrorCode = ErrorCode {
 /// ecosystem.
 ///
 /// Uses the compiled typeshed index from `basilisk-stubs` for O(1) module
-/// recognition. Suppression is handled centrally by the `suppression` module.
+/// recognition.  Imports that resolved to workspace or stub files are skipped
+/// — they already have type information available.
+/// Suppression is handled centrally by the `suppression` module.
 pub(crate) struct ImportFromUntypedModule;
 
 impl Rule for ImportFromUntypedModule {
@@ -28,6 +30,7 @@ impl Rule for ImportFromUntypedModule {
             .imports
             .iter()
             .filter(|import| !basilisk_stubs::is_stdlib_module(&import.module))
+            .filter(|import| import.resolution == ImportResolution::Unresolved)
             .for_each(|import| diagnostics.push(make_diagnostic(import, &module.path)));
     }
 }

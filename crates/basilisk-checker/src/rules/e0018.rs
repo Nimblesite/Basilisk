@@ -39,11 +39,19 @@ impl Rule for UndefinedVariable {
             })
             .collect();
 
+        // Collect module-level variable names so functions can reference them.
+        let module_var_names: Vec<&str> = module
+            .module_vars
+            .iter()
+            .map(|var| var.name.as_str())
+            .collect();
+
         module.functions.iter().for_each(|func| {
             check_function(
                 func,
                 &module.functions,
                 &import_names,
+                &module_var_names,
                 &module.imported_symbols,
                 &module.path,
                 diagnostics,
@@ -194,6 +202,7 @@ fn check_function(
     func: &FunctionInfo,
     all_functions: &[FunctionInfo],
     import_names: &[&str],
+    module_var_names: &[&str],
     imported_symbols: &std::collections::HashMap<String, basilisk_resolver::scope::ExternalSymbol>,
     path: &str,
     out: &mut Vec<Diagnostic>,
@@ -207,6 +216,7 @@ fn check_function(
             || func.kwarg.as_ref().is_some_and(|k| k.name == name_str)
             || func.all_local_assigns.iter().any(|a| a == name)
             || import_names.contains(&name_str)
+            || module_var_names.contains(&name_str)
             || imported_symbols.contains_key(name_str)
             || is_in_enclosing_scope(name_str, func, all_functions)
             || BUILTINS.contains(&name_str)

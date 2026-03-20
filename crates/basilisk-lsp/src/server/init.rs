@@ -50,7 +50,7 @@ pub(super) async fn initialize(
     );
 
     // Store workspace roots for later use by import resolution.
-    *server.workspace_roots.write().await = roots.clone();
+    (*server.workspace_roots.write().await).clone_from(&roots);
 
     // Build the workspace index now so `initialized()` can scan immediately.
     let index = WorkspaceIndex::new(roots, mode);

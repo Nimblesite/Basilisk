@@ -16,6 +16,7 @@ import {
   ServerOptions,
   CloseAction,
   ErrorAction,
+  RevealOutputChannelOn,
   State,
 } from "vscode-languageclient/node";
 import { logger, setLogBackend, FileLogSink } from "./logger";
@@ -169,7 +170,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   safeRegisterCommand(context, "basilisk.fixFile", async () => {
     const editor = vscode.window.activeTextEditor;
-    if (!editor) {
+    if (!editor || editor.document.uri.scheme !== "file") {
       return;
     }
     const uri = editor.document.uri;
@@ -348,6 +349,7 @@ function startLspClient(
     initializationOptions: readBasiliskSettings(),
     traceOutputChannel: traceChannel,
     outputChannel: outputChannel,
+    revealOutputChannelOn: RevealOutputChannelOn.Never,
     errorHandler: {
       error: (error, _message, count) => {
         logger.error(`LSP error: ${error.message ?? error}`);
