@@ -448,7 +448,7 @@ mod tests {
     #[test]
     fn run_fix_is_idempotent() {
         let (py, path) = write_temp("basilisk_test_fix_idempotent.py", "x: int = 42\n");
-        let first = run_fix(&[path.clone()], false, &[]);
+        let first = run_fix(std::slice::from_ref(&path), false, &[]);
         let after_first = std::fs::read_to_string(&py).expect("read after first");
         assert_eq!(first, 0);
         assert_eq!(after_first, "x = 42\n");

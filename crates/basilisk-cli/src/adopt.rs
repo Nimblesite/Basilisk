@@ -311,7 +311,7 @@ mod tests {
         let path = write_py(&dir, "bad.py", BAD_PYTHON);
 
         // First adopt.
-        let exit = run_adopt(&[path.clone()]);
+        let exit = run_adopt(std::slice::from_ref(&path));
         assert_eq!(exit, 0);
         let store = basilisk_config::AdoptionStore::load(&dir).unwrap();
         assert!(!store.is_empty(), "precondition: adoption must exist");
