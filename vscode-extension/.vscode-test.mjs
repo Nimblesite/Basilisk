@@ -23,8 +23,11 @@ export default defineConfig({
     }],
     coverage: {
         includeAll: true,
-        include: ['out/**/*.js'],
-        exclude: ['out/test/**'],
+        // @vscode/test-cli sets report.exclude.relativePath = false, which
+        // makes test-exclude match against absolute paths. Patterns must
+        // start with **/ so minimatch can match any prefix.
+        include: ['**/out/**/*.js'],
+        exclude: ['**/out/test/**'],
         reporter: ['text', 'lcov'],
     },
 });
