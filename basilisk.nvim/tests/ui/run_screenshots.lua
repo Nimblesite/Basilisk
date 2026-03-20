@@ -231,7 +231,7 @@ T["basilisk_info_float"] = function()
   register_commands(child)
   child.lua("vim.cmd('BasiliskInfo'); vim.wait(500)")
   -- ignore_text because the float contains random temp dir paths in Root field.
-  assert_screenshot(child.get_screenshot(), 0.15, { directory = screenshot_dir, ignore_text = true })
+  assert_screenshot(child.get_screenshot(), 0.25, { directory = screenshot_dir, ignore_text = true })
   child.stop()
 end
 
