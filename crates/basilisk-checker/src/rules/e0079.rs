@@ -359,4 +359,3 @@ fn check_protocol_compatibility(
 
     None
 }
-

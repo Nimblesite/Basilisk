@@ -6,7 +6,9 @@
 use std::collections::HashMap;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
-use crate::rules::shared::{is_numeric_subtype, parse_subscript_annotation, split_top_level_commas};
+use crate::rules::shared::{
+    is_numeric_subtype, parse_subscript_annotation, split_top_level_commas,
+};
 
 use super::utils::span_for_line;
 use super::variance::Variance;
@@ -107,8 +109,7 @@ pub(super) fn check_fn_body_assignments(
                         let name = p[..c].trim();
                         let ann = p[c + 1..].split('=').next().unwrap_or("").trim();
                         if let Some((cls, args)) = parse_subscript_annotation(ann) {
-                            let _ = param_types
-                                .insert(name.to_owned(), (cls.to_owned(), args));
+                            let _ = param_types.insert(name.to_owned(), (cls.to_owned(), args));
                         }
                     }
                 }

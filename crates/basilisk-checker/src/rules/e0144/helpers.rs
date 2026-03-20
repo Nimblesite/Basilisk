@@ -322,4 +322,3 @@ pub(super) fn expr_simple_name(expr: &Expr) -> Option<&str> {
         _ => None,
     }
 }
-

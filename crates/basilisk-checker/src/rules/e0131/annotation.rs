@@ -80,4 +80,3 @@ pub(super) fn strip_generic_prefix<'a>(ann: &'a str, prefix: &str) -> Option<&'a
     }
     ann.get(inner_start..inner_end)
 }
-

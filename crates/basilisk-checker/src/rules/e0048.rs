@@ -754,7 +754,6 @@ fn is_assignable_to_bound(arg: &str, bound: &str) -> bool {
     }
 }
 
-
 /// Check for calls to union type aliases (e.g. `ListOrSetAlias()`).
 ///
 /// Union aliases like `X = list | set` cannot be instantiated because the

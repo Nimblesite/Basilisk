@@ -80,7 +80,6 @@ pub(super) fn extract_return_type_from_generator(annotation: &str) -> Option<Str
     args.get(2).map(|arg| arg.trim().to_owned())
 }
 
-
 /// Check a `yield from expr` against the outer generator's declared yield type.
 pub(super) fn check_yield_from(
     func: &FunctionInfo,

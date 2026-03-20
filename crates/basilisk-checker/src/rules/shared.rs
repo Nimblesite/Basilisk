@@ -117,9 +117,7 @@ pub(crate) fn is_numeric_subtype(child: &str, parent: &str) -> bool {
     }
     matches!(
         (child, parent),
-        ("bool", "int" | "float" | "complex")
-            | ("int", "float" | "complex")
-            | ("float", "complex")
+        ("bool", "int" | "float" | "complex") | ("int", "float" | "complex") | ("float", "complex")
     )
 }
 

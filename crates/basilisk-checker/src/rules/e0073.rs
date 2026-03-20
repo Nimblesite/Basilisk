@@ -282,4 +282,3 @@ fn check_element_types(
         }
     }
 }
-

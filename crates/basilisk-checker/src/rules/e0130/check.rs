@@ -6,7 +6,9 @@ use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
-use crate::rules::shared::{is_type_compatible, parse_subscript_annotation, split_top_level_commas};
+use crate::rules::shared::{
+    is_type_compatible, parse_subscript_annotation, split_top_level_commas,
+};
 
 use super::collect::{collect_generic_classes, collect_generic_instances};
 use super::utils::{find_matching_close, infer_literal_type, span_for_line};
