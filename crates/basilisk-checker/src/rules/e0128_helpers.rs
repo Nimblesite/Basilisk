@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::GenericParamInfo;
 
-use crate::rules::shared::{is_numeric_subtype, split_top_level_commas};
+use crate::rules::shared::split_top_level_commas;
 
 // ---------------------------------------------------------------------------
 // Data types
