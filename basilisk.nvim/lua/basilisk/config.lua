@@ -92,7 +92,7 @@ M.defaults = {
     executable_path = nil,
     auto_sync = false,
     stub_suggestions = true,
-    dependency_diagnostics = true,
+    dependency_diagnostics = false,
   },
   keymaps = {
     enabled = true,

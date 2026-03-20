@@ -44,42 +44,26 @@ jobs:
 
   # ── Zed Extension (runs in parallel) ───────────────────────────────────────
   zed:
-    name: Zed Extension (${{ matrix.target }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: wasm32-wasip2
-            test: false
-          - os: ubuntu-latest
-            target: native
-            test: true
-          - os: macos-latest
-            target: native
-            test: true
+    name: Zed Extension
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target == 'wasm32-wasip2' && 'wasm32-wasip2' || '' }}
+          targets: wasm32-wasip2
 
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
 
       - name: Build Zed extension to WASM
-        if: matrix.target == 'wasm32-wasip2'
         run: cargo build --release --target wasm32-wasip2 --manifest-path basilisk-zed/Cargo.toml
 
       - name: Clippy (Zed extension)
-        if: matrix.test
         run: cargo clippy --release --all-targets --manifest-path basilisk-zed/Cargo.toml
 
       - name: Run Zed extension unit tests
-        if: matrix.test
         run: cargo test --release --manifest-path basilisk-zed/Cargo.toml
 
   # ── Rust coverage + thresholds (runs in parallel) ──────────────────────────
@@ -215,7 +199,7 @@ jobs:
         uses: rhysd/action-setup-vim@v1
         with:
           neovim: true
-          version: v0.11.0
+          version: stable
 
       - name: Run Neovim extension tests
         run: ./scripts/test-nvim.sh
