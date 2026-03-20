@@ -34,6 +34,7 @@ OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK MESSAGES AND COMPLY
 - [Python type system spec](https://typing.python.org/en/latest/spec/index.html)
 - [PEP Conformance](https://github.com/python/typing/blob/main/conformance/README.md)
 - [Pyrefly](https://pyrefly.org/en/docs/) | [Pyright](https://microsoft.github.io/pyright/#/) (competitors)
+- [Python Type System Conformance Test Results](https://github.com/python/typing/blob/main/conformance/results/results.html) <- We are going to get listed here
 
 # Rules
 

@@ -7,5 +7,15 @@
   "stylesheet": "/assets/css/styles.css",
   "github": "https://github.com/MelbourneDeveloper/Basilisk",
   "ogImage": "/assets/images/og-image.png",
+  "ogImageWidth": "1200",
+  "ogImageHeight": "630",
+  "organization": {
+    "name": "Basilisk",
+    "url": "https://www.basilisk-python.dev",
+    "logo": "/assets/images/logo.svg",
+    "sameAs": [
+      "https://github.com/MelbourneDeveloper/Basilisk"
+    ]
+  },
   "version": "0.1.0"
 }
