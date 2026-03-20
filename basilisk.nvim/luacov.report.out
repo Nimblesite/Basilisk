@@ -1,0 +1,2524 @@
+==============================================================================
+/Users/christianfindlay/Documents/Code/Basilisk/basilisk.nvim/lua/basilisk/binary.lua
+==============================================================================
+     --- Binary resolution for the basilisk executable.
+     ---
+     --- Follows the cascade defined in LSP-SPEC.md:
+     --- 1. User-configured path (editor setting)
+     --- 2. BASILISK_PATH environment variable
+     --- 3. ~/.cargo/bin/basilisk
+     --- 4. /usr/local/bin/basilisk
+     --- 5. /opt/homebrew/bin/basilisk
+     --- 6. Fall back to OS PATH search
+
+   1 local M = {}
+
+     --- Check whether a file exists and is executable.
+     ---@param path string
+     ---@return boolean
+     local function is_executable(path)
+  62   return vim.fn.executable(path) == 1
+     end
+
+     --- Resolve the basilisk binary path using the LSP-SPEC cascade.
+     ---@param configured_path? string User-configured path from setup().
+     ---@return string? path Absolute path to the binary, or nil if not found.
+   1 function M.resolve(configured_path)
+       -- 1. User-configured path.
+  23   if configured_path and configured_path ~= "" then
+   8     if is_executable(configured_path) then
+   2       return configured_path
+         end
+   4     vim.notify(
+   2       "[basilisk] configured binary_path not found: " .. configured_path,
+   2       vim.log.levels.WARN
+   2     )
+       end
+
+       -- 2. BASILISK_PATH environment variable.
+  21   local env_path = vim.env.BASILISK_PATH
+  23   if env_path and env_path ~= "" and is_executable(env_path) then
+   1     return env_path
+       end
+
+       -- 3-5. Well-known locations.
+  20   local candidates = {
+  40     vim.fn.expand("~/.cargo/bin/basilisk"),
+         "/usr/local/bin/basilisk",
+         "/opt/homebrew/bin/basilisk",
+       }
+  20   for _, candidate in ipairs(candidates) do
+  40     if is_executable(candidate) then
+  20       return candidate
+         end
+       end
+
+       -- 6. OS PATH search.
+***0   local on_path = vim.fn.exepath("basilisk")
+***0   if on_path ~= "" then
+***0     return on_path
+       end
+
+***0   return nil
+     end
+
+     --- Get the version string from the binary.
+     ---@param binary_path string
+     ---@return string? version
+   1 function M.version(binary_path)
+  10   if not is_executable(binary_path) then
+   1     return nil
+       end
+   4   local ok, result = pcall(vim.fn.system, { binary_path, "--version" })
+   8   if not ok or vim.v.shell_error ~= 0 then
+   1     return nil
+       end
+   3   return vim.trim(result)
+     end
+
+   1 return M
+
+==============================================================================
+/Users/christianfindlay/Documents/Code/Basilisk/basilisk.nvim/lua/basilisk/commands.lua
+==============================================================================
+     --- User commands for Basilisk.
+     ---
+     --- All profiling/memory/test/uv LSP commands (defined in LSP-ARCHITECTURE-SPEC.md)
+     --- surface as :Basilisk* user commands.
+
+   1 local log = require("basilisk.log")
+
+   1 local M = {}
+
+     --- Get the first active basilisk LSP client, or nil.
+     ---@return vim.lsp.Client?
+     local function get_client()
+  22   local clients = vim.lsp.get_clients({ name = "basilisk" })
+  22   return clients[1]
+     end
+
+     --- Send an LSP executeCommand request.
+     ---@param command string
+     ---@param args? table
+     ---@param callback? fun(err: any, result: any)
+     local function execute_command(command, args, callback)
+  20   local client = get_client()
+  20   if not client then
+***0     log.warn("no active LSP client")
+***0     return
+       end
+  40   client:request("workspace/executeCommand", {
+  20     command = command,
+  20     arguments = args or {},
+  20   }, callback, 0)
+     end
+
+     --- Open a floating window showing server info.
+     ---@param config BasiliskConfig
+     local function show_info_float(config)
+   2   local client = get_client()
+   2   local binary_mod = require("basilisk.binary")
+   2   local lsp_mod = require("basilisk.lsp")
+
+   2   local bin = binary_mod.resolve(config.binary_path)
+   4   local version = bin and binary_mod.version(bin) or "unknown"
+
+   2   local lines = {
+         "Basilisk LSP Server Info",
+         "",
+       }
+
+   2   if client then
+   2     lines[#lines + 1] = "  Status:     active"
+   4     lines[#lines + 1] = "  Client ID:  " .. tostring(client.id)
+   2     lines[#lines + 1] = "  Root:       " .. (client.root_dir or "nil")
+       else
+***0     lines[#lines + 1] = "  Status:     stopped"
+       end
+
+   2   lines[#lines + 1] = ""
+   2   lines[#lines + 1] = "  Binary:     " .. (bin or "not found")
+   2   lines[#lines + 1] = "  Version:    " .. version
+   2   lines[#lines + 1] = "  Python:     " .. (config.python or "auto-detect")
+   2   lines[#lines + 1] = "  Mode:       " .. config.analysis_mode
+   6   lines[#lines + 1] = "  Restarts:   " .. tostring(lsp_mod.get_restart_count())
+   2   lines[#lines + 1] = ""
+   2   lines[#lines + 1] = "  Ruff:       " .. (config.ruff.enabled and "enabled" or "disabled")
+   2   lines[#lines + 1] = "  Debugger:   " .. (config.debugger.enabled and "enabled" or "disabled")
+   2   lines[#lines + 1] = "  Tests:      " .. (config.test_explorer.enabled and "enabled" or "disabled")
+   2   lines[#lines + 1] = "  uv:         " .. (config.uv.enabled and "enabled" or "disabled")
+
+   2   local buf = vim.api.nvim_create_buf(false, true)
+   2   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+   4   vim.bo[buf].modifiable = false
+   4   vim.bo[buf].bufhidden = "wipe"
+
+   2   local width = 50
+  34   for _, line in ipairs(lines) do
+  32     width = math.max(width, #line + 2)
+       end
+
+   4   local win = vim.api.nvim_open_win(buf, true, {
+         relative = "editor",
+   2     width = width,
+   2     height = #lines,
+   4     col = math.floor((vim.o.columns - width) / 2),
+   4     row = math.floor((vim.o.lines - #lines) / 2),
+         style = "minimal",
+         border = "rounded",
+         title = " Basilisk Info ",
+         title_pos = "center",
+       })
+
+   4   vim.keymap.set("n", "q", function()
+***0     vim.api.nvim_win_close(win, true)
+   2   end, { buffer = buf })
+     end
+
+     --- Register all :Basilisk* commands.
+     ---@param config BasiliskConfig
+   1 function M.register(config)
+   2   local lsp_mod = require("basilisk.lsp")
+   2   local profiling = require("basilisk.profiling")
+   2   local memory = require("basilisk.memory")
+   2   local testing = require("basilisk.testing")
+
+       -- Core commands.
+
+   4   vim.api.nvim_create_user_command("BasiliskRestart", function()
+   2     lsp_mod.reset_restart_count()
+   2     lsp_mod.restart(config, true)
+   2     log.info("restarting server...")
+   4   end, { desc = "Restart the Basilisk LSP server" })
+
+   4   vim.api.nvim_create_user_command("BasiliskInfo", function()
+   2     show_info_float(config)
+   4   end, { desc = "Show Basilisk LSP server info" })
+
+   4   vim.api.nvim_create_user_command("BasiliskOrganizeImports", function()
+   2     local uri = vim.uri_from_bufnr(vim.api.nvim_get_current_buf())
+   2     execute_command("basilisk.organizeImports", { uri })
+   4   end, { desc = "Organize imports via Basilisk" })
+
+   4   vim.api.nvim_create_user_command("BasiliskFixFile", function()
+   2     local uri = vim.uri_from_bufnr(vim.api.nvim_get_current_buf())
+   4     execute_command("basilisk.fixFile", { uri }, function(err)
+   1       if err then
+***0         log.error("fix file failed: %s", err.message or tostring(err))
+           else
+   1         log.info("file fixed")
+           end
+         end)
+   4   end, { desc = "Fix all diagnostics in current file" })
+
+   4   vim.api.nvim_create_user_command("BasiliskFixWorkspace", function()
+   4     execute_command("basilisk.fixWorkspace", {}, function(err)
+   1       if err then
+***0         log.error("fix workspace failed: %s", err.message or tostring(err))
+           else
+   1         log.info("workspace fixed")
+           end
+         end)
+   4   end, { desc = "Fix all diagnostics in workspace" })
+
+   4   vim.api.nvim_create_user_command("BasiliskAdoptFile", function()
+   2     local uri = vim.uri_from_bufnr(vim.api.nvim_get_current_buf())
+   4     execute_command("basilisk.adoptFile", { uri }, function(err)
+   1       if err then
+***0         log.error("adopt file failed: %s", err.message or tostring(err))
+           else
+   1         log.info("file adopted for type checking")
+           end
+         end)
+   4   end, { desc = "Opt-in current file to type checking" })
+
+   4   vim.api.nvim_create_user_command("BasiliskAdoptWorkspace", function()
+   4     execute_command("basilisk.adoptWorkspace", {}, function(err)
+   1       if err then
+***0         log.error("adopt workspace failed: %s", err.message or tostring(err))
+           else
+   1         log.info("workspace adopted for type checking")
+           end
+         end)
+   4   end, { desc = "Opt-in workspace to type checking" })
+
+   4   vim.api.nvim_create_user_command("BasiliskUnadoptFile", function()
+   2     local uri = vim.uri_from_bufnr(vim.api.nvim_get_current_buf())
+   4     execute_command("basilisk.unadoptFile", { uri }, function(err)
+   1       if err then
+***0         log.error("unadopt file failed: %s", err.message or tostring(err))
+           else
+   1         log.info("file unadopted from type checking")
+           end
+         end)
+   4   end, { desc = "Opt-out current file from type checking" })
+
+   4   vim.api.nvim_create_user_command("BasiliskShowOutput", function()
+         -- In Neovim, open the LSP log file.
+   1     local logpath = vim.lsp.get_log_path()
+   1     if logpath then
+   3       vim.cmd("edit " .. vim.fn.fnameescape(logpath))
+         else
+***0       log.info("no LSP log file found")
+         end
+   3   end, { desc = "Show LSP output log" })
+
+       -- Refactoring commands.
+
+   4   vim.api.nvim_create_user_command("BasiliskExtractVariable", function()
+   3     vim.lsp.buf.code_action({
+           filter = function(action)
+***0         return action.kind and action.kind:find("refactor.extract.variable") ~= nil
+           end,
+           apply = true,
+         })
+   3   end, { desc = "Extract selection to a variable" })
+
+   4   vim.api.nvim_create_user_command("BasiliskExtractConstant", function()
+   2     vim.lsp.buf.code_action({
+           filter = function(action)
+***0         return action.kind and action.kind:find("refactor.extract.constant") ~= nil
+           end,
+           apply = true,
+         })
+   3   end, { desc = "Extract selection to a module-level constant" })
+
+   4   vim.api.nvim_create_user_command("BasiliskConvertUnion", function()
+   2     vim.lsp.buf.code_action({
+           filter = function(action)
+***0         return action.kind and action.kind:find("refactor.rewrite") ~= nil
+***0           and (action.title:find("Union") ~= nil or action.title:find("Optional") ~= nil)
+           end,
+           apply = false,
+         })
+   3   end, { desc = "Convert between Union/Optional syntax styles" })
+
+   4   vim.api.nvim_create_user_command("BasiliskImplementMethods", function()
+   2     vim.lsp.buf.code_action({
+           filter = function(action)
+***0         return action.kind and action.kind:find("refactor.rewrite.implement") ~= nil
+           end,
+           apply = true,
+         })
+   3   end, { desc = "Implement all abstract methods" })
+
+       -- Profiling commands.
+
+   4   vim.api.nvim_create_user_command("BasiliskProfile", function(opts)
+   3     local pid = opts.args ~= "" and tonumber(opts.args) or nil
+   3     profiling.start(pid)
+   5   end, { nargs = "?", desc = "Start profiling" })
+
+   4   vim.api.nvim_create_user_command("BasiliskProfileStop", function()
+   2     profiling.stop()
+   4   end, { desc = "Stop profiling and show results" })
+
+   4   vim.api.nvim_create_user_command("BasiliskProfileSnapshot", function()
+   2     profiling.snapshot()
+   4   end, { desc = "Take profiling snapshot" })
+
+       -- Memory commands.
+
+   4   vim.api.nvim_create_user_command("BasiliskMemLeak", function()
+   2     memory.start()
+   4   end, { desc = "Start memory leak tracking" })
+
+   4   vim.api.nvim_create_user_command("BasiliskMemStop", function()
+   2     memory.stop()
+   4   end, { desc = "Stop memory tracking and show report" })
+
+   4   vim.api.nvim_create_user_command("BasiliskMemRefs", function(opts)
+   2     memory.refs(opts.args)
+   4   end, {
+         nargs = 1,
+         desc = "Show memory references for a type",
+         complete = function(lead)
+***0       return memory.complete_refs(lead)
+         end,
+       })
+
+       -- Debug commands.
+
+   4   vim.api.nvim_create_user_command("BasiliskDebugFile", function()
+***0     local dap_ok, dap = pcall(require, "dap")
+***0     if not dap_ok then
+***0       log.error("nvim-dap required for debugging")
+***0       return
+         end
+***0     dap.run({
+           type = "basilisk",
+           request = "launch",
+           name = "Debug: Current File",
+           program = "${file}",
+           justMyCode = true,
+         })
+   2   end, { desc = "Start debugging current file" })
+
+       -- Test commands.
+
+   4   vim.api.nvim_create_user_command("BasiliskTestDiscover", function()
+***0     testing.discover(config)
+   2   end, { desc = "Discover tests" })
+
+   4   vim.api.nvim_create_user_command("BasiliskTestRun", function(opts)
+   1     local test_id = opts.args ~= "" and opts.args or nil
+   1     testing.run(config, test_id)
+   3   end, { nargs = "?", desc = "Run test(s)" })
+
+   4   vim.api.nvim_create_user_command("BasiliskTestDebug", function(opts)
+   1     if opts.args == "" then
+***0       log.warn("test ID required for debug")
+***0       return
+         end
+   1     testing.debug(config, opts.args)
+   3   end, { nargs = 1, desc = "Debug a test" })
+
+   4   vim.api.nvim_create_user_command("BasiliskTestToggle", function()
+   1     testing.toggle(config)
+   3   end, { desc = "Toggle test explorer panel" })
+
+       -- uv commands.
+
+   4   vim.api.nvim_create_user_command("BasiliskUvSync", function()
+   4     execute_command("basilisk.uv.sync", {}, function(err)
+   1       if err then
+***0         log.error("uv sync failed: %s", err.message or tostring(err))
+           else
+   1         log.info("uv sync complete")
+           end
+         end)
+   4   end, { desc = "Run uv sync" })
+
+   4   vim.api.nvim_create_user_command("BasiliskUvAdd", function(opts)
+   2     execute_command("basilisk.uv.add", { { package = opts.args } }, function(err)
+   1       if err then
+***0         log.error("uv add failed: %s", err.message or tostring(err))
+           else
+   1         log.info("added package: %s", opts.args)
+           end
+         end)
+   3   end, { nargs = 1, desc = "Add a package via uv" })
+
+   4   vim.api.nvim_create_user_command("BasiliskUvAddDev", function(opts)
+   2     execute_command("basilisk.uv.addDev", { { package = opts.args } }, function(err)
+   1       if err then
+***0         log.error("uv add --dev failed: %s", err.message or tostring(err))
+           else
+   1         log.info("added dev package: %s", opts.args)
+           end
+         end)
+   3   end, { nargs = 1, desc = "Add a dev package via uv" })
+
+   4   vim.api.nvim_create_user_command("BasiliskUvRemove", function(opts)
+   2     execute_command("basilisk.uv.remove", { { package = opts.args } }, function(err)
+   1       if err then
+***0         log.error("uv remove failed: %s", err.message or tostring(err))
+           else
+   1         log.info("removed package: %s", opts.args)
+           end
+         end)
+   3   end, { nargs = 1, desc = "Remove a package via uv" })
+
+   4   vim.api.nvim_create_user_command("BasiliskUvLock", function()
+   4     execute_command("basilisk.uv.lock", {}, function(err)
+   1       if err then
+***0         log.error("uv lock failed: %s", err.message or tostring(err))
+           else
+   1         log.info("uv lock complete")
+           end
+         end)
+   4   end, { desc = "Run uv lock" })
+
+   4   vim.api.nvim_create_user_command("BasiliskUvCreateEnv", function(opts)
+   1     local args = {}
+   1     if opts.args ~= "" then
+   1       args = { { pythonVersion = opts.args } }
+         end
+   2     execute_command("basilisk.uv.createEnv", args, function(err)
+   1       if err then
+***0         log.error("uv venv failed: %s", err.message or tostring(err))
+           else
+   1         log.info("virtual environment created")
+           end
+         end)
+   3   end, { nargs = "?", desc = "Create virtual environment via uv" })
+
+       -- Set up test auto-discover.
+   2   testing.setup_auto_discover(config)
+     end
+
+   1 return M
+
+==============================================================================
+/Users/christianfindlay/Documents/Code/Basilisk/basilisk.nvim/lua/basilisk/config.lua
+==============================================================================
+     --- Basilisk configuration defaults and validation.
+     ---
+     --- All shared LSP settings are defined in LSP-ARCHITECTURE-SPEC.md and forwarded
+     --- to the server. Neovim-specific settings are documented here.
+
+   1 local M = {}
+
+     ---@class BasiliskInlayHints
+     ---@field parameter_names boolean
+     ---@field variable_types boolean
+
+     ---@class BasiliskRuff
+     ---@field enabled boolean
+     ---@field executable_path string
+
+     ---@class BasiliskDebugger
+     ---@field enabled boolean
+     ---@field type_checking boolean
+     ---@field debugpy_path string
+
+     ---@class BasiliskTestExplorer
+     ---@field enabled boolean
+     ---@field framework "auto"|"pytest"|"unittest"
+     ---@field pytest_path string
+     ---@field args string[]
+     ---@field auto_discover_on_save boolean
+     ---@field position "left"|"right"|"bottom"
+     ---@field width integer
+
+     ---@class BasiliskUv
+     ---@field enabled boolean
+     ---@field executable_path? string
+     ---@field auto_sync boolean
+     ---@field stub_suggestions boolean
+     ---@field dependency_diagnostics boolean
+
+     ---@class BasiliskKeymaps
+     ---@field enabled boolean
+     ---@field prefix string
+
+     ---@class BasiliskStatusline
+     ---@field enabled boolean
+
+     ---@class BasiliskConfig
+     ---@field binary_path? string
+     ---@field enabled boolean
+     ---@field use_lsp boolean
+     ---@field analysis_mode "openFilesOnly"|"wholeModule"|"crossModule"
+     ---@field python? string
+     ---@field trace_server "off"|"messages"|"verbose"
+     ---@field inlay_hints BasiliskInlayHints
+     ---@field ruff BasiliskRuff
+     ---@field debugger BasiliskDebugger
+     ---@field test_explorer BasiliskTestExplorer
+     ---@field uv BasiliskUv
+     ---@field keymaps BasiliskKeymaps
+     ---@field statusline BasiliskStatusline
+     ---@field log_level "trace"|"debug"|"info"|"warn"|"error"
+
+     ---@type BasiliskConfig
+   1 M.defaults = {
+       binary_path = nil,
+       enabled = true,
+       use_lsp = true,
+       analysis_mode = "wholeModule",
+       python = nil,
+       trace_server = "off",
+   1   inlay_hints = {
+         parameter_names = true,
+         variable_types = true,
+   1   },
+   1   ruff = {
+         enabled = true,
+         executable_path = "ruff",
+   1   },
+   1   debugger = {
+         enabled = true,
+         type_checking = false,
+         debugpy_path = "debugpy",
+   1   },
+   1   test_explorer = {
+         enabled = true,
+         framework = "auto",
+         pytest_path = "pytest",
+   1     args = {},
+         auto_discover_on_save = true,
+         position = "right",
+         width = 40,
+   1   },
+   1   uv = {
+         enabled = true,
+         executable_path = nil,
+         auto_sync = false,
+         stub_suggestions = true,
+         dependency_diagnostics = true,
+   1   },
+   1   keymaps = {
+         enabled = true,
+         prefix = "<leader>b",
+   1   },
+   1   statusline = {
+         enabled = true,
+   1   },
+       log_level = "info",
+   1 }
+
+     --- Validate the resolved config.
+     ---@param config BasiliskConfig
+     ---@return string[] errors List of validation error messages.
+   1 function M.validate(config)
+  41   local errors = {}
+  41   local valid_modes = { openFilesOnly = true, wholeModule = true, crossModule = true }
+  41   if not valid_modes[config.analysis_mode] then
+   2     errors[#errors + 1] = "invalid analysis_mode: " .. tostring(config.analysis_mode)
+       end
+  41   local valid_frameworks = { auto = true, pytest = true, unittest = true }
+  41   if not valid_frameworks[config.test_explorer.framework] then
+   2     errors[#errors + 1] = "invalid test_explorer.framework: " .. tostring(config.test_explorer.framework)
+       end
+  41   local valid_positions = { left = true, right = true, bottom = true }
+  41   if not valid_positions[config.test_explorer.position] then
+   2     errors[#errors + 1] = "invalid test_explorer.position: " .. tostring(config.test_explorer.position)
+       end
+  41   local valid_levels = { trace = true, debug = true, info = true, warn = true, error = true }
+  41   if not valid_levels[config.log_level] then
+   2     errors[#errors + 1] = "invalid log_level: " .. tostring(config.log_level)
+       end
+  41   return errors
+     end
+
+     --- Merge user options with defaults and validate.
+     ---@param opts? table
+     ---@return BasiliskConfig
+   1 function M.resolve(opts)
+  36   local config = vim.tbl_deep_extend("force", {}, M.defaults, opts or {})
+  36   local errors = M.validate(config)
+  40   for _, err in ipairs(errors) do
+   4     vim.notify("[basilisk] config error: " .. err, vim.log.levels.ERROR)
+       end
+  36   return config
+     end
+
+   1 return M
+
+==============================================================================
+/Users/christianfindlay/Documents/Code/Basilisk/basilisk.nvim/lua/basilisk/dap.lua
+==============================================================================
+     --- DAP integration for Basilisk.
+     ---
+     --- Registers an nvim-dap adapter that communicates with the basilisk LSP
+     --- to spawn debugpy sessions. Implements DapTcpProxy using vim.uv (libuv).
+
+   1 local log = require("basilisk.log")
+
+   1 local M = {}
+
+     --- Content-Length header pattern for DAP message framing.
+   1 local CONTENT_LENGTH_PATTERN = "^Content%-Length: (%d+)\r\n\r\n"
+
+     --- Parse a DAP message from a buffer.
+     ---@param data string Raw data buffer.
+     ---@return table? message Parsed JSON message, or nil if incomplete.
+     ---@return string remaining Remaining unparsed data.
+     local function parse_dap_message(data)
+***0   local len_str = data:match(CONTENT_LENGTH_PATTERN)
+***0   if not len_str then
+***0     return nil, data
+       end
+
+***0   local header_end = data:find("\r\n\r\n", 1, true)
+***0   if not header_end then
+***0     return nil, data
+       end
+
+***0   local content_start = header_end + 4
+***0   local content_length = tonumber(len_str)
+***0   if #data < content_start + content_length - 1 then
+***0     return nil, data
+       end
+
+***0   local body = data:sub(content_start, content_start + content_length - 1)
+***0   local remaining = data:sub(content_start + content_length)
+***0   local ok, msg = pcall(vim.json.decode, body)
+***0   if not ok then
+***0     log.error("DAP message parse error: %s", tostring(msg))
+***0     return nil, remaining
+       end
+***0   return msg, remaining
+     end
+
+     --- Frame a DAP message with Content-Length header.
+     ---@param msg table JSON-serializable message.
+     ---@return string framed Framed message with header.
+     local function frame_dap_message(msg)
+***0   local body = vim.json.encode(msg)
+***0   return string.format("Content-Length: %d\r\n\r\n%s", #body, body)
+     end
+
+     --- Check whether a line is structural (try:, with:, if:, etc.)
+     ---@param msg table DAP message.
+     ---@return boolean
+     local function is_structural_step_out(msg)
+       -- This interception is handled at the proxy level by inspecting
+       -- stepOut responses — the actual line classification happens
+       -- server-side. The proxy injects an auto-next if needed.
+***0   return msg.command == "stepOut"
+     end
+
+     --- Create and start a DapTcpProxy.
+     ---@param remote_host string
+     ---@param remote_port integer
+     ---@param callback fun(proxy_port: integer) Called with the local proxy port.
+   1 function M.create_proxy(remote_host, remote_port, callback)
+   1   local server = vim.uv.new_tcp()
+   1   local client_conn = nil
+       local remote_conn = nil
+   1   local client_buf = ""
+   1   local remote_buf = ""
+   1   local terminated = false
+
+   1   server:bind("127.0.0.1", 0)
+   2   server:listen(1, function(listen_err)
+***0     if listen_err then
+***0       log.error("DapTcpProxy listen error: %s", listen_err)
+***0       return
+         end
+
+***0     client_conn = vim.uv.new_tcp()
+***0     server:accept(client_conn)
+
+         -- Connect to the remote debugpy.
+***0     remote_conn = vim.uv.new_tcp()
+***0     remote_conn:connect(remote_host, remote_port, function(connect_err)
+***0       if connect_err then
+***0         log.error("DapTcpProxy connect error: %s", connect_err)
+***0         return
+           end
+
+           -- Relay: client -> remote (with interception).
+***0       client_conn:read_start(function(err, data)
+***0         if err or not data then
+***0           if remote_conn and not remote_conn:is_closing() then
+***0             remote_conn:close()
+               end
+***0           return
+             end
+***0         client_buf = client_buf .. data
+             while true do
+***0           local msg, rest = parse_dap_message(client_buf)
+***0           if not msg then
+                 break
+               end
+***0           client_buf = rest
+
+               -- Intercept stepOut for structural lines.
+***0           if is_structural_step_out(msg) then
+***0             log.debug("DapTcpProxy: intercepting stepOut, will inject next")
+               end
+
+               -- Fast disconnect post-termination.
+***0           if terminated and msg.command == "disconnect" then
+***0             local response = {
+                   type = "response",
+                   request_seq = msg.seq,
+                   success = true,
+                   command = "disconnect",
+                   seq = 0,
+                 }
+***0             client_conn:write(frame_dap_message(response))
+                 -- Do not forward — session is already terminated.
+               else
+***0             remote_conn:write(frame_dap_message(msg))
+               end
+             end
+           end)
+
+           -- Relay: remote -> client (with interception).
+***0       remote_conn:read_start(function(err, data)
+***0         if err or not data then
+***0           if client_conn and not client_conn:is_closing() then
+***0             client_conn:close()
+               end
+***0           return
+             end
+***0         remote_buf = remote_buf .. data
+             while true do
+***0           local msg, rest = parse_dap_message(remote_buf)
+***0           if not msg then
+                 break
+               end
+***0           remote_buf = rest
+
+               -- Track terminated state.
+***0           if msg.event == "terminated" then
+***0             terminated = true
+               end
+
+               -- Inject exited event before terminated if missing.
+***0           if msg.event == "terminated" then
+***0             local exited = {
+                   type = "event",
+                   event = "exited",
+                   seq = 0,
+                   body = { exitCode = 0 },
+                 }
+***0             client_conn:write(frame_dap_message(exited))
+               end
+
+***0           client_conn:write(frame_dap_message(msg))
+             end
+           end)
+         end)
+       end)
+
+   1   local addr = server:getsockname()
+   1   callback(addr.port)
+     end
+
+     --- Get the first active basilisk LSP client, or nil.
+     ---@return vim.lsp.Client?
+     local function get_client()
+   2   local clients = vim.lsp.get_clients({ name = "basilisk" })
+   2   return clients[1]
+     end
+
+     --- Set up DAP integration.
+     ---@param config BasiliskConfig
+   1 function M.setup(config)
+   3   local dap_ok, dap = pcall(require, "dap")
+   3   if not dap_ok then
+***0     log.debug("nvim-dap not found, skipping DAP setup")
+***0     return
+       end
+
+   3   if not config.debugger.enabled then
+   1     log.debug("debugger disabled in config, skipping DAP setup")
+   1     return
+       end
+
+       -- Register the basilisk DAP adapter.
+   2   dap.adapters.basilisk = function(callback, dap_config)
+   1     local client = get_client()
+   1     if not client then
+***0       log.error("no active basilisk LSP client for debug session")
+***0       return
+         end
+
+   1     local uri = vim.uri_from_bufnr(vim.api.nvim_get_current_buf())
+   2     client:request("workspace/executeCommand", {
+           command = "basilisk/startDebugSession",
+   1       arguments = { { uri = uri, pythonPath = config.python } },
+         }, function(err, result)
+   1       if err then
+***0         log.error("startDebugSession failed: %s", err.message or tostring(err))
+***0         return
+           end
+   1       if not result then
+   1         log.error("startDebugSession returned nil")
+   1         return
+           end
+
+***0       local host = result.host or "127.0.0.1"
+***0       local port = result.port
+***0       local debug_session_id = result.sessionId
+
+***0       M.create_proxy(host, port, function(proxy_port)
+***0         vim.schedule(function()
+***0           callback({
+                 type = "server",
+                 host = "127.0.0.1",
+                 port = proxy_port,
+***0             options = {
+                   disconnect_timeout_sec = 3,
+                 },
+               })
+             end)
+           end)
+
+           -- Store session ID for cleanup.
+***0       M._active_session_id = debug_session_id
+   1     end, 0)
+       end
+
+       -- Default launch configurations.
+   2   if not dap.configurations.python or #dap.configurations.python == 0 then
+   1     dap.configurations.python = {}
+       end
+
+       -- Add basilisk configurations if not already present.
+   2   local has_basilisk_launch = false
+   2   local has_basilisk_attach = false
+   4   for _, conf in ipairs(dap.configurations.python) do
+   2     if conf.type == "basilisk" and conf.request == "launch" then
+   1       has_basilisk_launch = true
+         end
+   2     if conf.type == "basilisk" and conf.request == "attach" then
+   1       has_basilisk_attach = true
+         end
+       end
+
+   2   if not has_basilisk_launch then
+   1     dap.configurations.python[#dap.configurations.python + 1] = {
+           type = "basilisk",
+           request = "launch",
+           name = "Python: Current File (Basilisk)",
+           program = "${file}",
+           justMyCode = true,
+           redirectOutput = true,
+           console = "integratedTerminal",
+   1     }
+       end
+
+   2   if not has_basilisk_attach then
+   1     dap.configurations.python[#dap.configurations.python + 1] = {
+           type = "basilisk",
+           request = "attach",
+           name = "Python: Attach (Basilisk)",
+   1       connect = { host = "127.0.0.1", port = 5678 },
+   1     }
+       end
+
+       -- Optional: nvim-dap-ui auto open/close.
+   2   local dapui_ok, dapui = pcall(require, "dapui")
+   2   if dapui_ok then
+***0     dap.listeners.after.event_initialized["basilisk"] = function()
+***0       dapui.open()
+         end
+***0     dap.listeners.before.event_terminated["basilisk"] = function()
+***0       dapui.close()
+         end
+***0     dap.listeners.before.event_exited["basilisk"] = function()
+***0       dapui.close()
+         end
+       end
+
+       -- Optional: nvim-dap-virtual-text.
+   2   local vtext_ok, vtext = pcall(require, "nvim-dap-virtual-text")
+   2   if vtext_ok then
+***0     vtext.setup()
+       end
+
+   2   log.debug("DAP setup complete")
+     end
+
+     --- Stop the active debug session.
+   1 function M.stop_session()
+   1   local client = get_client()
+   1   if not client or not M._active_session_id then
+   1     return
+       end
+
+***0   client:request("workspace/executeCommand", {
+         command = "basilisk/stopDebugSession",
+         arguments = { { sessionId = M._active_session_id } },
+       }, function(err)
+***0     if err then
+***0       log.error("stopDebugSession failed: %s", err.message or tostring(err))
+         end
+***0     M._active_session_id = nil
+***0   end, 0)
+     end
+
+   1 return M
+
+==============================================================================
+/Users/christianfindlay/Documents/Code/Basilisk/basilisk.nvim/lua/basilisk/health.lua
+==============================================================================
+     --- Health check for :checkhealth basilisk.
+     ---
+     --- Reports on binary availability, Python interpreter,
+     --- optional integrations, and configuration summary.
+
+   1 local binary = require("basilisk.binary")
+
+   1 local M = {}
+
+   1 function M.check()
+   2   vim.health.start("basilisk.nvim")
+
+       -- Neovim version.
+   2   if vim.fn.has("nvim-0.10") == 1 then
+   2     vim.health.ok("Neovim >= 0.10")
+       else
+***0     vim.health.error("Neovim >= 0.10 required", { "Upgrade Neovim to 0.10 or later." })
+       end
+
+       -- Basilisk binary.
+   1   local bin = binary.resolve()
+   1   if bin then
+   2     local ver = binary.version(bin) or "unknown"
+   2     vim.health.ok("basilisk binary found: " .. bin .. " (" .. ver .. ")")
+       else
+***0     vim.health.error("basilisk binary not found", {
+           "Install with: cargo install basilisk-cli",
+           "Or set vim.env.BASILISK_PATH",
+         })
+       end
+
+       -- Python interpreter.
+   1   local python = vim.fn.exepath("python3")
+   1   if python == "" then
+***0     python = vim.fn.exepath("python")
+       end
+   1   if python ~= "" then
+   2     local py_ver = vim.trim(vim.fn.system({ python, "--version" }))
+   2     vim.health.ok("Python found: " .. python .. " (" .. py_ver .. ")")
+       else
+***0     vim.health.warn("Python not found on PATH", {
+           "Some features (debugging, testing) require Python.",
+         })
+       end
+
+       -- debugpy (optional).
+   1   if python ~= "" then
+   1     local result = vim.fn.system({ python, "-c", "import debugpy; print(debugpy.__version__)" })
+   2     if vim.v.shell_error == 0 then
+   3       vim.health.ok("debugpy installed: " .. vim.trim(result))
+         else
+***0       vim.health.info("debugpy not installed (optional, for debugging)")
+         end
+       end
+
+       -- nvim-dap (optional).
+   1   local dap_ok = pcall(require, "dap")
+   1   if dap_ok then
+   2     vim.health.ok("nvim-dap available")
+       else
+***0     vim.health.info("nvim-dap not installed (optional, for debugging)")
+       end
+
+       -- nvim-dap-ui (optional).
+   1   local dapui_ok = pcall(require, "dapui")
+   1   if dapui_ok then
+***0     vim.health.ok("nvim-dap-ui available")
+       else
+   1     vim.health.info("nvim-dap-ui not installed (optional, for debug UI)")
+       end
+
+       -- ruff (optional).
+   1   local ruff = vim.fn.exepath("ruff")
+   1   if ruff ~= "" then
+   2     local ruff_ver = vim.trim(vim.fn.system({ ruff, "--version" }))
+   2     vim.health.ok("ruff found: " .. ruff .. " (" .. ruff_ver .. ")")
+       else
+***0     vim.health.info("ruff not found (optional, for formatting)")
+       end
+
+       -- uv (optional).
+   1   local uv = vim.fn.exepath("uv")
+   1   if uv ~= "" then
+***0     local uv_ver = vim.trim(vim.fn.system({ uv, "--version" }))
+***0     vim.health.ok("uv found: " .. uv .. " (" .. uv_ver .. ")")
+       else
+   1     vim.health.info("uv not found (optional, for package management)")
+       end
+
+       -- Configuration summary.
+   1   vim.health.start("basilisk.nvim configuration")
+   1   local basilisk_ok, basilisk = pcall(require, "basilisk")
+   1   if basilisk_ok and basilisk.config then
+   1     local cfg = basilisk.config
+   1     vim.health.ok("Analysis mode: " .. cfg.analysis_mode)
+   1     vim.health.ok("Ruff: " .. (cfg.ruff.enabled and "enabled" or "disabled"))
+   1     vim.health.ok("Debugger: " .. (cfg.debugger.enabled and "enabled" or "disabled"))
+   1     vim.health.ok("Test explorer: " .. (cfg.test_explorer.enabled and "enabled" or "disabled"))
+   1     vim.health.ok("uv integration: " .. (cfg.uv.enabled and "enabled" or "disabled"))
+   1     vim.health.ok("Keymaps: " .. (cfg.keymaps.enabled and "enabled" or "disabled"))
+   2     vim.health.ok("Log level: " .. cfg.log_level)
+       else
+***0     vim.health.info("basilisk.setup() has not been called yet")
+       end
+     end
+
+   1 return M
+
+==============================================================================
+/Users/christianfindlay/Documents/Code/Basilisk/basilisk.nvim/lua/basilisk/init.lua
+==============================================================================
+     --- Basilisk — a strict-by-default Python type checker for Neovim.
+     ---
+     --- Entry point: require('basilisk').setup({})
+     --- Zero-config works out of the box.
+
+   2 local config_mod = require("basilisk.config")
+   2 local lsp = require("basilisk.lsp")
+   2 local commands = require("basilisk.commands")
+   2 local log = require("basilisk.log")
+
+   2 local M = {}
+
+     --- Resolved configuration (populated after setup).
+     ---@type BasiliskConfig?
+   2 M.config = nil
+
+     --- Whether setup() has been called.
+   2 local did_setup = false
+
+     --- Register LSP command handlers for custom commands.
+     local function register_lsp_commands()
+   1   vim.lsp.commands["basilisk.organizeImports"] = function(cmd, ctx)
+***0     local edit = cmd.edit or cmd.arguments and cmd.arguments[1]
+***0     if edit then
+***0       vim.lsp.util.apply_workspace_edit(edit, "utf-8")
+         end
+       end
+     end
+
+     --- Set up Basilisk with the given options.
+     ---@param opts? table User configuration (merged with defaults).
+   2 function M.setup(opts)
+   2   if did_setup then
+   1     return
+       end
+   1   did_setup = true
+
+   2   M.config = config_mod.resolve(opts)
+
+       -- Configure logging.
+   1   log.set_level(M.config.log_level)
+   1   log.info("setup started")
+
+       -- Register custom LSP command handlers.
+   1   register_lsp_commands()
+
+       -- Start the LSP client.
+   1   lsp.start(M.config)
+
+       -- Register user commands.
+   1   commands.register(M.config)
+
+       -- Register DAP adapter if nvim-dap is available.
+   1   local dap_ok, dap_mod = pcall(require, "basilisk.dap")
+   1   if dap_ok then
+   1     dap_mod.setup(M.config)
+       end
+
+       -- Set up tab tracking for openFilesOnly mode.
+   1   local tab_tracking = require("basilisk.tab_tracking")
+   1   tab_tracking.setup(M.config)
+
+   1   log.info("setup complete")
+     end
+
+   2 return M
+
+==============================================================================
+/Users/christianfindlay/Documents/Code/Basilisk/basilisk.nvim/lua/basilisk/log.lua
+==============================================================================
+     --- Logger for basilisk.nvim.
+     ---
+     --- Wraps vim.notify with configurable log levels and optional file logging.
+
+   1 local M = {}
+
+     --- Log level names to vim.log.levels mapping.
+     ---@type table<string, integer>
+   1 local LEVELS = {
+   1   trace = vim.log.levels.TRACE,
+   1   debug = vim.log.levels.DEBUG,
+   1   info = vim.log.levels.INFO,
+   1   warn = vim.log.levels.WARN,
+   1   error = vim.log.levels.ERROR,
+     }
+
+     --- Current minimum log level.
+     ---@type integer
+   1 local min_level = vim.log.levels.INFO
+
+     --- Optional file handle for file logging.
+     ---@type file*?
+   1 local log_file = nil
+
+     --- Set the minimum log level.
+     ---@param level string One of "trace", "debug", "info", "warn", "error".
+   1 function M.set_level(level)
+   8   local resolved = LEVELS[level]
+   8   if resolved then
+   7     min_level = resolved
+       end
+     end
+
+     --- Enable file logging to the given path.
+     ---@param path string
+   1 function M.enable_file(path)
+   1   if log_file then
+***0     log_file:close()
+       end
+   1   log_file = io.open(path, "a")
+     end
+
+     --- Close the log file if open.
+   1 function M.close_file()
+   2   if log_file then
+   1     log_file:close()
+   1     log_file = nil
+       end
+     end
+
+     --- Log a message at the given level.
+     ---@param level integer vim.log.levels.*
+     ---@param fmt string Format string.
+     ---@param ... any Format arguments.
+     local function log(level, fmt, ...)
+  66   if level < min_level then
+  16     return
+       end
+  50   local msg = string.format(fmt, ...)
+  50   vim.notify("[basilisk] " .. msg, level)
+  50   if log_file then
+   1     log_file:write(string.format("%s [%s] %s\n", os.date("%Y-%m-%d %H:%M:%S"), level, msg))
+   1     log_file:flush()
+       end
+     end
+
+   1 function M.trace(fmt, ...)
+   5   log(vim.log.levels.TRACE, fmt, ...)
+     end
+
+   1 function M.debug(fmt, ...)
+  11   log(vim.log.levels.DEBUG, fmt, ...)
+     end
+
+   1 function M.info(fmt, ...)
+  29   log(vim.log.levels.INFO, fmt, ...)
+     end
+
+   1 function M.warn(fmt, ...)
+  15   log(vim.log.levels.WARN, fmt, ...)
+     end
+
+   1 function M.error(fmt, ...)
+   6   log(vim.log.levels.ERROR, fmt, ...)
+     end
+
+   1 return M
+
+==============================================================================
+/Users/christianfindlay/Documents/Code/Basilisk/basilisk.nvim/lua/basilisk/lsp.lua
+==============================================================================
+     --- LSP client configuration and lifecycle management.
+     ---
+     --- Uses Neovim 0.10+ built-in LSP client (vim.lsp.config / vim.lsp.enable).
+     --- All 21 core LSP features are native — zero custom implementation needed.
+
+   1 local binary = require("basilisk.binary")
+
+   1 local M = {}
+
+     --- Maximum automatic restart attempts before giving up.
+   1 local MAX_RESTARTS = 3
+
+     --- Restart backoff delays in milliseconds: 1s, 2s, 4s.
+   1 local BACKOFF_MS = { 1000, 2000, 4000 }
+
+     --- Track restart state.
+   1 local restart_count = 0
+
+     --- Build the LSP settings table from the resolved config.
+     ---@param config BasiliskConfig
+     ---@return table
+     local function build_settings(config)
+  11   return {
+  11     basilisk = {
+  11       enabled = config.enabled,
+  11       python = config.python,
+  11       analysisMode = config.analysis_mode,
+  11       inlayHints = {
+  11         parameterNames = config.inlay_hints.parameter_names,
+  11         variableTypes = config.inlay_hints.variable_types,
+  11       },
+  11       ruff = {
+  11         enabled = config.ruff.enabled,
+  11         executablePath = config.ruff.executable_path,
+  11       },
+  11       debugger = {
+  11         enabled = config.debugger.enabled,
+  11         typeChecking = config.debugger.type_checking,
+  11         debugpyPath = config.debugger.debugpy_path,
+  11       },
+  11       testExplorer = {
+  11         enabled = config.test_explorer.enabled,
+  11         framework = config.test_explorer.framework,
+  11         pytestPath = config.test_explorer.pytest_path,
+  11         args = config.test_explorer.args,
+  11         autoDiscoverOnSave = config.test_explorer.auto_discover_on_save,
+  11       },
+  11       uv = {
+  11         enabled = config.uv.enabled,
+  11         executablePath = config.uv.executable_path,
+  11         autoSync = config.uv.auto_sync,
+  11         stubSuggestions = config.uv.stub_suggestions,
+  11         dependencyDiagnostics = config.uv.dependency_diagnostics,
+  11       },
+  11     },
+  11   }
+     end
+
+     --- Configure and enable the basilisk LSP client.
+     ---@param config BasiliskConfig
+     ---@return boolean success
+   1 function M.start(config)
+  11   local bin = binary.resolve(config.binary_path)
+  11   if not bin then
+***0     vim.notify(
+           "[basilisk] binary not found. Install with: cargo install basilisk-cli",
+***0       vim.log.levels.ERROR
+         )
+***0     return false
+       end
+
+  22   vim.lsp.config("basilisk", {
+  11     cmd = { bin, "lsp" },
+  11     filetypes = { "python" },
+  11     root_markers = { "pyproject.toml", "setup.py", "setup.cfg", ".git" },
+  22     settings = build_settings(config),
+  11     init_options = {
+  11       analysisMode = config.analysis_mode,
+  11     },
+       })
+
+  11   vim.lsp.enable("basilisk")
+  11   restart_count = 0
+  11   return true
+     end
+
+     --- Restart the LSP server, respecting the backoff policy.
+     ---@param config BasiliskConfig
+     ---@param force? boolean Bypass the restart limit.
+   1 function M.restart(config, force)
+   9   if force then
+   4     restart_count = 0
+       end
+
+   9   if restart_count >= MAX_RESTARTS then
+   2     vim.notify(
+   1       "[basilisk] max restarts reached (" .. MAX_RESTARTS .. "). Use :BasiliskRestart to force.",
+   1       vim.log.levels.ERROR
+   1     )
+   1     return
+       end
+
+   8   local delay = BACKOFF_MS[restart_count + 1] or BACKOFF_MS[#BACKOFF_MS]
+   8   restart_count = restart_count + 1
+
+  16   vim.defer_fn(function()
+         -- Stop all basilisk clients.
+  20     for _, client in ipairs(vim.lsp.get_clients({ name = "basilisk" })) do
+   4       client:stop()
+         end
+         -- Re-start after a tick so the stop completes.
+  16     vim.defer_fn(function()
+   8       M.start(config)
+  16     end, 100)
+  16   end, delay)
+     end
+
+     --- Reset the restart counter (called by :BasiliskRestart).
+   1 function M.reset_restart_count()
+   4   restart_count = 0
+     end
+
+     --- Get the current restart count (for statusline).
+     ---@return integer
+   1 function M.get_restart_count()
+   3   return restart_count
+     end
+
+   1 return M
+
+==============================================================================
+/Users/christianfindlay/Documents/Code/Basilisk/basilisk.nvim/lua/basilisk/memory.lua
+==============================================================================
+     --- Memory tracking commands for Basilisk.
+     ---
+     --- Sends LSP memory commands and displays leak reports and retention
+     --- paths in floating windows.
+
+   1 local log = require("basilisk.log")
+
+   1 local M = {}
+
+     --- Active memory tracking session ID.
+     ---@type string?
+   1 local session_id = nil
+
+     --- Common types for :BasiliskMemRefs completion.
+   1 local COMMON_TYPES = {
+       "DataFrame",
+       "Series",
+       "Tensor",
+       "ndarray",
+       "dict",
+       "list",
+       "set",
+       "tuple",
+       "str",
+       "bytes",
+       "int",
+       "float",
+     }
+
+     --- Open a floating window with the given lines.
+     ---@param title string
+     ---@param lines string[]
+     ---@return integer buf, integer win
+     local function open_float(title, lines)
+   8   local buf = vim.api.nvim_create_buf(false, true)
+   8   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  16   vim.bo[buf].modifiable = false
+  16   vim.bo[buf].bufhidden = "wipe"
+  16   vim.bo[buf].filetype = "basilisk-memory"
+
+   8   local width = 80
+   8   local height = math.min(#lines, 30)
+  29   for _, line in ipairs(lines) do
+  21     width = math.max(width, #line + 2)
+       end
+  16   width = math.min(width, math.floor(vim.o.columns * 0.8))
+
+  16   local win = vim.api.nvim_open_win(buf, true, {
+         relative = "editor",
+   8     width = width,
+   8     height = height,
+  16     col = math.floor((vim.o.columns - width) / 2),
+  16     row = math.floor((vim.o.lines - height) / 2),
+         style = "minimal",
+         border = "rounded",
+   8     title = " " .. title .. " ",
+         title_pos = "center",
+       })
+
+  16   vim.keymap.set("n", "q", function()
+***0     vim.api.nvim_win_close(win, true)
+   8   end, { buffer = buf })
+
+   8   return buf, win
+     end
+
+     --- Get the first active basilisk LSP client, or nil.
+     ---@return vim.lsp.Client?
+     local function get_client()
+   9   local clients = vim.lsp.get_clients({ name = "basilisk" })
+   9   return clients[1]
+     end
+
+     --- Start memory leak tracking.
+   1 function M.start()
+   3   local client = get_client()
+   3   if not client then
+   1     log.warn("no active LSP client")
+   1     return
+       end
+
+   4   client:request("workspace/executeCommand", {
+         command = "basilisk/memory/start",
+   2     arguments = {},
+       }, function(err, result)
+   1     if err then
+***0       log.error("memory start failed: %s", err.message or tostring(err))
+***0       return
+         end
+   1     if result and result.sessionId then
+***0       session_id = result.sessionId
+         end
+   1     log.info("memory tracking started")
+   3   end, 0)
+     end
+
+     --- Stop memory tracking and display leak report.
+   1 function M.stop()
+   3   local client = get_client()
+   3   if not client then
+   1     log.warn("no active LSP client")
+   1     return
+       end
+
+   2   local args = {}
+   2   if session_id then
+***0     args = { { sessionId = session_id } }
+       end
+
+   4   client:request("workspace/executeCommand", {
+         command = "basilisk/memory/stop",
+   2     arguments = args,
+       }, function(err, result)
+   1     if err then
+***0       log.error("memory stop failed: %s", err.message or tostring(err))
+***0       return
+         end
+   1     session_id = nil
+   2     vim.schedule(function()
+   1       M.display_leak_report(result)
+         end)
+   3   end, 0)
+     end
+
+     --- Query retention paths for a type.
+     ---@param type_name string
+   1 function M.refs(type_name)
+   3   local client = get_client()
+   3   if not client then
+   1     log.warn("no active LSP client")
+   1     return
+       end
+
+   4   client:request("workspace/executeCommand", {
+         command = "basilisk/memory/refs",
+   2     arguments = { { typeName = type_name } },
+       }, function(err, result)
+   1     if err then
+***0       log.error("memory refs failed: %s", err.message or tostring(err))
+***0       return
+         end
+   2     vim.schedule(function()
+   1       M.display_retention_paths(type_name, result)
+         end)
+   3   end, 0)
+     end
+
+     --- Display a leak report in a floating window.
+     ---@param result? table Leak report from the LSP server.
+   1 function M.display_leak_report(result)
+   4   if not result then
+   2     open_float("Memory Leak Report", { "No leak data available." })
+   2     return
+       end
+
+   2   local lines = { "Memory Leak Report", "" }
+   2   local leaks = result.leaks or {}
+
+   4   for _, leak in ipairs(leaks) do
+   4     lines[#lines + 1] = string.format(
+   2       "  %s: %d objects, %s",
+   2       leak.typeName or "?",
+   2       leak.count or 0,
+   2       leak.totalSize or "?"
+   2     )
+   2     if leak.location then
+   1       lines[#lines + 1] = string.format("    at %s:%d", leak.location.file or "?", leak.location.line or 0)
+         end
+       end
+
+   2   if #leaks == 0 then
+   1     lines[#lines + 1] = "  No leaks detected."
+       end
+
+   2   open_float("Memory Leak Report", lines)
+     end
+
+     --- Display retention paths in a floating window.
+     ---@param type_name string
+     ---@param result? table Retention paths from the LSP server.
+   1 function M.display_retention_paths(type_name, result)
+   4   if not result then
+   2     open_float("Retention Paths: " .. type_name, { "No retention data available." })
+   2     return
+       end
+
+   2   local lines = { "Retention Paths for: " .. type_name, "" }
+   2   local paths = result.retentionPaths or {}
+
+   3   for i, path in ipairs(paths) do
+   1     local confidence = path.confidence or 0
+   1     lines[#lines + 1] = string.format("  Path %d (confidence: %.0f%%):", i, confidence * 100)
+   3     for _, step in ipairs(path.steps or {}) do
+   2       lines[#lines + 1] = string.format("    -> %s (%s)", step.name or "?", step.kind or "?")
+         end
+   1     lines[#lines + 1] = ""
+       end
+
+   2   if #paths == 0 then
+   1     lines[#lines + 1] = "  No retention paths found."
+       end
+
+   2   open_float("Retention Paths: " .. type_name, lines)
+     end
+
+     --- Completion function for :BasiliskMemRefs.
+     ---@param lead string
+     ---@return string[]
+   1 function M.complete_refs(lead)
+   4   local matches = {}
+  52   for _, t in ipairs(COMMON_TYPES) do
+ 144     if t:lower():find(lead:lower(), 1, true) then
+  14       matches[#matches + 1] = t
+         end
+       end
+   4   return matches
+     end
+
+   1 return M
+
+==============================================================================
+/Users/christianfindlay/Documents/Code/Basilisk/basilisk.nvim/lua/basilisk/profiling.lua
+==============================================================================
+     --- Profiling commands for Basilisk.
+     ---
+     --- Sends LSP profiler commands and displays results in floating windows,
+     --- quickfix lists, and heat map extmarks.
+
+   1 local log = require("basilisk.log")
+
+   1 local M = {}
+
+     --- Namespace for profiling extmarks (heat map).
+   1 local ns = vim.api.nvim_create_namespace("basilisk-profiling")
+
+     --- Active profiling session ID.
+     ---@type string?
+   1 local session_id = nil
+
+     --- Open a floating window with the given lines.
+     ---@param title string
+     ---@param lines string[]
+     ---@return integer buf, integer win
+     local function open_float(title, lines)
+   5   local buf = vim.api.nvim_create_buf(false, true)
+   5   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  10   vim.bo[buf].modifiable = false
+  10   vim.bo[buf].bufhidden = "wipe"
+  10   vim.bo[buf].filetype = "basilisk-profiling"
+
+   5   local width = 80
+   5   local height = math.min(#lines, 30)
+  16   for _, line in ipairs(lines) do
+  11     width = math.max(width, #line + 2)
+       end
+  10   width = math.min(width, math.floor(vim.o.columns * 0.8))
+
+  10   local win = vim.api.nvim_open_win(buf, true, {
+         relative = "editor",
+   5     width = width,
+   5     height = height,
+  10     col = math.floor((vim.o.columns - width) / 2),
+  10     row = math.floor((vim.o.lines - height) / 2),
+         style = "minimal",
+         border = "rounded",
+   5     title = " " .. title .. " ",
+         title_pos = "center",
+       })
+
+       -- Close on q.
+  10   vim.keymap.set("n", "q", function()
+***0     vim.api.nvim_win_close(win, true)
+   5   end, { buffer = buf })
+
+   5   return buf, win
+     end
+
+     --- Get the first active basilisk LSP client, or nil.
+     ---@return vim.lsp.Client?
+     local function get_client()
+  11   local clients = vim.lsp.get_clients({ name = "basilisk" })
+  11   return clients[1]
+     end
+
+     --- Start profiling.
+     ---@param pid? integer Optional process ID to profile.
+   1 function M.start(pid)
+   5   local client = get_client()
+   5   if not client then
+   2     log.warn("no active LSP client")
+   2     return
+       end
+
+   3   local args = {}
+   3   if pid then
+   1     args = { { pid = pid } }
+       end
+
+   6   client:request("workspace/executeCommand", {
+         command = "basilisk/profiler/start",
+   3     arguments = args,
+       }, function(err, result)
+   2     if err then
+***0       log.error("profiler start failed: %s", err.message or tostring(err))
+***0       return
+         end
+   2     if result and result.sessionId then
+***0       session_id = result.sessionId
+         end
+   2     log.info("profiling started")
+   5   end, 0)
+     end
+
+     --- Stop profiling and display results.
+   1 function M.stop()
+   3   local client = get_client()
+   3   if not client then
+   1     log.warn("no active LSP client")
+   1     return
+       end
+
+   2   local args = {}
+   2   if session_id then
+***0     args = { { sessionId = session_id } }
+       end
+
+   4   client:request("workspace/executeCommand", {
+         command = "basilisk/profiler/stop",
+   2     arguments = args,
+       }, function(err, result)
+   1     if err then
+***0       log.error("profiler stop failed: %s", err.message or tostring(err))
+***0       return
+         end
+   1     session_id = nil
+   2     vim.schedule(function()
+   1       M.display_results(result)
+         end)
+   3   end, 0)
+     end
+
+     --- Take a snapshot without stopping.
+   1 function M.snapshot()
+   3   local client = get_client()
+   3   if not client then
+   1     log.warn("no active LSP client")
+   1     return
+       end
+
+   2   local args = {}
+   2   if session_id then
+***0     args = { { sessionId = session_id } }
+       end
+
+   4   client:request("workspace/executeCommand", {
+         command = "basilisk/profiler/snapshot",
+   2     arguments = args,
+       }, function(err, result)
+   1     if err then
+***0       log.error("profiler snapshot failed: %s", err.message or tostring(err))
+***0       return
+         end
+   2     vim.schedule(function()
+   1       M.display_results(result)
+         end)
+   3   end, 0)
+     end
+
+     --- Display profiling results in a floating window and quickfix list.
+     ---@param result? table Profiling results from the LSP server.
+   1 function M.display_results(result)
+   5   if not result then
+   3     open_float("Profiling Results", { "No profiling data available." })
+   3     return
+       end
+
+   2   local lines = { "Hot Functions:", "" }
+   2   local qf_items = {}
+
+   2   local hot_functions = result.hotFunctions or {}
+   5   for i, func in ipairs(hot_functions) do
+   6     local line = string.format(
+   3       "%3d. %6.1f%%  %s  (%s:%d)",
+   3       i,
+   3       func.percentage or 0,
+   3       func.name or "?",
+   3       func.file or "?",
+   3       func.line or 0
+         )
+   3     lines[#lines + 1] = line
+   3     qf_items[#qf_items + 1] = {
+   3       filename = func.file,
+   3       lnum = func.line or 0,
+   3       text = string.format("%.1f%% — %s", func.percentage or 0, func.name or "?"),
+   3     }
+       end
+
+   2   if #hot_functions == 0 then
+   1     lines[#lines + 1] = "  (no hot functions recorded)"
+       end
+
+       -- Show floating window.
+   2   open_float("Profiling Results", lines)
+
+       -- Populate quickfix list.
+   2   if #qf_items > 0 then
+   2     vim.fn.setqflist(qf_items, "r")
+   1     log.info("profiling results added to quickfix list (:copen)")
+       end
+
+       -- Apply heat map extmarks.
+   2   M.apply_heat_map(hot_functions)
+     end
+
+     --- Apply heat map extmarks on hot lines.
+     ---@param hot_functions table[]
+   1 function M.apply_heat_map(hot_functions)
+       -- Clear previous heat map.
+  16   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+  11     if vim.api.nvim_buf_is_loaded(buf) then
+   7       vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+         end
+       end
+
+   9   for _, func in ipairs(hot_functions or {}) do
+   4     local file = func.file
+   4     local line = (func.line or 1) - 1
+   4     local pct = func.percentage or 0
+   4     if file then
+           -- Find buffer for this file.
+  15       for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+  11         local name = vim.api.nvim_buf_get_name(buf)
+  11         if name == file and vim.api.nvim_buf_is_loaded(buf) then
+***0           local hl = pct > 50 and "DiagnosticError"
+***0             or pct > 20 and "DiagnosticWarn"
+***0             or "DiagnosticHint"
+***0           pcall(vim.api.nvim_buf_set_extmark, buf, ns, line, 0, {
+                 virt_text = { { string.format(" %.1f%%", pct), hl } },
+                 virt_text_pos = "eol",
+               })
+             end
+           end
+         end
+       end
+     end
+
+     --- Export results to speedscope JSON and open in browser.
+     ---@param result? table Profiling results from the LSP server.
+   1 function M.export_flamegraph(result)
+   3   if not result or not result.speedscopeJson then
+   2     log.warn("no speedscope data available")
+   2     return
+       end
+
+   2   local tmpfile = vim.fn.tempname() .. ".speedscope.json"
+   1   local fh = io.open(tmpfile, "w")
+   1   if not fh then
+***0     log.error("failed to create temp file: %s", tmpfile)
+***0     return
+       end
+   1   fh:write(result.speedscopeJson)
+   1   fh:close()
+
+   2   vim.ui.open("https://www.speedscope.app/#profileURL=file://" .. tmpfile)
+   1   log.info("flamegraph exported: %s", tmpfile)
+     end
+
+   1 return M
+
+==============================================================================
+/Users/christianfindlay/Documents/Code/Basilisk/basilisk.nvim/lua/basilisk/statusline.lua
+==============================================================================
+     --- Status line component for Basilisk.
+     ---
+     --- Compatible with lualine.nvim, heirline.nvim, or any status line
+     --- that accepts a function returning a string.
+
+   1 local M = {}
+
+     ---@alias BasiliskState "starting"|"ready"|"error"|"stopped"
+
+     --- Current server state.
+     ---@type BasiliskState
+   1 local state = "stopped"
+
+     --- Whether state was set manually (should not be overridden by update).
+   1 local state_pinned = false
+
+     --- Cached diagnostic counts.
+   1 local error_count = 0
+   1 local warn_count = 0
+
+     --- State display configuration.
+   1 local STATE_DISPLAY = {
+   1   starting = { icon = "\u{27f3}", text = "Basilisk", color = "DiagnosticWarn" },
+   1   ready = { icon = "\u{2713}", text = "Basilisk", color = "DiagnosticOk" },
+   1   error = { icon = "\u{2717}", text = "Basilisk", color = "DiagnosticError" },
+   1   stopped = { icon = "\u{2298}", text = "Basilisk", color = "Comment" },
+     }
+
+     --- Update the cached state from LSP client status.
+   1 function M.update()
+       -- Do not override manually-pinned states (e.g., "error" after max restarts).
+  19   if state_pinned then
+   6     return
+       end
+
+  14   local clients = vim.lsp.get_clients({ name = "basilisk" })
+  13   if #clients == 0 then
+  10     state = "stopped"
+  10     error_count = 0
+  10     warn_count = 0
+  10     return
+       end
+
+   3   state = "ready"
+
+       -- Count diagnostics across all buffers.
+   3   local errors = 0
+   3   local warns = 0
+   9   for _, diag in ipairs(vim.diagnostic.get(nil, { namespace = nil })) do
+   6     if diag.source == "basilisk" or (diag.code and tostring(diag.code):match("^BSK")) then
+   6       if diag.severity == vim.diagnostic.severity.ERROR then
+   6         errors = errors + 1
+***0       elseif diag.severity == vim.diagnostic.severity.WARN then
+***0         warns = warns + 1
+           end
+         end
+       end
+   3   error_count = errors
+   3   warn_count = warns
+     end
+
+     --- Get the status line text.
+     ---@return string
+   1 function M.get()
+   7   M.update()
+   7   local display = STATE_DISPLAY[state]
+   7   local text = display.icon .. " " .. display.text
+   7   if state == "ready" and (error_count > 0 or warn_count > 0) then
+   1     text = text .. string.format(" (%dE %dW)", error_count, warn_count)
+       end
+   7   return text
+     end
+
+     --- Get the highlight group for the current state.
+     ---@return string
+   1 function M.get_color()
+  10   M.update()
+  10   local display = STATE_DISPLAY[state]
+  10   if state == "ready" and error_count > 0 then
+   1     return "DiagnosticWarn"
+       end
+   9   return display.color
+     end
+
+     --- Lualine-compatible component table.
+   1 M.lualine_component = {
+       function()
+   1     return M.get()
+       end,
+       color = function()
+   2     return { fg = vim.api.nvim_get_hl(0, { name = M.get_color() }).fg }
+       end,
+   1 }
+
+     --- Set the state directly (for use by lsp.lua on error/restart).
+     --- Pinned states ("starting", "error") are not overridden by update().
+     --- "ready" and "stopped" unpin, allowing normal update flow.
+     ---@param new_state BasiliskState
+   1 function M.set_state(new_state)
+   9   state = new_state
+   9   state_pinned = (new_state == "starting" or new_state == "error")
+     end
+
+   1 return M
+
+==============================================================================
+/Users/christianfindlay/Documents/Code/Basilisk/basilisk.nvim/lua/basilisk/tab_tracking.lua
+==============================================================================
+     --- Tab tracking for openFilesOnly analysis mode.
+     ---
+     --- In openFilesOnly mode, diagnostics should clear when files close.
+     --- Neovim doesn't reliably fire didClose when a buffer is hidden, so
+     --- we track buffer visibility and send didClose manually.
+
+   1 local log = require("basilisk.log")
+
+   1 local M = {}
+
+     --- Set of URIs we know are visible in windows.
+     ---@type table<string, boolean>
+   1 local known_open_uris = {}
+
+     --- Get the first active basilisk LSP client, or nil.
+     ---@return vim.lsp.Client?
+     local function get_client()
+   4   local clients = vim.lsp.get_clients({ name = "basilisk" })
+   4   return clients[1]
+     end
+
+     --- Collect all Python file URIs currently visible in windows.
+     ---@return table<string, boolean>
+     local function collect_visible_python_uris()
+   5   local uris = {}
+  11   for _, win in ipairs(vim.api.nvim_list_wins()) do
+   6     local buf = vim.api.nvim_win_get_buf(win)
+  18     if vim.bo[buf].filetype == "python" then
+   1       local name = vim.api.nvim_buf_get_name(buf)
+   1       if name ~= "" then
+   3         uris[vim.uri_from_fname(name)] = true
+           end
+         end
+       end
+   5   return uris
+     end
+
+     --- Check for closed Python tabs and send didClose.
+     ---@param config BasiliskConfig
+     local function check_closed_tabs(config)
+   4   if config.analysis_mode ~= "openFilesOnly" then
+***0     return
+       end
+
+   4   local client = get_client()
+   4   if not client then
+***0     return
+       end
+
+   4   local current_uris = collect_visible_python_uris()
+
+       -- Find URIs that were open but are no longer visible.
+   5   for uri in pairs(known_open_uris) do
+   1     if not current_uris[uri] then
+   2       client:notify("textDocument/didClose", {
+   1         textDocument = { uri = uri },
+           })
+   1       log.debug("sent didClose for hidden buffer: %s", uri)
+         end
+       end
+
+   4   known_open_uris = current_uris
+     end
+
+     --- Set up tab tracking autocmds.
+     ---@param config BasiliskConfig
+   1 function M.setup(config)
+   4   if config.analysis_mode ~= "openFilesOnly" then
+   3     return
+       end
+
+   1   local group = vim.api.nvim_create_augroup("BasiliskTabTracking", { clear = true })
+
+       -- Track when buffers become hidden or windows change.
+   2   vim.api.nvim_create_autocmd({ "BufHidden", "WinClosed", "BufDelete" }, {
+   1     group = group,
+         pattern = "*.py",
+         callback = function()
+   8       vim.defer_fn(function()
+   4         check_closed_tabs(config)
+   8       end, 100)
+         end,
+       })
+
+       -- Seed with currently visible buffers.
+   2   known_open_uris = collect_visible_python_uris()
+
+   1   log.debug("tab tracking enabled for openFilesOnly mode")
+     end
+
+   1 return M
+
+==============================================================================
+/Users/christianfindlay/Documents/Code/Basilisk/basilisk.nvim/lua/basilisk/testing.lua
+==============================================================================
+     --- Test explorer for Basilisk.
+     ---
+     --- Discovers tests via pytest, displays a tree UI in a side panel,
+     --- and supports run/debug integration.
+
+   1 local log = require("basilisk.log")
+
+   1 local M = {}
+
+     --- Namespace for test diagnostics.
+   1 local ns = vim.api.nvim_create_namespace("basilisk-test")
+
+     --- Test tree data structure.
+     ---@class BasiliskTestNode
+     ---@field id string Fully qualified test ID.
+     ---@field name string Display name.
+     ---@field kind "file"|"class"|"function"
+     ---@field file? string
+     ---@field line? integer
+     ---@field status "unknown"|"running"|"passed"|"failed"
+     ---@field children BasiliskTestNode[]
+
+     --- The root test tree.
+     ---@type BasiliskTestNode[]
+   1 local test_tree = {}
+
+     --- The test explorer buffer.
+     ---@type integer?
+   1 local tree_buf = nil
+
+     --- The test explorer window.
+     ---@type integer?
+     local tree_win = nil
+
+     --- Flat list of rendered node IDs (maps line number to test node).
+     ---@type BasiliskTestNode[]
+   1 local rendered_nodes = {}
+
+     --- Status icons.
+   1 local STATUS_ICONS = {
+       unknown = "○",
+       running = "◌",
+       passed = "●",
+       failed = "✗",
+     }
+
+     --- Status highlight groups.
+   1 local STATUS_HL = {
+       unknown = "Comment",
+       running = "DiagnosticWarn",
+       passed = "DiagnosticOk",
+       failed = "DiagnosticError",
+     }
+
+     --- Parse pytest --collect-only output into a test tree.
+     ---@param output string
+     ---@return BasiliskTestNode[]
+   1 function M.parse_pytest_output(output)
+   9   local tree = {}
+   9   local file_nodes = {}
+   9   local class_nodes = {}
+
+  22   for line in output:gmatch("[^\n]+") do
+         -- Skip empty lines and summary lines.
+  13     if line:match("^%s*$") or line:match("^=") or line:match("^no tests") then
+   2       goto continue
+         end
+
+         -- Parse test IDs: file.py::Class::test_name or file.py::test_name.
+  10     local file, rest = line:match("^(.+%.py)::(.+)$")
+  10     if not file then
+   1       goto continue
+         end
+
+         -- Ensure file node exists.
+   9     if not file_nodes[file] then
+   6       file_nodes[file] = {
+   6         id = file,
+  12         name = vim.fn.fnamemodify(file, ":t"),
+             kind = "file",
+   6         file = file,
+             status = "unknown",
+   6         children = {},
+   6       }
+   6       tree[#tree + 1] = file_nodes[file]
+         end
+   9     local file_node = file_nodes[file]
+
+         -- Split rest into class::test or just test.
+   9     local class_name, test_name = rest:match("^(.+)::(.+)$")
+   9     if class_name then
+   3       local class_key = file .. "::" .. class_name
+   3       if not class_nodes[class_key] then
+   2         class_nodes[class_key] = {
+   2           id = class_key,
+   2           name = class_name,
+               kind = "class",
+   2           file = file,
+               status = "unknown",
+   2           children = {},
+   2         }
+   2         file_node.children[#file_node.children + 1] = class_nodes[class_key]
+           end
+   3       local class_node = class_nodes[class_key]
+   3       class_node.children[#class_node.children + 1] = {
+   3         id = line,
+   3         name = test_name,
+             kind = "function",
+   3         file = file,
+             status = "unknown",
+   3         children = {},
+   3       }
+         else
+   6       file_node.children[#file_node.children + 1] = {
+   6         id = line,
+   6         name = rest,
+             kind = "function",
+   6         file = file,
+             status = "unknown",
+   6         children = {},
+   6       }
+         end
+
+         ::continue::
+       end
+
+   9   return tree
+     end
+
+     --- Render the test tree into buffer lines.
+     ---@param nodes BasiliskTestNode[]
+     ---@param indent integer
+     ---@param lines string[]
+     ---@param node_map BasiliskTestNode[]
+     local function render_tree(nodes, indent, lines, node_map)
+   9   local prefix = string.rep("  ", indent)
+   9   for _, node in ipairs(nodes) do
+***0     local icon = STATUS_ICONS[node.status] or "○"
+***0     lines[#lines + 1] = prefix .. icon .. " " .. node.name
+***0     node_map[#node_map + 1] = node
+***0     if #node.children > 0 then
+***0       render_tree(node.children, indent + 1, lines, node_map)
+         end
+       end
+     end
+
+     --- Refresh the tree buffer display.
+   1 function M.refresh_display()
+  16   if not tree_buf or not vim.api.nvim_buf_is_valid(tree_buf) then
+   7     return
+       end
+
+   9   local lines = {}
+   9   rendered_nodes = {}
+   9   render_tree(test_tree, 0, lines, rendered_nodes)
+
+   9   if #lines == 0 then
+   9     lines = { "  No tests discovered.", "  Run :BasiliskTestDiscover" }
+       end
+
+  18   vim.bo[tree_buf].modifiable = true
+   9   vim.api.nvim_buf_set_lines(tree_buf, 0, -1, false, lines)
+  18   vim.bo[tree_buf].modifiable = false
+     end
+
+     --- Get the test node at the current cursor line.
+     ---@return BasiliskTestNode?
+     local function get_node_at_cursor()
+***0   if not tree_win or not vim.api.nvim_win_is_valid(tree_win) then
+***0     return nil
+       end
+***0   local row = vim.api.nvim_win_get_cursor(tree_win)[1]
+***0   return rendered_nodes[row]
+     end
+
+     --- Discover tests using pytest.
+     ---@param config BasiliskConfig
+   1 function M.discover(config)
+   1   log.info("discovering tests...")
+
+   1   local cmd = { config.test_explorer.pytest_path, "--collect-only", "-q" }
+   1   for _, arg in ipairs(config.test_explorer.args) do
+***0     cmd[#cmd + 1] = arg
+       end
+
+   3   vim.fn.jobstart(cmd, {
+         stdout_buffered = true,
+         on_stdout = function(_, data)
+   1       if not data then
+***0         return
+           end
+   1       local output = table.concat(data, "\n")
+   2       vim.schedule(function()
+   2         test_tree = M.parse_pytest_output(output)
+   1         M.refresh_display()
+   1         log.info("discovered %d test files", #test_tree)
+           end)
+         end,
+         on_stderr = function(_, data)
+   1       if data and data[1] ~= "" then
+***0         log.debug("pytest stderr: %s", table.concat(data, "\n"))
+           end
+         end,
+       })
+     end
+
+     --- Run a test (or all tests if no ID given).
+     ---@param config BasiliskConfig
+     ---@param test_id? string
+   1 function M.run(config, test_id)
+   2   local cmd = { config.test_explorer.pytest_path, "-v", "--tb=short" }
+   2   for _, arg in ipairs(config.test_explorer.args) do
+***0     cmd[#cmd + 1] = arg
+       end
+   2   if test_id then
+   1     cmd[#cmd + 1] = test_id
+       end
+
+       -- Mark as running.
+   2   M.set_status(test_id, "running")
+   2   M.refresh_display()
+
+   4   vim.fn.jobstart(cmd, {
+         stdout_buffered = true,
+         on_stdout = function(_, data)
+   2       if not data then
+***0         return
+           end
+   4       vim.schedule(function()
+   2         M.parse_test_results(table.concat(data, "\n"))
+   2         M.refresh_display()
+           end)
+         end,
+         on_exit = function(_, exit_code)
+   4       vim.schedule(function()
+   2         if exit_code == 0 then
+   2           log.info("tests passed")
+             else
+   1           log.warn("tests failed (exit code %d)", exit_code)
+             end
+           end)
+         end,
+       })
+     end
+
+     --- Debug a test using nvim-dap.
+     ---@param config BasiliskConfig
+     ---@param test_id string
+   1 function M.debug(config, test_id)
+   2   local dap_ok, dap = pcall(require, "dap")
+   2   if not dap_ok then
+***0     log.error("nvim-dap required for debugging tests")
+***0     return
+       end
+
+   4   dap.run({
+         type = "basilisk",
+         request = "launch",
+   2     name = "Debug: " .. test_id,
+         module = "pytest",
+   2     args = { "-xvs", test_id },
+         justMyCode = true,
+       })
+     end
+
+     --- Parse test results from pytest output and update the tree.
+     ---@param output string
+   1 function M.parse_test_results(output)
+  35   for line in output:gmatch("[^\n]+") do
+         -- Match lines like: test_file.py::test_name PASSED/FAILED
+  30     local test_id, result = line:match("^(.+%.py::.+)%s+(PASSED)")
+  30     if not test_id then
+  27       test_id, result = line:match("^(.+%.py::.+)%s+(FAILED)")
+         end
+  30     if test_id and result then
+   5       local status = result == "PASSED" and "passed" or "failed"
+   5       M.set_status(test_id, status)
+         end
+       end
+
+       -- Set inline diagnostics for failures.
+   5   M.update_diagnostics()
+     end
+
+     --- Set the status of a test node by ID.
+     ---@param test_id? string
+     ---@param status string
+   1 function M.set_status(test_id, status)
+  11   if not test_id then
+   2     return
+       end
+       local function walk(nodes)
+   9     for _, node in ipairs(nodes) do
+***0       if node.id == test_id then
+***0         node.status = status
+***0         return true
+           end
+***0       if walk(node.children) then
+***0         return true
+           end
+         end
+   9     return false
+       end
+   9   walk(test_tree)
+     end
+
+     --- Update inline diagnostics for failed tests.
+   1 function M.update_diagnostics()
+       -- Clear previous diagnostics.
+   8   vim.diagnostic.reset(ns)
+
+   7   local diagnostics_by_buf = {}
+       local function collect(nodes)
+   7     for _, node in ipairs(nodes) do
+***0       if node.status == "failed" and node.file and node.line then
+***0         local bufnr = vim.fn.bufnr(node.file)
+***0         if bufnr ~= -1 then
+***0           if not diagnostics_by_buf[bufnr] then
+***0             diagnostics_by_buf[bufnr] = {}
+               end
+***0           diagnostics_by_buf[bufnr][#diagnostics_by_buf[bufnr] + 1] = {
+                 lnum = (node.line or 1) - 1,
+                 col = 0,
+                 severity = vim.diagnostic.severity.ERROR,
+                 source = "basilisk-test",
+                 message = "Test failed: " .. node.name,
+               }
+             end
+           end
+***0       collect(node.children)
+         end
+       end
+   7   collect(test_tree)
+
+   7   for bufnr, diags in pairs(diagnostics_by_buf) do
+***0     vim.diagnostic.set(ns, bufnr, diags)
+       end
+     end
+
+     --- Create or show the test explorer panel.
+     ---@param config BasiliskConfig
+   1 function M.open(config)
+   5   if tree_win and vim.api.nvim_win_is_valid(tree_win) then
+***0     vim.api.nvim_set_current_win(tree_win)
+***0     return
+       end
+
+       -- Create buffer.
+   5   tree_buf = vim.api.nvim_create_buf(false, true)
+  10   vim.bo[tree_buf].filetype = "basilisk-tests"
+  10   vim.bo[tree_buf].bufhidden = "wipe"
+  10   vim.bo[tree_buf].swapfile = false
+
+       -- Create split.
+   5   local pos = config.test_explorer.position
+   5   local width = config.test_explorer.width
+
+   5   if pos == "bottom" then
+   1     vim.cmd("botright split")
+   1     vim.api.nvim_win_set_height(0, 15)
+   4   elseif pos == "left" then
+   1     vim.cmd("topleft vsplit")
+   1     vim.api.nvim_win_set_width(0, width)
+       else
+   3     vim.cmd("botright vsplit")
+   3     vim.api.nvim_win_set_width(0, width)
+       end
+
+   5   tree_win = vim.api.nvim_get_current_win()
+   5   vim.api.nvim_win_set_buf(tree_win, tree_buf)
+  10   vim.wo[tree_win].number = false
+  10   vim.wo[tree_win].relativenumber = false
+  10   vim.wo[tree_win].signcolumn = "no"
+  10   vim.wo[tree_win].winfixwidth = true
+
+       -- Set up keymaps.
+   5   local buf = tree_buf
+  10   vim.keymap.set("n", "<CR>", function()
+***0     local node = get_node_at_cursor()
+***0     if node and node.kind == "function" then
+***0       M.run(config, node.id)
+         end
+   5   end, { buffer = buf, desc = "Run test" })
+
+  10   vim.keymap.set("n", "d", function()
+***0     local node = get_node_at_cursor()
+***0     if node and node.kind == "function" then
+***0       M.debug(config, node.id)
+         end
+   5   end, { buffer = buf, desc = "Debug test" })
+
+  10   vim.keymap.set("n", "R", function()
+         -- Re-run failed tests.
+         local function collect_failed(nodes, ids)
+***0       for _, node in ipairs(nodes) do
+***0         if node.status == "failed" and node.kind == "function" then
+***0           ids[#ids + 1] = node.id
+             end
+***0         collect_failed(node.children, ids)
+           end
+         end
+***0     local failed = {}
+***0     collect_failed(test_tree, failed)
+***0     for _, id in ipairs(failed) do
+***0       M.run(config, id)
+         end
+   5   end, { buffer = buf, desc = "Re-run failed tests" })
+
+  10   vim.keymap.set("n", "q", function()
+***0     M.close()
+   5   end, { buffer = buf, desc = "Close test explorer" })
+
+   5   M.refresh_display()
+     end
+
+     --- Close the test explorer panel.
+   1 function M.close()
+   5   if tree_win and vim.api.nvim_win_is_valid(tree_win) then
+   5     vim.api.nvim_win_close(tree_win, true)
+       end
+   5   tree_win = nil
+   5   tree_buf = nil
+     end
+
+     --- Toggle the test explorer panel.
+     ---@param config BasiliskConfig
+   1 function M.toggle(config)
+   3   if tree_win and vim.api.nvim_win_is_valid(tree_win) then
+   2     M.close()
+       else
+   2     M.open(config)
+       end
+     end
+
+     --- Set up auto-discover on save.
+     ---@param config BasiliskConfig
+   1 function M.setup_auto_discover(config)
+   4   if not config.test_explorer.auto_discover_on_save then
+   1     return
+       end
+
+   6   vim.api.nvim_create_autocmd("BufWritePost", {
+         pattern = "*.py",
+   3     group = vim.api.nvim_create_augroup("BasiliskTestAutoDiscover", { clear = true }),
+         callback = function()
+***0       if tree_buf and vim.api.nvim_buf_is_valid(tree_buf) then
+***0         M.discover(config)
+           end
+         end,
+       })
+     end
+
+     --- Parse coverage.xml and apply gutter highlights.
+     ---@param coverage_path? string Path to coverage.xml. Defaults to "coverage.xml".
+   1 function M.apply_coverage(coverage_path)
+   2   local path = coverage_path or "coverage.xml"
+   2   local fh = io.open(path, "r")
+   2   if not fh then
+   1     log.debug("no coverage file found at %s", path)
+   1     return
+       end
+
+   1   local content = fh:read("*a")
+   1   fh:close()
+
+   1   local cov_ns = vim.api.nvim_create_namespace("basilisk-coverage")
+
+       -- Clear previous coverage marks.
+   3   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+   2     if vim.api.nvim_buf_is_loaded(buf) then
+   1       vim.api.nvim_buf_clear_namespace(buf, cov_ns, 0, -1)
+         end
+       end
+
+       -- Parse line coverage from XML (simplified parser for Cobertura format).
+       -- Match <class filename="..."> and <line number="..." hits="..."/>
+   1   local current_file = nil
+   6   for line in content:gmatch("[^\n]+") do
+   5     local filename = line:match('filename="([^"]+)"')
+   5     if filename then
+   1       current_file = filename
+         end
+   5     local line_num, hits = line:match('number="(%d+)"%s+hits="(%d+)"')
+   5     if line_num and hits and current_file then
+   1       local lnum = tonumber(line_num) - 1
+   1       local hit_count = tonumber(hits)
+   3       for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+   2         local name = vim.api.nvim_buf_get_name(buf)
+   2         if name:find(current_file, 1, true) and vim.api.nvim_buf_is_loaded(buf) then
+***0           local hl = hit_count > 0 and "DiagnosticOk" or "DiagnosticError"
+***0           pcall(vim.api.nvim_buf_set_extmark, buf, cov_ns, lnum, 0, {
+                 sign_text = hit_count > 0 and "▎" or "▎",
+                 sign_hl_group = hl,
+               })
+             end
+           end
+         end
+       end
+     end
+
+   1 return M
+
+==============================================================================
+Summary
+==============================================================================
+
+File                                                                                        Hits Missed Coverage
+----------------------------------------------------------------------------------------------------------------
+/Users/christianfindlay/Documents/Code/Basilisk/basilisk.nvim/lua/basilisk/binary.lua       26   4      86.67%
+/Users/christianfindlay/Documents/Code/Basilisk/basilisk.nvim/lua/basilisk/commands.lua     176  30     85.44%
+/Users/christianfindlay/Documents/Code/Basilisk/basilisk.nvim/lua/basilisk/config.lua       40   0      100.00%
+/Users/christianfindlay/Documents/Code/Basilisk/basilisk.nvim/lua/basilisk/dap.lua          58   86     40.28%
+/Users/christianfindlay/Documents/Code/Basilisk/basilisk.nvim/lua/basilisk/health.lua       44   11     80.00%
+/Users/christianfindlay/Documents/Code/Basilisk/basilisk.nvim/lua/basilisk/init.lua         25   3      89.29%
+/Users/christianfindlay/Documents/Code/Basilisk/basilisk.nvim/lua/basilisk/log.lua          38   1      97.44%
+/Users/christianfindlay/Documents/Code/Basilisk/basilisk.nvim/lua/basilisk/lsp.lua          76   3      96.20%
+/Users/christianfindlay/Documents/Code/Basilisk/basilisk.nvim/lua/basilisk/memory.lua       101  9      91.82%
+/Users/christianfindlay/Documents/Code/Basilisk/basilisk.nvim/lua/basilisk/profiling.lua    118  16     88.06%
+/Users/christianfindlay/Documents/Code/Basilisk/basilisk.nvim/lua/basilisk/statusline.lua   49   2      96.08%
+/Users/christianfindlay/Documents/Code/Basilisk/basilisk.nvim/lua/basilisk/tab_tracking.lua 35   2      94.59%
+/Users/christianfindlay/Documents/Code/Basilisk/basilisk.nvim/lua/basilisk/testing.lua      191  50     79.25%
+----------------------------------------------------------------------------------------------------------------
+Total                                                                                       977  217    81.83%

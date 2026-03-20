@@ -1,0 +1,162 @@
+--- Real command integration tests with actual LSP and UI interactions.
+---
+--- Tests all :Basilisk* commands with the REAL LSP server.
+--- Verifies floating windows open, buffers change, keymaps fire, etc.
+
+local helpers = require("tests.lsp.helpers")
+
+local binary = helpers.find_binary()
+if not binary then
+  describe("basilisk commands (SKIPPED — no binary)", function()
+    it("skipped", function()
+      pending("basilisk binary not found")
+    end)
+  end)
+  return
+end
+
+local tmpdir
+
+describe("basilisk commands with real LSP", function()
+  before_each(function()
+    tmpdir = helpers.create_tmpdir()
+    local fh = io.open(tmpdir .. "/pyproject.toml", "w")
+    fh:write('[project]\nname = "test"\nversion = "0.1.0"\n')
+    fh:close()
+
+    vim.lsp.config("basilisk", {
+      cmd = { binary, "lsp" },
+      filetypes = { "python" },
+      root_markers = { "pyproject.toml", ".git" },
+      settings = { basilisk = { analysisMode = "wholeModule" } },
+    })
+    vim.lsp.enable("basilisk")
+  end)
+
+  after_each(function()
+    helpers.stop_clients()
+    helpers.close_all_buffers()
+    helpers.cleanup_tmpdir(tmpdir)
+  end)
+
+  -- :BasiliskInfo — floating window
+
+  it(":BasiliskInfo opens a floating window", function()
+    local buf = helpers.open_python_file(tmpdir, "test_info.py", "x: int = 1\n")
+    helpers.wait_for_server_ready(buf)
+
+    -- Register commands manually (normally done by setup()).
+    local basilisk = require("basilisk")
+    basilisk.config = require("basilisk.config").resolve({ binary_path = binary })
+    require("basilisk.commands").register(basilisk.config)
+
+    vim.cmd("BasiliskInfo")
+    vim.wait(500)
+
+    -- Find the floating window.
+    local float_win = nil
+    for _, win in ipairs(vim.api.nvim_list_wins()) do
+      local config = vim.api.nvim_win_get_config(win)
+      if config.relative and config.relative ~= "" then
+        float_win = win
+        break
+      end
+    end
+
+    assert.is_not_nil(float_win, ":BasiliskInfo should open a floating window")
+
+    -- Check content.
+    local float_buf = vim.api.nvim_win_get_buf(float_win)
+    local lines = vim.api.nvim_buf_get_lines(float_buf, 0, -1, false)
+    local text = table.concat(lines, "\n")
+    assert.truthy(text:find("Basilisk"), "float should contain 'Basilisk'")
+    assert.truthy(text:find("Status"), "float should contain 'Status'")
+
+    -- Close with q.
+    vim.api.nvim_set_current_win(float_win)
+    vim.api.nvim_feedkeys("q", "x", false)
+    vim.wait(200)
+
+    -- Verify closed.
+    assert.is_false(vim.api.nvim_win_is_valid(float_win), "float should close on 'q'")
+  end)
+
+  -- :BasiliskOrganizeImports — real LSP command
+
+  it(":BasiliskOrganizeImports sends LSP command", function()
+    local buf = helpers.open_python_file(tmpdir, "test_organize.py", "import os\nimport sys\n\nprint(sys.path)\nprint(os.getcwd())\n")
+    helpers.wait_for_server_ready(buf)
+
+    -- Register commands.
+    local basilisk = require("basilisk")
+    basilisk.config = require("basilisk.config").resolve({ binary_path = binary })
+    require("basilisk.commands").register(basilisk.config)
+
+    -- Execute — should not error.
+    local ok = pcall(vim.cmd, "BasiliskOrganizeImports")
+    assert.is_true(ok, ":BasiliskOrganizeImports should not error")
+  end)
+
+  -- :BasiliskFixFile — real LSP command
+
+  it(":BasiliskFixFile sends LSP command", function()
+    local buf = helpers.open_python_file(tmpdir, "test_fixfile.py", "def greet(name):\n    return name\n")
+    helpers.wait_for_server_ready(buf)
+
+    local basilisk = require("basilisk")
+    basilisk.config = require("basilisk.config").resolve({ binary_path = binary })
+    require("basilisk.commands").register(basilisk.config)
+
+    local ok = pcall(vim.cmd, "BasiliskFixFile")
+    assert.is_true(ok, ":BasiliskFixFile should not error")
+  end)
+
+  -- :BasiliskAdoptFile — real LSP command
+
+  it(":BasiliskAdoptFile sends LSP command", function()
+    local buf = helpers.open_python_file(tmpdir, "test_adopt.py", "x = 1\n")
+    helpers.wait_for_server_ready(buf)
+
+    local basilisk = require("basilisk")
+    basilisk.config = require("basilisk.config").resolve({ binary_path = binary })
+    require("basilisk.commands").register(basilisk.config)
+
+    local ok = pcall(vim.cmd, "BasiliskAdoptFile")
+    assert.is_true(ok, ":BasiliskAdoptFile should not error")
+  end)
+
+  -- :BasiliskTestToggle — UI panel
+
+  it(":BasiliskTestToggle opens/closes test panel", function()
+    local buf = helpers.open_python_file(tmpdir, "test_panel.py", "x: int = 1\n")
+    helpers.wait_for_server_ready(buf)
+
+    local basilisk = require("basilisk")
+    basilisk.config = require("basilisk.config").resolve({ binary_path = binary })
+    require("basilisk.commands").register(basilisk.config)
+
+    local win_count_before = #vim.api.nvim_tabpage_list_wins(0)
+
+    vim.cmd("BasiliskTestToggle")
+    vim.wait(200)
+
+    local win_count_after = #vim.api.nvim_tabpage_list_wins(0)
+    assert.is_true(win_count_after > win_count_before, "should open a new panel window")
+
+    -- Find the test panel buffer.
+    local found_test_buf = false
+    for _, b in ipairs(vim.api.nvim_list_bufs()) do
+      if vim.bo[b].filetype == "basilisk-tests" then
+        found_test_buf = true
+        break
+      end
+    end
+    assert.is_true(found_test_buf, "should create buffer with basilisk-tests filetype")
+
+    -- Toggle off.
+    vim.cmd("BasiliskTestToggle")
+    vim.wait(200)
+    local win_count_closed = #vim.api.nvim_tabpage_list_wins(0)
+    assert.are.equal(win_count_before, win_count_closed, "toggle should close the panel")
+  end)
+end)

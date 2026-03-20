@@ -29,7 +29,18 @@ const EXEMPT_METHODS: &[&str] = &["__init__", "__new__"];
 
 /// Known covariant containers -- a `TypeVar` inside one of these in a return
 /// annotation is still purely in output position.
-const COVARIANT_CONTAINERS: &[&str] = &["type", "Type", "FrozenSet", "frozenset", "Sequence"];
+const COVARIANT_CONTAINERS: &[&str] = &[
+    "type",
+    "Type",
+    "FrozenSet",
+    "frozenset",
+    "Sequence",
+    "Iterator",
+    "Iterable",
+    "Mapping",
+    "AbstractSet",
+    "Collection",
+];
 
 /// The variance of a `TypeVar`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

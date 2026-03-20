@@ -6,20 +6,21 @@
  */
 
 import * as vscode from "vscode";
+import * as net from "net";
 import { execFile } from "child_process";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
 import {
   LanguageClient,
-  LanguageClientOptions,
-  ServerOptions,
+  type LanguageClientOptions,
+  type ServerOptions,
   CloseAction,
   ErrorAction,
   RevealOutputChannelOn,
   State,
 } from "vscode-languageclient/node";
-import { logger, setLogBackend, FileLogSink } from "./logger";
+import { Logger, setLogBackend, FileLogSink } from "./logger";
 import type { LogSink } from "./logger";
 import { DapTcpProxy } from "./dap-proxy";
 
@@ -30,11 +31,11 @@ let outputChannel: vscode.OutputChannel | undefined;
 /** Adapts a VS Code LogOutputChannel to our LogSink interface. */
 class VscodeLogSink implements LogSink {
   constructor(private readonly channel: vscode.LogOutputChannel) {}
-  trace(message: string): void { this.channel.trace(message); }
-  debug(message: string): void { this.channel.debug(message); }
-  info(message: string): void { this.channel.info(message); }
-  warn(message: string): void { this.channel.warn(message); }
-  error(message: string): void { this.channel.error(message); }
+  public trace(message: string): void { this.channel.trace(message); }
+  public debug(message: string): void { this.channel.debug(message); }
+  public info(message: string): void { this.channel.info(message); }
+  public warn(message: string): void { this.channel.warn(message); }
+  public error(message: string): void { this.channel.error(message); }
 }
 
 /** Registered command IDs so we can avoid double-registering on re-activation. */
@@ -73,7 +74,7 @@ function resolveExecutablePath(configured: string): string {
   // If it's a relative path with separators (e.g. "./basilisk"), resolve against workspace.
   if (configured.includes(path.sep) || configured.includes("/")) {
     const wsRoot = workspaceRoot();
-    return wsRoot ? path.resolve(wsRoot, configured) : configured;
+    return wsRoot !== undefined && wsRoot !== "" ? path.resolve(wsRoot, configured) : configured;
   }
 
   // Bare command name (e.g. "basilisk") — check well-known locations that
@@ -143,7 +144,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const executablePath = resolveExecutablePath(configuredPath);
   const useLsp = cfg.get<boolean>("useLsp") ?? true;
 
-  logger.info(`Basilisk executable: ${executablePath}`);
+  Logger.info(`Basilisk executable: ${executablePath}`);
 
   // Register commands safely — avoids "command already exists" errors when
   // the extension re-activates after an LSP crash/restart cycle.
@@ -153,13 +154,13 @@ export function activate(context: vscode.ExtensionContext): void {
       return;
     }
     try {
-      logger.info("Restarting Basilisk language server...");
+      Logger.info("Restarting Basilisk language server...");
       await client.stop();
       await client.start();
-      logger.info("Basilisk language server restarted.");
+      Logger.info("Basilisk language server restarted.");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      logger.error(`Restart failed: ${msg}`);
+      Logger.error(`Restart failed: ${msg}`);
       vscode.window.showErrorMessage(`Basilisk: Failed to restart server: ${msg}`);
     }
   });
@@ -170,7 +171,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   safeRegisterCommand(context, "basilisk.fixFile", async () => {
     const editor = vscode.window.activeTextEditor;
-    if (!editor || editor.document.uri.scheme !== "file") {
+    if (editor?.document.uri.scheme !== "file") {
       return;
     }
     const uri = editor.document.uri;
@@ -187,6 +188,133 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   });
 
+  safeRegisterCommand(context, "basilisk.fixWorkspace", async () => {
+    if (client) {
+      await client.sendRequest("workspace/executeCommand", {
+        command: "basilisk.fixWorkspace",
+        arguments: [],
+      });
+    }
+  });
+
+  safeRegisterCommand(context, "basilisk.adoptFile", async () => {
+    const editor = vscode.window.activeTextEditor;
+    if (editor?.document.uri.scheme !== "file") {return;}
+    if (client) {
+      await client.sendRequest("workspace/executeCommand", {
+        command: "basilisk.adoptFile",
+        arguments: [editor.document.uri.toString()],
+      });
+    }
+  });
+
+  safeRegisterCommand(context, "basilisk.adoptWorkspace", async () => {
+    if (client) {
+      await client.sendRequest("workspace/executeCommand", {
+        command: "basilisk.adoptWorkspace",
+        arguments: [],
+      });
+    }
+  });
+
+  safeRegisterCommand(context, "basilisk.unadoptFile", async () => {
+    const editor = vscode.window.activeTextEditor;
+    if (editor?.document.uri.scheme !== "file") {return;}
+    if (client) {
+      await client.sendRequest("workspace/executeCommand", {
+        command: "basilisk.unadoptFile",
+        arguments: [editor.document.uri.toString()],
+      });
+    }
+  });
+
+  safeRegisterCommand(context, "basilisk.uv.sync", async () => {
+    if (!client) {
+      vscode.window.showWarningMessage("Basilisk: LSP client is not running.");
+      return;
+    }
+    await client.sendRequest("workspace/executeCommand", {
+      command: "basilisk.uv.sync",
+      arguments: [],
+    });
+    vscode.window.showInformationMessage("Basilisk: uv sync complete.");
+  });
+
+  safeRegisterCommand(context, "basilisk.uv.add", async () => {
+    const packageName = await vscode.window.showInputBox({
+      prompt: "Package name to add",
+      placeHolder: "e.g. requests",
+    });
+    if (packageName === undefined || packageName === "") {return;}
+    if (!client) {
+      vscode.window.showWarningMessage("Basilisk: LSP client is not running.");
+      return;
+    }
+    await client.sendRequest("workspace/executeCommand", {
+      command: "basilisk.uv.add",
+      arguments: [{ package: packageName }],
+    });
+    vscode.window.showInformationMessage(`Basilisk: Added ${packageName}.`);
+  });
+
+  safeRegisterCommand(context, "basilisk.uv.addDev", async () => {
+    const packageName = await vscode.window.showInputBox({
+      prompt: "Dev package name to add",
+      placeHolder: "e.g. pytest",
+    });
+    if (packageName === undefined || packageName === "") {return;}
+    if (!client) {
+      vscode.window.showWarningMessage("Basilisk: LSP client is not running.");
+      return;
+    }
+    await client.sendRequest("workspace/executeCommand", {
+      command: "basilisk.uv.addDev",
+      arguments: [{ package: packageName }],
+    });
+    vscode.window.showInformationMessage(`Basilisk: Added dev dependency ${packageName}.`);
+  });
+
+  safeRegisterCommand(context, "basilisk.uv.remove", async () => {
+    const packageName = await vscode.window.showInputBox({
+      prompt: "Package name to remove",
+      placeHolder: "e.g. requests",
+    });
+    if (packageName === undefined || packageName === "") {return;}
+    if (!client) {
+      vscode.window.showWarningMessage("Basilisk: LSP client is not running.");
+      return;
+    }
+    await client.sendRequest("workspace/executeCommand", {
+      command: "basilisk.uv.remove",
+      arguments: [{ package: packageName }],
+    });
+    vscode.window.showInformationMessage(`Basilisk: Removed ${packageName}.`);
+  });
+
+  safeRegisterCommand(context, "basilisk.uv.lock", async () => {
+    if (!client) {
+      vscode.window.showWarningMessage("Basilisk: LSP client is not running.");
+      return;
+    }
+    await client.sendRequest("workspace/executeCommand", {
+      command: "basilisk.uv.lock",
+      arguments: [],
+    });
+    vscode.window.showInformationMessage("Basilisk: uv lock complete.");
+  });
+
+  safeRegisterCommand(context, "basilisk.uv.createEnv", async () => {
+    if (!client) {
+      vscode.window.showWarningMessage("Basilisk: LSP client is not running.");
+      return;
+    }
+    await client.sendRequest("workspace/executeCommand", {
+      command: "basilisk.uv.createEnv",
+      arguments: [],
+    });
+    vscode.window.showInformationMessage("Basilisk: Virtual environment created.");
+  });
+
   if (useLsp) {
     // In LSP mode, the LanguageClient automatically registers
     // basilisk.organizeImports via the server's executeCommandProvider.
@@ -198,7 +326,7 @@ export function activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
       vscode.debug.registerDebugAdapterDescriptorFactory(
         "basilisk-debug",
-        new BasiliskDebugAdapterFactory()
+        basiliskDebugAdapterFactory
       )
     );
 
@@ -213,7 +341,7 @@ export function activate(context: vscode.ExtensionContext): void {
     // Log debug session lifecycle events.
     context.subscriptions.push(
       vscode.debug.onDidStartDebugSession((session) => {
-        logger.info(
+        Logger.info(
           `Debug session started: id=${session.id}, name=${session.name}, type=${session.type}`
         );
       })
@@ -222,21 +350,21 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.debug.onDidTerminateDebugSession((session) => {
         const activeId = vscode.debug.activeDebugSession?.id ?? "undefined";
         const sameSession = activeId === session.id;
-        logger.info(
+        Logger.info(
           `[Lifecycle] onDidTerminateDebugSession fired: ` +
           `terminated=${session.id.slice(0, 8)}, name="${session.name}", ` +
           `activeDebugSession=${activeId.slice(0, 8)}, ` +
           `sameSession=${sameSession}`
         );
-        logger.info(
+        Logger.info(
           `[Lifecycle] This is the VS Code API race: activeDebugSession ` +
-          `should be undefined here but is ${activeId === "undefined" ? "correctly undefined" : "STILL SET (id=" + activeId.slice(0, 8) + ")"}`
+          `should be undefined here but is ${activeId === "undefined" ? "correctly undefined" : `STILL SET (id=${  activeId.slice(0, 8)  })`}`
         );
       })
     );
     context.subscriptions.push(
       vscode.debug.onDidChangeActiveDebugSession((session) => {
-        logger.info(
+        Logger.info(
           `[Lifecycle] onDidChangeActiveDebugSession: ${session ? `id=${session.id.slice(0, 8)}, name="${session.name}"` : "→ NONE (session cleared)"}`
         );
       })
@@ -252,12 +380,12 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // Update status bar when diagnostics change.
   context.subscriptions.push(
-    vscode.languages.onDidChangeDiagnostics(() => updateStatusBarDiagnostics())
+    vscode.languages.onDidChangeDiagnostics(() => { updateStatusBarDiagnostics(); })
   );
 
   // Update status bar when active editor changes.
   context.subscriptions.push(
-    vscode.window.onDidChangeActiveTextEditor(() => updateStatusBarDiagnostics())
+    vscode.window.onDidChangeActiveTextEditor(() => { updateStatusBarDiagnostics(); })
   );
 }
 
@@ -266,7 +394,7 @@ export function deactivate(): Promise<void> | undefined {
 }
 
 function updateStatusBar(state: "starting" | "ready" | "error" | "stopped"): void {
-  if (!statusBarItem) return;
+  if (!statusBarItem) {return;}
   switch (state) {
     case "starting":
       statusBarItem.text = "$(sync~spin) Basilisk";
@@ -295,9 +423,9 @@ function updateStatusBar(state: "starting" | "ready" | "error" | "stopped"): voi
 }
 
 function updateStatusBarDiagnostics(): void {
-  if (!statusBarItem) return;
+  if (!statusBarItem) {return;}
   const editor = vscode.window.activeTextEditor;
-  if (!editor || editor.document.languageId !== "python") {
+  if (editor?.document.languageId !== "python") {
     return;
   }
   const diagnostics = vscode.languages.getDiagnostics(editor.document.uri);
@@ -352,7 +480,7 @@ function startLspClient(
     revealOutputChannelOn: RevealOutputChannelOn.Never,
     errorHandler: {
       error: (error, _message, count) => {
-        logger.error(`LSP error: ${error.message ?? error}`);
+        Logger.error(`LSP error: ${error.message ?? error}`);
         if (count !== undefined && count < 3) {
           return { action: ErrorAction.Continue };
         }
@@ -360,7 +488,7 @@ function startLspClient(
         return { action: ErrorAction.Shutdown };
       },
       closed: () => {
-        logger.warn("LSP connection closed. Restarting...");
+        Logger.warn("LSP connection closed. Restarting...");
         return { action: CloseAction.Restart };
       },
     },
@@ -371,17 +499,17 @@ function startLspClient(
         configuration: async (params, token, next) => {
           const results = await next(params, token);
           if (!Array.isArray(results)) {
-            return results;
+            return results as unknown as Record<string, unknown>[];
           }
-          return results.map((item, idx) => {
+          return (results as unknown[]).map((item: unknown, idx: number) => {
             const section = params.items[idx]?.section;
             if (section === "basilisk" || section?.startsWith("basilisk.")) {
               return {
-                ...(typeof item === "object" && item !== null ? item : {}),
+                ...(typeof item === "object" && item !== null ? item as Record<string, unknown> : {}),
                 ...readBasiliskSettings(),
-              };
+              } as Record<string, unknown>;
             }
-            return item;
+            return item as Record<string, unknown>;
           });
         },
       },
@@ -400,12 +528,16 @@ function startLspClient(
   client.onDidChangeState((event) => {
     switch (event.newState) {
       case State.Running:
-        logger.info("Basilisk language server is running.");
+        Logger.info("Basilisk language server is running.");
         updateStatusBar("ready");
         break;
       case State.Stopped:
-        logger.info("Basilisk language server stopped.");
+        Logger.info("Basilisk language server stopped.");
         updateStatusBar("stopped");
+        break;
+      case State.Starting:
+        Logger.info("Basilisk language server is starting...");
+        updateStatusBar("starting");
         break;
     }
   });
@@ -414,7 +546,7 @@ function startLspClient(
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration("basilisk") && client?.isRunning()) {
-        client.sendNotification("workspace/didChangeConfiguration", {
+        void client.sendNotification("workspace/didChangeConfiguration", {
           settings: buildServerSettings(),
         });
       }
@@ -430,7 +562,7 @@ function startLspClient(
 
   context.subscriptions.push(
     vscode.window.tabGroups.onDidChangeTabs(() => {
-      if (!client?.isRunning()) return;
+      if (!client?.isRunning()) {return;}
 
       // Collect all Python file URIs currently open in tabs.
       const currentUris = new Set<string>();
@@ -453,7 +585,7 @@ function startLspClient(
         for (const uriStr of knownOpenUris) {
           if (!currentUris.has(uriStr)) {
             const uri = vscode.Uri.parse(uriStr);
-            client.sendNotification("textDocument/didClose", {
+            void client.sendNotification("textDocument/didClose", {
               textDocument: { uri: uri.toString() },
             });
           }
@@ -476,12 +608,13 @@ function startLspClient(
     }
   }
 
-  client.start().catch((error: Error) => {
+  client.start().catch((error: unknown) => {
+    const errorMessage = error instanceof Error ? error.message : String(error);
     const msg =
       `Basilisk: Failed to start language server. ` +
-      `Is '${executablePath}' installed and on PATH? ${error.message}`;
+      `Is '${executablePath}' installed and on PATH? ${errorMessage}`;
     vscode.window.showErrorMessage(msg);
-    logger.error(msg);
+    Logger.error(msg);
     updateStatusBar("error");
   });
 
@@ -509,6 +642,13 @@ function readBasiliskSettings(): Record<string, unknown> {
       enabled: cfg.get<boolean>("ruff.enabled") ?? true,
       executablePath: cfg.get<string>("ruff.executablePath") ?? "ruff",
     },
+    uv: {
+      enabled: cfg.get<boolean>("uv.enabled") ?? true,
+      executablePath: cfg.get<string>("uv.executablePath") ?? "",
+      autoSync: cfg.get<boolean>("uv.autoSync") ?? false,
+      stubSuggestions: cfg.get<boolean>("uv.stubSuggestions") ?? true,
+      dependencyDiagnostics: cfg.get<boolean>("uv.dependencyDiagnostics") ?? true,
+    },
   };
 }
 
@@ -520,7 +660,7 @@ function buildServerSettings(): Record<string, unknown> {
 /** Run `ruff check --select I --fix` on the active file to organize imports. */
 function organizeImports(): void {
   const editor = vscode.window.activeTextEditor;
-  if (!editor || editor.document.languageId !== "python") {
+  if (editor?.document.languageId !== "python") {
     vscode.window.showWarningMessage("Basilisk: Open a Python file to organize imports.");
     return;
   }
@@ -544,10 +684,10 @@ function organizeImports(): void {
           `Basilisk: Failed to run ruff for import organization. ` +
             `Is '${ruffPath}' installed and on PATH? (${error.message})`
         );
-        logger.error(`organizeImports error: ${stderr}`);
+        Logger.error(`organizeImports error: ${stderr}`);
         return;
       }
-      logger.info(`Imports organized in ${path.basename(filePath)}`);
+      Logger.info(`Imports organized in ${path.basename(filePath)}`);
     }
   );
 }
@@ -620,7 +760,7 @@ function checkDocument(
     (error, stdout, stderr) => {
       // Exit code 1 means diagnostics found — that's normal, not a crash.
       // Exit code 3 means internal error.
-      if (error && error.code === 3) {
+      if (error?.code === 3) {
         vscode.window.showWarningMessage(
           `Basilisk: internal error checking ${path.basename(filePath)}: ${stderr}`
         );
@@ -704,7 +844,7 @@ function workspaceRoot(): string | undefined {
 class BasiliskDebugAdapterTrackerFactory
   implements vscode.DebugAdapterTrackerFactory
 {
-  createDebugAdapterTracker(
+  public createDebugAdapterTracker(
     session: vscode.DebugSession
   ): vscode.ProviderResult<vscode.DebugAdapterTracker> {
     return new BasiliskDebugAdapterTracker(session);
@@ -722,24 +862,24 @@ class BasiliskDebugAdapterTracker implements vscode.DebugAdapterTracker {
     this.session = session;
   }
 
-  onWillStartSession(): void {
-    logger.info(`[DAP ${this.sessionId}] session "${this.sessionName}" starting`);
+  public onWillStartSession(): void {
+    Logger.info(`[DAP ${this.sessionId}] session "${this.sessionName}" starting`);
   }
 
-  onWillStopSession(): void {
-    logger.info(`[DAP ${this.sessionId}] session "${this.sessionName}" stopping`);
+  public onWillStopSession(): void {
+    Logger.info(`[DAP ${this.sessionId}] session "${this.sessionName}" stopping`);
   }
 
-  onWillReceiveMessage(message: unknown): void {
+  public onWillReceiveMessage(message: unknown): void {
     const msg = message as { type?: string; command?: string; seq?: number; arguments?: unknown };
     if (msg.type === "request") {
-      logger.debug(
+      Logger.debug(
         `[DAP ${this.sessionId}] --> ${msg.command} #${msg.seq} ${summarizeArgs(msg.arguments)}`
       );
     }
   }
 
-  onDidSendMessage(message: unknown): void {
+  public onDidSendMessage(message: unknown): void {
     const msg = message as {
       type?: string;
       command?: string;
@@ -752,83 +892,83 @@ class BasiliskDebugAdapterTracker implements vscode.DebugAdapterTracker {
     if (msg.type === "response") {
       const text = `[DAP ${this.sessionId}] <-- ${msg.command} #${msg.request_seq} success=${msg.success} ${summarizeBody(msg.body)}`;
       if (msg.success) {
-        logger.debug(text);
+        Logger.debug(text);
       } else {
-        logger.warn(text);
+        Logger.warn(text);
       }
     } else if (msg.type === "event") {
-      logger.debug(
+      Logger.debug(
         `[DAP ${this.sessionId}] <-- event:${msg.event} ${summarizeBody(msg.body)}`
       );
       if (msg.event === "terminated") {
-        logger.info(`[DAP ${this.sessionId}] program terminated`);
+        Logger.info(`[DAP ${this.sessionId}] program terminated`);
       }
     }
   }
 
-  onError(error: Error): void {
-    logger.error(`[DAP ${this.sessionId}] ${error.message}`);
+  public onError(error: Error): void {
+    Logger.error(`[DAP ${this.sessionId}] ${error.message}`);
   }
 
-  onExit(code: number | undefined, signal: string | undefined): void {
-    logger.warn(`[DAP ${this.sessionId}] exit code=${code ?? "?"}, signal=${signal ?? "none"}`);
+  public onExit(code: number | undefined, signal: string | undefined): void {
+    Logger.warn(`[DAP ${this.sessionId}] exit code=${code ?? "?"}, signal=${signal ?? "none"}`);
   }
 }
 
 /** Compact summary of DAP request arguments for logging. */
 function summarizeArgs(args: unknown): string {
-  if (!args || typeof args !== "object") return "";
+  if (args === null || args === undefined || typeof args !== "object") {return "";}
   const obj = args as Record<string, unknown>;
   const parts: string[] = [];
-  if ("threadId" in obj) parts.push(`thread=${obj.threadId}`);
-  if ("expression" in obj) parts.push(`expr="${obj.expression}"`);
-  if ("frameId" in obj) parts.push(`frame=${obj.frameId}`);
-  if ("context" in obj) parts.push(`ctx=${obj.context}`);
-  if ("program" in obj) parts.push(`program=${String(obj.program).split("/").pop()}`);
-  if ("lines" in obj) parts.push(`lines=${JSON.stringify(obj.lines)}`);
+  if ("threadId" in obj) {parts.push(`thread=${String(obj.threadId)}`);}
+  if ("expression" in obj) {parts.push(`expr="${String(obj.expression)}"`);}
+  if ("frameId" in obj) {parts.push(`frame=${String(obj.frameId)}`);}
+  if ("context" in obj) {parts.push(`ctx=${String(obj.context)}`);}
+  if ("program" in obj) {parts.push(`program=${String(obj.program).split("/").pop()}`);}
+  if ("lines" in obj) {parts.push(`lines=${JSON.stringify(obj.lines)}`);}
   if ("breakpoints" in obj) {
-    const bps = obj.breakpoints as Array<{ line?: number }>;
+    const bps = obj.breakpoints as { line?: number }[];
     parts.push(`bps=[${bps.map((b) => b.line).join(",")}]`);
   }
   if ("source" in obj) {
     const src = obj.source as { path?: string };
-    if (src.path) parts.push(`src=${src.path.split("/").pop()}`);
+    if (src.path !== undefined && src.path !== "") {parts.push(`src=${src.path.split("/").pop()}`);}
   }
   return parts.length > 0 ? `{${parts.join(", ")}}` : "";
 }
 
 /** Compact summary of DAP response/event body for logging. */
 function summarizeBody(body: unknown): string {
-  if (!body || typeof body !== "object") return "";
+  if (body === null || body === undefined || typeof body !== "object") {return "";}
   const obj = body as Record<string, unknown>;
   const parts: string[] = [];
-  if ("reason" in obj) parts.push(`reason=${obj.reason}`);
-  if ("threadId" in obj) parts.push(`thread=${obj.threadId}`);
-  if ("allThreadsStopped" in obj) parts.push(`allStopped=${obj.allThreadsStopped}`);
-  if ("line" in obj) parts.push(`line=${obj.line}`);
-  if ("name" in obj) parts.push(`name=${obj.name}`);
-  if ("result" in obj) parts.push(`result=${obj.result}`);
+  if ("reason" in obj) {parts.push(`reason=${String(obj.reason)}`);}
+  if ("threadId" in obj) {parts.push(`thread=${String(obj.threadId)}`);}
+  if ("allThreadsStopped" in obj) {parts.push(`allStopped=${String(obj.allThreadsStopped)}`);}
+  if ("line" in obj) {parts.push(`line=${String(obj.line)}`);}
+  if ("name" in obj) {parts.push(`name=${String(obj.name)}`);}
+  if ("result" in obj) {parts.push(`result=${String(obj.result)}`);}
   if ("stackFrames" in obj) {
-    const frames = obj.stackFrames as Array<{ name?: string; line?: number }>;
+    const frames = obj.stackFrames as { name?: string; line?: number }[];
     if (frames.length > 0) {
-      parts.push(`frames=[${frames.map((f) => `${f.name}:${f.line}`).join(", ")}]`);
+      parts.push(`frames=[${frames.map((f) => `${String(f.name)}:${String(f.line)}`).join(", ")}]`);
     }
   }
   if ("scopes" in obj) {
-    const scopes = obj.scopes as Array<{ name?: string }>;
-    parts.push(`scopes=[${scopes.map((s) => s.name).join(", ")}]`);
+    const scopes = obj.scopes as { name?: string }[];
+    parts.push(`scopes=[${scopes.map((s) => String(s.name)).join(", ")}]`);
   }
   if ("variables" in obj) {
-    const vars = obj.variables as Array<{ name?: string; value?: string }>;
+    const vars = obj.variables as { name?: string; value?: string }[];
     if (vars.length <= 10) {
-      parts.push(`vars=[${vars.map((v) => `${v.name}=${v.value}`).join(", ")}]`);
+      parts.push(`vars=[${vars.map((v) => `${String(v.name)}=${String(v.value)}`).join(", ")}]`);
     } else {
       parts.push(`vars=[${vars.length} items]`);
     }
   }
   if ("threads" in obj) {
-    const threads = obj.threads as Array<{ id?: number; name?: string }>;
-    parts.push(`threads=[${threads.map((t) => `${t.id}:${t.name}`).join(", ")}]`);
+    const threads = obj.threads as { id?: number; name?: string }[];
+    parts.push(`threads=[${threads.map((t) => `${String(t.id)}:${String(t.name)}`).join(", ")}]`);
   }
   return parts.length > 0 ? `{${parts.join(", ")}}` : "";
 }
@@ -836,151 +976,155 @@ function summarizeBody(body: unknown): string {
 // ── Debug adapter factory ─────────────────────────────────────────────────
 
 /**
+ * Non-destructive port check — attempts to **bind** to the port.
+ * If binding fails with EADDRINUSE, something is listening (returns true).
+ * This avoids making a TCP connection that would consume debugpy's single slot.
+ */
+function isPortAlive(_host: string, port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "EADDRINUSE") {
+        resolve(true); // Something is listening.
+      } else {
+        resolve(false);
+      }
+    });
+    server.listen(port, "127.0.0.1", () => {
+      // We could bind → port is free → nothing is listening.
+      server.close(() => { resolve(false); });
+    });
+  });
+}
+
+/**
  * Asks the Basilisk LSP to spawn debugpy on a free TCP port, then tells
  * VS Code to connect its DAP client to that port. No process spawning in
  * TypeScript — the LSP handles everything.
  */
-class BasiliskDebugAdapterFactory
-  implements vscode.DebugAdapterDescriptorFactory
-{
-  async createDebugAdapterDescriptor(
-    session: vscode.DebugSession
-  ): Promise<vscode.DebugAdapterDescriptor> {
-    const config = session.configuration;
+async function createDebugAdapterDescriptor(
+  session: vscode.DebugSession
+): Promise<vscode.DebugAdapterDescriptor> {
+  const config = session.configuration;
 
-    logger.info(
-      `[Basilisk Debug] createDebugAdapterDescriptor called — ` +
-      `type=${config.type}, request=${config.request}, ` +
-      `program=${config.program ?? "(none)"}`
-    );
+  Logger.info(
+    `[Basilisk Debug] createDebugAdapterDescriptor called — ` +
+    `type=${config.type}, request=${config.request}, ` +
+    `program=${config.program ?? "(none)"}`
+  );
 
-    // Attach mode: connect directly to a user-specified host:port.
-    // debugpy.adapter in --port mode accepts exactly ONE TCP connection.
-    // If something probed the port before us (e.g. a readiness check),
-    // that adapter is dead. Ask the LSP to spawn a fresh one, then connect.
-    if (config.request === "attach" && config.connect) {
-      let host = config.connect.host || "localhost";
-      let port = config.connect.port as number;
-      logger.info(`[Basilisk Debug] Attach mode → ${host}:${port}`);
+  // Attach mode: connect directly to a user-specified host:port.
+  // debugpy.adapter in --port mode accepts exactly ONE TCP connection.
+  // If something probed the port before us (e.g. a readiness check),
+  // that adapter is dead. Ask the LSP to spawn a fresh one, then connect.
+  if (config.request === "attach" && config.connect !== undefined && config.connect !== null) {
+    const connectInfo = config.connect as { host?: string; port: number };
+    let host = connectInfo.host ?? "localhost";
+    let port = connectInfo.port;
+    Logger.info(`[Basilisk Debug] Attach mode → ${host}:${port}`);
 
-      // Non-destructive check: is the port still alive?
-      const alive = await this.isPortAlive(host, port);
-      if (!alive && client) {
-        logger.warn(`[Basilisk Debug] Port ${port} is dead — respawning debugpy adapter`);
-        try {
-          const result = (await vscode.commands.executeCommand(
-            "basilisk.startDebugSession",
-            { python: config.python || null }
-          )) as { host: string; port: number; sessionId: string } | null;
-          if (result && typeof result.port === "number") {
-            logger.info(`[Basilisk Debug] Respawned debugpy on ${result.host}:${result.port}`);
-            host = result.host;
-            port = result.port;
-          }
-        } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : String(err);
-          logger.error(`[Basilisk Debug] Respawn failed: ${msg}`);
+    // Non-destructive check: is the port still alive?
+    const alive = await isPortAlive(host, port);
+    if (!alive && client) {
+      Logger.warn(`[Basilisk Debug] Port ${port} is dead — respawning debugpy adapter`);
+      try {
+        const result = await vscode.commands.executeCommand<{
+          host: string;
+          port: number;
+        }>(
+          "basilisk.startDebugSession",
+          { python: (config.python as string | undefined) ?? null }
+        );
+        if (result !== undefined && typeof result.port === "number") {
+          Logger.info(`[Basilisk Debug] Respawned debugpy on ${result.host}:${result.port}`);
+          host = result.host;
+          port = result.port;
         }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        Logger.error(`[Basilisk Debug] Respawn failed: ${msg}`);
       }
-
-      const proxy = new DapTcpProxy(host, port);
-      const proxyPort = await proxy.start();
-      logger.info(`[Basilisk Debug] attach proxy listening on port ${proxyPort}`);
-      return new vscode.DebugAdapterServer(proxyPort);
     }
 
-    // Launch mode: ask the running LSP to spawn debugpy.
-    if (!client) {
-      throw new Error(
-        "Basilisk: LSP client is not running. Cannot start debug session."
-      );
-    }
-
-    // Resolve Python: launch config > basilisk.python setting > auto-detect (LSP side)
-    const configuredPython =
-      config.python ||
-      vscode.workspace.getConfiguration("basilisk").get<string>("python") ||
-      null;
-
-    logger.info(
-      `Requesting LSP to spawn debugpy (python: ${configuredPython ?? "auto-detect"})...`
-    );
-
-    let result: { host: string; port: number; sessionId: string } | null;
-    try {
-      // Use vscode.commands.executeCommand which the vscode-languageclient
-      // bridges to workspace/executeCommand on the LSP server automatically.
-      result = (await vscode.commands.executeCommand(
-        "basilisk.startDebugSession",
-        { python: configuredPython }
-      )) as { host: string; port: number; sessionId: string } | null;
-
-      if (!result || typeof result.port !== "number") {
-        throw new Error(
-          "LSP returned null for basilisk.startDebugSession. " +
-          "Check the Basilisk output channel for details."
-        );
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.error(`Debug session start failed: ${msg}`);
-      // Surface actionable errors to the user.
-      if (msg.includes("debugpy not found") || msg.includes("pip install debugpy")) {
-        vscode.window.showErrorMessage(
-          `Basilisk Debug: debugpy is not installed. Run: pip install debugpy`,
-          "Install debugpy"
-        ).then((choice) => {
-          if (choice === "Install debugpy") {
-            const terminal = vscode.window.createTerminal("Basilisk");
-            terminal.show();
-            terminal.sendText("pip install debugpy");
-          }
-        });
-      } else if (msg.includes("No Python interpreter") || msg.includes("python")) {
-        vscode.window.showErrorMessage(
-          `Basilisk Debug: No Python interpreter found. Set basilisk.python or create a virtualenv.`
-        );
-      } else {
-        vscode.window.showErrorMessage(`Basilisk Debug: Failed to start debug session: ${msg}`);
-      }
-      throw new Error(`Basilisk: ${msg}`);
-    }
-
-    logger.info(
-      `LSP spawned debugpy on ${result.host}:${result.port} (session: ${result.sessionId})`
-    );
-
-    // Use a TCP DAP proxy so we can fix debugpy stepping quirks
-    // (e.g. auto-next after stepOut to complete return-value assignment,
-    // structural line skipping for try: statements).
-    // TCP-based proxy ensures VS Code manages its own session lifecycle,
-    // giving clean activeDebugSession teardown.
-    const proxy = new DapTcpProxy(result.host, result.port);
+    const proxy = new DapTcpProxy(host, port);
     const proxyPort = await proxy.start();
-    logger.info(`[Basilisk Debug] launch proxy listening on port ${proxyPort}`);
+    Logger.info(`[Basilisk Debug] attach proxy listening on port ${proxyPort}`);
     return new vscode.DebugAdapterServer(proxyPort);
   }
 
-  /**
-   * Non-destructive port check — attempts to **bind** to the port.
-   * If binding fails with EADDRINUSE, something is listening (returns true).
-   * This avoids making a TCP connection that would consume debugpy's single slot.
-   */
-  private isPortAlive(_host: string, port: number): Promise<boolean> {
-    const net = require("net") as typeof import("net");
-    return new Promise((resolve) => {
-      const server = net.createServer();
-      server.once("error", (err: NodeJS.ErrnoException) => {
-        if (err.code === "EADDRINUSE") {
-          resolve(true); // Something is listening.
-        } else {
-          resolve(false);
+  // Launch mode: ask the running LSP to spawn debugpy.
+  if (!client) {
+    throw new Error(
+      "Basilisk: LSP client is not running. Cannot start debug session."
+    );
+  }
+
+  // Resolve Python: launch config > basilisk.python setting > auto-detect (LSP side)
+  const configuredPython =
+    (config.python as string | undefined) ??
+    vscode.workspace.getConfiguration("basilisk").get<string>("python") ??
+    null;
+
+  Logger.info(
+    `Requesting LSP to spawn debugpy (python: ${configuredPython ?? "auto-detect"})...`
+  );
+
+  let result: { host: string; port: number; sessionId: string } | null;
+  try {
+    // Use vscode.commands.executeCommand which the vscode-languageclient
+    // bridges to workspace/executeCommand on the LSP server automatically.
+    result = await vscode.commands.executeCommand<{ host: string; port: number; sessionId: string } | null>(
+      "basilisk.startDebugSession",
+      { python: configuredPython }
+    );
+
+    if (!result || typeof result.port !== "number") {
+      throw new Error(
+        "LSP returned null for basilisk.startDebugSession. " +
+        "Check the Basilisk output channel for details."
+      );
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    Logger.error(`Debug session start failed: ${msg}`);
+    // Surface actionable errors to the user.
+    if (msg.includes("debugpy not found") || msg.includes("pip install debugpy")) {
+      void vscode.window.showErrorMessage(
+        `Basilisk Debug: debugpy is not installed. Run: pip install debugpy`,
+        "Install debugpy"
+      ).then((choice) => {
+        if (choice === "Install debugpy") {
+          const terminal = vscode.window.createTerminal("Basilisk");
+          terminal.show();
+          terminal.sendText("pip install debugpy");
         }
       });
-      server.listen(port, "127.0.0.1", () => {
-        // We could bind → port is free → nothing is listening.
-        server.close(() => resolve(false));
-      });
-    });
+    } else if (msg.includes("No Python interpreter") || msg.includes("python")) {
+      vscode.window.showErrorMessage(
+        `Basilisk Debug: No Python interpreter found. Set basilisk.python or create a virtualenv.`
+      );
+    } else {
+      vscode.window.showErrorMessage(`Basilisk Debug: Failed to start debug session: ${msg}`);
+    }
+    throw new Error(`Basilisk: ${msg}`);
   }
+
+  Logger.info(
+    `LSP spawned debugpy on ${result.host}:${result.port} (session: ${result.sessionId})`
+  );
+
+  // Use a TCP DAP proxy so we can fix debugpy stepping quirks
+  // (e.g. auto-next after stepOut to complete return-value assignment,
+  // structural line skipping for try: statements).
+  // TCP-based proxy ensures VS Code manages its own session lifecycle,
+  // giving clean activeDebugSession teardown.
+  const proxy = new DapTcpProxy(result.host, result.port);
+  const proxyPort = await proxy.start();
+  Logger.info(`[Basilisk Debug] launch proxy listening on port ${proxyPort}`);
+  return new vscode.DebugAdapterServer(proxyPort);
 }
+
+/** Debug adapter factory that delegates to the standalone function. */
+const basiliskDebugAdapterFactory: vscode.DebugAdapterDescriptorFactory = {
+  createDebugAdapterDescriptor,
+};

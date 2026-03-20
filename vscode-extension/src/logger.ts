@@ -6,6 +6,8 @@
  * Swap the backend by calling `setLogBackend()`.
  */
 
+import type FsModule from "fs";
+
 // ── Public interface ─────────────────────────────────────────────────────
 
 export enum LogLevel {
@@ -28,22 +30,22 @@ export interface LogSink {
 // ── Built-in sinks ──────────────────────────────────────────────────────
 
 /** Sink that silently discards all messages. */
-class NullSink implements LogSink {
-  trace(): void { /* noop */ }
-  debug(): void { /* noop */ }
-  info(): void { /* noop */ }
-  warn(): void { /* noop */ }
-  error(): void { /* noop */ }
-}
+const nullSink: LogSink = {
+  trace(): void { /* noop */ },
+  debug(): void { /* noop */ },
+  info(): void { /* noop */ },
+  warn(): void { /* noop */ },
+  error(): void { /* noop */ },
+};
 
 /** Sink that fans out to multiple backends. */
 class CompositeSink implements LogSink {
   constructor(private readonly sinks: LogSink[]) {}
-  trace(message: string): void { for (const s of this.sinks) s.trace(message); }
-  debug(message: string): void { for (const s of this.sinks) s.debug(message); }
-  info(message: string): void { for (const s of this.sinks) s.info(message); }
-  warn(message: string): void { for (const s of this.sinks) s.warn(message); }
-  error(message: string): void { for (const s of this.sinks) s.error(message); }
+  public trace(message: string): void { for (const s of this.sinks) {s.trace(message);} }
+  public debug(message: string): void { for (const s of this.sinks) {s.debug(message);} }
+  public info(message: string): void { for (const s of this.sinks) {s.info(message);} }
+  public warn(message: string): void { for (const s of this.sinks) {s.warn(message);} }
+  public error(message: string): void { for (const s of this.sinks) {s.error(message);} }
 }
 
 /** Sink that appends to a file on disk via synchronous writes. */
@@ -51,26 +53,26 @@ export class FileLogSink implements LogSink {
   private readonly fd: number;
   constructor(filePath: string) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const fs = require("fs") as typeof import("fs");
+    const fsModule = require("fs") as typeof FsModule;
     // Open for append+create, truncating any previous run.
-    this.fd = fs.openSync(filePath, "w");
+    this.fd = fsModule.openSync(filePath, "w");
   }
-  trace(message: string): void { this.write("TRACE", message); }
-  debug(message: string): void { this.write("DEBUG", message); }
-  info(message: string): void { this.write("INFO ", message); }
-  warn(message: string): void { this.write("WARN ", message); }
-  error(message: string): void { this.write("ERROR", message); }
+  public trace(message: string): void { this.write("TRACE", message); }
+  public debug(message: string): void { this.write("DEBUG", message); }
+  public info(message: string): void { this.write("INFO ", message); }
+  public warn(message: string): void { this.write("WARN ", message); }
+  public error(message: string): void { this.write("ERROR", message); }
   private write(level: string, message: string): void {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const fs = require("fs") as typeof import("fs");
+    const fsModule = require("fs") as typeof FsModule;
     const timestamp = new Date().toISOString();
-    fs.writeSync(this.fd, `${timestamp} [${level}] ${message}\n`);
+    fsModule.writeSync(this.fd, `${timestamp} [${level}] ${message}\n`);
   }
 }
 
 // ── Singleton logger ────────────────────────────────────────────────────
 
-let activeSink: LogSink = new NullSink();
+let activeSink: LogSink = nullSink;
 
 /** Replace the active log backend. Pass an array to fan out to multiple sinks. */
 export function setLogBackend(sink: LogSink | LogSink[]): void {
@@ -78,10 +80,10 @@ export function setLogBackend(sink: LogSink | LogSink[]): void {
 }
 
 /** The global logger. Always safe to call — defaults to a no-op sink. */
-export const logger: LogSink = {
+export const Logger = {
   trace(message: string): void { activeSink.trace(message); },
   debug(message: string): void { activeSink.debug(message); },
   info(message: string): void { activeSink.info(message); },
   warn(message: string): void { activeSink.warn(message); },
   error(message: string): void { activeSink.error(message); },
-};
+} as const;

@@ -16,6 +16,7 @@ basilisk-resolver.workspace = true
 basilisk-checker.workspace  = true
 basilisk-lsp.workspace      = true
 clap.workspace              = true
+tower-lsp                   = "0.20"
 walkdir.workspace           = true
 serde.workspace             = true
 serde_json.workspace        = true

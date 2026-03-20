@@ -6,9 +6,11 @@
 //! - Per-path overrides (`per-path-overrides."vendor/**".rules.disabled = [...]`)
 //! - Stub path directories (`stub-paths = ["stubs/"]`)
 
+pub mod adoption;
 pub mod overrides;
 mod parse;
 
+pub use adoption::AdoptionStore;
 pub use overrides::{ModuleOverride, PathOverride, RuleSeverity};
 pub use parse::BasiliskConfig;
 

@@ -27,7 +27,7 @@
 
 import * as net from "net";
 import * as fs from "fs";
-import { logger } from "./logger";
+import { Logger } from "./logger";
 
 /** Minimal shape of a DAP message for type narrowing. */
 interface DapMessage {
@@ -105,7 +105,7 @@ export class DapTcpProxy {
    * Start the proxy: connect to debugpy and listen on a random local port.
    * Returns the port number VS Code should connect to.
    */
-  async start(): Promise<number> {
+  public async start(): Promise<number> {
     // First connect to debugpy
     await this.connectToDebugpy();
 
@@ -116,16 +116,16 @@ export class DapTcpProxy {
   private connectToDebugpy(): Promise<void> {
     return new Promise((resolve, reject) => {
       this.debugpySocket = net.createConnection(this.debugpyPort, this.debugpyHost, () => {
-        logger.info(`[DAP Proxy] connected to debugpy at ${this.debugpyHost}:${this.debugpyPort}`);
+        Logger.info(`[DAP Proxy] connected to debugpy at ${this.debugpyHost}:${this.debugpyPort}`);
         resolve();
       });
-      this.debugpySocket.on("data", (chunk) => this.onDebugpyData(chunk));
+      this.debugpySocket.on("data", (chunk) => { this.onDebugpyData(chunk); });
       this.debugpySocket.on("error", (err) => {
-        logger.error(`[DAP Proxy] debugpy socket error: ${err.message}`);
+        Logger.error(`[DAP Proxy] debugpy socket error: ${err.message}`);
         reject(err);
       });
       this.debugpySocket.on("close", () => {
-        logger.info("[DAP Proxy] debugpy socket closed");
+        Logger.info("[DAP Proxy] debugpy socket closed");
       });
     });
   }
@@ -133,34 +133,34 @@ export class DapTcpProxy {
   private startServer(): Promise<number> {
     return new Promise((resolve, reject) => {
       this.server = net.createServer((socket) => {
-        logger.info("[DAP Proxy] VS Code connected to proxy");
+        Logger.info("[DAP Proxy] VS Code connected to proxy");
         this.clientSocket = socket;
-        socket.on("data", (chunk) => this.onClientData(chunk));
+        socket.on("data", (chunk) => { this.onClientData(chunk); });
         socket.on("error", (err) => {
-          logger.error(`[DAP Proxy] client socket error: ${err.message}`);
+          Logger.error(`[DAP Proxy] client socket error: ${err.message}`);
         });
         socket.on("close", () => {
-          logger.info("[DAP Proxy] client socket closed");
+          Logger.info("[DAP Proxy] client socket closed");
         });
       });
       this.server.listen(0, "127.0.0.1", () => {
         const addr = this.server?.address();
-        if (addr && typeof addr !== "string") {
-          logger.info(`[DAP Proxy] listening on port ${addr.port}`);
+        if (addr !== undefined && addr !== null && typeof addr !== "string") {
+          Logger.info(`[DAP Proxy] listening on port ${addr.port}`);
           resolve(addr.port);
         } else {
           reject(new Error("Failed to get proxy server address"));
         }
       });
       this.server.on("error", (err) => {
-        logger.error(`[DAP Proxy] server error: ${err.message}`);
+        Logger.error(`[DAP Proxy] server error: ${err.message}`);
         reject(err);
       });
     });
   }
 
-  dispose(): void {
-    logger.info("[DAP Proxy] disposing");
+  public dispose(): void {
+    Logger.info("[DAP Proxy] disposing");
     if (this.attachResponseTimer) {
       clearTimeout(this.attachResponseTimer);
     }
@@ -175,16 +175,16 @@ export class DapTcpProxy {
     this.clientBuffer = Buffer.concat([this.clientBuffer, chunk]);
     for (;;) {
       const headerEnd = this.clientBuffer.indexOf("\r\n\r\n");
-      if (headerEnd < 0) break;
+      if (headerEnd < 0) {break;}
       const headerStr = this.clientBuffer.subarray(0, headerEnd).toString("utf-8");
-      const match = headerStr.match(/Content-Length:\s*(\d+)/i);
+      const match = /Content-Length:\s*(\d+)/i.exec(headerStr);
       if (!match) {
         this.clientBuffer = this.clientBuffer.subarray(1);
         continue;
       }
       const bodyLen = parseInt(match[1], 10);
       const bodyStart = headerEnd + 4;
-      if (this.clientBuffer.length < bodyStart + bodyLen) break;
+      if (this.clientBuffer.length < bodyStart + bodyLen) {break;}
       const body = this.clientBuffer.subarray(bodyStart, bodyStart + bodyLen).toString("utf-8");
       this.clientBuffer = this.clientBuffer.subarray(bodyStart + bodyLen);
 
@@ -200,16 +200,16 @@ export class DapTcpProxy {
     this.debugpyBuffer = Buffer.concat([this.debugpyBuffer, chunk]);
     for (;;) {
       const headerEnd = this.debugpyBuffer.indexOf("\r\n\r\n");
-      if (headerEnd < 0) break;
+      if (headerEnd < 0) {break;}
       const headerStr = this.debugpyBuffer.subarray(0, headerEnd).toString("utf-8");
-      const match = headerStr.match(/Content-Length:\s*(\d+)/i);
+      const match = /Content-Length:\s*(\d+)/i.exec(headerStr);
       if (!match) {
         this.debugpyBuffer = this.debugpyBuffer.subarray(1);
         continue;
       }
       const bodyLen = parseInt(match[1], 10);
       const bodyStart = headerEnd + 4;
-      if (this.debugpyBuffer.length < bodyStart + bodyLen) break;
+      if (this.debugpyBuffer.length < bodyStart + bodyLen) {break;}
       const body = this.debugpyBuffer.subarray(bodyStart, bodyStart + bodyLen).toString("utf-8");
       this.debugpyBuffer = this.debugpyBuffer.subarray(bodyStart + bodyLen);
 
@@ -222,14 +222,14 @@ export class DapTcpProxy {
   // ── Send helpers ─────────────────────────────────────────────────────
 
   private sendToDebugpy(msg: DapMessage): void {
-    if (!this.debugpySocket || this.debugpySocket.destroyed) return;
+    if (!this.debugpySocket || this.debugpySocket.destroyed) {return;}
     const json = JSON.stringify(msg);
     const header = `Content-Length: ${Buffer.byteLength(json, "utf-8")}\r\n\r\n`;
     this.debugpySocket.write(header + json);
   }
 
   private sendToClient(msg: DapMessage): void {
-    if (!this.clientSocket || this.clientSocket.destroyed) return;
+    if (!this.clientSocket || this.clientSocket.destroyed) {return;}
     const json = JSON.stringify(msg);
     const header = `Content-Length: ${Buffer.byteLength(json, "utf-8")}\r\n\r\n`;
     this.clientSocket.write(header + json);
@@ -239,7 +239,7 @@ export class DapTcpProxy {
 
   private processFromClient(msg: DapMessage): void {
     if (msg.type === "request") {
-      logger.debug(`[DAP Proxy] client → debugpy: ${msg.command} seq=${msg.seq}`);
+      Logger.debug(`[DAP Proxy] client → debugpy: ${msg.command} seq=${msg.seq}`);
     }
 
     // After terminated event, respond to disconnect immediately without
@@ -247,7 +247,7 @@ export class DapTcpProxy {
     // After responding, close the client socket so VS Code's adapter-exit
     // path runs, which clears activeDebugSession synchronously.
     if (msg.type === "request" && msg.command === "disconnect" && this.sawTerminatedEvent) {
-      logger.info("[DAP Proxy] fast disconnect response (post-termination)");
+      Logger.info("[DAP Proxy] fast disconnect response (post-termination)");
       this.sendToClient({
         type: "response",
         command: "disconnect",
@@ -256,7 +256,7 @@ export class DapTcpProxy {
         success: true,
         body: {},
       });
-      logger.info("[DAP Proxy] disconnect response sent to client, forwarding to debugpy");
+      Logger.info("[DAP Proxy] disconnect response sent to client, forwarding to debugpy");
       // Also forward to debugpy for cleanup, swallowing its duplicate response.
       this.sawDisconnectForwarded = true;
       this.sendToDebugpy(msg);
@@ -273,7 +273,7 @@ export class DapTcpProxy {
       this.pendingNextSeq = msg.seq;
       this.nextThreadId = msg.arguments?.threadId as number | undefined;
       this.awaitingNextStop = false;
-      logger.debug(`[DAP Proxy] outgoing next seq=${msg.seq}`);
+      Logger.debug(`[DAP Proxy] outgoing next seq=${msg.seq}`);
     }
 
     // Detect attach mode.
@@ -283,7 +283,7 @@ export class DapTcpProxy {
       // Set a timeout: if debugpy doesn't respond within 3s, fake a response.
       this.attachResponseTimer = setTimeout(() => {
         if (this.pendingAttachSeq !== undefined) {
-          logger.warn("[DAP Proxy] attach response timeout — injecting success");
+          Logger.warn("[DAP Proxy] attach response timeout — injecting success");
           this.sendToClient({
             type: "response",
             command: "attach",
@@ -311,7 +311,7 @@ export class DapTcpProxy {
       msg.success
     ) {
       this.awaitingStepOutStop = true;
-      logger.debug("[DAP Proxy] stepOut ok — arming auto-next");
+      Logger.debug("[DAP Proxy] stepOut ok — arming auto-next");
     }
 
     // After stepOut, debugpy stops at the call-site BEFORE the assignment.
@@ -319,7 +319,7 @@ export class DapTcpProxy {
     if (msg.type === "event" && msg.event === "stopped" && this.awaitingStepOutStop) {
       this.awaitingStepOutStop = false;
       const tid = (msg.body as { threadId?: number })?.threadId ?? this.stepOutThreadId;
-      logger.info(`[DAP Proxy] injecting next after stepOut (thread ${tid})`);
+      Logger.info(`[DAP Proxy] injecting next after stepOut (thread ${tid})`);
       this.injectedSeq++;
       this.sendToDebugpy({
         type: "request",
@@ -336,16 +336,16 @@ export class DapTcpProxy {
       msg.command === "next" &&
       msg.success
     ) {
-      logger.debug(`[DAP Proxy] next response: request_seq=${msg.request_seq}, pendingNextSeq=${this.pendingNextSeq}, match=${msg.request_seq === this.pendingNextSeq}`);
+      Logger.debug(`[DAP Proxy] next response: request_seq=${msg.request_seq}, pendingNextSeq=${this.pendingNextSeq}, match=${msg.request_seq === this.pendingNextSeq}`);
       if (msg.request_seq === this.pendingNextSeq) {
         this.awaitingNextStop = true;
-        logger.debug("[DAP Proxy] next ok — arming structural line check");
+        Logger.debug("[DAP Proxy] next ok — arming structural line check");
       }
     }
 
     // When stopped after a stepOver, check if we're on a structural line.
     if (msg.type === "event" && msg.event === "stopped") {
-      logger.debug(`[DAP Proxy] stopped event: awaitingNextStop=${this.awaitingNextStop}, awaitingStepOutStop=${this.awaitingStepOutStop}`);
+      Logger.debug(`[DAP Proxy] stopped event: awaitingNextStop=${this.awaitingNextStop}, awaitingStepOutStop=${this.awaitingStepOutStop}`);
     }
     if (msg.type === "event" && msg.event === "stopped" && this.awaitingNextStop) {
       this.awaitingNextStop = false;
@@ -353,7 +353,7 @@ export class DapTcpProxy {
       this.pendingStoppedMsg = msg;
       this.injectedSeq++;
       this.pendingStackTraceSeq = this.injectedSeq;
-      logger.debug(`[DAP Proxy] holding stopped event, requesting stackTrace seq=${this.injectedSeq} thread=${tid}`);
+      Logger.debug(`[DAP Proxy] holding stopped event, requesting stackTrace seq=${this.injectedSeq} thread=${tid}`);
       this.sendToDebugpy({
         type: "request",
         command: "stackTrace",
@@ -365,7 +365,7 @@ export class DapTcpProxy {
 
     // Handle response to our injected stackTrace.
     if (msg.type === "response" && msg.command === "stackTrace") {
-      logger.debug(`[DAP Proxy] stackTrace response: request_seq=${msg.request_seq}, pendingStackTraceSeq=${this.pendingStackTraceSeq}, match=${msg.request_seq === this.pendingStackTraceSeq}`);
+      Logger.debug(`[DAP Proxy] stackTrace response: request_seq=${msg.request_seq}, pendingStackTraceSeq=${this.pendingStackTraceSeq}, match=${msg.request_seq === this.pendingStackTraceSeq}`);
     }
     if (
       msg.type === "response" &&
@@ -377,15 +377,15 @@ export class DapTcpProxy {
       this.pendingStoppedMsg = undefined;
 
       if (stoppedMsg && msg.success) {
-        const frames = (msg.body as { stackFrames?: Array<{ line?: number; source?: { path?: string } }> })?.stackFrames;
-        logger.debug(`[DAP Proxy] stackTrace frames: ${JSON.stringify(frames?.map(f => ({ line: f.line, path: f.source?.path?.split("/").pop() })))}`);
+        const frames = (msg.body as { stackFrames?: { line?: number; source?: { path?: string } }[] })?.stackFrames;
+        Logger.debug(`[DAP Proxy] stackTrace frames: ${JSON.stringify(frames?.map(f => ({ line: f.line, path: f.source?.path?.split("/").pop() })))}`);
         if (frames && frames.length > 0) {
           const line = frames[0].line;
           const filePath = frames[0].source?.path;
-          logger.debug(`[DAP Proxy] checking line ${line} in ${filePath}: structural=${line !== undefined && filePath ? this.isStructuralLine(filePath, line) : "N/A"}`);
-          if (line !== undefined && filePath && this.isStructuralLine(filePath, line)) {
+          Logger.debug(`[DAP Proxy] checking line ${line} in ${filePath}: structural=${line !== undefined && filePath !== undefined && filePath !== "" ? this.isStructuralLine(filePath, line) : "N/A"}`);
+          if (line !== undefined && filePath !== undefined && filePath !== "" && this.isStructuralLine(filePath, line)) {
             const tid = (stoppedMsg.body as { threadId?: number })?.threadId ?? this.nextThreadId;
-            logger.info(`[DAP Proxy] skipping structural line ${line} in ${filePath.split("/").pop()}`);
+            Logger.info(`[DAP Proxy] skipping structural line ${line} in ${filePath.split("/").pop()}`);
             this.awaitingNextStop = true;
             this.injectedSeq++;
             this.pendingNextSeq = this.injectedSeq;
@@ -409,13 +409,13 @@ export class DapTcpProxy {
 
     // Swallow the response to our injected next (from both stepOut and structural skip).
     if (msg.type === "response" && msg.command === "next" && msg.request_seq !== undefined && msg.request_seq >= 900_000) {
-      logger.debug("[DAP Proxy] swallowed injected next response");
+      Logger.debug("[DAP Proxy] swallowed injected next response");
       return;
     }
 
     // Swallow duplicate disconnect response from debugpy when we already responded.
     if (msg.type === "response" && msg.command === "disconnect" && this.sawDisconnectForwarded) {
-      logger.debug("[DAP Proxy] swallowed duplicate disconnect response from debugpy");
+      Logger.debug("[DAP Proxy] swallowed duplicate disconnect response from debugpy");
       this.sawDisconnectForwarded = false;
       return;
     }
@@ -438,21 +438,21 @@ export class DapTcpProxy {
     if (msg.type === "event" && msg.event === "exited") {
       this.sawExitedEvent = true;
       const exitCode = (msg.body as { exitCode?: number })?.exitCode;
-      logger.info(`[DAP Proxy] exited event received, exitCode=${exitCode}`);
+      Logger.info(`[DAP Proxy] exited event received, exitCode=${exitCode}`);
     }
 
     // Track thread exit events.
     if (msg.type === "event" && msg.event === "thread") {
       const reason = (msg.body as { reason?: string })?.reason;
       const threadId = (msg.body as { threadId?: number })?.threadId;
-      logger.info(`[DAP Proxy] thread event: reason=${reason}, threadId=${threadId}`);
+      Logger.info(`[DAP Proxy] thread event: reason=${reason}, threadId=${threadId}`);
     }
 
     // When terminated arrives, inject exited if missing, then forward.
     if (msg.type === "event" && msg.event === "terminated") {
-      logger.info(`[DAP Proxy] terminated event received, sawExited=${this.sawExitedEvent}`);
+      Logger.info(`[DAP Proxy] terminated event received, sawExited=${this.sawExitedEvent}`);
       if (!this.sawExitedEvent) {
-        logger.info("[DAP Proxy] injecting exited event before terminated");
+        Logger.info("[DAP Proxy] injecting exited event before terminated");
         this.sendToClient({
           type: "event",
           event: "exited",
@@ -461,9 +461,9 @@ export class DapTcpProxy {
         });
       }
       this.sawTerminatedEvent = true;
-      logger.info("[DAP Proxy] forwarding terminated event to VS Code");
+      Logger.info("[DAP Proxy] forwarding terminated event to VS Code");
       this.sendToClient(msg);
-      logger.info("[DAP Proxy] terminated event forwarded");
+      Logger.info("[DAP Proxy] terminated event forwarded");
       return;
     }
 
@@ -487,7 +487,7 @@ export class DapTcpProxy {
       }
     }
     const idx = lineNumber - 1; // DAP lines are 1-based
-    if (idx < 0 || idx >= lines.length) return false;
+    if (idx < 0 || idx >= lines.length) {return false;}
     return STRUCTURAL_LINE_RE.test(lines[idx]);
   }
 }

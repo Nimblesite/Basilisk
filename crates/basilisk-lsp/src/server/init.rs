@@ -6,13 +6,17 @@ use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::{
     CallHierarchyServerCapability, CodeActionKind, CodeActionOptions, CodeActionProviderCapability,
     CodeLensOptions, ColorProviderCapability, CompletionOptions, DeclarationCapability,
-    DidChangeConfigurationParams, ExecuteCommandOptions, FoldingRangeProviderCapability,
-    HoverProviderCapability, InitializeParams, InitializeResult, MessageType, OneOf, RenameOptions,
-    SelectionRangeProviderCapability, SemanticTokensFullOptions, SemanticTokensLegend,
-    SemanticTokensOptions, SemanticTokensServerCapabilities, ServerCapabilities, ServerInfo,
-    SignatureHelpOptions, TextDocumentSyncCapability, TextDocumentSyncKind,
-    TypeDefinitionProviderCapability, Url, WorkDoneProgressOptions,
+    DidChangeConfigurationParams, DidChangeWatchedFilesRegistrationOptions, ExecuteCommandOptions,
+    FileOperationFilter, FileOperationPattern, FileOperationPatternKind,
+    FileOperationRegistrationOptions, FileSystemWatcher, FoldingRangeProviderCapability,
+    GlobPattern, HoverProviderCapability, InitializeParams, InitializeResult, MessageType, OneOf,
+    Registration, RenameOptions, SelectionRangeProviderCapability, SemanticTokensFullOptions,
+    SemanticTokensLegend, SemanticTokensOptions, SemanticTokensServerCapabilities,
+    ServerCapabilities, ServerInfo, SignatureHelpOptions, TextDocumentSyncCapability,
+    TextDocumentSyncKind, TypeDefinitionProviderCapability, Url, WorkDoneProgressOptions,
+    WorkspaceFileOperationsServerCapabilities, WorkspaceServerCapabilities,
 };
+use tower_lsp::Client;
 use tracing::info;
 
 use crate::config::AnalysisMode;
@@ -131,6 +135,22 @@ fn build_capabilities() -> ServerCapabilities {
             },
         )),
         color_provider: Some(ColorProviderCapability::Simple(true)),
+        workspace: Some(WorkspaceServerCapabilities {
+            file_operations: Some(WorkspaceFileOperationsServerCapabilities {
+                will_rename: Some(FileOperationRegistrationOptions {
+                    filters: vec![FileOperationFilter {
+                        scheme: Some("file".to_owned()),
+                        pattern: FileOperationPattern {
+                            glob: "**/*.py".to_owned(),
+                            matches: Some(FileOperationPatternKind::File),
+                            options: None,
+                        },
+                    }],
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
         ..Default::default()
     }
 }
@@ -142,6 +162,13 @@ pub(super) async fn initialized(server: &LspServer) {
         .client
         .log_message(MessageType::INFO, "Basilisk LSP initialized")
         .await;
+
+    // Spawn file watcher registration in the background so it never blocks
+    // the message loop (register_capability sends a request to the client).
+    let client = server.client.clone();
+    drop(tokio::spawn(async move {
+        register_file_watchers(&client).await;
+    }));
 
     let guard = server.index.read().await;
     let Some(index) = guard.as_ref() else { return };
@@ -231,6 +258,50 @@ pub(super) async fn did_change_configuration(
     }
 }
 
+/// Register file watchers for uv-related configuration files.
+///
+/// Watches `**/uv.lock`, `**/.python-version`, and `**/pyproject.toml` so
+/// that the server is notified when these files change on disk.
+async fn register_file_watchers(client: &Client) {
+    let watchers = vec![
+        FileSystemWatcher {
+            glob_pattern: GlobPattern::String("**/uv.lock".into()),
+            kind: None,
+        },
+        FileSystemWatcher {
+            glob_pattern: GlobPattern::String("**/.python-version".into()),
+            kind: None,
+        },
+        FileSystemWatcher {
+            glob_pattern: GlobPattern::String("**/pyproject.toml".into()),
+            kind: None,
+        },
+    ];
+
+    let registration_options =
+        serde_json::to_value(DidChangeWatchedFilesRegistrationOptions { watchers });
+
+    let register_options = match registration_options {
+        Ok(options) => options,
+        Err(err) => {
+            tracing::warn!("failed to serialize file watcher registration options: {err}");
+            return;
+        }
+    };
+
+    let registration = Registration {
+        id: "uv-file-watchers".to_owned(),
+        method: "workspace/didChangeWatchedFiles".to_owned(),
+        register_options: Some(register_options),
+    };
+
+    if let Err(err) = client.register_capability(vec![registration]).await {
+        tracing::warn!("failed to register uv file watchers: {err}");
+    } else {
+        info!("registered uv file watchers (uv.lock, .python-version, pyproject.toml)");
+    }
+}
+
 /// Scan the whole workspace and publish diagnostics for all files.
 async fn run_workspace_scan(server: &LspServer, _mode: AnalysisMode) {
     let guard = server.index.read().await;
@@ -275,7 +346,8 @@ async fn scan_resolve_and_check(server: &LspServer, index: &WorkspaceIndex) -> S
         .first()
         .map(|r| crate::config::load_config(r))
         .unwrap_or_default();
-    let search_paths = crate::import_resolver::ImportSearchPaths::from_config(&roots, &config);
+    let search_paths =
+        crate::import_resolver::ImportSearchPaths::from_config(&roots, &config, None);
     crate::import_resolver::resolve_workspace_imports(index, &search_paths);
     drop(roots);
 

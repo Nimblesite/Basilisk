@@ -12,5 +12,6 @@ workspace = true
 
 [dependencies]
 zed_extension_api = "0.7.0"
+serde_json = "1"
 # Shared constants with the LSP — zero-dependency, WASM-compatible.
 basilisk-common = { path = "../crates/basilisk-common" }

@@ -25,20 +25,24 @@ const DIAGNOSTIC_TIMEOUT_MS = 15_000;
 /** Maximum time (ms) to wait for the LSP server to become responsive. */
 const SERVER_START_WAIT_MS = 10_000;
 
+/** Options for polling an async function until a predicate is satisfied. */
+interface PollOptions<T> {
+    fn: () => PromiseLike<T>;
+    predicate: (result: T) => boolean;
+    timeoutMs?: number;
+    intervalMs?: number;
+}
+
 /**
  * Poll an async function until it returns a truthy, non-empty result.
  * Avoids fixed sleeps by retrying at short intervals.
  */
-async function pollUntilResult<T>(
-    fn: () => PromiseLike<T>,
-    predicate: (result: T) => boolean,
-    timeoutMs: number = 5_000,
-    intervalMs: number = 100
-): Promise<T> {
+async function pollUntilResult<T>(options: PollOptions<T>): Promise<T> {
+    const { fn, predicate, timeoutMs = 5_000, intervalMs = 100 } = options;
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
         const result = await fn();
-        if (predicate(result)) return result;
+        if (predicate(result)) {return result;}
         await new Promise<void>((r) => setTimeout(r, intervalMs));
     }
     return fn() as Promise<T>;
@@ -69,39 +73,6 @@ function findBasiliskBinary(): string | undefined {
     } catch {
         return undefined;
     }
-}
-
-/**
- * Wait until at least one diagnostic appears for the given URI,
- * or until the timeout elapses -- whichever comes first.
- */
-function waitForDiagnostics(
-    uri: vscode.Uri,
-    timeoutMs: number = DIAGNOSTIC_TIMEOUT_MS
-): Promise<vscode.Diagnostic[]> {
-    return new Promise((resolve) => {
-        const existing = vscode.languages.getDiagnostics(uri);
-        if (existing.length > 0) {
-            resolve(existing);
-            return;
-        }
-
-        const timeout = setTimeout(() => {
-            disposable.dispose();
-            resolve(vscode.languages.getDiagnostics(uri));
-        }, timeoutMs);
-
-        const disposable = vscode.languages.onDidChangeDiagnostics((event) => {
-            if (event.uris.some((u) => u.toString() === uri.toString())) {
-                const diags = vscode.languages.getDiagnostics(uri);
-                if (diags.length > 0) {
-                    clearTimeout(timeout);
-                    disposable.dispose();
-                    resolve(diags);
-                }
-            }
-        });
-    });
 }
 
 /**
@@ -156,14 +127,14 @@ suite('LSP Feature Tests', () => {
         const dummyUri = vscode.Uri.file(dummyPath);
         const dummyDoc = await vscode.workspace.openTextDocument(dummyUri);
         await vscode.window.showTextDocument(dummyDoc);
-        await pollUntilResult(
-            () => vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+        await pollUntilResult({
+            fn: () => vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
                 'vscode.executeDocumentSymbolProvider', dummyUri
             ).then((r) => r, () => null),
-            (r) => r !== null && r !== undefined,
-            SERVER_START_WAIT_MS,
-            200
-        );
+            predicate: (r) => r !== null && r !== undefined,
+            timeoutMs: SERVER_START_WAIT_MS,
+            intervalMs: 200,
+        });
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     });
 
@@ -197,12 +168,12 @@ suite('LSP Feature Tests', () => {
 
         // Poll until the server has indexed and returns reference results.
         const defPosition = new vscode.Position(0, 4);
-        const locations = await pollUntilResult(
-            () => vscode.commands.executeCommand<vscode.Location[]>(
+        const locations = await pollUntilResult({
+            fn: () => vscode.commands.executeCommand<vscode.Location[]>(
                 'vscode.executeReferenceProvider', uri, defPosition
             ).then((r) => r, () => [] as vscode.Location[]),
-            (r) => r !== null && r !== undefined && r.length >= 3
-        );
+            predicate: (r) => r !== null && r !== undefined && r.length >= 3,
+        });
 
         assert.ok(locations, 'Expected reference results to be defined');
         assert.ok(
@@ -243,12 +214,12 @@ suite('LSP Feature Tests', () => {
 
         // Poll until the server has indexed and returns rename results.
         const defPosition = new vscode.Position(0, 4);
-        const workspaceEdit = await pollUntilResult(
-            () => vscode.commands.executeCommand<vscode.WorkspaceEdit>(
+        const workspaceEdit = await pollUntilResult({
+            fn: () => vscode.commands.executeCommand<vscode.WorkspaceEdit>(
                 'vscode.executeDocumentRenameProvider', uri, defPosition, 'new_name'
             ).then((r) => r, () => new vscode.WorkspaceEdit()),
-            (r) => r !== null && r !== undefined && r.get(uri).length > 0
-        );
+            predicate: (r) => r !== null && r !== undefined && r.get(uri).length > 0,
+        });
 
         assert.ok(workspaceEdit, 'Expected workspace edit to be defined');
 
@@ -267,8 +238,8 @@ suite('LSP Feature Tests', () => {
         assert.ok(
             renameEdits.length >= 2,
             `Expected at least 2 rename edits (definition + call site), ` +
-            `but got ${renameEdits.length}. All edits: ` +
-            edits.map((e) => `"${e.newText}" at L${e.range.start.line}:${e.range.start.character}`).join(', ')
+            `but got ${renameEdits.length}. All edits: ${ 
+            edits.map((e) => `"${e.newText}" at L${e.range.start.line}:${e.range.start.character}`).join(', ')}`
         );
 
         // Verify the edits cover both the definition line and the call-site line.
@@ -303,12 +274,12 @@ suite('LSP Feature Tests', () => {
             new vscode.Position(0, 0),
             new vscode.Position(doc.lineCount - 1, doc.lineAt(doc.lineCount - 1).text.length)
         );
-        const hints = await pollUntilResult(
-            () => vscode.commands.executeCommand<vscode.InlayHint[]>(
+        const hints = await pollUntilResult({
+            fn: () => vscode.commands.executeCommand<vscode.InlayHint[]>(
                 'vscode.executeInlayHintProvider', uri, fullRange
             ).then((r) => r, () => [] as vscode.InlayHint[]),
-            (r) => r !== null && r !== undefined && r.length >= 2
-        );
+            predicate: (r) => r !== null && r !== undefined && r.length >= 2,
+        });
 
         assert.ok(hints, 'Expected inlay hints result to be defined');
         assert.ok(
@@ -353,13 +324,13 @@ suite('LSP Feature Tests', () => {
         const { uri } = await openPythonFile(tmpDir, 'test_format.py', source);
 
         // Poll until the server returns formatting edits.
-        const edits = await pollUntilResult(
-            () => vscode.commands.executeCommand<vscode.TextEdit[]>(
+        const edits = await pollUntilResult({
+            fn: () => vscode.commands.executeCommand<vscode.TextEdit[]>(
                 'vscode.executeFormatDocumentProvider', uri,
                 { tabSize: 4, insertSpaces: true }
             ).then((r) => r, () => [] as vscode.TextEdit[]),
-            (r) => r !== null && r !== undefined && r.length > 0
-        );
+            predicate: (r) => r !== null && r !== undefined && r.length > 0,
+        });
 
         assert.ok(edits, 'Expected format edits to be defined');
         assert.ok(
@@ -399,12 +370,12 @@ suite('LSP Feature Tests', () => {
 
         // Poll until the server returns document highlights.
         const defPosition = new vscode.Position(0, 4);
-        const highlights = await pollUntilResult(
-            () => vscode.commands.executeCommand<vscode.DocumentHighlight[]>(
+        const highlights = await pollUntilResult({
+            fn: () => vscode.commands.executeCommand<vscode.DocumentHighlight[]>(
                 'vscode.executeDocumentHighlights', uri, defPosition
             ).then((r) => r, () => [] as vscode.DocumentHighlight[]),
-            (r) => r !== null && r !== undefined && r.length >= 3
-        );
+            predicate: (r) => r !== null && r !== undefined && r.length >= 3,
+        });
 
         assert.ok(highlights, 'Expected document highlights to be defined');
         assert.ok(
@@ -414,8 +385,8 @@ suite('LSP Feature Tests', () => {
         assert.ok(
             highlights.length >= 3,
             `Expected at least 3 highlights (1 definition + 2 call sites), ` +
-            `but got ${highlights.length}: ` +
-            highlights.map((h) => `L${h.range.start.line}:${h.range.start.character}`).join(', ')
+            `but got ${highlights.length}: ${ 
+            highlights.map((h) => `L${h.range.start.line}:${h.range.start.character}`).join(', ')}`
         );
 
         // Verify highlights span multiple lines.

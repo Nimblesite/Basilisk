@@ -489,6 +489,26 @@ fn check_no_init_with_args(
         return;
     }
 
+    // If any base class is a dataclass (including via @dataclass_transform),
+    // the subclass inherits the synthesized __init__.
+    for base in &class_info.bases {
+        let base_name = base.split('[').next().unwrap_or(base);
+        if let Some(base_info) = class_map.get(base_name) {
+            if base_info.is_dataclass || base_info.is_typed_dict {
+                return;
+            }
+        }
+    }
+
+    // Classes whose bases define __init_subclass__ often accept keyword
+    // arguments in their constructors; skip to avoid false positives.
+    for base in &class_info.bases {
+        let base_name = base.split('[').next().unwrap_or(base);
+        if method_map.contains_key(&(base_name, "__init_subclass__")) {
+            return;
+        }
+    }
+
     let range = call.range();
     let span = Span {
         start: range.start().to_u32(),

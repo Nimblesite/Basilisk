@@ -38,8 +38,9 @@ use crate::span_util::slice_span;
 
 use super::Rule;
 use helpers::{
-    check_self_typed_method_incompatibility, extract_constructor_name, find_method_mismatch,
-    get_self_typevar_name, method_has_typed_self, parse_subscript_annotation,
+    check_self_typed_method_incompatibility, check_typevar_methods_consistency,
+    extract_constructor_name, find_method_mismatch, get_self_typevar_name, method_has_typed_self,
+    parse_subscript_annotation,
 };
 
 const CODE: ErrorCode = ErrorCode {
@@ -340,18 +341,11 @@ fn check_self_typed_protocol_assignments(
             continue;
         }
 
-        // Look up the protocol class.
+        // Look up the protocol class — must be a Protocol.
         let Some(proto_class) = class_map.get(ann_name) else {
             continue;
         };
-
-        // Only process Protocol classes.
-        let is_protocol = proto_class.bases.iter().any(|b| b == "Protocol")
-            || proto_class
-                .base_subscripts
-                .iter()
-                .any(|bs| bs.base_name == "Protocol");
-        if !is_protocol {
+        if !is_protocol_class(proto_class) {
             continue;
         }
 
@@ -359,80 +353,151 @@ fn check_self_typed_protocol_assignments(
         let Some(rhs_text) = slice_span(source, rhs_span) else {
             continue;
         };
-        let rhs_text = rhs_text.trim();
-        let Some(rhs_class_name) = extract_constructor_name(rhs_text) else {
+        let Some(rhs_class_name) = extract_constructor_name(rhs_text.trim()) else {
             continue;
         };
-
         if rhs_class_name == ann_name {
             continue;
         }
 
-        // Check if the protocol has self-typed methods (methods with `self: T`).
         let Some(proto_methods) = class_methods.get(ann_name) else {
             continue;
         };
-
-        let self_typed_methods: Vec<&FunctionInfo> = proto_methods
-            .iter()
-            .filter(|m| method_has_typed_self(m))
-            .copied()
-            .collect();
-
-        if self_typed_methods.is_empty() {
-            continue;
-        }
-
-        // Get the concrete class's methods.
         let Some(concrete_methods) = class_methods.get(rhs_class_name) else {
             continue;
         };
 
-        // Check each self-typed protocol method.
-        for proto_method in &self_typed_methods {
-            let Some(concrete_method) = concrete_methods
-                .iter()
-                .find(|m| m.name == proto_method.name)
-            else {
-                continue;
-            };
+        check_self_typed_methods(
+            &SelfTypedCtx {
+                proto_methods,
+                concrete_methods,
+                source,
+                ann_name,
+                rhs_class_name,
+                path,
+                name_span: var.name_span,
+            },
+            diagnostics,
+        );
+    }
+}
 
-            // Get the TypeVar name used as the self annotation in the protocol.
-            let proto_self_typevar = get_self_typevar_name(proto_method, source);
+/// Returns `true` if a class is a Protocol.
+fn is_protocol_class(cls: &ClassInfo) -> bool {
+    cls.bases.iter().any(|b| b == "Protocol")
+        || cls
+            .base_subscripts
+            .iter()
+            .any(|bs| bs.base_name == "Protocol")
+}
 
-            // Check if concrete method has a compatible self-typed or Self-typed signature.
-            if let Some(tv_name) = &proto_self_typevar {
-                let mismatch = check_self_typed_method_incompatibility(
-                    proto_method,
-                    concrete_method,
-                    tv_name,
-                    source,
-                );
+/// Context for checking a single self-typed protocol assignment.
+struct SelfTypedCtx<'a> {
+    proto_methods: &'a [&'a FunctionInfo],
+    concrete_methods: &'a [&'a FunctionInfo],
+    source: &'a str,
+    ann_name: &'a str,
+    rhs_class_name: &'a str,
+    path: &'a str,
+    name_span: basilisk_resolver::Span,
+}
 
-                if let Some(detail) = mismatch {
-                    diagnostics.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
-                            "Class `{rhs_class_name}` is incompatible with protocol `{ann_name}`: \
-                             {detail}"
-                        ),
-                        span: var.name_span,
-                        path: path.to_owned(),
-                        help: Some(format!(
-                            "Method `{}` in `{rhs_class_name}` must match the self-typed \
-                             signature declared in protocol `{ann_name}`",
-                            proto_method.name
-                        )),
-                        note: Some(
-                            "PEP 544: methods with `self: T` annotations in protocols require \
-                             that implementing classes use compatible self-typed or `Self` signatures"
-                                .to_owned(),
-                        ),
-                    });
-                    break;
-                }
-            }
+/// Check self-typed and TypeVar-referencing methods for a single assignment.
+fn check_self_typed_methods(ctx: &SelfTypedCtx<'_>, diagnostics: &mut Vec<Diagnostic>) {
+    let self_typed: Vec<&FunctionInfo> = ctx
+        .proto_methods
+        .iter()
+        .filter(|m| method_has_typed_self(m))
+        .copied()
+        .collect();
+
+    if self_typed.is_empty() {
+        return;
+    }
+
+    let tv_name = self_typed
+        .iter()
+        .find_map(|m| get_self_typevar_name(m, ctx.source));
+
+    // Check each self-typed protocol method.
+    for proto_method in &self_typed {
+        let Some(concrete_method) = ctx
+            .concrete_methods
+            .iter()
+            .find(|m| m.name == proto_method.name)
+        else {
+            continue;
+        };
+
+        let Some(tv) = get_self_typevar_name(proto_method, ctx.source) else {
+            continue;
+        };
+
+        if let Some(detail) =
+            check_self_typed_method_incompatibility(proto_method, concrete_method, &tv, ctx.source)
+        {
+            emit_self_typed_diagnostic(diagnostics, &detail, ctx, &proto_method.name);
+            return;
         }
     }
+
+    // Check non-self-typed methods that reference the self-TypeVar.
+    if let Some(tv) = &tv_name {
+        if let Some(detail) = check_typevar_methods_consistency(
+            ctx.proto_methods,
+            ctx.concrete_methods,
+            tv,
+            ctx.source,
+        ) {
+            diagnostics.push(Diagnostic {
+                code: CODE.clone(),
+                severity: Severity::Error,
+                message: format!(
+                    "Class `{}` is incompatible with protocol `{}`: {detail}",
+                    ctx.rhs_class_name, ctx.ann_name
+                ),
+                span: ctx.name_span,
+                path: ctx.path.to_owned(),
+                help: Some(format!(
+                    "All methods in `{}` referencing TypeVar `{tv}` \
+                     must use consistent types matching the protocol `{}`",
+                    ctx.rhs_class_name, ctx.ann_name
+                )),
+                note: Some(
+                    "PEP 544: when a protocol binds `self: T`, all uses of `T` in \
+                     other methods must be satisfied by the implementing class"
+                        .to_owned(),
+                ),
+            });
+        }
+    }
+}
+
+/// Emit a diagnostic for a self-typed method incompatibility.
+fn emit_self_typed_diagnostic(
+    diagnostics: &mut Vec<Diagnostic>,
+    detail: &str,
+    ctx: &SelfTypedCtx<'_>,
+    method_name: &str,
+) {
+    diagnostics.push(Diagnostic {
+        code: CODE.clone(),
+        severity: Severity::Error,
+        message: format!(
+            "Class `{}` is incompatible with protocol `{}`: {detail}",
+            ctx.rhs_class_name, ctx.ann_name
+        ),
+        span: ctx.name_span,
+        path: ctx.path.to_owned(),
+        help: Some(format!(
+            "Method `{method_name}` in `{}` must match the self-typed \
+             signature declared in protocol `{}`",
+            ctx.rhs_class_name, ctx.ann_name
+        )),
+        note: Some(
+            "PEP 544: methods with `self: T` annotations in protocols require \
+             that implementing classes use compatible self-typed or `Self` signatures"
+                .to_owned(),
+        ),
+    });
 }

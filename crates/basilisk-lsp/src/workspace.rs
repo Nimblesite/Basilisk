@@ -66,6 +66,9 @@ impl WorkspaceIndex {
     }
 
     /// Return the `FileEntry` for a URI, if present.
+    ///
+    /// Canonicalizes the path to handle macOS `/var` → `/private/var` symlinks
+    /// and other platform symlink differences.
     #[must_use]
     pub fn get_by_uri(
         &self,
@@ -76,7 +79,11 @@ impl WorkspaceIndex {
         Vec<basilisk_checker::Diagnostic>,
     )> {
         let path = uri.to_file_path().ok()?;
-        let entry = self.files.get(&path)?;
+        // Try the literal path first, then canonicalized (handles symlinks).
+        let entry = self.files.get(&path).or_else(|| {
+            let canonical = path.canonicalize().ok()?;
+            self.files.get(&canonical)
+        })?;
         let resolved = entry.resolved.clone()?;
         let text = entry.text.clone();
         let diagnostics = entry.diagnostics.clone();
@@ -91,7 +98,10 @@ impl WorkspaceIndex {
     #[must_use]
     pub fn get_text(&self, uri: &Url) -> Option<String> {
         let path = uri.to_file_path().ok()?;
-        let entry = self.files.get(&path)?;
+        let entry = self.files.get(&path).or_else(|| {
+            let canonical = path.canonicalize().ok()?;
+            self.files.get(&canonical)
+        })?;
         Some(entry.text.clone())
     }
 

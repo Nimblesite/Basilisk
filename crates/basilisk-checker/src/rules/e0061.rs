@@ -71,9 +71,19 @@ impl Rule for AssertTypeEnumLiteralMismatch {
                     continue; // This would be handled by E0067
                 }
 
-                // Now check if the first argument (expression) is already typed as the enum
-                // This would require type inference which isn't fully implemented yet
-                // For now, we'll emit the diagnostic for any Literal[Enum.MEMBER] pattern
+                // Only flag when the first argument is already typed as the full
+                // enum class.  If the actual type is unknown, a union, a specific
+                // member literal, or anything other than the plain enum class name,
+                // the `assert_type` may be intentional (e.g. confirming narrowing
+                // or testing member identity).
+                let is_enum_typed_param = call
+                    .actual_type
+                    .as_ref()
+                    .is_some_and(|actual| actual.trim() == class_name);
+                if !is_enum_typed_param {
+                    continue;
+                }
+
                 diagnostics.push(make_diagnostic(call.span, class_name, member_name, path));
             }
         }

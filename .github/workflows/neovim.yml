@@ -1,0 +1,40 @@
+name: Neovim Plugin Tests
+
+on:
+  push:
+    paths:
+      - "basilisk.nvim/**"
+  pull_request:
+    paths:
+      - "basilisk.nvim/**"
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        neovim: ["v0.10.4", "v0.11.0", "nightly"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: ${{ matrix.neovim }}
+
+      - name: Clone plenary.nvim
+        run: git clone --depth 1 https://github.com/nvim-lua/plenary.nvim /tmp/plenary.nvim
+
+      - name: Run core tests
+        working-directory: basilisk.nvim
+        run: |
+          nvim --headless -u tests/minimal_init.lua \
+            -c "PlenaryBustedDirectory tests/basilisk {minimal_init = 'tests/minimal_init.lua'}"
+
+      - name: Run UI tests
+        working-directory: basilisk.nvim
+        run: |
+          nvim --headless -u tests/minimal_init.lua \
+            -c "PlenaryBustedDirectory tests/ui {minimal_init = 'tests/minimal_init.lua'}"

@@ -14,6 +14,8 @@ use tracing::{error, info, warn};
 
 use crate::output::{render_diagnostics, render_diagnostics_json, FileSource, OutputFormat};
 
+mod adopt;
+mod fix;
 mod output;
 
 /// Basilisk — strict-by-default Python type checker.
@@ -46,6 +48,34 @@ enum Command {
         #[arg(long, default_value = "text")]
         output: OutputFormat,
     },
+    /// Apply autofixes to one or more files or directories.
+    Fix {
+        /// Paths to fix. Directories are traversed recursively for `.py` files.
+        #[arg(default_value = ".")]
+        paths: Vec<String>,
+        /// Include unsafe (heuristic) fixes alongside safe fixes.
+        #[arg(long)]
+        r#unsafe: bool,
+        /// Comma-separated list of rule codes to fix (e.g. BSK-E0001,BSK-E0003).
+        /// If omitted, all safe rules are applied. Use `--rules all` for all rules.
+        #[arg(long, value_delimiter = ',')]
+        rules: Vec<String>,
+    },
+    /// Adopt files — demote remaining errors to warnings for gradual migration.
+    Adopt {
+        /// Paths to adopt. Directories are traversed recursively for `.py` files.
+        #[arg(default_value = ".")]
+        paths: Vec<String>,
+        /// Show adoption status instead of adopting.
+        #[arg(long)]
+        status: bool,
+    },
+    /// Un-adopt files — restore full strictness.
+    Unadopt {
+        /// Paths to un-adopt. Directories are traversed recursively for `.py` files.
+        #[arg(default_value = ".")]
+        paths: Vec<String>,
+    },
     /// Start the Basilisk Language Server.
     Lsp {
         /// Transport protocol: stdio (default) or ws (WebSocket).
@@ -72,6 +102,19 @@ fn main() -> ExitCode {
 
     let exit_code: u8 = match cli.command {
         Command::Check { paths, output } => run_check(&paths, output),
+        Command::Fix {
+            paths,
+            r#unsafe: include_unsafe,
+            rules,
+        } => fix::run_fix(&paths, include_unsafe, &rules),
+        Command::Adopt { paths, status } => {
+            if status {
+                adopt::run_adopt_status(&paths)
+            } else {
+                adopt::run_adopt(&paths)
+            }
+        }
+        Command::Unadopt { paths } => adopt::run_unadopt(&paths),
         Command::Lsp { transport, port } => match transport {
             Transport::Stdio => match basilisk_lsp::run_server() {
                 Ok(()) => 0,
@@ -187,7 +230,10 @@ fn process_file(path: &str) -> Result<(Vec<basilisk_checker::Diagnostic>, String
     Ok((diags, source))
 }
 
-fn collect_python_files(paths: &[String], excluded: &HashSet<&str>) -> Result<Vec<String>, String> {
+pub(crate) fn collect_python_files(
+    paths: &[String],
+    excluded: &HashSet<&str>,
+) -> Result<Vec<String>, String> {
     let mut files = Vec::new();
 
     for root in paths {

@@ -17,13 +17,18 @@ impl InferredType {
         match annotation.as_str() {
             "int" => InferredType::Int,
             "str" => InferredType::Str,
-            "float" => InferredType::Float,
+            "float" | "complex" => InferredType::Float, // complex ⊃ float ⊃ int
             "bool" => InferredType::Bool,
             "bytes" => InferredType::Bytes,
             "none" => InferredType::None_,
-            "any" | "object" | "final" => InferredType::Any,
+            // Bare `tuple` is `tuple[Any, ...]` — equivalent to Any for assignment.
+            "any" | "object" | "final" | "tuple" => InferredType::Any,
             "never" => InferredType::Never,
             "literalstring" => InferredType::LiteralString,
+            // Bare generics without `[...]` are implicitly parameterised with Any.
+            "list" => InferredType::List(Box::new(InferredType::Any)),
+            "dict" => InferredType::Dict(Box::new(InferredType::Any), Box::new(InferredType::Any)),
+            "set" | "frozenset" => InferredType::Set(Box::new(InferredType::Any)),
             _ => parse_complex_annotation(&annotation),
         }
     }
@@ -83,8 +88,9 @@ fn parse_container_annotation(annotation: &str) -> InferredType {
     }
     if annotation.starts_with("tuple[") && annotation.ends_with(']') {
         let inner = &annotation[6..annotation.len() - 1];
-        let elem_types: Vec<InferredType> = inner
-            .split(',')
+        let parts = split_type_params(inner);
+        let elem_types: Vec<InferredType> = parts
+            .iter()
             .map(|part| InferredType::from_annotation(part.trim()))
             .collect();
         return InferredType::Tuple(elem_types);

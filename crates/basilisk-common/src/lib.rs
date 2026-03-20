@@ -20,6 +20,26 @@ pub mod commands {
     pub const DISABLE_RULE: &str = "basilisk.disableRule";
     /// Fix all auto-fixable diagnostics in the current file (safe fixes only).
     pub const FIX_FILE: &str = "basilisk.fixFile";
+    /// Fix all auto-fixable diagnostics across the entire workspace.
+    pub const FIX_WORKSPACE: &str = "basilisk.fixWorkspace";
+    /// Adopt the current file — autofix + demote remaining errors to warnings.
+    pub const ADOPT_FILE: &str = "basilisk.adoptFile";
+    /// Adopt all files in the workspace.
+    pub const ADOPT_WORKSPACE: &str = "basilisk.adoptWorkspace";
+    /// Un-adopt the current file — restore full strictness.
+    pub const UNADOPT_FILE: &str = "basilisk.unadoptFile";
+    /// Run `uv sync` to synchronize the environment.
+    pub const UV_SYNC: &str = "basilisk.uv.sync";
+    /// Run `uv add <package>` to add a dependency.
+    pub const UV_ADD: &str = "basilisk.uv.add";
+    /// Run `uv add --dev <package>` to add a dev dependency.
+    pub const UV_ADD_DEV: &str = "basilisk.uv.addDev";
+    /// Run `uv remove <package>` to remove a dependency.
+    pub const UV_REMOVE: &str = "basilisk.uv.remove";
+    /// Run `uv lock` to update the lock file.
+    pub const UV_LOCK: &str = "basilisk.uv.lock";
+    /// Run `uv venv` to create a virtual environment.
+    pub const UV_CREATE_ENV: &str = "basilisk.uv.createEnv";
 
     /// Command names advertised via `executeCommandProvider` capabilities.
     ///
@@ -32,6 +52,12 @@ pub mod commands {
         START_DEBUG_SESSION,
         STOP_DEBUG_SESSION,
         DISABLE_RULE,
+        UV_SYNC,
+        UV_ADD,
+        UV_ADD_DEV,
+        UV_REMOVE,
+        UV_LOCK,
+        UV_CREATE_ENV,
     ];
 }
 
@@ -73,6 +99,19 @@ pub mod config_keys {
     pub const RUFF: &str = "ruff";
     /// Enable/disable Ruff integration.
     pub const RUFF_ENABLED: &str = "enabled";
+
+    /// uv package manager configuration section.
+    pub const UV: &str = "uv";
+    /// Enable/disable uv integration.
+    pub const UV_ENABLED: &str = "enabled";
+    /// Path to the uv executable.
+    pub const UV_EXECUTABLE_PATH: &str = "executablePath";
+    /// Auto-sync when pyproject.toml changes.
+    pub const UV_AUTO_SYNC: &str = "autoSync";
+    /// Show type stub installation suggestions.
+    pub const UV_STUB_SUGGESTIONS: &str = "stubSuggestions";
+    /// Show dependency hygiene diagnostics.
+    pub const UV_DEPENDENCY_DIAGNOSTICS: &str = "dependencyDiagnostics";
 }
 
 /// GitHub release asset naming for binary distribution.

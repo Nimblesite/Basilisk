@@ -24,7 +24,7 @@ suite('Basilisk Extension E2E Tests', () => {
         }
         const deadline = Date.now() + 5_000;
         while (Date.now() < deadline) {
-            if (ext?.isActive) break;
+            if (ext?.isActive) {break;}
             await new Promise<void>(r => setTimeout(r, 100));
         }
     });

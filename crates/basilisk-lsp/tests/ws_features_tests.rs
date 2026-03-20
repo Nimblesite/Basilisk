@@ -28,6 +28,8 @@ mod ws_test_execute_command;
 mod ws_test_hover;
 #[path = "lsp/ws_test_inlay_hints.rs"]
 mod ws_test_inlay_hints;
+#[path = "lsp/ws_test_refactoring.rs"]
+mod ws_test_refactoring;
 #[path = "lsp/ws_test_semantic_tokens.rs"]
 mod ws_test_semantic_tokens;
 #[path = "lsp/ws_test_signature_help.rs"]

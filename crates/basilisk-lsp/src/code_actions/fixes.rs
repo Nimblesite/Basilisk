@@ -82,7 +82,7 @@ pub(super) fn fix_remove_redundant_annotation(
                 line: diag.range.start.line,
                 character: u32::try_from(eq).unwrap_or(u32::MAX),
             };
-            (Range { start, end }, String::new())
+            (Range { start, end }, String::from(" "))
         }
         _ => (diag.range, String::new()),
     };
@@ -106,6 +106,17 @@ pub(super) fn fix_remove_redundant_annotation(
         is_preferred: Some(true),
         ..Default::default()
     }
+}
+
+/// Insert `: Any` after the attribute name for missing class attribute annotations.
+pub(super) fn fix_missing_attribute_annotation(uri: &Url, diag: &Diagnostic) -> CodeAction {
+    single_insert(
+        uri,
+        diag,
+        diag.range.end,
+        ": Any",
+        "Add `: Any` annotation to class attribute (basilisk)",
+    )
 }
 
 // ── Shared helper ─────────────────────────────────────────────────────────────

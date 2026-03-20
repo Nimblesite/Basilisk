@@ -50,6 +50,7 @@ fn search_paths(
         extra_paths: vec![],
         stub_paths,
         site_packages,
+        registry: None,
     }
 }
 

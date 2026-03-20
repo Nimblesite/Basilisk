@@ -169,6 +169,36 @@ pub(super) const fn is_ident_char(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'_'
 }
 
+/// Check whether `text` contains `name` as a whole word (not as a substring
+/// of a longer identifier).
+pub(crate) fn annotation_contains_typevar(text: &str, name: &str) -> bool {
+    let name_bytes = name.as_bytes();
+    let text_bytes = text.as_bytes();
+    let name_len = name_bytes.len();
+
+    if name_len > text_bytes.len() {
+        return false;
+    }
+
+    for start in 0..=(text_bytes.len() - name_len) {
+        let Some(slice) = text_bytes.get(start..start + name_len) else {
+            continue;
+        };
+        if slice != name_bytes {
+            continue;
+        }
+        if start > 0 && text_bytes.get(start - 1).is_some_and(|&b| is_ident_char(b)) {
+            continue;
+        }
+        let end = start + name_len;
+        if end < text_bytes.len() && text_bytes.get(end).is_some_and(|&b| is_ident_char(b)) {
+            continue;
+        }
+        return true;
+    }
+    false
+}
+
 /// Skip the `self` or `cls` parameter from a parameter list.
 pub(super) fn skip_self_param(params: &[ParameterInfo]) -> &[ParameterInfo] {
     let Some(first) = params.first() else {
@@ -427,6 +457,121 @@ fn check_self_typed_param_consistency(
         }
     }
 
+    None
+}
+
+/// Check non-self-typed methods that reference the self-TypeVar `T` from a
+/// `self: T` method.
+///
+/// When a protocol has `def f(self: T) -> T` and `def m(self, item: T, ...) -> str`,
+/// the concrete class must use `T` generically in `m` or use consistent concrete
+/// types that match the self-type binding.
+pub(super) fn check_typevar_methods_consistency(
+    proto_methods: &[&FunctionInfo],
+    concrete_methods: &[&FunctionInfo],
+    tv_name: &str,
+    source: &str,
+) -> Option<String> {
+    for proto_method in proto_methods {
+        // Skip self-typed methods (handled separately) and __init__.
+        if method_has_typed_self(proto_method) || proto_method.name == "__init__" {
+            continue;
+        }
+
+        // Check if this method references the TypeVar in any parameter annotation.
+        let proto_params = skip_self_param(&proto_method.parameters);
+        let uses_tv = proto_params.iter().any(|p| {
+            p.annotation_span
+                .and_then(|span| slice_span(source, span))
+                .is_some_and(|text| annotation_contains_typevar(text.trim(), tv_name))
+        });
+
+        if !uses_tv {
+            continue;
+        }
+
+        // Find the concrete method.
+        let Some(concrete_method) = concrete_methods
+            .iter()
+            .find(|m| m.name == proto_method.name)
+        else {
+            continue;
+        };
+
+        let concrete_params = skip_self_param(&concrete_method.parameters);
+        if proto_params.len() != concrete_params.len() {
+            continue;
+        }
+
+        // Collect the concrete types used where the protocol uses `T`.
+        // If the concrete method also uses `T` generically, it's OK.
+        let mut bound_types: Vec<&str> = Vec::new();
+        let mut concrete_uses_tv = false;
+
+        for (pp, cp) in proto_params.iter().zip(concrete_params.iter()) {
+            let proto_ann = pp
+                .annotation_span
+                .and_then(|span| slice_span(source, span))
+                .map_or("", str::trim);
+
+            if !annotation_contains_typevar(proto_ann, tv_name) {
+                continue;
+            }
+
+            let concrete_ann = cp
+                .annotation_span
+                .and_then(|span| slice_span(source, span))
+                .map_or("", str::trim);
+
+            if concrete_ann.is_empty() {
+                continue;
+            }
+
+            // If concrete also uses the TypeVar, method is generic — OK.
+            if annotation_contains_typevar(concrete_ann, tv_name) {
+                concrete_uses_tv = true;
+                continue;
+            }
+
+            // Concrete uses a specific type where protocol uses T.
+            // Extract the "core" type used for T.
+            // For direct `T` usage: `item: T` → concrete_ann is the bound type.
+            // For nested usage: `Callable[[T], str]` → need to check consistency
+            // of what T maps to.
+            if proto_ann == tv_name {
+                bound_types.push(concrete_ann);
+            }
+        }
+
+        // If concrete uses T generically, it matches the protocol.
+        if concrete_uses_tv {
+            continue;
+        }
+
+        // Check consistency and concreteness of types bound to T.
+        if let Some((&first, rest)) = bound_types.split_first() {
+            // All concrete types bound to T must be the same.
+            for &other in rest {
+                if other != first {
+                    return Some(format!(
+                        "method `{}` uses inconsistent types for TypeVar `{tv_name}`: \
+                         `{first}` and `{other}`",
+                        proto_method.name
+                    ));
+                }
+            }
+
+            // A concrete type (not Self/T) cannot satisfy a protocol
+            // where T is bound to Self via `self: T`.
+            if first != "Self" && first != tv_name {
+                return Some(format!(
+                    "method `{}` uses concrete type `{first}` for TypeVar `{tv_name}` \
+                     which is bound to `Self` via protocol's `self: {tv_name}` annotation",
+                    proto_method.name
+                ));
+            }
+        }
+    }
     None
 }
 

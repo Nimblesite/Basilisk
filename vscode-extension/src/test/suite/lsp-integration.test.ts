@@ -28,20 +28,24 @@ const NO_DIAGNOSTIC_WAIT_MS = 2_000;
 /** Time (ms) to wait for the LSP server to fully start. */
 const SERVER_START_WAIT_MS = 5_000;
 
+/** Options for polling an async function until a predicate is satisfied. */
+interface PollOptions<T> {
+    fn: () => PromiseLike<T>;
+    predicate: (result: T) => boolean;
+    timeoutMs?: number;
+    intervalMs?: number;
+}
+
 /**
  * Poll an async function until it returns a truthy, non-empty result.
  * Avoids fixed 3-second sleeps by retrying at short intervals.
  */
-async function pollUntilResult<T>(
-    fn: () => PromiseLike<T>,
-    predicate: (result: T) => boolean,
-    timeoutMs: number = 5_000,
-    intervalMs: number = 100
-): Promise<T> {
+async function pollUntilResult<T>(options: PollOptions<T>): Promise<T> {
+    const { fn, predicate, timeoutMs = 5_000, intervalMs = 100 } = options;
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
         const result = await fn();
-        if (predicate(result)) return result;
+        if (predicate(result)) {return result;}
         await new Promise<void>((r) => setTimeout(r, intervalMs));
     }
     // Final attempt
@@ -188,8 +192,9 @@ function extractHoverText(hovers: vscode.Hover[]): string {
     return hovers
         .flatMap((h) =>
             h.contents.map((c) => {
-                if (typeof c === 'string') return c;
-                if ('value' in c) return c.value;
+                if (typeof c === 'string') {return c;}
+                if (c instanceof vscode.MarkdownString) {return c.value;}
+                if ('value' in c) {return (c as { value: string }).value;}
                 return '';
             })
         )
@@ -199,10 +204,6 @@ function extractHoverText(hovers: vscode.Hover[]): string {
 /**
  * Wait for the LSP server to index a file before requesting features.
  */
-function waitForIndexing(ms: number = 3_000): Promise<void> {
-    return new Promise<void>((resolve) => setTimeout(resolve, ms));
-}
-
 suite('LSP Integration Tests', () => {
     let tmpDir: string;
     let basiliskBinary: string | undefined;
@@ -231,15 +232,15 @@ suite('LSP Integration Tests', () => {
         fs.writeFileSync(dummyUri.fsPath, '', 'utf8');
         const dummyDoc = await vscode.workspace.openTextDocument(dummyUri);
         await vscode.window.showTextDocument(dummyDoc);
-        await pollUntilResult(
-            () => vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+        await pollUntilResult({
+            fn: () => vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
                 'vscode.executeDocumentSymbolProvider',
                 dummyUri
             ).then((r) => r, () => null),
-            (r) => r !== null && r !== undefined,
-            SERVER_START_WAIT_MS,
-            200
-        );
+            predicate: (r) => r !== null && r !== undefined,
+            timeoutMs: SERVER_START_WAIT_MS,
+            intervalMs: 200,
+        });
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     });
 
@@ -345,8 +346,8 @@ suite('LSP Integration Tests', () => {
             basiliskDiags.length,
             0,
             `Expected zero Basilisk diagnostics for clean code, ` +
-            `but found ${basiliskDiags.length}: ` +
-            basiliskDiags.map((d) => d.message).join('; ')
+            `but found ${basiliskDiags.length}: ${ 
+            basiliskDiags.map((d) => d.message).join('; ')}`
         );
     });
 
@@ -364,12 +365,12 @@ suite('LSP Integration Tests', () => {
 
         // Poll until the server has indexed and returns hover results.
         const position = new vscode.Position(3, 10);
-        const hovers = await pollUntilResult(
-            () => vscode.commands.executeCommand<vscode.Hover[]>(
+        const hovers = await pollUntilResult({
+            fn: () => vscode.commands.executeCommand<vscode.Hover[]>(
                 'vscode.executeHoverProvider', uri, position
             ).then((r) => r, () => [] as vscode.Hover[]),
-            (r) => r !== null && r !== undefined && r.length > 0
-        );
+            predicate: (r) => r !== null && r !== undefined && r.length > 0,
+        });
 
         assert.ok(hovers, 'Expected hover result to be defined');
         assert.ok(
@@ -399,12 +400,12 @@ suite('LSP Integration Tests', () => {
 
         // Poll until the server returns completions.
         const position = new vscode.Position(3, 3);
-        const completions = await pollUntilResult(
-            () => vscode.commands.executeCommand<vscode.CompletionList>(
+        const completions = await pollUntilResult({
+            fn: () => vscode.commands.executeCommand<vscode.CompletionList>(
                 'vscode.executeCompletionItemProvider', uri, position
             ).then((r) => r, () => null),
-            (r) => r !== null && r !== undefined && r.items.length > 0
-        );
+            predicate: (r) => r !== null && r !== undefined && r.items.length > 0,
+        });
 
         assert.ok(completions, 'Expected completion result to be defined');
 
@@ -448,12 +449,12 @@ suite('LSP Integration Tests', () => {
         );
 
         // Poll until the server returns document symbols.
-        const symbols = await pollUntilResult(
-            () => vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+        const symbols = await pollUntilResult({
+            fn: () => vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
                 'vscode.executeDocumentSymbolProvider', uri
             ).then((r) => r, () => [] as vscode.DocumentSymbol[]),
-            (r) => r !== null && r !== undefined && r.length > 0
-        );
+            predicate: (r) => r !== null && r !== undefined && r.length > 0,
+        });
 
         assert.ok(symbols, 'Expected document symbols to be defined');
         assert.ok(symbols.length > 0, 'Expected at least one document symbol');
@@ -544,12 +545,12 @@ suite('LSP Integration Tests', () => {
         // Poll until go-to-definition returns results.
         // "add_numbers" starts at column 14 in "result: int = add_numbers(1, 2)".
         const callPosition = new vscode.Position(3, 18);
-        const locations = await pollUntilResult(
-            () => vscode.commands.executeCommand<vscode.Location[]>(
+        const locations = await pollUntilResult({
+            fn: () => vscode.commands.executeCommand<vscode.Location[]>(
                 'vscode.executeDefinitionProvider', uri, callPosition
             ).then((r) => r, () => [] as vscode.Location[]),
-            (r) => r !== null && r !== undefined && r.length > 0
-        );
+            predicate: (r) => r !== null && r !== undefined && r.length > 0,
+        });
 
         assert.ok(locations, 'Expected definition locations to be defined');
         assert.ok(
@@ -592,12 +593,12 @@ suite('LSP Integration Tests', () => {
 
         // Poll until signature help returns results.
         const position = new vscode.Position(3, 6);
-        const signatureHelp = await pollUntilResult(
-            () => vscode.commands.executeCommand<vscode.SignatureHelp>(
+        const signatureHelp = await pollUntilResult({
+            fn: () => vscode.commands.executeCommand<vscode.SignatureHelp>(
                 'vscode.executeSignatureHelpProvider', uri, position, '('
             ).then((r) => r, () => null),
-            (r) => r !== null && r !== undefined && r.signatures.length > 0
-        );
+            predicate: (r) => r !== null && r !== undefined && r.signatures.length > 0,
+        });
 
         assert.ok(signatureHelp, 'Expected signature help result to be defined');
         assert.ok(
@@ -685,12 +686,12 @@ suite('LSP Integration Tests', () => {
 
         // Poll until declaration returns results.
         const callPosition = new vscode.Position(3, 18);
-        const locations = await pollUntilResult(
-            () => vscode.commands.executeCommand<vscode.Location[]>(
+        const locations = await pollUntilResult({
+            fn: () => vscode.commands.executeCommand<vscode.Location[]>(
                 'vscode.executeDeclarationProvider', uri, callPosition
             ).then((r) => r, () => [] as vscode.Location[]),
-            (r) => r !== null && r !== undefined && r.length > 0
-        );
+            predicate: (r) => r !== null && r !== undefined && r.length > 0,
+        });
 
         assert.ok(locations, 'Expected declaration locations to be defined');
         assert.ok(
@@ -732,12 +733,12 @@ suite('LSP Integration Tests', () => {
 
         // Poll until type definition returns results.
         const varPosition = new vscode.Position(3, 2);
-        const locations = await pollUntilResult(
-            () => vscode.commands.executeCommand<vscode.Location[]>(
+        const locations = await pollUntilResult({
+            fn: () => vscode.commands.executeCommand<vscode.Location[]>(
                 'vscode.executeTypeDefinitionProvider', uri, varPosition
             ).then((r) => r, () => [] as vscode.Location[]),
-            (r) => r !== null && r !== undefined && r.length > 0
-        );
+            predicate: (r) => r !== null && r !== undefined && r.length > 0,
+        });
 
         assert.ok(locations, 'Expected type definition locations to be defined');
         assert.ok(
@@ -780,12 +781,12 @@ suite('LSP Integration Tests', () => {
 
         // Poll until hover returns results.
         const position = new vscode.Position(0, 5);
-        const hovers = await pollUntilResult(
-            () => vscode.commands.executeCommand<vscode.Hover[]>(
+        const hovers = await pollUntilResult({
+            fn: () => vscode.commands.executeCommand<vscode.Hover[]>(
                 'vscode.executeHoverProvider', uri, position
             ).then((r) => r, () => [] as vscode.Hover[]),
-            (r) => r !== null && r !== undefined && r.length > 0
-        );
+            predicate: (r) => r !== null && r !== undefined && r.length > 0,
+        });
 
         assert.ok(hovers, 'Expected hover result to be defined');
         assert.ok(
@@ -822,10 +823,8 @@ function flattenSymbolNames(symbols: vscode.DocumentSymbol[]): string[] {
 
 suite('Analysis Mode Tests', () => {
     let tmpDir: string;
-    let basiliskBinary: string | undefined;
 
     suiteSetup(function () {
-        basiliskBinary = findBasiliskBinary();
         tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bsk-mode-test-'));
     });
 
@@ -908,7 +907,7 @@ suite('Analysis Mode Tests', () => {
     // forwards the setting to the LSP server correctly.
     // -------------------------------------------------------
 
-    test('wholeModule mode: setting is wired into initializationOptions', async () => {
+    test('wholeModule mode: setting is wired into initializationOptions', () => {
         // Structural test — the extension must read analysisMode and pass it
         // to the server. The extension source sets initializationOptions.analysisMode.
         const cfg = vscode.workspace.getConfiguration('basilisk');
@@ -1007,8 +1006,8 @@ suite('Analysis Mode Tests', () => {
             const basiliskDiags = filterBasiliskDiagnostics(diags);
             assert.ok(
                 basiliskDiags.length > 0,
-                `wholeModule: diagnostics must be from Basilisk (BSK codes), got: ` +
-                `${JSON.stringify(diags.map(d => ({ source: d.source, code: d.code })))}`
+                `wholeModule: diagnostics must be from Basilisk (BSK codes), got: ${ 
+                JSON.stringify(diags.map(d => ({ source: d.source, code: d.code })))}`
             );
 
             // Cleanup the test file from the workspace root.

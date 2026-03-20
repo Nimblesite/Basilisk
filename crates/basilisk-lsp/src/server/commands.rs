@@ -2,7 +2,8 @@
 //!
 //! Covers `workspace/executeCommand` dispatch and the individual command
 //! implementations: `basilisk.organizeImports`, `basilisk.startDebugSession`,
-//! `basilisk.stopDebugSession`, and `basilisk.disableRule`.
+//! `basilisk.stopDebugSession`, `basilisk.disableRule`, `basilisk.fixFile`,
+//! `basilisk.fixWorkspace`, and `basilisk.uv.*` package management commands.
 
 use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::{ExecuteCommandParams, MessageType};
@@ -41,6 +42,36 @@ pub(super) async fn dispatch_execute_command(
             execute_disable_rule(server, &params.arguments).await
         }
         basilisk_common::commands::FIX_FILE => execute_fix_file(server, &params.arguments).await,
+        basilisk_common::commands::FIX_WORKSPACE => {
+            execute_fix_workspace(server, &params.arguments).await
+        }
+        basilisk_common::commands::ADOPT_FILE => {
+            super::adoption::execute_adopt_file(server, &params.arguments).await
+        }
+        basilisk_common::commands::ADOPT_WORKSPACE => {
+            super::adoption::execute_adopt_workspace(server, &params.arguments).await
+        }
+        basilisk_common::commands::UNADOPT_FILE => {
+            super::adoption::execute_unadopt_file(server, &params.arguments).await
+        }
+        basilisk_common::commands::UV_SYNC => {
+            super::uv_handlers::execute_uv_sync(server, &params.arguments).await
+        }
+        basilisk_common::commands::UV_ADD => {
+            super::uv_handlers::execute_uv_add(server, &params.arguments).await
+        }
+        basilisk_common::commands::UV_ADD_DEV => {
+            super::uv_handlers::execute_uv_add_dev(server, &params.arguments).await
+        }
+        basilisk_common::commands::UV_REMOVE => {
+            super::uv_handlers::execute_uv_remove(server, &params.arguments).await
+        }
+        basilisk_common::commands::UV_LOCK => {
+            super::uv_handlers::execute_uv_lock(server, &params.arguments).await
+        }
+        basilisk_common::commands::UV_CREATE_ENV => {
+            super::uv_handlers::execute_uv_create_env(server, &params.arguments).await
+        }
         unknown => {
             server
                 .client
@@ -221,7 +252,7 @@ async fn execute_disable_rule(
     let pyproject_path = root.join("pyproject.toml");
     let existing = std::fs::read_to_string(&pyproject_path).unwrap_or_default();
 
-    let updated = insert_rule_override(&existing, rule, severity);
+    let updated = super::rule_override::insert_rule_override(&existing, rule, severity);
 
     if let Err(err) = std::fs::write(&pyproject_path, updated.as_bytes()) {
         error!(%err, "failed to write pyproject.toml");
@@ -361,51 +392,121 @@ async fn execute_fix_file(
     Ok(Some(serde_json::json!({ "fixed": edit_count })))
 }
 
-/// Insert or update a rule override in `pyproject.toml` content.
+/// Handle `basilisk.fixWorkspace`.
 ///
-/// Adds `[tool.basilisk.rules]` section if missing, then sets `RULE = "severity"`.
-fn insert_rule_override(content: &str, rule: &str, severity: &str) -> String {
-    let section_header = "[tool.basilisk.rules]";
-    let entry = format!("{rule} = \"{severity}\"");
+/// Iterates all files in the workspace index, collects fixable diagnostics,
+/// and applies a single `WorkspaceEdit` so the user can undo in one step.
+async fn execute_fix_workspace(
+    server: &LspServer,
+    _args: &[serde_json::Value],
+) -> LspResult<Option<serde_json::Value>> {
+    info!("fixWorkspace: starting");
 
-    // Check if the rule already exists — update in place.
-    if content.contains(section_header) {
-        let rule_pattern = format!("{rule} = ");
-        if content.contains(&rule_pattern) {
-            // Replace existing rule line.
-            let mut result = String::with_capacity(content.len());
-            for line in content.lines() {
-                if line.trim_start().starts_with(&rule_pattern) {
-                    result.push_str(&entry);
-                } else {
-                    result.push_str(line);
+    let file_edits: Option<
+        Vec<(
+            tower_lsp::lsp_types::Url,
+            Vec<tower_lsp::lsp_types::TextEdit>,
+        )>,
+    > = server
+        .with_index(|idx| {
+            let mut all_edits = Vec::new();
+            for entry in &idx.files {
+                let path = entry.key();
+                let file_entry = entry.value();
+
+                let Ok(uri) = tower_lsp::lsp_types::Url::from_file_path(path) else {
+                    continue;
+                };
+
+                if file_entry.diagnostics.is_empty() {
+                    continue;
                 }
-                result.push('\n');
+
+                let lsp_diags: Vec<_> = file_entry
+                    .diagnostics
+                    .iter()
+                    .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &file_entry.text))
+                    .collect();
+
+                let Some(action) =
+                    crate::code_actions::fix_all_in_file(&uri, &lsp_diags, &file_entry.text)
+                else {
+                    continue;
+                };
+
+                let Some(edit) = action.edit else {
+                    continue;
+                };
+
+                let Some(changes) = edit.changes else {
+                    continue;
+                };
+
+                for (change_uri, edits) in changes {
+                    if !edits.is_empty() {
+                        all_edits.push((change_uri, edits));
+                    }
+                }
             }
-            return result;
-        }
-        // Section exists but rule doesn't — append after section header.
-        let mut result = String::with_capacity(content.len() + entry.len() + 2);
-        for line in content.lines() {
-            result.push_str(line);
-            result.push('\n');
-            if line.trim() == section_header {
-                result.push_str(&entry);
-                result.push('\n');
-            }
-        }
-        return result;
+            Some(all_edits)
+        })
+        .await;
+
+    let Some(file_edits) = file_edits else {
+        warn!("fixWorkspace: workspace index not available");
+        return Ok(Some(serde_json::json!({ "fixed": 0, "files": 0 })));
+    };
+
+    if file_edits.is_empty() {
+        info!("fixWorkspace: no fixable diagnostics found");
+        return Ok(Some(serde_json::json!({ "fixed": 0, "files": 0 })));
     }
 
-    // No section at all — append at end.
-    let mut result = content.to_owned();
-    if !result.ends_with('\n') && !result.is_empty() {
-        result.push('\n');
+    let file_count = file_edits.len();
+    let total_edit_count: usize = file_edits.iter().map(|(_, edits)| edits.len()).sum();
+
+    // Combine all per-file edits into a single WorkspaceEdit for atomic undo.
+    let mut changes = std::collections::HashMap::new();
+    for (uri, edits) in file_edits {
+        changes.entry(uri).or_insert_with(Vec::new).extend(edits);
     }
-    result.push('\n');
-    result.push_str(section_header);
-    result.push('\n');
-    result.push_str(&entry);
-    result.push('\n');
-    result
+
+    let workspace_edit = tower_lsp::lsp_types::WorkspaceEdit {
+        changes: Some(changes),
+        document_changes: None,
+        change_annotations: None,
+    };
+
+    match server.client.apply_edit(workspace_edit).await {
+        Ok(response) => {
+            if response.applied {
+                info!(
+                    total_edit_count,
+                    file_count, "fixWorkspace: edits applied successfully"
+                );
+            } else {
+                error!(
+                    total_edit_count,
+                    file_count,
+                    failure_reason = response.failure_reason.as_deref().unwrap_or("unknown"),
+                    "fixWorkspace: client REJECTED the workspace edit"
+                );
+            }
+        }
+        Err(err) => {
+            error!(error = %err, "fixWorkspace: apply_edit request failed");
+        }
+    }
+
+    server
+        .client
+        .log_message(
+            tower_lsp::lsp_types::MessageType::INFO,
+            format!("Basilisk: fixed {total_edit_count} issues across {file_count} file(s)"),
+        )
+        .await;
+
+    Ok(Some(
+        serde_json::json!({ "fixed": total_edit_count, "files": file_count }),
+    ))
 }

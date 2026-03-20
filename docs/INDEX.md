@@ -19,6 +19,7 @@ Specifications define the target behavior and architecture. They are the source 
 | [LSP-UV-INTEGRATION-SPEC.md](specs/LSP-UV-INTEGRATION-SPEC.md) | Zero-config uv workspace detection, lock file parsing, package intelligence, stub resolution. |
 | [VSIX-SPEC.md](specs/VSIX-SPEC.md) | VS Code extension — language intelligence, debugging, profiling, test explorer. |
 | [NEOVIM-SPEC.md](specs/NEOVIM-SPEC.md) | Neovim plugin (basilisk.nvim) — LSP client, DAP proxy, command mappings. |
+| [LSP-REFACTORING-SPEC.md](specs/LSP-REFACTORING-SPEC.md) | Deterministic refactoring tools — rename, extract, inline, move, convert, change signature. |
 | [ZED-SPEC.md](specs/ZED-SPEC.md) | Zed extension (WASM) — LSP integration, tree-sitter grammars, DAP debugging. |
 
 ## Plans
@@ -34,4 +35,5 @@ Implementation roadmaps tracking phasing, priorities, and progress.
 | [LSP-PROFILING-PLAN.md](plans/LSP-PROFILING-PLAN.md) | Embed py-spy profiler into LSP for CPU profiling and hotspot visualization. |
 | [LSP-MASS-AUTOFIX-PLAN.md](plans/LSP-MASS-AUTOFIX-PLAN.md) | Batch autofix rollout and gradual adoption mode. |
 | [LSP-UV-INTEGRATION-PLAN.md](plans/LSP-UV-INTEGRATION-PLAN.md) | uv project detection, lock file parsing, dependency intelligence. |
+| [LSP-REFACTORING-PLAN.md](plans/LSP-REFACTORING-PLAN.md) | Refactoring tools rollout — 10 phases from scope-aware rename to inline function. |
 | [ZED-PLAN.md](plans/ZED-PLAN.md) | Zed extension — LSP scaffolding, tree-sitter queries, DAP support. |

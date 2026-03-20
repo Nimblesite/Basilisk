@@ -8,6 +8,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
 import { execFileSync } from 'child_process';
 
 export const EXTENSION_ID = 'basilisk-lang.basilisk';
@@ -117,20 +118,34 @@ export function waitForDiagnosticsCleared(
     });
 }
 
+/** Options for polling an async function until a predicate is satisfied. */
+export interface PollOptions<T> {
+    fn: () => PromiseLike<T>;
+    predicate: (result: T) => boolean;
+    timeoutMs?: number;
+    intervalMs?: number;
+}
+
 /**
  * Poll an async function until it returns a truthy, non-empty result.
  * Avoids fixed sleeps by retrying at short intervals.
+ *
+ * Supports two calling conventions:
+ * - `pollUntilResult({ fn, predicate, timeoutMs?, intervalMs? })`
+ * - `pollUntilResult(fn, predicate)`
  */
 export async function pollUntilResult<T>(
-    fn: () => PromiseLike<T>,
-    predicate: (result: T) => boolean,
-    timeoutMs: number = 5_000,
-    intervalMs: number = 100
+    optionsOrFn: PollOptions<T> | (() => PromiseLike<T>),
+    predicateArg?: (result: T) => boolean,
 ): Promise<T> {
+    const options: PollOptions<T> = typeof optionsOrFn === 'function'
+        ? { fn: optionsOrFn, predicate: predicateArg! }
+        : optionsOrFn;
+    const { fn, predicate, timeoutMs = 5_000, intervalMs = 100 } = options;
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
         const result = await fn();
-        if (predicate(result)) return result;
+        if (predicate(result)) {return result;}
         await new Promise<void>((r) => setTimeout(r, intervalMs));
     }
     return fn();
@@ -191,7 +206,7 @@ export async function setupLspTestSuite(
         );
     }
 
-    const tmpDir = fs.mkdtempSync(path.join(require('os').tmpdir(), tmpDirPrefix));
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), tmpDirPrefix));
 
     const ext = vscode.extensions.getExtension(EXTENSION_ID);
     if (ext && !ext.isActive) {
@@ -210,7 +225,7 @@ export async function setupLspTestSuite(
             const syms = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
                 'vscode.executeDocumentSymbolProvider', dummyUri
             );
-            if (syms !== null && syms !== undefined) break;
+            if (syms !== null && syms !== undefined) {break;}
         } catch { /* server not ready yet */ }
         await new Promise<void>((r) => setTimeout(r, 200));
     }

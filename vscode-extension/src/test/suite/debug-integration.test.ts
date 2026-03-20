@@ -99,7 +99,7 @@ function findPython(): string | undefined {
 /**
  * Attempt a TCP connection to verify a port is accepting connections.
  */
-function checkPortListening(host: string, port: number, timeoutMs: number = 3000): Promise<boolean> {
+function checkPortListening(host: string, port: number, timeoutMs = 3000): Promise<boolean> {
     return new Promise((resolve) => {
         const socket = new net.Socket();
         const timer = setTimeout(() => {
@@ -183,13 +183,13 @@ function waitForDebugSessionEnd(timeoutMs: number = DEBUG_SESSION_TIMEOUT_MS): P
  * Get the stack trace for the given thread.
  */
 async function getStackTrace(session: vscode.DebugSession, threadId: number): Promise<{
-    stackFrames: Array<{
+    stackFrames: {
         id: number;
         name: string;
         source?: { path?: string };
         line: number;
         column: number;
-    }>;
+    }[];
     totalFrames: number;
 }> {
     return session.customRequest('stackTrace', {
@@ -203,11 +203,11 @@ async function getStackTrace(session: vscode.DebugSession, threadId: number): Pr
  * Get the scopes for a given stack frame.
  */
 async function getScopes(session: vscode.DebugSession, frameId: number): Promise<{
-    scopes: Array<{
+    scopes: {
         name: string;
         variablesReference: number;
         expensive: boolean;
-    }>;
+    }[];
 }> {
     return session.customRequest('scopes', { frameId });
 }
@@ -216,29 +216,33 @@ async function getScopes(session: vscode.DebugSession, frameId: number): Promise
  * Get variables for a given variables reference (scope or structured variable).
  */
 async function getVariables(session: vscode.DebugSession, variablesReference: number): Promise<{
-    variables: Array<{
+    variables: {
         name: string;
         value: string;
         type?: string;
         variablesReference: number;
-    }>;
+    }[];
 }> {
     return session.customRequest('variables', { variablesReference });
+}
+
+/** Options for evaluating an expression in a debug session. */
+interface EvaluateExpressionOptions {
+    session: vscode.DebugSession;
+    expression: string;
+    frameId: number;
+    context?: 'watch' | 'repl' | 'hover';
 }
 
 /**
  * Evaluate an expression in the context of a stack frame (watch expression).
  */
-async function evaluateExpression(
-    session: vscode.DebugSession,
-    expression: string,
-    frameId: number,
-    context: 'watch' | 'repl' | 'hover' = 'watch'
-): Promise<{
+async function evaluateExpression(options: EvaluateExpressionOptions): Promise<{
     result: string;
     type?: string;
     variablesReference: number;
 }> {
+    const { session, expression, frameId, context = 'watch' } = options;
     return session.customRequest('evaluate', {
         expression,
         frameId,
@@ -285,7 +289,8 @@ function waitForStop(timeoutMs: number = STOPPED_EVENT_TIMEOUT_MS): Promise<numb
             reject(new Error(`Timed out waiting for debugger to stop after ${timeoutMs}ms`));
         }, timeoutMs);
 
-        const poll = setInterval(async () => {
+        const poll = setInterval(() => {
+            void (async () => {
             const session = vscode.debug.activeDebugSession;
             if (!session) {
                 return;
@@ -308,6 +313,7 @@ function waitForStop(timeoutMs: number = STOPPED_EVENT_TIMEOUT_MS): Promise<numb
             } catch {
                 // Session not ready yet.
             }
+            })();
         }, 100);
     });
 }
@@ -332,16 +338,20 @@ async function getLocalVariable(
     return varsResponse.variables.find((v) => v.name === varName);
 }
 
+/** Options for asserting a local variable's value. */
+interface AssertLocalVariableOptions {
+    session: vscode.DebugSession;
+    threadId: number;
+    varName: string;
+    expectedValue: string;
+    message?: string;
+}
+
 /**
  * Helper: Assert a local variable has the expected value string.
  */
-async function assertLocalVariable(
-    session: vscode.DebugSession,
-    threadId: number,
-    varName: string,
-    expectedValue: string,
-    message?: string
-): Promise<void> {
+async function assertLocalVariable(options: AssertLocalVariableOptions): Promise<void> {
+    const { session, threadId, varName, expectedValue, message } = options;
     const variable = await getLocalVariable(session, threadId, varName);
     assert.ok(variable, `Variable '${varName}' not found in locals`);
     assert.strictEqual(
@@ -351,19 +361,23 @@ async function assertLocalVariable(
     );
 }
 
+/** Options for asserting a watch expression's result. */
+interface AssertWatchOptions {
+    session: vscode.DebugSession;
+    threadId: number;
+    expression: string;
+    expectedResult: string;
+    message?: string;
+}
+
 /**
  * Helper: Assert a watch expression evaluates to the expected result.
  */
-async function assertWatch(
-    session: vscode.DebugSession,
-    threadId: number,
-    expression: string,
-    expectedResult: string,
-    message?: string
-): Promise<void> {
+async function assertWatch(options: AssertWatchOptions): Promise<void> {
+    const { session, threadId, expression, expectedResult, message } = options;
     const stack = await getStackTrace(session, threadId);
     const frameId = stack.stackFrames[0].id;
-    const result = await evaluateExpression(session, expression, frameId, 'watch');
+    const result = await evaluateExpression({ session, expression, frameId, context: 'watch' });
     assert.strictEqual(
         result.result,
         expectedResult,
@@ -371,15 +385,19 @@ async function assertWatch(
     );
 }
 
+/** Options for asserting the current line number. */
+interface AssertCurrentLineOptions {
+    session: vscode.DebugSession;
+    threadId: number;
+    expectedLine: number;
+    message?: string;
+}
+
 /**
  * Helper: Assert the current line number in the top frame.
  */
-async function assertCurrentLine(
-    session: vscode.DebugSession,
-    threadId: number,
-    expectedLine: number,
-    message?: string
-): Promise<void> {
+async function assertCurrentLine(options: AssertCurrentLineOptions): Promise<void> {
+    const { session, threadId, expectedLine, message } = options;
     const stack = await getStackTrace(session, threadId);
     assert.ok(stack.stackFrames.length > 0, 'Expected at least one stack frame');
     assert.strictEqual(
@@ -389,15 +407,19 @@ async function assertCurrentLine(
     );
 }
 
+/** Options for asserting the current function name. */
+interface AssertCurrentFunctionOptions {
+    session: vscode.DebugSession;
+    threadId: number;
+    expectedName: string;
+    message?: string;
+}
+
 /**
  * Helper: Assert the current function name in the top frame.
  */
-async function assertCurrentFunction(
-    session: vscode.DebugSession,
-    threadId: number,
-    expectedName: string,
-    message?: string
-): Promise<void> {
+async function assertCurrentFunction(options: AssertCurrentFunctionOptions): Promise<void> {
+    const { session, threadId, expectedName, message } = options;
     const stack = await getStackTrace(session, threadId);
     assert.ok(stack.stackFrames.length > 0, 'Expected at least one stack frame');
     assert.strictEqual(
@@ -528,7 +550,7 @@ suite('Debug Integration E2E Tests', () => {
     // 1. Package.json contributes basilisk-debug
     // ────────────────────────────────────────────────────────────────────────
 
-    test('LSP advertises startDebugSession and stopDebugSession commands', async function () {
+    test('LSP advertises startDebugSession and stopDebugSession commands', function () {
         this.timeout(5_000);
         const ext = vscode.extensions.getExtension(EXTENSION_ID);
         assert.ok(ext, 'Extension must be installed');
@@ -540,7 +562,7 @@ suite('Debug Integration E2E Tests', () => {
         );
     });
 
-    test('basilisk-debug type has correct configuration attributes', async function () {
+    test('basilisk-debug type has correct configuration attributes', function () {
         this.timeout(5_000);
         const ext = vscode.extensions.getExtension(EXTENSION_ID);
         assert.ok(ext, 'Extension must be installed');
@@ -644,8 +666,8 @@ suite('Debug Integration E2E Tests', () => {
             await startDebugSession('/nonexistent/python3.99');
             assert.fail('Expected startDebugSession to throw with a bad Python path');
         } catch (err: unknown) {
-            assert.ok(err, 'Expected an error to be thrown');
-            const message = err instanceof Error ? err.message : String(err);
+            assert.ok(err !== null && err !== undefined, 'Expected an error to be thrown');
+            const message = err instanceof Error ? err.message : JSON.stringify(err);
             assert.ok(message.length > 0, `Expected a meaningful error message, got: "${message}"`);
         }
     });
@@ -689,10 +711,10 @@ suite('Debug Integration E2E Tests', () => {
                 // Parse the Content-Length header so we extract exactly one
                 // DAP message, even if multiple arrive back-to-back.
                 const headerEnd = data.indexOf('\r\n\r\n');
-                if (headerEnd === -1) return;
+                if (headerEnd === -1) {return;}
                 const header = data.slice(0, headerEnd);
-                const match = header.match(/Content-Length:\s*(\d+)/i);
-                if (!match) return;
+                const match = /Content-Length:\s*(\d+)/i.exec(header);
+                if (!match) {return;}
                 const contentLength = parseInt(match[1], 10);
                 const bodyStart = headerEnd + 4;
                 if (data.length >= bodyStart + contentLength) {
@@ -740,48 +762,48 @@ suite('Debug Integration E2E Tests', () => {
         const { session, threadId } = await launchAndWaitForBreakpoint([11], pythonPath);
 
         // Stopped at line 11: x = 10 (not yet executed)
-        await assertCurrentLine(session, threadId, 11);
-        await assertCurrentFunction(session, threadId, 'arithmetic');
+        await assertCurrentLine({ session: session, threadId: threadId, expectedLine: 11 });
+        await assertCurrentFunction({ session: session, threadId: threadId, expectedName: 'arithmetic' });
 
         // Step over: execute x = 10, now on line 12
         await stepOver(session, threadId);
         const tid2 = await waitForStop();
-        await assertCurrentLine(session, tid2, 12);
-        await assertLocalVariable(session, tid2, 'x', '10');
+        await assertCurrentLine({ session: session, threadId: tid2, expectedLine: 12 });
+        await assertLocalVariable({ session: session, threadId: tid2, varName: 'x', expectedValue: '10' });
 
         // Step over: execute y = 20, now on line 13
         await stepOver(session, tid2);
         const tid3 = await waitForStop();
-        await assertCurrentLine(session, tid3, 13);
-        await assertLocalVariable(session, tid3, 'x', '10');
-        await assertLocalVariable(session, tid3, 'y', '20');
+        await assertCurrentLine({ session: session, threadId: tid3, expectedLine: 13 });
+        await assertLocalVariable({ session: session, threadId: tid3, varName: 'x', expectedValue: '10' });
+        await assertLocalVariable({ session: session, threadId: tid3, varName: 'y', expectedValue: '20' });
 
         // Step over: execute z = x + y, now on line 14
         await stepOver(session, tid3);
         const tid4 = await waitForStop();
-        await assertCurrentLine(session, tid4, 14);
-        await assertLocalVariable(session, tid4, 'z', '30');
+        await assertCurrentLine({ session: session, threadId: tid4, expectedLine: 14 });
+        await assertLocalVariable({ session: session, threadId: tid4, varName: 'z', expectedValue: '30' });
 
         // Watch expressions
-        await assertWatch(session, tid4, 'x + y', '30');
-        await assertWatch(session, tid4, 'z == 30', 'True');
-        await assertWatch(session, tid4, 'type(z).__name__', "'int'");
+        await assertWatch({ session: session, threadId: tid4, expression: 'x + y', expectedResult: '30' });
+        await assertWatch({ session: session, threadId: tid4, expression: 'z == 30', expectedResult: 'True' });
+        await assertWatch({ session: session, threadId: tid4, expression: 'type(z).__name__', expectedResult: "'int'" });
 
         // Step over: execute w = z * 2, now on line 15
         await stepOver(session, tid4);
         const tid5 = await waitForStop();
-        await assertCurrentLine(session, tid5, 15);
-        await assertLocalVariable(session, tid5, 'w', '60');
+        await assertCurrentLine({ session: session, threadId: tid5, expectedLine: 15 });
+        await assertLocalVariable({ session: session, threadId: tid5, varName: 'w', expectedValue: '60' });
 
         // Step over: execute result = w - 5, now on line 16
         await stepOver(session, tid5);
         const tid6 = await waitForStop();
-        await assertCurrentLine(session, tid6, 16);
-        await assertLocalVariable(session, tid6, 'result', '55');
+        await assertCurrentLine({ session: session, threadId: tid6, expectedLine: 16 });
+        await assertLocalVariable({ session: session, threadId: tid6, varName: 'result', expectedValue: '55' });
 
         // Watch: verify final computed value
-        await assertWatch(session, tid6, 'result == 55', 'True');
-        await assertWatch(session, tid6, 'result * 2', '110');
+        await assertWatch({ session: session, threadId: tid6, expression: 'result == 55', expectedResult: 'True' });
+        await assertWatch({ session: session, threadId: tid6, expression: 'result * 2', expectedResult: '110' });
     });
 
     // ────────────────────────────────────────────────────────────────────────
@@ -793,42 +815,42 @@ suite('Debug Integration E2E Tests', () => {
 
         const { session, threadId } = await launchAndWaitForBreakpoint([21], pythonPath);
 
-        await assertCurrentLine(session, threadId, 21);
-        await assertCurrentFunction(session, threadId, 'string_ops');
+        await assertCurrentLine({ session: session, threadId: threadId, expectedLine: 21 });
+        await assertCurrentFunction({ session: session, threadId: threadId, expectedName: 'string_ops' });
 
         // Step: greeting = "hello"
         await stepOver(session, threadId);
         const t1 = await waitForStop();
-        await assertLocalVariable(session, t1, 'greeting', "'hello'");
+        await assertLocalVariable({ session: session, threadId: t1, varName: 'greeting', expectedValue: "'hello'" });
 
         // Step: name = "world"
         await stepOver(session, t1);
         const t2 = await waitForStop();
-        await assertLocalVariable(session, t2, 'name', "'world'");
+        await assertLocalVariable({ session: session, threadId: t2, varName: 'name', expectedValue: "'world'" });
 
         // Step: message = greeting + " " + name
         await stepOver(session, t2);
         const t3 = await waitForStop();
-        await assertLocalVariable(session, t3, 'message', "'hello world'");
+        await assertLocalVariable({ session: session, threadId: t3, varName: 'message', expectedValue: "'hello world'" });
 
         // Watch: string operations
-        await assertWatch(session, t3, 'len(message)', '11');
-        await assertWatch(session, t3, 'message.startswith("hello")', 'True');
-        await assertWatch(session, t3, '"world" in message', 'True');
+        await assertWatch({ session: session, threadId: t3, expression: 'len(message)', expectedResult: '11' });
+        await assertWatch({ session: session, threadId: t3, expression: 'message.startswith("hello")', expectedResult: 'True' });
+        await assertWatch({ session: session, threadId: t3, expression: '"world" in message', expectedResult: 'True' });
 
         // Step: upper = message.upper()
         await stepOver(session, t3);
         const t4 = await waitForStop();
-        await assertLocalVariable(session, t4, 'upper', "'HELLO WORLD'");
+        await assertLocalVariable({ session: session, threadId: t4, varName: 'upper', expectedValue: "'HELLO WORLD'" });
 
         // Step: length = len(upper)
         await stepOver(session, t4);
         const t5 = await waitForStop();
-        await assertLocalVariable(session, t5, 'length', '11');
+        await assertLocalVariable({ session: session, threadId: t5, varName: 'length', expectedValue: '11' });
 
         // Watch: verify everything
-        await assertWatch(session, t5, 'upper == "HELLO WORLD"', 'True');
-        await assertWatch(session, t5, 'length == len(upper)', 'True');
+        await assertWatch({ session: session, threadId: t5, expression: 'upper == "HELLO WORLD"', expectedResult: 'True' });
+        await assertWatch({ session: session, threadId: t5, expression: 'length == len(upper)', expectedResult: 'True' });
     });
 
     // ────────────────────────────────────────────────────────────────────────
@@ -840,46 +862,46 @@ suite('Debug Integration E2E Tests', () => {
 
         const { session, threadId } = await launchAndWaitForBreakpoint([31], pythonPath);
 
-        await assertCurrentLine(session, threadId, 31);
-        await assertCurrentFunction(session, threadId, 'list_ops');
+        await assertCurrentLine({ session: session, threadId: threadId, expectedLine: 31 });
+        await assertCurrentFunction({ session: session, threadId: threadId, expectedName: 'list_ops' });
 
         // Step: items = [1, 2, 3]
         await stepOver(session, threadId);
         const t1 = await waitForStop();
-        await assertLocalVariable(session, t1, 'items', '[1, 2, 3]');
+        await assertLocalVariable({ session: session, threadId: t1, varName: 'items', expectedValue: '[1, 2, 3]' });
 
         // Watch: list properties
-        await assertWatch(session, t1, 'len(items)', '3');
-        await assertWatch(session, t1, 'items[0]', '1');
-        await assertWatch(session, t1, 'items[-1]', '3');
-        await assertWatch(session, t1, 'sum(items)', '6');
+        await assertWatch({ session: session, threadId: t1, expression: 'len(items)', expectedResult: '3' });
+        await assertWatch({ session: session, threadId: t1, expression: 'items[0]', expectedResult: '1' });
+        await assertWatch({ session: session, threadId: t1, expression: 'items[-1]', expectedResult: '3' });
+        await assertWatch({ session: session, threadId: t1, expression: 'sum(items)', expectedResult: '6' });
 
         // Step: items.append(4)
         await stepOver(session, t1);
         const t2 = await waitForStop();
-        await assertWatch(session, t2, 'len(items)', '4');
-        await assertWatch(session, t2, 'items[-1]', '4');
-        await assertWatch(session, t2, '4 in items', 'True');
+        await assertWatch({ session: session, threadId: t2, expression: 'len(items)', expectedResult: '4' });
+        await assertWatch({ session: session, threadId: t2, expression: 'items[-1]', expectedResult: '4' });
+        await assertWatch({ session: session, threadId: t2, expression: '4 in items', expectedResult: 'True' });
 
         // Step: items.insert(0, 0)
         await stepOver(session, t2);
         const t3 = await waitForStop();
-        await assertWatch(session, t3, 'items[0]', '0');
-        await assertWatch(session, t3, 'len(items)', '5');
+        await assertWatch({ session: session, threadId: t3, expression: 'items[0]', expectedResult: '0' });
+        await assertWatch({ session: session, threadId: t3, expression: 'len(items)', expectedResult: '5' });
 
         // Step: total = sum(items)
         await stepOver(session, t3);
         const t4 = await waitForStop();
-        await assertLocalVariable(session, t4, 'total', '10');
+        await assertLocalVariable({ session: session, threadId: t4, varName: 'total', expectedValue: '10' });
 
         // Step: count = len(items)
         await stepOver(session, t4);
         const t5 = await waitForStop();
-        await assertLocalVariable(session, t5, 'count', '5');
+        await assertLocalVariable({ session: session, threadId: t5, varName: 'count', expectedValue: '5' });
 
         // Watch: final assertions
-        await assertWatch(session, t5, 'total == sum(items)', 'True');
-        await assertWatch(session, t5, 'count == len(items)', 'True');
+        await assertWatch({ session: session, threadId: t5, expression: 'total == sum(items)', expectedResult: 'True' });
+        await assertWatch({ session: session, threadId: t5, expression: 'count == len(items)', expectedResult: 'True' });
     });
 
     // ────────────────────────────────────────────────────────────────────────
@@ -891,42 +913,42 @@ suite('Debug Integration E2E Tests', () => {
 
         const { session, threadId } = await launchAndWaitForBreakpoint([41], pythonPath);
 
-        await assertCurrentLine(session, threadId, 41);
-        await assertCurrentFunction(session, threadId, 'dict_ops');
+        await assertCurrentLine({ session: session, threadId: threadId, expectedLine: 41 });
+        await assertCurrentFunction({ session: session, threadId: threadId, expectedName: 'dict_ops' });
 
         // Step: data = {"a": 1, "b": 2}
         await stepOver(session, threadId);
         const t1 = await waitForStop();
 
         // Watch: dict operations
-        await assertWatch(session, t1, 'len(data)', '2');
-        await assertWatch(session, t1, 'data["a"]', '1');
-        await assertWatch(session, t1, 'data["b"]', '2');
-        await assertWatch(session, t1, '"a" in data', 'True');
-        await assertWatch(session, t1, '"c" in data', 'False');
+        await assertWatch({ session: session, threadId: t1, expression: 'len(data)', expectedResult: '2' });
+        await assertWatch({ session: session, threadId: t1, expression: 'data["a"]', expectedResult: '1' });
+        await assertWatch({ session: session, threadId: t1, expression: 'data["b"]', expectedResult: '2' });
+        await assertWatch({ session: session, threadId: t1, expression: '"a" in data', expectedResult: 'True' });
+        await assertWatch({ session: session, threadId: t1, expression: '"c" in data', expectedResult: 'False' });
 
         // Step: data["c"] = 3
         await stepOver(session, t1);
         const t2 = await waitForStop();
-        await assertWatch(session, t2, 'len(data)', '3');
-        await assertWatch(session, t2, 'data["c"]', '3');
-        await assertWatch(session, t2, '"c" in data', 'True');
+        await assertWatch({ session: session, threadId: t2, expression: 'len(data)', expectedResult: '3' });
+        await assertWatch({ session: session, threadId: t2, expression: 'data["c"]', expectedResult: '3' });
+        await assertWatch({ session: session, threadId: t2, expression: '"c" in data', expectedResult: 'True' });
 
         // Step: keys = list(data.keys())
         await stepOver(session, t2);
         const t3 = await waitForStop();
-        await assertWatch(session, t3, 'len(keys)', '3');
+        await assertWatch({ session: session, threadId: t3, expression: 'len(keys)', expectedResult: '3' });
 
         // Step: total = sum(data.values())
         await stepOver(session, t3);
         const t4 = await waitForStop();
-        await assertLocalVariable(session, t4, 'total', '6');
-        await assertWatch(session, t4, 'total == sum(data.values())', 'True');
+        await assertLocalVariable({ session: session, threadId: t4, varName: 'total', expectedValue: '6' });
+        await assertWatch({ session: session, threadId: t4, expression: 'total == sum(data.values())', expectedResult: 'True' });
 
         // Step: has_a = "a" in data
         await stepOver(session, t4);
         const t5 = await waitForStop();
-        await assertLocalVariable(session, t5, 'has_a', 'True');
+        await assertLocalVariable({ session: session, threadId: t5, varName: 'has_a', expectedValue: 'True' });
     });
 
     // ────────────────────────────────────────────────────────────────────────
@@ -938,33 +960,33 @@ suite('Debug Integration E2E Tests', () => {
 
         const { session, threadId } = await launchAndWaitForBreakpoint([51], pythonPath);
 
-        await assertCurrentLine(session, threadId, 51);
-        await assertCurrentFunction(session, threadId, 'nested_call');
+        await assertCurrentLine({ session: session, threadId: threadId, expectedLine: 51 });
+        await assertCurrentFunction({ session: session, threadId: threadId, expectedName: 'nested_call' });
 
         // Step: a = 5
         await stepOver(session, threadId);
         const t1 = await waitForStop();
-        await assertLocalVariable(session, t1, 'a', '5');
+        await assertLocalVariable({ session: session, threadId: t1, varName: 'a', expectedValue: '5' });
 
         // Step INTO: b = double(a) — should enter the double() function
         await stepIn(session, t1);
         const t2 = await waitForStop();
-        await assertCurrentFunction(session, t2, 'double');
+        await assertCurrentFunction({ session: session, threadId: t2, expectedName: 'double' });
 
         // We're inside double(). Check the parameter.
-        await assertLocalVariable(session, t2, 'n', '5');
+        await assertLocalVariable({ session: session, threadId: t2, varName: 'n', expectedValue: '5' });
 
         // Step over inside double: result = n * 2
         await stepOver(session, t2);
         const t3 = await waitForStop();
-        await assertLocalVariable(session, t3, 'result', '10');
-        await assertWatch(session, t3, 'result == n * 2', 'True');
+        await assertLocalVariable({ session: session, threadId: t3, varName: 'result', expectedValue: '10' });
+        await assertWatch({ session: session, threadId: t3, expression: 'result == n * 2', expectedResult: 'True' });
 
         // Step out back to nested_call
         await stepOut(session, t3);
         const t4 = await waitForStop();
-        await assertCurrentFunction(session, t4, 'nested_call');
-        await assertLocalVariable(session, t4, 'b', '10');
+        await assertCurrentFunction({ session: session, threadId: t4, expectedName: 'nested_call' });
+        await assertLocalVariable({ session: session, threadId: t4, varName: 'b', expectedValue: '10' });
 
         // Verify stack depth
         const stack = await getStackTrace(session, t4);
@@ -981,13 +1003,13 @@ suite('Debug Integration E2E Tests', () => {
 
         const { session, threadId } = await launchAndWaitForBreakpoint([65], pythonPath);
 
-        await assertCurrentLine(session, threadId, 65);
-        await assertCurrentFunction(session, threadId, 'loop_and_accumulate');
+        await assertCurrentLine({ session: session, threadId: threadId, expectedLine: 65 });
+        await assertCurrentFunction({ session: session, threadId: threadId, expectedName: 'loop_and_accumulate' });
 
         // Step: total = 0
         await stepOver(session, threadId);
         const t1 = await waitForStop();
-        await assertLocalVariable(session, t1, 'total', '0');
+        await assertLocalVariable({ session: session, threadId: t1, varName: 'total', expectedValue: '0' });
 
         // Step into the for loop header
         await stepOver(session, t1);
@@ -996,35 +1018,35 @@ suite('Debug Integration E2E Tests', () => {
         // Step through the loop body: total += i  (i=0)
         await stepOver(session, t2);
         const t3 = await waitForStop();
-        await assertWatch(session, t3, 'total', '0'); // 0 + 0 = 0
+        await assertWatch({ session: session, threadId: t3, expression: 'total', expectedResult: '0' }); // 0 + 0 = 0
 
         // Continue through iterations — step over the for line + body for i=1
         await stepOver(session, t3);
         const t4 = await waitForStop();
         await stepOver(session, t4);
         const t5 = await waitForStop();
-        await assertWatch(session, t5, 'total', '1'); // 0 + 1 = 1
+        await assertWatch({ session: session, threadId: t5, expression: 'total', expectedResult: '1' }); // 0 + 1 = 1
 
         // i=2
         await stepOver(session, t5);
         const t6 = await waitForStop();
         await stepOver(session, t6);
         const t7 = await waitForStop();
-        await assertWatch(session, t7, 'total', '3'); // 1 + 2 = 3
+        await assertWatch({ session: session, threadId: t7, expression: 'total', expectedResult: '3' }); // 1 + 2 = 3
 
         // i=3
         await stepOver(session, t7);
         const t8 = await waitForStop();
         await stepOver(session, t8);
         const t9 = await waitForStop();
-        await assertWatch(session, t9, 'total', '6'); // 3 + 3 = 6
+        await assertWatch({ session: session, threadId: t9, expression: 'total', expectedResult: '6' }); // 3 + 3 = 6
 
         // i=4
         await stepOver(session, t9);
         const t10 = await waitForStop();
         await stepOver(session, t10);
         const t11 = await waitForStop();
-        await assertWatch(session, t11, 'total', '10'); // 6 + 4 = 10
+        await assertWatch({ session: session, threadId: t11, expression: 'total', expectedResult: '10' }); // 6 + 4 = 10
     });
 
     // ────────────────────────────────────────────────────────────────────────
@@ -1036,15 +1058,15 @@ suite('Debug Integration E2E Tests', () => {
 
         const { session, threadId } = await launchAndWaitForBreakpoint([74], pythonPath);
 
-        await assertCurrentLine(session, threadId, 74);
-        await assertCurrentFunction(session, threadId, 'conditional_branches');
+        await assertCurrentLine({ session: session, threadId: threadId, expectedLine: 74 });
+        await assertCurrentFunction({ session: session, threadId: threadId, expectedName: 'conditional_branches' });
 
         // Step: x = 42
         await stepOver(session, threadId);
         const t1 = await waitForStop();
-        await assertLocalVariable(session, t1, 'x', '42');
-        await assertWatch(session, t1, 'x > 100', 'False');
-        await assertWatch(session, t1, 'x > 10', 'True');
+        await assertLocalVariable({ session: session, threadId: t1, varName: 'x', expectedValue: '42' });
+        await assertWatch({ session: session, threadId: t1, expression: 'x > 100', expectedResult: 'False' });
+        await assertWatch({ session: session, threadId: t1, expression: 'x > 10', expectedResult: 'True' });
 
         // Step: if x > 100 — should go to elif
         await stepOver(session, t1);
@@ -1057,12 +1079,12 @@ suite('Debug Integration E2E Tests', () => {
         // Step: label = "medium"
         await stepOver(session, t3);
         const t4 = await waitForStop();
-        await assertLocalVariable(session, t4, 'label', "'medium'");
+        await assertLocalVariable({ session: session, threadId: t4, varName: 'label', expectedValue: "'medium'" });
 
         // Watch: verify the branch result
-        await assertWatch(session, t4, 'label == "medium"', 'True');
-        await assertWatch(session, t4, 'label != "big"', 'True');
-        await assertWatch(session, t4, 'label != "small"', 'True');
+        await assertWatch({ session: session, threadId: t4, expression: 'label == "medium"', expectedResult: 'True' });
+        await assertWatch({ session: session, threadId: t4, expression: 'label != "big"', expectedResult: 'True' });
+        await assertWatch({ session: session, threadId: t4, expression: 'label != "small"', expectedResult: 'True' });
     });
 
     // ────────────────────────────────────────────────────────────────────────
@@ -1074,18 +1096,18 @@ suite('Debug Integration E2E Tests', () => {
 
         const { session, threadId } = await launchAndWaitForBreakpoint([86], pythonPath);
 
-        await assertCurrentLine(session, threadId, 86);
-        await assertCurrentFunction(session, threadId, 'exception_handling');
+        await assertCurrentLine({ session: session, threadId: threadId, expectedLine: 86 });
+        await assertCurrentFunction({ session: session, threadId: threadId, expectedName: 'exception_handling' });
 
         // Step: caught = False
         await stepOver(session, threadId);
         const t1 = await waitForStop();
-        await assertLocalVariable(session, t1, 'caught', 'False');
+        await assertLocalVariable({ session: session, threadId: t1, varName: 'caught', expectedValue: 'False' });
 
         // Step: error_msg = ""
         await stepOver(session, t1);
         const t2 = await waitForStop();
-        await assertLocalVariable(session, t2, 'error_msg', "''");
+        await assertLocalVariable({ session: session, threadId: t2, varName: 'error_msg', expectedValue: "''" });
 
         // Step into try block: value = 1 / 0 — this raises ZeroDivisionError
         await stepOver(session, t2);
@@ -1098,13 +1120,13 @@ suite('Debug Integration E2E Tests', () => {
         // Step: caught = True
         await stepOver(session, t4);
         const t5 = await waitForStop();
-        await assertLocalVariable(session, t5, 'caught', 'True');
+        await assertLocalVariable({ session: session, threadId: t5, varName: 'caught', expectedValue: 'True' });
 
         // Step: error_msg = str(exc)
         await stepOver(session, t5);
         const t6 = await waitForStop();
-        await assertWatch(session, t6, 'caught', 'True');
-        await assertWatch(session, t6, 'len(error_msg) > 0', 'True');
+        await assertWatch({ session: session, threadId: t6, expression: 'caught', expectedResult: 'True' });
+        await assertWatch({ session: session, threadId: t6, expression: 'len(error_msg) > 0', expectedResult: 'True' });
     });
 
     // ────────────────────────────────────────────────────────────────────────
@@ -1116,52 +1138,52 @@ suite('Debug Integration E2E Tests', () => {
 
         const { session, threadId } = await launchAndWaitForBreakpoint([98], pythonPath);
 
-        await assertCurrentLine(session, threadId, 98);
-        await assertCurrentFunction(session, threadId, 'type_variety');
+        await assertCurrentLine({ session: session, threadId: threadId, expectedLine: 98 });
+        await assertCurrentFunction({ session: session, threadId: threadId, expectedName: 'type_variety' });
 
         // an_int = 42
         await stepOver(session, threadId);
         const t1 = await waitForStop();
-        await assertLocalVariable(session, t1, 'an_int', '42');
-        await assertWatch(session, t1, 'type(an_int).__name__', "'int'");
+        await assertLocalVariable({ session: session, threadId: t1, varName: 'an_int', expectedValue: '42' });
+        await assertWatch({ session: session, threadId: t1, expression: 'type(an_int).__name__', expectedResult: "'int'" });
 
         // a_float = 3.14
         await stepOver(session, t1);
         const t2 = await waitForStop();
-        await assertLocalVariable(session, t2, 'a_float', '3.14');
-        await assertWatch(session, t2, 'type(a_float).__name__', "'float'");
+        await assertLocalVariable({ session: session, threadId: t2, varName: 'a_float', expectedValue: '3.14' });
+        await assertWatch({ session: session, threadId: t2, expression: 'type(a_float).__name__', expectedResult: "'float'" });
 
         // a_bool = True
         await stepOver(session, t2);
         const t3 = await waitForStop();
-        await assertLocalVariable(session, t3, 'a_bool', 'True');
-        await assertWatch(session, t3, 'type(a_bool).__name__', "'bool'");
+        await assertLocalVariable({ session: session, threadId: t3, varName: 'a_bool', expectedValue: 'True' });
+        await assertWatch({ session: session, threadId: t3, expression: 'type(a_bool).__name__', expectedResult: "'bool'" });
 
         // a_none = None
         await stepOver(session, t3);
         const t4 = await waitForStop();
-        await assertLocalVariable(session, t4, 'a_none', 'None');
-        await assertWatch(session, t4, 'a_none is None', 'True');
+        await assertLocalVariable({ session: session, threadId: t4, varName: 'a_none', expectedValue: 'None' });
+        await assertWatch({ session: session, threadId: t4, expression: 'a_none is None', expectedResult: 'True' });
 
         // a_tuple = (1, "two", 3.0)
         await stepOver(session, t4);
         const t5 = await waitForStop();
-        await assertWatch(session, t5, 'len(a_tuple)', '3');
-        await assertWatch(session, t5, 'a_tuple[0]', '1');
-        await assertWatch(session, t5, 'type(a_tuple).__name__', "'tuple'");
+        await assertWatch({ session: session, threadId: t5, expression: 'len(a_tuple)', expectedResult: '3' });
+        await assertWatch({ session: session, threadId: t5, expression: 'a_tuple[0]', expectedResult: '1' });
+        await assertWatch({ session: session, threadId: t5, expression: 'type(a_tuple).__name__', expectedResult: "'tuple'" });
 
         // a_set = {10, 20, 30}
         await stepOver(session, t5);
         const t6 = await waitForStop();
-        await assertWatch(session, t6, 'len(a_set)', '3');
-        await assertWatch(session, t6, '10 in a_set', 'True');
-        await assertWatch(session, t6, 'type(a_set).__name__', "'set'");
+        await assertWatch({ session: session, threadId: t6, expression: 'len(a_set)', expectedResult: '3' });
+        await assertWatch({ session: session, threadId: t6, expression: '10 in a_set', expectedResult: 'True' });
+        await assertWatch({ session: session, threadId: t6, expression: 'type(a_set).__name__', expectedResult: "'set'" });
 
         // a_bytes = b"hello"
         await stepOver(session, t6);
         const t7 = await waitForStop();
-        await assertWatch(session, t7, 'len(a_bytes)', '5');
-        await assertWatch(session, t7, 'type(a_bytes).__name__', "'bytes'");
+        await assertWatch({ session: session, threadId: t7, expression: 'len(a_bytes)', expectedResult: '5' });
+        await assertWatch({ session: session, threadId: t7, expression: 'type(a_bytes).__name__', expectedResult: "'bytes'" });
     });
 
     // ────────────────────────────────────────────────────────────────────────
@@ -1174,26 +1196,26 @@ suite('Debug Integration E2E Tests', () => {
         // Break at line 119: p = Point(3, 4)
         const { session, threadId } = await launchAndWaitForBreakpoint([119], pythonPath);
 
-        await assertCurrentLine(session, threadId, 119);
-        await assertCurrentFunction(session, threadId, 'class_instance');
+        await assertCurrentLine({ session: session, threadId: threadId, expectedLine: 119 });
+        await assertCurrentFunction({ session: session, threadId: threadId, expectedName: 'class_instance' });
 
         // Step over: p = Point(3, 4)
         await stepOver(session, threadId);
         const t1 = await waitForStop();
 
         // Verify object attributes via watch
-        await assertWatch(session, t1, 'p.x', '3');
-        await assertWatch(session, t1, 'p.y', '4');
-        await assertWatch(session, t1, 'type(p).__name__', "'Point'");
+        await assertWatch({ session: session, threadId: t1, expression: 'p.x', expectedResult: '3' });
+        await assertWatch({ session: session, threadId: t1, expression: 'p.y', expectedResult: '4' });
+        await assertWatch({ session: session, threadId: t1, expression: 'type(p).__name__', expectedResult: "'Point'" });
 
         // Step: mag = p.magnitude()
         await stepOver(session, t1);
         const t2 = await waitForStop();
-        await assertLocalVariable(session, t2, 'mag', '5.0');
+        await assertLocalVariable({ session: session, threadId: t2, varName: 'mag', expectedValue: '5.0' });
 
         // Watch: verify computed value
-        await assertWatch(session, t2, 'mag == 5.0', 'True');
-        await assertWatch(session, t2, 'p.x ** 2 + p.y ** 2', '25');
+        await assertWatch({ session: session, threadId: t2, expression: 'mag == 5.0', expectedResult: 'True' });
+        await assertWatch({ session: session, threadId: t2, expression: 'p.x ** 2 + p.y ** 2', expectedResult: '25' });
     });
 
     // ────────────────────────────────────────────────────────────────────────
@@ -1207,21 +1229,21 @@ suite('Debug Integration E2E Tests', () => {
         const { session, threadId } = await launchAndWaitForBreakpoint([13, 23], pythonPath);
 
         // Should stop at line 13 first (z = x + y in arithmetic())
-        await assertCurrentLine(session, threadId, 13);
-        await assertCurrentFunction(session, threadId, 'arithmetic');
+        await assertCurrentLine({ session: session, threadId: threadId, expectedLine: 13 });
+        await assertCurrentFunction({ session: session, threadId: threadId, expectedName: 'arithmetic' });
 
         // Verify x and y are set
-        await assertLocalVariable(session, threadId, 'x', '10');
-        await assertLocalVariable(session, threadId, 'y', '20');
+        await assertLocalVariable({ session: session, threadId: threadId, varName: 'x', expectedValue: '10' });
+        await assertLocalVariable({ session: session, threadId: threadId, varName: 'y', expectedValue: '20' });
 
         // Continue to next breakpoint — line 23 (message = ... in string_ops())
         await continueExecution(session, threadId);
         const t2 = await waitForStop();
 
-        await assertCurrentLine(session, t2, 23);
-        await assertCurrentFunction(session, t2, 'string_ops');
-        await assertLocalVariable(session, t2, 'greeting', "'hello'");
-        await assertLocalVariable(session, t2, 'name', "'world'");
+        await assertCurrentLine({ session: session, threadId: t2, expectedLine: 23 });
+        await assertCurrentFunction({ session: session, threadId: t2, expectedName: 'string_ops' });
+        await assertLocalVariable({ session: session, threadId: t2, varName: 'greeting', expectedValue: "'hello'" });
+        await assertLocalVariable({ session: session, threadId: t2, varName: 'name', expectedValue: "'world'" });
     });
 
     // ────────────────────────────────────────────────────────────────────────
@@ -1234,8 +1256,8 @@ suite('Debug Integration E2E Tests', () => {
         // Break inside double(), called from nested_call()
         const { session, threadId } = await launchAndWaitForBreakpoint([59], pythonPath);
 
-        await assertCurrentLine(session, threadId, 59);
-        await assertCurrentFunction(session, threadId, 'double');
+        await assertCurrentLine({ session: session, threadId: threadId, expectedLine: 59 });
+        await assertCurrentFunction({ session: session, threadId: threadId, expectedName: 'double' });
 
         // Verify the call stack
         const stack = await getStackTrace(session, threadId);
@@ -1268,7 +1290,7 @@ suite('Debug Integration E2E Tests', () => {
 
         const { session, threadId } = await launchAndWaitForBreakpoint([13], pythonPath);
 
-        await assertCurrentLine(session, threadId, 13);
+        await assertCurrentLine({ session: session, threadId: threadId, expectedLine: 13 });
 
         const stack = await getStackTrace(session, threadId);
         const frameId = stack.stackFrames[0].id;
@@ -1311,40 +1333,40 @@ suite('Debug Integration E2E Tests', () => {
         // Stop at line 15 in arithmetic where x=10, y=20, z=30, w=60
         const { session, threadId } = await launchAndWaitForBreakpoint([15], pythonPath);
 
-        await assertCurrentLine(session, threadId, 15);
+        await assertCurrentLine({ session: session, threadId: threadId, expectedLine: 15 });
 
         // Arithmetic watch expressions
-        await assertWatch(session, threadId, 'x', '10');
-        await assertWatch(session, threadId, 'y', '20');
-        await assertWatch(session, threadId, 'z', '30');
-        await assertWatch(session, threadId, 'w', '60');
+        await assertWatch({ session: session, threadId: threadId, expression: 'x', expectedResult: '10' });
+        await assertWatch({ session: session, threadId: threadId, expression: 'y', expectedResult: '20' });
+        await assertWatch({ session: session, threadId: threadId, expression: 'z', expectedResult: '30' });
+        await assertWatch({ session: session, threadId: threadId, expression: 'w', expectedResult: '60' });
 
         // Computed expressions
-        await assertWatch(session, threadId, 'x + y + z', '60');
-        await assertWatch(session, threadId, 'w // x', '6');
-        await assertWatch(session, threadId, 'w % 7', '4');
-        await assertWatch(session, threadId, 'w ** 0', '1');
-        await assertWatch(session, threadId, 'abs(-w)', '60');
-        await assertWatch(session, threadId, 'min(x, y, z, w)', '10');
-        await assertWatch(session, threadId, 'max(x, y, z, w)', '60');
-        await assertWatch(session, threadId, 'sorted([w, z, y, x])', '[10, 20, 30, 60]');
+        await assertWatch({ session: session, threadId: threadId, expression: 'x + y + z', expectedResult: '60' });
+        await assertWatch({ session: session, threadId: threadId, expression: 'w // x', expectedResult: '6' });
+        await assertWatch({ session: session, threadId: threadId, expression: 'w % 7', expectedResult: '4' });
+        await assertWatch({ session: session, threadId: threadId, expression: 'w ** 0', expectedResult: '1' });
+        await assertWatch({ session: session, threadId: threadId, expression: 'abs(-w)', expectedResult: '60' });
+        await assertWatch({ session: session, threadId: threadId, expression: 'min(x, y, z, w)', expectedResult: '10' });
+        await assertWatch({ session: session, threadId: threadId, expression: 'max(x, y, z, w)', expectedResult: '60' });
+        await assertWatch({ session: session, threadId: threadId, expression: 'sorted([w, z, y, x])', expectedResult: '[10, 20, 30, 60]' });
 
         // Boolean expressions
-        await assertWatch(session, threadId, 'x < y', 'True');
-        await assertWatch(session, threadId, 'x > y', 'False');
-        await assertWatch(session, threadId, 'x == 10 and y == 20', 'True');
-        await assertWatch(session, threadId, 'z == x + y', 'True');
-        await assertWatch(session, threadId, 'w == z * 2', 'True');
+        await assertWatch({ session: session, threadId: threadId, expression: 'x < y', expectedResult: 'True' });
+        await assertWatch({ session: session, threadId: threadId, expression: 'x > y', expectedResult: 'False' });
+        await assertWatch({ session: session, threadId: threadId, expression: 'x == 10 and y == 20', expectedResult: 'True' });
+        await assertWatch({ session: session, threadId: threadId, expression: 'z == x + y', expectedResult: 'True' });
+        await assertWatch({ session: session, threadId: threadId, expression: 'w == z * 2', expectedResult: 'True' });
 
         // Type checking via watch
-        await assertWatch(session, threadId, 'isinstance(x, int)', 'True');
-        await assertWatch(session, threadId, 'isinstance(x, str)', 'False');
+        await assertWatch({ session: session, threadId: threadId, expression: 'isinstance(x, int)', expectedResult: 'True' });
+        await assertWatch({ session: session, threadId: threadId, expression: 'isinstance(x, str)', expectedResult: 'False' });
 
         // String formatting via watch
-        await assertWatch(session, threadId, 'f"{x} + {y} = {z}"', "'10 + 20 = 30'");
+        await assertWatch({ session: session, threadId: threadId, expression: 'f"{x} + {y} = {z}"', expectedResult: "'10 + 20 = 30'" });
 
         // List comprehension via watch
-        await assertWatch(session, threadId, '[v * 2 for v in [x, y, z]]', '[20, 40, 60]');
+        await assertWatch({ session: session, threadId: threadId, expression: '[v * 2 for v in [x, y, z]]', expectedResult: '[20, 40, 60]' });
     });
 
     // ────────────────────────────────────────────────────────────────────────
@@ -1360,11 +1382,11 @@ suite('Debug Integration E2E Tests', () => {
         const frameId = stack.stackFrames[0].id;
 
         // Hover evaluation (simulates mouse hover in editor)
-        const hoverResult = await evaluateExpression(session, 'x', frameId, 'hover');
+        const hoverResult = await evaluateExpression({ session: session, expression: 'x', frameId: frameId, context: 'hover' });
         assert.strictEqual(hoverResult.result, '10');
         assert.ok(hoverResult.type, 'Hover result should include type info');
 
-        const hoverResult2 = await evaluateExpression(session, 'y', frameId, 'hover');
+        const hoverResult2 = await evaluateExpression({ session: session, expression: 'y', frameId: frameId, context: 'hover' });
         assert.strictEqual(hoverResult2.result, '20');
     });
 
@@ -1381,13 +1403,13 @@ suite('Debug Integration E2E Tests', () => {
         const frameId = stack.stackFrames[0].id;
 
         // REPL evaluation (simulates Debug Console)
-        const replResult = await evaluateExpression(session, 'x + y', frameId, 'repl');
+        const replResult = await evaluateExpression({ session: session, expression: 'x + y', frameId: frameId, context: 'repl' });
         assert.strictEqual(replResult.result, '30');
 
-        const replResult2 = await evaluateExpression(session, '[x, y]', frameId, 'repl');
+        const replResult2 = await evaluateExpression({ session: session, expression: '[x, y]', frameId: frameId, context: 'repl' });
         assert.strictEqual(replResult2.result, '[10, 20]');
 
-        const replResult3 = await evaluateExpression(session, 'dict(a=x, b=y)', frameId, 'repl');
+        const replResult3 = await evaluateExpression({ session: session, expression: 'dict(a=x, b=y)', frameId: frameId, context: 'repl' });
         assert.ok(replResult3.result.includes('a'), 'REPL dict result should contain key a');
         assert.ok(replResult3.result.includes('b'), 'REPL dict result should contain key b');
     });
@@ -1402,7 +1424,7 @@ suite('Debug Integration E2E Tests', () => {
         // Break at the return of arithmetic()
         const { session, threadId } = await launchAndWaitForBreakpoint([16], pythonPath);
 
-        await assertCurrentLine(session, threadId, 16);
+        await assertCurrentLine({ session: session, threadId: threadId, expectedLine: 16 });
 
         const endPromise = waitForDebugSessionEnd(15_000);
 

@@ -33,6 +33,49 @@ pub(super) fn all_base_names(class_info: &ClassInfo) -> Vec<&str> {
 }
 
 /// Recursively check if any base class defines `__init__` or `__new__`.
+/// Builtin types that have custom `__init__` or `__new__` accepting
+/// arguments.  Classes inheriting from these can always be constructed
+/// with arguments even though they don't define `__init__` in user code.
+const BUILTINS_WITH_INIT: &[&str] = &[
+    "str",
+    "int",
+    "float",
+    "bool",
+    "bytes",
+    "bytearray",
+    "complex",
+    "list",
+    "dict",
+    "set",
+    "frozenset",
+    "tuple",
+    "type",
+    "range",
+    "slice",
+    "memoryview",
+    "super",
+    "property",
+    "staticmethod",
+    "classmethod",
+    "Exception",
+    "BaseException",
+    "ValueError",
+    "TypeError",
+    "KeyError",
+    "IndexError",
+    "AttributeError",
+    "RuntimeError",
+    "StopIteration",
+    "OSError",
+    "IOError",
+    "UserDict",
+    "UserList",
+    "UserString",
+    "Mapping",
+    "MutableMapping",
+    "ABC",
+];
+
 pub(super) fn has_custom_init_in_bases(
     class_info: &ClassInfo,
     class_map: &HashMap<&str, &ClassInfo>,
@@ -41,6 +84,11 @@ pub(super) fn has_custom_init_in_bases(
     for base_name in all_base_names(class_info) {
         if base_name == "object" || base_name == "Generic" || base_name == "Protocol" {
             continue;
+        }
+
+        // Builtin types always have custom __init__/__new__.
+        if BUILTINS_WITH_INIT.contains(&base_name) {
+            return true;
         }
 
         // Check if the base class itself defines __init__ or __new__.

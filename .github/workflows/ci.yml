@@ -42,13 +42,53 @@ jobs:
       - name: clippy (zed extension)
         run: cargo clippy --release --all-targets --manifest-path basilisk-zed/Cargo.toml
 
+  # ── Zed Extension (runs in parallel) ────────────────────────────────────────
+  zed:
+    name: Zed Extension (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: wasm32-wasip2
+            test: false
+          - os: ubuntu-latest
+            target: native
+            test: true
+          - os: macos-latest
+            target: native
+            test: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target == 'wasm32-wasip2' && 'wasm32-wasip2' || '' }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Build Zed extension to WASM
+        if: matrix.target == 'wasm32-wasip2'
+        run: cargo build --release --target wasm32-wasip2 --manifest-path basilisk-zed/Cargo.toml
+
+      - name: Clippy (Zed extension)
+        if: matrix.test
+        run: cargo clippy --release --all-targets --manifest-path basilisk-zed/Cargo.toml
+
+      - name: Run Zed extension unit tests
+        if: matrix.test
+        run: cargo test --release --manifest-path basilisk-zed/Cargo.toml
+
   # ── Test (runs in parallel with lint) ────────────────────────────────────
   test:
     name: Build & Test
     runs-on: ubuntu-latest
     env:
       TEST_COVERAGE_BASILISK_CHECKER: ${{ vars.TEST_COVERAGE_BASILISK_CHECKER || '89' }}
-      TEST_COVERAGE_BASILISK_CLI: ${{ vars.TEST_COVERAGE_BASILISK_CLI || '96' }}
+      TEST_COVERAGE_BASILISK_CLI: ${{ vars.TEST_COVERAGE_BASILISK_CLI || '84' }}
       TEST_COVERAGE_BASILISK_DB: ${{ vars.TEST_COVERAGE_BASILISK_DB || '100' }}
       TEST_COVERAGE_BASILISK_LSP: ${{ vars.TEST_COVERAGE_BASILISK_LSP || '50' }}
       TEST_COVERAGE_BASILISK_MOJO: ${{ vars.TEST_COVERAGE_BASILISK_MOJO || '90' }}

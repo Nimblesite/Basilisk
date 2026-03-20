@@ -11,6 +11,7 @@ basilisk-parser.workspace   = true
 basilisk-resolver.workspace = true
 basilisk-checker.workspace  = true
 basilisk-common.workspace   = true
+basilisk-uv.workspace       = true
 
 tower-lsp         = "0.20"
 tokio             = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "io-util", "net", "sync", "time", "process", "fs"] }

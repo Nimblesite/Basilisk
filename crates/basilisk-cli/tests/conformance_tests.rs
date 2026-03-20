@@ -220,6 +220,8 @@ fn run_file(path: &Path) -> FileResult {
 
     // Run the pipeline.
     let mut rules_seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    // Map each diagnostic line to the rule codes that fired on it (for FP reporting).
+    let mut diag_line_rules: HashMap<usize, Vec<String>> = HashMap::new();
     let diag_lines: HashSet<usize> = match parse_file(path.to_string_lossy().as_ref()) {
         Ok(parsed) => match resolve(&parsed) {
             Ok(resolved) => {
@@ -230,7 +232,12 @@ fn run_file(path: &Path) -> FileResult {
                     .filter(|d| !STRICTNESS_ONLY.contains(&d.code.code))
                     .map(|d| {
                         let _ = rules_seen.insert(d.code.code.to_owned());
-                        byte_offset_to_line(&source, d.span.start)
+                        let line = byte_offset_to_line(&source, d.span.start);
+                        diag_line_rules
+                            .entry(line)
+                            .or_default()
+                            .push(d.code.code.to_owned());
+                        line
                     })
                     .collect()
             }
@@ -282,6 +289,20 @@ fn run_file(path: &Path) -> FileResult {
             .copied()
             .collect();
         println!("  DEBUG {file_name}: missed={missed} lines={missed_lines:?}");
+    }
+    if false_positives > 0 {
+        let mut fp_details: Vec<(usize, String)> = diag_lines
+            .iter()
+            .filter(|l| !all_annotated.contains(l))
+            .map(|&l| {
+                let rules = diag_line_rules
+                    .get(&l)
+                    .map_or_else(String::new, |codes| codes.join("|"));
+                (l, rules)
+            })
+            .collect();
+        fp_details.sort_by_key(|(l, _)| *l);
+        println!("  FP    {file_name}: count={false_positives} lines={fp_details:?}");
     }
 
     FileResult {

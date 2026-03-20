@@ -196,6 +196,28 @@ pub(super) fn td_check_ann_assign(
     let Some((_, field_types, _, _)) = fields.get(class_name) else {
         return;
     };
+    check_dict_value_types(
+        dict,
+        field_types,
+        all_fields,
+        class_name,
+        node.range(),
+        fields,
+        out,
+    );
+}
+
+/// Recursively check value types in a dict literal against `TypedDict` field types.
+fn check_dict_value_types(
+    dict: &ruff_python_ast::ExprDict,
+    field_types: &std::collections::HashMap<&str, String>,
+    all_fields: &[&str],
+    class_name: &str,
+    span_range: ruff_text_size::TextRange,
+    fields: &TdFieldMap<'_>,
+    out: &mut Vec<TypedDictKeyViolation>,
+) {
+    use ruff_text_size::Ranged as _;
     for item in &dict.items {
         let Some(Expr::StringLiteral(s)) = &item.key else {
             continue;
@@ -204,18 +226,37 @@ pub(super) fn td_check_ann_assign(
         if !all_fields.contains(&key.as_str()) {
             continue;
         }
-        if let Some(expected) = field_types.get(key.as_str()) {
-            if let Some(actual) = expr_literal_type_name(&item.value) {
-                if !typeddict_field_type_compatible(actual, expected) {
-                    out.push(TypedDictKeyViolation {
-                        span: text_range_to_span(node.range()),
-                        class_name: class_name.to_owned(),
-                        kind: TypedDictKeyViolationKind::WrongSubscriptValueType {
-                            key,
-                            expected: expected.clone(),
-                        },
-                    });
-                }
+        let Some(expected) = field_types.get(key.as_str()) else {
+            continue;
+        };
+
+        // Primitive literal value — check type directly.
+        if let Some(actual) = expr_literal_type_name(&item.value) {
+            if !typeddict_field_type_compatible(actual, expected) {
+                out.push(TypedDictKeyViolation {
+                    span: text_range_to_span(span_range),
+                    class_name: class_name.to_owned(),
+                    kind: TypedDictKeyViolationKind::WrongSubscriptValueType {
+                        key,
+                        expected: expected.clone(),
+                    },
+                });
+            }
+            continue;
+        }
+
+        // Nested dict literal — if the expected type is a TypedDict, recurse.
+        if let Expr::Dict(nested_dict) = &item.value {
+            if let Some((nested_fields, nested_types, _, _)) = fields.get(expected.as_str()) {
+                check_dict_value_types(
+                    nested_dict,
+                    nested_types,
+                    nested_fields,
+                    expected,
+                    nested_dict.range(),
+                    fields,
+                    out,
+                );
             }
         }
     }

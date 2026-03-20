@@ -391,13 +391,11 @@ pub(super) fn check_variance_assignments(
         }
     }
 
-    let classes = collect_classes(&lines, &infer_tvs);
-    if classes.is_empty() {
-        return;
-    }
-
-    // Build known variances: parent classes + two passes for dependencies
+    // Build known variances: parent classes with explicitly declared variance.
     let mut known: HashMap<String, Vec<Variance>> = resolve_parent_variances(&lines, &tv_declared);
+
+    // Infer variances for classes that need it (PEP 695, infer_variance).
+    let classes = collect_classes(&lines, &infer_tvs);
     for _ in 0..2 {
         for class in &classes {
             let vars: Vec<Variance> = class
@@ -407,6 +405,10 @@ pub(super) fn check_variance_assignments(
                 .collect();
             let _ = known.insert(class.name.clone(), vars);
         }
+    }
+
+    if known.is_empty() {
+        return;
     }
 
     check_module_assignments(&lines, &known, &module.source, &module.path, diagnostics);
