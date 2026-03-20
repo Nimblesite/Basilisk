@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run the full Basilisk test suite.
-# Calls individual test scripts in sequence. Each script can also be run standalone.
+# Calls individual test scripts — build + coverage first, then the rest in parallel.
 #
 # Usage:
 #   ./scripts/test.sh          # run everything
@@ -57,12 +57,49 @@ if [[ "$MISSING" -ne 0 ]]; then
 fi
 ok "All dependencies present"
 
-# ── Run test scripts ────────────────────────────────────────────────────────
+# ── Phase 1: Build + coverage (must complete first — produces the binary) ───
 
 "$SCRIPTS/test-rust.sh" $OPEN_FLAG
-"$SCRIPTS/test-vscode.sh"
-"$SCRIPTS/test-nvim.sh"
-"$SCRIPTS/test-zed.sh"
+
+# ── Phase 2: Extension tests in parallel ───────────────────────────────────
+
+header "Running extension tests in parallel"
+PIDS=()
+NAMES=()
+LOGS=()
+
+run_parallel() {
+    local name="$1" script="$2"
+    local log
+    log=$(mktemp)
+    NAMES+=("$name")
+    LOGS+=("$log")
+    "$script" >"$log" 2>&1 &
+    PIDS+=($!)
+}
+
+run_parallel "vscode" "$SCRIPTS/test-vscode.sh"
+run_parallel "nvim"   "$SCRIPTS/test-nvim.sh"
+run_parallel "zed"    "$SCRIPTS/test-zed.sh"
+
+FAILED=0
+for i in "${!PIDS[@]}"; do
+    if wait "${PIDS[$i]}"; then
+        ok "${NAMES[$i]} passed"
+    else
+        echo -e "${RED}✗ ${NAMES[$i]} FAILED${RESET}"
+        FAILED=1
+    fi
+    # Always print the log output so failures are visible.
+    cat "${LOGS[$i]}"
+    rm -f "${LOGS[$i]}"
+done
+
+if [[ "$FAILED" -ne 0 ]]; then
+    echo ""
+    echo -e "${RED}${BOLD}One or more extension test suites failed.${RESET}"
+    exit 1
+fi
 
 echo ""
 ok "All tests passed."
