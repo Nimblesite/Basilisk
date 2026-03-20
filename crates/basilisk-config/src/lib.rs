@@ -402,10 +402,7 @@ disabled = ["BSK-E0001"]
         };
 
         assert_eq!(cfg.rule_severity("BSK-E0010"), Some(RuleSeverity::Warning));
-        assert_eq!(
-            cfg.rule_severity("BSK-E0001"),
-            Some(RuleSeverity::Disabled)
-        );
+        assert_eq!(cfg.rule_severity("BSK-E0001"), Some(RuleSeverity::Disabled));
         assert_eq!(
             cfg.rule_severity("BSK-E9999"),
             None,

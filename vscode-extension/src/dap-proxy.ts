@@ -303,7 +303,24 @@ export class DapTcpProxy {
   // ── Process messages from debugpy (debugpy → client) ─────────────────
 
   private processFromDebugpy(msg: DapMessage): void {
-    // ── stepOut auto-next ──────────────────────────────────────────────
+    this.handleStepOutResponse(msg);
+
+    if (this.handleStepOutStop(msg)) {return;}
+    if (this.handleNextResponse(msg)) {return;}
+    if (this.handleStoppedAfterNext(msg)) {return;}
+    if (this.handleStructuralLineCheck(msg)) {return;}
+    if (this.handleSwallowedResponses(msg)) {return;}
+
+    this.handleAttachResponse(msg);
+    if (this.handleTerminationEvents(msg)) {return;}
+
+    this.sendToClient(msg);
+  }
+
+  // ── stepOut auto-next ──────────────────────────────────────────────
+
+  /** Arm auto-next when stepOut response arrives. */
+  private handleStepOutResponse(msg: DapMessage): void {
     if (
       msg.type === "response" &&
       msg.command === "stepOut" &&
@@ -313,114 +330,134 @@ export class DapTcpProxy {
       this.awaitingStepOutStop = true;
       Logger.debug("[DAP Proxy] stepOut ok — arming auto-next");
     }
+  }
 
-    // After stepOut, debugpy stops at the call-site BEFORE the assignment.
-    // Inject an extra `next` to complete it, swallowing this intermediate stop.
-    if (msg.type === "event" && msg.event === "stopped" && this.awaitingStepOutStop) {
-      this.awaitingStepOutStop = false;
-      const tid = (msg.body as { threadId?: number })?.threadId ?? this.stepOutThreadId;
-      Logger.info(`[DAP Proxy] injecting next after stepOut (thread ${tid})`);
-      this.injectedSeq++;
-      this.sendToDebugpy({
-        type: "request",
-        command: "next",
-        seq: this.injectedSeq,
-        arguments: { threadId: tid },
-      });
-      return; // swallow this stopped event
+  /** After stepOut, inject an extra `next` to complete the assignment. */
+  private handleStepOutStop(msg: DapMessage): boolean {
+    if (msg.type !== "event" || msg.event !== "stopped" || !this.awaitingStepOutStop) {
+      return false;
     }
+    this.awaitingStepOutStop = false;
+    const tid = (msg.body as { threadId?: number })?.threadId ?? this.stepOutThreadId;
+    Logger.info(`[DAP Proxy] injecting next after stepOut (thread ${tid})`);
+    this.injectedSeq++;
+    this.sendToDebugpy({
+      type: "request",
+      command: "next",
+      seq: this.injectedSeq,
+      arguments: { threadId: tid },
+    });
+    return true;
+  }
 
-    // ── stepOver structural line skipping ──────────────────────────────
-    if (
-      msg.type === "response" &&
-      msg.command === "next" &&
-      msg.success
-    ) {
-      Logger.debug(`[DAP Proxy] next response: request_seq=${msg.request_seq}, pendingNextSeq=${this.pendingNextSeq}, match=${msg.request_seq === this.pendingNextSeq}`);
+  // ── stepOver structural line skipping ──────────────────────────────
+
+  /** Arm structural line check when next response arrives. Returns true if stopped event was logged. */
+  private handleNextResponse(msg: DapMessage): boolean {
+    if (msg.type === "response" && msg.command === "next" && msg.success) {
+      Logger.debug(`[DAP Proxy] next response: request_seq=${msg.request_seq}, pending=${this.pendingNextSeq}`);
       if (msg.request_seq === this.pendingNextSeq) {
         this.awaitingNextStop = true;
         Logger.debug("[DAP Proxy] next ok — arming structural line check");
       }
     }
-
-    // When stopped after a stepOver, check if we're on a structural line.
     if (msg.type === "event" && msg.event === "stopped") {
-      Logger.debug(`[DAP Proxy] stopped event: awaitingNextStop=${this.awaitingNextStop}, awaitingStepOutStop=${this.awaitingStepOutStop}`);
+      Logger.debug(`[DAP Proxy] stopped: awaitNext=${this.awaitingNextStop}, awaitStepOut=${this.awaitingStepOutStop}`);
     }
-    if (msg.type === "event" && msg.event === "stopped" && this.awaitingNextStop) {
-      this.awaitingNextStop = false;
-      const tid = (msg.body as { threadId?: number })?.threadId ?? this.nextThreadId;
-      this.pendingStoppedMsg = msg;
-      this.injectedSeq++;
-      this.pendingStackTraceSeq = this.injectedSeq;
-      Logger.debug(`[DAP Proxy] holding stopped event, requesting stackTrace seq=${this.injectedSeq} thread=${tid}`);
-      this.sendToDebugpy({
-        type: "request",
-        command: "stackTrace",
-        seq: this.injectedSeq,
-        arguments: { threadId: tid, startFrame: 0, levels: 1 },
-      });
-      return; // hold the stopped event until we check the line
-    }
+    return false;
+  }
 
-    // Handle response to our injected stackTrace.
+  /** When stopped after stepOver, hold the event and request stackTrace. */
+  private handleStoppedAfterNext(msg: DapMessage): boolean {
+    if (msg.type !== "event" || msg.event !== "stopped" || !this.awaitingNextStop) {
+      return false;
+    }
+    this.awaitingNextStop = false;
+    const tid = (msg.body as { threadId?: number })?.threadId ?? this.nextThreadId;
+    this.pendingStoppedMsg = msg;
+    this.injectedSeq++;
+    this.pendingStackTraceSeq = this.injectedSeq;
+    Logger.debug(`[DAP Proxy] holding stopped, requesting stackTrace seq=${this.injectedSeq} thread=${tid}`);
+    this.sendToDebugpy({
+      type: "request",
+      command: "stackTrace",
+      seq: this.injectedSeq,
+      arguments: { threadId: tid, startFrame: 0, levels: 1 },
+    });
+    return true;
+  }
+
+  /** Handle stackTrace response: skip structural lines or forward the stopped event. */
+  private handleStructuralLineCheck(msg: DapMessage): boolean {
     if (msg.type === "response" && msg.command === "stackTrace") {
-      Logger.debug(`[DAP Proxy] stackTrace response: request_seq=${msg.request_seq}, pendingStackTraceSeq=${this.pendingStackTraceSeq}, match=${msg.request_seq === this.pendingStackTraceSeq}`);
+      Logger.debug(`[DAP Proxy] stackTrace response: req=${msg.request_seq}, pending=${this.pendingStackTraceSeq}`);
     }
     if (
-      msg.type === "response" &&
-      msg.command === "stackTrace" &&
-      msg.request_seq === this.pendingStackTraceSeq
+      msg.type !== "response" ||
+      msg.command !== "stackTrace" ||
+      msg.request_seq !== this.pendingStackTraceSeq
     ) {
-      this.pendingStackTraceSeq = undefined;
-      const stoppedMsg = this.pendingStoppedMsg;
-      this.pendingStoppedMsg = undefined;
-
-      if (stoppedMsg && msg.success) {
-        const frames = (msg.body as { stackFrames?: { line?: number; source?: { path?: string } }[] })?.stackFrames;
-        Logger.debug(`[DAP Proxy] stackTrace frames: ${JSON.stringify(frames?.map(f => ({ line: f.line, path: f.source?.path?.split("/").pop() })))}`);
-        if (frames && frames.length > 0) {
-          const line = frames[0].line;
-          const filePath = frames[0].source?.path;
-          Logger.debug(`[DAP Proxy] checking line ${line} in ${filePath}: structural=${line !== undefined && filePath !== undefined && filePath !== "" ? this.isStructuralLine(filePath, line) : "N/A"}`);
-          if (line !== undefined && filePath !== undefined && filePath !== "" && this.isStructuralLine(filePath, line)) {
-            const tid = (stoppedMsg.body as { threadId?: number })?.threadId ?? this.nextThreadId;
-            Logger.info(`[DAP Proxy] skipping structural line ${line} in ${filePath.split("/").pop()}`);
-            this.awaitingNextStop = true;
-            this.injectedSeq++;
-            this.pendingNextSeq = this.injectedSeq;
-            this.sendToDebugpy({
-              type: "request",
-              command: "next",
-              seq: this.injectedSeq,
-              arguments: { threadId: tid },
-            });
-            return; // swallow this stopped event + stackTrace response
-          }
-        }
-      }
-
-      // Not a structural line — forward the original stopped event.
-      if (stoppedMsg) {
-        this.sendToClient(stoppedMsg);
-      }
-      return; // don't forward the stackTrace response itself
+      return false;
     }
 
-    // Swallow the response to our injected next (from both stepOut and structural skip).
+    this.pendingStackTraceSeq = undefined;
+    const stoppedMsg = this.pendingStoppedMsg;
+    this.pendingStoppedMsg = undefined;
+
+    if (stoppedMsg && msg.success && this.trySkipStructuralLine(msg, stoppedMsg)) {
+      return true;
+    }
+
+    if (stoppedMsg) {
+      this.sendToClient(stoppedMsg);
+    }
+    return true; // always consume the stackTrace response
+  }
+
+  /** Check if the top frame is a structural line and inject a skip if so. */
+  private trySkipStructuralLine(stackMsg: DapMessage, stoppedMsg: DapMessage): boolean {
+    const frames = (stackMsg.body as { stackFrames?: { line?: number; source?: { path?: string } }[] })?.stackFrames;
+    if (!frames || frames.length === 0) {return false;}
+
+    const line = frames[0].line;
+    const filePath = frames[0].source?.path;
+    if (line === undefined || filePath === undefined || filePath === "") {return false;}
+    if (!this.isStructuralLine(filePath, line)) {return false;}
+
+    const tid = (stoppedMsg.body as { threadId?: number })?.threadId ?? this.nextThreadId;
+    Logger.info(`[DAP Proxy] skipping structural line ${line} in ${filePath.split("/").pop()}`);
+    this.awaitingNextStop = true;
+    this.injectedSeq++;
+    this.pendingNextSeq = this.injectedSeq;
+    this.sendToDebugpy({
+      type: "request",
+      command: "next",
+      seq: this.injectedSeq,
+      arguments: { threadId: tid },
+    });
+    return true;
+  }
+
+  // ── Response swallowing ────────────────────────────────────────────
+
+  /** Swallow injected next responses and duplicate disconnect responses. */
+  private handleSwallowedResponses(msg: DapMessage): boolean {
     if (msg.type === "response" && msg.command === "next" && msg.request_seq !== undefined && msg.request_seq >= 900_000) {
       Logger.debug("[DAP Proxy] swallowed injected next response");
-      return;
+      return true;
     }
-
-    // Swallow duplicate disconnect response from debugpy when we already responded.
     if (msg.type === "response" && msg.command === "disconnect" && this.sawDisconnectForwarded) {
-      Logger.debug("[DAP Proxy] swallowed duplicate disconnect response from debugpy");
+      Logger.debug("[DAP Proxy] swallowed duplicate disconnect response");
       this.sawDisconnectForwarded = false;
-      return;
+      return true;
     }
+    return false;
+  }
 
-    // ── attach mode handling ──────────────────────────────────────────
+  // ── Attach and termination handling ────────────────────────────────
+
+  /** Clear attach timeout when debugpy responds. */
+  private handleAttachResponse(msg: DapMessage): void {
     if (
       msg.type === "response" &&
       msg.command === "attach" &&
@@ -432,43 +469,34 @@ export class DapTcpProxy {
       }
       this.pendingAttachSeq = undefined;
     }
+  }
 
-    // ── terminated event handling ─────────────────────────────────────
-    // Track exited event.
-    if (msg.type === "event" && msg.event === "exited") {
+  /** Handle exited, thread, and terminated events. Returns true if consumed. */
+  private handleTerminationEvents(msg: DapMessage): boolean {
+    if (msg.type !== "event") {return false;}
+
+    if (msg.event === "exited") {
       this.sawExitedEvent = true;
-      const exitCode = (msg.body as { exitCode?: number })?.exitCode;
-      Logger.info(`[DAP Proxy] exited event received, exitCode=${exitCode}`);
+      Logger.info(`[DAP Proxy] exited, code=${(msg.body as { exitCode?: number })?.exitCode}`);
     }
 
-    // Track thread exit events.
-    if (msg.type === "event" && msg.event === "thread") {
-      const reason = (msg.body as { reason?: string })?.reason;
-      const threadId = (msg.body as { threadId?: number })?.threadId;
-      Logger.info(`[DAP Proxy] thread event: reason=${reason}, threadId=${threadId}`);
+    if (msg.event === "thread") {
+      const body = msg.body as { reason?: string; threadId?: number };
+      Logger.info(`[DAP Proxy] thread: reason=${body.reason}, id=${body.threadId}`);
     }
 
-    // When terminated arrives, inject exited if missing, then forward.
-    if (msg.type === "event" && msg.event === "terminated") {
-      Logger.info(`[DAP Proxy] terminated event received, sawExited=${this.sawExitedEvent}`);
+    if (msg.event === "terminated") {
+      Logger.info(`[DAP Proxy] terminated, sawExited=${this.sawExitedEvent}`);
       if (!this.sawExitedEvent) {
         Logger.info("[DAP Proxy] injecting exited event before terminated");
-        this.sendToClient({
-          type: "event",
-          event: "exited",
-          seq: 0,
-          body: { exitCode: 0 },
-        });
+        this.sendToClient({ type: "event", event: "exited", seq: 0, body: { exitCode: 0 } });
       }
       this.sawTerminatedEvent = true;
-      Logger.info("[DAP Proxy] forwarding terminated event to VS Code");
       this.sendToClient(msg);
-      Logger.info("[DAP Proxy] terminated event forwarded");
-      return;
+      return true;
     }
 
-    // Everything else → VS Code.
-    this.sendToClient(msg);
+    return false;
   }
 
   /**
