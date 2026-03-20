@@ -1,7 +1,5 @@
 # CLAUDE.md
 
-⚠️ CRITICAL: DO NOT USE GIT!!!!
-
 ⚠️ CRITICAL: WE TREAT THIS CODEBASE WITH RESPECT. THIS CODE WOULD PASS REVIEW AT Google, Meta and Microsoft. WE DON'T ALLOW BAD CODE. NOT EVEN FOR ONE LINE. THIS CODEBASE RECEIVES A GRADE OF A+. ANYTHING LESS IS ⛔️ILLEGAL AND YOU MUST FIX IT IMMEDIATELY.
 
 Target: 100% PEP conformance. Canonical version: **Python 3.12**. Read the PEP conformance readme carefully.
@@ -39,11 +37,10 @@ OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK MESSAGES AND COMPLY
 
 # Rules
 
-- 
-   allow(clippy = ⛔️ ILLEGAL. If you have to do this, you better add a damn good reason!!! 
-   **aggressively remove** allow from the code!!!
+- TOP PRIORITY: REDUCE CODE DUPLICATION. ALWAYS MERGE SIMILAR CODE. ALWAYS SEARCH FOR CODE BEFORE ADDING NEW CODE. 
 - Zero duplication. DRY AF!!! Check for existing code before writing new code
 - Aggressively move code that can be shared out to shared crates/modules/packages
+- allow(clippy = ⛔️ ILLEGAL. 
 - Keep the dependencies and versions in these two files in sync at all times: .github/workflows/ci.yml, .devcontainer/Dockerfile
 - Ignore compiler code (except clippy fixes)
 - Do not use Git unless asked
@@ -65,6 +62,7 @@ Testing is absolutely critical. We aim for 100% test coverage and a high mutatio
 ## Core Principles
 
 - Logging is critical. Can't see what's happening? Add more logging immediately
+- DRY, DRY, DRY
 - 100% test coverage is only the start
 - No unit tests. Only COARSE e2e tests
 

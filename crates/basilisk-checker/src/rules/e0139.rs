@@ -35,6 +35,7 @@ use ruff_python_ast::{Expr, Stmt};
 use ruff_text_size::Ranged;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::rules::shared::split_top_level_commas;
 
 use super::Rule;
 
@@ -453,26 +454,3 @@ fn check_too_few_args_for_tvt_alias(
     }
 }
 
-/// Split a comma-separated type argument list at top-level commas,
-/// respecting bracket nesting.
-fn split_top_level_commas(inner: &str) -> Vec<&str> {
-    let mut parts = Vec::new();
-    let mut depth = 0u32;
-    let mut start = 0;
-    for (idx, ch) in inner.char_indices() {
-        match ch {
-            '[' | '(' => depth = depth.saturating_add(1),
-            ']' | ')' => depth = depth.saturating_sub(1),
-            ',' if depth == 0 => {
-                parts.push(&inner[start..idx]);
-                start = idx + 1;
-            }
-            _ => {}
-        }
-    }
-    let last = &inner[start..];
-    if !last.trim().is_empty() {
-        parts.push(last);
-    }
-    parts
-}

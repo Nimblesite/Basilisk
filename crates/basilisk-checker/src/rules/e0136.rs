@@ -27,7 +27,7 @@ use ruff_text_size::Ranged;
 use basilisk_resolver::{ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
-use crate::rules::shared::{ann_str, expr_name, is_numeric_subtype};
+use crate::rules::shared::{ann_str, expr_name, is_numeric_subtype, split_top_level_commas};
 
 use super::Rule;
 
@@ -280,22 +280,3 @@ fn split_top_level_comma(s: &str) -> Option<(&str, &str)> {
     None
 }
 
-/// Split `s` at all top-level commas (respecting bracket nesting).
-fn split_top_level_commas(s: &str) -> Vec<&str> {
-    let mut depth: usize = 0;
-    let mut parts = Vec::new();
-    let mut start = 0;
-    for (i, c) in s.char_indices() {
-        match c {
-            '[' | '(' => depth = depth.saturating_add(1),
-            ']' | ')' => depth = depth.saturating_sub(1),
-            ',' if depth == 0 => {
-                parts.push(&s[start..i]);
-                start = i + 1;
-            }
-            _ => {}
-        }
-    }
-    parts.push(&s[start..]);
-    parts
-}
