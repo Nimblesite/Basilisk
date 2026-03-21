@@ -35,19 +35,21 @@ impl Rule for ImportFromUntypedModule {
     }
 }
 
+/// Build the diagnostic message for an unresolved import.
 fn make_diagnostic(import: &ImportInfo, path: &str) -> Diagnostic {
+    let root_module = import.module.split('.').next().unwrap_or(&import.module);
+
     Diagnostic {
         code: CODE.clone(),
         severity: Severity::Error,
         message: format!(
-            "Import from `{}` — module may not have type stubs",
+            "Cannot resolve import `{}` — no type information available",
             import.module
         ),
         span: import.span,
         path: path.to_owned(),
         help: Some(format!(
-            "Install a `{}-stubs` package, add a local stub file, or annotate the import with `# type: ignore`",
-            import.module.split('.').next().unwrap_or(&import.module)
+            "Run `uv add {root_module}` to install the package, or `uv add --dev types-{root_module}` for type stubs"
         )),
         note: Some(
             "Basilisk requires complete type information for all imported modules".to_owned(),

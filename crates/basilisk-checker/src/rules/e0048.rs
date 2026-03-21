@@ -25,6 +25,7 @@
 use basilisk_resolver::{ImportKind, ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::rules::shared::split_top_level_commas;
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -674,7 +675,7 @@ fn check_single_annotation(
             let bracket_start = ann_text.find('[').unwrap_or(ann_text.len());
             if ann_text.ends_with(']') {
                 let inner = &ann_text[bracket_start + 1..ann_text.len() - 1];
-                let args: Vec<&str> = split_top_level_args(inner);
+                let args: Vec<&str> = split_top_level_commas(inner);
                 // If all args are simple types (no `[...]` or `...`),
                 // the ParamSpec arg is probably wrong
                 let all_simple = args.iter().all(|arg| {
@@ -706,7 +707,7 @@ fn check_single_annotation(
             let bracket_start = ann_text.find('[').unwrap_or(ann_text.len());
             if ann_text.ends_with(']') {
                 let inner = &ann_text[bracket_start + 1..ann_text.len() - 1];
-                let args: Vec<&str> = split_top_level_args(inner);
+                let args: Vec<&str> = split_top_level_commas(inner);
                 for (idx, arg) in args.iter().enumerate() {
                     if let Some((tv_name, Some(bound))) = info.typevar_bounds.get(idx) {
                         let arg_trimmed = arg.trim();
@@ -751,29 +752,6 @@ fn is_assignable_to_bound(arg: &str, bound: &str) -> bool {
             true
         }
     }
-}
-
-/// Split arguments at top-level commas, respecting bracket nesting.
-fn split_top_level_args(inner: &str) -> Vec<&str> {
-    let mut parts = Vec::new();
-    let mut depth = 0i32;
-    let mut start = 0;
-    for (idx, ch) in inner.char_indices() {
-        match ch {
-            '[' | '(' | '{' => depth += 1,
-            ']' | ')' | '}' => depth -= 1,
-            ',' if depth == 0 => {
-                parts.push(&inner[start..idx]);
-                start = idx + 1;
-            }
-            _ => {}
-        }
-    }
-    let remainder = &inner[start..];
-    if !remainder.trim().is_empty() {
-        parts.push(remainder);
-    }
-    parts
 }
 
 /// Check for calls to union type aliases (e.g. `ListOrSetAlias()`).

@@ -16,9 +16,9 @@ permalink: /readme/
 <h1 align="center">Basilisk</h1>
 
 <p align="center">
-  <strong>Strict-by-default Python type checker. No escape hatches.</strong><br>
-  Every parameter typed. Every return declared. <code>Any</code> is always explicit.<br>
-  Built in <strong>Rust</strong> — ships as a single binary, no runtime required.
+  <strong>The open-source Pylance replacement.</strong><br>
+  Complete Python language server, type checker, debugger, and profiler.<br>
+  VS Code &bull; Neovim &bull; Zed. Built in <strong>Rust</strong> — single binary, no runtime.
 </p>
 
 <p align="center">
@@ -26,7 +26,8 @@ permalink: /readme/
   <a href="https://www.basilisk-python.dev/docs/installation/">Install</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/docs/quick-start/">Quick Start</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/docs/rules/">Rules</a> &nbsp;&bull;&nbsp;
-  <a href="SPEC.md">Spec</a>
+  <a href="https://www.basilisk-python.dev/docs/refactoring/">Refactoring</a> &nbsp;&bull;&nbsp;
+  <a href="https://www.basilisk-python.dev/docs/comparison/">Compare</a>
 </p>
 
 ---
@@ -129,6 +130,32 @@ All rules are on by default. There is no way to relax them globally.
 
 ---
 
+## Refactoring
+
+Basilisk ships 16 refactoring code actions — available via the lightbulb menu in VS Code, Zed, and Neovim. No extensions required.
+
+| Action | Kind | What it does |
+|--------|------|-------------|
+| **Extract variable** | `refactor.extract` | Extract expression into a named variable |
+| **Extract variable (replace all)** | `refactor.extract` | Replace all identical occurrences |
+| **Extract constant** | `refactor.extract` | Extract to module-level `SCREAMING_SNAKE` constant |
+| **Extract function** | `refactor.extract` | Extract selected statements into a new function |
+| **Inline variable** | `refactor.inline` | Replace variable with its value, delete assignment |
+| **Inline function** | `refactor.inline` | Replace call with function body (single-expression) |
+| **Move to new file** | `refactor.move` | Move class/function to a new file, leave import behind |
+| **Move to existing file** | `refactor.move` | Move class/function to a chosen file via command |
+| **Rename symbol** | — | Scope-aware rename with keyword arg, `self.attr`, docstring, and `__all__` updates |
+| **Remove parameter** | `refactor.rewrite` | Remove parameter from function + all call sites |
+| **Add parameter** | `refactor.rewrite` | Add `new_param=None` to function signature |
+| **Sort parameters** | `refactor.rewrite` | Alphabetically sort parameters (keeps `self`/`cls` first) |
+| **Implement abstract methods** | `refactor.rewrite` | Generate method stubs for abstract base class |
+| **Convert Union/Optional** | `refactor.rewrite` | `Union[X, Y]` ↔ `X \| Y`, `Optional[X]` ↔ `X \| None` |
+| **Convert constructs** | `refactor.rewrite` | f-string ↔ `.format()`, `dict()` ↔ `{}`, `list()` ↔ `[]`, ternary ↔ if/else, NamedTuple class ↔ functional |
+
+Extract function detects async functions, methods (`self`/`cls`), and rejects selections containing `yield`, `break`, or `continue`.
+
+---
+
 ## Output format
 
 Diagnostics use rustc-style output:
@@ -157,21 +184,46 @@ error[BSK-E0001]: Missing parameter type annotation for `data`
 
 Basilisk is a Cargo workspace. Each crate owns one layer of the analysis pipeline.
 
+> **Pipeline:** source text &rarr; parser &rarr; AST &rarr; resolver &rarr; scopes &rarr; checker &rarr; diagnostics
+>
+> **Incremental:** `basilisk-db` caches ASTs and resolved modules by content hash so only changed files re-run the pipeline.
+
+### Analysis pipeline
+
 | Crate | What it does | Status |
 |-------|-------------|--------|
 | [basilisk-parser](crates/basilisk-parser/) | Wraps `ruff_python_parser` to parse `.py` source into a typed AST | Done |
-| [basilisk-resolver](crates/basilisk-resolver/) | Name resolution and scope analysis — catches undefined names (E0018) and use-before-assignment (E0019) | Done |
+| [basilisk-resolver](crates/basilisk-resolver/) | Name resolution and scope analysis — catches undefined names and use-before-assignment | Done |
 | [basilisk-checker](crates/basilisk-checker/) | Core type checker — implements all E0001-E0025 rules | Done |
 | [basilisk-cli](crates/basilisk-cli/) | The `basilisk` binary — wires the full pipeline together | Done |
-| [basilisk-db](crates/basilisk-db/) | Salsa-based incremental computation for <10ms latency | Phase 2 |
-| [basilisk-lsp](crates/basilisk-lsp/) | LSP server via tower-lsp — diagnostics, hover, go-to-def | Phase 2 |
+
+### LSP and infrastructure
+
+| Crate | What it does | Status |
+|-------|-------------|--------|
+| [basilisk-lsp](crates/basilisk-lsp/) | LSP server — diagnostics, hover, go-to-def, code actions, refactoring, debugging | Working |
+| [basilisk-db](crates/basilisk-db/) | Salsa-based incremental computation for <10ms latency | Working |
+| [basilisk-config](crates/basilisk-config/) | Configuration parsing (`pyproject.toml`, `basilisk.json`) | Done |
+| [basilisk-stubs](crates/basilisk-stubs/) | Bundled type stubs (typeshed) — no internet needed | Working |
+| [basilisk-uv](crates/basilisk-uv/) | uv package manager integration for the LSP | Working |
+| [basilisk-common](crates/basilisk-common/) | Shared constants and types — zero deps, WASM-compatible | Done |
+| [basilisk-test-utils](crates/basilisk-test-utils/) | Shared E2E test helpers | Done |
+
+### Future capabilities
+
+| Crate | What it does | Status |
+|-------|-------------|--------|
 | [basilisk-mojo](crates/basilisk-mojo/) | Mojo-inspired ownership/immutability analysis (`Borrowed`, `InOut`, `Owned`) | Phase 4 |
-| [basilisk-stubs](crates/basilisk-stubs/) | Bundled type stubs (typeshed + community) — no internet needed | Phase 5 |
+| [basilisk-compiler](crates/basilisk-compiler/) | Compiles typed Python to native code | Future |
 | [basilisk-plugin](crates/basilisk-plugin/) | WASM plugin host for Django, Pydantic, SQLAlchemy type extensions | Phase 5 |
 
-> **Pipeline:** source text &rarr; parser &rarr; AST &rarr; resolver &rarr; scopes &rarr; checker &rarr; diagnostics &rarr; CLI output
->
-> **Incremental (Phase 2+):** `basilisk-db` caches ASTs and resolved modules by content hash so only changed files re-run the pipeline.
+### Editor extensions
+
+| Extension | Editor | Status |
+|-----------|--------|--------|
+| [vscode-extension](vscode-extension/) | VS Code | Working |
+| [basilisk.nvim](basilisk.nvim/) | Neovim 0.10+ | Working |
+| [basilisk-zed](basilisk-zed/) | Zed | Phase 2 |
 
 ---
 

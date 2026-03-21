@@ -145,6 +145,7 @@ dependencies = [
  "basilisk-parser",
  "basilisk-resolver",
  "basilisk-stubs",
+ "basilisk-uv",
  "ruff_python_ast",
  "ruff_text_size",
  "tempfile",
@@ -165,6 +166,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tower-lsp",
  "tracing",
  "tracing-subscriber",
  "walkdir",
@@ -209,7 +211,9 @@ dependencies = [
  "basilisk-config",
  "basilisk-parser",
  "basilisk-resolver",
+ "basilisk-stubs",
  "basilisk-test-utils",
+ "basilisk-uv",
  "dashmap 6.1.0",
  "futures-util",
  "serde",
@@ -271,10 +275,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "basilisk-uv"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "toml",
+ "tracing",
+]
+
+[[package]]
 name = "basilisk-zed"
 version = "0.1.0"
 dependencies = [
  "basilisk-common",
+ "serde_json",
  "zed_extension_api",
 ]
 

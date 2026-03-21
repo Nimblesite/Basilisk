@@ -4,14 +4,13 @@
 //! This module provides type extraction and yield-from checking utilities used
 //! by the rule to validate generator function annotations.
 
-use basilisk_resolver::{FunctionInfo, RhsKind, YieldExprInfo};
+use basilisk_resolver::{FunctionInfo, ResolvedModule, RhsKind, YieldExprInfo};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 use crate::inference::infer_rhs;
+use crate::rules::shared::split_top_level_commas;
 use crate::span_util::slice_span;
 use crate::types::InferredType;
-
-use basilisk_resolver::ResolvedModule;
 
 /// BSK-E0120 error code shared between this module and the rule.
 pub(super) const CODE: ErrorCode = ErrorCode {
@@ -62,7 +61,7 @@ pub(super) fn extract_yield_type(annotation: &str, base: &str) -> Option<String>
     match base {
         "Generator" | "AsyncGenerator" => {
             // First type parameter is the yield type.
-            let first_arg = split_top_level_comma(inner).into_iter().next()?;
+            let first_arg = split_top_level_commas(inner).into_iter().next()?;
             Some(first_arg.trim().to_owned())
         }
         "Iterator" | "Iterable" | "AsyncIterator" | "AsyncIterable" => {
@@ -77,34 +76,8 @@ pub(super) fn extract_yield_type(annotation: &str, base: &str) -> Option<String>
 pub(super) fn extract_return_type_from_generator(annotation: &str) -> Option<String> {
     let bracket_pos = annotation.find('[')?;
     let inner = annotation.get(bracket_pos + 1..annotation.len().checked_sub(1)?)?;
-    let args = split_top_level_comma(inner);
+    let args = split_top_level_commas(inner);
     args.get(2).map(|arg| arg.trim().to_owned())
-}
-
-/// Split a string by top-level commas (respecting bracket nesting).
-pub(super) fn split_top_level_comma(inner: &str) -> Vec<&str> {
-    let mut parts = Vec::new();
-    let mut depth: usize = 0;
-    let mut start = 0;
-
-    for (idx, ch) in inner.char_indices() {
-        match ch {
-            '[' => depth += 1,
-            ']' => depth = depth.saturating_sub(1),
-            ',' if depth == 0 => {
-                if let Some(part) = inner.get(start..idx) {
-                    parts.push(part);
-                }
-                start = idx + 1;
-            }
-            _ => {}
-        }
-    }
-    let remainder = inner.get(start..).unwrap_or_default();
-    if !remainder.trim().is_empty() {
-        parts.push(remainder);
-    }
-    parts
 }
 
 /// Check a `yield from expr` against the outer generator's declared yield type.
@@ -270,8 +243,8 @@ pub(super) fn check_send_type_compat(
         .get(callee_bracket + 1..callee_ann.len().saturating_sub(1))
         .unwrap_or_default();
 
-    let outer_args = split_top_level_comma(outer_inner);
-    let callee_args = split_top_level_comma(callee_inner);
+    let outer_args = split_top_level_commas(outer_inner);
+    let callee_args = split_top_level_commas(callee_inner);
 
     let Some(outer_send_str) = outer_args.get(1) else {
         return;

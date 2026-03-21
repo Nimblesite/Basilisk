@@ -8,6 +8,9 @@ use ruff_text_size::Ranged;
 use basilisk_resolver::Span;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+// Re-export shared helpers so sibling modules can use `helpers::ann_str` etc.
+pub(super) use crate::rules::shared::{ann_str, expr_name};
+use crate::rules::shared::{infer_expr_literal_type, is_type_compatible, split_top_level_commas};
 
 pub(super) const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0148",
@@ -243,7 +246,7 @@ pub(super) fn parse_mapping_annotation(ann: &str) -> Option<(String, String)> {
     let ann = ann.trim();
     let bracket_pos = ann.find('[')?;
     let inner = ann.get(bracket_pos + 1..ann.rfind(']')?)?;
-    let args = split_top_level(inner);
+    let args = split_top_level_commas(inner);
     if args.len() < 2 {
         return None;
     }
@@ -285,7 +288,7 @@ pub(super) fn resolve_mapping_annotation(
 
     // Parse the specialization args from the annotation.
     let inner = ann.get(bracket + 1..ann.rfind(']')?)?;
-    let spec_args: Vec<String> = split_top_level(inner)
+    let spec_args: Vec<String> = split_top_level_commas(inner)
         .into_iter()
         .map(|s| s.trim().to_owned())
         .collect();
@@ -408,11 +411,11 @@ pub(super) fn check_subscript(
     let Some((key_ty, _val_ty)) = ctx.mapping_vars.get(obj_name) else {
         return;
     };
-    let Some(idx_ty) = infer_literal_type(&sub.slice) else {
+    let Some(idx_ty) = infer_expr_literal_type(&sub.slice) else {
         return;
     };
 
-    if !types_compatible(idx_ty, key_ty) {
+    if !is_type_compatible(idx_ty, key_ty) {
         let span = Span {
             start: sub.range().start().to_u32(),
             end: sub.range().end().to_u32(),
@@ -486,81 +489,8 @@ pub(super) fn check_class_def(cls: &ast::StmtClassDef, path: &str, diag: &mut Ve
 fn infer_arg_type<'a>(arg: &'a Expr, var_types: &'a HashMap<String, String>) -> Option<String> {
     match arg {
         Expr::Name(n) => var_types.get(n.id.as_str()).cloned(),
-        _ => infer_literal_type(arg).map(str::to_owned),
+        _ => infer_expr_literal_type(arg).map(str::to_owned),
     }
-}
-
-/// Infer the concrete type of a literal expression.
-pub(super) fn infer_literal_type(expr: &Expr) -> Option<&'static str> {
-    match expr {
-        Expr::NumberLiteral(n) => match &n.value {
-            ruff_python_ast::Number::Int(_) => Some("int"),
-            ruff_python_ast::Number::Float(_) => Some("float"),
-            ruff_python_ast::Number::Complex { .. } => Some("complex"),
-        },
-        Expr::StringLiteral(_) => Some("str"),
-        Expr::BytesLiteral(_) => Some("bytes"),
-        Expr::BooleanLiteral(_) => Some("bool"),
-        Expr::NoneLiteral(_) => Some("None"),
-        _ => None,
-    }
-}
-
-/// Check if `actual` is compatible with `expected` for subscript key types.
-fn types_compatible(actual: &str, expected: &str) -> bool {
-    if actual == expected {
-        return true;
-    }
-    matches!(
-        (actual, expected),
-        ("bool", "int" | "float") | ("int", "float")
-    )
-}
-
-// ---------------------------------------------------------------------------
-// Utility helpers
-// ---------------------------------------------------------------------------
-
-/// Extract the simple name from a `Name` expression.
-pub(super) fn expr_name(expr: &Expr) -> Option<&str> {
-    match expr {
-        Expr::Name(n) => Some(n.id.as_str()),
-        _ => None,
-    }
-}
-
-/// Convert an annotation expression to a readable string.
-pub(super) fn ann_str(expr: &Expr) -> String {
-    match expr {
-        Expr::Name(n) => n.id.to_string(),
-        Expr::Subscript(s) => format!("{}[{}]", ann_str(&s.value), ann_str(&s.slice)),
-        Expr::Attribute(a) => format!("{}.{}", ann_str(&a.value), a.attr),
-        Expr::Tuple(t) => t.elts.iter().map(ann_str).collect::<Vec<_>>().join(", "),
-        Expr::BinOp(b) => format!("{} | {}", ann_str(&b.left), ann_str(&b.right)),
-        Expr::NoneLiteral(_) => "None".to_owned(),
-        Expr::StringLiteral(s) => s.value.to_str().to_owned(),
-        _ => "...".to_owned(),
-    }
-}
-
-/// Split a string by top-level commas (respecting bracket nesting).
-pub(super) fn split_top_level(s: &str) -> Vec<&str> {
-    let mut parts = Vec::new();
-    let mut depth = 0i32;
-    let mut start = 0;
-    for (idx, ch) in s.char_indices() {
-        match ch {
-            '[' | '(' | '{' => depth += 1,
-            ']' | ')' | '}' => depth -= 1,
-            ',' if depth == 0 => {
-                parts.push(&s[start..idx]);
-                start = idx + 1;
-            }
-            _ => {}
-        }
-    }
-    parts.push(&s[start..]);
-    parts
 }
 
 /// Build a span for a call expression.

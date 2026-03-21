@@ -1,5 +1,7 @@
 //! Tuple annotation parsing and compatibility helpers for BSK-E0147.
 
+use crate::rules::shared::split_top_level_commas;
+
 // ---------------------------------------------------------------------------
 // Parsed tuple annotation representation
 // ---------------------------------------------------------------------------
@@ -392,26 +394,6 @@ pub(super) fn is_simple_name(s: &str) -> bool {
 // ---------------------------------------------------------------------------
 // Bracket and comma splitting utilities
 // ---------------------------------------------------------------------------
-
-/// Split `s` by top-level commas (respecting `[]`, `()`, `{}`).
-pub(super) fn split_top_level_commas(s: &str) -> Vec<&str> {
-    let mut parts = Vec::new();
-    let mut depth = 0i32;
-    let mut start = 0;
-    for (i, byte) in s.bytes().enumerate() {
-        match byte {
-            b'[' | b'(' | b'{' => depth += 1,
-            b']' | b')' | b'}' => depth -= 1,
-            b',' if depth == 0 => {
-                parts.push(&s[start..i]);
-                start = i + 1;
-            }
-            _ => {}
-        }
-    }
-    parts.push(&s[start..]);
-    parts
-}
 
 /// Strip the outer `]` from a string that starts immediately after `[`.
 /// Handles nested brackets correctly.

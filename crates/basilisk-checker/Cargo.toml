@@ -12,6 +12,7 @@ basilisk-resolver.workspace = true
 basilisk-stubs.workspace    = true
 ruff_python_ast.workspace   = true
 ruff_text_size.workspace    = true
+basilisk-uv.workspace       = true
 
 [dev-dependencies]
 tempfile = "3"

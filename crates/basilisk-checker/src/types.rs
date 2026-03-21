@@ -299,6 +299,10 @@ impl InferredType {
                 let b_base = b_name.split('[').next().unwrap_or(b_name);
                 a_base == b_base
             }
+            // Ellipsis (`...`) parsed as Named is compatible when it appears
+            // inside Callable parameter lists (e.g. `Callable[..., T]`).
+            // For tuple annotations, `...` has special semantics that need
+            // structural checking, so we don't treat it as universally compatible.
             _ => false,
         }
     }

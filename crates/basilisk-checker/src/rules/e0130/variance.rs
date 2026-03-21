@@ -15,10 +15,9 @@ use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::Diagnostic;
 
-use super::utils::{
-    contains_typevar_reference, extract_pep695_type_params_ordered,
-    extract_typevar_params_from_generic, parse_generic_annotation,
-};
+use crate::rules::shared::{contains_typevar_reference, parse_subscript_annotation};
+
+use super::utils::{extract_pep695_type_params_ordered, extract_typevar_params_from_generic};
 use super::variance_check::{
     check_fn_body_assignments, check_module_assignments, split_top_level_params,
 };
@@ -70,7 +69,7 @@ fn extract_implicit_type_params(
 
     let mut params = Vec::new();
     for base in split_top_level_params(&trimmed[open + 1..close]) {
-        if let Some((_, args)) = parse_generic_annotation(base.trim()) {
+        if let Some((_, args)) = parse_subscript_annotation(base.trim()) {
             for arg in &args {
                 let arg = arg.trim();
                 if infer_tvs.contains_key(arg) && !params.contains(&arg.to_owned()) {
@@ -197,19 +196,19 @@ fn infer_param_variance(
 
     // Check base class constraints
     for base in &class.bases {
-        if let Some((name, args)) = parse_generic_annotation(base) {
+        if let Some((name, args)) = parse_subscript_annotation(base) {
             for (pos, arg) in args.iter().enumerate() {
                 if !contains_typevar_reference(arg, param) {
                     continue;
                 }
-                if is_known_invariant_base(&name) {
+                if is_known_invariant_base(name) {
                     return Variance::Invariant;
                 }
-                if is_known_covariant_base(&name) {
+                if is_known_covariant_base(name) {
                     cov = true;
                     continue;
                 }
-                if let Some(vars) = known.get(&name) {
+                if let Some(vars) = known.get(name) {
                     match vars.get(pos) {
                         Some(Variance::Invariant) => return Variance::Invariant,
                         Some(Variance::Covariant) => cov = true,
@@ -391,13 +390,11 @@ pub(super) fn check_variance_assignments(
         }
     }
 
-    let classes = collect_classes(&lines, &infer_tvs);
-    if classes.is_empty() {
-        return;
-    }
-
-    // Build known variances: parent classes + two passes for dependencies
+    // Build known variances: parent classes with explicitly declared variance.
     let mut known: HashMap<String, Vec<Variance>> = resolve_parent_variances(&lines, &tv_declared);
+
+    // Infer variances for classes that need it (PEP 695, infer_variance).
+    let classes = collect_classes(&lines, &infer_tvs);
     for _ in 0..2 {
         for class in &classes {
             let vars: Vec<Variance> = class
@@ -407,6 +404,10 @@ pub(super) fn check_variance_assignments(
                 .collect();
             let _ = known.insert(class.name.clone(), vars);
         }
+    }
+
+    if known.is_empty() {
+        return;
     }
 
     check_module_assignments(&lines, &known, &module.source, &module.path, diagnostics);

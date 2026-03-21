@@ -1,9 +1,18 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { getStore } from '../../extension';
 
 const EXTENSION_ID = 'basilisk-lang.basilisk';
+const ACTIVATION_TIMEOUT_MS = 5_000;
+const POLL_INTERVAL_MS = 100;
 
+interface PackageJSON {
+    displayName: string;
+    activationEvents?: string[];
+}
+
+// eslint-disable-next-line max-lines-per-function
 suite('Basilisk Extension E2E Tests', () => {
 
     suiteSetup(async () => {
@@ -22,10 +31,10 @@ suite('Basilisk Extension E2E Tests', () => {
         if (ext && !ext.isActive) {
             await ext.activate();
         }
-        const deadline = Date.now() + 5_000;
+        const deadline = Date.now() + ACTIVATION_TIMEOUT_MS;
         while (Date.now() < deadline) {
-            if (ext?.isActive) break;
-            await new Promise<void>(r => setTimeout(r, 100));
+            if (ext?.isActive) {break;}
+            await new Promise<void>(r => setTimeout(r, POLL_INTERVAL_MS));
         }
     });
 
@@ -47,27 +56,30 @@ suite('Basilisk Extension E2E Tests', () => {
     // ----------------------------------------------------------------
     // 2. Extension registers expected commands
     // ----------------------------------------------------------------
-    test('Extension registers basilisk.restartServer command', async () => {
-        const commands = await vscode.commands.getCommands(true);
+    test('Extension registers basilisk.restartServer command', () => {
+        const store = getStore();
+        assert.ok(store, 'Store should be available after activation');
         assert.ok(
-            commands.includes('basilisk.restartServer'),
-            'basilisk.restartServer command should be registered'
+            store.isClientCommandRegistered('basilisk.restartServer'),
+            'basilisk.restartServer should be tracked in internal VSIX state'
         );
     });
 
-    test('Extension registers basilisk.showOutput command', async () => {
-        const commands = await vscode.commands.getCommands(true);
+    test('Extension registers basilisk.showOutput command', () => {
+        const store = getStore();
+        assert.ok(store, 'Store should be available after activation');
         assert.ok(
-            commands.includes('basilisk.showOutput'),
-            'basilisk.showOutput command should be registered'
+            store.isClientCommandRegistered('basilisk.showOutput'),
+            'basilisk.showOutput should be tracked in internal VSIX state'
         );
     });
 
-    test('Extension registers basilisk.organizeImports command', async () => {
-        const commands = await vscode.commands.getCommands(true);
+    test('LSP server advertises basilisk.organizeImports command', () => {
+        const store = getStore();
+        assert.ok(store, 'Store should be available after activation');
         assert.ok(
-            commands.includes('basilisk.organizeImports'),
-            'basilisk.organizeImports command should be registered'
+            store.isServerCommandAdvertised('basilisk.organizeImports'),
+            'basilisk.organizeImports should be advertised by the LSP server'
         );
     });
 
@@ -192,13 +204,13 @@ suite('Basilisk Extension E2E Tests', () => {
     test('Extension has correct display name', () => {
         const ext = vscode.extensions.getExtension(EXTENSION_ID);
         assert.ok(ext, `Extension ${EXTENSION_ID} should be installed`);
-        assert.strictEqual(ext.packageJSON.displayName, 'Basilisk');
+        assert.strictEqual((ext.packageJSON as PackageJSON).displayName, 'Basilisk');
     });
 
     test('Extension activates on Python language', () => {
         const ext = vscode.extensions.getExtension(EXTENSION_ID);
         assert.ok(ext, `Extension ${EXTENSION_ID} should be installed`);
-        const activationEvents: string[] = ext.packageJSON.activationEvents ?? [];
+        const activationEvents: string[] = (ext.packageJSON as PackageJSON).activationEvents ?? [];
         assert.ok(
             activationEvents.includes('onLanguage:python'),
             'Extension should activate on Python language'

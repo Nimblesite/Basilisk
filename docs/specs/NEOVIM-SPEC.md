@@ -151,6 +151,8 @@ All 21 core LSP features (defined in LSP-ARCHITECTURE-SPEC.md) are native in Neo
 
 ### Custom LSP Command Registration
 
+> **Command Registration Rule**: See `LSP-ARCHITECTURE-SPEC.md` § Command Registration Rule. The plugin MUST NOT register commands that the LSP server advertises via `executeCommandProvider`. The server is the single source of truth.
+
 Register handlers for custom commands (defined in LSP-ARCHITECTURE-SPEC.md):
 
 ```lua

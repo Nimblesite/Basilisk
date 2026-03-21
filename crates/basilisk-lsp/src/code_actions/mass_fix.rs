@@ -12,6 +12,24 @@ use tower_lsp::lsp_types::{
 
 use super::fixes;
 
+/// All diagnostic codes that have an autofix implementation.
+pub const ALL_FIXABLE_RULES: &[&str] = &[
+    "BSK-E0001", // Missing parameter type → `: Any`
+    "BSK-E0002", // Missing return type → `-> None`
+    "BSK-E0003", // Missing variable type → `: <inferred>`
+    "BSK-E0005", // Missing class attribute type → `: Any`
+    "BSK-W0050", // Redundant annotation → remove
+];
+
+/// Rules classified as safe (guaranteed not to change runtime semantics).
+pub const SAFE_FIXABLE_RULES: &[&str] = &[
+    "BSK-E0001",
+    "BSK-E0002",
+    "BSK-E0003",
+    "BSK-E0005",
+    "BSK-W0050",
+];
+
 /// Custom `CodeActionKind` for "fix all safe diagnostics in this file".
 ///
 /// VS Code triggers this when the user runs `source.fixAll.basilisk` from
@@ -24,11 +42,8 @@ pub(crate) fn fix_all_kind() -> CodeActionKind {
 ///
 /// Returns `None` if no diagnostics have applicable fixes.
 /// Uses `source.fixAll.basilisk` kind (for on-save / command palette).
-pub(crate) fn fix_all_in_file(
-    uri: &Url,
-    diagnostics: &[Diagnostic],
-    source: &str,
-) -> Option<CodeAction> {
+#[must_use]
+pub fn fix_all_in_file(uri: &Url, diagnostics: &[Diagnostic], source: &str) -> Option<CodeAction> {
     build_fix_all(
         uri,
         diagnostics,
@@ -97,6 +112,32 @@ pub(crate) fn fix_all_by_rule(
         is_preferred: Some(false),
         ..Default::default()
     })
+}
+
+/// Build a single code action that fixes diagnostics matching any of the given rule codes.
+///
+/// Returns `None` if no matching diagnostics have applicable fixes.
+#[must_use]
+pub fn fix_filtered_in_file(
+    uri: &Url,
+    diagnostics: &[Diagnostic],
+    source: &str,
+    allowed_rules: &[&str],
+) -> Option<CodeAction> {
+    let filtered: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| {
+            matches!(&d.code, Some(NumberOrString::String(c)) if allowed_rules.contains(&c.as_str()))
+        })
+        .cloned()
+        .collect();
+
+    build_fix_all(
+        uri,
+        &filtered,
+        source,
+        CodeActionKind::new("source.fixAll.basilisk"),
+    )
 }
 
 /// Shared builder for fix-all code actions.
@@ -176,6 +217,7 @@ fn single_fix_edit(uri: &Url, diag: &Diagnostic, source: &str) -> Option<TextEdi
         "BSK-E0002" => fixes::fix_missing_return_annotation(uri, diag),
         "BSK-E0003" => fixes::fix_missing_variable_annotation(uri, diag),
         "BSK-W0050" => fixes::fix_remove_redundant_annotation(uri, diag, source),
+        "BSK-E0005" => fixes::fix_missing_attribute_annotation(uri, diag),
         _ => return None,
     };
 
@@ -334,5 +376,39 @@ mod tests {
         let a = Range::new(Position::new(0, 0), Position::new(0, 10));
         let b = Range::new(Position::new(1, 0), Position::new(1, 10));
         assert!(!ranges_overlap(&a, &b));
+    }
+
+    #[test]
+    fn test_fix_filtered_includes_only_matching_rules() {
+        let uri = Url::parse("file:///test.py").unwrap();
+        let source = "x: int = 42\ny: str = 'hello'\n";
+        let diags = vec![
+            make_diag("BSK-W0050", 0, 0, 1),
+            make_diag("BSK-W0050", 1, 0, 1),
+            make_diag("BSK-E0001", 1, 5, 10), // different rule
+        ];
+        // Only allow W0050 — E0001 should be excluded.
+        let action = fix_filtered_in_file(&uri, &diags, source, &["BSK-W0050"]);
+        assert!(action.is_some(), "should produce a fix for W0050");
+        let action = action.unwrap();
+        // All attached diagnostics must be W0050.
+        let attached = action.diagnostics.unwrap();
+        assert!(attached.iter().all(|d| matches!(
+            &d.code,
+            Some(NumberOrString::String(c)) if c == "BSK-W0050"
+        )));
+    }
+
+    #[test]
+    fn test_fix_filtered_returns_none_for_no_matching_rules() {
+        let uri = Url::parse("file:///test.py").unwrap();
+        let source = "x: int = 42\n";
+        let diags = vec![make_diag("BSK-W0050", 0, 0, 1)];
+        // Only allow E0001 — W0050 should be filtered out.
+        let action = fix_filtered_in_file(&uri, &diags, source, &["BSK-E0001"]);
+        assert!(
+            action.is_none(),
+            "should return None when no diagnostics match allowed rules"
+        );
     }
 }

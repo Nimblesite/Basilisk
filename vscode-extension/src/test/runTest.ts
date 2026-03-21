@@ -1,5 +1,6 @@
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
 import { runTests } from '@vscode/test-electron';
 import { execSync } from 'child_process';
 
@@ -61,13 +62,13 @@ async function main(): Promise<void> {
 
         // Create a temp workspace with settings pointing to the debug binary
         // so the extension uses the latest build, not a stale installed version.
-        const tmpWorkspace = fs.mkdtempSync(path.join(require('os').tmpdir(), 'basilisk-test-ws-'));
+        const tmpWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), 'basilisk-test-ws-'));
         const vscodeDir = path.join(tmpWorkspace, '.vscode');
         fs.mkdirSync(vscodeDir, { recursive: true });
 
         const debugBinary = process.env.BASILISK_EXECUTABLE_PATH ?? findBinary();
         const settings: Record<string, unknown> = {};
-        if (debugBinary) {
+        if (debugBinary !== undefined && debugBinary !== '') {
             settings['basilisk.executablePath'] = debugBinary;
         }
         fs.writeFileSync(
@@ -79,16 +80,17 @@ async function main(): Promise<void> {
         await runTests({
             extensionDevelopmentPath,
             extensionTestsPath,
-            ...(systemElectron ? { vscodeExecutablePath: systemElectron } : {}),
+            ...(systemElectron !== undefined ? { vscodeExecutablePath: systemElectron } : {}),
             launchArgs: ['--disable-extensions', tmpWorkspace],
         });
 
         // Clean up temp workspace.
         fs.rmSync(tmpWorkspace, { recursive: true, force: true });
     } catch (err) {
+        // eslint-disable-next-line no-console
         console.error('Failed to run tests', err);
         process.exit(1);
     }
 }
 
-main();
+void main();

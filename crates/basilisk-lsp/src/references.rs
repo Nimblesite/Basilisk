@@ -1,11 +1,16 @@
 //! Find All References and Rename Symbol handlers.
+//!
+//! Uses the scope tree from `scope_tree` for scope-aware reference finding
+//! and rename.  Falls back to whole-file text matching for cross-file
+//! references (handled by the navigation handler).
 
-use basilisk_resolver::ResolvedModule;
+use basilisk_resolver::{FunctionInfo, ResolvedModule};
 use tower_lsp::lsp_types::{Location, PrepareRenameResponse, Range, TextEdit, Url, WorkspaceEdit};
 
+use crate::scope_tree;
 use crate::util::{find_symbol_at_offset, identifier_at_offset, span_to_range, SymbolHit};
 
-/// Find all references to the symbol at a byte offset.
+/// Find all references to the symbol at a byte offset (scope-aware).
 #[must_use]
 pub fn find_references(
     resolved: &ResolvedModule,
@@ -14,20 +19,15 @@ pub fn find_references(
     uri: &Url,
     include_declaration: bool,
 ) -> Vec<Location> {
-    let name = symbol_name_at(resolved, source, byte_offset);
-    let Some(name) = name else {
-        return vec![];
-    };
+    let ranges = scope_tree::find_scoped_references(resolved, source, byte_offset);
 
-    let mut locations = Vec::new();
-
-    // Find all occurrences of the name as whole-word matches in the source.
-    for range in find_identifier_occurrences(source, &name) {
-        locations.push(Location {
+    let mut locations: Vec<Location> = ranges
+        .into_iter()
+        .map(|range| Location {
             uri: uri.clone(),
             range,
-        });
-    }
+        })
+        .collect();
 
     // If not including declaration, try to remove it.
     if !include_declaration {
@@ -49,11 +49,10 @@ pub fn prepare_rename(
 ) -> Option<PrepareRenameResponse> {
     let name = symbol_name_at(resolved, source, byte_offset)?;
 
-    // Must be on a known symbol.
+    // Must be on a known symbol or identifier.
     let hit = find_symbol_at_offset(resolved, byte_offset);
     let ident = identifier_at_offset(source, byte_offset);
 
-    // Accept if cursor is on a definition or a known identifier.
     if hit.is_some() || ident.is_some() {
         let range = identifier_range_at(source, byte_offset)?;
         return Some(PrepareRenameResponse::RangeWithPlaceholder {
@@ -65,7 +64,9 @@ pub fn prepare_rename(
     None
 }
 
-/// Rename the symbol at a byte offset, returning a workspace edit.
+/// Rename the symbol at a byte offset, returning a workspace edit (scope-aware).
+///
+/// Handles parameter keyword arguments and `__all__` entry updates.
 #[must_use]
 pub fn rename_symbol(
     resolved: &ResolvedModule,
@@ -74,9 +75,44 @@ pub fn rename_symbol(
     uri: &Url,
     new_name: &str,
 ) -> Option<WorkspaceEdit> {
+    // Validate the rename first.
+    if let Some(rejection) = scope_tree::validate_rename(new_name, resolved, source, byte_offset) {
+        if rejection == scope_tree::RenameRejection::InvalidIdentifier {
+            return None;
+        }
+    }
+
     let name = symbol_name_at(resolved, source, byte_offset)?;
 
-    let edits: Vec<TextEdit> = find_identifier_occurrences(source, &name)
+    // Use scope-aware reference finding.
+    let mut ranges = scope_tree::find_scoped_references(resolved, source, byte_offset);
+
+    // If renaming a parameter, also find keyword argument sites and docstring refs.
+    let hit = find_symbol_at_offset(resolved, byte_offset);
+    if let Some(SymbolHit::Parameter { func, .. }) = &hit {
+        let kwarg_ranges = find_keyword_arg_sites(source, &func.name, &name);
+        ranges.extend(kwarg_ranges);
+        let doc_ranges = find_docstring_param_references(source, func, &name);
+        ranges.extend(doc_ranges);
+    }
+
+    // If renaming a class attribute, find `self.attr` references in all methods.
+    if let Some(SymbolHit::Attribute { class, .. }) = &hit {
+        let attr_ranges = find_self_attr_references(source, &class.name, &name, resolved);
+        ranges.extend(attr_ranges);
+    }
+
+    // If renaming a module-level symbol, update __all__ entries.
+    if matches!(
+        &hit,
+        Some(SymbolHit::Function(f)) if f.class_name.is_none()
+    ) || matches!(&hit, Some(SymbolHit::Class(_) | SymbolHit::Variable(_)))
+    {
+        let all_ranges = find_dunder_all_entries(source, &name);
+        ranges.extend(all_ranges);
+    }
+
+    let edits: Vec<TextEdit> = ranges
         .into_iter()
         .map(|range| TextEdit {
             range,
@@ -94,6 +130,261 @@ pub fn rename_symbol(
         changes: Some(changes),
         ..Default::default()
     })
+}
+
+/// Find keyword argument sites like `func(param_name=value)` in the source.
+fn find_keyword_arg_sites(source: &str, func_name: &str, param_name: &str) -> Vec<Range> {
+    let mut results = Vec::new();
+    for (line_idx, line) in source.lines().enumerate() {
+        if !line.contains(func_name) {
+            continue;
+        }
+        let line_u32 = u32::try_from(line_idx).unwrap_or(u32::MAX);
+        find_kwarg_in_line(line, param_name, line_u32, &mut results);
+    }
+    results
+}
+
+/// Find keyword argument occurrences within a single line.
+fn find_kwarg_in_line(line: &str, param_name: &str, line_num: u32, results: &mut Vec<Range>) {
+    let bytes = line.as_bytes();
+    let param_len = param_name.len();
+    let pattern = format!("{param_name}=");
+    let mut pos = 0;
+
+    while let Some(rel) = line.get(pos..).and_then(|s| s.find(&pattern)) {
+        let abs = pos + rel;
+        let after_param = abs + param_len;
+        let before = line.get(..abs).unwrap_or("");
+        let at_word_start = abs == 0 || bytes.get(abs - 1).is_some_and(|&b| !is_ident_byte(b));
+        let is_single_eq = bytes.get(after_param + 1).is_none_or(|&b| b != b'=');
+
+        if at_word_start
+            && before.contains('(')
+            && is_single_eq
+            && !is_in_string_or_comment(line, abs)
+        {
+            let start_char = u32::try_from(abs).unwrap_or(0);
+            let end_char = u32::try_from(after_param).unwrap_or(0);
+            results.push(Range {
+                start: tower_lsp::lsp_types::Position {
+                    line: line_num,
+                    character: start_char,
+                },
+                end: tower_lsp::lsp_types::Position {
+                    line: line_num,
+                    character: end_char,
+                },
+            });
+        }
+        pos = abs + param_len.max(1);
+    }
+}
+
+/// Find `__all__` entries that match `name` and return their ranges.
+fn find_dunder_all_entries(source: &str, name: &str) -> Vec<Range> {
+    let mut results = Vec::new();
+    let mut in_all_block = false;
+    for (line_idx, line) in source.lines().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("__all__") && trimmed.contains('=') {
+            in_all_block = true;
+        }
+        if in_all_block {
+            for quote in &['\'', '"'] {
+                let quoted = format!("{quote}{name}{quote}");
+                if let Some(pos) = line.find(&quoted) {
+                    let name_start = pos + 1;
+                    let name_end = name_start + name.len();
+                    let line_u32 = u32::try_from(line_idx).unwrap_or(u32::MAX);
+                    results.push(Range {
+                        start: tower_lsp::lsp_types::Position {
+                            line: line_u32,
+                            character: u32::try_from(name_start).unwrap_or(0),
+                        },
+                        end: tower_lsp::lsp_types::Position {
+                            line: line_u32,
+                            character: u32::try_from(name_end).unwrap_or(0),
+                        },
+                    });
+                }
+            }
+            if trimmed.ends_with(']') {
+                in_all_block = false;
+            }
+        }
+    }
+    results
+}
+
+/// Find docstring parameter references for a function parameter rename.
+///
+/// Searches for `:param param_name:` (reST), `:type param_name:`, `@param`,
+/// `param_name (type):` (Google), and `param_name :` (`NumPy`) patterns within
+/// the function's `def_span`. Returns ranges covering only the `param_name`.
+fn find_docstring_param_references(
+    source: &str,
+    func: &FunctionInfo,
+    param_name: &str,
+) -> Vec<Range> {
+    if func.docstring.is_none() {
+        return Vec::new();
+    }
+    let start = func.def_span.start_usize();
+    let end = func.def_span.end_usize().min(source.len());
+    let slice = source.get(start..end).unwrap_or("");
+
+    let mut results = Vec::new();
+    find_tagged_param_refs(slice, start, param_name, source, &mut results);
+    find_google_numpy_param_refs(slice, start, param_name, source, &mut results);
+    results
+}
+
+/// Find reST/Javadoc-style parameter references (`:param name:`, `@param name`).
+fn find_tagged_param_refs(
+    slice: &str,
+    base_offset: usize,
+    param_name: &str,
+    source: &str,
+    results: &mut Vec<Range>,
+) {
+    let patterns = [
+        format!(":param {param_name}:"),
+        format!(":type {param_name}:"),
+        format!("@param {param_name} "),
+        format!("@type {param_name} "),
+    ];
+    for pattern in &patterns {
+        find_pattern_param(slice, base_offset, param_name, pattern, source, results);
+    }
+}
+
+/// Search `slice` for `pattern` and emit a range for the `param_name` portion.
+fn find_pattern_param(
+    slice: &str,
+    base_offset: usize,
+    param_name: &str,
+    pattern: &str,
+    source: &str,
+    results: &mut Vec<Range>,
+) {
+    let Some(name_offset_in_pattern) = pattern.find(param_name) else {
+        return;
+    };
+    let mut pos = 0;
+    while let Some(rel) = slice.get(pos..).and_then(|s| s.find(pattern)) {
+        let name_start = base_offset + pos + rel + name_offset_in_pattern;
+        let name_end = name_start + param_name.len();
+        results.push(Range {
+            start: crate::util::byte_offset_to_position(source, name_start),
+            end: crate::util::byte_offset_to_position(source, name_end),
+        });
+        pos += rel + pattern.len().max(1);
+    }
+}
+
+/// Find Google-style `name (type):` and `NumPy`-style `name :` param references.
+fn find_google_numpy_param_refs(
+    slice: &str,
+    base_offset: usize,
+    param_name: &str,
+    source: &str,
+    results: &mut Vec<Range>,
+) {
+    let mut byte_pos = 0;
+    for line in slice.lines() {
+        let trimmed = line.trim_start();
+        let whitespace_len = line.len() - trimmed.len();
+        if trimmed.starts_with(param_name) {
+            let after = trimmed.get(param_name.len()..).unwrap_or("");
+            let is_match =
+                after.starts_with(" (") || after.starts_with(':') || after.starts_with(" :");
+            if is_match {
+                let name_start = base_offset + byte_pos + whitespace_len;
+                let name_end = name_start + param_name.len();
+                results.push(Range {
+                    start: crate::util::byte_offset_to_position(source, name_start),
+                    end: crate::util::byte_offset_to_position(source, name_end),
+                });
+            }
+        }
+        // Advance past this line plus the newline character.
+        byte_pos += line.len() + 1;
+    }
+}
+
+/// Find `self.attr_name` and `cls.attr_name` references across all methods of a class.
+///
+/// For each method belonging to `class_name`, searches within its `def_span` for
+/// `self.attr_name` and `cls.attr_name` patterns. Returns ranges covering only the
+/// attribute name portion (after `self.`/`cls.`).
+fn find_self_attr_references(
+    source: &str,
+    class_name: &str,
+    attr_name: &str,
+    resolved: &ResolvedModule,
+) -> Vec<Range> {
+    let methods = class_methods(resolved, class_name);
+
+    ["self.", "cls."]
+        .iter()
+        .flat_map(|prefix| {
+            let pattern = format!("{prefix}{attr_name}");
+            methods
+                .iter()
+                .flat_map(move |func| {
+                    find_attr_in_span(source, func.def_span, &pattern, prefix.len(), attr_name)
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+/// Collect all methods belonging to a class by matching `class_name`.
+fn class_methods<'a>(resolved: &'a ResolvedModule, class_name: &str) -> Vec<&'a FunctionInfo> {
+    resolved
+        .functions
+        .iter()
+        .filter(|f| f.class_name.as_deref() == Some(class_name))
+        .collect()
+}
+
+/// Search for `pattern` within a span, returning ranges for the attr name only.
+fn find_attr_in_span(
+    source: &str,
+    span: basilisk_resolver::Span,
+    pattern: &str,
+    prefix_len: usize,
+    attr_name: &str,
+) -> Vec<Range> {
+    let start = span.start_usize();
+    let end = span.end_usize().min(source.len());
+    let slice = source.get(start..end).unwrap_or("");
+    let mut results = Vec::new();
+    let mut search_pos = 0;
+
+    while let Some(rel) = slice.get(search_pos..).and_then(|s| s.find(pattern)) {
+        let abs = start + search_pos + rel;
+        let name_start = abs + prefix_len;
+        let name_end = name_start + attr_name.len();
+
+        if has_word_boundary_after(source, name_end) && !is_in_string_or_comment(source, abs) {
+            results.push(Range {
+                start: crate::util::byte_offset_to_position(source, name_start),
+                end: crate::util::byte_offset_to_position(source, name_end),
+            });
+        }
+        search_pos += rel + pattern.len().max(1);
+    }
+    results
+}
+
+/// Check that the byte after `pos` is not an identifier character (word boundary).
+fn has_word_boundary_after(source: &str, pos: usize) -> bool {
+    source
+        .as_bytes()
+        .get(pos)
+        .is_none_or(|&b| !is_ident_byte(b))
 }
 
 /// Get the symbol name at a byte offset, either from the symbol table or from
@@ -129,6 +420,10 @@ fn definition_range(hit: &SymbolHit<'_>, source: &str) -> Range {
 }
 
 /// Find all whole-word occurrences of `name` in `source`, returning LSP ranges.
+///
+/// This is the **non-scope-aware** version, still used by cross-file reference
+/// search in the navigation handler where we don't have a resolved module for
+/// the remote file's scope tree.
 pub(crate) fn find_identifier_occurrences(source: &str, name: &str) -> Vec<Range> {
     let bytes = source.as_bytes();
     let name_bytes = name.as_bytes();
@@ -144,13 +439,10 @@ pub(crate) fn find_identifier_occurrences(source: &str, name: &str) -> Vec<Range
             abs_pos == 0 || bytes.get(abs_pos - 1).is_none_or(|&b| !is_ident_byte(b));
         let at_word_end = bytes.get(end_pos).is_none_or(|&b| !is_ident_byte(b));
 
-        if at_word_start && at_word_end {
-            // Make sure we're not inside a string or comment (simple heuristic).
-            if !is_in_string_or_comment(source, abs_pos) {
-                let start = crate::util::byte_offset_to_position(source, abs_pos);
-                let end = crate::util::byte_offset_to_position(source, end_pos);
-                results.push(Range { start, end });
-            }
+        if at_word_start && at_word_end && !is_in_string_or_comment(source, abs_pos) {
+            let start = crate::util::byte_offset_to_position(source, abs_pos);
+            let end = crate::util::byte_offset_to_position(source, end_pos);
+            results.push(Range { start, end });
         }
 
         search_start = abs_pos + name_bytes.len().max(1);
@@ -198,7 +490,6 @@ pub(crate) fn is_in_string_or_comment(source: &str, offset: usize) -> bool {
 
     // If there's a `#` before us on the same line (outside strings), it's a comment.
     if let Some(hash_pos) = line_before.find('#') {
-        // Simple check: no string quote before the hash on this line.
         let Some(before_hash) = line_before.get(..hash_pos) else {
             return false;
         };

@@ -1,6 +1,6 @@
 --- LSP client configuration and lifecycle management.
 ---
---- Uses Neovim 0.10+ built-in LSP client (vim.lsp.config / vim.lsp.enable).
+--- Uses Neovim 0.11+ built-in LSP client (vim.lsp.config / vim.lsp.enable).
 --- All 21 core LSP features are native — zero custom implementation needed.
 
 local binary = require("basilisk.binary")
@@ -22,6 +22,7 @@ local restart_count = 0
 local function build_settings(config)
   return {
     basilisk = {
+      enabled = config.enabled,
       python = config.python,
       analysisMode = config.analysis_mode,
       inlayHints = {
@@ -31,6 +32,25 @@ local function build_settings(config)
       ruff = {
         enabled = config.ruff.enabled,
         executablePath = config.ruff.executable_path,
+      },
+      debugger = {
+        enabled = config.debugger.enabled,
+        typeChecking = config.debugger.type_checking,
+        debugpyPath = config.debugger.debugpy_path,
+      },
+      testExplorer = {
+        enabled = config.test_explorer.enabled,
+        framework = config.test_explorer.framework,
+        pytestPath = config.test_explorer.pytest_path,
+        args = config.test_explorer.args,
+        autoDiscoverOnSave = config.test_explorer.auto_discover_on_save,
+      },
+      uv = {
+        enabled = config.uv.enabled,
+        executablePath = config.uv.executable_path,
+        autoSync = config.uv.auto_sync,
+        stubSuggestions = config.uv.stub_suggestions,
+        dependencyDiagnostics = config.uv.dependency_diagnostics,
       },
     },
   }

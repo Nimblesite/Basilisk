@@ -32,6 +32,8 @@ mod ws_test_goto_definition;
 mod ws_test_hierarchies;
 #[path = "lsp/ws_test_rename.rs"]
 mod ws_test_rename;
+#[path = "lsp/ws_test_scope_rename.rs"]
+mod ws_test_scope_rename;
 #[path = "lsp/ws_test_selection_ranges.rs"]
 mod ws_test_selection_ranges;
 #[path = "lsp/ws_test_workspace_symbols.rs"]

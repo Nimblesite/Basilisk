@@ -1,29 +1,35 @@
 //! Basilisk extension for the Zed editor.
+//!
+//! Pure logic lives in [`logic`] (testable on native target).
+//! This file is thin glue that bridges [`logic`] ↔ `zed_extension_api` types.
 #![expect(
     missing_docs,
     reason = "zed::register_extension! generates undocumented items"
 )]
 
+mod logic;
+
 use zed_extension_api::{self as zed, serde_json, Result};
 
-use basilisk_common::{config_keys, slash_commands};
+use basilisk_common::{config_keys, release};
 
 struct BasiliskExtension {
     /// Cached path to the resolved binary, so we don't re-resolve every call.
     cached_binary_path: Option<String>,
+    /// Version of the currently resolved binary (from download dir name or "local").
+    cached_binary_version: Option<String>,
 }
+
+// ── Binary resolution ────────────────────────────────────────────────────────
 
 impl BasiliskExtension {
     /// Resolve the basilisk binary to an absolute path.
     ///
-    /// Zed does NOT resolve bare command names from PATH — it treats them
-    /// as relative to the extension work directory. We must return an
-    /// absolute path.
-    ///
     /// Resolution order:
     /// 1. User-configured path from Zed LSP settings
     /// 2. `BASILISK_PATH` environment variable
-    /// 3. Search `PATH` directories from the worktree shell environment
+    /// 3. `~/.cargo/bin/basilisk`
+    /// 4. Download from GitHub releases
     fn resolve_binary(&mut self, worktree: &zed::Worktree) -> Result<String> {
         if let Some(ref path) = self.cached_binary_path {
             return Ok(path.clone());
@@ -40,50 +46,133 @@ impl BasiliskExtension {
         }
 
         // 2. Check BASILISK_PATH environment variable.
-        if let Some(path) = Self::env_var(worktree, "BASILISK_PATH") {
-            self.cached_binary_path = Some(path.clone());
-            return Ok(path);
+        let env = worktree.shell_env();
+        if let Some(path) = logic::find_env_var(&env, "BASILISK_PATH") {
+            let owned = path.to_string();
+            self.cached_binary_path = Some(owned.clone());
+            return Ok(owned);
         }
 
         // 3. Default: ~/.cargo/bin/basilisk (where cargo install puts it).
-        if let Some(path) = Self::find_binary(worktree) {
+        if let Some(home) = logic::find_env_var(&env, "HOME") {
+            let path = logic::cargo_bin_path(home);
             self.cached_binary_path = Some(path.clone());
             return Ok(path);
         }
 
-        Err(
-            "basilisk binary not found. Install with: cargo install --path crates/basilisk-cli"
-                .into(),
-        )
+        // 4. Download from GitHub releases.
+        let (path, version) = Self::download_binary()?;
+        self.cached_binary_path = Some(path.clone());
+        self.cached_binary_version = Some(version);
+        Ok(path)
     }
 
-    /// Read a single environment variable from the worktree shell env.
-    fn env_var(worktree: &zed::Worktree, name: &str) -> Option<String> {
-        worktree
-            .shell_env()
-            .into_iter()
-            .find(|(key, _)| key == name)
-            .map(|(_, value)| value)
+    /// Check if a newer version is available and log a warning if so.
+    ///
+    /// Non-fatal — if the check fails we silently continue.
+    fn check_for_updates(&self) {
+        let current = match &self.cached_binary_version {
+            Some(v) => v.as_str(),
+            None => return,
+        };
+
+        if let Ok(latest_release) = zed::latest_github_release(
+            release::GITHUB_REPO,
+            zed::GithubReleaseOptions {
+                require_assets: false,
+                pre_release: false,
+            },
+        ) {
+            if logic::is_newer_version(current, &latest_release.version) {
+                eprintln!(
+                    "[basilisk] Update available: {} → {} (restart Zed to upgrade)",
+                    current, latest_release.version
+                );
+            }
+        }
     }
 
-    /// Find the basilisk binary. Since WASM can't stat files, we go straight
-    /// to the most likely location: ~/.cargo/bin/basilisk (where cargo install puts it).
-    fn find_binary(worktree: &zed::Worktree) -> Option<String> {
-        let home = Self::env_var(worktree, "HOME")?;
-        Some(format!("{home}/.cargo/bin/basilisk"))
+    /// Download the basilisk binary from the latest GitHub release.
+    fn download_binary() -> Result<(String, String)> {
+        let release = zed::latest_github_release(
+            release::GITHUB_REPO,
+            zed::GithubReleaseOptions {
+                require_assets: true,
+                pre_release: false,
+            },
+        )?;
+
+        let (platform, arch) = zed::current_platform();
+
+        let (os_str, is_windows) = match platform {
+            zed::Os::Mac => ("apple-darwin", false),
+            zed::Os::Linux => ("unknown-linux-gnu", false),
+            zed::Os::Windows => ("pc-windows-msvc", true),
+        };
+
+        let arch_str = match arch {
+            zed::Architecture::Aarch64 => "aarch64",
+            zed::Architecture::X8664 => "x86_64",
+            zed::Architecture::X86 => {
+                return Err("32-bit x86 is not supported".into());
+            }
+        };
+
+        let expected_asset = release::asset_name(os_str, arch_str, is_windows);
+
+        let asset = release
+            .assets
+            .iter()
+            .find(|a| a.name == expected_asset)
+            .ok_or_else(|| {
+                format!(
+                    "No release asset found for {expected_asset} in {}",
+                    release.version
+                )
+            })?;
+
+        let binary_name = if is_windows {
+            "basilisk.exe"
+        } else {
+            "basilisk"
+        };
+
+        let download_dir = format!("basilisk-{}", release.version);
+        let binary_path = format!("{download_dir}/{binary_name}");
+
+        // Only download if the binary isn't already cached in the extension dir.
+        if std::fs::metadata(&binary_path).is_err() {
+            zed::download_file(
+                &asset.download_url,
+                &download_dir,
+                if is_windows {
+                    zed::DownloadedFileType::Zip
+                } else {
+                    zed::DownloadedFileType::GzipTar
+                },
+            )
+            .map_err(|err| format!("Failed to download basilisk: {err}"))?;
+
+            zed::make_file_executable(&binary_path)
+                .map_err(|err| format!("Failed to make basilisk executable: {err}"))?;
+        }
+
+        Ok((binary_path, release.version))
     }
 
-    /// Build a `SlashCommandOutput` with a single labeled section.
-    fn slash_output(label: &str, text: String) -> zed::SlashCommandOutput {
+    /// Build a `SlashCommandOutput` from a `(label, text)` pair.
+    fn slash_output(label: String, text: String) -> zed::SlashCommandOutput {
         zed::SlashCommandOutput {
             sections: vec![zed::SlashCommandOutputSection {
                 range: (0..text.len()).into(),
-                label: label.to_string(),
+                label,
             }],
             text,
         }
     }
 }
+
+// ── Extension trait ──────────────────────────────────────────────────────────
 
 impl zed::Extension for BasiliskExtension {
     fn new() -> Self
@@ -92,6 +181,7 @@ impl zed::Extension for BasiliskExtension {
     {
         Self {
             cached_binary_path: None,
+            cached_binary_version: None,
         }
     }
 
@@ -101,7 +191,7 @@ impl zed::Extension for BasiliskExtension {
         worktree: &zed::Worktree,
     ) -> Result<zed::Command> {
         let binary_path = self.resolve_binary(worktree)?;
-
+        self.check_for_updates();
         Ok(zed::Command {
             command: binary_path,
             args: vec!["lsp".into()],
@@ -124,27 +214,12 @@ impl zed::Extension for BasiliskExtension {
         _language_server_id: &zed::LanguageServerId,
         worktree: &zed::Worktree,
     ) -> Result<Option<serde_json::Value>> {
-        // Read settings from Zed's LSP configuration for basilisk.
         let settings = zed::settings::LspSettings::for_worktree(config_keys::ROOT, worktree)
             .ok()
             .and_then(|s| s.settings);
 
-        // If user has settings, pass them through. Otherwise use sensible defaults.
-        let config = settings.unwrap_or_else(|| {
-            serde_json::json!({
-                config_keys::INLAY_HINTS: {
-                    config_keys::PARAM_NAMES: true,
-                    config_keys::VAR_TYPES: true
-                },
-                config_keys::RUFF: {
-                    config_keys::RUFF_ENABLED: true
-                }
-            })
-        });
-
-        Ok(Some(serde_json::json!({
-            config_keys::ROOT: config
-        })))
+        let config = settings.unwrap_or_else(logic::default_workspace_config);
+        Ok(Some(logic::wrap_config(&config)))
     }
 
     fn run_slash_command(
@@ -153,40 +228,8 @@ impl zed::Extension for BasiliskExtension {
         args: Vec<String>,
         _worktree: Option<&zed::Worktree>,
     ) -> Result<zed::SlashCommandOutput> {
-        match command.name.as_str() {
-            slash_commands::PROFILE => {
-                let text = if let Some(pid) = args.first() {
-                    format!("Profiling PID {pid}")
-                } else {
-                    "Profiling active Python process".to_string()
-                };
-                Ok(Self::slash_output("Profile Started", text))
-            }
-            slash_commands::PROFSTOP => Ok(Self::slash_output(
-                "Profile Results",
-                "Profiling stopped. Results sent via LSP diagnostics.".into(),
-            )),
-            slash_commands::PROFSNAPSHOT => Ok(Self::slash_output(
-                "Profile Snapshot",
-                "Profiling snapshot captured. Results sent via LSP diagnostics. Profiling continues.".into(),
-            )),
-            slash_commands::MEMLEAK => Ok(Self::slash_output(
-                "Memory Tracking",
-                "Memory leak tracking started.".into(),
-            )),
-            slash_commands::MEMSTOP => Ok(Self::slash_output(
-                "Memory Report",
-                "Memory tracking stopped. Leak report sent via LSP diagnostics.".into(),
-            )),
-            slash_commands::MEMREFS => {
-                let type_name = args.first().map_or("(unknown)", String::as_str);
-                Ok(Self::slash_output(
-                    "Reference Graph",
-                    format!("Querying retention paths for `{type_name}`..."),
-                ))
-            }
-            _ => Err(format!("Unknown slash command: {}", command.name)),
-        }
+        let (label, text) = logic::slash_command_output(&command.name, &args)?;
+        Ok(Self::slash_output(label, text))
     }
 
     fn complete_slash_command_argument(
@@ -194,28 +237,90 @@ impl zed::Extension for BasiliskExtension {
         command: zed::SlashCommand,
         _args: Vec<String>,
     ) -> Result<Vec<zed::SlashCommandArgumentCompletion>> {
-        match command.name.as_str() {
-            slash_commands::PROFILE => {
-                // In WASM we can't enumerate processes — return a placeholder hint.
-                Ok(vec![zed::SlashCommandArgumentCompletion {
-                    label: "<pid>".to_string(),
-                    new_text: String::new(),
-                    run_command: false,
-                }])
-            }
-            slash_commands::MEMREFS => {
-                // Suggest common Python types.
-                Ok(["DataFrame", "dict", "list", "set", "ndarray", "Tensor"]
-                    .iter()
-                    .map(|t| zed::SlashCommandArgumentCompletion {
-                        label: (*t).to_string(),
-                        new_text: (*t).to_string(),
-                        run_command: true,
-                    })
-                    .collect())
-            }
-            _ => Ok(vec![]),
+        Ok(logic::slash_completions(&command.name)
+            .into_iter()
+            .map(
+                |(label, new_text, run_command)| zed::SlashCommandArgumentCompletion {
+                    label,
+                    new_text,
+                    run_command,
+                },
+            )
+            .collect())
+    }
+
+    fn get_dap_binary(
+        &mut self,
+        _adapter_name: String,
+        config: zed::DebugTaskDefinition,
+        user_provided_debug_adapter_path: Option<String>,
+        worktree: &zed::Worktree,
+    ) -> core::result::Result<zed::DebugAdapterBinary, String> {
+        let binary_path = match user_provided_debug_adapter_path {
+            Some(path) => path,
+            None => self.resolve_binary(worktree)?,
+        };
+
+        let adapter_config: serde_json::Value =
+            serde_json::from_str(&config.config).unwrap_or_default();
+
+        let dap_config = logic::build_dap_config(&adapter_config);
+
+        let request = if logic::is_attach_request(&adapter_config)? {
+            zed::StartDebuggingRequestArgumentsRequest::Attach
+        } else {
+            zed::StartDebuggingRequestArgumentsRequest::Launch
+        };
+
+        Ok(zed::DebugAdapterBinary {
+            command: Some(binary_path),
+            arguments: vec!["debug-adapter".into()],
+            envs: Vec::new(),
+            cwd: adapter_config
+                .get("cwd")
+                .and_then(serde_json::Value::as_str)
+                .map(String::from),
+            connection: None,
+            request_args: zed::StartDebuggingRequestArguments {
+                configuration: dap_config.to_string(),
+                request,
+            },
+        })
+    }
+
+    fn dap_request_kind(
+        &mut self,
+        _adapter_name: String,
+        config: serde_json::Value,
+    ) -> core::result::Result<zed::StartDebuggingRequestArgumentsRequest, String> {
+        if logic::is_attach_request(&config)? {
+            Ok(zed::StartDebuggingRequestArgumentsRequest::Attach)
+        } else {
+            Ok(zed::StartDebuggingRequestArgumentsRequest::Launch)
         }
+    }
+
+    fn dap_config_to_scenario(
+        &mut self,
+        config: zed::DebugConfig,
+    ) -> core::result::Result<zed::DebugScenario, String> {
+        let adapter_config = match &config.request {
+            zed::DebugRequest::Launch(launch) => logic::build_launch_scenario(
+                &launch.program,
+                &launch.args,
+                launch.cwd.as_deref(),
+                config.stop_on_entry.unwrap_or(false),
+            ),
+            zed::DebugRequest::Attach(attach) => logic::build_attach_scenario(attach.process_id),
+        };
+
+        Ok(zed::DebugScenario {
+            label: config.label,
+            adapter: "basilisk-debug".to_string(),
+            build: None,
+            config: adapter_config.to_string(),
+            tcp_connection: None,
+        })
     }
 }
 

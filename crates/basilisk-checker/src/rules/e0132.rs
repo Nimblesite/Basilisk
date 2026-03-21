@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::rules::shared::split_top_level_commas;
 
 use super::Rule;
 
@@ -89,28 +90,6 @@ fn extract_base_subscripts(
         .iter()
         .filter_map(|base_text| parse_base_subscript(base_text.trim()))
         .collect()
-}
-
-/// Split a string by commas at bracket depth 0.
-fn split_top_level_commas(text: &str) -> Vec<&str> {
-    let mut results = Vec::new();
-    let mut depth = 0i32;
-    let mut start = 0;
-    for (idx, ch) in text.char_indices() {
-        match ch {
-            '[' | '(' => depth += 1,
-            ']' | ')' => depth -= 1,
-            ',' if depth == 0 => {
-                results.push(&text[start..idx]);
-                start = idx + 1;
-            }
-            _ => {}
-        }
-    }
-    if start < text.len() {
-        results.push(&text[start..]);
-    }
-    results
 }
 
 /// Parse `Name[T1, T2]` into a `BaseSubscript`.

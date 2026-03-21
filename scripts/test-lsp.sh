@@ -10,24 +10,29 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$REPO_ROOT/scripts/common.sh"
 cd "$REPO_ROOT"
 
-GREEN='\033[0;32m'
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-RESET='\033[0m'
+header "Running LSP stdio tests"
+cargo test --profile ci -p basilisk-lsp --test lsp_stdio_tests
+ok "lsp_stdio_tests done"
 
-header() { echo -e "\n${BOLD}${CYAN}▶ $*${RESET}"; }
-ok()     { echo -e "${GREEN}✓ $*${RESET}"; }
+header "Running workspace core tests"
+cargo test --profile ci -p basilisk-lsp --test ws_core_tests
+ok "ws_core_tests done"
 
-header "Running LSP tests"
-cargo test -p basilisk-lsp --test lsp_tests
-ok "lsp_tests done"
+header "Running workspace features tests"
+cargo test --profile ci -p basilisk-lsp --test ws_features_tests
+ok "ws_features_tests done"
 
-header "Running LSP e2e tests"
-cargo test -p basilisk-lsp --test 'lsp_e2e_*'
-ok "lsp_e2e tests done"
+header "Running workspace navigation tests"
+cargo test --profile ci -p basilisk-lsp --test ws_navigation_tests
+ok "ws_navigation_tests done"
 
-header "Running workspace e2e tests"
-cargo test -p basilisk-lsp --test 'ws_test_*'
-ok "ws_test tests done"
+header "Running workspace cross-module tests"
+cargo test --profile ci -p basilisk-lsp --test ws_test_cross_module
+ok "ws_test_cross_module done"
+
+header "Running Zed extension tests"
+cargo test --profile ci -p basilisk-lsp --test zed_tests
+ok "zed_tests done"

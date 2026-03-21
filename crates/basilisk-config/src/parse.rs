@@ -40,6 +40,19 @@ pub struct BasiliskConfig {
     /// Patterns support `**` for recursive matching
     /// (e.g. `"vendor/**"` matches `vendor/lib/foo.py`).
     pub per_path_overrides: HashMap<String, PathOverride>,
+
+    /// Whether to emit BSK-W0010 (missing type stubs) warnings.
+    ///
+    /// When `true` (default), warns about installed packages lacking type stubs.
+    /// Maps to `basilisk.uv.stubSuggestions` in the LSP config.
+    pub uv_stub_suggestions: bool,
+
+    /// Whether to emit dependency hygiene diagnostics (BSK-W0011, W0012, W0013).
+    ///
+    /// When `true`, warns about undeclared transitive dependencies, unused
+    /// declared dependencies, and stale lock files. Disabled by default.
+    /// Maps to `basilisk.uv.dependencyDiagnostics` in the LSP config.
+    pub uv_dependency_diagnostics: bool,
 }
 
 impl Default for BasiliskConfig {
@@ -53,6 +66,8 @@ impl Default for BasiliskConfig {
             rules: HashMap::new(),
             per_module_overrides: HashMap::new(),
             per_path_overrides: HashMap::new(),
+            uv_stub_suggestions: true,
+            uv_dependency_diagnostics: false,
         }
     }
 }
@@ -117,6 +132,24 @@ pub fn load_from_json(path: &Path) -> Option<BasiliskConfig> {
         }
     }
 
+    // uv section
+    if let Some(uv_obj) = obj.get("uv").and_then(|v| v.as_object()) {
+        if let Some(val) = uv_obj
+            .get("stubSuggestions")
+            .or_else(|| uv_obj.get("stub-suggestions"))
+            .and_then(serde_json::Value::as_bool)
+        {
+            cfg.uv_stub_suggestions = val;
+        }
+        if let Some(val) = uv_obj
+            .get("dependencyDiagnostics")
+            .or_else(|| uv_obj.get("dependency-diagnostics"))
+            .and_then(serde_json::Value::as_bool)
+        {
+            cfg.uv_dependency_diagnostics = val;
+        }
+    }
+
     // perModuleOverrides
     if let Some(overrides_obj) = obj
         .get("perModuleOverrides")
@@ -177,6 +210,22 @@ pub fn load_from_pyproject(path: &Path) -> Option<BasiliskConfig> {
                     let _ = cfg.rules.insert(code.clone(), severity);
                 }
             }
+        }
+    }
+
+    // uv section
+    if let Some(uv_table) = basilisk.get("uv").and_then(|v| v.as_table()) {
+        if let Some(val) = uv_table
+            .get("stub-suggestions")
+            .and_then(toml::Value::as_bool)
+        {
+            cfg.uv_stub_suggestions = val;
+        }
+        if let Some(val) = uv_table
+            .get("dependency-diagnostics")
+            .and_then(toml::Value::as_bool)
+        {
+            cfg.uv_dependency_diagnostics = val;
         }
     }
 

@@ -2,6 +2,8 @@
 
 use basilisk_resolver::Span;
 
+use crate::rules::shared::contains_typevar_reference;
+
 /// Check if `line` is a simple assignment (e.g. `X = list[T]`), excluding
 /// comparisons (`==`, `!=`, `<=`, `>=`) and augmented assignments (`+=`, etc.).
 /// Used to identify module-level implicit type aliases per PEP 484.
@@ -60,35 +62,6 @@ pub(super) fn collect_full_signature(lines: &[&str], start_idx: usize) -> String
         }
     }
     sig
-}
-
-/// Check if `name` appears as a whole identifier in `text` (not as part of a longer name).
-pub(super) fn contains_typevar_reference(text: &str, typevar_name: &str) -> bool {
-    let needle = typevar_name.as_bytes();
-    let haystack = text.as_bytes();
-    let needle_len = needle.len();
-
-    if needle_len > haystack.len() {
-        return false;
-    }
-
-    haystack
-        .windows(needle_len)
-        .enumerate()
-        .any(|(idx, window)| {
-            if window != needle {
-                return false;
-            }
-            let before_ok = idx == 0
-                || haystack
-                    .get(idx - 1)
-                    .is_some_and(|&b| !b.is_ascii_alphanumeric() && b != b'_');
-            let after_ok = idx + needle_len >= haystack.len()
-                || haystack
-                    .get(idx + needle_len)
-                    .is_some_and(|&b| !b.is_ascii_alphanumeric() && b != b'_');
-            before_ok && after_ok
-        })
 }
 
 /// Extract `TypeVar` names from a `Generic[T, S, ...]`, `Protocol[T]`, or
@@ -273,44 +246,6 @@ pub(super) fn extract_typevar_params_from_generic(source_line: &str) -> Vec<Stri
         .collect()
 }
 
-/// Parse a subscript annotation like `MyClass[int]` into `("MyClass", ["int"])`.
-pub(super) fn parse_generic_annotation(ann: &str) -> Option<(String, Vec<String>)> {
-    let bracket_pos = ann.find('[')?;
-    let class_name = ann[..bracket_pos].trim().to_owned();
-    if class_name.is_empty() {
-        return None;
-    }
-    let inner = ann.get(bracket_pos + 1..ann.rfind(']')?)?;
-    let type_args = split_top_level_type_args(inner);
-    if type_args.is_empty() {
-        return None;
-    }
-    Some((class_name, type_args))
-}
-
-/// Split comma-separated type args at the top level of brackets.
-pub(super) fn split_top_level_type_args(inner: &str) -> Vec<String> {
-    let mut args = Vec::new();
-    let mut depth = 0i32;
-    let mut start = 0usize;
-    for (idx, ch) in inner.char_indices() {
-        match ch {
-            '[' | '(' => depth += 1,
-            ']' | ')' => depth -= 1,
-            ',' if depth == 0 => {
-                args.push(inner[start..idx].trim().to_owned());
-                start = idx + 1;
-            }
-            _ => {}
-        }
-    }
-    let last = inner[start..].trim();
-    if !last.is_empty() {
-        args.push(last.to_owned());
-    }
-    args
-}
-
 /// Infer a simple Python type name from a literal expression.
 pub(super) fn infer_literal_type(expr: &str) -> Option<&'static str> {
     let expr = expr.trim();
@@ -351,23 +286,86 @@ pub(super) fn infer_literal_type(expr: &str) -> Option<&'static str> {
     None
 }
 
-/// Check if two type names are compatible.
-pub(super) fn generic_types_compatible(actual: &str, expected: &str) -> bool {
-    if expected == "Any" || actual == "Any" || expected == "object" {
-        return true;
+/// Compute a per-line bitmask indicating which lines are inside triple-quoted strings.
+///
+/// Returns a `Vec<bool>` of the same length as `lines` where `true` means the line
+/// is entirely inside (or is) a triple-quoted string. This is a conservative
+/// approximation that handles `"""` and `'''` delimiters.
+pub(super) fn compute_triple_quote_mask(lines: &[&str]) -> Vec<bool> {
+    let mut mask = vec![false; lines.len()];
+    let mut in_triple = false;
+    // Which delimiter we are inside: `true` = `"""`, `false` = `'''`.
+    let mut is_double = true;
+
+    for (idx, &line) in lines.iter().enumerate() {
+        let Some(slot) = mask.get_mut(idx) else {
+            continue;
+        };
+        if in_triple {
+            *slot = true;
+            let closing = if is_double { "\"\"\"" } else { "'''" };
+            if line.contains(closing) {
+                in_triple = false;
+            }
+        } else {
+            // Check if a triple-quote opens on this line without closing on the same line.
+            let (opens_double, opens_single) = triple_quote_opens(line);
+            if opens_double {
+                *slot = true;
+                in_triple = true;
+                is_double = true;
+            } else if opens_single {
+                *slot = true;
+                in_triple = true;
+                is_double = false;
+            }
+        }
     }
-    if actual == expected {
-        return true;
+    mask
+}
+
+/// Check whether `line` opens a triple-quoted string that does NOT close on the same line.
+///
+/// Returns `(opens_double, opens_single)` booleans for `"""` and `'''` respectively.
+fn triple_quote_opens(line: &str) -> (bool, bool) {
+    for delim in ["\"\"\"", "'''"] {
+        let Some(first) = line.find(delim) else {
+            continue;
+        };
+        // Check if there is a matching close on this same line after the opening.
+        let after_open = first + delim.len();
+        if line
+            .get(after_open..)
+            .is_some_and(|rest| !rest.contains(delim))
+        {
+            return (delim == "\"\"\"", delim == "'''");
+        }
     }
-    // bool is subtype of int
-    if expected == "int" && actual == "bool" {
-        return true;
+    (false, false)
+}
+
+/// Compute the 0-based line index where a multi-line function signature ends.
+///
+/// Starting from a `def`/`async def` line at `start_idx`, tracks parenthesis depth
+/// and returns the index of the line containing the closing `)`. If the signature
+/// is entirely on one line, returns `start_idx`.
+pub(super) fn signature_end_line(lines: &[&str], start_idx: usize) -> usize {
+    let mut depth = 0i32;
+    for (offset, &line) in lines.iter().enumerate().skip(start_idx) {
+        for ch in line.chars() {
+            match ch {
+                '(' => depth += 1,
+                ')' => {
+                    depth -= 1;
+                    if depth <= 0 {
+                        return offset;
+                    }
+                }
+                _ => {}
+            }
+        }
     }
-    // int is subtype of float
-    if expected == "float" && (actual == "int" || actual == "bool") {
-        return true;
-    }
-    false
+    start_idx
 }
 
 /// Find the position of the matching close paren/bracket in a string that starts

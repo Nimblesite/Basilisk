@@ -401,3 +401,84 @@ Parallelizable:
 | Registry lookup | < 1 microsecond (HashMap) |
 | Hot reload on `uv.lock` change | < 100ms to updated diagnostics |
 | Zero regressions | All existing tests pass, non-uv projects unchanged |
+
+---
+
+## Todo
+
+> **Philosophy**: We are not rebuilding uv. We read its files, call its CLI, and surface its intelligence inside the LSP. If uv already does it (env creation, dependency resolution, lock management), we just invoke `uv`. Our value-add is the _glue_: knowing what uv knows so we can give developers instant, in-editor feedback without them ever leaving their code.
+
+### Phase 1 — uv Project Detection & Lock File Parsing
+
+- [x] Create `crates/basilisk-uv` crate (`Cargo.toml`, `src/lib.rs`)
+- [x] `detect.rs` — detect uv projects via `uv.lock`, `[tool.uv]`, `.venv/pyvenv.cfg`
+- [x] `lockfile.rs` — parse `uv.lock` TOML into `LockFile` / `LockPackage` structs
+- [x] `registry.rs` — `PackageRegistry` HashMap: normalized import name → `PackageInfo`
+- [x] `import_map.rs` — package-to-import-name mapping (top 200 mismatches + normalization fallback)
+- [x] `python_version.rs` — read `.python-version` file
+- [x] Tests: detection (uv vs non-uv), lock parsing (basic, markers, workspace), registry lookup, import name mapping, `.python-version` — **67 tests passing**
+
+### Phase 2 — Wire into Import Resolver
+
+- [x] Add `Option<Arc<PackageRegistry>>` to `ImportSearchPaths`
+- [x] Cross-check resolved imports against registry for metadata enrichment
+- [x] `UnresolvedReason` enum (`NotInstalled`, `NotInDeps`, `NeedsSync`, `NoStubs`, `WrongPythonVersion`, `Unknown`)
+- [x] `WorkspaceIndex` holds `Option<Arc<PackageRegistry>>` field
+- [x] Startup flow: detect uv → parse lock → extract pyproject deps → build registry → pass to resolver
+- [x] `PackageDepKind` enum on `ImportInfo` — set during `resolve_workspace_imports` from registry
+- [x] `pyproject.rs` — extract `[project].dependencies` from `pyproject.toml` (PEP 508 specifier parsing)
+- [x] Tests: resolution with registry, unresolved classification, workspace member resolution, non-uv fallback — **77 tests passing**
+
+### Phase 3 — Enhanced Diagnostics
+
+- [x] BSK-E0010: context-aware messages based on `UnresolvedReason` (not just "unresolved import")
+- [x] BSK-E0010: attach `code_action_data` to diagnostic for quick-fix wiring
+- [x] BSK-W0010: missing stubs diagnostic (package installed but no `.pyi`)
+- [x] BSK-W0011: undeclared dependency import (transitive dep used directly) — fires when `package_dep_kind == Transitive`
+- [x] BSK-W0012: unused dependency (in deps but never imported — whole-module only) — skeleton ready, awaits workspace-level aggregate import data
+- [x] BSK-W0013: stale lock (`pyproject.toml` mtime > `uv.lock` mtime) — skeleton ready
+- [x] Gate W0010 behind `uv.stubSuggestions` config (default true)
+- [x] Gate W0011–W0013 behind `uv.dependencyDiagnostics` config (default false)
+- [x] Config parsing: `basilisk.json` `uv.stubSuggestions`/`uv.dependencyDiagnostics`, `pyproject.toml` `[tool.basilisk.uv]`
+- [x] Tests: message variants, stub detection, non-uv projects unchanged
+
+### Phase 4 — Code Actions & LSP Commands (delegate to `uv` CLI)
+
+- [x] Code action: "Add dependency" on E0010 (NotInstalled) → `uv add <package>`
+- [x] Code action: "Install type stubs" on W0010 → `uv add --dev <stubs-package>`
+- [x] Code action: "Sync environment" on W0013 → `uv sync`
+- [x] `uv_commands.rs` — thin subprocess wrapper: spawn `uv` with args, 30s timeout, stream output
+- [x] LSP commands: `basilisk.uv.sync`, `basilisk.uv.add`, `basilisk.uv.addDev`, `basilisk.uv.remove`, `basilisk.uv.lock`, `basilisk.uv.createEnv`
+- [x] Post-command hook: `run_uv_and_refresh()` — all uv commands trigger `rebuild_registry_and_resolve()` on success
+- [x] Graceful degradation: hide uv commands/actions when `uv` binary not found
+- [x] Tests: code action generation, command execution, binary-not-found handling
+
+### Phase 5 — File Watchers & Hot Reload
+
+- [x] Register `uv.lock` file watcher (`workspace/didChangeWatchedFiles`)
+- [x] Register `.python-version` file watcher
+- [x] Register `pyproject.toml` change handler (staleness detection, workspace member changes)
+- [x] Registry rebuild on `uv.lock`/`pyproject.toml` change: `rebuild_registry_and_resolve()` re-parses lock, re-resolves imports, republishes all diagnostics
+- [ ] Tests: lock change triggers reparse, add/remove package updates diagnostics, Python version change
+
+### Phase 6 — Hover Enrichment & Workspace Support
+
+- [x] Hover on import: show package version, source, stub status from registry
+- [x] Hover on workspace member import: show "Workspace member" + path (detected via non-site-packages path)
+- [x] Hover on imports: show dependency classification (direct/dev/transitive) from uv registry
+- [x] Parse `[tool.uv.workspace]` — extract member paths from glob patterns
+- [x] Workspace member discovery: expand globs → find member `pyproject.toml` → extract package names
+- [x] Wire workspace members into import resolver: `discover_workspace_members()` adds member src roots to search paths (after roots, before extraPaths)
+- [ ] Multi-root LSP mapping for workspace members
+- [x] Tests: hover content, workspace glob expansion, cross-member imports
+
+### Phase 7 — Configuration & Editor Integration
+
+- [x] Config key constants in `basilisk-common` (`UV`, `UV_ENABLED`, etc.)
+- [x] Read from `basilisk.json` (`uv.stubSuggestions`, `uv.dependencyDiagnostics`) and `pyproject.toml` (`[tool.basilisk.uv]`)
+- [x] `binary.rs` — uv binary resolution cascade: config path → `UV_PATH` env → `~/.cargo/bin/uv` → `~/.local/bin/uv` → OS PATH
+- [x] VS Code: add `basilisk.uv.*` settings + commands to `package.json` and `extension.ts`
+- [x] Neovim: uv config defaults, commands, and tests
+- [x] Zed: uv settings in `default_workspace_config()` and tests
+- [x] Update `LSP-ARCHITECTURE-SPEC.md` with uv integration architecture section, diagnostic codes table, binary resolution cascade, and hot reload docs
+- [x] Tests: VS Code command registration, Neovim config defaults, Zed config wrapping

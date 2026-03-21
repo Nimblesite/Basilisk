@@ -7,6 +7,8 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use basilisk_config::AdoptionStore;
+
 use crate::config::{AnalysisMode, WorkspaceConfig};
 
 use super::workspace::FileEntry;
@@ -75,7 +77,8 @@ pub(crate) fn analyse_with_config(
 }
 
 /// Convert a Basilisk checker diagnostic to an LSP diagnostic.
-pub(crate) fn bsk_to_lsp(
+#[must_use]
+pub fn bsk_to_lsp(
     d: &basilisk_checker::Diagnostic,
     text: &str,
 ) -> tower_lsp::lsp_types::Diagnostic {
@@ -164,4 +167,26 @@ pub fn resolve_analysis_mode(
 
     // 3. Hard default.
     AnalysisMode::WholeModule
+}
+
+/// Apply adoption overrides to checker diagnostics.
+///
+/// Demotes adopted error codes from `Error` to `Warning` severity for the
+/// given file path. The path is made relative to `project_root` before
+/// looking up the adoption store.
+pub(crate) fn apply_adoptions(
+    diagnostics: &mut [basilisk_checker::Diagnostic],
+    file_path: &Path,
+    project_root: &Path,
+    store: &AdoptionStore,
+) {
+    let relative = file_path.strip_prefix(project_root).unwrap_or(file_path);
+
+    for diag in diagnostics.iter_mut() {
+        if diag.severity == basilisk_checker::Severity::Error
+            && store.is_demoted(relative, diag.code.code)
+        {
+            diag.severity = basilisk_checker::Severity::Warning;
+        }
+    }
 }

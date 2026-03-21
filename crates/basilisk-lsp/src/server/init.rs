@@ -2,17 +2,23 @@
 //!
 //! Covers `initialize`, `initialized`, `shutdown`, and `did_change_configuration`.
 
+use std::sync::Arc;
+
 use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::{
     CallHierarchyServerCapability, CodeActionKind, CodeActionOptions, CodeActionProviderCapability,
     CodeLensOptions, ColorProviderCapability, CompletionOptions, DeclarationCapability,
-    DidChangeConfigurationParams, ExecuteCommandOptions, FoldingRangeProviderCapability,
-    HoverProviderCapability, InitializeParams, InitializeResult, MessageType, OneOf, RenameOptions,
-    SelectionRangeProviderCapability, SemanticTokensFullOptions, SemanticTokensLegend,
-    SemanticTokensOptions, SemanticTokensServerCapabilities, ServerCapabilities, ServerInfo,
-    SignatureHelpOptions, TextDocumentSyncCapability, TextDocumentSyncKind,
-    TypeDefinitionProviderCapability, Url, WorkDoneProgressOptions,
+    DidChangeConfigurationParams, DidChangeWatchedFilesRegistrationOptions, ExecuteCommandOptions,
+    FileOperationFilter, FileOperationPattern, FileOperationPatternKind,
+    FileOperationRegistrationOptions, FileSystemWatcher, FoldingRangeProviderCapability,
+    GlobPattern, HoverProviderCapability, InitializeParams, InitializeResult, MessageType, OneOf,
+    Registration, RenameOptions, SelectionRangeProviderCapability, SemanticTokensFullOptions,
+    SemanticTokensLegend, SemanticTokensOptions, SemanticTokensServerCapabilities,
+    ServerCapabilities, ServerInfo, SignatureHelpOptions, TextDocumentSyncCapability,
+    TextDocumentSyncKind, TypeDefinitionProviderCapability, Url, WorkDoneProgressOptions,
+    WorkspaceFileOperationsServerCapabilities, WorkspaceServerCapabilities,
 };
+use tower_lsp::Client;
 use tracing::info;
 
 use crate::config::AnalysisMode;
@@ -131,6 +137,22 @@ fn build_capabilities() -> ServerCapabilities {
             },
         )),
         color_provider: Some(ColorProviderCapability::Simple(true)),
+        workspace: Some(WorkspaceServerCapabilities {
+            file_operations: Some(WorkspaceFileOperationsServerCapabilities {
+                will_rename: Some(FileOperationRegistrationOptions {
+                    filters: vec![FileOperationFilter {
+                        scheme: Some("file".to_owned()),
+                        pattern: FileOperationPattern {
+                            glob: "**/*.py".to_owned(),
+                            matches: Some(FileOperationPatternKind::File),
+                            options: None,
+                        },
+                    }],
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
         ..Default::default()
     }
 }
@@ -142,6 +164,13 @@ pub(super) async fn initialized(server: &LspServer) {
         .client
         .log_message(MessageType::INFO, "Basilisk LSP initialized")
         .await;
+
+    // Spawn file watcher registration in the background so it never blocks
+    // the message loop (register_capability sends a request to the client).
+    let client = server.client.clone();
+    drop(tokio::spawn(async move {
+        register_file_watchers(&client).await;
+    }));
 
     let guard = server.index.read().await;
     let Some(index) = guard.as_ref() else { return };
@@ -231,6 +260,50 @@ pub(super) async fn did_change_configuration(
     }
 }
 
+/// Register file watchers for uv-related configuration files.
+///
+/// Watches `**/uv.lock`, `**/.python-version`, and `**/pyproject.toml` so
+/// that the server is notified when these files change on disk.
+async fn register_file_watchers(client: &Client) {
+    let watchers = vec![
+        FileSystemWatcher {
+            glob_pattern: GlobPattern::String("**/uv.lock".into()),
+            kind: None,
+        },
+        FileSystemWatcher {
+            glob_pattern: GlobPattern::String("**/.python-version".into()),
+            kind: None,
+        },
+        FileSystemWatcher {
+            glob_pattern: GlobPattern::String("**/pyproject.toml".into()),
+            kind: None,
+        },
+    ];
+
+    let registration_options =
+        serde_json::to_value(DidChangeWatchedFilesRegistrationOptions { watchers });
+
+    let register_options = match registration_options {
+        Ok(options) => options,
+        Err(err) => {
+            tracing::warn!("failed to serialize file watcher registration options: {err}");
+            return;
+        }
+    };
+
+    let registration = Registration {
+        id: "uv-file-watchers".to_owned(),
+        method: "workspace/didChangeWatchedFiles".to_owned(),
+        register_options: Some(register_options),
+    };
+
+    if let Err(err) = client.register_capability(vec![registration]).await {
+        tracing::warn!("failed to register uv file watchers: {err}");
+    } else {
+        info!("registered uv file watchers (uv.lock, .python-version, pyproject.toml)");
+    }
+}
+
 /// Scan the whole workspace and publish diagnostics for all files.
 async fn run_workspace_scan(server: &LspServer, _mode: AnalysisMode) {
     let guard = server.index.read().await;
@@ -275,7 +348,12 @@ async fn scan_resolve_and_check(server: &LspServer, index: &WorkspaceIndex) -> S
         .first()
         .map(|r| crate::config::load_config(r))
         .unwrap_or_default();
-    let search_paths = crate::import_resolver::ImportSearchPaths::from_config(&roots, &config);
+
+    // Detect uv project, build package registry and discover workspace members.
+    let registry = build_uv_registry(&roots);
+    let mut search_paths =
+        crate::import_resolver::ImportSearchPaths::from_config(&roots, &config, registry);
+    search_paths.workspace_members = discover_workspace_members(&roots);
     crate::import_resolver::resolve_workspace_imports(index, &search_paths);
     drop(roots);
 
@@ -341,6 +419,137 @@ fn recheck_with_cross_module_symbols(
     }
 
     results
+}
+
+/// Discover uv workspace member source directories.
+///
+/// Parses `[tool.uv.workspace]` from `pyproject.toml` at each workspace root
+/// and returns the resolved member directory paths. For each member, looks for
+/// a `src/` subdirectory (common Python project layout) and adds it; otherwise
+/// adds the member directory itself.
+///
+/// Returns an empty vec if this is not a uv workspace or parsing fails.
+fn discover_workspace_members(roots: &[std::path::PathBuf]) -> Vec<std::path::PathBuf> {
+    let mut members = Vec::new();
+
+    for root in roots {
+        let Ok(Some(workspace)) = basilisk_uv::parse_uv_workspace(root) else {
+            continue;
+        };
+
+        for member_dir in &workspace.members {
+            // Prefer src/ layout if it exists.
+            let src_dir = member_dir.join("src");
+            if src_dir.is_dir() {
+                members.push(src_dir);
+            } else {
+                members.push(member_dir.clone());
+            }
+        }
+
+        if !workspace.members.is_empty() {
+            info!(
+                root = %root.display(),
+                member_count = workspace.members.len(),
+                "discovered uv workspace members"
+            );
+        }
+    }
+
+    members
+}
+
+/// Detect a uv project and build a [`PackageRegistry`] from its lock file.
+///
+/// Returns `None` if this is not a uv project, if there is no lock file, or
+/// if the lock file fails to parse. Errors are logged but never fatal — the
+/// LSP falls back to registry-free resolution.
+fn build_uv_registry(roots: &[std::path::PathBuf]) -> Option<Arc<basilisk_uv::PackageRegistry>> {
+    let uv_info = basilisk_uv::detect_uv_project(roots)?;
+
+    if !uv_info.has_lockfile {
+        info!(root = %uv_info.root.display(), "uv project detected but no uv.lock — skipping registry");
+        return None;
+    }
+
+    let lock_path = uv_info.root.join("uv.lock");
+    let lock_file = match basilisk_uv::parse_lock_file(&lock_path) {
+        Ok(lock) => lock,
+        Err(err) => {
+            tracing::warn!(
+                path = %lock_path.display(),
+                error = %err,
+                "failed to parse uv.lock — package registry unavailable"
+            );
+            return None;
+        }
+    };
+
+    let deps = basilisk_uv::extract_pyproject_deps(&uv_info.root);
+    let registry = basilisk_uv::PackageRegistry::from_lock_file(&lock_file, &deps);
+
+    let pkg_count = registry.all_packages().count();
+    info!(
+        root = %uv_info.root.display(),
+        packages = pkg_count,
+        direct_deps = deps.len(),
+        "built uv package registry"
+    );
+
+    Some(Arc::new(registry))
+}
+
+/// Rebuild the uv package registry and re-resolve all workspace imports.
+///
+/// Called after uv commands complete or when `uv.lock` changes on disk.
+/// Rebuilds the registry from the current `uv.lock`, updates
+/// `WorkspaceIndex.registry`, re-resolves imports, and republishes
+/// diagnostics for all indexed files.
+pub(super) async fn rebuild_registry_and_resolve(server: &LspServer) {
+    let guard = server.index.read().await;
+    let Some(index) = guard.as_ref() else { return };
+
+    let roots = server.workspace_roots.read().await;
+    let config = roots
+        .first()
+        .map(|r| crate::config::load_config(r))
+        .unwrap_or_default();
+
+    let registry = build_uv_registry(&roots);
+    let mut search_paths =
+        crate::import_resolver::ImportSearchPaths::from_config(&roots, &config, registry);
+    search_paths.workspace_members = discover_workspace_members(&roots);
+    crate::import_resolver::resolve_workspace_imports(index, &search_paths);
+    drop(roots);
+
+    // Re-check all files and publish updated diagnostics.
+    let results: Vec<_> = index
+        .files
+        .iter_mut()
+        .filter_map(|mut entry| {
+            let resolved = entry.resolved.as_ref()?;
+            let checker_diags = basilisk_checker::check(resolved);
+            let lsp_diags: Vec<tower_lsp::lsp_types::Diagnostic> = checker_diags
+                .iter()
+                .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &entry.text))
+                .collect();
+            entry.diagnostics = checker_diags;
+            let uri = crate::workspace_scan::path_to_uri(entry.key())?;
+            Some((uri, lsp_diags))
+        })
+        .collect();
+
+    drop(guard);
+
+    let file_count = results.len();
+    for (uri, diags) in results {
+        server.client.publish_diagnostics(uri, diags, None).await;
+    }
+
+    info!(
+        files = file_count,
+        "registry rebuilt — diagnostics refreshed"
+    );
 }
 
 /// Handle the `shutdown` request: stop all debug sessions.

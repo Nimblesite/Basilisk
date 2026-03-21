@@ -292,7 +292,7 @@ fn check_protocol_conformance(
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let required_methods = collect_protocol_required_methods(protocol_class, class_map);
+    let required_members = collect_protocol_required_methods(protocol_class, class_map);
 
     // Get the RHS class methods.
     let rhs_methods: Vec<&str> = class_methods
@@ -300,10 +300,21 @@ fn check_protocol_conformance(
         .cloned()
         .unwrap_or_default();
 
-    // Find missing methods.
-    let missing: Vec<&str> = required_methods
+    // Get the RHS class attribute names. Class attributes, dataclass fields,
+    // and NamedTuple fields all satisfy protocol property requirements.
+    let rhs_attributes: Vec<&str> = class_map
+        .get(rhs_class_name)
+        .map(|cls| cls.attributes.iter().map(|a| a.name.as_str()).collect())
+        .unwrap_or_default();
+
+    // Find missing members: a protocol member is satisfied by either a method
+    // or an attribute with the same name.
+    let missing: Vec<&str> = required_members
         .iter()
-        .filter(|m| !rhs_methods.contains(&m.as_str()))
+        .filter(|m| {
+            let name = m.as_str();
+            !rhs_methods.contains(&name) && !rhs_attributes.contains(&name)
+        })
         .map(String::as_str)
         .collect();
 

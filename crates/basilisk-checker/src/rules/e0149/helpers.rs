@@ -76,13 +76,14 @@ pub(super) fn contains_name(text: &str, name: &str) -> bool {
 /// Returns `Some(vec)` with the ordered parameter names if found.
 pub(super) fn extract_pep695_type_params(line: &str) -> Option<Vec<String>> {
     // Find the opening `[` that is part of a type parameter list.
-    // It must appear before `(` (for class) or `:` (for def).
+    // It must appear before `(` (for class), `:` (for def), or `=` (for type).
     let bracket_start = line.find('[')?;
     let colon_or_paren = line.find('(').unwrap_or(line.len());
     let colon_pos = line.find(':').unwrap_or(line.len());
-    let first_end = colon_or_paren.min(colon_pos);
+    let eq_pos = line.find('=').unwrap_or(line.len());
+    let first_end = colon_or_paren.min(colon_pos).min(eq_pos);
 
-    // The `[` must appear before `(` or `:`.
+    // The `[` must appear before `(`, `:`, or `=`.
     if bracket_start >= first_end {
         return None;
     }

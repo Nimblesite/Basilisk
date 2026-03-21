@@ -6,6 +6,7 @@ use basilisk_resolver::ClassInfo;
 
 use basilisk_resolver::Span;
 
+use crate::rules::shared::{infer_expr_literal_type, is_type_compatible};
 use crate::span_util::slice_span;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
@@ -33,6 +34,49 @@ pub(super) fn all_base_names(class_info: &ClassInfo) -> Vec<&str> {
 }
 
 /// Recursively check if any base class defines `__init__` or `__new__`.
+/// Builtin types that have custom `__init__` or `__new__` accepting
+/// arguments.  Classes inheriting from these can always be constructed
+/// with arguments even though they don't define `__init__` in user code.
+const BUILTINS_WITH_INIT: &[&str] = &[
+    "str",
+    "int",
+    "float",
+    "bool",
+    "bytes",
+    "bytearray",
+    "complex",
+    "list",
+    "dict",
+    "set",
+    "frozenset",
+    "tuple",
+    "type",
+    "range",
+    "slice",
+    "memoryview",
+    "super",
+    "property",
+    "staticmethod",
+    "classmethod",
+    "Exception",
+    "BaseException",
+    "ValueError",
+    "TypeError",
+    "KeyError",
+    "IndexError",
+    "AttributeError",
+    "RuntimeError",
+    "StopIteration",
+    "OSError",
+    "IOError",
+    "UserDict",
+    "UserList",
+    "UserString",
+    "Mapping",
+    "MutableMapping",
+    "ABC",
+];
+
 pub(super) fn has_custom_init_in_bases(
     class_info: &ClassInfo,
     class_map: &HashMap<&str, &ClassInfo>,
@@ -41,6 +85,11 @@ pub(super) fn has_custom_init_in_bases(
     for base_name in all_base_names(class_info) {
         if base_name == "object" || base_name == "Generic" || base_name == "Protocol" {
             continue;
+        }
+
+        // Builtin types always have custom __init__/__new__.
+        if BUILTINS_WITH_INIT.contains(&base_name) {
+            return true;
         }
 
         // Check if the base class itself defines __init__ or __new__.
@@ -145,50 +194,6 @@ pub(super) fn resolve_string_annotation(annotation: &str) -> String {
     } else {
         annotation.to_owned()
     }
-}
-
-/// Classify the Python type of a literal expression.
-pub(super) fn classify_literal_type(expr: &ruff_python_ast::Expr) -> Option<&'static str> {
-    use ruff_python_ast::Expr;
-    match expr {
-        Expr::StringLiteral(_) => Some("str"),
-        Expr::NumberLiteral(num) => {
-            if num.value.is_int() {
-                Some("int")
-            } else {
-                Some("float")
-            }
-        }
-        Expr::BooleanLiteral(_) => Some("bool"),
-        Expr::BytesLiteral(_) => Some("bytes"),
-        Expr::NoneLiteral(_) => Some("None"),
-        _ => None,
-    }
-}
-
-/// Check if an argument type is compatible with a parameter type.
-pub(super) fn is_type_compatible(arg_type: &str, param_type: &str) -> bool {
-    if arg_type == param_type {
-        return true;
-    }
-    if param_type == "Any" || param_type == "object" {
-        return true;
-    }
-    if param_type == "int" && arg_type == "bool" {
-        return true;
-    }
-    if param_type == "float" && (arg_type == "int" || arg_type == "bool") {
-        return true;
-    }
-    if param_type == "complex" && (arg_type == "int" || arg_type == "float" || arg_type == "bool") {
-        return true;
-    }
-    if param_type.contains('|') {
-        return param_type
-            .split('|')
-            .any(|part| is_type_compatible(arg_type, part.trim()));
-    }
-    false
 }
 
 /// Extract type argument texts from a subscript slice expression.
@@ -379,7 +384,7 @@ pub(super) fn check_init_method_args(
         }
 
         // Classify the argument expression type.
-        let Some(arg_type) = classify_literal_type(arg_expr) else {
+        let Some(arg_type) = infer_expr_literal_type(arg_expr) else {
             continue;
         };
 

@@ -23,6 +23,7 @@
 use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::rules::shared::split_top_level_commas;
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -339,30 +340,6 @@ fn extract_literal_inner(ann: &str) -> Option<&str> {
         idx += 1;
     }
     None
-}
-
-/// Split a string by commas, respecting bracket nesting.
-fn split_top_level_commas(source: &str) -> Vec<&str> {
-    let mut result = Vec::new();
-    let mut depth = 0i32;
-    let mut start = 0;
-    for (idx, byte) in source.bytes().enumerate() {
-        match byte {
-            b'[' | b'(' | b'{' => depth += 1,
-            b']' | b')' | b'}' => depth -= 1,
-            b',' if depth == 0 => {
-                if let Some(segment) = source.get(start..idx) {
-                    result.push(segment);
-                }
-                start = idx + 1;
-            }
-            _ => {}
-        }
-    }
-    if let Some(tail) = source.get(start..) {
-        result.push(tail);
-    }
-    result
 }
 
 /// Check if source Literal values are all assignable to target Literal values.

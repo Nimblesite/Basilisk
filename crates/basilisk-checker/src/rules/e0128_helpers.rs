@@ -8,6 +8,8 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::GenericParamInfo;
 
+use crate::rules::shared::split_top_level_commas;
+
 // ---------------------------------------------------------------------------
 // Data types
 // ---------------------------------------------------------------------------
@@ -97,7 +99,7 @@ pub(super) fn parse_typevar_info_from_source(
         };
 
         // Parse args: skip the first string arg (name), collect constraints and kwargs
-        let args = split_top_level_args(inner);
+        let args = split_top_level_commas(inner);
 
         let mut past_name = false;
         for arg in &args {
@@ -127,54 +129,6 @@ pub(super) fn parse_typevar_info_from_source(
     }
 
     results
-}
-
-// ---------------------------------------------------------------------------
-// Argument splitting
-// ---------------------------------------------------------------------------
-
-/// Split a string by commas at the top level (not inside brackets or parens).
-pub(super) fn split_top_level_args(text: &str) -> Vec<String> {
-    let mut result = Vec::new();
-    let mut depth = 0i32;
-    let mut current = String::new();
-
-    for ch in text.chars() {
-        match ch {
-            '(' | '[' => {
-                depth += 1;
-                current.push(ch);
-            }
-            ')' | ']' => {
-                depth -= 1;
-                current.push(ch);
-            }
-            ',' if depth == 0 => {
-                result.push(current.clone());
-                current.clear();
-            }
-            _ => current.push(ch),
-        }
-    }
-    if !current.trim().is_empty() {
-        result.push(current);
-    }
-    result
-}
-
-// ---------------------------------------------------------------------------
-// Type compatibility
-// ---------------------------------------------------------------------------
-
-/// Built-in numeric type hierarchy for bound/constraint compatibility checks.
-pub(super) fn is_numeric_subtype(sub: &str, super_type: &str) -> bool {
-    match (sub, super_type) {
-        (a, b) if a == b => true,
-        ("bool", "int" | "float" | "complex")
-        | ("int", "float" | "complex")
-        | ("float", "complex") => true,
-        _ => false,
-    }
 }
 
 // ---------------------------------------------------------------------------

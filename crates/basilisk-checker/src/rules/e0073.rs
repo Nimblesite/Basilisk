@@ -28,6 +28,8 @@ use crate::span_util::slice_span;
 
 use super::Rule;
 
+use crate::rules::shared::is_type_compatible;
+
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0073",
     docs_url: "https://www.basilisk-python.dev/errors/BSK-E0073",
@@ -279,47 +281,4 @@ fn check_element_types(
             });
         }
     }
-}
-
-/// Check if `source_type` (the `NamedTuple` field type) is a subtype of
-/// `target_type` (the tuple annotation element type).
-///
-/// This handles common covariant cases:
-/// - `int` is a subtype of `float` (numeric tower)
-/// - `bool` is a subtype of `int` and `float`
-/// - `Any` accepts anything
-/// - exact match
-fn is_type_compatible(source_type: &str, target_type: &str) -> bool {
-    let src = source_type.trim();
-    let tgt = target_type.trim();
-
-    // Exact match.
-    if src == tgt {
-        return true;
-    }
-
-    // `Any` accepts everything.
-    if tgt == "Any" {
-        return true;
-    }
-
-    // `object` accepts everything.
-    if tgt == "object" {
-        return true;
-    }
-
-    // Numeric tower: int <: float <: complex
-    if tgt == "float" && (src == "int" || src == "bool") {
-        return true;
-    }
-    if tgt == "complex" && (src == "int" || src == "float" || src == "bool") {
-        return true;
-    }
-
-    // bool <: int
-    if tgt == "int" && src == "bool" {
-        return true;
-    }
-
-    false
 }

@@ -6,6 +6,8 @@ use basilisk_resolver::Span;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
+use crate::rules::shared::infer_expr_literal_type;
+
 use super::callable::{check_callable_compat, parse_callable_type, types_compat};
 use super::context::{ann_str, expr_name, extract_base_name, ModuleContext};
 use super::protocol::check_protocol_func_compat;
@@ -202,7 +204,7 @@ fn check_attr_assignment(
         return;
     };
     // Check type compatibility of the assigned value
-    let value_type = infer_literal_type(value);
+    let value_type = infer_expr_literal_type(value).map(str::to_owned);
     if let Some(vt) = value_type {
         if !types_compat(&proto_attr.ann, &vt) {
             diag.push(Diagnostic {
@@ -356,24 +358,6 @@ fn check_assignment(
 // ---------------------------------------------------------------------------
 // Utilities
 // ---------------------------------------------------------------------------
-
-/// Infer a simple type string from a literal expression.
-fn infer_literal_type(expr: &Expr) -> Option<String> {
-    match expr {
-        Expr::StringLiteral(_) => Some("str".to_owned()),
-        Expr::NumberLiteral(n) => {
-            if n.value.is_int() {
-                Some("int".to_owned())
-            } else {
-                Some("float".to_owned())
-            }
-        }
-        Expr::BooleanLiteral(_) => Some("bool".to_owned()),
-        Expr::BytesLiteral(_) => Some("bytes".to_owned()),
-        Expr::NoneLiteral(_) => Some("None".to_owned()),
-        _ => None,
-    }
-}
 
 /// Create a [`Span`] from a ruff range.
 fn mk_span(range: ruff_text_size::TextRange) -> Span {

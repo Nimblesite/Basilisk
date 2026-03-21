@@ -44,3 +44,47 @@ fun(Proto)
     let _ = codes(&diags);
     Ok(())
 }
+
+#[test]
+fn e0106_protocol_assigned_to_type_variable() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Protocol
+
+class Drawable(Protocol):
+    def draw(self) -> None: ...
+
+class Circle:
+    def draw(self) -> None:
+        pass
+
+widget_type: type[Drawable] = Circle
+widget_type = Drawable
+";
+    let diags = run(source)?;
+    let _ = codes(&diags);
+    Ok(())
+}
+
+#[test]
+fn e0106_multiple_protocol_violations() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Protocol
+
+class Serializable(Protocol):
+    def serialize(self) -> str: ...
+
+def process(cls: type[Serializable]) -> str:
+    return cls().serialize()
+
+process(Serializable)
+
+class JsonSerializable:
+    def serialize(self) -> str:
+        return '{}'
+
+process(JsonSerializable)
+";
+    let diags = run(source)?;
+    let _ = codes(&diags);
+    Ok(())
+}

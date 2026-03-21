@@ -2,6 +2,9 @@
 
 use ruff_python_ast::{self as ast, Expr, Stmt};
 
+// Re-export shared helpers so sibling modules can use `context::ann_str` etc.
+pub(super) use crate::rules::shared::{ann_str, expr_name};
+
 // ---------------------------------------------------------------------------
 // Data structures
 // ---------------------------------------------------------------------------
@@ -299,32 +302,6 @@ fn mk_param(param: &ast::ParameterWithDefault, is_pos_only: bool) -> ParamInfo {
             .unwrap_or_default(),
         has_default: param.default.is_some(),
         is_positional_only: is_pos_only,
-    }
-}
-
-/// Extract the name string from a `Name` expression, if applicable.
-pub(super) fn expr_name(expr: &Expr) -> Option<&str> {
-    match expr {
-        Expr::Name(n) => Some(n.id.as_str()),
-        _ => None,
-    }
-}
-
-/// Render an annotation expression to a string.
-pub(super) fn ann_str(expr: &Expr) -> String {
-    match expr {
-        Expr::Name(n) => n.id.to_string(),
-        Expr::Subscript(s) => format!("{}[{}]", ann_str(&s.value), ann_str(&s.slice)),
-        Expr::Attribute(a) => format!("{}.{}", ann_str(&a.value), a.attr),
-        Expr::Tuple(t) => t.elts.iter().map(ann_str).collect::<Vec<_>>().join(", "),
-        Expr::BinOp(b) => format!("{} | {}", ann_str(&b.left), ann_str(&b.right)),
-        Expr::NoneLiteral(_) => "None".to_owned(),
-        Expr::List(l) => format!(
-            "[{}]",
-            l.elts.iter().map(ann_str).collect::<Vec<_>>().join(", ")
-        ),
-        Expr::NumberLiteral(n) => format!("{:?}", n.value),
-        _ => "...".to_owned(),
     }
 }
 

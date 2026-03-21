@@ -35,9 +35,11 @@ use basilisk_resolver::ResolvedModule;
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 use crate::span_util::slice_span;
 
+use crate::rules::shared::{is_numeric_subtype, split_top_level_commas};
+
 use super::e0128_helpers::{
-    find_matching_bracket, is_numeric_subtype, literal_type_mismatch,
-    parse_typevar_info_from_source, resolve_generic_params, split_top_level_args, TypeVarInfo,
+    find_matching_bracket, literal_type_mismatch, parse_typevar_info_from_source,
+    resolve_generic_params, TypeVarInfo,
 };
 use super::Rule;
 
@@ -481,11 +483,10 @@ fn check_subscripted_class_on_line(
         return;
     };
     let call_args_str = &call_args_str[..paren_end];
-    let type_args_owned: Vec<String> = split_top_level_args(type_args_str)
+    let type_args: Vec<&str> = split_top_level_commas(type_args_str)
         .iter()
-        .map(|s| s.trim().to_owned())
+        .map(|s| s.trim())
         .collect();
-    let type_args: Vec<&str> = type_args_owned.iter().map(String::as_str).collect();
     let resolved_types = resolve_generic_params(&class_info.generic_params, &type_args, info_map);
     let Some(init_fn) = init_map.get(class_name) else {
         return;
@@ -495,7 +496,7 @@ fn check_subscripted_class_on_line(
         .iter()
         .filter(|p| p.name != "self")
         .collect();
-    let call_args = split_top_level_args(call_args_str);
+    let call_args = split_top_level_commas(call_args_str);
     for (arg_idx, call_arg) in call_args.iter().enumerate() {
         let call_arg = call_arg.trim();
         let Some(param) = init_params.get(arg_idx) else {

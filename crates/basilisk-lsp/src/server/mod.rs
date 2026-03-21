@@ -6,10 +6,14 @@ use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::AbortHandle;
 
+pub(super) mod adoption;
 pub(super) mod commands;
 pub(super) mod document;
 pub(super) mod handlers;
 pub(super) mod init;
+pub(super) mod refactor_commands;
+pub(super) mod rule_override;
+pub(super) mod uv_handlers;
 
 macro_rules! diaglog {
     ($($arg:tt)*) => {{
@@ -38,11 +42,11 @@ use tower_lsp::lsp_types::{
     DocumentHighlightParams, DocumentSymbolParams, DocumentSymbolResponse, ExecuteCommandParams,
     FoldingRange, FoldingRangeParams, GotoDefinitionParams, GotoDefinitionResponse, Hover,
     HoverParams, InitializeParams, InitializeResult, InitializedParams, InlayHint, InlayHintParams,
-    Location, Position, PrepareRenameResponse, ReferenceParams, RenameParams, SelectionRange,
-    SelectionRangeParams, SemanticTokensParams, SemanticTokensResult, SignatureHelpParams,
-    SymbolInformation, TextDocumentPositionParams, TextEdit, TypeHierarchyItem,
-    TypeHierarchyPrepareParams, TypeHierarchySubtypesParams, TypeHierarchySupertypesParams, Url,
-    WorkspaceEdit, WorkspaceSymbolParams,
+    Location, Position, PrepareRenameResponse, ReferenceParams, RenameFilesParams, RenameParams,
+    SelectionRange, SelectionRangeParams, SemanticTokensParams, SemanticTokensResult,
+    SignatureHelpParams, SymbolInformation, TextDocumentPositionParams, TextEdit,
+    TypeHierarchyItem, TypeHierarchyPrepareParams, TypeHierarchySubtypesParams,
+    TypeHierarchySupertypesParams, Url, WorkspaceEdit, WorkspaceSymbolParams,
 };
 use tower_lsp::{Client, LspService, Server};
 
@@ -348,6 +352,13 @@ impl tower_lsp::LanguageServer for LspServer {
         params: ColorPresentationParams,
     ) -> LspResult<Vec<ColorPresentation>> {
         handlers::color_presentation(self, params).await
+    }
+
+    async fn will_rename_files(
+        &self,
+        params: RenameFilesParams,
+    ) -> LspResult<Option<WorkspaceEdit>> {
+        handlers::will_rename_files(self, params).await
     }
 }
 

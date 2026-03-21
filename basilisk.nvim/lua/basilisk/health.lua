@@ -1,7 +1,7 @@
 --- Health check for :checkhealth basilisk.
 ---
 --- Reports on binary availability, Python interpreter,
---- and optional integrations (debugpy, nvim-dap, ruff).
+--- optional integrations, and configuration summary.
 
 local binary = require("basilisk.binary")
 
@@ -76,6 +76,31 @@ function M.check()
     vim.health.ok("ruff found: " .. ruff .. " (" .. ruff_ver .. ")")
   else
     vim.health.info("ruff not found (optional, for formatting)")
+  end
+
+  -- uv (optional).
+  local uv = vim.fn.exepath("uv")
+  if uv ~= "" then
+    local uv_ver = vim.trim(vim.fn.system({ uv, "--version" }))
+    vim.health.ok("uv found: " .. uv .. " (" .. uv_ver .. ")")
+  else
+    vim.health.info("uv not found (optional, for package management)")
+  end
+
+  -- Configuration summary.
+  vim.health.start("basilisk.nvim configuration")
+  local basilisk_ok, basilisk = pcall(require, "basilisk")
+  if basilisk_ok and basilisk.config then
+    local cfg = basilisk.config
+    vim.health.ok("Analysis mode: " .. cfg.analysis_mode)
+    vim.health.ok("Ruff: " .. (cfg.ruff.enabled and "enabled" or "disabled"))
+    vim.health.ok("Debugger: " .. (cfg.debugger.enabled and "enabled" or "disabled"))
+    vim.health.ok("Test explorer: " .. (cfg.test_explorer.enabled and "enabled" or "disabled"))
+    vim.health.ok("uv integration: " .. (cfg.uv.enabled and "enabled" or "disabled"))
+    vim.health.ok("Keymaps: " .. (cfg.keymaps.enabled and "enabled" or "disabled"))
+    vim.health.ok("Log level: " .. cfg.log_level)
+  else
+    vim.health.info("basilisk.setup() has not been called yet")
   end
 end
 

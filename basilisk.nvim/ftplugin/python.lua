@@ -1,7 +1,7 @@
 --- Filetype plugin for Python files.
 ---
 --- Auto-loaded by Neovim when a Python buffer opens.
---- Sets up keymaps and inlay hints for Basilisk.
+--- Sets up keymaps, inlay hints, and code lens for Basilisk.
 
 -- Guard: only run if basilisk was set up.
 local ok, basilisk = pcall(require, "basilisk")
@@ -23,6 +23,17 @@ vim.api.nvim_create_autocmd("LspAttach", {
     -- Enable inlay hints if supported.
     if client:supports_method("textDocument/inlayHint") then
       vim.lsp.inlay_hint.enable(true, { bufnr = args.buf })
+    end
+
+    -- Enable code lens if supported.
+    if client:supports_method("textDocument/codeLens") then
+      vim.lsp.codelens.refresh({ bufnr = args.buf })
+      vim.api.nvim_create_autocmd({ "BufEnter", "InsertLeave" }, {
+        buffer = args.buf,
+        callback = function()
+          vim.lsp.codelens.refresh({ bufnr = args.buf })
+        end,
+      })
     end
 
     -- Skip keymaps if disabled.
@@ -55,5 +66,14 @@ vim.api.nvim_create_autocmd("LspAttach", {
     map("n", prefix .. "M", "<cmd>BasiliskMemStop<CR>", "Stop memory tracking")
     map("n", prefix .. "t", "<cmd>BasiliskTestToggle<CR>", "Toggle test explorer")
     map("n", prefix .. "d", "<cmd>BasiliskDebugFile<CR>", "Debug current file")
+    map("n", prefix .. "R", "<cmd>BasiliskTestRun<CR>", "Run test at cursor")
+    map("n", prefix .. "D", "<cmd>BasiliskTestDebug<CR>", "Debug test at cursor")
+
+    -- Refactoring keymaps.
+    map("v", prefix .. "ev", "<cmd>BasiliskExtractVariable<CR>", "Extract variable")
+    map("v", prefix .. "ec", "<cmd>BasiliskExtractConstant<CR>", "Extract constant")
+    map("n", prefix .. "cu", "<cmd>BasiliskConvertUnion<CR>", "Convert Union/Optional")
+    map("n", prefix .. "im", "<cmd>BasiliskImplementMethods<CR>", "Implement abstract methods")
+    map("n", prefix .. "fa", "<cmd>BasiliskFixFile<CR>", "Fix all in file")
   end,
 })

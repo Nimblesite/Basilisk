@@ -21,6 +21,8 @@
 //! movie2: Movie = {"title": "Blade Runner", "year": 1982}  # E: invalid/missing keys
 //! ```
 
+mod type_consistency;
+
 use basilisk_resolver::{ResolvedModule, TypedDictKeyViolationKind};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
@@ -37,6 +39,8 @@ pub(crate) struct TypedDictKeyValidation;
 
 impl Rule for TypedDictKeyValidation {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+        type_consistency::check_typeddict_assignability(module, diagnostics);
+
         for violation in &module.typeddict_key_violations {
             let message = match &violation.kind {
                 TypedDictKeyViolationKind::InvalidSubscriptKey { key } => format!(

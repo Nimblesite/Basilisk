@@ -49,7 +49,9 @@ fn search_paths(
         roots,
         extra_paths: vec![],
         stub_paths,
+        workspace_members: vec![],
         site_packages,
+        registry: None,
     }
 }
 

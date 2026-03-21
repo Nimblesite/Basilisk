@@ -77,6 +77,42 @@ fn has_cycle(start: &str, graph: &HashMap<&str, Vec<&str>>) -> bool {
     false
 }
 
+/// Known container types that make recursive type aliases valid when they
+/// wrap the self-reference (e.g. `list["Json"]` inside a Union).
+const CONTAINER_TYPES: &[&str] = &[
+    "list",
+    "dict",
+    "set",
+    "frozenset",
+    "tuple",
+    "List",
+    "Dict",
+    "Set",
+    "FrozenSet",
+    "Tuple",
+    "Mapping",
+    "MutableMapping",
+    "Sequence",
+    "MutableSequence",
+    "Iterable",
+    "Iterator",
+    "Deque",
+    "DefaultDict",
+    "OrderedDict",
+    "ChainMap",
+    "Counter",
+];
+
+/// Returns `true` if the alias's RHS references any known container type,
+/// indicating the recursive reference is likely wrapped in a container
+/// (e.g. `list["Json"]`) rather than appearing directly in a Union.
+fn has_container_wrapper(alias: &basilisk_resolver::TypeAliasDefInfo) -> bool {
+    alias
+        .rhs_names
+        .iter()
+        .any(|name| CONTAINER_TYPES.contains(&name.as_str()))
+}
+
 impl Rule for CyclicalTypeAliasReference {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         // Build a set of all TypeAlias names for quick membership tests.
@@ -107,23 +143,31 @@ impl Rule for CyclicalTypeAliasReference {
             if !graph.contains_key(alias.name.as_str()) {
                 continue;
             }
-            if has_cycle(alias.name.as_str(), &graph) {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!("Type alias `{}` creates a cyclical reference", alias.name),
-                    span: alias.span,
-                    path: module.path.clone(),
-                    help: Some(
-                        "Remove the self-reference or break the mutual reference cycle".to_owned(),
-                    ),
-                    note: Some(
-                        "A TypeAlias whose RHS forward-references itself (directly or \
-                         through another alias) produces an infinite type that cannot be resolved"
-                            .to_owned(),
-                    ),
-                });
+            if !has_cycle(alias.name.as_str(), &graph) {
+                continue;
             }
+            // Valid recursive aliases wrap the self-reference in a container
+            // type (e.g. `list["Json"]`, `dict[str, "Json"]`).  When the RHS
+            // references a container type, the recursion terminates through
+            // structural nesting and is not truly infinite.
+            if has_container_wrapper(alias) {
+                continue;
+            }
+            diagnostics.push(Diagnostic {
+                code: CODE.clone(),
+                severity: Severity::Error,
+                message: format!("Type alias `{}` creates a cyclical reference", alias.name),
+                span: alias.span,
+                path: module.path.clone(),
+                help: Some(
+                    "Remove the self-reference or break the mutual reference cycle".to_owned(),
+                ),
+                note: Some(
+                    "A TypeAlias whose RHS forward-references itself (directly or \
+                     through another alias) produces an infinite type that cannot be resolved"
+                        .to_owned(),
+                ),
+            });
         }
     }
 }

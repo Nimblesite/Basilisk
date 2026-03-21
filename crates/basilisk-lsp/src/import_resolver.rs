@@ -6,7 +6,8 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use basilisk_resolver::scope::{ImportKind, ImportResolution};
+use basilisk_resolver::scope::{ImportKind, ImportResolution, PackageDepKind};
+use basilisk_uv::PackageRegistry;
 
 use crate::workspace::WorkspaceIndex;
 
@@ -17,6 +18,25 @@ pub struct ResolvedImport {
     pub path: PathBuf,
     /// Whether this resolved to a `.pyi` stub or `.py` source.
     pub resolution: ImportResolution,
+    /// Optional metadata from the uv package registry.
+    pub package_info: Option<Arc<basilisk_uv::PackageInfo>>,
+}
+
+/// Why an import could not be resolved.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UnresolvedReason {
+    /// Package not in uv.lock at all.
+    NotInstalled,
+    /// In lock as transitive, not in pyproject.toml dependencies.
+    NotInDeps,
+    /// In pyproject.toml but lock file is stale or venv not synced.
+    NeedsSync,
+    /// Installed but no .pyi files.
+    NoStubs,
+    /// stdlib module not available in target Python version.
+    WrongPythonVersion,
+    /// Non-uv project or can't determine reason.
+    Unknown,
 }
 
 /// Search paths used for import resolution.
@@ -28,22 +48,58 @@ pub struct ImportSearchPaths {
     pub extra_paths: Vec<PathBuf>,
     /// User-provided stub directories from `stub-paths` config.
     pub stub_paths: Vec<PathBuf>,
+    /// uv workspace member source roots (editable packages).
+    ///
+    /// Searched after workspace roots but before `extra_paths`.
+    pub workspace_members: Vec<PathBuf>,
     /// Virtual environment site-packages directory, if detected.
     pub site_packages: Option<PathBuf>,
+    /// Package registry from uv lock file, if available.
+    pub registry: Option<Arc<PackageRegistry>>,
 }
 
 impl ImportSearchPaths {
     /// Build search paths from workspace config.
     #[must_use]
-    pub fn from_config(roots: &[PathBuf], config: &crate::config::WorkspaceConfig) -> Self {
+    pub fn from_config(
+        roots: &[PathBuf],
+        config: &crate::config::WorkspaceConfig,
+        registry: Option<Arc<PackageRegistry>>,
+    ) -> Self {
         let site_packages = resolve_site_packages(roots, config);
         Self {
             roots: roots.to_vec(),
             extra_paths: config.extra_paths.clone(),
             stub_paths: config.stub_paths.clone(),
+            workspace_members: Vec::new(),
             site_packages,
+            registry,
         }
     }
+}
+
+/// Classify why an import is unresolved using the package registry.
+#[must_use]
+pub fn classify_unresolved(
+    module_name: &str,
+    search_paths: &ImportSearchPaths,
+) -> UnresolvedReason {
+    let Some(registry) = &search_paths.registry else {
+        return UnresolvedReason::Unknown;
+    };
+
+    let root_module = module_name.split('.').next().unwrap_or(module_name);
+    let import_name = basilisk_uv::import_map::package_to_import_name(root_module);
+
+    if let Some(info) = registry.lookup(&import_name) {
+        if info.kind == basilisk_uv::DepKind::Transitive {
+            return UnresolvedReason::NotInDeps;
+        }
+        // Package is known but not found on filesystem — needs sync
+        return UnresolvedReason::NeedsSync;
+    }
+
+    UnresolvedReason::NotInstalled
 }
 
 /// Resolve an absolute import following PEP 561 resolution order.
@@ -65,10 +121,11 @@ pub fn resolve_module(
         }
     }
 
-    // 2. User source (workspace roots + extraPaths: .pyi preferred over .py)
+    // 2. User source (workspace roots + workspace members + extraPaths: .pyi preferred over .py)
     for dir in search_paths
         .roots
         .iter()
+        .chain(search_paths.workspace_members.iter())
         .chain(search_paths.extra_paths.iter())
     {
         if let Some(resolved) = try_resolve_in_dir(module_name, dir) {
@@ -112,6 +169,7 @@ fn try_resolve_stub_only(module_name: &str, stub_dir: &Path) -> Option<ResolvedI
         return Some(ResolvedImport {
             path: pyi,
             resolution: ImportResolution::StubPyi,
+            package_info: None,
         });
     }
 
@@ -120,6 +178,7 @@ fn try_resolve_stub_only(module_name: &str, stub_dir: &Path) -> Option<ResolvedI
         return Some(ResolvedImport {
             path: pkg_pyi,
             resolution: ImportResolution::StubPyi,
+            package_info: None,
         });
     }
 
@@ -144,6 +203,7 @@ fn try_resolve_stub_package(module_name: &str, site_packages: &Path) -> Option<R
                 return Some(ResolvedImport {
                     path: init_pyi,
                     resolution: ImportResolution::StubPyi,
+                    package_info: None,
                 });
             }
             None
@@ -200,6 +260,7 @@ fn try_resolve_name(dir: &Path, name: &str) -> Option<ResolvedImport> {
         return Some(ResolvedImport {
             path: pyi,
             resolution: ImportResolution::StubPyi,
+            package_info: None,
         });
     }
     // 2. name.py
@@ -208,6 +269,7 @@ fn try_resolve_name(dir: &Path, name: &str) -> Option<ResolvedImport> {
         return Some(ResolvedImport {
             path: py,
             resolution: ImportResolution::SourcePy,
+            package_info: None,
         });
     }
     // 3. name/__init__.pyi (package stub)
@@ -216,6 +278,7 @@ fn try_resolve_name(dir: &Path, name: &str) -> Option<ResolvedImport> {
         return Some(ResolvedImport {
             path: pkg_pyi,
             resolution: ImportResolution::StubPyi,
+            package_info: None,
         });
     }
     // 4. name/__init__.py (package)
@@ -224,6 +287,7 @@ fn try_resolve_name(dir: &Path, name: &str) -> Option<ResolvedImport> {
         return Some(ResolvedImport {
             path: pkg_py,
             resolution: ImportResolution::SourcePy,
+            package_info: None,
         });
     }
     None
@@ -236,6 +300,7 @@ fn try_resolve_init(dir: &Path) -> Option<ResolvedImport> {
         return Some(ResolvedImport {
             path: init_pyi,
             resolution: ImportResolution::StubPyi,
+            package_info: None,
         });
     }
     let init_py = dir.join("__init__.py");
@@ -243,6 +308,7 @@ fn try_resolve_init(dir: &Path) -> Option<ResolvedImport> {
         return Some(ResolvedImport {
             path: init_py,
             resolution: ImportResolution::SourcePy,
+            package_info: None,
         });
     }
     None
@@ -368,7 +434,7 @@ fn find_venv_dir(roots: &[PathBuf], config: &crate::config::WorkspaceConfig) -> 
 /// Resolve imports for all files in the workspace index.
 ///
 /// Iterates every file in the index, resolves each `ImportInfo`, and updates
-/// its `resolution` and `resolved_path` fields in place.
+/// its `resolution`, `resolved_path`, and `package_dep_kind` fields in place.
 pub fn resolve_workspace_imports(index: &WorkspaceIndex, search_paths: &ImportSearchPaths) {
     for mut entry in index.files.iter_mut() {
         let Some(resolved_arc) = entry.value_mut().resolved.take() else {
@@ -386,9 +452,38 @@ pub fn resolve_workspace_imports(index: &WorkspaceIndex, search_paths: &ImportSe
                 import.resolution = r.resolution;
                 import.resolved_path = Some(r.path);
             }
+
+            // Annotate with dependency classification from the uv registry.
+            import.package_dep_kind = classify_dep_kind(&import.module, search_paths);
         }
         entry.value_mut().resolved = Some(Arc::new(resolved));
     }
+}
+
+/// Determine the dependency kind for an import using the uv package registry.
+///
+/// Returns `None` for stdlib modules, non-uv projects, or imports not found
+/// in the registry.
+fn classify_dep_kind(
+    module_name: &str,
+    search_paths: &ImportSearchPaths,
+) -> Option<PackageDepKind> {
+    let registry = search_paths.registry.as_ref()?;
+
+    // Skip stdlib modules — they have no package dep kind.
+    if basilisk_stubs::is_stdlib_module(module_name) {
+        return None;
+    }
+
+    let root_module = module_name.split('.').next().unwrap_or(module_name);
+    let import_name = basilisk_uv::import_map::package_to_import_name(root_module);
+
+    let info = registry.lookup(&import_name)?;
+    Some(match info.kind {
+        basilisk_uv::DepKind::Direct => PackageDepKind::Direct,
+        basilisk_uv::DepKind::Dev => PackageDepKind::Dev,
+        basilisk_uv::DepKind::Transitive => PackageDepKind::Transitive,
+    })
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────
@@ -417,7 +512,9 @@ mod tests {
             roots,
             extra_paths: vec![],
             stub_paths: vec![],
+            workspace_members: vec![],
             site_packages: None,
+            registry: None,
         }
     }
 
@@ -552,7 +649,9 @@ mod tests {
             roots: vec![root.clone()],
             extra_paths: vec![extra.clone()],
             stub_paths: vec![],
+            workspace_members: vec![],
             site_packages: None,
+            registry: None,
         };
         let result = resolve_module("libmod", &paths).unwrap();
         assert!(result.path.ends_with("libmod.py"));
@@ -573,7 +672,9 @@ mod tests {
             roots: vec![root.clone()],
             extra_paths: vec![],
             stub_paths: vec![],
+            workspace_members: vec![],
             site_packages: Some(sp.clone()),
+            registry: None,
         };
         let result = resolve_module("requests", &paths).unwrap();
         assert!(result.path.ends_with("requests.py"));
@@ -595,7 +696,9 @@ mod tests {
             roots: vec![root.clone()],
             extra_paths: vec![extra.clone()],
             stub_paths: vec![],
+            workspace_members: vec![],
             site_packages: None,
+            registry: None,
         };
         let result = resolve_module("dup", &paths).unwrap();
         assert!(result.path.starts_with(&root));
@@ -710,7 +813,9 @@ mod tests {
             roots: vec![root.clone()],
             extra_paths: vec![],
             stub_paths: vec![stubs.clone()],
+            workspace_members: vec![],
             site_packages: None,
+            registry: None,
         };
         let result = resolve_module("mymod", &paths).unwrap();
         // Stub-path .pyi should win over root .py
@@ -732,7 +837,9 @@ mod tests {
             roots: vec![],
             extra_paths: vec![],
             stub_paths: vec![stubs.clone()],
+            workspace_members: vec![],
             site_packages: None,
+            registry: None,
         };
         let result = resolve_module("mymod", &paths);
         assert!(
@@ -758,7 +865,9 @@ mod tests {
             roots: vec![root.clone()],
             extra_paths: vec![],
             stub_paths: vec![],
+            workspace_members: vec![],
             site_packages: Some(sp.clone()),
+            registry: None,
         };
         let result = resolve_module("requests", &paths).unwrap();
         assert_eq!(result.resolution, ImportResolution::StubPyi);
@@ -780,7 +889,9 @@ mod tests {
             roots: vec![],
             extra_paths: vec![],
             stub_paths: vec![],
+            workspace_members: vec![],
             site_packages: Some(sp.clone()),
+            registry: None,
         };
         let result = resolve_module("requests.api", &paths).unwrap();
         assert_eq!(result.resolution, ImportResolution::StubPyi);

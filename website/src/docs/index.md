@@ -10,9 +10,9 @@ eleventyNavigation:
 
 # Introduction
 
-Basilisk is a **complete Python language server and VS Code extension** that replaces Pylance and Pyright. Everything Pylance does — autocomplete, go-to-definition, hover information, refactoring, diagnostics — Basilisk does too, fully open source and strict by default.
+Basilisk is a **complete Python language server** that replaces Pylance and Pyright. Everything Pylance does — autocomplete, go-to-definition, hover information, refactoring, diagnostics, integrated debugging, profiling — Basilisk does too, fully open source and strict by default.
 
-It is not just a type checker. It is a feature-complete LSP that works in VS Code, Neovim, Emacs, and any editor that speaks the Language Server Protocol. No proprietary extensions. No Node.js. A single Rust binary.
+It is not just a type checker. It is a feature-complete LSP with first-class extensions for **VS Code**, **Neovim**, and **Zed** — plus any other editor that speaks the Language Server Protocol. No proprietary extensions. No Node.js. A single Rust binary.
 
 ## The problem Basilisk solves
 
@@ -24,12 +24,14 @@ Basilisk takes a different position. **It replaces the entire Pylance stack** �
 
 ## What Basilisk is
 
-- A **full-featured language server** (LSP) — autocomplete, go-to-definition, hover, find references, rename, code actions, inlay hints
-- A **VS Code extension** that replaces Pylance — install it, disable Pylance, and everything works
+- A **full-featured language server** (LSP) — autocomplete, go-to-definition, hover, find references, rename, [16 refactoring actions](/docs/refactoring/), code actions, inlay hints
+- **Editor extensions** for VS Code, Neovim (0.10+), and Zed — install it, disable Pylance, and everything works
 - An **integrated debugger** — press F5 to debug Python with breakpoints, stepping, variable inspection, and watch expressions, all brokered through the Basilisk LSP
+- An **integrated profiler** — py-spy profiling with heatmap visualization directly in your editor
 - A **strict-by-default type checker** — no `--strict` flag, no gradual mode, no opt-in
 - A **CLI tool** for CI integration — exits with code 1 when errors are found
 - A **migration assistant** that reads your existing `pyrightconfig.json` or `mypy.ini`
+- **uv integration** — workspace detection, lock file parsing, and package management commands
 - Written in **Rust** — ships as a single binary with no runtime dependencies
 
 ## What Basilisk is not
@@ -78,9 +80,21 @@ Basilisk is currently at **v0.1.0** — the core checker, LSP server, and VS Cod
 | 6 | 95%+ PEP, SARIF/JUnit, enterprise hardening | Planned |
 | 7 | Plugin marketplace, community stubs, ecosystem | Planned |
 
+## Architecture
+
+Basilisk is a Cargo workspace with 14 Rust crates, each owning one layer of the system:
+
+| Layer | Crates |
+|-------|--------|
+| **Analysis pipeline** | `basilisk-parser` &rarr; `basilisk-resolver` &rarr; `basilisk-checker` &rarr; `basilisk-cli` |
+| **LSP & infrastructure** | `basilisk-lsp`, `basilisk-db`, `basilisk-config`, `basilisk-stubs`, `basilisk-uv`, `basilisk-common` |
+| **Editor extensions** | VS Code (`vscode-extension`), Neovim (`basilisk.nvim`), Zed (`basilisk-zed`) |
+| **Future** | `basilisk-mojo` (ownership), `basilisk-compiler` (native), `basilisk-plugin` (WASM plugins) |
+
 ## Next steps
 
 - [Install Basilisk](/docs/installation/) — build from source or install via cargo
 - [Quick Start](/docs/quick-start/) — your first type check in under 5 minutes
+- [Refactoring](/docs/refactoring/) — all 16 refactoring code actions (extract, inline, move, rename, convert)
 - [Debugging](/docs/debugging/) — set breakpoints, step through code, inspect variables
 - [All Rules](/docs/rules/) — browse every BSK-E and BSK-W diagnostic code
