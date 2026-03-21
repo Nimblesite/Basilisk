@@ -8,6 +8,12 @@ import { type LanguageClient } from "vscode-languageclient/node";
 import { Logger } from "./logger";
 import { DapTcpProxy } from "./dap-proxy";
 
+/** Max number of variables to log inline before switching to a count summary. */
+const MAX_INLINE_VARS = 10;
+
+/** Length of an abbreviated session ID prefix. */
+const SESSION_ID_PREFIX_LEN = 8;
+
 // ── DAP message summarization ─────────────────────────────────────────────
 
 /** Compact summary of DAP request arguments for logging. */
@@ -68,7 +74,7 @@ function summarizeCollectionFields(obj: Record<string, unknown>, parts: string[]
   }
   if ("variables" in obj) {
     const vars = obj.variables as { name?: string; value?: string }[];
-    if (vars.length <= 10) {
+    if (vars.length <= MAX_INLINE_VARS) {
       parts.push(`vars=[${vars.map((v) => `${String(v.name)}=${String(v.value)}`).join(", ")}]`);
     } else {
       parts.push(`vars=[${vars.length} items]`);
@@ -100,7 +106,7 @@ class BasiliskDebugAdapterTracker implements vscode.DebugAdapterTracker {
   private readonly sessionName: string;
 
   constructor(session: vscode.DebugSession) {
-    this.sessionId = session.id.slice(0, 8);
+    this.sessionId = session.id.slice(0, SESSION_ID_PREFIX_LEN);
     this.sessionName = session.name;
   }
 

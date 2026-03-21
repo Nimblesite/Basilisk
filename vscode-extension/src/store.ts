@@ -14,10 +14,14 @@
  * production creates one in activate().
  */
 
-import { signal, computed, type ReadonlySignal } from "@preact/signals-core";
-import type { LanguageClient } from "vscode-languageclient/node";
-import type * as vscode from "vscode";
-import type { LogSink } from "./logger";
+import { signal, computed, type ReadonlySignal, type Signal } from "@preact/signals-core";
+import { type LanguageClient, State } from "vscode-languageclient/node";
+import * as vscode from "vscode";
+import { Logger, type LogSink } from "./logger";
+import type { Result } from "./result";
+
+/** Default timeout (ms) for waiting on the LSP client to become ready. */
+export const DEFAULT_LSP_READY_TIMEOUT_MS = 1_000;
 
 /** LSP lifecycle states exposed to consumers. */
 export type LspState = "idle" | "starting" | "running" | "stopped";
@@ -43,141 +47,226 @@ export interface Store {
   readonly lspReadyPromise: ReadonlySignal<Promise<void> | undefined>;
 
   // Write actions — the only way to mutate state.
-  setClient(c: LanguageClient): void;
+  setClient(context: vscode.ExtensionContext, c: LanguageClient): void;
   setStatusBarItem(item: vscode.StatusBarItem): void;
   setOutputChannel(ch: vscode.OutputChannel): void;
   setLogSink(sink: LogSink): void;
   isClientCommandRegistered(id: string): boolean;
   isServerCommandAdvertised(id: string): boolean;
-  ensureLspReadyPromise(): Promise<void>;
+  ensureLspReadyPromise(timeoutMs?: number): Promise<Result<LanguageClient>>;
   reset(): void;
 }
 
-export function createStore(): Store {
-  const _client = signal<LanguageClient | undefined>(undefined);
-  const _serverCommands = signal<ReadonlySet<string>>(new Set());
-  const _clientCommands = signal<ReadonlySet<string>>(new Set());
-  const _statusBarItem = signal<vscode.StatusBarItem | undefined>(undefined);
-  const _outputChannel = signal<vscode.OutputChannel | undefined>(undefined);
-  const _logSink = signal<LogSink | undefined>(undefined);
-  const _lspState = signal<LspState>("idle");
-  const _readyHandle = signal<ReadyHandle | undefined>(undefined);
+/** Internal mutable signals backing the store. */
+interface StoreSignals {
+  client: Signal<LanguageClient | undefined>;
+  serverCommands: Signal<ReadonlySet<string>>;
+  clientCommands: Signal<ReadonlySet<string>>;
+  statusBarItem: Signal<vscode.StatusBarItem | undefined>;
+  outputChannel: Signal<vscode.OutputChannel | undefined>;
+  logSink: Signal<LogSink | undefined>;
+  lspState: Signal<LspState>;
+  readyHandle: Signal<ReadyHandle | undefined>;
+}
 
-  const isServerReady = computed(() => _client.value?.isRunning() === true);
-  const lspReadyPromise = computed(() => _readyHandle.value?.promise);
+// ── Private helpers operating on StoreSignals ─────────────────────────────
 
-  /** Extract commands from the client's initializeResult. Private. */
-  function syncServerCommands(): void {
-    const commands = _client.value?.initializeResult?.capabilities?.executeCommandProvider?.commands;
-    if (!Array.isArray(commands)) {
-      _serverCommands.value = new Set();
+/** Extract commands from the client's initializeResult. */
+function syncServerCommands(signals: StoreSignals): void {
+  const commands = signals.client.value?.initializeResult?.capabilities?.executeCommandProvider?.commands;
+  if (!Array.isArray(commands)) {
+    signals.serverCommands.value = new Set();
+    return;
+  }
+  const next = new Set<string>();
+  for (const cmd of commands) {
+    if (typeof cmd === "string") {
+      next.add(cmd);
+    }
+  }
+  signals.serverCommands.value = next;
+}
+
+/** Resolve the ready handle and clear it. */
+function resolveLspReady(signals: StoreSignals): void {
+  const handle = signals.readyHandle.value;
+  if (handle !== undefined) {
+    signals.readyHandle.value = undefined;
+    setTimeout(handle.resolve, 0);
+  }
+}
+
+/** Create a fresh ready handle for this start cycle. */
+function createReadyHandle(signals: StoreSignals): ReadyHandle {
+  let resolve: (() => void) | undefined;
+  const promise = new Promise<void>((r) => { resolve = r; });
+  const handle: ReadyHandle = { promise, resolve: resolve as () => void };
+  signals.readyHandle.value = handle;
+  return handle;
+}
+
+interface CommandRegistration {
+  signals: StoreSignals;
+  context: vscode.ExtensionContext;
+  commandId: string;
+}
+
+/** Register a client command with VS Code and track it. */
+function registerCommand(
+  reg: CommandRegistration,
+  handler: (...args: unknown[]) => unknown
+): void {
+  if (reg.signals.clientCommands.value.has(reg.commandId)) {
+    return;
+  }
+  const disposable = vscode.commands.registerCommand(reg.commandId, handler);
+  reg.context.subscriptions.push(disposable);
+  const next = new Set(reg.signals.clientCommands.value);
+  next.add(reg.commandId);
+  reg.signals.clientCommands.value = next;
+}
+
+/** Register all client-only commands. Called once when LSP reaches Running. */
+function registerClientCommands(signals: StoreSignals, context: vscode.ExtensionContext): void {
+  registerCommand({ signals, context, commandId: "basilisk.restartServer" }, async () => {
+    const lspClient = signals.client.value;
+    if (!lspClient) {
+      vscode.window.showWarningMessage("Basilisk: No language server to restart.");
       return;
     }
-    const next = new Set<string>();
-    for (const cmd of commands) {
-      if (typeof cmd === "string") {
-        next.add(cmd);
+    try {
+      Logger.info("Restarting Basilisk language server...");
+      await lspClient.stop();
+      await lspClient.start();
+      Logger.info("Basilisk language server restarted.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      Logger.error(`Restart failed: ${msg}`);
+      vscode.window.showErrorMessage(`Basilisk: Failed to restart server: ${msg}`);
+    }
+  });
+
+  registerCommand({ signals, context, commandId: "basilisk.showOutput" }, () => {
+    signals.outputChannel.value?.show();
+  });
+}
+
+/**
+ * Wire up the onDidChangeState listener on the given client.
+ * This is the ONLY place commands get registered or populated.
+ */
+function bindClientStateListener(
+  signals: StoreSignals,
+  context: vscode.ExtensionContext,
+  lspClient: LanguageClient
+): void {
+  lspClient.onDidChangeState((event) => {
+    const newState = event.newState;
+
+    if (newState === State.Running) {
+      signals.lspState.value = "running";
+      syncServerCommands(signals);
+      registerClientCommands(signals, context);
+      resolveLspReady(signals);
+      return;
+    }
+
+    if (newState === State.Stopped) {
+      signals.lspState.value = "stopped";
+      return;
+    }
+
+    if (newState === State.Starting) {
+      signals.lspState.value = "starting";
+      if (signals.readyHandle.value === undefined) {
+        createReadyHandle(signals);
       }
     }
-    _serverCommands.value = next;
+  });
+}
+
+/** Wait for the LSP ready handle with a timeout, returning Result. */
+async function awaitLspReady(signals: StoreSignals, timeoutMs: number): Promise<Result<LanguageClient>> {
+  const existing = signals.readyHandle.value;
+  const ready = existing !== undefined ? existing.promise : createReadyHandle(signals).promise;
+  const timeout = new Promise<"timeout">((resolve) => {
+    setTimeout(() => { resolve("timeout"); }, timeoutMs);
+  });
+  const outcome = await Promise.race([ready.then(() => "ready" as const), timeout]);
+  if (outcome === "timeout") {
+    return { ok: false, error: new Error(`LSP client did not reach Running state within ${timeoutMs}ms`) };
   }
-
-  /** Resolve the ready handle and clear it. Private. */
-  function resolveLspReady(): void {
-    const handle = _readyHandle.value;
-    if (handle !== undefined) {
-      _readyHandle.value = undefined;
-      setTimeout(handle.resolve, 0);
-    }
+  const client = signals.client.value;
+  if (client === undefined) {
+    return { ok: false, error: new Error("LSP client resolved but is undefined") };
   }
+  return { ok: true, value: client };
+}
 
-  /** Create a fresh ready handle for this start cycle. Private. */
-  function createReadyHandle(): ReadyHandle {
-    let resolve: () => void;
-    const promise = new Promise<void>((r) => { resolve = r; });
-    const handle: ReadyHandle = { promise, resolve: resolve! };
-    _readyHandle.value = handle;
-    return handle;
-  }
+/** Reset all signals to their initial values. */
+function resetSignals(signals: StoreSignals): void {
+  signals.client.value = undefined;
+  signals.serverCommands.value = new Set();
+  signals.clientCommands.value = new Set();
+  signals.statusBarItem.value = undefined;
+  signals.outputChannel.value = undefined;
+  signals.logSink.value = undefined;
+  signals.lspState.value = "idle";
+  signals.readyHandle.value = undefined;
+}
 
-  /**
-   * Wire up the onDidChangeState listener on the given client.
-   * This is the ONLY place server commands get populated.
-   */
-  function bindClientStateListener(lspClient: LanguageClient): void {
-    lspClient.onDidChangeState((event) => {
-      // Dynamically import State to avoid pulling vscode-languageclient
-      // into the module scope (it's already imported by the caller).
-      // State enum values: Starting=1, Running=2, Stopped=3
-      const newState = event.newState;
+// ── Factory ───────────────────────────────────────────────────────────────
 
-      // State.Running === 2
-      if (newState === 2) {
-        _lspState.value = "running";
-        syncServerCommands();
-        resolveLspReady();
-        return;
-      }
+export function createStore(): Store {
+  const signals: StoreSignals = {
+    client: signal<LanguageClient | undefined>(undefined),
+    serverCommands: signal<ReadonlySet<string>>(new Set()),
+    clientCommands: signal<ReadonlySet<string>>(new Set()),
+    statusBarItem: signal<vscode.StatusBarItem | undefined>(undefined),
+    outputChannel: signal<vscode.OutputChannel | undefined>(undefined),
+    logSink: signal<LogSink | undefined>(undefined),
+    lspState: signal<LspState>("idle"),
+    readyHandle: signal<ReadyHandle | undefined>(undefined),
+  };
 
-      // State.Stopped === 3
-      if (newState === 3) {
-        _lspState.value = "stopped";
-        return;
-      }
-
-      // State.Starting === 1
-      if (newState === 1) {
-        _lspState.value = "starting";
-        if (_readyHandle.value === undefined) {
-          createReadyHandle();
-        }
-      }
-    });
-  }
+  const isServerReady = computed(() => signals.client.value?.isRunning() === true);
+  const lspReadyPromise = computed(async () => signals.readyHandle.value?.promise);
 
   return {
-    client: _client as ReadonlySignal<LanguageClient | undefined>,
-    serverCommands: _serverCommands as ReadonlySignal<ReadonlySet<string>>,
-    clientCommands: _clientCommands as ReadonlySignal<ReadonlySet<string>>,
-    statusBarItem: _statusBarItem as ReadonlySignal<vscode.StatusBarItem | undefined>,
-    outputChannel: _outputChannel as ReadonlySignal<vscode.OutputChannel | undefined>,
-    logSink: _logSink as ReadonlySignal<LogSink | undefined>,
-    lspState: _lspState as ReadonlySignal<LspState>,
+    client: signals.client as ReadonlySignal<LanguageClient | undefined>,
+    serverCommands: signals.serverCommands as ReadonlySignal<ReadonlySet<string>>,
+    clientCommands: signals.clientCommands as ReadonlySignal<ReadonlySet<string>>,
+    statusBarItem: signals.statusBarItem as ReadonlySignal<vscode.StatusBarItem | undefined>,
+    outputChannel: signals.outputChannel as ReadonlySignal<vscode.OutputChannel | undefined>,
+    logSink: signals.logSink as ReadonlySignal<LogSink | undefined>,
+    lspState: signals.lspState as ReadonlySignal<LspState>,
     lspReadyPromise,
     isServerReady,
 
-    setClient(c: LanguageClient): void {
-      _client.value = c;
-      bindClientStateListener(c);
+    setClient(context: vscode.ExtensionContext, c: LanguageClient): void {
+      signals.client.value = c;
+      bindClientStateListener(signals, context, c);
     },
     setStatusBarItem(item: vscode.StatusBarItem): void {
-      _statusBarItem.value = item;
+      signals.statusBarItem.value = item;
     },
     setOutputChannel(ch: vscode.OutputChannel): void {
-      _outputChannel.value = ch;
+      signals.outputChannel.value = ch;
     },
     setLogSink(sink: LogSink): void {
-      _logSink.value = sink;
+      signals.logSink.value = sink;
     },
     isClientCommandRegistered(id: string): boolean {
-      return _clientCommands.value.has(id);
+      return signals.clientCommands.value.has(id);
     },
     isServerCommandAdvertised(id: string): boolean {
-      return _serverCommands.value.has(id);
+      return signals.serverCommands.value.has(id);
     },
-    ensureLspReadyPromise(): Promise<void> {
-      const existing = _readyHandle.value;
-      return existing !== undefined ? existing.promise : createReadyHandle().promise;
+    async ensureLspReadyPromise(timeoutMs = DEFAULT_LSP_READY_TIMEOUT_MS): Promise<Result<LanguageClient>> {
+      return awaitLspReady(signals, timeoutMs);
     },
     reset(): void {
-      _client.value = undefined;
-      _serverCommands.value = new Set();
-      _clientCommands.value = new Set();
-      _statusBarItem.value = undefined;
-      _outputChannel.value = undefined;
-      _logSink.value = undefined;
-      _lspState.value = "idle";
-      _readyHandle.value = undefined;
+      resetSignals(signals);
     },
   };
 }

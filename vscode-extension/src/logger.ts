@@ -12,11 +12,11 @@ import type FsModule from "fs";
 // ── Public interface ─────────────────────────────────────────────────────
 
 export enum LogLevel {
-  Trace,
-  Debug,
-  Info,
-  Warn,
-  Error,
+  Trace = 0,
+  Debug = 1,
+  Info = 2,
+  Warn = 3,
+  Error = 4,
 }
 
 /** Backend-agnostic logging interface. */
@@ -74,6 +74,7 @@ export class FileLogSink implements LogSink {
 // ── Logger with injectable sink ─────────────────────────────────────────
 
 /** Sink accessor — set once at startup by extension.ts via bindLogger(). */
+// eslint-disable-next-line func-style
 let sinkAccessor: () => LogSink = () => nullSink;
 
 /**

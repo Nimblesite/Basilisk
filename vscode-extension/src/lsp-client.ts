@@ -17,49 +17,10 @@ import {
 } from "vscode-languageclient/node";
 import { effect } from "@preact/signals-core";
 import { Logger } from "./logger";
-import type { Store, LspState } from "./store";
+import { type Store, type LspState } from "./store";
 
-/**
- * Returns a promise that resolves when the LSP client reaches Running state.
- *
- * At that point, vscode-languageclient has completed the initialize handshake
- * and registered all server-advertised commands from executeCommandProvider.
- * Tests and other code that depends on server commands should await this.
- */
-export async function whenReady(store: Store): Promise<void> {
-  if (store.client.value?.isRunning() === true) {
-    return;
-  }
-  return store.ensureLspReadyPromise();
-}
-
-/**
- * Wait for the LSP client to reach Running state, then assert a specific
- * server-advertised command is present in the server's executeCommandProvider
- * capabilities. Uses internal VSIX state — never calls getCommands().
- */
-export async function whenCommandReady(
-  store: Store,
-  commandId: string,
-  timeoutMs = 1_000
-): Promise<void> {
-  await Promise.race([
-    whenReady(store),
-    new Promise<never>((_resolve, reject) => {
-      setTimeout(
-        () => reject(new Error(
-          `LSP client did not reach Running state within ${timeoutMs}ms`
-        )),
-        timeoutMs
-      );
-    }),
-  ]);
-  if (!store.isServerCommandAdvertised(commandId)) {
-    throw new Error(
-      `Server command '${commandId}' not advertised by executeCommandProvider`
-    );
-  }
-}
+/** Maximum LSP errors before shutting down the server. */
+const MAX_LSP_ERRORS_BEFORE_SHUTDOWN = 3;
 
 /** Read all Basilisk settings from the VS Code configuration. */
 export function readBasiliskSettings(): Record<string, unknown> {
@@ -129,7 +90,7 @@ export function startLspClient(
 
   // setClient wires up onDidChangeState internally — the store owns
   // all state transitions (server commands, ready handle, lspState).
-  store.setClient(lspClient);
+  store.setClient(context, lspClient);
 
   updateStatusBar("starting");
   bindLspStateEffects(store, updateStatusBar);
@@ -196,7 +157,7 @@ function buildClientOptions(
     errorHandler: {
       error: (error, _message, count) => {
         Logger.error(`LSP error: ${error.message ?? error}`);
-        if (count !== undefined && count < 3) {
+        if (count !== undefined && count < MAX_LSP_ERRORS_BEFORE_SHUTDOWN) {
           return { action: ErrorAction.Continue };
         }
         updateStatusBar("error");

@@ -47,6 +47,12 @@ interface DapMessage {
  * ARE useful stops because they indicate exception handling flow and the
  * test suite counts them as part of the stepping sequence.
  */
+/** Length of the `\r\n\r\n` separator between DAP header and body. */
+const DAP_HEADER_SEPARATOR_LEN = 4;
+
+/** Timeout (ms) before injecting a synthetic attach response. */
+const ATTACH_RESPONSE_TIMEOUT_MS = 3000;
+
 const STRUCTURAL_LINE_RE = /^\s*(try\s*:)\s*(#.*)?$/;
 
 /**
@@ -68,7 +74,9 @@ export class DapTcpProxy {
   private pendingStepOutSeq: number | undefined;
   private awaitingStepOutStop = false;
   private stepOutThreadId: number | undefined;
-  private injectedSeq = 900_000;
+  /** Sequence number base for injected DAP requests — must not collide with VS Code's seqs. */
+  private static readonly INJECTED_SEQ_BASE = 900_000;
+  private injectedSeq = DapTcpProxy.INJECTED_SEQ_BASE;
 
   /** Track pending next (stepOver) requests from VS Code for structural line skipping. */
   private pendingNextSeq: number | undefined;
@@ -183,7 +191,7 @@ export class DapTcpProxy {
         continue;
       }
       const bodyLen = parseInt(match[1], 10);
-      const bodyStart = headerEnd + 4;
+      const bodyStart = headerEnd + DAP_HEADER_SEPARATOR_LEN;
       if (this.clientBuffer.length < bodyStart + bodyLen) {break;}
       const body = this.clientBuffer.subarray(bodyStart, bodyStart + bodyLen).toString("utf-8");
       this.clientBuffer = this.clientBuffer.subarray(bodyStart + bodyLen);
@@ -208,7 +216,7 @@ export class DapTcpProxy {
         continue;
       }
       const bodyLen = parseInt(match[1], 10);
-      const bodyStart = headerEnd + 4;
+      const bodyStart = headerEnd + DAP_HEADER_SEPARATOR_LEN;
       if (this.debugpyBuffer.length < bodyStart + bodyLen) {break;}
       const body = this.debugpyBuffer.subarray(bodyStart, bodyStart + bodyLen).toString("utf-8");
       this.debugpyBuffer = this.debugpyBuffer.subarray(bodyStart + bodyLen);
@@ -294,7 +302,7 @@ export class DapTcpProxy {
           });
           this.pendingAttachSeq = undefined;
         }
-      }, 3000);
+      }, ATTACH_RESPONSE_TIMEOUT_MS);
     }
 
     this.sendToDebugpy(msg);
@@ -442,7 +450,7 @@ export class DapTcpProxy {
 
   /** Swallow injected next responses and duplicate disconnect responses. */
   private handleSwallowedResponses(msg: DapMessage): boolean {
-    if (msg.type === "response" && msg.command === "next" && msg.request_seq !== undefined && msg.request_seq >= 900_000) {
+    if (msg.type === "response" && msg.command === "next" && msg.request_seq !== undefined && msg.request_seq >= DapTcpProxy.INJECTED_SEQ_BASE) {
       Logger.debug("[DAP Proxy] swallowed injected next response");
       return true;
     }

@@ -13,9 +13,17 @@ import * as os from "os";
 import { Logger, bindLogger, CompositeSink, FileLogSink, nullSink } from "./logger";
 import type { LogSink } from "./logger";
 import { startLspClient } from "./lsp-client";
-import { registerClientCommands, registerOrganizeImportsCommand } from "./commands";
 import { createDebugAdapterFactory, BasiliskDebugAdapterTrackerFactory } from "./debug-adapter";
 import { createStore, type Store } from "./store";
+
+/** Priority for the Basilisk status bar item (higher = further left). */
+const STATUS_BAR_PRIORITY = 100;
+
+/** Length of an abbreviated session ID prefix for logging. */
+const SESSION_ID_PREFIX_LEN = 8;
+
+/** Exit code returned by `basilisk check` on internal errors. */
+const BASILISK_INTERNAL_ERROR_EXIT_CODE = 3;
 
 let store: Store | undefined;
 
@@ -43,13 +51,11 @@ export function activate(context: vscode.ExtensionContext): void {
   const useLsp = vscode.workspace.getConfiguration("basilisk").get<boolean>("useLsp") ?? true;
   Logger.info(`Basilisk executable: ${executablePath}`);
 
-  registerClientCommands(context, store);
 
   if (useLsp) {
     startLspClient({ context, executablePath, outputChannel: store.outputChannel.value }, store, updateStatusBar);
     registerDebugSupport(context, store);
   } else {
-    registerOrganizeImportsCommand(context, store, workspaceRoot);
     startSubprocessMode(context, executablePath);
     updateStatusBar("ready");
   }
@@ -86,7 +92,7 @@ function initLogging(context: vscode.ExtensionContext, s: Store): void {
 function initStatusBar(context: vscode.ExtensionContext, s: Store): void {
   const item = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Left,
-    100
+    STATUS_BAR_PRIORITY
   );
   item.command = "basilisk.showOutput";
   s.setStatusBarItem(item);
@@ -126,15 +132,15 @@ function registerDebugLifecycleLogging(context: vscode.ExtensionContext): void {
     vscode.debug.onDidTerminateDebugSession((session) => {
       const activeId = vscode.debug.activeDebugSession?.id ?? "undefined";
       Logger.info(
-        `[Lifecycle] onDidTerminateDebugSession: terminated=${session.id.slice(0, 8)}, ` +
-        `active=${activeId === "undefined" ? "correctly undefined" : `STILL SET (${activeId.slice(0, 8)})`}`
+        `[Lifecycle] onDidTerminateDebugSession: terminated=${session.id.slice(0, SESSION_ID_PREFIX_LEN)}, ` +
+        `active=${activeId === "undefined" ? "correctly undefined" : `STILL SET (${activeId.slice(0, SESSION_ID_PREFIX_LEN)})`}`
       );
     })
   );
   context.subscriptions.push(
     vscode.debug.onDidChangeActiveDebugSession((session) => {
       Logger.info(
-        `[Lifecycle] onDidChangeActiveDebugSession: ${session ? `id=${session.id.slice(0, 8)}, name="${session.name}"` : "→ NONE"}`
+        `[Lifecycle] onDidChangeActiveDebugSession: ${session ? `id=${session.id.slice(0, SESSION_ID_PREFIX_LEN)}, name="${session.name}"` : "→ NONE"}`
       );
     })
   );
@@ -287,7 +293,7 @@ function checkDocument(
     ["check", "--output", "json", filePath],
     { cwd: workspaceRoot() },
     (error, stdout, stderr) => {
-      if (error?.code === 3) {
+      if (error?.code === BASILISK_INTERNAL_ERROR_EXIT_CODE) {
         vscode.window.showWarningMessage(
           `Basilisk: internal error checking ${path.basename(filePath)}: ${stderr}`
         );

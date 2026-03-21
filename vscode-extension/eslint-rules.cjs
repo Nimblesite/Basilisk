@@ -121,29 +121,7 @@ const masterRules = {
 
 /** @type {Record<string, import('eslint').Linter.RuleEntry>} */
 const testOverrides = {
-  // Tests often need longer functions and more nesting.
-  'max-lines-per-function': 'off',
-  'max-lines': 'off',
-  'max-depth': ['error', 5],
-  'complexity': 'off',
-  '@typescript-eslint/no-non-null-assertion': 'off',
-  // Tests may use any for mocking.
-  '@typescript-eslint/no-explicit-any': 'off',
-  '@typescript-eslint/no-unsafe-assignment': 'off',
-  '@typescript-eslint/no-unsafe-member-access': 'off',
-  '@typescript-eslint/no-unsafe-call': 'off',
-  '@typescript-eslint/no-unsafe-argument': 'off',
-  '@typescript-eslint/no-unsafe-return': 'off',
-  // Tests use string truthiness checks extensively.
-  '@typescript-eslint/strict-boolean-expressions': 'off',
-  // Test helpers may use require() for dynamic loading.
-  '@typescript-eslint/no-require-imports': 'off',
-  // Tests don't need explicit member accessibility.
-  '@typescript-eslint/explicit-member-accessibility': 'off',
-  // Test helpers return bare promises for chaining.
-  '@typescript-eslint/promise-function-async': 'off',
-  // Tests use literal values for assertions and fixtures.
-  '@typescript-eslint/no-magic-numbers': 'off',
+
 };
 
 module.exports = { masterRules, testOverrides };
