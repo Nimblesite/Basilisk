@@ -3,7 +3,9 @@
 use std::collections::HashMap;
 
 use super::types::{GenericClassDef, GenericInstance};
-use super::utils::{extract_typevar_params_from_generic, parse_generic_annotation};
+use crate::rules::shared::parse_subscript_annotation;
+
+use super::utils::extract_typevar_params_from_generic;
 
 /// Scan source text to collect generic class definitions.
 pub(super) fn collect_generic_classes(source: &str) -> Vec<GenericClassDef> {
@@ -199,10 +201,10 @@ pub(super) fn collect_generic_instances(source: &str) -> Vec<GenericInstance> {
         let ann_raw = after_colon.split('=').next().unwrap_or(after_colon).trim();
         let ann_text = ann_raw.split('#').next().unwrap_or(ann_raw).trim();
 
-        if let Some((class_name, type_args)) = parse_generic_annotation(ann_text) {
+        if let Some((class_name, type_args)) = parse_subscript_annotation(ann_text) {
             instances.push(GenericInstance {
                 var_name: var_name.to_owned(),
-                class_name,
+                class_name: class_name.to_owned(),
                 type_args,
             });
         }

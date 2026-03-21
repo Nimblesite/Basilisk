@@ -11,6 +11,9 @@ local M = {}
 ---@type BasiliskState
 local state = "stopped"
 
+--- Whether state was set manually (should not be overridden by update).
+local state_pinned = false
+
 --- Cached diagnostic counts.
 local error_count = 0
 local warn_count = 0
@@ -25,6 +28,11 @@ local STATE_DISPLAY = {
 
 --- Update the cached state from LSP client status.
 function M.update()
+  -- Do not override manually-pinned states (e.g., "error" after max restarts).
+  if state_pinned then
+    return
+  end
+
   local clients = vim.lsp.get_clients({ name = "basilisk" })
   if #clients == 0 then
     state = "stopped"
@@ -85,9 +93,12 @@ M.lualine_component = {
 }
 
 --- Set the state directly (for use by lsp.lua on error/restart).
+--- Pinned states ("starting", "error") are not overridden by update().
+--- "ready" and "stopped" unpin, allowing normal update flow.
 ---@param new_state BasiliskState
 function M.set_state(new_state)
   state = new_state
+  state_pinned = (new_state == "starting" or new_state == "error")
 end
 
 return M

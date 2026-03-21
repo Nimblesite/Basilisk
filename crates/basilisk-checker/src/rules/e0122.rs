@@ -11,6 +11,7 @@ use ruff_text_size::Ranged;
 use basilisk_resolver::{ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::rules::shared::{infer_expr_literal_type, is_type_compatible};
 
 use super::Rule;
 
@@ -287,8 +288,8 @@ fn check_arg_types(
         .zip(cp.arg_types.iter())
         .enumerate()
     {
-        if let Some(actual) = infer_literal_type(arg_expr) {
-            if !is_type_compatible(&actual, expected_type) {
+        if let Some(actual) = infer_expr_literal_type(arg_expr) {
+            if !is_type_compatible(actual, expected_type) {
                 let span = Span {
                     start: arg_expr.range().start().to_u32(),
                     end: arg_expr.range().end().to_u32(),
@@ -311,33 +312,4 @@ fn check_arg_types(
             }
         }
     }
-}
-
-fn infer_literal_type(expr: &Expr) -> Option<String> {
-    match expr {
-        Expr::NumberLiteral(num) => {
-            Some(if num.value.is_int() { "int" } else { "float" }.to_owned())
-        }
-        Expr::StringLiteral(_) | Expr::FString(_) => Some("str".to_owned()),
-        Expr::BytesLiteral(_) => Some("bytes".to_owned()),
-        Expr::BooleanLiteral(_) => Some("bool".to_owned()),
-        Expr::NoneLiteral(_) => Some("None".to_owned()),
-        _ => None,
-    }
-}
-
-fn is_type_compatible(actual: &str, expected: &str) -> bool {
-    if actual == expected {
-        return true;
-    }
-    if actual == "int" && expected == "float" {
-        return true;
-    }
-    if actual == "bool" && expected == "int" {
-        return true;
-    }
-    if expected == "Any" || expected == "object" {
-        return true;
-    }
-    false
 }

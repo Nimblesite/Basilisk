@@ -24,6 +24,7 @@
 //! - Selection Ranges (Smart Select)
 //! - Semantic Tokens (syntax-aware highlighting)
 
+pub mod ai_typing;
 pub mod auto_import;
 pub mod call_hierarchy;
 pub mod code_actions;
@@ -43,6 +44,7 @@ pub mod import_graph;
 pub mod import_resolver;
 pub mod inlay_hints;
 pub mod references;
+pub mod scope_tree;
 pub mod selection;
 pub mod semantic_tokens;
 pub mod server;
@@ -52,6 +54,7 @@ pub mod test_discovery;
 pub mod type_definition;
 pub mod type_hierarchy;
 pub mod util;
+pub mod uv_commands;
 pub mod websocket;
 pub mod workspace;
 pub mod workspace_analysis;

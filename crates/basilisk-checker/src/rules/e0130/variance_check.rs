@@ -6,8 +6,11 @@
 use std::collections::HashMap;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::rules::shared::{
+    is_numeric_subtype, parse_subscript_annotation, split_top_level_commas,
+};
 
-use super::utils::{parse_generic_annotation, span_for_line, split_top_level_type_args};
+use super::utils::span_for_line;
 use super::variance::Variance;
 
 const CODE: ErrorCode = ErrorCode {
@@ -15,38 +18,13 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/BSK-E0130",
 };
 
-/// Check if `subtype` is a numeric subtype of `supertype` in the Python type hierarchy.
-fn is_numeric_subtype(subtype: &str, supertype: &str) -> bool {
-    if subtype == supertype {
-        return true;
-    }
-    matches!(
-        (subtype, supertype),
-        ("bool", "int" | "float" | "complex") | ("int", "float" | "complex") | ("float", "complex")
-    )
-}
-
-/// Split at top-level commas (respecting brackets).
+/// Split at top-level commas (respecting brackets), returning owned trimmed strings.
 pub(super) fn split_top_level_params(text: &str) -> Vec<String> {
-    let mut parts = Vec::new();
-    let mut depth = 0i32;
-    let mut start = 0usize;
-    for (idx, ch) in text.char_indices() {
-        match ch {
-            '[' | '(' => depth += 1,
-            ']' | ')' => depth -= 1,
-            ',' if depth == 0 => {
-                parts.push(text[start..idx].to_owned());
-                start = idx + 1;
-            }
-            _ => {}
-        }
-    }
-    let last = &text[start..];
-    if !last.trim().is_empty() {
-        parts.push(last.to_owned());
-    }
-    parts
+    split_top_level_commas(text)
+        .into_iter()
+        .map(str::to_owned)
+        .filter(|s| !s.trim().is_empty())
+        .collect()
 }
 
 /// Check module-level assignments like `v: Class[A] = Class[B]()`.
@@ -62,6 +40,10 @@ pub(super) fn check_module_assignments(
             continue;
         }
         let trimmed = line.trim();
+        // Skip comments — they are not executable code.
+        if trimmed.starts_with('#') {
+            continue;
+        }
         let Some(colon) = trimmed.find(':') else {
             continue;
         };
@@ -74,7 +56,7 @@ pub(super) fn check_module_assignments(
         let ann = trimmed[colon + 1..eq].trim();
         let rhs = trimmed[eq + 1..].split('#').next().unwrap_or("").trim();
 
-        let Some((lhs_cls, lhs_args)) = parse_generic_annotation(ann) else {
+        let Some((lhs_cls, lhs_args)) = parse_subscript_annotation(ann) else {
             continue;
         };
         let Some((rhs_cls, rhs_args)) = extract_rhs_generic(rhs) else {
@@ -83,10 +65,10 @@ pub(super) fn check_module_assignments(
         if lhs_cls != rhs_cls {
             continue;
         }
-        if let Some(vars) = known.get(&lhs_cls) {
+        if let Some(vars) = known.get(lhs_cls) {
             emit_violations(
                 &ViolationCtx {
-                    class_name: &lhs_cls,
+                    class_name: lhs_cls,
                     lhs_args: &lhs_args,
                     rhs_args: &rhs_args,
                     variances: vars,
@@ -126,8 +108,8 @@ pub(super) fn check_fn_body_assignments(
                     if let Some(c) = p.find(':') {
                         let name = p[..c].trim();
                         let ann = p[c + 1..].split('=').next().unwrap_or("").trim();
-                        if let Some(parsed) = parse_generic_annotation(ann) {
-                            let _ = param_types.insert(name.to_owned(), parsed);
+                        if let Some((cls, args)) = parse_subscript_annotation(ann) {
+                            let _ = param_types.insert(name.to_owned(), (cls.to_owned(), args));
                         }
                     }
                 }
@@ -156,12 +138,12 @@ pub(super) fn check_fn_body_assignments(
         let rhs = trimmed[eq + 1..].split('#').next().unwrap_or("").trim();
 
         if let Some((rhs_cls, rhs_args)) = param_types.get(rhs) {
-            if let Some((lhs_cls, lhs_args)) = parse_generic_annotation(ann) {
-                if lhs_cls == *rhs_cls {
-                    if let Some(vars) = known.get(&lhs_cls) {
+            if let Some((lhs_cls, lhs_args)) = parse_subscript_annotation(ann) {
+                if lhs_cls == rhs_cls {
+                    if let Some(vars) = known.get(lhs_cls) {
                         emit_violations(
                             &ViolationCtx {
-                                class_name: &lhs_cls,
+                                class_name: lhs_cls,
                                 lhs_args: &lhs_args,
                                 rhs_args,
                                 variances: vars,
@@ -196,7 +178,11 @@ fn extract_rhs_generic(rhs: &str) -> Option<(String, Vec<String>)> {
             _ => {}
         }
     }
-    let args = split_top_level_type_args(&after[..close?]);
+    let args: Vec<String> = split_top_level_commas(&after[..close?])
+        .iter()
+        .map(|s| s.trim().to_owned())
+        .filter(|s| !s.is_empty())
+        .collect();
     if args.is_empty() {
         None
     } else {

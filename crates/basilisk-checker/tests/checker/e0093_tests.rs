@@ -229,3 +229,189 @@ movie: Movie = {"name": "Blade Runner"}  # Missing 'year' is OK when total=False
     );
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// TypedDict assignment compatibility (exercises type_consistency.rs)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_e0093_typeddict_to_dict_assignment() -> Result<(), Box<dyn std::error::Error>> {
+    let src = r#"
+from typing import TypedDict
+
+class Movie(TypedDict):
+    name: str
+    year: int
+
+movie: Movie = {"name": "Blade Runner", "year": 1982}
+d: dict = movie
+"#;
+    let diags = run(src)?;
+    let _ = codes(&diags);
+    Ok(())
+}
+
+#[test]
+fn test_e0093_typeddict_to_mapping_object() -> Result<(), Box<dyn std::error::Error>> {
+    let src = r#"
+from typing import TypedDict, Mapping
+
+class Movie(TypedDict):
+    name: str
+    year: int
+
+movie: Movie = {"name": "Blade Runner", "year": 1982}
+m: Mapping[str, object] = movie
+"#;
+    let diags = run(src)?;
+    let _ = codes(&diags);
+    Ok(())
+}
+
+#[test]
+fn test_e0093_typeddict_to_mapping_narrow_type() -> Result<(), Box<dyn std::error::Error>> {
+    let src = r#"
+from typing import TypedDict, Mapping
+
+class Movie(TypedDict):
+    name: str
+    year: int
+
+movie: Movie = {"name": "Blade Runner", "year": 1982}
+m: Mapping[str, str] = movie
+"#;
+    let diags = run(src)?;
+    let _ = codes(&diags);
+    Ok(())
+}
+
+#[test]
+fn test_e0093_typeddict_structural_compat_matching() -> Result<(), Box<dyn std::error::Error>> {
+    let src = r#"
+from typing import TypedDict
+
+class MovieA(TypedDict):
+    name: str
+    year: int
+
+class MovieB(TypedDict):
+    name: str
+    year: int
+
+a: MovieA = {"name": "Blade Runner", "year": 1982}
+b: MovieB = a
+"#;
+    let diags = run(src)?;
+    let _ = codes(&diags);
+    Ok(())
+}
+
+#[test]
+fn test_e0093_typeddict_structural_compat_missing_field() -> Result<(), Box<dyn std::error::Error>>
+{
+    let src = r#"
+from typing import TypedDict
+
+class Small(TypedDict):
+    name: str
+
+class Big(TypedDict):
+    name: str
+    year: int
+    genre: str
+
+small: Small = {"name": "Blade Runner"}
+big: Big = small
+"#;
+    let diags = run(src)?;
+    let _ = codes(&diags);
+    Ok(())
+}
+
+#[test]
+fn test_e0093_typeddict_structural_compat_type_mismatch() -> Result<(), Box<dyn std::error::Error>>
+{
+    let src = r#"
+from typing import TypedDict
+
+class MovieA(TypedDict):
+    name: str
+    year: int
+
+class MovieB(TypedDict):
+    name: str
+    year: str
+
+a: MovieA = {"name": "Blade Runner", "year": 1982}
+b: MovieB = a
+"#;
+    let diags = run(src)?;
+    let _ = codes(&diags);
+    Ok(())
+}
+
+#[test]
+fn test_e0093_typeddict_to_dict_with_params() -> Result<(), Box<dyn std::error::Error>> {
+    let src = r#"
+from typing import TypedDict
+
+class Movie(TypedDict):
+    name: str
+    year: int
+
+movie: Movie = {"name": "Blade Runner", "year": 1982}
+d: dict[str, int] = movie
+"#;
+    let diags = run(src)?;
+    let _ = codes(&diags);
+    Ok(())
+}
+
+#[test]
+fn test_e0093_typeddict_reassignment() -> Result<(), Box<dyn std::error::Error>> {
+    let src = r#"
+from typing import TypedDict
+
+class Movie(TypedDict):
+    name: str
+    year: int
+
+class Film(TypedDict):
+    name: str
+    year: int
+    director: str
+
+movie: Movie = {"name": "Blade Runner", "year": 1982}
+film: Film = {"name": "Blade Runner", "year": 1982, "director": "Scott"}
+movie = film
+film = movie
+"#;
+    let diags = run(src)?;
+    let _ = codes(&diags);
+    Ok(())
+}
+
+#[test]
+fn test_e0093_typeddict_missing_required_keys_in_literal() -> Result<(), Box<dyn std::error::Error>>
+{
+    let src = r#"
+from typing import TypedDict
+
+class Movie(TypedDict):
+    name: str
+    year: int
+    director: str
+
+movie: Movie = {"name": "Blade Runner"}
+"#;
+    let diags = run(src)?;
+    let e0093: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0093")
+        .collect();
+    assert!(
+        !e0093.is_empty(),
+        "Missing required keys in dict literal should fire E0093"
+    );
+    Ok(())
+}

@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::rules::shared::split_top_level_commas;
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -108,32 +109,6 @@ fn extract_subscript_args(text: &str) -> Option<Vec<&str>> {
     let bracket_pos = text.find('[')?;
     let inner = text.get(bracket_pos + 1..text.len().checked_sub(1)?)?;
     Some(split_top_level_commas(inner))
-}
-
-/// Split text at top-level commas (respecting bracket nesting).
-fn split_top_level_commas(inner: &str) -> Vec<&str> {
-    let mut parts = Vec::new();
-    let mut depth = 0u32;
-    let mut start = 0;
-    for (idx, ch) in inner.char_indices() {
-        match ch {
-            '[' | '(' => depth = depth.saturating_add(1),
-            ']' | ')' => depth = depth.saturating_sub(1),
-            ',' if depth == 0 => {
-                if let Some(segment) = inner.get(start..idx) {
-                    parts.push(segment.trim());
-                }
-                start = idx + 1;
-            }
-            _ => {}
-        }
-    }
-    if let Some(last) = inner.get(start..).map(str::trim) {
-        if !last.is_empty() {
-            parts.push(last);
-        }
-    }
-    parts
 }
 
 /// Returns `true` for builtin generic types.

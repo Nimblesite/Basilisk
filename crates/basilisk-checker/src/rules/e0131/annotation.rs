@@ -3,6 +3,8 @@
 //! Provides utilities for recognising and decomposing generator-like return
 //! annotations such as `Generator[Y, S, R]`, `Iterator[Y]`, and `Iterable[Y]`.
 
+use crate::rules::shared::split_top_level_commas;
+
 /// Parsed generator return annotation.
 #[expect(
     clippy::struct_field_names,
@@ -25,7 +27,7 @@ pub(super) fn parse_generator_annotation(ann: &str) -> Option<GeneratorAnnotatio
 
     // Check for Generator[Y, S, R]
     if let Some(inner) = strip_generic_prefix(ann, "Generator") {
-        let args = split_top_level_args(inner);
+        let args = split_top_level_commas(inner);
         if args.is_empty() {
             return None;
         }
@@ -38,7 +40,7 @@ pub(super) fn parse_generator_annotation(ann: &str) -> Option<GeneratorAnnotatio
 
     // Check for Iterator[Y]
     if let Some(inner) = strip_generic_prefix(ann, "Iterator") {
-        let args = split_top_level_args(inner);
+        let args = split_top_level_commas(inner);
         if args.is_empty() {
             return None;
         }
@@ -51,7 +53,7 @@ pub(super) fn parse_generator_annotation(ann: &str) -> Option<GeneratorAnnotatio
 
     // Check for Iterable[Y]
     if let Some(inner) = strip_generic_prefix(ann, "Iterable") {
-        let args = split_top_level_args(inner);
+        let args = split_top_level_commas(inner);
         if args.is_empty() {
             return None;
         }
@@ -77,29 +79,4 @@ pub(super) fn strip_generic_prefix<'a>(ann: &'a str, prefix: &str) -> Option<&'a
         return None;
     }
     ann.get(inner_start..inner_end)
-}
-
-/// Split comma-separated type arguments at the top level (respecting bracket nesting).
-pub(super) fn split_top_level_args(inner: &str) -> Vec<&str> {
-    let mut args = Vec::new();
-    let mut depth = 0i32;
-    let mut start = 0;
-
-    for (idx, ch) in inner.char_indices() {
-        match ch {
-            '[' | '(' | '{' => depth += 1,
-            ']' | ')' | '}' => depth -= 1,
-            ',' if depth == 0 => {
-                if let Some(slice) = inner.get(start..idx) {
-                    args.push(slice);
-                }
-                start = idx + 1;
-            }
-            _ => {}
-        }
-    }
-    if let Some(slice) = inner.get(start..) {
-        args.push(slice);
-    }
-    args
 }

@@ -7,6 +7,7 @@
 //! inlay hints, semantic tokens, folding, selection ranges, code lens, colors.
 
 mod features;
+mod file_operations;
 mod navigation;
 
 pub(super) use features::{
@@ -14,6 +15,8 @@ pub(super) use features::{
     folding_range, formatting, hover, inlay_hint, selection_range, semantic_tokens_full,
     signature_help,
 };
+
+pub(super) use file_operations::will_rename_files;
 
 pub(super) use navigation::{
     document_highlight, document_symbol, goto_declaration, goto_definition, goto_type_definition,

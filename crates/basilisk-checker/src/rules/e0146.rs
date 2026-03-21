@@ -37,6 +37,7 @@ use ruff_text_size::Ranged;
 use basilisk_resolver::{ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::rules::shared::{ann_str, expr_name};
 
 use super::Rule;
 
@@ -247,26 +248,6 @@ fn extract_classvar_inner(expr: &Expr) -> Option<String> {
         }
     }
     None
-}
-
-fn expr_name(expr: &Expr) -> Option<&str> {
-    match expr {
-        Expr::Name(n) => Some(n.id.as_str()),
-        _ => None,
-    }
-}
-
-fn ann_str(expr: &Expr) -> String {
-    match expr {
-        Expr::Name(n) => n.id.to_string(),
-        Expr::Subscript(s) => format!("{}[{}]", ann_str(&s.value), ann_str(&s.slice)),
-        Expr::Attribute(a) => format!("{}.{}", ann_str(&a.value), a.attr),
-        Expr::Tuple(t) => t.elts.iter().map(ann_str).collect::<Vec<_>>().join(", "),
-        Expr::BinOp(b) => format!("{} | {}", ann_str(&b.left), ann_str(&b.right)),
-        Expr::NoneLiteral(_) => "None".to_owned(),
-        Expr::EllipsisLiteral(_) => "...".to_owned(),
-        _ => "?".to_owned(),
-    }
 }
 
 // ---------------------------------------------------------------------------

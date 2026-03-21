@@ -63,8 +63,11 @@ end
 ---@param binary_path string
 ---@return string? version
 function M.version(binary_path)
-  local result = vim.fn.system({ binary_path, "--version" })
-  if vim.v.shell_error ~= 0 then
+  if not is_executable(binary_path) then
+    return nil
+  end
+  local ok, result = pcall(vim.fn.system, { binary_path, "--version" })
+  if not ok or vim.v.shell_error ~= 0 then
     return nil
   end
   return vim.trim(result)

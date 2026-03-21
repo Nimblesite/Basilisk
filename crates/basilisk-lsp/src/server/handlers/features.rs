@@ -112,7 +112,14 @@ pub(in crate::server) async fn code_action(
         .with_index(|idx| idx.get_text(&uri))
         .await
         .unwrap_or_default();
-    let mut actions = code_actions::code_actions(&uri, &params.context.diagnostics, &source);
+    let resolved = server.get_document_data(&uri).await.map(|(_, r, _)| r);
+    let mut actions = code_actions::code_actions(
+        &uri,
+        &params.context.diagnostics,
+        &source,
+        &params.range,
+        resolved.as_deref(),
+    );
 
     // Collect the distinct rule codes from the diagnostics at the cursor.
     let cursor_codes: Vec<String> = params

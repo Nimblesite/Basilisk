@@ -66,6 +66,16 @@ pub fn check_with_config(
         .filter_map(|mut diag| {
             let code = diag.code.code;
 
+            // 0. Config gating for uv diagnostics.
+            if code == "BSK-W0010" && !config.uv_stub_suggestions {
+                return None;
+            }
+            if matches!(code, "BSK-W0011" | "BSK-W0012" | "BSK-W0013")
+                && !config.uv_dependency_diagnostics
+            {
+                return None;
+            }
+
             // 1. Per-path: check if rule is completely disabled for this file path.
             if config.is_rule_disabled_for_path(code, file_path) {
                 return None;

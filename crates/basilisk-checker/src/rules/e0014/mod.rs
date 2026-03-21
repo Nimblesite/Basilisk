@@ -65,7 +65,7 @@ impl Rule for AssignmentTypeMismatch {
 /// subclasses, so dict literal assignments to `TypedDict` annotations are
 /// skipped to avoid false positives.
 fn collect_typeddict_names(module: &ResolvedModule) -> std::collections::HashSet<String> {
-    let names: std::collections::HashSet<String> = module
+    let mut names: std::collections::HashSet<String> = module
         .classes
         .iter()
         .filter(|c| {
@@ -78,6 +78,11 @@ fn collect_typeddict_names(module: &ResolvedModule) -> std::collections::HashSet
         })
         .map(|c| c.name.to_ascii_lowercase())
         .collect();
+
+    // Include functional-form TypedDicts: `Name = TypedDict("Name", {...})`.
+    for td_call in &module.typeddict_calls {
+        let _ = names.insert(td_call.lhs_name.to_ascii_lowercase());
+    }
 
     names
 }

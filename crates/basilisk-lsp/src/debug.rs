@@ -267,7 +267,11 @@ pub async fn check_debugpy(python: &str) -> Result<(), DebugError> {
 )]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
     use tokio::net::TcpStream;
+
+    /// Guard for tests that mutate process-wide environment variables.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn find_free_port_returns_nonzero() {
@@ -284,6 +288,7 @@ mod tests {
 
     #[test]
     fn resolve_python_uses_env_var() {
+        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
         // Temporarily set the env var.
         let key = "BASILISK_PYTHON";
         let prev = std::env::var(key).ok();
@@ -301,6 +306,7 @@ mod tests {
 
     #[test]
     fn resolve_python_falls_back_to_system() {
+        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
         let key = "BASILISK_PYTHON";
         let prev = std::env::var(key).ok();
         std::env::remove_var(key);

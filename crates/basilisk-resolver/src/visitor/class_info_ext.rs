@@ -353,6 +353,7 @@ pub(super) fn import_infos_from(node: &StmtImport) -> Vec<ImportInfo> {
             kind: ImportKind::Plain,
             resolution: ImportResolution::Unresolved,
             resolved_path: None,
+            package_dep_kind: None,
         })
         .collect()
 }
@@ -374,6 +375,7 @@ pub(super) fn import_from_infos_from(node: &StmtImportFrom) -> Vec<ImportInfo> {
             kind: ImportKind::Star,
             resolution: ImportResolution::Unresolved,
             resolved_path: None,
+            package_dep_kind: None,
         }];
     }
 
@@ -385,6 +387,7 @@ pub(super) fn import_from_infos_from(node: &StmtImportFrom) -> Vec<ImportInfo> {
         kind: ImportKind::From,
         resolution: ImportResolution::Unresolved,
         resolved_path: None,
+        package_dep_kind: None,
     }]
 }
 

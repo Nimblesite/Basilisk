@@ -23,6 +23,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, Severity};
+use crate::rules::shared::{infer_expr_literal_type, is_type_compatible};
 
 use super::Rule;
 
@@ -489,6 +490,26 @@ fn check_no_init_with_args(
         return;
     }
 
+    // If any base class is a dataclass (including via @dataclass_transform),
+    // the subclass inherits the synthesized __init__.
+    for base in &class_info.bases {
+        let base_name = base.split('[').next().unwrap_or(base);
+        if let Some(base_info) = class_map.get(base_name) {
+            if base_info.is_dataclass || base_info.is_typed_dict {
+                return;
+            }
+        }
+    }
+
+    // Classes whose bases define __init_subclass__ often accept keyword
+    // arguments in their constructors; skip to avoid false positives.
+    for base in &class_info.bases {
+        let base_name = base.split('[').next().unwrap_or(base);
+        if method_map.contains_key(&(base_name, "__init_subclass__")) {
+            return;
+        }
+    }
+
     let range = call.range();
     let span = Span {
         start: range.start().to_u32(),
@@ -687,7 +708,7 @@ fn check_nt_arg_types(
             continue;
         };
         let ann = ann.trim();
-        let arg_type = infer_literal_type(arg);
+        let arg_type = infer_expr_literal_type(arg).map(str::to_owned);
         let Some(arg_type_name) = arg_type else {
             continue;
         };
@@ -734,7 +755,7 @@ fn check_nt_kwarg_types(
             continue;
         };
         let ann = ann.trim();
-        let arg_type = infer_literal_type(&kw.value);
+        let arg_type = infer_expr_literal_type(&kw.value).map(str::to_owned);
         let Some(arg_type_name) = arg_type else {
             continue;
         };
@@ -753,47 +774,6 @@ fn check_nt_kwarg_types(
             });
         }
     }
-}
-
-/// Infer the type name of a literal expression.
-fn infer_literal_type(expr: &ruff_python_ast::Expr) -> Option<String> {
-    match expr {
-        ruff_python_ast::Expr::NumberLiteral(n) => match &n.value {
-            ruff_python_ast::Number::Int(_) => Some("int".to_owned()),
-            ruff_python_ast::Number::Float(_) => Some("float".to_owned()),
-            ruff_python_ast::Number::Complex { .. } => Some("complex".to_owned()),
-        },
-        ruff_python_ast::Expr::StringLiteral(_) => Some("str".to_owned()),
-        ruff_python_ast::Expr::BytesLiteral(_) => Some("bytes".to_owned()),
-        ruff_python_ast::Expr::BooleanLiteral(_) => Some("bool".to_owned()),
-        ruff_python_ast::Expr::NoneLiteral(_) => Some("None".to_owned()),
-        _ => None,
-    }
-}
-
-/// Simple type compatibility check for literal types against annotations.
-fn is_type_compatible(arg_type: &str, annotation: &str) -> bool {
-    let ann = annotation.trim();
-    if ann == arg_type {
-        return true;
-    }
-    // int is compatible with float
-    if arg_type == "int" && ann == "float" {
-        return true;
-    }
-    // bool is compatible with int
-    if arg_type == "bool" && ann == "int" {
-        return true;
-    }
-    // None is compatible with Optional[T] or T | None
-    if arg_type == "None" && (ann.contains("None") || ann.starts_with("Optional")) {
-        return true;
-    }
-    // Union types: check if arg_type is any member
-    if ann.contains('|') {
-        return ann.split('|').any(|part| part.trim() == arg_type);
-    }
-    false
 }
 
 /// Check 6: Detect unknown keyword arguments passed to dataclass/transform constructors.
@@ -908,7 +888,7 @@ fn check_generic_nt_arg_types(
         let ann = ann.trim();
         // Apply type substitutions (e.g. T → str).
         let resolved_ann = substitutions.get(ann).unwrap_or(&ann);
-        let arg_type = infer_literal_type(arg);
+        let arg_type = infer_expr_literal_type(arg).map(str::to_owned);
         let Some(arg_type_name) = arg_type else {
             continue;
         };

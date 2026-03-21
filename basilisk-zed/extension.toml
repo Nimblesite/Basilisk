@@ -6,6 +6,10 @@ authors = ["Basilisk Contributors"]
 description = "Strict-by-default Python type checker with debugging and profiling"
 repository = "https://github.com/MelbourneDeveloper/Basilisk"
 
+[grammars.python]
+repository = "https://github.com/tree-sitter/tree-sitter-python"
+rev = "a61ed4fbad3ecc2e1e63e1b15a5404f12b3a797a"
+
 [language_servers.basilisk]
 name = "Basilisk"
 languages = ["Python"]

@@ -14,6 +14,7 @@ members = [
     "crates/basilisk-compiler",
     "crates/basilisk-common",
     "crates/basilisk-test-utils",
+    "crates/basilisk-uv",
     "basilisk-zed",
 ]
 exclude = []
@@ -55,6 +56,7 @@ basilisk-compiler = { path = "crates/basilisk-compiler" }
 basilisk-stubs      = { path = "crates/basilisk-stubs" }
 basilisk-config     = { path = "crates/basilisk-config" }
 basilisk-common     = { path = "crates/basilisk-common" }
+basilisk-uv         = { path = "crates/basilisk-uv" }
 basilisk-test-utils = { path = "crates/basilisk-test-utils" }
 
 [workspace.lints.rust]

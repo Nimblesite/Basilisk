@@ -3,6 +3,7 @@
 use basilisk_resolver::Span;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::rules::shared::split_top_level_commas;
 
 use super::context::FuncSig;
 
@@ -52,7 +53,7 @@ pub(super) fn parse_callable_type(s: &str) -> Option<CallableTypeInfo> {
     }
     if first.starts_with("Concatenate[") {
         let ci = &first["Concatenate[".len()..first.len().checked_sub(1)?];
-        let parts = split_all_commas(ci);
+        let parts = split_top_level_commas(ci);
         let mut prefix = Vec::new();
         let mut open = false;
         for p in &parts {
@@ -75,7 +76,7 @@ pub(super) fn parse_callable_type(s: &str) -> Option<CallableTypeInfo> {
         let types = if li.trim().is_empty() {
             Vec::new()
         } else {
-            split_all_commas(li)
+            split_top_level_commas(li)
                 .iter()
                 .map(|s| s.trim().to_owned())
                 .collect()
@@ -240,26 +241,6 @@ pub(super) fn split_top_comma(s: &str) -> Option<(&str, &str)> {
         }
     }
     None
-}
-
-/// Split `s` at every top-level comma, returning all parts.
-pub(super) fn split_all_commas(s: &str) -> Vec<&str> {
-    let mut d: usize = 0;
-    let mut parts = Vec::new();
-    let mut start = 0;
-    for (i, c) in s.char_indices() {
-        match c {
-            '[' | '(' => d += 1,
-            ']' | ')' => d = d.saturating_sub(1),
-            ',' if d == 0 => {
-                parts.push(&s[start..i]);
-                start = i + 1;
-            }
-            _ => {}
-        }
-    }
-    parts.push(&s[start..]);
-    parts
 }
 
 // ---------------------------------------------------------------------------

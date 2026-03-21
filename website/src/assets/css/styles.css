@@ -790,6 +790,40 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   .cta-inner { flex-direction: column; align-items: flex-start; gap: var(--space-8); }
 }
 
+/* ── Citations ─────────────────────────────────────────────── */
+.citations-section {
+  padding: var(--space-10) 0 var(--space-12);
+  border-top: 1px solid rgba(255 255 255 / 0.06);
+}
+
+.citations-heading {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-4);
+}
+
+.citations-list {
+  list-style: decimal;
+  padding-left: 1.25rem;
+  font-size: 0.8rem;
+  line-height: 1.7;
+  color: var(--color-text-muted);
+  max-width: 72ch;
+}
+
+.citations-list li + li { margin-top: var(--space-2); }
+
+.citations-list a {
+  color: var(--color-text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.citations-list a:hover { color: var(--color-accent); }
+
 /* ── Responsive ────────────────────────────────────────────── */
 @media (max-width: 640px) {
   .section-heading { font-size: 1.75rem; }

@@ -28,6 +28,8 @@ use crate::span_util::slice_span;
 
 use super::Rule;
 
+use crate::rules::shared::is_type_compatible;
+
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0079",
     docs_url: "https://www.basilisk-python.dev/errors/BSK-E0079",
@@ -313,7 +315,7 @@ fn check_protocol_compatibility(
         // Check if the module has this attribute.
         if let Some(mod_type) = mod_interface.attributes.get(attr_name) {
             // Type must be compatible.
-            if !types_compatible(mod_type, &protocol_type) {
+            if !is_type_compatible(mod_type, &protocol_type) {
                 return Some(format!(
                     "attribute `{attr_name}` has type `{mod_type}` \
                      but protocol expects `{protocol_type}`"
@@ -345,7 +347,7 @@ fn check_protocol_compatibility(
             protocol_method_returns.get(&(protocol_name, method_name_str))
         {
             if let Some(mod_return) = mod_interface.methods.get(method_name_str) {
-                if !types_compatible(mod_return, protocol_return) {
+                if !is_type_compatible(mod_return, protocol_return) {
                     return Some(format!(
                         "method `{method_name_str}` returns `{mod_return}` \
                          but protocol expects `{protocol_return}`"
@@ -356,29 +358,4 @@ fn check_protocol_compatibility(
     }
 
     None
-}
-
-/// Check basic type compatibility between a module type and a protocol type.
-fn types_compatible(actual: &str, expected: &str) -> bool {
-    let actual = actual.trim();
-    let expected = expected.trim();
-
-    if actual == expected {
-        return true;
-    }
-
-    // `object` matches everything.
-    if expected == "object" || actual == "object" {
-        return true;
-    }
-
-    // bool <: int <: float <: complex
-    if expected == "int" && actual == "bool" {
-        return true;
-    }
-    if expected == "float" && (actual == "int" || actual == "bool") {
-        return true;
-    }
-
-    false
 }

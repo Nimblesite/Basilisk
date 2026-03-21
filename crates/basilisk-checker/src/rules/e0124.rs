@@ -27,6 +27,8 @@ use crate::span_util::slice_span;
 
 use super::Rule;
 
+use crate::rules::shared::is_type_compatible;
+
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0124",
     docs_url: "https://www.basilisk-python.dev/errors/BSK-E0124",
@@ -156,7 +158,7 @@ fn check_class(
                     continue;
                 };
 
-                if !types_compatible(param_type, expected_type) {
+                if !is_type_compatible(param_type, expected_type) {
                     // Find the span for this line in the source.
                     let line_offset = find_line_offset(func_source, line);
                     let absolute_offset = func_offset + line_offset;
@@ -247,24 +249,6 @@ fn is_protocol_class(class: &ClassInfo) -> bool {
 /// Find an attribute by name in a class.
 fn find_attribute<'a>(class: &'a ClassInfo, name: &str) -> Option<&'a AttributeInfo> {
     class.attributes.iter().find(|attr| attr.name == name)
-}
-
-/// Check if two type strings are compatible.
-fn types_compatible(actual: &str, expected: &str) -> bool {
-    let actual = actual.trim();
-    let expected = expected.trim();
-
-    // Exact match.
-    if actual == expected {
-        return true;
-    }
-
-    // int is compatible with float.
-    if expected == "float" && actual == "int" {
-        return true;
-    }
-
-    false
 }
 
 /// Find the byte offset of a line within a larger text.

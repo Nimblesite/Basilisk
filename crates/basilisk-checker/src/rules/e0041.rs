@@ -252,6 +252,10 @@ fn is_clearly_incompatible(arg_type: &str, param_ann: &str) -> bool {
 ///
 /// Only emits errors when a literal argument type is clearly incompatible
 /// with the corresponding field annotation.
+///
+/// Skips classes with dataclass bases because Python dataclass inheritance
+/// reorders fields according to the MRO, which may differ from the
+/// declaration order we see in the class body.
 fn check_dataclass_arg_types(
     class_info: &ClassInfo,
     call: &basilisk_resolver::CallSite,
@@ -259,6 +263,13 @@ fn check_dataclass_arg_types(
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
+    // Dataclass inheritance reorders fields based on MRO.  Without full MRO
+    // resolution we cannot map positional arguments to the correct fields, so
+    // bail out to avoid false positives.
+    if !class_info.bases.is_empty() {
+        return;
+    }
+
     let fields = positional_dataclass_fields(class_info, source);
 
     for (idx, (arg_kind, arg_span)) in call.args.iter().enumerate() {

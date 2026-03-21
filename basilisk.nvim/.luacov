@@ -1,0 +1,13 @@
+return {
+  include = {
+    "basilisk.nvim/lua/basilisk/.+",
+    "lua/basilisk/.+",
+    "basilisk/",
+  },
+  exclude = {
+    "tests/",
+    "minimal_init",
+    "plenary",
+    "luacov",
+  },
+}

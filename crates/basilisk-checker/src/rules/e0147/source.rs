@@ -4,7 +4,9 @@ use basilisk_resolver::Span;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
-use super::annotation::{is_simple_name, split_top_level_commas};
+use crate::rules::shared::split_top_level_commas;
+
+use super::annotation::is_simple_name;
 
 // ---------------------------------------------------------------------------
 // Source text parsing helpers

@@ -65,6 +65,56 @@
         "command": "basilisk.fixFile",
         "title": "Basilisk: Fix All in File",
         "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.fixWorkspace",
+        "title": "Basilisk: Fix All in Workspace",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.adoptFile",
+        "title": "Basilisk: Adopt File",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.adoptWorkspace",
+        "title": "Basilisk: Adopt Workspace",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.unadoptFile",
+        "title": "Basilisk: Un-adopt File",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.uv.sync",
+        "title": "Basilisk: uv Sync Environment",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.uv.add",
+        "title": "Basilisk: uv Add Dependency",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.uv.addDev",
+        "title": "Basilisk: uv Add Dev Dependency",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.uv.remove",
+        "title": "Basilisk: uv Remove Dependency",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.uv.lock",
+        "title": "Basilisk: uv Lock",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.uv.createEnv",
+        "title": "Basilisk: uv Create Virtual Environment",
+        "category": "Basilisk"
       }
     ],
     "keybindings": [
@@ -241,6 +291,44 @@
           "default": "ruff",
           "description": "Path to the ruff binary."
         },
+        "basilisk.aiTyping.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable AI-assisted type inference for diagnostics that cannot be resolved by deterministic analysis. Requires a configured AI provider."
+        },
+        "basilisk.aiTyping.provider": {
+          "type": "string",
+          "enum": [
+            "none"
+          ],
+          "default": "none",
+          "description": "AI typing provider. Currently no providers are implemented — this setting is reserved for future use."
+        },
+        "basilisk.uv.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable uv package manager integration"
+        },
+        "basilisk.uv.executablePath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the uv executable. Auto-detected if empty."
+        },
+        "basilisk.uv.autoSync": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically run 'uv sync' when pyproject.toml changes"
+        },
+        "basilisk.uv.stubSuggestions": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show suggestions to install type stubs for untyped packages"
+        },
+        "basilisk.uv.dependencyDiagnostics": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show diagnostics for dependency hygiene (undeclared imports, unused deps)"
+        },
         "basilisk.analysisMode": {
           "type": "string",
           "enum": [
@@ -262,11 +350,14 @@
   "scripts": {
     "compile": "tsc -p ./ && node -e \"const fs=require('fs');fs.mkdirSync('out/src/test/fixtures',{recursive:true});fs.readdirSync('src/test/fixtures').forEach(f=>fs.copyFileSync('src/test/fixtures/'+f,'out/src/test/fixtures/'+f));\"",
     "watch": "tsc -watch -p ./",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
     "test": "vscode-test",
     "vscode:prepublish": "npm run compile",
     "package": "vsce package"
   },
   "dependencies": {
+    "@preact/signals-core": "^1.14.0",
     "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
@@ -281,6 +372,7 @@
     "eslint": "^10.0.2",
     "glob": "^13.0.6",
     "mocha": "^11.7.5",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "typescript-eslint": "^8.57.1"
   }
 }

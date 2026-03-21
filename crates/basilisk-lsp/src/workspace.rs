@@ -6,6 +6,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use basilisk_uv::PackageRegistry;
 use dashmap::DashMap;
 use tower_lsp::lsp_types::Url;
 
@@ -51,6 +52,11 @@ pub struct WorkspaceIndex {
     /// Built during workspace scan in `crossModule` mode.
     /// Protected by a `Mutex` for interior mutability.
     pub import_graph: std::sync::Mutex<ImportGraph>,
+    /// Package registry from uv lock file, if this is a uv project.
+    ///
+    /// Built during workspace initialisation and rebuilt when `uv.lock`
+    /// changes. Used for import classification and dependency diagnostics.
+    pub registry: Option<Arc<PackageRegistry>>,
 }
 
 impl WorkspaceIndex {
@@ -62,10 +68,14 @@ impl WorkspaceIndex {
             files: DashMap::new(),
             mode,
             import_graph: std::sync::Mutex::new(ImportGraph::new()),
+            registry: None,
         }
     }
 
     /// Return the `FileEntry` for a URI, if present.
+    ///
+    /// Canonicalizes the path to handle macOS `/var` → `/private/var` symlinks
+    /// and other platform symlink differences.
     #[must_use]
     pub fn get_by_uri(
         &self,
@@ -76,7 +86,11 @@ impl WorkspaceIndex {
         Vec<basilisk_checker::Diagnostic>,
     )> {
         let path = uri.to_file_path().ok()?;
-        let entry = self.files.get(&path)?;
+        // Try the literal path first, then canonicalized (handles symlinks).
+        let entry = self.files.get(&path).or_else(|| {
+            let canonical = path.canonicalize().ok()?;
+            self.files.get(&canonical)
+        })?;
         let resolved = entry.resolved.clone()?;
         let text = entry.text.clone();
         let diagnostics = entry.diagnostics.clone();
@@ -91,7 +105,10 @@ impl WorkspaceIndex {
     #[must_use]
     pub fn get_text(&self, uri: &Url) -> Option<String> {
         let path = uri.to_file_path().ok()?;
-        let entry = self.files.get(&path)?;
+        let entry = self.files.get(&path).or_else(|| {
+            let canonical = path.canonicalize().ok()?;
+            self.files.get(&canonical)
+        })?;
         Some(entry.text.clone())
     }
 

@@ -25,26 +25,12 @@ use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
 use super::Rule;
 
+use crate::rules::shared::is_numeric_subtype;
+
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0091",
     docs_url: "https://www.basilisk-python.dev/errors/BSK-E0091",
 };
-
-/// Numeric type subtype hierarchy: `bool <: int <: float <: complex`.
-///
-/// Returns `true` when `child` is a subtype of `parent` in the numeric hierarchy.
-/// For non-numeric types, only equality counts as a subtype relationship.
-fn is_numeric_subtype(child: &str, parent: &str) -> bool {
-    const NUMERIC_ORDER: &[&str] = &["bool", "int", "float", "complex"];
-    let child_pos = NUMERIC_ORDER.iter().position(|&n| n == child);
-    let parent_pos = NUMERIC_ORDER.iter().position(|&n| n == parent);
-    match (child_pos, parent_pos) {
-        // child is at a lower index (more specific), so child <= parent
-        (Some(c), Some(p)) => c <= p,
-        // For non-numeric types, only equality counts.
-        _ => child == parent,
-    }
-}
 
 /// Emits BSK-E0091 for `TypeVar` bound/constraint vs default incompatibilities.
 pub(crate) struct TypeVarDefaultIncompatible;

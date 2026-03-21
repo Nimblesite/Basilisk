@@ -15,6 +15,7 @@
 use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::rules::shared::split_top_level_commas;
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -264,26 +265,6 @@ fn parse_int_literal(s: &str) -> Option<i64> {
     }
     let val: i64 = digits.parse().ok()?;
     Some(if negative { -val } else { val })
-}
-
-/// Split a string by commas at the top level (respecting brackets).
-fn split_top_level_commas(s: &str) -> Vec<&str> {
-    let mut result = Vec::new();
-    let mut depth = 0i32;
-    let mut start = 0;
-    for (i, byte) in s.bytes().enumerate() {
-        match byte {
-            b'[' | b'(' | b'{' => depth += 1,
-            b']' | b')' | b'}' => depth -= 1,
-            b',' if depth == 0 => {
-                result.push(&s[start..i]);
-                start = i + 1;
-            }
-            _ => {}
-        }
-    }
-    result.push(&s[start..]);
-    result
 }
 
 /// Find the position of the closing `]` that matches the opening one.

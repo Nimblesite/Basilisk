@@ -22,6 +22,7 @@
 use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::rules::shared::split_top_level_commas;
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -93,25 +94,6 @@ fn has_invalid_literal_param(ann: &str) -> bool {
     split_top_level_commas(inner.trim())
         .into_iter()
         .any(|arg| is_invalid_single_arg(arg.trim()))
-}
-
-fn split_top_level_commas(s: &str) -> Vec<&str> {
-    let mut result = Vec::new();
-    let mut depth = 0i32;
-    let mut start = 0;
-    for (i, b) in s.bytes().enumerate() {
-        match b {
-            b'[' | b'(' | b'{' => depth += 1,
-            b']' | b')' | b'}' => depth -= 1,
-            b',' if depth == 0 => {
-                result.push(&s[start..i]);
-                start = i + 1;
-            }
-            _ => {}
-        }
-    }
-    result.push(&s[start..]);
-    result
 }
 
 fn is_invalid_single_arg(arg: &str) -> bool {

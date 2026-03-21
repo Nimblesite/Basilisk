@@ -35,6 +35,18 @@ Read the PR template:
 cat .github/PULL_REQUEST_TEMPLATE.md
 ```
 
+## CI Check
+
+Make sure the CI gh action and test.sh is including all tests from all crates/projects
+
+## Sanity Check
+
+Make sure nothing seems obviously wrong
+
+## Website Check
+
+Make sure the website is up to date with the latest changes
+
 ## Write PR Description
 
 The template has three sections (gh will auto-populate structure):

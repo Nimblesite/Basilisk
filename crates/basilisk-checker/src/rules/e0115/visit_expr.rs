@@ -417,31 +417,37 @@ fn check_attribute_deprecated(
         }
 
         // Case 3: `alias` is a typed variable; look up its class's deprecated members.
+        // Only flag read-access deprecations (property getters and methods), not
+        // property setters — setter deprecation is handled on assignment targets.
         if let Some(var_type) = var_types.get(alias) {
             let key = format!("{}.{}", var_type.class_name, member_name);
             if !var_type.module_alias.is_empty() {
                 if let Some(members) = deprecated_members.get(&var_type.module_alias) {
                     if let Some(info) = members.get(&key) {
-                        diagnostics.push(make_diagnostic(
-                            span,
-                            &info.kind,
-                            member_name,
-                            info.message.as_deref(),
-                            path,
-                        ));
-                        return;
+                        if info.kind == "property" || info.kind == "method" {
+                            diagnostics.push(make_diagnostic(
+                                span,
+                                &info.kind,
+                                member_name,
+                                info.message.as_deref(),
+                                path,
+                            ));
+                            return;
+                        }
                     }
                 }
             }
             if let Some(info) = deprecated.get(&key) {
-                diagnostics.push(make_diagnostic(
-                    span,
-                    &info.kind,
-                    member_name,
-                    info.message.as_deref(),
-                    path,
-                ));
-                return;
+                if info.kind == "property" || info.kind == "method" {
+                    diagnostics.push(make_diagnostic(
+                        span,
+                        &info.kind,
+                        member_name,
+                        info.message.as_deref(),
+                        path,
+                    ));
+                    return;
+                }
             }
         }
     }

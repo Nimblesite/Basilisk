@@ -49,6 +49,15 @@ fn check_function(func: &FunctionInfo, module: &ResolvedModule, out: &mut Vec<Di
     // Parse annotation text to InferredType
     let declared_type = InferredType::from_annotation(ann_text);
 
+    // Named types (e.g. `Sequence[float]`, `Iterable[int]`, forward references
+    // like `"Class | Any"`) require structural subtyping or generic variance
+    // analysis that E0013 cannot perform.  A concrete return like `list[int]`
+    // IS assignable to `Sequence[float]` at runtime, but `InferredType` has no
+    // knowledge of the class hierarchy.  Skip the check to avoid FPs.
+    if matches!(declared_type, InferredType::Named(_)) {
+        return;
+    }
+
     // Special case for -> None functions: any valued return should be flagged
     if declared_type == InferredType::None_ {
         func.return_stmts

@@ -11,6 +11,7 @@ use ruff_text_size::Ranged as _;
 use basilisk_resolver::Span;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::rules::shared::{infer_expr_literal_type, is_type_compatible};
 use crate::span_util::slice_span;
 
 pub(super) const CODE: ErrorCode = ErrorCode {
@@ -212,7 +213,7 @@ pub(super) fn check_kwarg_types(
             continue;
         };
         let expected_type = ann_text.trim();
-        let Some(arg_type) = classify_literal_type(&kw.value) else {
+        let Some(arg_type) = infer_expr_literal_type(&kw.value) else {
             continue;
         };
         if !is_type_compatible(arg_type, expected_type) {
@@ -261,7 +262,7 @@ pub(super) fn check_positional_arg_types(
             continue;
         };
         let expected_type = ann_text.trim();
-        let Some(arg_type) = classify_literal_type(arg_expr) else {
+        let Some(arg_type) = infer_expr_literal_type(arg_expr) else {
             continue;
         };
         if !is_type_compatible(arg_type, expected_type) {
@@ -320,47 +321,4 @@ pub(super) fn expr_simple_name(expr: &Expr) -> Option<&str> {
         Expr::Name(n) => Some(n.id.as_str()),
         _ => None,
     }
-}
-
-/// Classify the Python type of a literal expression.
-pub(super) fn classify_literal_type(expr: &Expr) -> Option<&'static str> {
-    match expr {
-        Expr::StringLiteral(_) => Some("str"),
-        Expr::NumberLiteral(num) => {
-            if num.value.is_int() {
-                Some("int")
-            } else {
-                Some("float")
-            }
-        }
-        Expr::BooleanLiteral(_) => Some("bool"),
-        Expr::BytesLiteral(_) => Some("bytes"),
-        Expr::NoneLiteral(_) => Some("None"),
-        _ => None,
-    }
-}
-
-/// Check if `arg_type` is compatible with `param_type`.
-pub(super) fn is_type_compatible(arg_type: &str, param_type: &str) -> bool {
-    if arg_type == param_type {
-        return true;
-    }
-    if param_type == "Any" || param_type == "object" {
-        return true;
-    }
-    if param_type == "int" && arg_type == "bool" {
-        return true;
-    }
-    if param_type == "float" && (arg_type == "int" || arg_type == "bool") {
-        return true;
-    }
-    if param_type == "complex" && (arg_type == "int" || arg_type == "float" || arg_type == "bool") {
-        return true;
-    }
-    if param_type.contains('|') {
-        return param_type
-            .split('|')
-            .any(|part| is_type_compatible(arg_type, part.trim()));
-    }
-    false
 }

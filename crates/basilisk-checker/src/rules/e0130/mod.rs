@@ -29,13 +29,14 @@ use basilisk_resolver::ResolvedModule;
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
 use super::Rule;
+use crate::rules::shared::contains_typevar_reference;
 
 use check::{check_generic_constructor_calls, check_generic_instance_method_calls};
 use types::ScopeInfo;
 use utils::{
-    collect_full_signature, contains_typevar_reference, extract_pep695_type_params,
+    collect_full_signature, compute_triple_quote_mask, extract_pep695_type_params,
     extract_typevars_from_function_sig, extract_typevars_from_generic_base, is_simple_assignment,
-    leading_indent, span_for_line,
+    leading_indent, signature_end_line, span_for_line,
 };
 use variance::check_variance_assignments;
 
@@ -65,9 +66,14 @@ impl Rule for TypeVarScopeViolation {
         }
 
         let lines: Vec<&str> = module.source.lines().collect();
+        let triple_quote_mask = compute_triple_quote_mask(&lines);
 
         // Track scope stack: each entry has (indent, bound_typevars, is_class).
         let mut scope_stack: Vec<ScopeInfo> = Vec::new();
+
+        // When > 0, we are inside a multi-line function signature and should
+        // skip lines until this index (inclusive, 0-based).
+        let mut skip_until_line: usize = 0;
 
         for (line_idx, line) in lines.iter().enumerate() {
             let line_number = line_idx + 1;
@@ -75,6 +81,16 @@ impl Rule for TypeVarScopeViolation {
 
             // Skip empty lines, comments, and pure string lines.
             if trimmed.is_empty() || trimmed.starts_with('#') {
+                continue;
+            }
+
+            // Skip lines inside triple-quoted strings (docstrings, multi-line strings).
+            if triple_quote_mask.get(line_idx).copied().unwrap_or(false) {
+                continue;
+            }
+
+            // Skip continuation lines of multi-line function signatures.
+            if line_idx < skip_until_line {
                 continue;
             }
 
@@ -145,7 +161,7 @@ impl Rule for TypeVarScopeViolation {
 
             // Detect function definitions. For multi-line signatures, collect
             // the full signature text so TypeVars in parameter annotations are
-            // correctly recognised as bound.
+            // correctly recognised as bound, and skip continuation lines.
             if trimmed.starts_with("def ") || trimmed.starts_with("async def ") {
                 let full_sig = collect_full_signature(&lines, line_idx);
                 let bound_tvs = extract_typevars_from_function_sig(&full_sig, &all_typevars);
@@ -154,6 +170,11 @@ impl Rule for TypeVarScopeViolation {
                     bound_typevars: bound_tvs,
                     is_class: false,
                 });
+                // Mark continuation lines so they are not analysed as standalone code.
+                let sig_end = signature_end_line(&lines, line_idx);
+                if sig_end > line_idx {
+                    skip_until_line = sig_end + 1;
+                }
                 continue;
             }
 

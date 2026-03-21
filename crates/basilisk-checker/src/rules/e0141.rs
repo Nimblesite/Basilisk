@@ -12,6 +12,7 @@ use ruff_text_size::Ranged;
 use basilisk_resolver::{ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::rules::shared::{ann_str, expr_name};
 
 use super::Rule;
 
@@ -566,13 +567,6 @@ fn is_typevar_call(expr: &Expr) -> bool {
     matches!(expr, Expr::Call(call) if matches!(call.func.as_ref(), Expr::Name(n) if n.id.as_str() == "TypeVar"))
 }
 
-fn expr_name(expr: &Expr) -> Option<&str> {
-    match expr {
-        Expr::Name(n) => Some(n.id.as_str()),
-        _ => None,
-    }
-}
-
 fn extract_unpack_arg(expr: &Expr) -> Option<&str> {
     if let Expr::Subscript(sub) = expr {
         if matches!(sub.value.as_ref(), Expr::Name(n) if n.id.as_str() == "Unpack") {
@@ -580,16 +574,6 @@ fn extract_unpack_arg(expr: &Expr) -> Option<&str> {
         }
     }
     None
-}
-
-/// Render an annotation expression to a string.
-fn ann_str(expr: &Expr) -> String {
-    match expr {
-        Expr::Name(n) => n.id.to_string(),
-        Expr::Subscript(s) => format!("{}[{}]", ann_str(&s.value), ann_str(&s.slice)),
-        Expr::BinOp(b) => format!("{} | {}", ann_str(&b.left), ann_str(&b.right)),
-        _ => "...".to_owned(),
-    }
 }
 
 fn mk_span(range: ruff_text_size::TextRange) -> Span {

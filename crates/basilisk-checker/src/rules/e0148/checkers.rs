@@ -9,8 +9,10 @@ use basilisk_resolver::Span;
 
 use crate::diagnostic::{Diagnostic, Severity};
 
+use crate::rules::shared::{infer_expr_literal_type, is_type_compatible};
+
 use super::{
-    helpers::{call_span, expr_name, infer_literal_type, types_compatible},
+    helpers::{call_span, expr_name},
     ModuleContext, CODE,
 };
 
@@ -213,11 +215,11 @@ fn check_subscript(
     };
 
     // Infer the type of the subscript key.
-    let Some(idx_ty) = infer_literal_type(&sub.slice) else {
+    let Some(idx_ty) = infer_expr_literal_type(&sub.slice) else {
         return;
     };
 
-    if !types_compatible(idx_ty, key_ty) {
+    if !is_type_compatible(idx_ty, key_ty) {
         let span = Span {
             start: sub.range().start().to_u32(),
             end: sub.range().end().to_u32(),
@@ -297,6 +299,6 @@ fn infer_arg_type<'a>(arg: &'a Expr, var_types: &'a HashMap<String, String>) -> 
             // Look up the variable's declared type.
             var_types.get(name).cloned()
         }
-        _ => infer_literal_type(arg).map(str::to_owned),
+        _ => infer_expr_literal_type(arg).map(|s| s.to_owned()),
     }
 }

@@ -2,60 +2,10 @@
 
 use std::collections::HashMap;
 
-use basilisk_resolver::{FunctionInfo, ParameterInfo, Span};
+use basilisk_resolver::{FunctionInfo, ParameterInfo};
 
+use crate::rules::shared::contains_typevar_reference;
 use crate::span_util::slice_span;
-
-/// Parse a subscript annotation like `Proto[A, B]` into `(proto_name, [A, B])`.
-pub(super) fn parse_subscript_annotation(text: &str) -> Option<(&str, Vec<String>)> {
-    let bracket_pos = text.find('[')?;
-    let proto_name = text[..bracket_pos].trim();
-    if proto_name.is_empty() {
-        return None;
-    }
-
-    let inner_start = bracket_pos + 1;
-    let inner_end = text.rfind(']')?;
-    if inner_end <= inner_start {
-        return None;
-    }
-    let inner = &text[inner_start..inner_end];
-
-    let args = split_top_level_args(inner)
-        .into_iter()
-        .map(|s| s.trim().to_owned())
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>();
-
-    if args.is_empty() {
-        return None;
-    }
-
-    Some((proto_name, args))
-}
-
-/// Split comma-separated type arguments at the top level (respecting bracket nesting).
-pub(super) fn split_top_level_args(inner: &str) -> Vec<&str> {
-    let mut args = Vec::new();
-    let mut depth = 0i32;
-    let mut start = 0;
-
-    for (idx, ch) in inner.char_indices() {
-        match ch {
-            '[' | '(' | '{' => depth += 1,
-            ']' | ')' | '}' => depth -= 1,
-            ',' if depth == 0 => {
-                args.push(&inner[start..idx]);
-                start = idx + 1;
-            }
-            _ => {}
-        }
-    }
-    if start < inner.len() {
-        args.push(&inner[start..]);
-    }
-    args
-}
 
 /// Extract the constructor class name from an expression like `ClassName(...)`.
 pub(super) fn extract_constructor_name(expr: &str) -> Option<&str> {
@@ -430,35 +380,116 @@ fn check_self_typed_param_consistency(
     None
 }
 
-/// Collect all methods belonging to a class from the module's function list.
-pub(super) fn _collect_class_methods<'a>(
-    class_name: &str,
-    functions: &'a [FunctionInfo],
-) -> Vec<&'a FunctionInfo> {
-    functions
-        .iter()
-        .filter(|f| f.class_name.as_deref() == Some(class_name))
-        .collect()
-}
-
-/// Compute the byte span of a line in the source for diagnostic anchoring.
-pub(super) fn _line_span(source: &str, line_number: usize) -> Option<Span> {
-    let mut current_line = 1;
-    let mut start = 0;
-    for (i, ch) in source.char_indices() {
-        if current_line == line_number {
-            let end = source
-                .get(i..)
-                .and_then(|s| s.find('\n'))
-                .map_or(source.len(), |j| i + j);
-            return Some(Span {
-                start: u32::try_from(start).ok()?,
-                end: u32::try_from(end).ok()?,
-            });
+/// Check non-self-typed methods that reference the self-TypeVar `T` from a
+/// `self: T` method.
+///
+/// When a protocol has `def f(self: T) -> T` and `def m(self, item: T, ...) -> str`,
+/// the concrete class must use `T` generically in `m` or use consistent concrete
+/// types that match the self-type binding.
+pub(super) fn check_typevar_methods_consistency(
+    proto_methods: &[&FunctionInfo],
+    concrete_methods: &[&FunctionInfo],
+    tv_name: &str,
+    source: &str,
+) -> Option<String> {
+    for proto_method in proto_methods {
+        // Skip self-typed methods (handled separately) and __init__.
+        if method_has_typed_self(proto_method) || proto_method.name == "__init__" {
+            continue;
         }
-        if ch == '\n' {
-            current_line += 1;
-            start = i + 1;
+
+        // Check if this method references the TypeVar in any parameter annotation.
+        let proto_params = skip_self_param(&proto_method.parameters);
+        let uses_tv = proto_params.iter().any(|p| {
+            p.annotation_span
+                .and_then(|span| slice_span(source, span))
+                .is_some_and(|text| contains_typevar_reference(text.trim(), tv_name))
+        });
+
+        if !uses_tv {
+            continue;
+        }
+
+        // Find the concrete method.
+        let Some(concrete_method) = concrete_methods
+            .iter()
+            .find(|m| m.name == proto_method.name)
+        else {
+            continue;
+        };
+
+        let concrete_params = skip_self_param(&concrete_method.parameters);
+        if proto_params.len() != concrete_params.len() {
+            continue;
+        }
+
+        // Collect the concrete types used where the protocol uses `T`.
+        // If the concrete method also uses `T` generically, it's OK.
+        let mut bound_types: Vec<&str> = Vec::new();
+        let mut concrete_uses_tv = false;
+
+        for (pp, cp) in proto_params.iter().zip(concrete_params.iter()) {
+            let proto_ann = pp
+                .annotation_span
+                .and_then(|span| slice_span(source, span))
+                .map_or("", str::trim);
+
+            if !contains_typevar_reference(proto_ann, tv_name) {
+                continue;
+            }
+
+            let concrete_ann = cp
+                .annotation_span
+                .and_then(|span| slice_span(source, span))
+                .map_or("", str::trim);
+
+            if concrete_ann.is_empty() {
+                continue;
+            }
+
+            // If concrete also uses the TypeVar, method is generic — OK.
+            if contains_typevar_reference(concrete_ann, tv_name) {
+                concrete_uses_tv = true;
+                continue;
+            }
+
+            // Concrete uses a specific type where protocol uses T.
+            // Extract the "core" type used for T.
+            // For direct `T` usage: `item: T` → concrete_ann is the bound type.
+            // For nested usage: `Callable[[T], str]` → need to check consistency
+            // of what T maps to.
+            if proto_ann == tv_name {
+                bound_types.push(concrete_ann);
+            }
+        }
+
+        // If concrete uses T generically, it matches the protocol.
+        if concrete_uses_tv {
+            continue;
+        }
+
+        // Check consistency and concreteness of types bound to T.
+        if let Some((&first, rest)) = bound_types.split_first() {
+            // All concrete types bound to T must be the same.
+            for &other in rest {
+                if other != first {
+                    return Some(format!(
+                        "method `{}` uses inconsistent types for TypeVar `{tv_name}`: \
+                         `{first}` and `{other}`",
+                        proto_method.name
+                    ));
+                }
+            }
+
+            // A concrete type (not Self/T) cannot satisfy a protocol
+            // where T is bound to Self via `self: T`.
+            if first != "Self" && first != tv_name {
+                return Some(format!(
+                    "method `{}` uses concrete type `{first}` for TypeVar `{tv_name}` \
+                     which is bound to `Self` via protocol's `self: {tv_name}` annotation",
+                    proto_method.name
+                ));
+            }
         }
     }
     None

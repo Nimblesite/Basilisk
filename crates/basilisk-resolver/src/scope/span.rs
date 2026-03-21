@@ -10,6 +10,24 @@ pub struct Span {
 }
 
 impl Span {
+    /// Create a new span from start and end byte offsets.
+    #[must_use]
+    pub const fn new(start: u32, end: u32) -> Self {
+        Self { start, end }
+    }
+
+    /// Does this span fully contain `other`?
+    #[must_use]
+    pub const fn contains_span(&self, other: Self) -> bool {
+        self.start <= other.start && other.end <= self.end
+    }
+
+    /// Does this span contain the byte offset?
+    #[must_use]
+    pub const fn contains_offset(&self, offset: u32) -> bool {
+        self.start <= offset && offset < self.end
+    }
+
     /// Slice `source` using this span without `as` conversions.
     ///
     /// Returns `None` if the span is out of bounds.

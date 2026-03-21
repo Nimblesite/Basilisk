@@ -8,8 +8,9 @@ use std::collections::HashMap;
 use basilisk_resolver::{FunctionInfo, Span};
 
 use crate::diagnostic::{Diagnostic, Severity};
+use crate::rules::shared::{is_type_compatible, split_top_level_commas};
 
-use super::annotation::{parse_generator_annotation, split_top_level_args, GeneratorAnnotation};
+use super::annotation::{parse_generator_annotation, GeneratorAnnotation};
 use super::yield_scan::YieldExpr;
 use super::CODE;
 
@@ -88,25 +89,6 @@ pub(super) fn get_constructor_name(expr: &str) -> Option<&str> {
     }
 }
 
-/// Check if a type name is compatible with an expected type.
-///
-/// This is a conservative check: it returns `true` (compatible) when
-/// we cannot determine incompatibility.
-pub(super) fn is_type_compatible(actual: &str, expected: &str) -> bool {
-    if expected == "Any" || actual == "Any" || expected == "object" || actual == expected {
-        return true;
-    }
-    // int is compatible with float
-    if expected == "float" && actual == "int" {
-        return true;
-    }
-    // bool is compatible with int
-    if expected == "int" && actual == "bool" {
-        return true;
-    }
-    false
-}
-
 /// Extract the function name from a call expression like `generator17()`.
 pub(super) fn extract_call_name(expr: &str) -> Option<&str> {
     let expr = expr.trim();
@@ -131,7 +113,7 @@ pub(super) fn infer_list_element_type(expr: &str) -> Option<&str> {
         return None;
     }
 
-    let first_elem = split_top_level_args(inner);
+    let first_elem = split_top_level_commas(inner);
     infer_expr_type(first_elem.first()?.trim())
 }
 

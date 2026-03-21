@@ -1,0 +1,327 @@
+*basilisk.txt*  Basilisk — Python type checker and LSP for Neovim
+
+                        BASILISK.NVIM REFERENCE MANUAL
+
+==============================================================================
+CONTENTS                                                    *basilisk-contents*
+
+  1. Introduction ....................................... |basilisk-introduction|
+  2. Requirements ....................................... |basilisk-requirements|
+  3. Installation ....................................... |basilisk-installation|
+  4. Configuration ...................................... |basilisk-configuration|
+  5. Commands ........................................... |basilisk-commands|
+  6. Keymaps ............................................ |basilisk-keymaps|
+  7. DAP Integration .................................... |basilisk-dap|
+  8. Test Explorer ...................................... |basilisk-test-explorer|
+  9. Profiling .......................................... |basilisk-profiling|
+  10. Memory Tracking ................................... |basilisk-memory|
+  11. uv Integration .................................... |basilisk-uv|
+  12. Status Line ....................................... |basilisk-statusline|
+  13. Health Check ...................................... |basilisk-health|
+  14. Troubleshooting ................................... |basilisk-troubleshooting|
+
+==============================================================================
+1. INTRODUCTION                                         *basilisk-introduction*
+
+Basilisk is a strict-by-default Python type checker built in Rust. This plugin
+provides a first-class Neovim integration via the built-in LSP client.
+
+Features:
+- Zero-config setup: works out of the box
+- All 21 LSP features native via Neovim 0.10+
+- Debug Adapter Protocol via nvim-dap
+- Test explorer with pytest integration
+- Python profiling with heat maps
+- Memory leak tracking
+- uv package manager integration
+
+==============================================================================
+2. REQUIREMENTS                                         *basilisk-requirements*
+
+Required:
+- Neovim >= 0.10
+- `basilisk` binary (install: `cargo install basilisk-cli`)
+
+Optional:
+- Python 3.12+ (for debugging, testing)
+- debugpy (for DAP debugging)
+- nvim-dap (for debug integration)
+- nvim-dap-ui (for debug UI)
+- ruff (for formatting)
+- uv (for package management)
+
+==============================================================================
+3. INSTALLATION                                         *basilisk-installation*
+
+lazy.nvim: >lua
+  {
+    'basilisk-lang/basilisk.nvim',
+    ft = 'python',
+    dependencies = { 'mfussenegger/nvim-dap' },  -- optional
+    opts = {},
+  }
+<
+
+packer.nvim: >lua
+  use {
+    'basilisk-lang/basilisk.nvim',
+    ft = 'python',
+    config = function()
+      require('basilisk').setup({})
+    end,
+  }
+<
+
+Manual: Clone to your plugin directory and call: >lua
+  require('basilisk').setup({})
+<
+
+==============================================================================
+4. CONFIGURATION                                       *basilisk-configuration*
+
+All options with defaults: >lua
+  require('basilisk').setup({
+    binary_path = nil,               -- auto-detect
+    enabled = true,                  -- enable type checker
+    analysis_mode = "wholeModule",   -- "openFilesOnly"|"wholeModule"|"crossModule"
+    python = nil,                    -- auto-detect Python interpreter
+    inlay_hints = {
+      parameter_names = true,        -- show param name hints at call sites
+      variable_types = true,         -- show inferred type hints
+    },
+    ruff = {
+      enabled = true,                -- enable Ruff integration
+      executable_path = "ruff",      -- Ruff binary path
+    },
+    debugger = {
+      enabled = true,                -- enable debugger
+      type_checking = false,         -- type assertion breakpoints
+      debugpy_path = "debugpy",      -- debugpy module path
+    },
+    test_explorer = {
+      enabled = true,                -- enable test discovery
+      framework = "auto",            -- "auto"|"pytest"|"unittest"
+      pytest_path = "pytest",        -- pytest executable path
+      args = {},                     -- additional test runner args
+      auto_discover_on_save = true,  -- re-discover on file save
+      position = "right",            -- "left"|"right"|"bottom"
+      width = 40,                    -- panel width
+    },
+    uv = {
+      enabled = true,                -- enable uv integration
+      executable_path = nil,         -- auto-detect
+      auto_sync = false,             -- auto-run uv sync
+      stub_suggestions = true,       -- suggest type stub packages
+      dependency_diagnostics = false, -- dependency hygiene warnings
+    },
+    keymaps = {
+      enabled = true,                -- set default keymaps
+      prefix = "<leader>b",          -- Basilisk keymap prefix
+    },
+    statusline = {
+      enabled = true,                -- enable status line component
+    },
+    log_level = "info",              -- "trace"|"debug"|"info"|"warn"|"error"
+  })
+<
+
+==============================================================================
+5. COMMANDS                                                 *basilisk-commands*
+
+Core: ~
+
+:BasiliskRestart                                            *:BasiliskRestart*
+  Restart the LSP server. Resets the restart counter.
+
+:BasiliskInfo                                                  *:BasiliskInfo*
+  Show server status in a floating window.
+
+:BasiliskOrganizeImports                              *:BasiliskOrganizeImports*
+  Organize imports via Ruff.
+
+Profiling: ~
+
+:BasiliskProfile [pid]                                      *:BasiliskProfile*
+  Start profiling. Optional PID argument.
+
+:BasiliskProfileStop                                    *:BasiliskProfileStop*
+  Stop profiling. Shows results in floating window + quickfix.
+
+:BasiliskProfileSnapshot                            *:BasiliskProfileSnapshot*
+  Take a profiling snapshot without stopping.
+
+Memory: ~
+
+:BasiliskMemLeak                                          *:BasiliskMemLeak*
+  Start memory leak tracking.
+
+:BasiliskMemStop                                          *:BasiliskMemStop*
+  Stop tracking. Shows leak report in floating window.
+
+:BasiliskMemRefs {type}                                    *:BasiliskMemRefs*
+  Show retention paths for a type. Tab-completion available.
+
+Debug: ~
+
+:BasiliskDebugFile                                      *:BasiliskDebugFile*
+  Start debugging the current file via nvim-dap.
+
+Testing: ~
+
+:BasiliskTestDiscover                                *:BasiliskTestDiscover*
+  Discover tests via pytest.
+
+:BasiliskTestRun [id]                                    *:BasiliskTestRun*
+  Run test(s). Optional test ID.
+
+:BasiliskTestDebug {id}                                *:BasiliskTestDebug*
+  Debug a test via nvim-dap.
+
+:BasiliskTestToggle                                    *:BasiliskTestToggle*
+  Toggle the test explorer side panel.
+
+uv: ~
+
+:BasiliskUvSync                                          *:BasiliskUvSync*
+  Run `uv sync` in the project root.
+
+:BasiliskUvAdd {package}                                  *:BasiliskUvAdd*
+  Add a package via `uv add`.
+
+:BasiliskUvAddDev {package}                            *:BasiliskUvAddDev*
+  Add a dev dependency via `uv add --dev`.
+
+:BasiliskUvRemove {package}                            *:BasiliskUvRemove*
+  Remove a package via `uv remove`.
+
+:BasiliskUvLock                                          *:BasiliskUvLock*
+  Run `uv lock`.
+
+:BasiliskUvCreateEnv [version]                      *:BasiliskUvCreateEnv*
+  Create a virtual environment via `uv venv`.
+
+==============================================================================
+6. KEYMAPS                                                   *basilisk-keymaps*
+
+Standard LSP (set on LspAttach for Python buffers): ~
+
+  `gd`          Go to definition
+  `gD`          Go to declaration
+  `gy`          Go to type definition
+  `gr`          Find references
+  `K`           Hover
+  `<C-k>`       Signature help (insert mode)
+  `<leader>rn`  Rename
+  `<leader>ca`  Code action
+
+Basilisk-specific (configurable prefix, default `<leader>b`): ~
+
+  `<leader>br`  Restart server
+  `<leader>bo`  Organize imports
+  `<leader>bp`  Start profiling
+  `<leader>bP`  Stop profiling
+  `<leader>bm`  Start memory tracking
+  `<leader>bM`  Stop memory tracking
+  `<leader>bt`  Toggle test explorer
+  `<leader>bd`  Debug current file
+  `<leader>bR`  Run test at cursor
+  `<leader>bD`  Debug test at cursor
+
+Disable all keymaps: >lua
+  require('basilisk').setup({ keymaps = { enabled = false } })
+<
+
+==============================================================================
+7. DAP INTEGRATION                                             *basilisk-dap*
+
+Requires nvim-dap. Automatically set up when available.
+
+Two default configurations are registered:
+1. "Python: Current File (Basilisk)" — launch current file
+2. "Python: Attach (Basilisk)" — attach to 127.0.0.1:5678
+
+Optional integrations:
+- nvim-dap-ui: auto-open on debug start, auto-close on terminate
+- nvim-dap-virtual-text: inline variable display during debugging
+
+==============================================================================
+8. TEST EXPLORER                                       *basilisk-test-explorer*
+
+Test explorer keymaps (in test panel): ~
+
+  `<CR>`  Run test
+  `d`     Debug test
+  `R`     Re-run failed tests
+  `q`     Close panel
+
+==============================================================================
+9. PROFILING                                               *basilisk-profiling*
+
+Workflow:
+1. `:BasiliskProfile` to start
+2. Exercise your code
+3. `:BasiliskProfileStop` to see results
+4. Results appear in floating window + quickfix list
+5. Hot lines get heat map extmarks in source buffers
+
+==============================================================================
+10. MEMORY TRACKING                                           *basilisk-memory*
+
+Workflow:
+1. `:BasiliskMemLeak` to start tracking
+2. Exercise your code
+3. `:BasiliskMemStop` to see leak report
+4. `:BasiliskMemRefs DataFrame` to see retention paths
+
+==============================================================================
+11. UV INTEGRATION                                                *basilisk-uv*
+
+Package management via uv. Commands map to uv CLI operations.
+
+==============================================================================
+12. STATUS LINE                                           *basilisk-statusline*
+
+Lualine integration: >lua
+  sections = {
+    lualine_x = { require('basilisk.statusline').lualine_component },
+  }
+<
+
+Raw function for custom status lines: >lua
+  require('basilisk.statusline').get()  -- returns "✓ Basilisk" etc.
+<
+
+States:
+  Starting      ⟳ Basilisk         (yellow)
+  Ready         ✓ Basilisk         (green)
+  Ready+errors  ⚠ Basilisk (3E 2W) (orange)
+  Error         ✗ Basilisk         (red)
+  Stopped       ⊘ Basilisk         (grey)
+
+==============================================================================
+13. HEALTH CHECK                                             *basilisk-health*
+
+Run `:checkhealth basilisk` to verify your setup.
+
+==============================================================================
+14. TROUBLESHOOTING                                   *basilisk-troubleshooting*
+
+Binary not found: ~
+  Install: `cargo install basilisk-cli`
+  Or set: `vim.env.BASILISK_PATH = "/path/to/basilisk"`
+
+LSP not starting: ~
+  Check `:checkhealth basilisk`
+  Check `:BasiliskInfo` for status
+  Try `:BasiliskRestart`
+
+No diagnostics: ~
+  Ensure you have a `pyproject.toml` or `.git` in your project root.
+  Check `analysis_mode` setting.
+
+Debug not working: ~
+  Install debugpy: `pip install debugpy`
+  Install nvim-dap: add to your plugin manager
+
+==============================================================================
+ vim:tw=78:ts=8:ft=help:norl:
