@@ -83,19 +83,33 @@ if [[ ! -f luacov.stats.out ]]; then
 fi
 
 # Generate the luacov report from stats.
-if command -v luacov &>/dev/null; then
-    luacov
-elif lua -e 'require("luacov.runner")' 2>/dev/null; then
-    lua -e 'require("luacov.runner").run_report()'
-else
-    echo -e "  ${RED}${BOLD}✗ neovim: luacov not found — cannot generate coverage report. FAIL${RESET}"
-    exit 1
+# Neovim's LuaJIT writes the stats; the standalone luacov tool (possibly a
+# different Lua version) reads them.  Use nvim first so the report generator
+# uses the same LuaJIT runtime that collected the stats (no LUACOV so it
+# doesn't re-init the coverage runner).
+if command -v nvim &>/dev/null; then
+    nvim --headless --noplugin -l tests/generate_report.lua 2>/dev/null || true
+fi
+
+if [[ ! -f luacov.report.out ]]; then
+    if command -v luacov &>/dev/null; then
+        luacov
+    elif lua -e 'require("luacov.runner")' 2>/dev/null; then
+        lua -e 'require("luacov.runner").run_report()'
+    else
+        echo -e "  ${RED}${BOLD}✗ neovim: luacov not found — cannot generate coverage report. FAIL${RESET}"
+        exit 1
+    fi
 fi
 
 if [[ ! -f luacov.report.out ]]; then
     echo -e "  ${RED}${BOLD}✗ neovim: luacov report generation failed. FAIL${RESET}"
     exit 1
 fi
+
+# Show summary section for CI debugging.
+echo "  luacov report summary:"
+awk '/^=+$/{s=1} s{print "    "$0}' luacov.report.out | tail -20
 
 # Parse the Total line from the summary: "Total  977  217  81.83%"
 nvim_pct=$(awk '/^Total/ { gsub(/%/, "", $NF); printf "%d", $NF }' luacov.report.out)
