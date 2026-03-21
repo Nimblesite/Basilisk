@@ -68,7 +68,7 @@ async function main(): Promise<void> {
 
         const debugBinary = process.env.BASILISK_EXECUTABLE_PATH ?? findBinary();
         const settings: Record<string, unknown> = {};
-        if (debugBinary) {
+        if (debugBinary !== undefined && debugBinary !== '') {
             settings['basilisk.executablePath'] = debugBinary;
         }
         fs.writeFileSync(
@@ -80,7 +80,7 @@ async function main(): Promise<void> {
         await runTests({
             extensionDevelopmentPath,
             extensionTestsPath,
-            ...(systemElectron ? { vscodeExecutablePath: systemElectron } : {}),
+            ...(systemElectron !== undefined ? { vscodeExecutablePath: systemElectron } : {}),
             launchArgs: ['--disable-extensions', tmpWorkspace],
         });
 

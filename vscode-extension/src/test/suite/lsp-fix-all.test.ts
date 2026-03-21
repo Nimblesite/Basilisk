@@ -15,8 +15,10 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 
 import {
+    COMMAND_WAIT_MS,
     DIAGNOSTIC_TIMEOUT_MS,
     NO_DIAGNOSTIC_WAIT_MS,
+    SERVER_START_WAIT_MS,
     waitForDiagnostics,
     waitForDiagnosticsCleared,
     openPythonFile,
@@ -24,6 +26,12 @@ import {
     setupLspTestSuite,
     teardownLspTestSuite,
 } from './test-helpers';
+
+/** Timeout (ms) for suite-level setup (server init + workspace). */
+const SUITE_SETUP_TIMEOUT_MS = 30_000;
+
+/** Time (ms) to wait for re-diagnosis after applying edits. */
+const RECHECK_WAIT_MS = 3_000;
 
 /** Filter diagnostics to only BSK-W0050 (redundant annotation). */
 function filterW0050(diagnostics: vscode.Diagnostic[]): vscode.Diagnostic[] {
@@ -35,11 +43,12 @@ function filterW0050(diagnostics: vscode.Diagnostic[]): vscode.Diagnostic[] {
     });
 }
 
+// eslint-disable-next-line max-lines-per-function
 suite('LSP Fix-All Tests', () => {
     let tmpDir: string;
 
     suiteSetup(async function () {
-        this.timeout(30_000);
+        this.timeout(SUITE_SETUP_TIMEOUT_MS);
         const result = await setupLspTestSuite('basilisk-fixall-test-');
         tmpDir = result.tmpDir;
     });
@@ -57,7 +66,7 @@ suite('LSP Fix-All Tests', () => {
     // 1. fixFile command applies edits and clears diagnostics
     // ----------------------------------------------------------------
     test('fixFile command applies edits and clears diagnostics', async function () {
-        this.timeout(DIAGNOSTIC_TIMEOUT_MS * 2 + 10_000);
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS * 2 + SERVER_START_WAIT_MS);
 
         // Open a file with a redundant annotation — W0050 is auto-fixable.
         const { uri } = await openPythonFile(
@@ -92,7 +101,7 @@ suite('LSP Fix-All Tests', () => {
     // 2. source.fixAll code action returned for fixable diagnostics
     // ----------------------------------------------------------------
     test('source.fixAll code action returned for fixable diagnostics', async function () {
-        this.timeout(DIAGNOSTIC_TIMEOUT_MS + 10_000);
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + SERVER_START_WAIT_MS);
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -119,7 +128,7 @@ suite('LSP Fix-All Tests', () => {
             vscode.CodeActionKind.SourceFixAll.value
         );
 
-        assert.ok(codeActions, 'Expected code actions result to be defined');
+        assert.ok(codeActions !== undefined, 'Expected code actions result to be defined');
         assert.ok(
             codeActions.length > 0,
             `Expected at least one source.fixAll code action, got ${codeActions.length}`
@@ -139,7 +148,7 @@ suite('LSP Fix-All Tests', () => {
     // 3. fixFile fixes multiple diagnostics across lines
     // ----------------------------------------------------------------
     test('fixFile fixes multiple diagnostics across lines', async function () {
-        this.timeout(DIAGNOSTIC_TIMEOUT_MS * 2 + 10_000);
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS * 2 + SERVER_START_WAIT_MS);
 
         // Two redundant annotations on separate lines — both fixable.
         const { uri } = await openPythonFile(
@@ -174,7 +183,7 @@ suite('LSP Fix-All Tests', () => {
     // 4. fixFile on clean file is a no-op
     // ----------------------------------------------------------------
     test('fixFile on clean file is a no-op', async function () {
-        this.timeout(DIAGNOSTIC_TIMEOUT_MS + 10_000);
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + SERVER_START_WAIT_MS);
 
         // Fully typed file — nothing to fix.
         const { doc, uri } = await openPythonFile(
@@ -192,7 +201,7 @@ suite('LSP Fix-All Tests', () => {
         await vscode.commands.executeCommand('basilisk.fixFile');
 
         // Brief wait for any edits to land.
-        await new Promise<void>((r) => setTimeout(r, 1_000));
+        await new Promise<void>((r) => setTimeout(r, COMMAND_WAIT_MS));
 
         const after = doc.getText();
         assert.strictEqual(
@@ -206,7 +215,7 @@ suite('LSP Fix-All Tests', () => {
     // 5. fixFile with mixed fixable and unfixable diagnostics
     // ----------------------------------------------------------------
     test('fixFile fixes what it can and leaves unfixable diagnostics', async function () {
-        this.timeout(DIAGNOSTIC_TIMEOUT_MS * 2 + 10_000);
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS * 2 + SERVER_START_WAIT_MS);
 
         // x: int = 42 produces W0050 (fixable — redundant annotation).
         // def broken(y) produces E0001+E0002 (fixable — missing annotations).
@@ -227,7 +236,7 @@ suite('LSP Fix-All Tests', () => {
         await vscode.commands.executeCommand('basilisk.fixFile');
 
         // Wait for edits to apply and re-diagnosis to happen.
-        await new Promise<void>((r) => setTimeout(r, 3_000));
+        await new Promise<void>((r) => setTimeout(r, RECHECK_WAIT_MS));
 
         // The W0050 should be gone — the redundant annotation was removed.
         const after = vscode.languages.getDiagnostics(uri);

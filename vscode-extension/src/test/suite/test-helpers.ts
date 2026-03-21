@@ -25,6 +25,15 @@ export const SERVER_START_WAIT_MS = 10_000;
 /** Maximum time (ms) to wait for a server-advertised command to appear. */
 export const COMMAND_WAIT_MS = 1_000;
 
+/** Timeout (ms) for basilisk binary version check via CLI. */
+const BINARY_VERSION_CHECK_TIMEOUT_MS = 5_000;
+
+/** Default interval (ms) for polling loops. */
+export const DEFAULT_POLL_INTERVAL_MS = 100;
+
+/** Interval (ms) between server readiness polls during setup. */
+const SERVER_READINESS_POLL_INTERVAL_MS = 200;
+
 
 /**
  * Resolves the absolute path to the basilisk binary built from Cargo.
@@ -32,7 +41,7 @@ export const COMMAND_WAIT_MS = 1_000;
  */
 export function findBasiliskBinary(): string | undefined {
     const envPath = process.env.BASILISK_EXECUTABLE_PATH;
-    if (envPath && fs.existsSync(envPath)) {
+    if (envPath !== undefined && envPath !== '' && fs.existsSync(envPath)) {
         return envPath;
     }
 
@@ -49,7 +58,7 @@ export function findBasiliskBinary(): string | undefined {
     }
 
     try {
-        execFileSync('basilisk', ['--version'], { timeout: 5000 });
+        execFileSync('basilisk', ['--version'], { timeout: BINARY_VERSION_CHECK_TIMEOUT_MS });
         return 'basilisk';
     } catch {
         return undefined;
@@ -60,7 +69,7 @@ export function findBasiliskBinary(): string | undefined {
  * Wait until at least one diagnostic appears for the given URI,
  * or until the timeout elapses — whichever comes first.
  */
-export function waitForDiagnostics(
+export async function waitForDiagnostics(
     uri: vscode.Uri,
     timeoutMs: number = DIAGNOSTIC_TIMEOUT_MS
 ): Promise<vscode.Diagnostic[]> {
@@ -93,7 +102,7 @@ export function waitForDiagnostics(
  * Wait for diagnostics to clear (reach zero) for the given URI,
  * or until the timeout elapses.
  */
-export function waitForDiagnosticsCleared(
+export async function waitForDiagnosticsCleared(
     uri: vscode.Uri,
     timeoutMs: number = DIAGNOSTIC_TIMEOUT_MS
 ): Promise<vscode.Diagnostic[]> {
@@ -143,9 +152,9 @@ export async function pollUntilResult<T>(
     predicateArg?: (result: T) => boolean,
 ): Promise<T> {
     const options: PollOptions<T> = typeof optionsOrFn === 'function'
-        ? { fn: optionsOrFn, predicate: predicateArg! }
+        ? { fn: optionsOrFn, predicate: predicateArg ?? (() => true) }
         : optionsOrFn;
-    const { fn, predicate, timeoutMs = 5_000, intervalMs = 100 } = options;
+    const { fn, predicate, timeoutMs = NO_DIAGNOSTIC_WAIT_MS, intervalMs = DEFAULT_POLL_INTERVAL_MS } = options;
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
         const result = await fn();
@@ -204,7 +213,7 @@ export async function setupLspTestSuite(
     tmpDirPrefix: string
 ): Promise<{ tmpDir: string; basiliskBinary: string }> {
     const binary = findBasiliskBinary();
-    if (!binary) {
+    if (binary === undefined) {
         throw new Error(
             'Basilisk binary not found. Build with: cargo build -p basilisk-cli'
         );
@@ -231,7 +240,7 @@ export async function setupLspTestSuite(
             );
             if (syms !== null && syms !== undefined) {break;}
         } catch { /* server not ready yet */ }
-        await new Promise<void>((r) => setTimeout(r, 200));
+        await new Promise<void>((r) => setTimeout(r, SERVER_READINESS_POLL_INTERVAL_MS));
     }
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
 
@@ -240,7 +249,7 @@ export async function setupLspTestSuite(
 
 /** Clean up a tmpDir created by setupLspTestSuite. */
 export function teardownLspTestSuite(tmpDir: string): void {
-    if (tmpDir && fs.existsSync(tmpDir)) {
+    if (tmpDir !== '' && fs.existsSync(tmpDir)) {
         fs.rmSync(tmpDir, { recursive: true, force: true });
     }
 }

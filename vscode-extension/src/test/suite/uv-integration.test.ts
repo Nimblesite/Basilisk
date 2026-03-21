@@ -7,11 +7,14 @@ import {
     teardownLspTestSuite,
 } from './test-helpers';
 
+const SUITE_SETUP_TIMEOUT_MS = 30_000;
+
+// eslint-disable-next-line max-lines-per-function
 suite('Basilisk uv Integration Tests', () => {
     let tmpDir: string;
 
     suiteSetup(async function () {
-        this.timeout(30_000);
+        this.timeout(SUITE_SETUP_TIMEOUT_MS);
         const result = await setupLspTestSuite('basilisk-uv-test-');
         tmpDir = result.tmpDir;
     });
