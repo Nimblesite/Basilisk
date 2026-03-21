@@ -82,28 +82,18 @@ if [[ ! -f luacov.stats.out ]]; then
     exit 1
 fi
 
-# Generate the luacov report from stats.
-# Neovim's LuaJIT writes the stats; the standalone luacov tool (possibly a
-# different Lua version) reads them.  Use nvim first so the report generator
-# uses the same LuaJIT runtime that collected the stats (no LUACOV so it
-# doesn't re-init the coverage runner).
-if command -v nvim &>/dev/null; then
-    nvim --headless --noplugin -l tests/generate_report.lua || true
-fi
+# Debug: show stats file size and first entries.
+echo "  luacov.stats.out size: $(wc -c < luacov.stats.out) bytes, $(wc -l < luacov.stats.out) lines"
+echo "  luacov.stats.out first 6 lines:"
+head -6 luacov.stats.out | while IFS= read -r line; do echo "    ${line:0:120}"; done
+
+# Generate coverage report. Our generate_report.lua parses the stats file
+# directly (bypassing luacov's reporter which has cross-platform issues with
+# include/exclude pattern matching on absolute paths).
+nvim --headless --noplugin -l tests/generate_report.lua 2>&1
 
 if [[ ! -f luacov.report.out ]]; then
-    if command -v luacov &>/dev/null; then
-        luacov
-    elif lua -e 'require("luacov.runner")' 2>/dev/null; then
-        lua -e 'require("luacov.runner").run_report()'
-    else
-        echo -e "  ${RED}${BOLD}✗ neovim: luacov not found — cannot generate coverage report. FAIL${RESET}"
-        exit 1
-    fi
-fi
-
-if [[ ! -f luacov.report.out ]]; then
-    echo -e "  ${RED}${BOLD}✗ neovim: luacov report generation failed. FAIL${RESET}"
+    echo -e "  ${RED}${BOLD}✗ neovim: coverage report generation failed. FAIL${RESET}"
     exit 1
 fi
 
