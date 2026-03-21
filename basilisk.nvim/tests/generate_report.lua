@@ -18,9 +18,17 @@ end
 
 local ok, reporter = pcall(require, "luacov.reporter")
 if not ok then
-  io.stderr:write("luacov.reporter not found: " .. tostring(reporter) .. "\n")
+  print("luacov.reporter not found: " .. tostring(reporter))
   os.exit(1)
 end
+
+-- Debug: verify the config file and stats file are accessible.
+local cwd = vim.fn.getcwd()
+print("  generate_report: cwd=" .. cwd)
+local config_exists = vim.fn.filereadable(".luacov") == 1
+print("  generate_report: .luacov exists=" .. tostring(config_exists))
+local stats_exists = vim.fn.filereadable("luacov.stats.out") == 1
+print("  generate_report: luacov.stats.out exists=" .. tostring(stats_exists))
 
 reporter.report()
 os.exit(0)

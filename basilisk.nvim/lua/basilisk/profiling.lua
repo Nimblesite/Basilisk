@@ -4,6 +4,7 @@
 --- quickfix lists, and heat map extmarks.
 
 local log = require("basilisk.log")
+local ui = require("basilisk.ui")
 
 local M = {}
 
@@ -14,55 +15,10 @@ local ns = vim.api.nvim_create_namespace("basilisk-profiling")
 ---@type string?
 local session_id = nil
 
---- Open a floating window with the given lines.
----@param title string
----@param lines string[]
----@return integer buf, integer win
-local function open_float(title, lines)
-  local buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-  vim.bo[buf].modifiable = false
-  vim.bo[buf].bufhidden = "wipe"
-  vim.bo[buf].filetype = "basilisk-profiling"
-
-  local width = 80
-  local height = math.min(#lines, 30)
-  for _, line in ipairs(lines) do
-    width = math.max(width, #line + 2)
-  end
-  width = math.min(width, math.floor(vim.o.columns * 0.8))
-
-  local win = vim.api.nvim_open_win(buf, true, {
-    relative = "editor",
-    width = width,
-    height = height,
-    col = math.floor((vim.o.columns - width) / 2),
-    row = math.floor((vim.o.lines - height) / 2),
-    style = "minimal",
-    border = "rounded",
-    title = " " .. title .. " ",
-    title_pos = "center",
-  })
-
-  -- Close on q.
-  vim.keymap.set("n", "q", function()
-    vim.api.nvim_win_close(win, true)
-  end, { buffer = buf })
-
-  return buf, win
-end
-
---- Get the first active basilisk LSP client, or nil.
----@return vim.lsp.Client?
-local function get_client()
-  local clients = vim.lsp.get_clients({ name = "basilisk" })
-  return clients[1]
-end
-
 --- Start profiling.
 ---@param pid? integer Optional process ID to profile.
 function M.start(pid)
-  local client = get_client()
+  local client = ui.get_client()
   if not client then
     log.warn("no active LSP client")
     return
@@ -90,7 +46,7 @@ end
 
 --- Stop profiling and display results.
 function M.stop()
-  local client = get_client()
+  local client = ui.get_client()
   if not client then
     log.warn("no active LSP client")
     return
@@ -118,7 +74,7 @@ end
 
 --- Take a snapshot without stopping.
 function M.snapshot()
-  local client = get_client()
+  local client = ui.get_client()
   if not client then
     log.warn("no active LSP client")
     return
@@ -147,7 +103,7 @@ end
 ---@param result? table Profiling results from the LSP server.
 function M.display_results(result)
   if not result then
-    open_float("Profiling Results", { "No profiling data available." })
+    ui.open_float("Profiling Results", { "No profiling data available." }, "basilisk-profiling")
     return
   end
 
@@ -177,7 +133,7 @@ function M.display_results(result)
   end
 
   -- Show floating window.
-  open_float("Profiling Results", lines)
+  ui.open_float("Profiling Results", lines, "basilisk-profiling")
 
   -- Populate quickfix list.
   if #qf_items > 0 then

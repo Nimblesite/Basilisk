@@ -4,22 +4,16 @@
 --- surface as :Basilisk* user commands.
 
 local log = require("basilisk.log")
+local ui = require("basilisk.ui")
 
 local M = {}
-
---- Get the first active basilisk LSP client, or nil.
----@return vim.lsp.Client?
-local function get_client()
-  local clients = vim.lsp.get_clients({ name = "basilisk" })
-  return clients[1]
-end
 
 --- Send an LSP executeCommand request.
 ---@param command string
 ---@param args? table
 ---@param callback? fun(err: any, result: any)
 local function execute_command(command, args, callback)
-  local client = get_client()
+  local client = ui.get_client()
   if not client then
     log.warn("no active LSP client")
     return
@@ -33,7 +27,7 @@ end
 --- Open a floating window showing server info.
 ---@param config BasiliskConfig
 local function show_info_float(config)
-  local client = get_client()
+  local client = ui.get_client()
   local binary_mod = require("basilisk.binary")
   local lsp_mod = require("basilisk.lsp")
 
@@ -65,31 +59,7 @@ local function show_info_float(config)
   lines[#lines + 1] = "  Tests:      " .. (config.test_explorer.enabled and "enabled" or "disabled")
   lines[#lines + 1] = "  uv:         " .. (config.uv.enabled and "enabled" or "disabled")
 
-  local buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-  vim.bo[buf].modifiable = false
-  vim.bo[buf].bufhidden = "wipe"
-
-  local width = 50
-  for _, line in ipairs(lines) do
-    width = math.max(width, #line + 2)
-  end
-
-  local win = vim.api.nvim_open_win(buf, true, {
-    relative = "editor",
-    width = width,
-    height = #lines,
-    col = math.floor((vim.o.columns - width) / 2),
-    row = math.floor((vim.o.lines - #lines) / 2),
-    style = "minimal",
-    border = "rounded",
-    title = " Basilisk Info ",
-    title_pos = "center",
-  })
-
-  vim.keymap.set("n", "q", function()
-    vim.api.nvim_win_close(win, true)
-  end, { buffer = buf })
+  ui.open_float("Basilisk Info", lines)
 end
 
 --- Register all :Basilisk* commands.

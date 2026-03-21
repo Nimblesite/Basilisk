@@ -4,6 +4,7 @@
 --- to spawn debugpy sessions. Implements DapTcpProxy using vim.uv (libuv).
 
 local log = require("basilisk.log")
+local ui = require("basilisk.ui")
 
 local M = {}
 
@@ -169,13 +170,6 @@ function M.create_proxy(remote_host, remote_port, callback)
   callback(addr.port)
 end
 
---- Get the first active basilisk LSP client, or nil.
----@return vim.lsp.Client?
-local function get_client()
-  local clients = vim.lsp.get_clients({ name = "basilisk" })
-  return clients[1]
-end
-
 --- Set up DAP integration.
 ---@param config BasiliskConfig
 function M.setup(config)
@@ -192,7 +186,7 @@ function M.setup(config)
 
   -- Register the basilisk DAP adapter.
   dap.adapters.basilisk = function(callback, dap_config)
-    local client = get_client()
+    local client = ui.get_client()
     if not client then
       log.error("no active basilisk LSP client for debug session")
       return
@@ -299,7 +293,7 @@ end
 
 --- Stop the active debug session.
 function M.stop_session()
-  local client = get_client()
+  local client = ui.get_client()
   if not client or not M._active_session_id then
     return
   end

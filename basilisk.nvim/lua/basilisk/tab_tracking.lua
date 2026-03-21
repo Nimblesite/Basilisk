@@ -5,19 +5,13 @@
 --- we track buffer visibility and send didClose manually.
 
 local log = require("basilisk.log")
+local ui = require("basilisk.ui")
 
 local M = {}
 
 --- Set of URIs we know are visible in windows.
 ---@type table<string, boolean>
 local known_open_uris = {}
-
---- Get the first active basilisk LSP client, or nil.
----@return vim.lsp.Client?
-local function get_client()
-  local clients = vim.lsp.get_clients({ name = "basilisk" })
-  return clients[1]
-end
 
 --- Collect all Python file URIs currently visible in windows.
 ---@return table<string, boolean>
@@ -42,7 +36,7 @@ local function check_closed_tabs(config)
     return
   end
 
-  local client = get_client()
+  local client = ui.get_client()
   if not client then
     return
   end

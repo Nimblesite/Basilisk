@@ -88,7 +88,7 @@ fi
 # uses the same LuaJIT runtime that collected the stats (no LUACOV so it
 # doesn't re-init the coverage runner).
 if command -v nvim &>/dev/null; then
-    nvim --headless --noplugin -l tests/generate_report.lua 2>/dev/null || true
+    nvim --headless --noplugin -l tests/generate_report.lua || true
 fi
 
 if [[ ! -f luacov.report.out ]]; then

@@ -4,6 +4,7 @@
 --- paths in floating windows.
 
 local log = require("basilisk.log")
+local ui = require("basilisk.ui")
 
 local M = {}
 
@@ -27,53 +28,9 @@ local COMMON_TYPES = {
   "float",
 }
 
---- Open a floating window with the given lines.
----@param title string
----@param lines string[]
----@return integer buf, integer win
-local function open_float(title, lines)
-  local buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-  vim.bo[buf].modifiable = false
-  vim.bo[buf].bufhidden = "wipe"
-  vim.bo[buf].filetype = "basilisk-memory"
-
-  local width = 80
-  local height = math.min(#lines, 30)
-  for _, line in ipairs(lines) do
-    width = math.max(width, #line + 2)
-  end
-  width = math.min(width, math.floor(vim.o.columns * 0.8))
-
-  local win = vim.api.nvim_open_win(buf, true, {
-    relative = "editor",
-    width = width,
-    height = height,
-    col = math.floor((vim.o.columns - width) / 2),
-    row = math.floor((vim.o.lines - height) / 2),
-    style = "minimal",
-    border = "rounded",
-    title = " " .. title .. " ",
-    title_pos = "center",
-  })
-
-  vim.keymap.set("n", "q", function()
-    vim.api.nvim_win_close(win, true)
-  end, { buffer = buf })
-
-  return buf, win
-end
-
---- Get the first active basilisk LSP client, or nil.
----@return vim.lsp.Client?
-local function get_client()
-  local clients = vim.lsp.get_clients({ name = "basilisk" })
-  return clients[1]
-end
-
 --- Start memory leak tracking.
 function M.start()
-  local client = get_client()
+  local client = ui.get_client()
   if not client then
     log.warn("no active LSP client")
     return
@@ -96,7 +53,7 @@ end
 
 --- Stop memory tracking and display leak report.
 function M.stop()
-  local client = get_client()
+  local client = ui.get_client()
   if not client then
     log.warn("no active LSP client")
     return
@@ -125,7 +82,7 @@ end
 --- Query retention paths for a type.
 ---@param type_name string
 function M.refs(type_name)
-  local client = get_client()
+  local client = ui.get_client()
   if not client then
     log.warn("no active LSP client")
     return
@@ -149,7 +106,7 @@ end
 ---@param result? table Leak report from the LSP server.
 function M.display_leak_report(result)
   if not result then
-    open_float("Memory Leak Report", { "No leak data available." })
+    ui.open_float("Memory Leak Report", { "No leak data available." }, "basilisk-memory")
     return
   end
 
@@ -172,7 +129,7 @@ function M.display_leak_report(result)
     lines[#lines + 1] = "  No leaks detected."
   end
 
-  open_float("Memory Leak Report", lines)
+  ui.open_float("Memory Leak Report", lines, "basilisk-memory")
 end
 
 --- Display retention paths in a floating window.
@@ -180,7 +137,7 @@ end
 ---@param result? table Retention paths from the LSP server.
 function M.display_retention_paths(type_name, result)
   if not result then
-    open_float("Retention Paths: " .. type_name, { "No retention data available." })
+    ui.open_float("Retention Paths: " .. type_name, { "No retention data available." }, "basilisk-memory")
     return
   end
 
@@ -200,7 +157,7 @@ function M.display_retention_paths(type_name, result)
     lines[#lines + 1] = "  No retention paths found."
   end
 
-  open_float("Retention Paths: " .. type_name, lines)
+  ui.open_float("Retention Paths: " .. type_name, lines, "basilisk-memory")
 end
 
 --- Completion function for :BasiliskMemRefs.

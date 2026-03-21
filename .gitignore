@@ -16,6 +16,8 @@ benchmarks/results/
 # Python
 .venv/
 .mypy_cache/
+__pycache__/
+.pytest_cache/
 
 # Node / VS Code extension
 node_modules/
@@ -44,3 +46,7 @@ basilisk-zed/dist/
 vscode-extension/coverage/
 
 coverage/
+
+basilisk.nvim/luacov.report.out
+
+basilisk.nvim/luacov.stats.out
