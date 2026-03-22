@@ -6,6 +6,7 @@ use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::AbortHandle;
 
+pub(super) mod activity_panel;
 pub(super) mod adoption;
 pub(super) mod commands;
 pub(super) mod document;
@@ -13,6 +14,7 @@ pub(super) mod handlers;
 pub(super) mod init;
 pub(super) mod refactor_commands;
 pub(super) mod rule_override;
+pub(super) mod test_handlers;
 pub(super) mod uv_handlers;
 
 macro_rules! diaglog {
@@ -55,6 +57,39 @@ use crate::workspace::WorkspaceIndex;
 /// Debounce interval for file-watcher notifications (milliseconds).
 pub(super) const FILE_WATCHER_DEBOUNCE_MS: u64 = 200;
 
+/// Debounce interval for `basilisk/moduleChanged` notifications (milliseconds).
+pub(super) const MODULE_CHANGED_DEBOUNCE_MS: u64 = 300;
+
+/// Runtime test explorer configuration received from the client.
+#[derive(Debug, Clone)]
+pub(super) struct TestExplorerConfig {
+    /// Whether test discovery is enabled.
+    pub(super) enabled: bool,
+    /// Test framework: `pytest`, `unittest`, or `auto`.
+    pub(super) framework: String,
+    /// Path to the pytest executable.
+    pub(super) pytest_path: String,
+    /// Additional test runner arguments.
+    pub(super) args: Vec<String>,
+    /// Re-discover tests on file save.
+    pub(super) auto_discover_on_save: bool,
+    /// Use `uv run` when a uv project is detected.
+    pub(super) use_uv_run: bool,
+}
+
+impl Default for TestExplorerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            framework: "auto".to_owned(),
+            pytest_path: "pytest".to_owned(),
+            args: Vec::new(),
+            auto_discover_on_save: true,
+            use_uv_run: true,
+        }
+    }
+}
+
 /// The Basilisk LSP server.
 pub struct LspServer {
     /// LSP client for sending notifications back to the editor.
@@ -67,6 +102,10 @@ pub struct LspServer {
     pub(super) debug_manager: crate::debug::DebugSessionManager,
     /// Debounced file-watcher task.
     pub(super) watcher_debounce: Mutex<Option<AbortHandle>>,
+    /// Debounced module-changed notification task.
+    pub(super) module_changed_debounce: Mutex<Option<AbortHandle>>,
+    /// Test explorer configuration from the client.
+    pub(super) test_config: RwLock<TestExplorerConfig>,
 }
 
 impl LspServer {
@@ -79,6 +118,8 @@ impl LspServer {
             workspace_roots: RwLock::new(Vec::new()),
             debug_manager: crate::debug::DebugSessionManager::new(),
             watcher_debounce: Mutex::new(None),
+            module_changed_debounce: Mutex::new(None),
+            test_config: RwLock::new(TestExplorerConfig::default()),
         }
     }
 

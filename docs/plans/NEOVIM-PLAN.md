@@ -152,19 +152,8 @@ Phases 1–11 mostly COMPLETE. 189 tests (80 unit + 103 real LSP e2e + 6 screens
 
 ### Phase 4: Test Explorer
 
-- [x] `lua/basilisk/testing.lua` — test explorer module
-- [x] Discovery — run `pytest --collect-only -q`, parse output into hierarchical tree (File > Class > Function)
-- [x] Tree UI — dedicated side-panel buffer with `basilisk-tests` filetype
-  - [x] Hierarchical rendering with status icons (pass/fail/running/unknown)
-  - [x] Keymaps: `<CR>` run, `d` debug, `R` re-run failed, `q` close
-  - [x] Configurable position (`right`/`left`/`bottom`) and width
-- [x] `:BasiliskTestDiscover` — refresh test tree
-- [x] `:BasiliskTestRun [id]` — spawn pytest subprocess, parse output, update tree status
-- [x] `:BasiliskTestDebug [id]` — trigger nvim-dap with specific test as target
-- [x] `:BasiliskTestToggle` — toggle test explorer panel
-- [x] Inline failures — `vim.diagnostic.set()` in `basilisk-test` namespace
-- [x] Coverage display — parse `coverage.xml`, render as extmark gutter highlights
-- [x] Auto-discover on save (respects `basilisk.testExplorer.autoDiscoverOnSave` setting)
+> **DONE.** See `LSP-TEST-INTEGRATION-PLAN.md` for the cross-editor test integration plan and remaining TODO items.
+> Neovim-specific tasks below are complete.
 
 ### Phase 5: Keymaps & ftplugin
 

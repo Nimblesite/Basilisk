@@ -277,6 +277,19 @@ function M.register(config)
     testing.toggle(config)
   end, { desc = "Toggle test explorer panel" })
 
+  -- Activity panel commands.
+
+  local modules_panel = require("basilisk.modules")
+  local type_health_panel = require("basilisk.type_health")
+
+  vim.api.nvim_create_user_command("BasiliskModules", function()
+    modules_panel.toggle()
+  end, { desc = "Toggle module explorer panel" })
+
+  vim.api.nvim_create_user_command("BasiliskHealth", function()
+    type_health_panel.toggle()
+  end, { desc = "Toggle type health panel" })
+
   -- uv commands.
 
   vim.api.nvim_create_user_command("BasiliskUvSync", function()

@@ -163,9 +163,9 @@ fn run_check(paths: &[String], format: OutputFormat) -> u8 {
                     println!(
                         "Found {} diagnostic{} ({} error{}).",
                         total,
-                        if total == 1 { "" } else { "s" },
+                        pluralise(total),
                         error_count,
-                        if error_count == 1 { "" } else { "s" },
+                        pluralise(error_count),
                     );
                     u8::from(error_count > 0)
                 }
@@ -228,6 +228,15 @@ fn process_file(path: &str) -> Result<(Vec<basilisk_checker::Diagnostic>, String
     let resolved = basilisk_resolver::resolve(&parsed).map_err(|e| e.to_string())?;
     let diags = basilisk_checker::check(&resolved);
     Ok((diags, source))
+}
+
+/// Return `"s"` for counts != 1, empty string otherwise.
+pub(crate) fn pluralise(count: usize) -> &'static str {
+    if count == 1 {
+        ""
+    } else {
+        "s"
+    }
 }
 
 pub(crate) fn collect_python_files(

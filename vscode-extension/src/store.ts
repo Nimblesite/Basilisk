@@ -67,17 +67,39 @@ interface StoreSignals {
   logSink: Signal<LogSink | undefined>;
   lspState: Signal<LspState>;
   readyHandle: Signal<ReadyHandle | undefined>;
+  /** Disposables for client-registered commands — disposed on LSP stop/restart. */
+  commandDisposables: vscode.Disposable[];
+  /** Disposables for server-advertised command registrations — disposed on LSP stop/restart. */
+  serverCommandDisposables: vscode.Disposable[];
 }
 
 // ── Private helpers operating on StoreSignals ─────────────────────────────
 
-/** Extract commands from the client's initializeResult. */
+/** Dispose all server-advertised command registrations. */
+function disposeServerCommands(signals: StoreSignals): void {
+  for (const d of signals.serverCommandDisposables) {
+    d.dispose();
+  }
+  signals.serverCommandDisposables = [];
+}
+
+/**
+ * Extract commands from the client's initializeResult and register them
+ * with VS Code so they appear in getCommands() and the command palette.
+ *
+ * Each command handler executes the command through the LSP client via
+ * workspace/executeCommand. This replaces the vscode-languageclient
+ * ExecuteCommandFeature which was removed to prevent double-registration.
+ */
 function syncServerCommands(signals: StoreSignals): void {
+  disposeServerCommands(signals);
+
   const commands = signals.client.value?.initializeResult?.capabilities?.executeCommandProvider?.commands;
   if (!Array.isArray(commands)) {
     signals.serverCommands.value = new Set();
     return;
   }
+
   const next = new Set<string>();
   for (const cmd of commands) {
     if (typeof cmd === "string") {
@@ -85,6 +107,13 @@ function syncServerCommands(signals: StoreSignals): void {
     }
   }
   signals.serverCommands.value = next;
+
+  // Server commands are NOT registered via vscode.commands.registerCommand.
+  // They are declared in package.json contributes.commands (making them
+  // available in the command palette) and executed through the LSP
+  // client's executeCommand middleware. The ExecuteCommandFeature was
+  // removed from the LanguageClient to prevent double-registration on
+  // reload — our middleware handles the routing instead.
 }
 
 /** Resolve the ready handle and clear it. */
@@ -111,22 +140,40 @@ interface CommandRegistration {
   commandId: string;
 }
 
-/** Register a client command with VS Code and track it. */
+/**
+ * Register a client command with VS Code and track it.
+ *
+ * The disposable is stored ONLY in commandDisposables — NOT in
+ * context.subscriptions. Rationale: disposeClientCommands() calls
+ * dispose() on every entry when the LSP restarts or stops. If the
+ * same disposable also lived in context.subscriptions, deactivate()
+ * would dispose it a second time (double-dispose). Per the VS Code
+ * API, registerCommand returns a Disposable whose dispose() method
+ * unregisters the command — calling it twice is undefined behaviour.
+ */
 function registerCommand(
   reg: CommandRegistration,
   handler: (...args: unknown[]) => unknown
 ): void {
-  if (reg.signals.clientCommands.value.has(reg.commandId)) {
-    return;
-  }
   const disposable = vscode.commands.registerCommand(reg.commandId, handler);
-  reg.context.subscriptions.push(disposable);
+  reg.signals.commandDisposables.push(disposable);
   const next = new Set(reg.signals.clientCommands.value);
   next.add(reg.commandId);
   reg.signals.clientCommands.value = next;
 }
 
-/** Register all client-only commands. Called once when LSP reaches Running. */
+/** Dispose all registered commands (client AND server) so they can be re-registered fresh. */
+function disposeAllCommands(signals: StoreSignals): void {
+  for (const d of signals.commandDisposables) {
+    d.dispose();
+  }
+  signals.commandDisposables = [];
+  signals.clientCommands.value = new Set();
+  disposeServerCommands(signals);
+  signals.serverCommands.value = new Set();
+}
+
+/** Register all client-only commands. Called when LSP reaches Running. */
 function registerClientCommands(signals: StoreSignals, context: vscode.ExtensionContext): void {
   registerCommand({ signals, context, commandId: "basilisk.restartServer" }, async () => {
     const lspClient = signals.client.value;
@@ -165,6 +212,7 @@ function bindClientStateListener(
 
     if (newState === State.Running) {
       signals.lspState.value = "running";
+      disposeAllCommands(signals);
       syncServerCommands(signals);
       registerClientCommands(signals, context);
       resolveLspReady(signals);
@@ -172,6 +220,7 @@ function bindClientStateListener(
     }
 
     if (newState === State.Stopped) {
+      disposeAllCommands(signals);
       signals.lspState.value = "stopped";
       return;
     }
@@ -217,7 +266,7 @@ function resetSignals(signals: StoreSignals): void {
 
 // ── Factory ───────────────────────────────────────────────────────────────
 
-export function createStore(): Store {
+export function createStore(onReset?: () => void): Store {
   const signals: StoreSignals = {
     client: signal<LanguageClient | undefined>(undefined),
     serverCommands: signal<ReadonlySet<string>>(new Set()),
@@ -227,6 +276,8 @@ export function createStore(): Store {
     logSink: signal<LogSink | undefined>(undefined),
     lspState: signal<LspState>("idle"),
     readyHandle: signal<ReadyHandle | undefined>(undefined),
+    commandDisposables: [],
+    serverCommandDisposables: [],
   };
 
   const isServerReady = computed(() => signals.client.value?.isRunning() === true);
@@ -266,7 +317,9 @@ export function createStore(): Store {
       return awaitLspReady(signals, timeoutMs);
     },
     reset(): void {
+      disposeAllCommands(signals);
       resetSignals(signals);
+      onReset?.();
     },
   };
 }

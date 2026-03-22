@@ -96,6 +96,13 @@ fn all_slash_commands_produce_output() {
         slash_commands::MEMLEAK,
         slash_commands::MEMSTOP,
         slash_commands::MEMREFS,
+        slash_commands::MODULES,
+        slash_commands::SYMBOLS,
+        slash_commands::HEALTH,
+        slash_commands::BASILISK,
+        slash_commands::TESTS,
+        slash_commands::RUNTESTS,
+        slash_commands::TESTFILE,
     ];
     for cmd in commands {
         let (label, text) = slash_command_output(cmd, &[]).expect(cmd);
@@ -113,6 +120,13 @@ fn slash_output_is_markdown() {
         slash_commands::MEMLEAK,
         slash_commands::MEMSTOP,
         slash_commands::MEMREFS,
+        slash_commands::MODULES,
+        slash_commands::SYMBOLS,
+        slash_commands::HEALTH,
+        slash_commands::BASILISK,
+        slash_commands::TESTS,
+        slash_commands::RUNTESTS,
+        slash_commands::TESTFILE,
     ];
     for cmd in commands {
         let (_, text) = slash_command_output(cmd, &[]).expect(cmd);
@@ -390,4 +404,193 @@ fn v_prefix_stripped() {
 #[test]
 fn v_prefix_same() {
     assert!(!is_newer_version("v0.1.0", "v0.1.0"));
+}
+
+// ── Test slash commands ─────────────────────────────────────────────────
+
+#[test]
+fn tests_discovery_workspace() {
+    let (label, text) = slash_command_output("tests", &[]).expect("should succeed");
+    assert_eq!(label, "Test Discovery");
+    assert!(text.contains("workspace"));
+    assert!(text.contains("pytest"));
+    assert!(text.contains("unittest"));
+    assert!(text.contains("def test_*"));
+}
+
+#[test]
+fn tests_discovery_file() {
+    let args = vec!["test_api.py".to_string()];
+    let (label, text) = slash_command_output("tests", &args).expect("should succeed");
+    assert_eq!(label, "Test Discovery");
+    assert!(text.contains("test_api.py"));
+}
+
+#[test]
+fn runtests_all() {
+    let (label, text) = slash_command_output("runtests", &[]).expect("should succeed");
+    assert_eq!(label, "Running Tests");
+    assert!(text.contains("all tests"));
+    assert!(text.contains("pytest"));
+    assert!(text.contains("uv run pytest"));
+}
+
+#[test]
+fn runtests_specific() {
+    let args = vec!["tests/test_api.py::test_login".to_string()];
+    let (label, text) = slash_command_output("runtests", &args).expect("should succeed");
+    assert_eq!(label, "Running Tests");
+    assert!(text.contains("test_login"));
+}
+
+#[test]
+fn testfile_default() {
+    let (label, text) = slash_command_output("testfile", &[]).expect("should succeed");
+    assert_eq!(label, "File Tests");
+    assert!(text.contains("current file"));
+    assert!(text.contains("uv run pytest"));
+}
+
+#[test]
+fn testfile_specific() {
+    let args = vec!["test_models.py".to_string()];
+    let (label, text) = slash_command_output("testfile", &args).expect("should succeed");
+    assert_eq!(label, "File Tests");
+    assert!(text.contains("test_models.py"));
+}
+
+#[test]
+fn runtests_completions() {
+    let completions = slash_completions("runtests");
+    assert_eq!(completions.len(), 1);
+    assert_eq!(completions[0].0, "<test_id>");
+    assert!(!completions[0].2, "run_command should be false");
+}
+
+#[test]
+fn testfile_completions() {
+    let completions = slash_completions("testfile");
+    assert_eq!(completions.len(), 1);
+    assert_eq!(completions[0].0, "<file.py>");
+}
+
+#[test]
+fn tests_no_completions() {
+    let completions = slash_completions("tests");
+    assert!(completions.is_empty());
+}
+
+// ── Test explorer workspace config ──────────────────────────────────────
+
+#[test]
+fn default_config_has_test_explorer() {
+    let config = default_workspace_config();
+    assert_eq!(config["testExplorer"]["enabled"], true);
+    assert_eq!(config["testExplorer"]["framework"], "auto");
+    assert_eq!(config["testExplorer"]["pytestPath"], "pytest");
+    assert!(config["testExplorer"]["args"].is_array());
+    assert_eq!(config["testExplorer"]["autoDiscoverOnSave"], true);
+    assert_eq!(config["testExplorer"]["useUvRun"], true);
+}
+
+#[test]
+fn wrap_config_preserves_test_explorer() {
+    let inner = serde_json::json!({
+        "testExplorer": {
+            "enabled": false,
+            "framework": "unittest",
+            "pytestPath": "/usr/bin/pytest",
+            "useUvRun": false
+        }
+    });
+    let wrapped = wrap_config(&inner);
+    assert_eq!(wrapped["basilisk"]["testExplorer"]["enabled"], false);
+    assert_eq!(wrapped["basilisk"]["testExplorer"]["framework"], "unittest");
+    assert_eq!(
+        wrapped["basilisk"]["testExplorer"]["pytestPath"],
+        "/usr/bin/pytest"
+    );
+    assert_eq!(wrapped["basilisk"]["testExplorer"]["useUvRun"], false);
+}
+
+// ── Activity panel slash command tests ────────────────────────────────
+
+#[test]
+fn modules_workspace_scope() {
+    let (label, text) = slash_command_output(slash_commands::MODULES, &[]).expect("should succeed");
+    assert_eq!(label, "Workspace Modules");
+    assert!(text.contains("entire workspace"));
+    assert!(text.contains("basilisk.workspaceModules"));
+}
+
+#[test]
+fn modules_prefix_scope() {
+    let args = vec!["myapp.api".to_string()];
+    let (label, text) =
+        slash_command_output(slash_commands::MODULES, &args).expect("should succeed");
+    assert_eq!(label, "Workspace Modules");
+    assert!(text.contains("prefix `myapp.api`"));
+}
+
+#[test]
+fn symbols_output() {
+    let args = vec!["myapp.models".to_string()];
+    let (label, text) =
+        slash_command_output(slash_commands::SYMBOLS, &args).expect("should succeed");
+    assert_eq!(label, "Module Symbols");
+    assert!(text.contains("myapp.models"));
+    assert!(text.contains("basilisk.workspaceModules"));
+}
+
+#[test]
+fn symbols_default() {
+    let (label, text) = slash_command_output(slash_commands::SYMBOLS, &[]).expect("should succeed");
+    assert_eq!(label, "Module Symbols");
+    assert!(text.contains("all modules"));
+}
+
+#[test]
+fn health_output() {
+    let (label, text) = slash_command_output(slash_commands::HEALTH, &[]).expect("should succeed");
+    assert_eq!(label, "Type Health");
+    assert!(text.contains("basilisk.typeHealth"));
+    assert!(text.contains("Coverage"));
+    assert!(text.contains("Module"));
+}
+
+#[test]
+fn basilisk_info_output() {
+    let (label, text) =
+        slash_command_output(slash_commands::BASILISK, &[]).expect("should succeed");
+    assert_eq!(label, "Basilisk Info");
+    assert!(text.contains("strict-by-default"));
+    assert!(text.contains("/modules"));
+    assert!(text.contains("/health"));
+    assert!(text.contains("basilisk-python.dev"));
+}
+
+#[test]
+fn modules_completions() {
+    let completions = slash_completions(slash_commands::MODULES);
+    assert_eq!(completions.len(), 1);
+    assert_eq!(completions[0].0, "<module_prefix>");
+}
+
+#[test]
+fn symbols_completions() {
+    let completions = slash_completions(slash_commands::SYMBOLS);
+    assert_eq!(completions.len(), 1);
+    assert_eq!(completions[0].0, "<module_name>");
+}
+
+#[test]
+fn health_no_completions() {
+    let completions = slash_completions(slash_commands::HEALTH);
+    assert!(completions.is_empty());
+}
+
+#[test]
+fn basilisk_no_completions() {
+    let completions = slash_completions(slash_commands::BASILISK);
+    assert!(completions.is_empty());
 }

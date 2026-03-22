@@ -262,19 +262,8 @@ All profiling/memory/test LSP commands (defined in LSP-ARCHITECTURE-SPEC.md) sur
 
 ## Test Explorer
 
-> See LSP-ARCHITECTURE-SPEC.md for test discovery features, supported frameworks, and configuration.
-
-### Neovim-Specific Implementation
-
-- **Discovery**: Run `pytest --collect-only -q`, parse output into tree
-- **Tree UI**: Dedicated side-panel buffer with `basilisk-tests` filetype
-  - Hierarchical rendering: File > Class > Function
-  - Status icons: pass/fail/running/unknown
-  - Keymaps: `<CR>` run, `d` debug, `R` re-run failed, `q` close
-- **Run**: Spawn pytest subprocess, parse output, update tree status
-- **Debug**: Trigger nvim-dap with specific test as target
-- **Inline failures**: `vim.diagnostic.set()` in `basilisk-test` namespace
-- **Coverage**: Parse `coverage.xml`, display as extmark gutter highlights
+> See `LSP-TEST-INTEGRATION-SPEC.md` for full test explorer architecture, data model, configuration, and features.
+> Neovim-specific wiring (tree UI, keymaps, nvim-dap integration) is documented in the Neovim section of that spec.
 
 ---
 

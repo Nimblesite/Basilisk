@@ -398,3 +398,4 @@ These are explicitly **out of scope**:
 | [CHECKER-CROSS-MODULE-PLAN.md](../plans/CHECKER-CROSS-MODULE-PLAN.md) | Phase 1 (stub infrastructure) gains lock-file-aware stub detection |
 | [LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md) | New commands, settings, and file watchers added |
 | [LSP-MASS-AUTOFIX-SPEC.md](LSP-MASS-AUTOFIX-SPEC.md) | Mass autofix can batch `uv add --dev` for all missing stubs |
+| [LSP-TEST-INTEGRATION-SPEC.md](LSP-TEST-INTEGRATION-SPEC.md) | `uv run pytest` for deterministic test execution, `PackageRegistry` verifies pytest/pytest-cov availability, code actions to install missing test dependencies |

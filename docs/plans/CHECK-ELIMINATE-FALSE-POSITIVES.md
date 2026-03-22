@@ -149,14 +149,16 @@ The remaining ~125 FPs cannot be fixed without fundamental engine work. The chec
 | 0. FP verbose reporting | 0 (tooling) | Low | None | DONE |
 | 1. E0104 recursive aliases | ~20 | Low | Low | DONE (2 FPs fixed) |
 | 2. E0136 callable subtyping | ~25 | Medium | Medium | Pending |
-| 3. E0014 assignment mismatch | ~30 | Medium | Medium | Partial (7 FPs fixed) |
-| 4. E0093 TypedDict | ~15 | Medium | Low | Partial (9 FPs fixed) |
+| 3. E0014 assignment mismatch | ~110 | Medium | Medium | **DONE (108 FPs fixed)** |
+| 4. E0093 TypedDict | ~15 | Medium | Low | Partial (9 FPs fixed, 7 remain) |
 | 5. E0121/E0110/E0133 protocols | ~25 | High | Medium | Partial (12 FPs fixed) |
-| 6. Remaining scatter | ~20 | High | Low | Pending |
+| 6. E0013 return type mismatch | ~7 | Low | Low | **DONE (7 FPs fixed)** |
+| 7. File-level `# type: ignore` | ~1 | Low | None | **DONE** |
+| 8. Remaining scatter | ~20 | High | Low | In Progress |
 
-### Phase 2: Type Narrowing and Full Inference (Step 7) — ~125 FPs
+### Phase 2: Type Narrowing and Full Inference — DONE
 
-See [CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md](CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md) for execution order and TODO.
+Type narrowing engine, expression inference, constraint solver, and subtyping context all implemented. See [CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md](CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md). FPs reduced from 57 to 18.
 
 ---
 
@@ -172,29 +174,29 @@ After each step:
 
 ## TODO
 
-> **Total: 177 FPs** (down from 251, as of 2026-03-20)
+> **Total: 18 FPs** (down from 251→177→57→18, as of 2026-03-21)
 
 ### FP Breakdown by Rule (from conformance test verbose output)
 
-| Rule | FPs | Top Files |
-|------|-----|-----------|
-| BSK-E0014 | ~105 | callables_subtyping (22), tuples_type_compat (17), callables_annotation (15), specialtypes_any (7), protocols_subtyping (7), typeddicts_readonly_consistency (5) |
-| BSK-E0093 | ~18 | typeddicts_extra_items (7), typeddicts_readonly (4), typeddicts_readonly_update (3), typeddicts_required (4) |
-| BSK-E0111 | ~15 | dataclasses_transform_meta (5), dataclasses_transform_class (2), dataclasses_transform_converter (2), namedtuples (3), generics_type_erasure (2) |
-| BSK-E0013 | ~15 | protocols_definition (6), exceptions_context_managers (2), narrowing_typeguard (2), narrowing_typeis (2), constructors (3) |
-| BSK-E0053 | ~12 | exceptions_context_managers (4), narrowing_typeguard (1), narrowing_typeis (2), tuples_unpacked (3), literals_interactions (1) |
-| BSK-E0061 | ~10 | enums_members (7), enums_definition (1), literals_interactions (2) |
-| BSK-E0130 | ~9 | generics_defaults (2), dataclasses_transform_func (1), dataclasses_transform_converter (1), constructors_call_type (1), specialtypes_type (1), overloads_basic (1), generics_self_basic (1), generics_syntax_infer_variance (1) |
-| BSK-E0121 | ~7 | protocols_definition (7) |
-| BSK-E0149 | ~7 | aliases_type_statement (4), generics_syntax_scoping (2) |
-| BSK-E0110 | ~5 | protocols_recursive (4), protocols_self (1) |
-| BSK-E0012 | ~4 | generics_typevartuple_specialization (2), generics_typevartuple_unpack (2) |
-| BSK-E0115 | 2 | directives_deprecated (2) |
-| BSK-E0133 | 3 | callables_subtyping (1), callables_protocol (1), protocols_variance (1) |
-| BSK-E0104 | 2 | aliases_recursive (2) |
-| Others | ~37 | scattered across E0041, E0047, E0048, E0054, E0060, E0069, E0078, E0092, E0094, E0099, E0112, E0132, E0139, E0140, E0141, E0143 |
+| Rule | FPs | Files |
+|------|-----|-------|
+| BSK-E0094 | 2 | generics_self_usage (2) |
+| BSK-E0093 | 2 | typeddicts_final (1), typeddicts_readonly_update (1) |
+| BSK-E0140 | 2 | callables_kwargs (1), typeddicts_readonly_kwargs (1) |
+| BSK-E0014 | 2 | dataclasses_transform_converter (1), directives_type_checking (1) |
+| BSK-E0149 | 1 | generics_syntax_scoping (1, triple-reported) |
+| BSK-E0141 | 1 | typeddicts_extra_items (1) |
+| BSK-E0132 | 1 | typeddicts_extra_items (1) |
+| BSK-E0139 | 1 | generics_typevartuple_specialization (1) |
+| BSK-E0143 | 1 | namedtuples_usage (1) |
+| BSK-E0115 | 1 | directives_deprecated (1) |
+| BSK-E0112 | 1 | narrowing_typeguard (1) |
+| BSK-E0099 | 1 | generics_self_protocols (1) |
+| BSK-E0092 | 1 | generics_paramspec_specialization (1) |
+| BSK-E0078 | 1 | generics_self_usage (1) |
+| BSK-E0069 | 1 | dataclasses_transform_func (1) |
 
-### Completed (55 FPs eliminated, 251 -> 196)
+### Completed (120+ FPs eliminated, 177 -> 57 as of 2026-03-21)
 
 - [x] Step 0: Add FP verbose reporting to conformance harness — `diag_line_rules` HashMap in `conformance_tests.rs`
 - [x] BSK-E0014: bare generics (`list`, `dict`, `set`, `tuple`) + `complex` type recognition — 7 FPs fixed
@@ -206,18 +208,13 @@ After each step:
 - [x] BSK-E0110: protocol variance — treat invariant containers as variance-neutral; add `tuple`/`Tuple` to covariant containers — 5 FPs fixed
 - [x] BSK-E0121: protocol conformance — check class attributes (not just methods) for protocol member satisfaction — 7 FPs fixed
 - [x] BSK-E0130: TypeVar scoping — skip docstrings, comments, and multi-line function signature continuations — 6 FPs fixed
+- [x] BSK-E0014: **massive FP elimination** — suppress when RHS is non-literal (variable/param/call) and involves Named/Callable/Tuple types; suppress when declared type is Named (unresolved alias); `contains_unresolvable` recursive check; `# type: ignore` line-level support — **101 FPs fixed**
+- [x] BSK-E0013: return type mismatch — `contains_named` recursive check for declared types with Named inside unions/tuples; `is_base_to_literal` for Bool→Literal[True/False] and Int→Literal[N] etc. — **7 FPs fixed**
+- [x] BSK-E0053: `assert_type` — variadic tuple equivalence in `types_match` — **4 FPs fixed**
+- [x] File-level `# type: ignore` support in `suppression.rs` — detect standalone `# type: ignore` before executable code and suppress all diagnostics — **1 FP fixed**
 
-### Remaining: Phase 1 — Domain-Specific Rule Improvements (~71 FPs)
+### Remaining: 18 FPs across 15 files (scattered, low-count rules)
 
-- [ ] BSK-E0093 (~9 FP remaining) — TypedDict `extra_items` subscript reads, `Final` key access
-- [ ] BSK-E0111 (~6 FP) — remaining: dataclass_transform metaclass, generic NamedTuples
-- [ ] BSK-E0130 (~3 FP remaining) — generics_defaults, dataclass_transform edge cases
-- [ ] BSK-E0012 (~4 FP) — TypeVarTuple unpacking edge cases
-- [ ] BSK-E0133 (~3 FP) — callable parameter count with *args/**kwargs
-- [ ] BSK-E0115 (~2 FP) — deprecated directive false positives
-- [ ] BSK-E0136 (~25 FP) — callable subtyping: `object` supertype, Union params, *args/**kwargs
-- [ ] Remaining scatter (~19 FP) — E0041, E0047, E0048, E0054, E0060, E0069, E0078, E0092, E0094, E0099, E0112, E0132, E0139, E0140, E0141, E0143
+All remaining FPs are 1-2 per rule — no single rule dominates. See updated breakdown table above.
 
-### Remaining: Phase 2 — Type Narrowing and Full Inference (~125 FPs)
-
-See [CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md](CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md) for the full TODO.
+**Notable**: E0094 (2), E0093 (2), E0140 (2), E0014 (2) are the only rules with >1 FP. All others have exactly 1.

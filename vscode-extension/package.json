@@ -45,6 +45,44 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "basilisk-explorer",
+          "title": "Basilisk",
+          "icon": "resources/basilisk-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "basilisk-explorer": [
+        {
+          "id": "basilisk.moduleExplorer",
+          "name": "Module Explorer",
+          "when": "basilisk.hasWorkspace"
+        },
+        {
+          "id": "basilisk.typeHealth",
+          "name": "Type Health",
+          "when": "basilisk.hasWorkspace"
+        },
+        {
+          "id": "basilisk.info",
+          "name": "Basilisk",
+          "visibility": "visible"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "basilisk.moduleExplorer",
+        "contents": "No modules found.\n[Restart Server](command:basilisk.restartServer)"
+      },
+      {
+        "view": "basilisk.typeHealth",
+        "contents": "Waiting for analysis...\n[Restart Server](command:basilisk.restartServer)"
+      }
+    ],
     "commands": [
       {
         "command": "basilisk.restartServer",
@@ -115,8 +153,105 @@
         "command": "basilisk.uv.createEnv",
         "title": "Basilisk: uv Create Virtual Environment",
         "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.refreshModuleExplorer",
+        "title": "Refresh Module Explorer",
+        "category": "Basilisk",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "basilisk.collapseModuleExplorer",
+        "title": "Collapse All",
+        "category": "Basilisk",
+        "icon": "$(collapse-all)"
+      },
+      {
+        "command": "basilisk.refreshTypeHealth",
+        "title": "Refresh Type Health",
+        "category": "Basilisk",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "basilisk.sortTypeHealth",
+        "title": "Toggle Sort Order",
+        "category": "Basilisk",
+        "icon": "$(sort-precedence)"
+      },
+      {
+        "command": "basilisk.copyImportPath",
+        "title": "Copy Import Path",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.copyQualifiedName",
+        "title": "Copy Qualified Name",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.toggleModuleExplorerView",
+        "title": "Toggle Tree/Flat View",
+        "category": "Basilisk",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "basilisk.filterModuleExplorer",
+        "title": "Filter Modules",
+        "category": "Basilisk",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "basilisk.openWalkthrough",
+        "title": "Basilisk: Getting Started",
+        "category": "Basilisk"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "basilisk.refreshModuleExplorer",
+          "when": "view == basilisk.moduleExplorer",
+          "group": "navigation"
+        },
+        {
+          "command": "basilisk.collapseModuleExplorer",
+          "when": "view == basilisk.moduleExplorer",
+          "group": "navigation"
+        },
+        {
+          "command": "basilisk.toggleModuleExplorerView",
+          "when": "view == basilisk.moduleExplorer",
+          "group": "navigation"
+        },
+        {
+          "command": "basilisk.filterModuleExplorer",
+          "when": "view == basilisk.moduleExplorer",
+          "group": "navigation"
+        },
+        {
+          "command": "basilisk.refreshTypeHealth",
+          "when": "view == basilisk.typeHealth",
+          "group": "navigation"
+        },
+        {
+          "command": "basilisk.sortTypeHealth",
+          "when": "view == basilisk.typeHealth",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "basilisk.copyImportPath",
+          "when": "view == basilisk.moduleExplorer && viewItem =~ /^(module|symbol)/",
+          "group": "6_copypath@1"
+        },
+        {
+          "command": "basilisk.copyQualifiedName",
+          "when": "view == basilisk.moduleExplorer && viewItem =~ /^(module|symbol)/",
+          "group": "6_copypath@2"
+        }
+      ]
+    },
     "keybindings": [
       {
         "command": "basilisk.fixFile",
@@ -329,6 +464,43 @@
           "default": true,
           "description": "Show diagnostics for dependency hygiene (undeclared imports, unused deps)"
         },
+        "basilisk.testExplorer.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Python test discovery and execution in Test Explorer."
+        },
+        "basilisk.testExplorer.framework": {
+          "type": "string",
+          "enum": ["pytest", "unittest", "auto"],
+          "default": "auto",
+          "description": "Test framework to use. 'auto' detects from project config."
+        },
+        "basilisk.testExplorer.pytestPath": {
+          "type": "string",
+          "default": "pytest",
+          "description": "Path to the pytest executable."
+        },
+        "basilisk.testExplorer.args": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Additional arguments passed to the test runner."
+        },
+        "basilisk.testExplorer.autoDiscoverOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Re-discover tests when test files are saved."
+        },
+        "basilisk.testExplorer.useUvRun": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use 'uv run' to execute tests when a uv project is detected. Ensures tests run in the correct environment."
+        },
+        "basilisk.testExplorer.coverageEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show coverage gutter decorations after running tests with coverage. Runs pytest with --cov flag."
+        },
         "basilisk.analysisMode": {
           "type": "string",
           "enum": [
@@ -345,7 +517,40 @@
           "description": "Controls which files Basilisk analyses. 'wholeModule' (default) analyses all workspace files; 'openFilesOnly' analyses only open editors; 'crossModule' is reserved for future cross-file import graph analysis."
         }
       }
-    }
+    },
+    "walkthroughs": [
+      {
+        "id": "basilisk.gettingStarted",
+        "title": "Getting Started with Basilisk",
+        "description": "Set up Basilisk as your Python type checker and language server.",
+        "steps": [
+          {
+            "id": "basilisk.installBinary",
+            "title": "Install Basilisk Binary",
+            "description": "Install via cargo: `cargo install basilisk` or download from GitHub releases.\n[Open Terminal](command:workbench.action.terminal.new)",
+            "media": { "markdown": "Install via `cargo install basilisk`." }
+          },
+          {
+            "id": "basilisk.openPythonProject",
+            "title": "Open a Python Project",
+            "description": "Open a folder containing Python files to start analysis.\n[Open Folder](command:vscode.openFolder)",
+            "media": { "markdown": "Open any folder with `.py` files." }
+          },
+          {
+            "id": "basilisk.exploreModules",
+            "title": "Explore Modules",
+            "description": "Click the Basilisk icon in the activity bar to see your modules and type health.\n[Open Module Explorer](command:basilisk.moduleExplorer.focus)",
+            "media": { "markdown": "The Module Explorer shows your workspace's Python modules." }
+          },
+          {
+            "id": "basilisk.checkTypeHealth",
+            "title": "Check Type Health",
+            "description": "The Type Health panel shows coverage statistics per module.\n[Open Type Health](command:basilisk.typeHealth.focus)",
+            "media": { "markdown": "See which modules need more type annotations." }
+          }
+        ]
+      }
+    ]
   },
   "scripts": {
     "compile": "tsc -p ./ && node -e \"const fs=require('fs');fs.mkdirSync('out/src/test/fixtures',{recursive:true});fs.readdirSync('src/test/fixtures').forEach(f=>fs.copyFileSync('src/test/fixtures/'+f,'out/src/test/fixtures/'+f));\"",

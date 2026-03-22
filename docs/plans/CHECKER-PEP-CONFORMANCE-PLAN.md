@@ -1,6 +1,6 @@
 # PEP Conformance — Plan
 
-> **Score**: 135/146 (92.5%)
+> **Score**: 124/146 (84.9%)
 > **Tests**: `crates/basilisk-cli/tests/conformance/`
 > **Status CSV**: `conformance/conformance_status.csv`
 > **Run**: `./conformance/conformance.sh` or `cargo test --test conformance_tests -- --nocapture`
@@ -22,36 +22,63 @@
 - [x] `protocols_generic.py` — generic protocol assignability — FLIPPED
 - [x] `typeddicts_type_consistency.py` — TypedDict type consistency — FLIPPED
 
-## TODO — 11 failing files remaining
+## TODO — 23 failing files remaining
 
-### Protocols (1 file, 17 missed, 13 FP)
+### Protocols (2 files)
 
-- [ ] `protocols_definition.py` (17 missed, 13 FP) — structural subtyping, method signature compat
+- [ ] `protocols_definition.py` (19 missed) — structural subtyping, method signature compat
+- [ ] `protocols_subtyping.py` (6 missed) — protocol assignability
 
-### Generics — TypeVarTuple (2 files, 15 missed)
+### Generics — TypeVarTuple (2 files)
 
 - [ ] `generics_typevartuple_basic.py` (6 missed) — deep type inference for TVT matching
 - [ ] `generics_typevartuple_args.py` (9 missed) — `*args` typing with TypeVarTuple
 
-### Generics — ParamSpec (3 files, 30 missed)
+### Generics — ParamSpec (4 files)
 
+- [ ] `generics_paramspec_basic.py` (1 missed) — basic ParamSpec usage
 - [ ] `generics_paramspec_components.py` (16 missed) — `P.args` / `P.kwargs`
-- [ ] `generics_paramspec_semantics.py` (9 missed, 1 FP) — constraint solving
-- [ ] `generics_paramspec_specialization.py` (5 missed, 3 FP) — concrete specialization
+- [ ] `generics_paramspec_semantics.py` (9 missed) — constraint solving
+- [ ] `generics_paramspec_specialization.py` (5 missed, 1 FP) — concrete specialization
 
-### Type Aliases (1 file, 22 missed)
+### Type Aliases (3 files)
 
-- [ ] `aliases_typealiastype.py` (22 missed, 3 FP) — `TypeAliasType` call-based aliases
+- [ ] `aliases_recursive.py` (9 missed) — recursive alias handling
+- [ ] `aliases_type_statement.py` (2 missed) — PEP 695 type statement edge cases
+- [ ] `aliases_typealiastype.py` (22 missed) — `TypeAliasType` call-based aliases
 
-### Constructors (1 file, 12 missed)
+### Callables (2 files)
+
+- [ ] `callables_annotation.py` (4 missed) — callable annotation edge cases
+- [ ] `callables_subtyping.py` (30 missed) — callable subtyping rules
+
+### Constructors (1 file)
 
 - [ ] `constructors_callable.py` (12 missed) — callable as constructor
 
-### Dataclasses (1 file, 6 missed)
+### Dataclasses (1 file)
 
-- [ ] `dataclasses_transform_converter.py` (6 missed, 3 FP) — `converter` semantics
+- [ ] `dataclasses_transform_converter.py` (9 missed, 1 FP) — `converter` semantics
 
-### TypedDict (2 files, 27 missed)
+### Directives (2 files)
 
-- [ ] `typeddicts_extra_items.py` (18 missed, 13 FP) — `extra_items` kwarg
-- [ ] `typeddicts_readonly_inheritance.py` (9 missed, 2 FP) — readonly + inheritance
+- [ ] `directives_assert_type.py` (1 missed) — assert_type edge case
+- [ ] `directives_deprecated.py` (1 missed) — deprecated detection
+
+### Generics — Self (1 file)
+
+- [ ] `generics_self_usage.py` (1 missed, 1 FP) — Self type usage
+
+### Special Types (1 file)
+
+- [ ] `specialtypes_none.py` (1 missed) — None type edge case
+
+### Tuples (1 file)
+
+- [ ] `tuples_type_compat.py` (6 missed) — tuple type compatibility
+
+### TypedDict (3 files)
+
+- [ ] `typeddicts_extra_items.py` (21 missed, 2 FP) — `extra_items` kwarg
+- [ ] `typeddicts_readonly_consistency.py` (7 missed) — readonly consistency
+- [ ] `typeddicts_readonly_inheritance.py` (10 missed) — readonly + inheritance

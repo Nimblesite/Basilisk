@@ -48,3 +48,47 @@ pub(super) fn insert_rule_override(content: &str, rule: &str, severity: &str) ->
     result.push('\n');
     result
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn insert_rule_when_no_section_exists() {
+        let content = "[tool.basilisk]\nstrict = true\n";
+        let result = insert_rule_override(content, "BSK-E0001", "warning");
+        assert!(result.contains("[tool.basilisk.rules]"));
+        assert!(result.contains("BSK-E0001 = \"warning\""));
+    }
+
+    #[test]
+    fn insert_rule_when_section_exists_but_rule_absent() {
+        let content = "[tool.basilisk.rules]\nBSK-E0002 = \"error\"\n";
+        let result = insert_rule_override(content, "BSK-E0001", "warning");
+        assert!(result.contains("BSK-E0001 = \"warning\""));
+        assert!(result.contains("BSK-E0002 = \"error\""));
+    }
+
+    #[test]
+    fn update_existing_rule_in_section() {
+        let content = "[tool.basilisk.rules]\nBSK-E0001 = \"error\"\n";
+        let result = insert_rule_override(content, "BSK-E0001", "warning");
+        assert!(result.contains("BSK-E0001 = \"warning\""));
+        assert!(!result.contains("BSK-E0001 = \"error\""));
+    }
+
+    #[test]
+    fn insert_into_empty_content() {
+        let result = insert_rule_override("", "BSK-E0001", "off");
+        assert!(result.contains("[tool.basilisk.rules]"));
+        assert!(result.contains("BSK-E0001 = \"off\""));
+    }
+
+    #[test]
+    fn insert_when_content_has_no_trailing_newline() {
+        let content = "[project]\nname = \"foo\"";
+        let result = insert_rule_override(content, "BSK-W0010", "error");
+        assert!(result.contains("\n\n[tool.basilisk.rules]\n"));
+        assert!(result.contains("BSK-W0010 = \"error\""));
+    }
+}

@@ -164,4 +164,190 @@ describe("test explorer e2e", function()
       testing.apply_coverage(cov_path)
     end)
   end)
+
+  -- ── Discovery: Detailed Structure Validation ────────────────────────
+
+  it("discovery tree contains correct test names from real files", function()
+    local testing = require("basilisk.testing")
+    local output = vim.fn.system({ "pytest", "--collect-only", "-q", tmpdir })
+    local tree = testing.parse_pytest_output(output)
+
+    -- Collect all leaf test names.
+    local names = {}
+    local function collect(nodes)
+      for _, node in ipairs(nodes) do
+        if node.kind == "function" then
+          names[node.name] = true
+        end
+        collect(node.children)
+      end
+    end
+    collect(tree)
+
+    -- Verify known test names from the fixture files.
+    assert.is_true(names["test_add"] ~= nil, "should find test_add")
+    assert.is_true(names["test_subtract"] ~= nil, "should find test_subtract")
+    assert.is_true(names["test_positive"] ~= nil, "should find test_positive (class method)")
+    assert.is_true(names["test_zero"] ~= nil, "should find test_zero (class method)")
+    assert.is_true(names["test_concat"] ~= nil, "should find test_concat from second file")
+    assert.is_true(names["test_upper"] ~= nil, "should find test_upper from second file")
+  end)
+
+  it("discovery tree file nodes have correct kinds", function()
+    local testing = require("basilisk.testing")
+    local output = vim.fn.system({ "pytest", "--collect-only", "-q", tmpdir })
+    local tree = testing.parse_pytest_output(output)
+
+    for _, file_node in ipairs(tree) do
+      assert.are.equal("file", file_node.kind, "top-level nodes should be files")
+      assert.is_true(file_node.file ~= nil, "file nodes should have a file path")
+    end
+  end)
+
+  it("class methods are nested under their class node", function()
+    local testing = require("basilisk.testing")
+    local output = vim.fn.system({ "pytest", "--collect-only", "-q", tmpdir })
+    local tree = testing.parse_pytest_output(output)
+
+    -- Find the file with TestMultiply.
+    local multiply_class = nil
+    for _, file_node in ipairs(tree) do
+      for _, child in ipairs(file_node.children) do
+        if child.name == "TestMultiply" then
+          multiply_class = child
+          break
+        end
+      end
+    end
+    assert.is_not_nil(multiply_class, "should find TestMultiply class")
+    assert.are.equal("class", multiply_class.kind)
+    assert.are.equal(2, #multiply_class.children, "TestMultiply should have 2 methods")
+  end)
+
+  -- ── Discovery: File with Only Functions ─────────────────────────────
+
+  it("discovers file with only standalone functions", function()
+    local testing = require("basilisk.testing")
+
+    -- Create a test file with only functions.
+    local fh = io.open(tmpdir .. "/test_funcs_only.py", "w")
+    fh:write(table.concat({
+      "def test_alpha():",
+      "    assert True",
+      "",
+      "def test_beta():",
+      "    assert True",
+      "",
+      "def test_gamma():",
+      "    assert True",
+      "",
+    }, "\n"))
+    fh:close()
+
+    local output = vim.fn.system({ "pytest", "--collect-only", "-q", tmpdir .. "/test_funcs_only.py" })
+    local tree = testing.parse_pytest_output(output)
+
+    assert.are.equal(1, #tree, "should find 1 file")
+    assert.are.equal(3, #tree[1].children, "should find 3 test functions")
+    for _, child in ipairs(tree[1].children) do
+      assert.are.equal("function", child.kind)
+    end
+  end)
+
+  -- ── Discovery: Empty Test File ──────────────────────────────────────
+
+  it("discovers nothing from empty test file", function()
+    local testing = require("basilisk.testing")
+
+    local fh = io.open(tmpdir .. "/test_empty.py", "w")
+    fh:write("# no tests here\nx = 42\n")
+    fh:close()
+
+    local output = vim.fn.system({ "pytest", "--collect-only", "-q", tmpdir .. "/test_empty.py" })
+    local tree = testing.parse_pytest_output(output)
+    assert.are.equal(0, #tree)
+  end)
+
+  -- ── Test Run Results ─────────────────────────────────────────────────
+
+  it("real pytest run produces parseable output", function()
+    local testing = require("basilisk.testing")
+
+    -- First discover so the tree is populated.
+    local collect_output = vim.fn.system({ "pytest", "--collect-only", "-q", tmpdir })
+    testing.parse_pytest_output(collect_output)
+
+    -- Now run the tests.
+    local run_output = vim.fn.system({ "pytest", "-v", "--tb=short", tmpdir })
+    assert.has_no.errors(function()
+      testing.parse_test_results(run_output)
+    end)
+  end)
+
+  -- ── Panel: Display After Discovery ──────────────────────────────────
+
+  it("panel shows discovered tests after refresh", function()
+    local testing = require("basilisk.testing")
+    local config = require("basilisk.config").resolve()
+
+    -- Discover and open.
+    local output = vim.fn.system({ "pytest", "--collect-only", "-q", tmpdir })
+    testing.parse_pytest_output(output)
+    testing.open(config)
+    testing.refresh_display()
+
+    -- Find the test buffer and check content.
+    for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+      if vim.bo[buf].filetype == "basilisk-tests" then
+        local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+        assert.is_true(#lines > 0, "buffer should have content")
+        -- Should NOT show the placeholder text.
+        assert.is_false(
+          lines[1]:find("No tests") ~= nil,
+          "should show test tree, not placeholder"
+        )
+        break
+      end
+    end
+    testing.close()
+  end)
+
+  -- ── Panel: Buffer Properties ────────────────────────────────────────
+
+  it("panel buffer is non-modifiable", function()
+    local testing = require("basilisk.testing")
+    local config = require("basilisk.config").resolve()
+
+    testing.open(config)
+    testing.refresh_display()
+
+    for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+      if vim.bo[buf].filetype == "basilisk-tests" then
+        assert.is_false(vim.bo[buf].modifiable, "test buffer should be non-modifiable")
+        assert.is_false(vim.bo[buf].swapfile, "test buffer should have no swapfile")
+        break
+      end
+    end
+    testing.close()
+  end)
+
+  -- ── Panel: Window Options ──────────────────────────────────────────
+
+  it("panel window has no line numbers", function()
+    local testing = require("basilisk.testing")
+    local config = require("basilisk.config").resolve()
+
+    testing.open(config)
+
+    -- Find the window showing basilisk-tests.
+    for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+      local buf = vim.api.nvim_win_get_buf(win)
+      if vim.bo[buf].filetype == "basilisk-tests" then
+        assert.is_false(vim.wo[win].number, "test panel should have no line numbers")
+        assert.is_false(vim.wo[win].relativenumber, "test panel should have no relative numbers")
+        break
+      end
+    end
+    testing.close()
+  end)
 end)

@@ -17,5 +17,25 @@ languages = ["Python"]
 [language_servers.basilisk.language_ids]
 "Python" = "python"
 
+[[slash_commands]]
+name = "modules"
+description = "Show workspace module tree"
+requires_argument = false
+
+[[slash_commands]]
+name = "symbols"
+description = "Show symbols in a module"
+requires_argument = true
+
+[[slash_commands]]
+name = "health"
+description = "Type health statistics"
+requires_argument = false
+
+[[slash_commands]]
+name = "basilisk"
+description = "Basilisk server info and commands"
+requires_argument = false
+
 [debug_adapters.basilisk-debug]
 schema_path = "debug_adapter_schemas/basilisk-debug.json"

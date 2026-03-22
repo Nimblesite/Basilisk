@@ -23,33 +23,55 @@ import { type Store, type LspState } from "./store";
 const MAX_LSP_ERRORS_BEFORE_SHUTDOWN = 3;
 
 /** Read all Basilisk settings from the VS Code configuration. */
+function readInlayHints(cfg: vscode.WorkspaceConfiguration): Record<string, unknown> {
+  return {
+    parameterNames: cfg.get<boolean>("inlayHints.parameterNames") ?? true,
+    variableTypes: cfg.get<boolean>("inlayHints.variableTypes") ?? true,
+  };
+}
+
+function readRuffSettings(cfg: vscode.WorkspaceConfiguration): Record<string, unknown> {
+  return {
+    enabled: cfg.get<boolean>("ruff.enabled") ?? true,
+    executablePath: cfg.get<string>("ruff.executablePath") ?? "ruff",
+  };
+}
+
+function readUvSettings(cfg: vscode.WorkspaceConfiguration): Record<string, unknown> {
+  return {
+    enabled: cfg.get<boolean>("uv.enabled") ?? true,
+    executablePath: cfg.get<string>("uv.executablePath") ?? "",
+    autoSync: cfg.get<boolean>("uv.autoSync") ?? false,
+    stubSuggestions: cfg.get<boolean>("uv.stubSuggestions") ?? true,
+    dependencyDiagnostics: cfg.get<boolean>("uv.dependencyDiagnostics") ?? true,
+  };
+}
+
+function readTestExplorerSettings(cfg: vscode.WorkspaceConfiguration): Record<string, unknown> {
+  return {
+    enabled: cfg.get<boolean>("testExplorer.enabled") ?? true,
+    framework: cfg.get<string>("testExplorer.framework") ?? "auto",
+    pytestPath: cfg.get<string>("testExplorer.pytestPath") ?? "pytest",
+    args: cfg.get<string[]>("testExplorer.args") ?? [],
+    autoDiscoverOnSave: cfg.get<boolean>("testExplorer.autoDiscoverOnSave") ?? true,
+    useUvRun: cfg.get<boolean>("testExplorer.useUvRun") ?? true,
+  };
+}
+
 export function readBasiliskSettings(): Record<string, unknown> {
   const cfg = vscode.workspace.getConfiguration("basilisk");
+  const ruff = readRuffSettings(cfg);
   return {
     analysisMode: cfg.get<string>("analysisMode") ?? "wholeModule",
     basilisk: {
       python: cfg.get<string>("python") ?? "",
       analysisMode: cfg.get<string>("analysisMode") ?? "wholeModule",
-      inlayHints: {
-        parameterNames: cfg.get<boolean>("inlayHints.parameterNames") ?? true,
-        variableTypes: cfg.get<boolean>("inlayHints.variableTypes") ?? true,
-      },
-      ruff: {
-        enabled: cfg.get<boolean>("ruff.enabled") ?? true,
-        executablePath: cfg.get<string>("ruff.executablePath") ?? "ruff",
-      },
+      inlayHints: readInlayHints(cfg),
+      ruff,
     },
-    ruff: {
-      enabled: cfg.get<boolean>("ruff.enabled") ?? true,
-      executablePath: cfg.get<string>("ruff.executablePath") ?? "ruff",
-    },
-    uv: {
-      enabled: cfg.get<boolean>("uv.enabled") ?? true,
-      executablePath: cfg.get<string>("uv.executablePath") ?? "",
-      autoSync: cfg.get<boolean>("uv.autoSync") ?? false,
-      stubSuggestions: cfg.get<boolean>("uv.stubSuggestions") ?? true,
-      dependencyDiagnostics: cfg.get<boolean>("uv.dependencyDiagnostics") ?? true,
-    },
+    ruff,
+    uv: readUvSettings(cfg),
+    testExplorer: readTestExplorerSettings(cfg),
   };
 }
 
@@ -87,6 +109,12 @@ export function startLspClient(
     serverOptions,
     clientOptions
   );
+
+  // Remove the built-in ExecuteCommandFeature to prevent it from calling
+  // vscode.commands.registerCommand for server-advertised commands.
+  // This avoids "command already exists" crashes on extension reload.
+  // All command execution is handled by the executeCommand middleware.
+  removeExecuteCommandFeature(lspClient);
 
   // setClient wires up onDidChangeState internally — the store owns
   // all state transitions (server commands, ready handle, lspState).
@@ -296,6 +324,36 @@ function registerTabTracking(context: vscode.ExtensionContext, store: Store): vo
       knownOpenUris = currentUris;
     })
   );
+}
+
+/**
+ * Remove the built-in ExecuteCommandFeature from a LanguageClient.
+ *
+ * The library's ExecuteCommandFeature calls vscode.commands.registerCommand
+ * for every server-advertised command. On extension reload, the old
+ * registrations persist and the re-registration throws "command already
+ * exists", killing the client. Since all command execution flows through
+ * our executeCommand middleware, the feature is unnecessary.
+ */
+function removeExecuteCommandFeature(client: LanguageClient): void {
+  const METHOD = "workspace/executeCommand";
+  const internals = client as unknown as {
+    _features: { registrationType?: { method?: string } }[];
+    _dynamicFeatures: Map<string, unknown>;
+  };
+
+  const idx = internals._features.findIndex(
+    (f) => f.registrationType?.method === METHOD
+  );
+  if (idx !== -1) {
+    internals._features.splice(idx, 1);
+  }
+
+  // The feature is also stored in _dynamicFeatures — if left there,
+  // the client's handleRegistrationRequest path can still call register()
+  // on it, which triggers vscode.commands.registerCommand and crashes
+  // with "command already exists" on reload.
+  internals._dynamicFeatures.delete(METHOD);
 }
 
 function collectOpenPythonUris(): Set<string> {

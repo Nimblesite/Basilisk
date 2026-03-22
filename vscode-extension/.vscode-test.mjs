@@ -11,7 +11,7 @@ export default defineConfig({
         // This enables whole-module analysis tests that write Python files to the
         // workspace root without opening them in the editor.
         workspaceFolder: path.join(__dirname, 'test-fixtures', 'workspace'),
-        launchArgs: ['--disable-extensions'],
+        launchArgs: ['--disable-extensions', '--user-data-dir', path.join(__dirname, '.vscode-test', 'user-data')],
         // Coverage: tell c8 where compiled sources live. Without this,
         // @vscode/test-cli defaults to 'src' (TypeScript sources), so
         // include patterns like 'out/**/*.js' resolve against src/ and

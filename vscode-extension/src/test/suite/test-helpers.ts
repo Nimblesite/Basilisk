@@ -226,6 +226,17 @@ export async function setupLspTestSuite(
         await ext.activate();
     }
 
+    // After a simulated deactivate() cycle (e.g. from a prior test suite),
+    // the extension is still marked as active by VS Code, but the store is
+    // undefined and the LSP is stopped. Calling getStore() triggers the
+    // lazy re-init path that creates a new store and starts the LSP client.
+    const { getStore: getStoreFromExtension } = await import('../../extension');
+    // First call after deactivate() returns undefined (proves cleanup).
+    // Second call triggers lazy re-init.
+    if (getStoreFromExtension() === undefined) {
+        getStoreFromExtension();
+    }
+
     // Poll until the LSP server is responsive.
     const dummyPath = path.join(tmpDir, '__init__.py');
     fs.writeFileSync(dummyPath, '', 'utf8');

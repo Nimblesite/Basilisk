@@ -27,6 +27,32 @@ local function register_lsp_commands()
   end
 end
 
+--- Register the basilisk/moduleChanged notification handler.
+local function register_notification_handlers()
+  vim.lsp.handlers["basilisk/moduleChanged"] = function(_err, _result, _ctx, _config)
+    local modules_ok, modules_panel = pcall(require, "basilisk.modules")
+    if modules_ok then
+      modules_panel.refresh()
+    end
+    local health_ok, health_panel = pcall(require, "basilisk.type_health")
+    if health_ok then
+      health_panel.refresh()
+    end
+  end
+end
+
+--- Set up default keymaps for activity panels.
+---@param cfg BasiliskConfig
+local function register_keymaps(cfg)
+  if not cfg.keymaps.enabled then
+    return
+  end
+  local prefix = cfg.keymaps.prefix or "<leader>b"
+  vim.keymap.set("n", prefix .. "m", "<cmd>BasiliskModules<CR>", { desc = "Toggle Basilisk Module Explorer" })
+  vim.keymap.set("n", prefix .. "h", "<cmd>BasiliskHealth<CR>", { desc = "Toggle Basilisk Type Health" })
+  vim.keymap.set("n", prefix .. "i", "<cmd>BasiliskInfo<CR>", { desc = "Show Basilisk Server Info" })
+end
+
 --- Set up Basilisk with the given options.
 ---@param opts? table User configuration (merged with defaults).
 function M.setup(opts)
@@ -44,11 +70,17 @@ function M.setup(opts)
   -- Register custom LSP command handlers.
   register_lsp_commands()
 
+  -- Register module change notification handler.
+  register_notification_handlers()
+
   -- Start the LSP client.
   lsp.start(M.config)
 
   -- Register user commands.
   commands.register(M.config)
+
+  -- Register default keymaps for activity panels.
+  register_keymaps(M.config)
 
   -- Register DAP adapter if nvim-dap is available.
   local dap_ok, dap_mod = pcall(require, "basilisk.dap")

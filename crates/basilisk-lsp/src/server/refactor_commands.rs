@@ -228,3 +228,135 @@ fn end_of_file_position() -> Position {
         character: 0,
     }
 }
+
+#[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    reason = "test-only code: expect acceptable in unit tests"
+)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_lines_returns_correct_range() {
+        let source = "line0\nline1\nline2\nline3\n";
+        assert_eq!(extract_lines(source, 1, 3), "line1\nline2");
+    }
+
+    #[test]
+    fn extract_lines_empty_range() {
+        let source = "line0\nline1\n";
+        assert_eq!(extract_lines(source, 1, 1), "");
+    }
+
+    #[test]
+    fn extract_lines_past_end() {
+        let source = "line0\nline1\n";
+        assert_eq!(extract_lines(source, 0, 100), "line0\nline1");
+    }
+
+    #[test]
+    fn build_import_line_extracts_module_stem() {
+        let uri = Url::parse("file:///project/src/helpers.py").expect("valid URL");
+        let result = build_import_line(&uri, "MyClass");
+        assert_eq!(result, "from .helpers import MyClass\n");
+    }
+
+    #[test]
+    fn build_dest_append_empty_dest() {
+        let result = build_dest_append("", "def foo():\n    pass\n");
+        assert_eq!(result, "def foo():\n    pass\n");
+    }
+
+    #[test]
+    fn build_dest_append_single_trailing_newline() {
+        let result = build_dest_append("existing\n", "def foo():\n    pass\n");
+        assert_eq!(result, "\ndef foo():\n    pass\n");
+    }
+
+    #[test]
+    fn build_dest_append_double_trailing_newline() {
+        let result = build_dest_append("existing\n\n", "def foo():\n    pass\n");
+        assert_eq!(result, "def foo():\n    pass\n");
+    }
+
+    #[test]
+    fn build_dest_append_no_trailing_newline() {
+        let result = build_dest_append("existing", "def foo():\n    pass");
+        assert_eq!(result, "\n\ndef foo():\n    pass\n");
+    }
+
+    #[test]
+    fn line_range_within_bounds() {
+        let source = "aaa\nbbb\nccc\n";
+        let range = line_range(source, 1, 2);
+        assert_eq!(range.start.line, 1);
+        assert_eq!(range.start.character, 0);
+        assert_eq!(range.end.line, 2);
+        assert_eq!(range.end.character, 0);
+    }
+
+    #[test]
+    fn line_range_past_end() {
+        let source = "aaa\nbbb";
+        let range = line_range(source, 0, 100);
+        assert_eq!(range.start.line, 0);
+        assert_eq!(range.end.line, 1);
+        assert_eq!(range.end.character, 3);
+    }
+
+    #[test]
+    fn end_of_file_position_uses_max() {
+        let pos = end_of_file_position();
+        assert_eq!(pos.line, u32::MAX);
+        assert_eq!(pos.character, 0);
+    }
+
+    #[test]
+    fn parse_move_args_valid() {
+        let args = vec![
+            serde_json::json!("file:///src/a.py"),
+            serde_json::json!("file:///src/b.py"),
+            serde_json::json!("MyClass"),
+            serde_json::json!(5),
+            serde_json::json!(10),
+        ];
+        let parsed = parse_move_args(&args).expect("should parse");
+        assert_eq!(parsed.symbol_name, "MyClass");
+        assert_eq!(parsed.start_line, 5);
+        assert_eq!(parsed.end_line, 10);
+    }
+
+    #[test]
+    fn parse_move_args_missing_field() {
+        let args = vec![serde_json::json!("file:///src/a.py")];
+        assert!(parse_move_args(&args).is_none());
+    }
+
+    #[test]
+    fn parse_move_args_empty() {
+        assert!(parse_move_args(&[]).is_none());
+    }
+
+    #[test]
+    fn build_move_edit_has_both_files() {
+        let source_uri = Url::parse("file:///src/a.py").expect("valid URL");
+        let dest_uri = Url::parse("file:///src/b.py").expect("valid URL");
+        let parsed = MoveArgs {
+            source_uri: source_uri.clone(),
+            dest_uri: dest_uri.clone(),
+            symbol_name: "foo".to_owned(),
+            start_line: 0,
+            end_line: 1,
+        };
+        let edit = build_move_edit(
+            &parsed,
+            "def foo():\n    pass\n",
+            "from .b import foo\n",
+            "def foo():\n    pass\n",
+        );
+        let changes = edit.changes.expect("should have changes");
+        assert!(changes.contains_key(&source_uri));
+        assert!(changes.contains_key(&dest_uri));
+    }
+}

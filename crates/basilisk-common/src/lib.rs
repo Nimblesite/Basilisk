@@ -43,6 +43,20 @@ pub mod commands {
     /// Move a symbol to an existing file (args: source URI, dest URI, symbol
     /// name, start line, end line).
     pub const MOVE_SYMBOL: &str = "basilisk.moveSymbol";
+    /// Discover tests in the workspace or a specific file.
+    pub const DISCOVER_TESTS: &str = "basilisk.discoverTests";
+    /// Run one or more tests by node ID.
+    pub const RUN_TESTS: &str = "basilisk.runTests";
+    /// Run all tests in the current file.
+    pub const RUN_TEST_FILE: &str = "basilisk.runTestFile";
+    /// Debug a specific test by node ID.
+    pub const DEBUG_TEST: &str = "basilisk.debugTest";
+    /// Run tests with coverage and return coverage results.
+    pub const RUN_TESTS_COVERAGE: &str = "basilisk.runTestsCoverage";
+    /// Return the workspace module tree (packages, modules, symbols).
+    pub const WORKSPACE_MODULES: &str = "basilisk.workspaceModules";
+    /// Return type health statistics (coverage, errors, warnings per module).
+    pub const TYPE_HEALTH: &str = "basilisk.typeHealth";
 
     /// Command names advertised via `executeCommandProvider` capabilities.
     ///
@@ -69,6 +83,13 @@ pub mod commands {
         UV_LOCK,
         UV_CREATE_ENV,
         MOVE_SYMBOL,
+        DISCOVER_TESTS,
+        RUN_TESTS,
+        RUN_TEST_FILE,
+        DEBUG_TEST,
+        RUN_TESTS_COVERAGE,
+        WORKSPACE_MODULES,
+        TYPE_HEALTH,
     ];
 }
 
@@ -89,6 +110,20 @@ pub mod slash_commands {
     pub const MEMSTOP: &str = "memstop";
     /// Query reference/retention graph for a type.
     pub const MEMREFS: &str = "memrefs";
+    /// Show workspace module tree.
+    pub const MODULES: &str = "modules";
+    /// Show symbols in a module.
+    pub const SYMBOLS: &str = "symbols";
+    /// Show type health statistics.
+    pub const HEALTH: &str = "health";
+    /// Show Basilisk server info.
+    pub const BASILISK: &str = "basilisk";
+    /// Discover tests in the workspace.
+    pub const TESTS: &str = "tests";
+    /// Run tests by node ID or file.
+    pub const RUNTESTS: &str = "runtests";
+    /// Run tests in the current file.
+    pub const TESTFILE: &str = "testfile";
 }
 
 /// Configuration key names shared between editor extensions and the LSP.
@@ -123,6 +158,29 @@ pub mod config_keys {
     pub const UV_STUB_SUGGESTIONS: &str = "stubSuggestions";
     /// Show dependency hygiene diagnostics.
     pub const UV_DEPENDENCY_DIAGNOSTICS: &str = "dependencyDiagnostics";
+
+    /// Test explorer configuration section.
+    pub const TEST_EXPLORER: &str = "testExplorer";
+    /// Enable/disable test discovery and execution.
+    pub const TEST_EXPLORER_ENABLED: &str = "enabled";
+    /// Test framework: `pytest`, `unittest`, or `auto`.
+    pub const TEST_EXPLORER_FRAMEWORK: &str = "framework";
+    /// Path to the pytest executable.
+    pub const TEST_EXPLORER_PYTEST_PATH: &str = "pytestPath";
+    /// Additional test runner arguments.
+    pub const TEST_EXPLORER_ARGS: &str = "args";
+    /// Re-discover tests on file save.
+    pub const TEST_EXPLORER_AUTO_DISCOVER_ON_SAVE: &str = "autoDiscoverOnSave";
+    /// Use `uv run` when a uv project is detected.
+    pub const TEST_EXPLORER_USE_UV_RUN: &str = "useUvRun";
+    /// Enable coverage gutter decorations after test runs.
+    pub const TEST_EXPLORER_COVERAGE_ENABLED: &str = "coverageEnabled";
+}
+
+/// Custom LSP notification method names for coverage.
+pub mod coverage_notifications {
+    /// Notification sent with coverage data after a test run with `--cov`.
+    pub const COVERAGE_RESULT: &str = "basilisk/coverageResult";
 }
 
 /// GitHub release asset naming for binary distribution.
@@ -156,6 +214,12 @@ pub mod release {
         let ext = if is_windows { "zip" } else { "tar.gz" };
         format!("basilisk-{arch}-{os}.{ext}")
     }
+}
+
+/// Custom LSP notification method names.
+pub mod notifications {
+    /// Notification sent when a module's symbol table changes after re-analysis.
+    pub const MODULE_CHANGED: &str = "basilisk/moduleChanged";
 }
 
 /// Diagnostic code ranges defined in the Basilisk specification.

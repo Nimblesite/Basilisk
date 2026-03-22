@@ -205,10 +205,16 @@ pub(super) async fn initialized(server: &LspServer) {
                     ),
                 )
                 .await;
+
+            // Send initial test discovery results.
+            send_initial_test_discovery(server).await;
             return;
         }
     }
     drop(guard);
+
+    // Send initial test discovery even in openFilesOnly mode.
+    send_initial_test_discovery(server).await;
 }
 
 /// Handle `didChangeConfiguration`: update the analysis mode on the index and
@@ -220,6 +226,9 @@ pub(super) async fn did_change_configuration(
     let settings = params.settings;
     super::diaglog!("[DIAG] did_change_configuration: settings={settings}");
     info!(settings = %settings, "did_change_configuration received");
+
+    // Update test explorer config if present.
+    update_test_explorer_config(server, &settings).await;
 
     let mut mode = None;
     if let Some(mode_str) = settings
@@ -550,6 +559,64 @@ pub(super) async fn rebuild_registry_and_resolve(server: &LspServer) {
         files = file_count,
         "registry rebuilt — diagnostics refreshed"
     );
+}
+
+/// Update test explorer configuration from `didChangeConfiguration` settings.
+async fn update_test_explorer_config(server: &LspServer, settings: &serde_json::Value) {
+    let te = settings
+        .get("testExplorer")
+        .or_else(|| settings.get("basilisk").and_then(|b| b.get("testExplorer")));
+
+    let Some(te) = te else { return };
+
+    let mut config = server.test_config.write().await;
+    if let Some(enabled) = te.get("enabled").and_then(serde_json::Value::as_bool) {
+        config.enabled = enabled;
+    }
+    if let Some(framework) = te.get("framework").and_then(serde_json::Value::as_str) {
+        framework.clone_into(&mut config.framework);
+    }
+    if let Some(pytest_path) = te.get("pytestPath").and_then(serde_json::Value::as_str) {
+        pytest_path.clone_into(&mut config.pytest_path);
+    }
+    if let Some(args) = te.get("args").and_then(serde_json::Value::as_array) {
+        config.args = args
+            .iter()
+            .filter_map(|v| v.as_str().map(String::from))
+            .collect();
+    }
+    if let Some(auto_discover) = te
+        .get("autoDiscoverOnSave")
+        .and_then(serde_json::Value::as_bool)
+    {
+        config.auto_discover_on_save = auto_discover;
+    }
+    if let Some(use_uv_run) = te.get("useUvRun").and_then(serde_json::Value::as_bool) {
+        config.use_uv_run = use_uv_run;
+    }
+    info!(?config, "test explorer config updated");
+}
+
+/// Send initial test discovery results to the client after workspace initialization.
+async fn send_initial_test_discovery(server: &LspServer) {
+    let roots = server.workspace_roots.read().await;
+    let Some(root) = roots.first().cloned() else {
+        return;
+    };
+    drop(roots);
+
+    let items = crate::test_discovery::discover_workspace_tests(&root);
+    let count: usize = items
+        .iter()
+        .map(|file_item| file_item.children.len() + 1)
+        .sum();
+    info!(count, "initial test discovery complete");
+
+    super::test_handlers::send_test_discovery_notification(server, items).await;
+
+    // Check if pytest is available in the uv registry.
+    super::test_handlers::check_pytest_availability(server).await;
+    super::test_handlers::check_pytest_cov_availability(server).await;
 }
 
 /// Handle the `shutdown` request: stop all debug sessions.

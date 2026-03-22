@@ -80,75 +80,75 @@ Lua-rendered buffers using the nvim LSP client.
 ## TODOs
 
 ### LSP Backend
-- [ ] Implement `basilisk/workspaceModules` handler in `basilisk-lsp`
-- [ ] Implement `ModuleNode` / `SymbolNode` construction from `ResolvedModule`
-- [ ] Implement `scope` parameter filtering for `basilisk/workspaceModules`
-- [ ] Implement `basilisk/moduleChanged` notification on re-analysis
-- [ ] Implement 300ms debounce for `basilisk/moduleChanged`
-- [ ] Implement `basilisk/typeHealth` handler
-- [ ] Implement `HealthStats` computation (annotated vs unannotated symbol counting)
-- [ ] Implement `ModuleHealth` per-module breakdown
-- [ ] Wire adoption state into `ModuleHealth.adopted`
-- [ ] Add all three custom commands to `LSP-ARCHITECTURE-SPEC.md`
-- [ ] Unit tests: `basilisk/workspaceModules` returns correct tree for test workspace
-- [ ] Unit tests: `basilisk/typeHealth` returns correct coverage percentages
-- [ ] Unit tests: `basilisk/moduleChanged` fires after file change, not before
+- [x] Implement `basilisk/workspaceModules` handler in `basilisk-lsp`
+- [x] Implement `ModuleNode` / `SymbolNode` construction from `ResolvedModule`
+- [x] Implement `scope` parameter filtering for `basilisk/workspaceModules`
+- [x] Implement `basilisk/moduleChanged` notification on re-analysis
+- [x] Implement 300ms debounce for `basilisk/moduleChanged`
+- [x] Implement `basilisk/typeHealth` handler
+- [x] Implement `HealthStats` computation (annotated vs unannotated symbol counting)
+- [x] Implement `ModuleHealth` per-module breakdown
+- [x] Wire adoption state into `ModuleHealth.adopted`
+- [x] Add all three custom commands to `LSP-ARCHITECTURE-SPEC.md`
+- [x] Unit tests: `basilisk/workspaceModules` returns correct tree for test workspace
+- [x] Unit tests: `basilisk/typeHealth` returns correct coverage percentages
+- [x] Unit tests: `basilisk/moduleChanged` fires after file change, not before
 
 ### VS Code Extension
-- [ ] Create `basilisk-icon.svg` (monochrome, 24x24, light + dark theme compatible)
-- [ ] Add `viewsContainers` and `views` to `package.json`
-- [ ] Add `viewsWelcome` entries to `package.json`
-- [ ] Add all menu contributions to `package.json`
-- [ ] Add walkthrough contribution to `package.json`
-- [ ] Implement `ModuleExplorerProvider` — `TreeDataProvider` with lazy child loading
-- [ ] Implement module tree item rendering (codicons, descriptions, tooltips, click-to-open)
-- [ ] Implement symbol decorations (unannotated italic, private dimmed, exported overlay, error dot)
-- [ ] Implement `basilisk/moduleChanged` notification handler -> incremental tree refresh
-- [ ] Implement tree/flat view toggle with `workspaceState` persistence
-- [ ] Implement module filter input box with glob support
-- [ ] Implement `TypeHealthProvider` — `TreeDataProvider` with summary header
-- [ ] Implement coverage bar rendering in description field
-- [ ] Implement sort cycling (worst-first / best-first / alphabetical)
-- [ ] Implement `BasiliskInfoProvider` — static tree with four sections
-- [ ] Implement Feature Status toggle-on-click
-- [ ] Implement Server Info section (version, binary, python, analysis mode, file count)
-- [ ] Register `basilisk.refreshModuleExplorer` command
-- [ ] Register `basilisk.toggleModuleExplorerView` command
-- [ ] Register `basilisk.collapseModuleExplorer` command
-- [ ] Register `basilisk.copyImportPath` command (clipboard: `from x.y import Z`)
-- [ ] Register `basilisk.copyQualifiedName` command (clipboard: `x.y.Z`)
-- [ ] Register `basilisk.refreshTypeHealth` command
-- [ ] Register `basilisk.sortTypeHealth` command
-- [ ] Register `basilisk.openWalkthrough` command
-- [ ] Set context keys: `basilisk.serverState`, `basilisk.hasWorkspace`, `basilisk.moduleExplorerView`
-- [ ] E2E test: activity bar icon appears, clicking opens sidebar
-- [ ] E2E test: module explorer shows correct tree for test workspace
-- [ ] E2E test: type health shows correct coverage for test workspace
-- [ ] E2E test: copy import path produces correct `from x import y` string
-- [ ] E2E test: feature toggle click changes setting and updates tree item
+- [x] Create `basilisk-icon.svg` (monochrome, 24x24, light + dark theme compatible)
+- [x] Add `viewsContainers` and `views` to `package.json`
+- [x] Add `viewsWelcome` entries to `package.json`
+- [x] Add all menu contributions to `package.json`
+- [x] Add walkthrough contribution to `package.json`
+- [x] Implement `ModuleExplorerProvider` — `TreeDataProvider` with lazy child loading
+- [x] Implement module tree item rendering (codicons, descriptions, tooltips, click-to-open)
+- [x] Implement symbol decorations (unannotated italic, private dimmed, exported overlay, error dot)
+- [x] Implement `basilisk/moduleChanged` notification handler -> incremental tree refresh
+- [x] Implement tree/flat view toggle with `workspaceState` persistence
+- [x] Implement module filter input box with glob support
+- [x] Implement `TypeHealthProvider` — `TreeDataProvider` with summary header
+- [x] Implement coverage bar rendering in description field
+- [x] Implement sort cycling (worst-first / best-first / alphabetical)
+- [x] Implement `BasiliskInfoProvider` — static tree with four sections
+- [x] Implement Feature Status toggle-on-click
+- [x] Implement Server Info section (version, binary, python, analysis mode, file count)
+- [x] Register `basilisk.refreshModuleExplorer` command
+- [x] Register `basilisk.toggleModuleExplorerView` command
+- [x] Register `basilisk.collapseModuleExplorer` command
+- [x] Register `basilisk.copyImportPath` command (clipboard: `from x.y import Z`)
+- [x] Register `basilisk.copyQualifiedName` command (clipboard: `x.y.Z`)
+- [x] Register `basilisk.refreshTypeHealth` command
+- [x] Register `basilisk.sortTypeHealth` command
+- [x] Register `basilisk.openWalkthrough` command
+- [x] Set context keys: `basilisk.serverState`, `basilisk.hasWorkspace`, `basilisk.moduleExplorerView`
+- [x] E2E test: activity bar icon appears, clicking opens sidebar
+- [x] E2E test: module explorer shows correct tree for test workspace
+- [x] E2E test: type health shows correct coverage for test workspace
+- [x] E2E test: copy import path produces correct `from x import y` string
+- [x] E2E test: feature toggle click changes setting and updates tree item
 
 ### Zed Extension
-- [ ] Register `/modules` slash command
-- [ ] Register `/symbols` slash command
-- [ ] Register `/health` slash command
-- [ ] Register `/basilisk` slash command
-- [ ] Implement markdown tree formatting for module output
-- [ ] Implement markdown table formatting for health output
-- [ ] Implement argument completion for `/modules` and `/symbols` (module names)
-- [ ] Test: `/modules` output matches `basilisk/workspaceModules` data
-- [ ] Test: `/health` output matches `basilisk/typeHealth` data
+- [x] Register `/modules` slash command
+- [x] Register `/symbols` slash command
+- [x] Register `/health` slash command
+- [x] Register `/basilisk` slash command
+- [x] Implement markdown tree formatting for module output
+- [x] Implement markdown table formatting for health output
+- [x] Implement argument completion for `/modules` and `/symbols` (module names)
+- [x] Test: `/modules` output matches `basilisk/workspaceModules` data
+- [x] Test: `/health` output matches `basilisk/typeHealth` data
 - [ ] When Zed adds panel API: implement native panels using same LSP commands
 
 ### Neovim Plugin
-- [ ] Implement `basilisk.modules` Lua module (split buffer, foldable tree)
-- [ ] Implement tree rendering with `nvim_buf_set_lines` + virtual text for types
-- [ ] Implement keybindings: `<CR>` open, `o` toggle, `r` refresh, `y` copy import, `q` close
-- [ ] Implement `basilisk.health` Lua module (split buffer, colored highlights)
-- [ ] Implement green/yellow/red highlights via `nvim_buf_add_highlight`
-- [ ] Implement `basilisk.info` Lua module (floating window)
-- [ ] Register `:BasiliskModules`, `:BasiliskHealth`, `:BasiliskInfo` commands
-- [ ] Set default keymaps: `<leader>bm`, `<leader>bh`, `<leader>bi`
-- [ ] Handle `basilisk/moduleChanged` via `vim.lsp.handlers` for live refresh
+- [x] Implement `basilisk.modules` Lua module (split buffer, foldable tree)
+- [x] Implement tree rendering with `nvim_buf_set_lines` + virtual text for types
+- [x] Implement keybindings: `<CR>` open, `o` toggle, `r` refresh, `y` copy import, `q` close
+- [x] Implement `basilisk.health` Lua module (split buffer, colored highlights)
+- [x] Implement green/yellow/red highlights via `nvim_buf_add_highlight`
+- [x] Implement `basilisk.info` Lua module (floating window)
+- [x] Register `:BasiliskModules`, `:BasiliskHealth`, `:BasiliskInfo` commands
+- [x] Set default keymaps: `<leader>bm`, `<leader>bh`, `<leader>bi`
+- [x] Handle `basilisk/moduleChanged` via `vim.lsp.handlers` for live refresh
 - [ ] Test: `:BasiliskModules` renders correct tree for test workspace
 - [ ] Test: `:BasiliskHealth` renders correct coverage stats
 
@@ -157,5 +157,5 @@ Lua-rendered buffers using the nvim LSP client.
 - [ ] Performance test: `basilisk/typeHealth` < 50ms for 1000-file workspace
 - [ ] Performance test: `basilisk/moduleChanged` notification < 20ms per file change
 - [ ] Accessibility audit: VS Code screen reader testing
-- [ ] Final icon design for activity bar
+- [x] Final icon design for activity bar
 - [ ] Documentation: add panel usage to README / user guide

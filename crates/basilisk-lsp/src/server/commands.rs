@@ -75,6 +75,27 @@ pub(super) async fn dispatch_execute_command(
         basilisk_common::commands::MOVE_SYMBOL => {
             super::refactor_commands::execute_move_symbol(server, &params.arguments).await
         }
+        basilisk_common::commands::DISCOVER_TESTS => {
+            super::test_handlers::execute_discover_tests(server, &params.arguments).await
+        }
+        basilisk_common::commands::RUN_TESTS => {
+            super::test_handlers::execute_run_tests(server, &params.arguments).await
+        }
+        basilisk_common::commands::RUN_TEST_FILE => {
+            super::test_handlers::execute_run_test_file(server, &params.arguments).await
+        }
+        basilisk_common::commands::DEBUG_TEST => {
+            super::test_handlers::execute_debug_test(server, &params.arguments).await
+        }
+        basilisk_common::commands::RUN_TESTS_COVERAGE => {
+            super::test_handlers::execute_run_tests_coverage(server, &params.arguments).await
+        }
+        basilisk_common::commands::WORKSPACE_MODULES => {
+            super::activity_panel::execute_workspace_modules(server, &params.arguments).await
+        }
+        basilisk_common::commands::TYPE_HEALTH => {
+            super::activity_panel::execute_type_health(server, &params.arguments).await
+        }
         unknown => {
             server
                 .client
@@ -296,36 +317,16 @@ async fn execute_fix_file(
     server: &LspServer,
     args: &[serde_json::Value],
 ) -> LspResult<Option<serde_json::Value>> {
-    // Debug: write to a file so we can trace what happens during E2E tests.
-    let dbg = |msg: &str| {
-        use std::io::Write;
-        if let Ok(mut file) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open("/tmp/basilisk-fixfile-debug.log")
-        {
-            let _ = writeln!(file, "[fixFile] {msg}");
-        }
-    };
-
     let Some(uri_str) = args.first().and_then(|v| v.as_str()) else {
-        dbg("BAIL: no URI argument");
         return Ok(None);
     };
-    dbg(&format!("URI: {uri_str}"));
     let Ok(uri) = tower_lsp::lsp_types::Url::parse(uri_str) else {
-        dbg("BAIL: could not parse URI");
         return Ok(None);
     };
 
     let action: Option<tower_lsp::lsp_types::CodeAction> = server
         .with_index(|idx| {
             let (text, _, checker_diags) = idx.get_by_uri(&uri)?;
-            dbg(&format!(
-                "index lookup OK: {} diagnostics, text={:?}",
-                checker_diags.len(),
-                &text[..text.len().min(60)]
-            ));
             let lsp_diags: Vec<_> = checker_diags
                 .iter()
                 .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &text))
@@ -335,11 +336,9 @@ async fn execute_fix_file(
         .await;
 
     let Some(action) = action else {
-        dbg("BAIL: no fixable diagnostics (with_index or fix_all returned None)");
-        warn!(uri = %uri, "fixFile: no fixable diagnostics (index lookup or fix generation returned None)");
+        warn!(uri = %uri, "fixFile: no fixable diagnostics");
         return Ok(Some(serde_json::json!({ "fixed": 0 })));
     };
-    dbg(&format!("action generated: {}", action.title));
 
     let edit_count: usize = action
         .edit
@@ -348,13 +347,8 @@ async fn execute_fix_file(
         .map_or(0, |changes| changes.values().map(Vec::len).sum::<usize>());
 
     if let Some(edit) = action.edit {
-        dbg(&format!("applying edit with {edit_count} text edits"));
         match server.client.apply_edit(edit).await {
             Ok(response) => {
-                dbg(&format!(
-                    "apply_edit response: applied={}, failure_reason={:?}",
-                    response.applied, response.failure_reason
-                ));
                 if response.applied {
                     info!(uri = %uri, edit_count, "fixFile: edits applied successfully");
                     // Clear stale diagnostics immediately — the client confirmed
@@ -364,7 +358,6 @@ async fn execute_fix_file(
                         .client
                         .publish_diagnostics(uri.clone(), vec![], None)
                         .await;
-                    dbg("published empty diagnostics");
                 } else {
                     error!(
                         uri = %uri,
@@ -375,12 +368,9 @@ async fn execute_fix_file(
                 }
             }
             Err(err) => {
-                dbg(&format!("apply_edit ERROR: {err}"));
                 error!(uri = %uri, error = %err, "fixFile: apply_edit request failed");
             }
         }
-    } else {
-        dbg("action had no edit!");
     }
 
     info!(uri = %uri, edit_count, "fixFile: completed");

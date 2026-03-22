@@ -178,3 +178,56 @@ pub(super) async fn execute_uv_create_env(
     })
     .await
 }
+
+#[cfg(test)]
+#[expect(
+    clippy::indexing_slicing,
+    reason = "test-only code: indexing acceptable in unit tests"
+)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_package_arg_bare_string() {
+        let args = vec![serde_json::json!("requests")];
+        assert_eq!(extract_package_arg(&args), Some("requests".to_owned()));
+    }
+
+    #[test]
+    fn extract_package_arg_object_with_package_field() {
+        let args = vec![serde_json::json!({"package": "flask"})];
+        assert_eq!(extract_package_arg(&args), Some("flask".to_owned()));
+    }
+
+    #[test]
+    fn extract_package_arg_empty_args() {
+        assert_eq!(extract_package_arg(&[]), None);
+    }
+
+    #[test]
+    fn extract_package_arg_wrong_type() {
+        let args = vec![serde_json::json!(42)];
+        assert_eq!(extract_package_arg(&args), None);
+    }
+
+    #[test]
+    fn uv_result_to_json_captures_all_fields() {
+        let result = crate::uv_commands::UvCommandResult {
+            success: true,
+            stdout: "ok".to_owned(),
+            stderr: String::new(),
+        };
+        let json = uv_result_to_json(&result);
+        assert_eq!(json["success"], true);
+        assert_eq!(json["stdout"], "ok");
+        assert_eq!(json["stderr"], "");
+    }
+
+    #[test]
+    fn spawn_error_includes_label_and_message() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "not found");
+        let lsp_err = spawn_error("uv sync", &io_err);
+        assert!(lsp_err.message.contains("uv sync"));
+        assert!(lsp_err.message.contains("not found"));
+    }
+}

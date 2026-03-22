@@ -53,11 +53,7 @@ These settings are sent to the LSP server via `workspace/configuration` under th
 | `basilisk.debugger.enabled` | `boolean` | `true` | Enable debugger |
 | `basilisk.debugger.typeChecking` | `boolean` | `false` | Enable type assertion breakpoints |
 | `basilisk.debugger.debugpyPath` | `string` | `"debugpy"` | Path to debugpy module |
-| `basilisk.testExplorer.enabled` | `boolean` | `true` | Enable test discovery and execution |
-| `basilisk.testExplorer.framework` | `enum` | `"auto"` | `pytest` / `unittest` / `auto` |
-| `basilisk.testExplorer.pytestPath` | `string` | `"pytest"` | Path to pytest executable |
-| `basilisk.testExplorer.args` | `string[]` | `[]` | Additional test runner arguments |
-| `basilisk.testExplorer.autoDiscoverOnSave` | `boolean` | `true` | Re-discover tests on file save |
+| `basilisk.testExplorer.*` | — | — | See `LSP-TEST-INTEGRATION-SPEC.md` § Configuration Settings |
 | `basilisk.uv.enabled` | `boolean` | `true` | Enable uv integration (auto-detected, see `LSP-UV-INTEGRATION-SPEC.md`) |
 | `basilisk.uv.executablePath` | `string` | `""` (auto-detect) | Path to `uv` binary (only needed for commands, not detection) |
 | `basilisk.uv.autoSync` | `boolean` | `false` | Auto-run `uv sync` when `pyproject.toml` changes |
@@ -65,6 +61,9 @@ These settings are sent to the LSP server via `workspace/configuration` under th
 | `basilisk.uv.dependencyDiagnostics` | `boolean` | `false` | Enable BSK-W0011/W0012/W0013 dependency hygiene warnings |
 
 ## Command Registration Rule
+
+⚠️ FOLLOW THIS DOCUMENTATION TO THE LETTER
+https://code.visualstudio.com/api/references/vscode-api#commands
 
 **The LSP server is the single source of truth for commands.** The server advertises every command it handles via `executeCommandProvider` in its `initialize` response. This is an ironclad rule:
 
@@ -97,6 +96,62 @@ This rule applies equally to VS Code, Neovim, and Zed extensions.
 | `basilisk.uv.remove` | `{package}` | `{}` | Run `uv remove <package>` |
 | `basilisk.uv.lock` | `{}` | `{}` | Run `uv lock` (resolve without installing) |
 | `basilisk.uv.createEnv` | `{pythonVersion?}` | `{}` | Run `uv venv` (optionally `--python X.Y`) |
+| `basilisk/workspaceModules` | `{scope?: string}` | `WorkspaceModulesResponse` | Return the workspace module tree (optionally scoped to a package/subpackage) |
+| `basilisk/typeHealth` | `{module?: string}` | `TypeHealthResponse` | Return type health statistics for the workspace or a specific module |
+
+### Custom LSP Notifications
+
+| Notification | Direction | Params | Description |
+|-------------|-----------|--------|-------------|
+| `basilisk/moduleChanged` | Server → Client | `{module: ModuleNode}` | Sent when a module's symbol table changes after re-analysis. Debounced at 300ms. |
+
+### Data Model Types
+
+```typescript
+/** A node in the workspace module tree. */
+interface ModuleNode {
+    name: string;              // Fully qualified module name (e.g. "mypackage.utils")
+    path: string;              // Absolute filesystem path to the module file or __init__.py
+    kind: "package" | "module";
+    children: ModuleNode[];    // Sub-modules (non-empty only for packages)
+    symbols: SymbolNode[];     // Top-level symbols exported by this module
+}
+
+/** A symbol within a module (function, class, or variable). */
+interface SymbolNode {
+    name: string;
+    kind: "function" | "class" | "variable";
+    type: string | null;       // Inferred or annotated type signature, null if unresolved
+    line: number;              // 0-based line number of the definition
+    children: SymbolNode[];    // Nested symbols (e.g. methods inside a class)
+}
+
+/** Response from `basilisk/workspaceModules`. */
+interface WorkspaceModulesResponse {
+    modules: ModuleNode[];
+}
+
+/** Aggregate health statistics for a scope (workspace or single module). */
+interface HealthStats {
+    totalSymbols: number;      // Total symbols in scope
+    typedSymbols: number;      // Symbols with a resolved type annotation
+    coveragePercent: number;   // (typedSymbols / totalSymbols) * 100, 0 when totalSymbols == 0
+    errorCount: number;        // Number of BSK-E* diagnostics
+    warningCount: number;      // Number of BSK-W* diagnostics
+}
+
+/** Per-module health breakdown. */
+interface ModuleHealth {
+    module: string;            // Fully qualified module name
+    stats: HealthStats;
+}
+
+/** Response from `basilisk/typeHealth`. */
+interface TypeHealthResponse {
+    workspace: HealthStats;    // Rolled-up stats for the entire workspace
+    modules: ModuleHealth[];   // Per-module breakdown (all modules, or single module when filtered)
+}
+```
 
 ## DapTcpProxy (all editors)
 

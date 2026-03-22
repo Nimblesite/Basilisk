@@ -228,48 +228,8 @@ Additional indicators (future):
 
 ## Test Explorer Integration
 
-> See `LSP-ARCHITECTURE-SPEC.md` § Shared Configuration Settings for test explorer settings shared across all editors.
-
-Discover and run Python tests (pytest, unittest) directly from VS Code's Test Explorer.
-
-**Architecture**:
-- Implement `TestController` via VS Code's `vscode.tests` API
-- Parse Python test files to discover test functions, classes, and methods
-- Use the resolver to find `def test_*` functions, classes inheriting `unittest.TestCase`, and `@pytest.mark` decorated items
-- Execute tests via `pytest` subprocess (similar to how formatting delegates to `ruff`)
-- Stream results back to Test Explorer as pass/fail/skip/error
-
-**Test Discovery**:
-- Scan workspace for `test_*.py` and `*_test.py` files
-- Parse with `basilisk-parser` to extract test items without importing
-- Detect pytest fixtures, parametrize markers, and unittest setUp/tearDown
-- Auto-refresh on file save
-
-**Test Item Hierarchy**:
-```
-tests/
-    test_api.py
-        test_login
-        test_signup -- AssertionError: expected 200, got 401
-        TestUserEndpoints
-            test_get_user
-            test_delete_user
-            test_update_user
-    test_models.py
-        test_create_widget
-        test_slow_query (skipped)
-```
-
-**Features**:
-- **Auto-discovery**: finds pytest and unittest tests from AST (no import needed)
-- **Run/debug individual tests**: click play on any test function or class
-- **Run all**: run entire test suite from Test Explorer root
-- **Inline failure messages**: show assertion errors and tracebacks inline
-- **Go to test**: click any test item to navigate to its source
-- **Re-run failed**: quick action to re-run only failed tests
-- **pytest integration**: honours `pytest.ini`, `pyproject.toml [tool.pytest]`, conftest fixtures
-- **Type-checked tests**: Basilisk diagnostics run on test files too
-- **Coverage overlay**: integrate with `pytest-cov` to show coverage gutters
+> See `LSP-TEST-INTEGRATION-SPEC.md` for full test explorer architecture, data model, configuration, and features.
+> VS Code-specific wiring (TestController API, TestRunProfile) is documented in the VS Code section of that spec.
 
 ---
 

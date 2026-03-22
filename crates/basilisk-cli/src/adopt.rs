@@ -9,6 +9,8 @@ use std::path::Path;
 
 use tracing::{error, info, warn};
 
+use crate::pluralise;
+
 /// Run the adopt subcommand.
 ///
 /// Exit codes:
@@ -202,15 +204,6 @@ fn resolve_config_root(paths: &[String]) -> std::path::PathBuf {
             }
         })
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-}
-
-/// Return `"s"` for counts != 1, empty string otherwise.
-fn pluralise(count: usize) -> &'static str {
-    if count == 1 {
-        ""
-    } else {
-        "s"
-    }
 }
 
 #[cfg(test)]

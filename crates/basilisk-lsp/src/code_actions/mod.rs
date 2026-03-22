@@ -67,6 +67,11 @@ pub fn code_actions(
         if code == "BSK-W0013" {
             actions.push(CodeActionOrCommand::CodeAction(make_uv_sync_action(diag)));
         }
+        if code == crate::server::test_handlers::PYTEST_NOT_FOUND_CODE {
+            actions.push(CodeActionOrCommand::CodeAction(
+                make_uv_add_dev_pytest_action(diag),
+            ));
+        }
         if let Some(a) = fix {
             actions.push(CodeActionOrCommand::CodeAction(a));
         }
@@ -228,6 +233,22 @@ fn make_uv_sync_action(diag: &Diagnostic) -> CodeAction {
             command: basilisk_common::commands::UV_SYNC.to_owned(),
             arguments: None,
         }),
+        ..CodeAction::default()
+    }
+}
+
+/// Build a code action that runs `uv add --dev pytest` when pytest is missing.
+fn make_uv_add_dev_pytest_action(diag: &Diagnostic) -> CodeAction {
+    CodeAction {
+        title: "Install pytest (uv add --dev pytest)".to_owned(),
+        kind: Some(CodeActionKind::QUICKFIX),
+        diagnostics: Some(vec![diag.clone()]),
+        command: Some(Command {
+            title: "uv add --dev pytest".to_owned(),
+            command: basilisk_common::commands::UV_ADD_DEV.to_owned(),
+            arguments: Some(vec![serde_json::Value::String("pytest".to_owned())]),
+        }),
+        is_preferred: Some(true),
         ..CodeAction::default()
     }
 }
@@ -472,6 +493,61 @@ mod tests {
                 args[0],
                 serde_json::Value::String("requests-stubs".to_owned())
             );
+        }
+    }
+
+    #[test]
+    fn test_bsk_w0014_code_action_includes_uv_add_dev_pytest() {
+        let diag = Diagnostic {
+            range: Range {
+                start: Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: Position {
+                    line: 0,
+                    character: 0,
+                },
+            },
+            severity: Some(tower_lsp::lsp_types::DiagnosticSeverity::WARNING),
+            code: Some(NumberOrString::String(
+                crate::server::test_handlers::PYTEST_NOT_FOUND_CODE.to_owned(),
+            )),
+            code_description: None,
+            source: Some("basilisk".to_owned()),
+            message: "pytest not found in uv.lock — run `uv add --dev pytest` to install it"
+                .to_owned(),
+            tags: None,
+            related_information: None,
+            data: None,
+        };
+        let uri = Url::parse("file:///test_example.py").unwrap();
+        let source = "def test_hello() -> None:\n    pass\n";
+        let range = Range {
+            start: Position {
+                line: 0,
+                character: 0,
+            },
+            end: Position {
+                line: 0,
+                character: 0,
+            },
+        };
+        let actions = super::code_actions(&uri, &[diag], source, &range, None);
+        let pytest_action = actions.iter().find(|a| match a {
+            CodeActionOrCommand::CodeAction(ca) => ca.title.contains("Install pytest"),
+            CodeActionOrCommand::Command(_) => false,
+        });
+        assert!(
+            pytest_action.is_some(),
+            "Should have install pytest action for BSK-W0014"
+        );
+        if let Some(CodeActionOrCommand::CodeAction(ca)) = pytest_action {
+            assert_eq!(ca.title, "Install pytest (uv add --dev pytest)");
+            let cmd = ca.command.as_ref().expect("should have command");
+            assert_eq!(cmd.command, basilisk_common::commands::UV_ADD_DEV);
+            let args = cmd.arguments.as_ref().expect("should have arguments");
+            assert_eq!(args[0], serde_json::Value::String("pytest".to_owned()));
         }
     }
 }
