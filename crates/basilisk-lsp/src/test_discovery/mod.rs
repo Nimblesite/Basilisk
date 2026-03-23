@@ -11,10 +11,10 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-pub use self::discovery::{
-    discover_test_files, discover_tests_in_file, discover_workspace_tests,
+pub use self::discovery::{discover_test_files, discover_tests_in_file, discover_workspace_tests};
+pub use self::runner::{
+    parse_pytest_output, run_tests, PerTestResult, TestRunConfig, TestRunResult,
 };
-pub use self::runner::{parse_pytest_output, run_tests, PerTestResult, TestRunConfig, TestRunResult};
 
 /// A discovered test item in the workspace.
 #[derive(Debug, Clone, Serialize, Deserialize)]

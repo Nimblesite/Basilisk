@@ -17,7 +17,7 @@ This is the **Zed editor integration**. It is a native Zed extension compiled to
 ## Building
 
 ```sh
-./scripts/build-zed-extension.sh
+make package-zed
 ```
 
 ## Dependencies
