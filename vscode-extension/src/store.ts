@@ -121,8 +121,8 @@ function syncServerCommands(signals: StoreSignals): void {
 function resolveLspReady(signals: StoreSignals): void {
   const handle = signals.readyHandle.value;
   if (handle !== undefined) {
+    handle.resolve();
     signals.readyHandle.value = undefined;
-    setTimeout(handle.resolve, 0);
   }
 }
 
