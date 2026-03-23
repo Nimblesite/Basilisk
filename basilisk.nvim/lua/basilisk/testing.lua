@@ -124,6 +124,9 @@ function M.parse_pytest_output(output)
     ::continue::
   end
 
+  -- Update the module-level tree so refresh_display() picks it up.
+  test_tree = tree
+
   return tree
 end
 
