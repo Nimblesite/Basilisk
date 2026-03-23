@@ -18,6 +18,7 @@ import { signal, computed, type ReadonlySignal, type Signal } from "@preact/sign
 import { type LanguageClient, State } from "vscode-languageclient/node";
 import * as vscode from "vscode";
 import { Logger, type LogSink } from "./logger";
+import { createServerCommandHandler } from "./lsp-client";
 import type { Result } from "./result";
 
 /** Default timeout (ms) for waiting on the LSP client to become ready. */
@@ -94,8 +95,9 @@ function disposeServerCommands(signals: StoreSignals): void {
 function syncServerCommands(signals: StoreSignals): void {
   disposeServerCommands(signals);
 
-  const commands = signals.client.value?.initializeResult?.capabilities?.executeCommandProvider?.commands;
-  if (!Array.isArray(commands)) {
+  const client = signals.client.value;
+  const commands = client?.initializeResult?.capabilities?.executeCommandProvider?.commands;
+  if (!Array.isArray(commands) || client === undefined) {
     signals.serverCommands.value = new Set();
     return;
   }
@@ -104,16 +106,12 @@ function syncServerCommands(signals: StoreSignals): void {
   for (const cmd of commands) {
     if (typeof cmd === "string") {
       next.add(cmd);
+      const handler = createServerCommandHandler(client, cmd);
+      const disposable = vscode.commands.registerCommand(cmd, handler);
+      signals.serverCommandDisposables.push(disposable);
     }
   }
   signals.serverCommands.value = next;
-
-  // Server commands are NOT registered via vscode.commands.registerCommand.
-  // They are declared in package.json contributes.commands (making them
-  // available in the command palette) and executed through the LSP
-  // client's executeCommand middleware. The ExecuteCommandFeature was
-  // removed from the LanguageClient to prevent double-registration on
-  // reload — our middleware handles the routing instead.
 }
 
 /** Resolve the ready handle and clear it. */

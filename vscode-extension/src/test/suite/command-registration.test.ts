@@ -292,12 +292,12 @@ suite('Command Registration (VS Code API Compliance)', () => {
     });
 
     // ----------------------------------------------------------------
-    // 7. Server commands are NOT directly registered (ExecuteCommandFeature removed)
+    // 7. Server commands ARE registered (routed through LSP client)
     // ----------------------------------------------------------------
-    test('server commands are not pre-registered via registerCommand', async function () {
+    test('server commands are registered via syncServerCommands', async function () {
         this.timeout(COMMAND_WAIT_MS);
         for (const cmd of SERVER_COMMANDS) {
-            assertCanRegister(cmd, 'ExecuteCommandFeature removal');
+            assertCannotRegister(cmd, 'Server command registration');
         }
     });
 

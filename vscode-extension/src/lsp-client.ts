@@ -287,6 +287,30 @@ async function executeCommandMiddleware(
   return result;
 }
 
+/**
+ * Create a VS Code command handler that routes through the executeCommand
+ * middleware and then sends `workspace/executeCommand` to the LSP server.
+ *
+ * This replaces the vscode-languageclient `ExecuteCommandFeature` which was
+ * removed to prevent double-registration crashes. The store calls this for
+ * each server-advertised command and registers the result with
+ * `vscode.commands.registerCommand`.
+ */
+export function createServerCommandHandler(
+  client: LanguageClient,
+  command: string
+): (...args: unknown[]) => Promise<unknown> {
+  return async (...args: unknown[]) => {
+    async function next(cmd: string, a: unknown[]): Promise<unknown> {
+      return client.sendRequest("workspace/executeCommand", {
+        command: cmd,
+        arguments: a,
+      });
+    }
+    return executeCommandMiddleware(command, args, next);
+  };
+}
+
 function registerConfigForwarding(context: vscode.ExtensionContext, store: Store): void {
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
