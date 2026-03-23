@@ -16,12 +16,11 @@ import { getStore } from "../../extension";
 import {
   EXTENSION_ID,
   SERVER_START_WAIT_MS,
+  SUITE_SETUP_TIMEOUT_MS,
   setupLspTestSuite,
   teardownLspTestSuite,
   closeAllEditors,
 } from "./test-helpers";
-
-const SUITE_SETUP_TIMEOUT_MS = 30_000;
 const TEST_TIMEOUT_MS = 15_000;
 
 // ── Package.json type definitions ─────────────────────────────────────────

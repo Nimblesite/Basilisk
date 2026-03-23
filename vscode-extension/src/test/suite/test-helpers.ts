@@ -19,8 +19,13 @@ export const DIAGNOSTIC_TIMEOUT_MS = 15_000;
 /** Time (ms) to wait for "no diagnostics" assertions. */
 export const NO_DIAGNOSTIC_WAIT_MS = 5_000;
 
-/** Time (ms) to wait for the LSP server to fully start. */
-export const SERVER_START_WAIT_MS = 10_000;
+/** Time (ms) to wait for the LSP server to fully start.
+ *  CI runners need up to 2 minutes for a cold start (cargo build + LSP init). */
+export const SERVER_START_WAIT_MS = 60_000;
+
+/** Mocha timeout (ms) for suiteSetup hooks that wait for the LSP.
+ *  Must exceed SERVER_START_WAIT_MS to avoid Mocha killing the hook early. */
+export const SUITE_SETUP_TIMEOUT_MS = 90_000;
 
 /** Maximum time (ms) to wait for a server-advertised command to appear. */
 export const COMMAND_WAIT_MS = 1_000;

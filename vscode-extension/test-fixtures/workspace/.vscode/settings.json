@@ -1,3 +1,13 @@
 {
-    "basilisk.analysisMode": "wholeModule"
+    "basilisk.analysisMode": "wholeModule",
+    "basilisk.testExplorer.framework": "unittest",
+    "basilisk.testExplorer.pytestPath": "/custom/pytest",
+    "basilisk.testExplorer.args": [
+        "-v",
+        "--tb=long"
+    ],
+    "basilisk.testExplorer.useUvRun": false,
+    "basilisk.testExplorer.enabled": false,
+    "basilisk.testExplorer.autoDiscoverOnSave": false,
+    "basilisk.testExplorer.coverageEnabled": true
 }

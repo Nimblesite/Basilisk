@@ -237,20 +237,28 @@ function bindClientStateListener(
 
 /** Wait for the LSP ready handle with a timeout, returning Result. */
 async function awaitLspReady(signals: StoreSignals, timeoutMs: number): Promise<Result<LanguageClient>> {
+  // Fast path: client already running.
   const client = signals.client.value;
   if (client?.isRunning() === true) {
+    return { ok: true, value: client };
+  }
+  // Also check our own state signal (catches post-restart where isRunning()
+  // lags behind the onDidChangeState callback that set lspState = "running").
+  if (signals.lspState.value === "running" && client !== undefined) {
     return { ok: true, value: client };
   }
 
   const existing = signals.readyHandle.value;
   const ready = existing !== undefined ? existing.promise : createReadyHandle(signals).promise;
 
-  // Also poll for the client becoming ready, in case the readyHandle was
-  // created after the state change listener fired (e.g. after a store reset).
+  // Poll for the client becoming ready via both isRunning() and our own
+  // lspState signal. The double check catches cases where the readyHandle
+  // was resolved before this function was called (e.g. after a deactivate/
+  // activate cycle where the state listener already fired).
   const poll = new Promise<"poll">((resolve) => {
     const interval = setInterval(() => {
       const c = signals.client.value;
-      if (c?.isRunning() === true) {
+      if (c?.isRunning() === true || (signals.lspState.value === "running" && c !== undefined)) {
         clearInterval(interval);
         resolve("poll");
       }
