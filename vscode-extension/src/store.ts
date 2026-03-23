@@ -234,20 +234,39 @@ function bindClientStateListener(
 
 /** Wait for the LSP ready handle with a timeout, returning Result. */
 async function awaitLspReady(signals: StoreSignals, timeoutMs: number): Promise<Result<LanguageClient>> {
+  const client = signals.client.value;
+  if (client?.isRunning() === true) {
+    return { ok: true, value: client };
+  }
+
   const existing = signals.readyHandle.value;
   const ready = existing !== undefined ? existing.promise : createReadyHandle(signals).promise;
+
+  // Also poll for the client becoming ready, in case the readyHandle was
+  // created after the state change listener fired (e.g. after a store reset).
+  const poll = new Promise<"poll">((resolve) => {
+    const interval = setInterval(() => {
+      const c = signals.client.value;
+      if (c?.isRunning() === true) {
+        clearInterval(interval);
+        resolve("poll");
+      }
+    }, 250);
+    setTimeout(() => { clearInterval(interval); }, timeoutMs);
+  });
+
   const timeout = new Promise<"timeout">((resolve) => {
     setTimeout(() => { resolve("timeout"); }, timeoutMs);
   });
-  const outcome = await Promise.race([ready.then(() => "ready" as const), timeout]);
+  const outcome = await Promise.race([ready.then(() => "ready" as const), poll, timeout]);
   if (outcome === "timeout") {
     return { ok: false, error: new Error(`LSP client did not reach Running state within ${timeoutMs}ms`) };
   }
-  const client = signals.client.value;
-  if (client === undefined) {
+  const resolved = signals.client.value;
+  if (resolved === undefined) {
     return { ok: false, error: new Error("LSP client resolved but is undefined") };
   }
-  return { ok: true, value: client };
+  return { ok: true, value: resolved };
 }
 
 /** Reset all signals to their initial values. */
