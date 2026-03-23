@@ -9,7 +9,6 @@ import {
 
 const SUITE_SETUP_TIMEOUT_MS = 30_000;
 
-// eslint-disable-next-line max-lines-per-function
 suite('Basilisk uv Integration Tests', () => {
     let tmpDir: string;
 

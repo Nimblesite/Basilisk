@@ -262,7 +262,6 @@ suite('LSP Lifecycle Tests', () => {
     // ----------------------------------------------------------------
     // 6. Multiple files get independent diagnostics
     // ----------------------------------------------------------------
-    // eslint-disable-next-line max-lines-per-function
     test('multiple files get independent diagnostics', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS * 2 + SERVER_START_WAIT_MS);
 

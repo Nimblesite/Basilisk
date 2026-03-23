@@ -809,7 +809,6 @@ suite('Debug Integration E2E Tests', () => {
     // 3. Full DAP handshake test
     // ────────────────────────────────────────────────────────────────────────
 
-    // eslint-disable-next-line max-lines-per-function
     test('full debug lifecycle: start, verify DAP handshake, stop', async function () {
         this.timeout(DEBUG_SESSION_TIMEOUT_MS + SUBPROCESS_TIMEOUT_MS);
 
