@@ -117,12 +117,14 @@ function syncServerCommands(signals: StoreSignals): void {
   signals.serverCommands.value = next;
 }
 
-/** Resolve the ready handle and clear it. */
+/** Resolve the ready handle and clear it.
+ *  Resolution MUST be async (next tick) so callers' .then() handlers
+ *  are attached before the promise settles. */
 function resolveLspReady(signals: StoreSignals): void {
   const handle = signals.readyHandle.value;
   if (handle !== undefined) {
-    handle.resolve();
     signals.readyHandle.value = undefined;
+    setTimeout(handle.resolve, 0);
   }
 }
 

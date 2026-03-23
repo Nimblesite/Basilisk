@@ -88,6 +88,28 @@ lint-vsix: ## Lint VS Code extension (ESLint)
 	cd $(EXTENSION_DIR) && npm run lint
 	echo -e '$(GREEN)✓ VS Code lint passed$(RESET)'
 
+# ── Format ───────────────────────────────────────────────────────────────────
+
+.PHONY: format format-rust format-python format-vsix
+
+format: format-rust format-python format-vsix ## Format all code
+
+format-rust: ## Format Rust code
+	@echo -e '$(BOLD)$(CYAN)▶ Formatting Rust$(RESET)'
+	cargo fmt --all
+	echo -e '$(GREEN)✓ Rust formatted$(RESET)'
+
+format-python: ## Format Python code (ruff)
+	@echo -e '$(BOLD)$(CYAN)▶ Formatting Python$(RESET)'
+	ruff format --exclude '*/fixtures/*' .
+	ruff check --fix --exclude '*/fixtures/*' .
+	echo -e '$(GREEN)✓ Python formatted$(RESET)'
+
+format-vsix: ## Format VS Code extension (ESLint --fix)
+	@echo -e '$(BOLD)$(CYAN)▶ Formatting VS Code extension$(RESET)'
+	cd $(EXTENSION_DIR) && npm run lint:fix
+	echo -e '$(GREEN)✓ VS Code extension formatted$(RESET)'
+
 # ── Test ──────────────────────────────────────────────────────────────────────
 
 .PHONY: test test-rust test-vsix test-nvim test-zed test-compiler test-lsp audit
