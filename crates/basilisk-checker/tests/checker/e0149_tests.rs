@@ -59,10 +59,7 @@ r2_4: RecursiveTypeAlias2[int, str, [int, str]] = []
     let diags = run(source)?;
     let msgs = messages_for(&diags, "BSK-E0149");
     // Filter to only bound-violation messages (not other E0149 violations)
-    let bound_msgs: Vec<_> = msgs
-        .iter()
-        .filter(|m| m.contains("bound"))
-        .collect();
+    let bound_msgs: Vec<_> = msgs.iter().filter(|m| m.contains("bound")).collect();
     assert!(
         bound_msgs.is_empty(),
         "E0149 should not fire bound violations for valid type args, got: {bound_msgs:?}"

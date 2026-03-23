@@ -227,11 +227,7 @@ fn check_vars(
 /// Builds a map of parameter name to declared type for each function so that
 /// assignments like `x: Literal[False] = a` (where `a: Literal[0]`) can be
 /// checked for Literal-level incompatibility.
-fn check_local_vars(
-    module: &ResolvedModule,
-    diagnostics: &mut Vec<Diagnostic>,
-    skip: &SkipNames,
-) {
+fn check_local_vars(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>, skip: &SkipNames) {
     let source = &module.source;
     for func in &module.functions {
         let param_types = build_param_type_map(&func.parameters, source);

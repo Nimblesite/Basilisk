@@ -191,8 +191,8 @@ fn e0014_final_with_type_no_diagnostic() -> Result<(), Box<dyn std::error::Error
 }
 
 #[test]
-fn e0014_no_false_positive_on_pep695_type_alias_annotation() -> Result<(), Box<dyn std::error::Error>>
-{
+fn e0014_no_false_positive_on_pep695_type_alias_annotation(
+) -> Result<(), Box<dyn std::error::Error>> {
     // PEP 695 type alias used as annotation: E0014 should NOT fire because
     // the type alias might expand to a union that includes int.
     let source = r#"

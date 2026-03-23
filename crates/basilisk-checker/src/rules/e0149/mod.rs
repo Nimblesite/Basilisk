@@ -355,10 +355,7 @@ fn collect_type_alias_bounds(source: &str) -> Vec<TypeAliasWithBounds> {
                 let (name, bound) = if let Some(colon_pos) = stripped.find(':') {
                     let name = stripped[..colon_pos].trim().to_owned();
                     let bound = stripped[colon_pos + 1..].trim().to_owned();
-                    (
-                        name,
-                        if bound.is_empty() { None } else { Some(bound) },
-                    )
+                    (name, if bound.is_empty() { None } else { Some(bound) })
                 } else {
                     (stripped.trim().to_owned(), None)
                 };
@@ -427,19 +424,10 @@ fn check_type_alias_bound_violations(
             if !var.has_annotation {
                 continue;
             }
-            let Some(ann_text) =
-                extract_annotation_for_var(source, var.name_span)
-            else {
+            let Some(ann_text) = extract_annotation_for_var(source, var.name_span) else {
                 continue;
             };
-            check_annotation_bounds(
-                ann_text,
-                var.name_span,
-                &aliases,
-                source,
-                path,
-                diagnostics,
-            );
+            check_annotation_bounds(ann_text, var.name_span, &aliases, source, path, diagnostics);
         }
     }
 }
