@@ -191,6 +191,26 @@ fn e0014_final_with_type_no_diagnostic() -> Result<(), Box<dyn std::error::Error
 }
 
 #[test]
+fn e0014_no_false_positive_on_pep695_type_alias_annotation() -> Result<(), Box<dyn std::error::Error>>
+{
+    // PEP 695 type alias used as annotation: E0014 should NOT fire because
+    // the type alias might expand to a union that includes int.
+    let source = r#"
+type RecursiveTypeAlias1[T] = T | list[RecursiveTypeAlias1[T]]
+
+r1_1: RecursiveTypeAlias1[int] = 1
+r1_2: RecursiveTypeAlias1[int] = [1, [1, 2, 3]]
+"#;
+    let diags = run(source)?;
+    let msgs = messages_for(&diags, "BSK-E0014");
+    assert!(
+        msgs.is_empty(),
+        "E0014 should not fire on variables annotated with a PEP 695 type alias, got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn e0014_tuple_reassignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 x: int = 1

@@ -42,17 +42,20 @@ pub(crate) struct AssignmentTypeMismatch;
 impl Rule for AssignmentTypeMismatch {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         let empty_params = std::collections::HashMap::new();
-        let typeddict_names = collect_typeddict_names(module);
+        let skip = SkipNames {
+            typeddict: collect_typeddict_names(module),
+            type_alias: collect_type_alias_names(module),
+        };
         check_vars(
             &module.module_vars,
             &module.source,
             &module.path,
             diagnostics,
             &empty_params,
-            &typeddict_names,
+            &skip,
             &module.functions,
         );
-        check_local_vars(module, diagnostics, &typeddict_names);
+        check_local_vars(module, diagnostics, &skip);
         check_tuple_reassignments(module, diagnostics);
         check_dataclass_attr_assignments(module, diagnostics);
         typeform_check::check_typeform_calls(module, diagnostics);
@@ -87,6 +90,26 @@ fn collect_typeddict_names(module: &ResolvedModule) -> std::collections::HashSet
     names
 }
 
+/// Collect names of PEP 695 type aliases defined in this module (lowercased).
+///
+/// E0014 cannot evaluate expanded type alias types, so annotations that
+/// reference a type alias are skipped to avoid false positives.
+fn collect_type_alias_names(module: &ResolvedModule) -> std::collections::HashSet<String> {
+    module
+        .type_statements
+        .iter()
+        .map(|ts| ts.name.to_ascii_lowercase())
+        .collect()
+}
+
+/// Names that E0014 must skip to avoid false positives.
+struct SkipNames {
+    /// `TypedDict` class names (lowercase).
+    typeddict: std::collections::HashSet<String>,
+    /// PEP 695 type alias names (lowercase).
+    type_alias: std::collections::HashSet<String>,
+}
+
 /// Check a slice of annotated variables for type mismatches.
 ///
 /// `param_types` maps parameter names to their declared annotation types.
@@ -99,7 +122,7 @@ fn check_vars(
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
     param_types: &std::collections::HashMap<String, InferredType>,
-    typeddict_names: &std::collections::HashSet<String>,
+    skip: &SkipNames,
     functions: &[basilisk_resolver::FunctionInfo],
 ) {
     vars.iter()
@@ -135,11 +158,21 @@ fn check_vars(
                 }
             }
 
+            // Skip annotations that reference a PEP 695 type alias. E0014 cannot
+            // evaluate the expanded alias type, so any assignment check would be
+            // unreliable and produce false positives.
+            if let InferredType::Named(ref name) = declared_type {
+                let base = name.split('[').next().unwrap_or(name);
+                if skip.type_alias.contains(base) {
+                    return None;
+                }
+            }
+
             // Skip dict literal assignments to TypedDict annotations. E0014 compares
             // the top-level type (e.g. `dict[str, str|int]` vs `Movie`) which always
             // mismatches. Field-level checking is done by E0093 instead.
             if let InferredType::Named(ref name) = declared_type {
-                if typeddict_names.contains(name.as_str()) {
+                if skip.typeddict.contains(name.as_str()) {
                     let rhs_is_dict_literal = var
                         .rhs_span
                         .and_then(|sp| slice_span(source, sp))
@@ -197,7 +230,7 @@ fn check_vars(
 fn check_local_vars(
     module: &ResolvedModule,
     diagnostics: &mut Vec<Diagnostic>,
-    typeddict_names: &std::collections::HashSet<String>,
+    skip: &SkipNames,
 ) {
     let source = &module.source;
     for func in &module.functions {
@@ -208,7 +241,7 @@ fn check_local_vars(
             &module.path,
             diagnostics,
             &param_types,
-            typeddict_names,
+            skip,
             &module.functions,
         );
     }
