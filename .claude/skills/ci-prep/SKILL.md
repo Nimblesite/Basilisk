@@ -9,6 +9,11 @@ allowed-tools: Read, Grep, Glob, Edit, Write, Bash
 
 You MUST NOT STOP until every check passes.
 
+AIM: 
+- PREP BRANCH FOR PR SUBMISSION
+- AVOID LARGE CHANGES AND RABBIT HOLES
+- WE WANT TO DUST OFF THE CURRENT FUNCTIONALITY AND MAKE SURE IT WILL PASS CI
+
 ## Step 1: Read the CI Pipeline and Build Your Checklist
 
 Read the CI workflow:
@@ -19,8 +24,7 @@ cat .github/workflows/ci.yml
 
 Parse EVERY step. Extract the exact commands CI runs. Build a numbered checklist. The CI pipeline changes over time so read it fresh every time — do not rely on assumptions.
 
-The current CI pipeline runs these jobs (verify against the actual file):
-
+Example only. you must not use this. you must parse the gh action:
 1. **Lint job** (`cargo fmt --all --check`, `cargo clippy --release --all-targets` for workspace, same for zed extension)
 2. **Zed Extension** (`cargo build --release --target wasm32-wasip2 --manifest-path basilisk-zed/Cargo.toml`, clippy, tests)
 3. **Rust Tests & Coverage** (`./scripts/test-rust.sh` — runs tests with `cargo llvm-cov` and enforces per-crate coverage thresholds)
@@ -31,68 +35,11 @@ For local CI prep, focus on checks 1–3 (lint, zed, rust tests). VS Code and Ne
 
 ## Step 2: The Checklist
 
-Run these in order. Fix failures before moving on.
-
-### Check 1: cargo fmt
-
-```bash
-cargo fmt --all --check
-```
-
-If it fails, run `cargo fmt --all` to fix, then re-check.
-
-### Check 2: cargo clippy (workspace)
-
-```bash
-cargo clippy --release --all-targets 2>&1
-```
-
-CI uses `RUSTFLAGS="-D warnings"` — all warnings are errors. Fix every clippy warning. Never use `#[allow(...)]`.
-
-### Check 3: cargo clippy (zed extension)
-
-```bash
-cargo clippy --release --all-targets --manifest-path basilisk-zed/Cargo.toml 2>&1
-```
-
-### Check 4: cargo build (zed extension WASM)
-
-```bash
-cargo build --release --target wasm32-wasip2 --manifest-path basilisk-zed/Cargo.toml 2>&1
-```
-
-### Check 5: Rust tests with coverage
-
-```bash
-./scripts/test-rust.sh
-```
-
-This runs `cargo llvm-cov` with coverage instrumentation and enforces per-crate thresholds. If `cargo-llvm-cov` is not installed:
-
-```bash
-cargo install cargo-llvm-cov
-rustup component add llvm-tools-preview
-```
-
-Coverage thresholds (from `scripts/test-rust.sh`):
-- basilisk-checker: 92%
-- basilisk-cli: 94%
-- basilisk-db: 100%
-- basilisk-lsp: 74%
-- basilisk-mojo: 91%
-- basilisk-parser: 100%
-- basilisk-plugin: 100%
-- basilisk-resolver: 95%
-- basilisk-stubs: 100%
-- basilisk-config: 92%
-
-If you cannot run `./scripts/test-rust.sh` (missing `cargo-llvm-cov`), fall back to:
-
-```bash
-cargo test --workspace --exclude basilisk-compiler 2>&1
-```
-
-But note: coverage thresholds will NOT be checked. Install `cargo-llvm-cov` to fully replicate CI.
+- Run the checklist in order
+- Coverage thresholds: get the thresholds from the gh variables
+- If you can't run any step, TANK HARD
+- If the gh variables are surpassed, bump them to a higher number
+- If the coverage threshold is not met, TANK HARD
 
 ## Step 3: The Fix Loop
 
