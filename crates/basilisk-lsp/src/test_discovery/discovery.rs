@@ -419,4 +419,85 @@ class MyTests(TestCase):
         let json = serde_json::to_string(&TestItemKind::Class).expect("serialize");
         assert_eq!(json, "\"class\"");
     }
+
+    #[test]
+    fn test_workspace_discovery_nested_tests_dir() {
+        let unique = format!(
+            "basilisk_nested_tests_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("time")
+                .as_nanos()
+        );
+        let dir = std::env::temp_dir().join(unique);
+        let _ = std::fs::remove_dir_all(&dir);
+
+        // Reproduce the user's project layout: tests/ with subdirs.
+        let tests_dir = dir.join("tests");
+        let compose_dir = tests_dir.join("compose");
+        std::fs::create_dir_all(&compose_dir).expect("create compose dir");
+
+        // Root-level test file.
+        std::fs::write(
+            tests_dir.join("test_result.py"),
+            "def test_unwrap_or_returns_value() -> None:\n    assert True\n",
+        )
+        .expect("write test_result.py");
+
+        // Nested test file in compose/.
+        std::fs::write(
+            compose_dir.join("test_actions.py"),
+            "def test_action_runs() -> None:\n    assert True\n",
+        )
+        .expect("write test_actions.py");
+
+        // conftest.py — not a test file but lives in tests/.
+        std::fs::write(tests_dir.join("conftest.py"), "import pytest\n")
+            .expect("write conftest.py");
+
+        // __init__.py — not a test file.
+        std::fs::write(tests_dir.join("__init__.py"), "").expect("write __init__.py");
+
+        // helpers.py — not a test file.
+        std::fs::write(
+            tests_dir.join("helpers.py"),
+            "def make_fixture() -> dict:\n    return {}\n",
+        )
+        .expect("write helpers.py");
+
+        // Non-test source file at project root.
+        std::fs::write(dir.join("main.py"), "def main() -> None:\n    pass\n")
+            .expect("write main.py");
+
+        let items = discover_workspace_tests(&dir);
+
+        // Should find both test files (test_result.py, test_actions.py).
+        assert_eq!(
+            items.len(),
+            2,
+            "should find 2 test files in nested tests/ dir, got: {items:?}"
+        );
+
+        let file_names: Vec<&str> = items.iter().map(|i| i.name.as_str()).collect();
+        assert!(
+            file_names.iter().any(|n| n.contains("test_result.py")),
+            "should find test_result.py, got: {file_names:?}"
+        );
+        assert!(
+            file_names.iter().any(|n| n.contains("test_actions.py")),
+            "should find test_actions.py, got: {file_names:?}"
+        );
+
+        // Each file should have its test function as a child.
+        for file_item in &items {
+            assert_eq!(
+                file_item.children.len(),
+                1,
+                "file {} should have 1 test child",
+                file_item.name
+            );
+        }
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

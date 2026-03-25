@@ -63,6 +63,10 @@ pub(super) async fn execute_discover_tests(
         .sum();
     info!(count, "discovered tests in workspace");
 
+    // Always send a notification so the client populates the test explorer,
+    // regardless of whether it uses the JSON-RPC response.
+    send_test_discovery_notification(server, items.clone()).await;
+
     Ok(Some(serde_json::json!({ "items": items })))
 }
 

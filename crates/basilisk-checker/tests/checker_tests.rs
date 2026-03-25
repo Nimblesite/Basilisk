@@ -128,16 +128,16 @@ fn e0003_annotated_empty_list_does_not_fire() -> Result<(), Box<dyn std::error::
 }
 
 #[test]
-fn e0003_unannotated_str_literal_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
-    // Unannotated but with an inferrable literal — E0003 must NOT fire
+fn e0003_unannotated_str_literal_fires_strict() -> Result<(), Box<dyn std::error::Error>> {
+    // Unannotated str literal — E0003 fires in strict mode (all module vars need annotation)
     let diags = run("name = \"hello\"\n")?;
     let e3: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0003")
         .collect();
     assert!(
-        e3.is_empty(),
-        "unannotated str literal must not trigger E0003"
+        !e3.is_empty(),
+        "unannotated str literal must trigger E0003 in strict mode"
     );
     Ok(())
 }

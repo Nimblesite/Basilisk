@@ -145,7 +145,16 @@ STATUS = 'active'
 MAX = 100
 ";
     let diags = run(src)?;
-    assert!(diags.is_empty(), "module-level literals should be clean");
+    // E0003 fires for unannotated module vars (strict mode) — exclude it here.
+    let non_e0003: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code != "BSK-E0003")
+        .collect();
+    assert!(
+        non_e0003.is_empty(),
+        "module-level literals should be clean (excluding E0003), got: {:?}",
+        non_e0003.iter().map(|d| &d.message).collect::<Vec<_>>()
+    );
     Ok(())
 }
 

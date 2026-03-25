@@ -3,6 +3,7 @@
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
+use tracing::{error, info, warn};
 
 use super::TestStatus;
 
@@ -94,14 +95,37 @@ pub fn run_tests(config: &TestRunConfig<'_>) -> Result<TestRunResult, String> {
         let _ = cmd.arg(test_id);
     }
 
-    let output = cmd
-        .output()
-        .map_err(|e| format!("Failed to run pytest: {e}"))?;
+    info!(
+        root = %config.root.display(),
+        test_ids = ?config.test_ids,
+        pytest_path = config.pytest_path,
+        use_uv_run = config.use_uv_run,
+        "running pytest"
+    );
+
+    let output = cmd.output().map_err(|err| {
+        error!(%err, root = %config.root.display(), "failed to spawn pytest");
+        format!("Failed to run pytest: {err}")
+    })?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
     let exit_code = output.status.code().unwrap_or(-1);
     let per_test = parse_pytest_output(&stdout, &stderr);
+
+    if exit_code != 0 {
+        warn!(
+            exit_code,
+            stdout_len = stdout.len(),
+            stderr_len = stderr.len(),
+            "pytest exited with non-zero code"
+        );
+        if !stderr.is_empty() {
+            warn!(stderr = %stderr, "pytest stderr");
+        }
+    } else {
+        info!(exit_code, test_count = per_test.len(), "pytest passed");
+    }
 
     Ok(TestRunResult {
         stdout,
@@ -125,16 +149,15 @@ pub(super) fn set_venv_env(root: &Path, cmd: &mut std::process::Command) {
         };
         if bin_dir.is_dir() {
             let _ = cmd.env("VIRTUAL_ENV", &venv_path);
-            // Prepend venv bin to PATH.
+            // Prepend venv bin to PATH using the correct env-var separator
+            // (`:` on Unix, `;` on Windows — NOT `std::path::MAIN_SEPARATOR`).
             if let Ok(current_path) = std::env::var("PATH") {
-                let new_path = format!(
-                    "{}{}{}",
-                    bin_dir.display(),
-                    std::path::MAIN_SEPARATOR,
-                    current_path
-                );
+                let separator = if cfg!(windows) { ';' } else { ':' };
+                let new_path =
+                    format!("{}{separator}{current_path}", bin_dir.display());
                 let _ = cmd.env("PATH", new_path);
             }
+            info!(venv = %venv_path.display(), bin = %bin_dir.display(), "activated venv for pytest");
             break;
         }
     }
@@ -430,5 +453,56 @@ mod tests {
             enable_coverage: true,
         };
         assert!(config.enable_coverage);
+    }
+
+    /// Verify that `set_venv_env` uses the correct PATH separator (`:` on Unix,
+    /// `;` on Windows) rather than `std::path::MAIN_SEPARATOR` (which is `/`
+    /// on Unix). The wrong separator merges the venv bin dir with the first
+    /// existing PATH entry, making pytest unfindable.
+    #[test]
+    fn test_set_venv_env_uses_correct_path_separator() {
+        let unique = format!(
+            "basilisk_venv_path_sep_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("time")
+                .as_nanos()
+        );
+        let dir = std::env::temp_dir().join(unique);
+        let _ = std::fs::remove_dir_all(&dir);
+
+        // Create a fake .venv/bin directory.
+        let venv_bin = if cfg!(windows) {
+            dir.join(".venv").join("Scripts")
+        } else {
+            dir.join(".venv").join("bin")
+        };
+        std::fs::create_dir_all(&venv_bin).expect("create venv bin");
+
+        let mut cmd = std::process::Command::new("echo");
+        set_venv_env(&dir, &mut cmd);
+
+        // Extract the PATH that was set on the command. We do this by
+        // inspecting the environment via Command::get_envs().
+        let path_env = cmd
+            .get_envs()
+            .find(|(k, _)| k == &std::ffi::OsStr::new("PATH"))
+            .and_then(|(_, v)| v)
+            .expect("PATH should be set")
+            .to_string_lossy()
+            .into_owned();
+
+        let expected_separator = if cfg!(windows) { ';' } else { ':' };
+
+        // The venv bin dir should be the first entry, separated from the rest
+        // by the correct platform PATH separator.
+        let venv_bin_str = venv_bin.display().to_string();
+        let expected_prefix = format!("{venv_bin_str}{expected_separator}");
+        assert!(
+            path_env.starts_with(&expected_prefix),
+            "PATH should start with '{expected_prefix}' but was '{path_env}'"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

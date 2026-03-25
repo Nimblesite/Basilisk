@@ -3,12 +3,13 @@
 use super::common::*;
 
 #[test]
-fn e0005_unannotated_class_attr_with_literal_exempt() -> Result<(), Box<dyn std::error::Error>> {
+fn e0005_unannotated_class_attr_with_literal_fires_strict() -> Result<(), Box<dyn std::error::Error>>
+{
     let source = "class Foo:\n    value = 42\n";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0005"),
-        "scalar literal class attr should NOT fire E0005 (type is inferrable), got: {:?}",
+        codes(&diags).contains(&"BSK-E0005"),
+        "unannotated class attr should fire E0005 in strict mode, got: {:?}",
         codes(&diags)
     );
     Ok(())
@@ -83,7 +84,7 @@ class AdminRoute(BaseRoute):
 }
 
 #[test]
-fn e0005_subclass_unannotated_new_attr_literal_exempt() -> Result<(), Box<dyn std::error::Error>> {
+fn e0005_subclass_unannotated_new_attr_fires_strict() -> Result<(), Box<dyn std::error::Error>> {
     let source = "\
 class BaseRoute:
     priority: int = 10
@@ -97,28 +98,35 @@ class AdminRoute(BaseRoute):
         .iter()
         .filter(|d| d.code.code == "BSK-E0005")
         .collect();
-    assert!(
-        e0005_diags.is_empty(),
-        "literal attrs should not fire E0005 even in subclasses, got: {:?}",
+    // `priority` is exempt (parent has annotation), but `new_attr` should fire.
+    assert_eq!(
+        e0005_diags.len(),
+        1,
+        "new unannotated attr should fire E0005, parent-annotated override should not, got: {:?}",
         e0005_diags.iter().map(|d| &d.message).collect::<Vec<_>>()
+    );
+    assert!(
+        e0005_diags[0].message.contains("new_attr"),
+        "E0005 should fire for new_attr, got: {}",
+        e0005_diags[0].message
     );
     Ok(())
 }
 
 #[test]
-fn e0005_multiple_unannotated_attrs() -> Result<(), Box<dyn std::error::Error>> {
+fn e0005_multiple_unannotated_attrs_fire_strict() -> Result<(), Box<dyn std::error::Error>> {
     let source = "class Foo:\n    a = 1\n    b = 2\n    c = 3\n";
     let diags = run(source)?;
     let count = diags.iter().filter(|d| d.code.code == "BSK-E0005").count();
     assert_eq!(
-        count, 0,
-        "scalar literal attrs should NOT fire E0005 (type is inferrable)"
+        count, 3,
+        "all 3 unannotated attrs should fire E0005 in strict mode"
     );
     Ok(())
 }
 
 #[test]
-fn e0005_scalar_literal_attrs_exempt() -> Result<(), Box<dyn std::error::Error>> {
+fn e0005_scalar_literal_attrs_fire_strict() -> Result<(), Box<dyn std::error::Error>> {
     let source = "\
 class Config:
     retries = 3
@@ -133,10 +141,47 @@ class Config:
         .iter()
         .filter(|d| d.code.code == "BSK-E0005")
         .collect();
-    assert!(
-        e0005_diags.is_empty(),
-        "class attrs with scalar literal values should not fire E0005 (type is inferrable), got: {:?}",
+    assert_eq!(
+        e0005_diags.len(),
+        6,
+        "all 6 unannotated scalar literal attrs should fire E0005 in strict mode, got: {:?}",
         e0005_diags.iter().map(|d| &d.message).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn e0005_scalar_int_literal_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let source = "class Foo:\n    value = 42\n";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"BSK-E0005"),
+        "unannotated int literal class attr should fire E0005 (strict mode requires annotation), got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn e0005_scalar_string_literal_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let source = "class Foo:\n    label = \"hello\"\n";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"BSK-E0005"),
+        "unannotated string literal class attr should fire E0005 (strict mode requires annotation), got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn e0005_scalar_bool_literal_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let source = "class Foo:\n    flag = True\n";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"BSK-E0005"),
+        "unannotated bool literal class attr should fire E0005 (strict mode requires annotation), got: {:?}",
+        codes(&diags)
     );
     Ok(())
 }
