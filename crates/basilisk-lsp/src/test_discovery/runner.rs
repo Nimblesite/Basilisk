@@ -153,8 +153,7 @@ pub(super) fn set_venv_env(root: &Path, cmd: &mut std::process::Command) {
             // (`:` on Unix, `;` on Windows — NOT `std::path::MAIN_SEPARATOR`).
             if let Ok(current_path) = std::env::var("PATH") {
                 let separator = if cfg!(windows) { ';' } else { ':' };
-                let new_path =
-                    format!("{}{separator}{current_path}", bin_dir.display());
+                let new_path = format!("{}{separator}{current_path}", bin_dir.display());
                 let _ = cmd.env("PATH", new_path);
             }
             info!(venv = %venv_path.display(), bin = %bin_dir.display(), "activated venv for pytest");
