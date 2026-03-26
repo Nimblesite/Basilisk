@@ -36,6 +36,8 @@ pub mod coverage;
 pub mod cross_module;
 pub mod debug;
 pub mod declaration;
+// Note: profiler/mod.rs not yet created — uncomment when ready.
+// pub mod profiler;
 pub mod definition;
 pub mod folding;
 pub mod formatting;

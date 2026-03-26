@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Users/christianfindlay/Documents/Code/Basilisk rev-parse --abbrev-ref HEAD)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Skill(ci-prep)",
+      "Skill(ci-prep:*)",
+      "Bash(git check-ignore:*)"
+    ]
+  },
+  "autoMemoryEnabled": false
+}

@@ -113,7 +113,7 @@ pub fn clear_diagnostics(previous_uris: &[Url]) -> DiagnosticsByUri {
 ///
 /// py-spy reports 1-based line numbers; LSP uses 0-based.
 fn line_range(line_1based: i32) -> Range {
-    let line_0based = (line_1based - 1).max(0) as u32;
+    let line_0based = u32::try_from((line_1based - 1).max(0)).unwrap_or(0);
     Range {
         start: Position {
             line: line_0based,

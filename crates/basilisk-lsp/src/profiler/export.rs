@@ -210,9 +210,9 @@ fn build_collapsed_stacks(data: &ProfileData) -> String {
             // Stack is root-first (indices into data.frames).
             let collapsed: String = stack
                 .iter()
-                .map(|&idx| {
-                    let frame = &data.frames[idx];
-                    format!("{} ({}:{})", frame.name, frame.file, frame.line)
+                .filter_map(|&idx| {
+                    let frame = data.frames.get(idx)?;
+                    Some(format!("{} ({}:{})", frame.name, frame.file, frame.line))
                 })
                 .collect::<Vec<_>>()
                 .join(";");
