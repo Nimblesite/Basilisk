@@ -27,7 +27,7 @@ local function register_lsp_commands()
   end
 end
 
---- Register the basilisk/moduleChanged notification handler.
+--- Register notification handlers for basilisk/* server-push notifications.
 local function register_notification_handlers()
   vim.lsp.handlers["basilisk/moduleChanged"] = function(_err, _result, _ctx, _config)
     local modules_ok, modules_panel = pcall(require, "basilisk.modules")
@@ -38,6 +38,31 @@ local function register_notification_handlers()
     if health_ok then
       health_panel.refresh()
     end
+  end
+
+  -- Profiler progress: update statusline while a session is running.
+  vim.lsp.handlers["basilisk/profiler/progress"] = function(_err, result, _ctx, _config)
+    if not result then
+      return
+    end
+    local statusline = require("basilisk.statusline")
+    local samples = result.totalSamples or 0
+    local elapsed = result.elapsedSeconds or 0
+    local pid = result.pid or 0
+    log.info("profiling PID %d: %ds, %d samples", pid, elapsed, samples)
+    statusline.set_profiler_status(result)
+  end
+
+  -- Memory timeline: periodic snapshot data during auto-snapshot mode.
+  vim.lsp.handlers["basilisk/memory/timeline"] = function(_err, result, _ctx, _config)
+    if not result then
+      return
+    end
+    log.info(
+      "memory timeline: current=%d peak=%d",
+      result.currentMemory or 0,
+      result.peakMemory or 0
+    )
   end
 end
 
