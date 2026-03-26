@@ -207,6 +207,36 @@ pub mod config_keys {
     pub const TEST_EXPLORER_USE_UV_RUN: &str = "useUvRun";
     /// Enable coverage gutter decorations after test runs.
     pub const TEST_EXPLORER_COVERAGE_ENABLED: &str = "coverageEnabled";
+
+    /// CPU profiler configuration section.
+    pub const PROFILER: &str = "profiler";
+    /// Enable CPU profiling features.
+    pub const PROFILER_ENABLED: &str = "enabled";
+    /// Samples per second (Hz). Default: 100.
+    pub const PROFILER_SAMPLE_RATE: &str = "sampleRate";
+    /// Preset name: `"lightweight"`, `"detailed"`, or `"memory"`.
+    pub const PROFILER_PRESET: &str = "preset";
+    /// Include native (C extension) frames in profiles.
+    pub const PROFILER_INCLUDE_NATIVE: &str = "includeNative";
+    /// Per-line hotspot threshold as a fraction (0.0–1.0). Default: 0.01 (1%).
+    pub const PROFILER_LINE_THRESHOLD: &str = "lineThreshold";
+    /// Per-function hotspot threshold as a fraction (0.0–1.0). Default: 0.02 (2%).
+    pub const PROFILER_FUNC_THRESHOLD: &str = "funcThreshold";
+    /// Maximum number of hotspot diagnostics per file. Default: 20.
+    pub const PROFILER_MAX_DIAGNOSTICS: &str = "maxDiagnostics";
+    /// Automatically start profiling when a debug session launches.
+    pub const PROFILER_AUTO_ON_LAUNCH: &str = "autoOnLaunch";
+    /// Default export format: `"speedscope"`, `"flamegraph"`, or `"summary"`.
+    pub const PROFILER_DEFAULT_FORMAT: &str = "defaultFormat";
+
+    /// Memory profiler configuration section.
+    pub const MEMORY: &str = "memory";
+    /// Tracemalloc traceback depth for allocation sites. Default: 25.
+    pub const MEMORY_TRACEBACK_DEPTH: &str = "tracebackDepth";
+    /// Seconds between automatic memory snapshots (0 = disabled). Default: 0.
+    pub const MEMORY_AUTO_SNAPSHOT_INTERVAL: &str = "autoSnapshotInterval";
+    /// Maximum number of memory allocation diagnostic entries per file. Default: 10.
+    pub const MEMORY_MAX_DIAGNOSTICS: &str = "maxDiagnostics";
 }
 
 /// Custom LSP notification method names for coverage.
@@ -278,6 +308,37 @@ pub mod memory_diagnostics {
     pub const LEAK: &str = "BSK-MEM-LEAK";
     /// Reference cycle detected — objects with `__del__` in a cycle (uncollectable).
     pub const CYCLE: &str = "BSK-MEM-CYCLE";
+}
+
+/// Profiler export format names and sampling preset names.
+///
+/// These string values are used in LSP request parameters (`basilisk.profiler.stop`
+/// `format` field) and workspace configuration (`profiler.preset`). Both the LSP
+/// server and editor extensions share these constants so there is a single source
+/// of truth for the allowed values.
+pub mod profiler_formats {
+    /// Speedscope JSON format — the default. Opens in speedscope.app.
+    pub const SPEEDSCOPE: &str = "speedscope";
+    /// Flamegraph SVG via the inferno crate.
+    pub const FLAMEGRAPH: &str = "flamegraph";
+    /// Text summary only — no file written to disk.
+    pub const SUMMARY: &str = "summary";
+
+    /// All valid format strings, in order of preference.
+    pub const ALL: &[&str] = &[SPEEDSCOPE, FLAMEGRAPH, SUMMARY];
+}
+
+/// Profiler preset names used in `basilisk.profiler.start` and workspace config.
+pub mod profiler_presets {
+    /// Low-overhead preset: 10 Hz sampling, no native frames.
+    pub const LIGHTWEIGHT: &str = "lightweight";
+    /// High-fidelity preset: 200 Hz sampling, native frames included.
+    pub const DETAILED: &str = "detailed";
+    /// Memory-oriented preset: 50 Hz sampling, native frames included.
+    pub const MEMORY: &str = "memory";
+
+    /// All valid preset names.
+    pub const ALL: &[&str] = &[LIGHTWEIGHT, DETAILED, MEMORY];
 }
 
 /// Diagnostic code ranges defined in the Basilisk specification.

@@ -777,3 +777,274 @@ fn basilisk_no_completions() {
     let completions = slash_completions(slash_commands::BASILISK);
     assert!(completions.is_empty());
 }
+
+// ── Profiler workspace config defaults ──────────────────────────────
+
+#[test]
+fn default_config_has_profiler_section() {
+    let config = default_workspace_config();
+    assert!(
+        !config["profiler"].is_null(),
+        "profiler section must be present in default config"
+    );
+}
+
+#[test]
+fn default_config_profiler_enabled_by_default() {
+    let config = default_workspace_config();
+    assert_eq!(
+        config["profiler"]["enabled"], true,
+        "profiler must be enabled by default"
+    );
+}
+
+#[test]
+fn default_config_profiler_sample_rate() {
+    let config = default_workspace_config();
+    assert_eq!(
+        config["profiler"]["sampleRate"], 100,
+        "default sample rate must be 100 Hz"
+    );
+}
+
+#[test]
+fn default_config_profiler_native_frames_disabled() {
+    let config = default_workspace_config();
+    assert_eq!(
+        config["profiler"]["includeNative"], false,
+        "native frames must be off by default (low overhead)"
+    );
+}
+
+#[test]
+fn default_config_profiler_thresholds() {
+    let config = default_workspace_config();
+    let line = config["profiler"]["lineThreshold"]
+        .as_f64()
+        .expect("lineThreshold must be a number");
+    let func = config["profiler"]["funcThreshold"]
+        .as_f64()
+        .expect("funcThreshold must be a number");
+    assert!(
+        (line - 0.01).abs() < f64::EPSILON,
+        "line threshold must be 1%"
+    );
+    assert!(
+        (func - 0.02).abs() < f64::EPSILON,
+        "function threshold must be 2%"
+    );
+}
+
+#[test]
+fn default_config_profiler_max_diagnostics() {
+    let config = default_workspace_config();
+    assert_eq!(
+        config["profiler"]["maxDiagnostics"], 20,
+        "max diagnostics per file must be 20"
+    );
+}
+
+#[test]
+fn default_config_profiler_auto_on_launch_disabled() {
+    let config = default_workspace_config();
+    assert_eq!(
+        config["profiler"]["autoOnLaunch"], false,
+        "auto-profile on launch must be opt-in"
+    );
+}
+
+#[test]
+fn default_config_profiler_default_format_is_speedscope() {
+    let config = default_workspace_config();
+    assert_eq!(
+        config["profiler"]["defaultFormat"], "speedscope",
+        "default export format must be speedscope"
+    );
+}
+
+#[test]
+fn default_config_has_memory_section() {
+    let config = default_workspace_config();
+    assert!(
+        !config["memory"].is_null(),
+        "memory section must be present in default config"
+    );
+}
+
+#[test]
+fn default_config_memory_traceback_depth() {
+    let config = default_workspace_config();
+    assert_eq!(
+        config["memory"]["tracebackDepth"], 25,
+        "traceback depth must default to 25 frames"
+    );
+}
+
+#[test]
+fn default_config_memory_auto_snapshot_disabled() {
+    let config = default_workspace_config();
+    assert_eq!(
+        config["memory"]["autoSnapshotInterval"], 0,
+        "auto-snapshot must be disabled by default"
+    );
+}
+
+#[test]
+fn default_config_memory_max_diagnostics() {
+    let config = default_workspace_config();
+    assert_eq!(
+        config["memory"]["maxDiagnostics"], 10,
+        "max memory diagnostics per file must be 10"
+    );
+}
+
+#[test]
+fn wrap_config_preserves_profiler_settings() {
+    let inner = serde_json::json!({
+        "profiler": {
+            "enabled": false,
+            "sampleRate": 200,
+            "includeNative": true,
+            "autoOnLaunch": true,
+            "defaultFormat": "flamegraph"
+        }
+    });
+    let wrapped = wrap_config(&inner);
+    assert_eq!(wrapped["basilisk"]["profiler"]["enabled"], false);
+    assert_eq!(wrapped["basilisk"]["profiler"]["sampleRate"], 200);
+    assert_eq!(wrapped["basilisk"]["profiler"]["includeNative"], true);
+    assert_eq!(wrapped["basilisk"]["profiler"]["autoOnLaunch"], true);
+    assert_eq!(
+        wrapped["basilisk"]["profiler"]["defaultFormat"],
+        "flamegraph"
+    );
+}
+
+#[test]
+fn wrap_config_preserves_memory_settings() {
+    let inner = serde_json::json!({
+        "memory": {
+            "tracebackDepth": 10,
+            "autoSnapshotInterval": 30,
+            "maxDiagnostics": 5
+        }
+    });
+    let wrapped = wrap_config(&inner);
+    assert_eq!(wrapped["basilisk"]["memory"]["tracebackDepth"], 10);
+    assert_eq!(wrapped["basilisk"]["memory"]["autoSnapshotInterval"], 30);
+    assert_eq!(wrapped["basilisk"]["memory"]["maxDiagnostics"], 5);
+}
+
+// ── Profile command uses shared format constants ─────────────────────
+
+#[test]
+fn profstop_output_uses_canonical_format_names() {
+    let (_, text) = slash_command_output("profstop", &[]).expect("should succeed");
+    assert!(
+        text.contains(basilisk_common::profiler_formats::SPEEDSCOPE),
+        "must use canonical speedscope format name"
+    );
+    assert!(
+        text.contains(basilisk_common::profiler_formats::FLAMEGRAPH),
+        "must use canonical flamegraph format name"
+    );
+    assert!(
+        text.contains(basilisk_common::profiler_formats::SUMMARY),
+        "must use canonical summary format name"
+    );
+}
+
+#[test]
+fn profile_output_documents_presets() {
+    let (_, text) = slash_command_output("profile", &[]).expect("should succeed");
+    assert!(
+        text.contains(basilisk_common::profiler_presets::LIGHTWEIGHT),
+        "must document lightweight preset"
+    );
+    assert!(
+        text.contains(basilisk_common::profiler_presets::DETAILED),
+        "must document detailed preset"
+    );
+    assert!(
+        text.contains(basilisk_common::profiler_presets::MEMORY),
+        "must document memory preset"
+    );
+}
+
+#[test]
+fn memleak_output_uses_canonical_command_names() {
+    let (_, text) = slash_command_output("memleak", &[]).expect("should succeed");
+    assert!(
+        text.contains(basilisk_common::commands::MEMORY_START),
+        "must use canonical memory start command"
+    );
+    assert!(
+        text.contains(basilisk_common::commands::MEMORY_SNAPSHOT),
+        "must use canonical memory snapshot command"
+    );
+    assert!(
+        text.contains(basilisk_common::commands::MEMORY_DIFF),
+        "must use canonical memory diff command"
+    );
+    assert!(
+        text.contains(basilisk_common::commands::MEMORY_REFERENCES),
+        "must use canonical memory references command"
+    );
+    assert!(
+        text.contains(basilisk_common::commands::MEMORY_GC_COLLECT),
+        "must use canonical gc collect command"
+    );
+}
+
+#[test]
+fn memleak_output_uses_canonical_diagnostic_codes() {
+    let (_, text) = slash_command_output("memleak", &[]).expect("should succeed");
+    assert!(
+        text.contains(basilisk_common::memory_diagnostics::ALLOC),
+        "must use canonical BSK-MEM-ALLOC code"
+    );
+    assert!(
+        text.contains(basilisk_common::memory_diagnostics::GROWTH),
+        "must use canonical BSK-MEM-GROWTH code"
+    );
+    assert!(
+        text.contains(basilisk_common::memory_diagnostics::LEAK),
+        "must use canonical BSK-MEM-LEAK code"
+    );
+    assert!(
+        text.contains(basilisk_common::memory_diagnostics::CYCLE),
+        "must use canonical BSK-MEM-CYCLE code"
+    );
+}
+
+#[test]
+fn profile_output_uses_canonical_notification_name() {
+    let (_, text) = slash_command_output("profile", &[]).expect("should succeed");
+    assert!(
+        text.contains(basilisk_common::notifications::PROFILER_PROGRESS),
+        "must reference canonical profiler progress notification"
+    );
+}
+
+#[test]
+fn memleak_output_uses_canonical_timeline_notification() {
+    let (_, text) = slash_command_output("memleak", &[]).expect("should succeed");
+    assert!(
+        text.contains(basilisk_common::notifications::MEMORY_TIMELINE),
+        "must reference canonical memory timeline notification"
+    );
+}
+
+#[test]
+fn memrefs_output_uses_canonical_command_and_diagnostic() {
+    let args = vec!["MyModel".to_string()];
+    let (_, text) = slash_command_output("memrefs", &args).expect("should succeed");
+    assert!(
+        text.contains(basilisk_common::commands::MEMORY_REFERENCES),
+        "must use canonical memory references command"
+    );
+    assert!(
+        text.contains(basilisk_common::memory_diagnostics::CYCLE),
+        "must use canonical BSK-MEM-CYCLE diagnostic code"
+    );
+}

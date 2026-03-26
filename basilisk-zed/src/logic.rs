@@ -4,7 +4,10 @@
 //! only `serde_json::Value`, `String`, `&str`, or basic Rust types so the
 //! module compiles and tests on any native target — no WASM host required.
 
-use basilisk_common::{config_keys, slash_commands};
+use basilisk_common::{
+    commands, config_keys, memory_diagnostics, notifications, profiler_diagnostics,
+    profiler_formats, profiler_presets, slash_commands,
+};
 use serde_json::Value;
 
 // ── Slash commands ───────────────────────────────────────────────────────────
@@ -37,109 +40,155 @@ fn slash_profile(args: &[String]) -> (String, String) {
         Some(pid) => format!("PID `{pid}`"),
         None => "active Python process".to_string(),
     };
+    let start = commands::PROFILER_START;
+    let stop = commands::PROFILER_STOP;
+    let snapshot = commands::PROFILER_SNAPSHOT;
+    let list = commands::PROFILER_LIST;
+    let line_code = profiler_diagnostics::LINE;
+    let func_code = profiler_diagnostics::FUNC;
+    let progress = notifications::PROFILER_PROGRESS;
+    let lightweight = profiler_presets::LIGHTWEIGHT;
+    let detailed = profiler_presets::DETAILED;
+    let memory_preset = profiler_presets::MEMORY;
     let text = format!(
         "## CPU Profiling\n\n\
          **Target:** {target}\n\n\
-         Basilisk profiles Python processes via `py-spy` (zero overhead, no instrumentation).\n\n\
+         Basilisk profiles Python processes via `py-spy` (zero overhead, no instrumentation).\n\
+         Diagnostics appear inline as `{line_code}` / `{func_code}` hints on hot lines and functions.\n\
+         Live progress is delivered via `{progress}` notifications.\n\n\
          ### How to start\n\
-         Run `basilisk.profiler.start` from the command palette with `{{\"pid\": <PID>}}`.\n\
-         If profiling a debug session, the PID is auto-detected.\n\n\
+         Open the command palette and run **`{start}`** with:\n\
+         ```json\n\
+         {{\"pid\": <PID>, \"sampleRate\": 100, \"includeNative\": false}}\n\
+         ```\n\
+         If a debug session is active, the PID is auto-detected — omit the `pid` field.\n\n\
+         ### Presets\n\
+         | Preset | Sample Rate | Native Frames | Best for |\n\
+         |--------|-------------|---------------|----------|\n\
+         | `{lightweight}` | 10 Hz | No | Long-running processes, minimal overhead |\n\
+         | `{detailed}` | 200 Hz | Yes | Short tasks, deep native call stacks |\n\
+         | `{memory_preset}` | 50 Hz | Yes | Memory-intensive workloads |\n\n\
          ### Results\n\
-         - **Inline diagnostics** — `BSK-PROF-LINE` / `BSK-PROF-FUNC` hints on hot lines\n\
-         - **Speedscope JSON** — written to `/tmp/`, open in browser at speedscope.app\n\
-         - **Flamegraph SVG** — request `\"format\": \"flamegraph\"` on stop\n\n\
+         - **Inline diagnostics** — `{line_code}` / `{func_code}` hints on hot lines (≥1% / ≥2% threshold)\n\
+         - **Speedscope JSON** — written to `/tmp/`, open at speedscope.app for interactive flamegraph\n\
+         - **Flamegraph SVG** — request `\"format\": \"flamegraph\"` on stop (inferno rendering)\n\n\
          ### Commands\n\
          | Command | Description |\n\
          |---------|-------------|\n\
-         | `basilisk.profiler.start` | Begin sampling |\n\
-         | `basilisk.profiler.stop` | Stop and export results |\n\
-         | `basilisk.profiler.snapshot` | Snapshot without stopping |\n\
-         | `basilisk.profiler.list` | List active sessions |"
+         | `{start}` | Begin sampling (PID optional if debug session active) |\n\
+         | `{stop}` | Stop and export results (speedscope / flamegraph / summary) |\n\
+         | `{snapshot}` | Snapshot without stopping — diagnostics updated immediately |\n\
+         | `{list}` | List active profiling sessions with sample counts |"
     );
     ("CPU Profiling".to_string(), text)
 }
 
 fn slash_profstop() -> (String, String) {
-    let text = "\
-        ## Stop Profiling\n\n\
-        Run `basilisk.profiler.stop` from the command palette with:\n\
+    let stop = commands::PROFILER_STOP;
+    let speedscope = profiler_formats::SPEEDSCOPE;
+    let flamegraph = profiler_formats::FLAMEGRAPH;
+    let summary = profiler_formats::SUMMARY;
+    let text = format!(
+        "## Stop Profiling\n\n\
+        Run **`{stop}`** from the command palette with:\n\
         ```json\n\
-        {\"sessionId\": \"<session-id>\", \"format\": \"speedscope\"}\n\
+        {{\"sessionId\": \"<session-id>\", \"format\": \"{speedscope}\"}}\n\
         ```\n\n\
         ### Output formats\n\
         | Format | Description |\n\
         |--------|-------------|\n\
-        | `speedscope` | JSON for speedscope.app (default) |\n\
-        | `flamegraph` | SVG flamegraph via inferno |\n\
-        | `summary` | Text-only, no file export |\n\n\
+        | `{speedscope}` | JSON for speedscope.app (default) |\n\
+        | `{flamegraph}` | SVG flamegraph via inferno |\n\
+        | `{summary}` | Text-only, no file export |\n\n\
         ### What happens on stop\n\
         1. Sampling thread stops, remaining samples drained\n\
         2. Hot lines/functions computed (above 1%/2% threshold)\n\
         3. `publishDiagnostics` sent for each profiled file — hints appear inline\n\
         4. Export file written to temp directory\n\n\
-        > Open the speedscope JSON at `https://www.speedscope.app` for an interactive flamegraph."
-        .to_string();
+        > Open the speedscope JSON at speedscope.app for an interactive flamegraph."
+    );
     ("Stop Profiling".to_string(), text)
 }
 
 fn slash_profsnapshot() -> (String, String) {
-    let text = "\
-        ## Profile Snapshot\n\n\
-        Run `basilisk.profiler.snapshot` from the command palette.\n\
+    let snapshot = commands::PROFILER_SNAPSHOT;
+    let text = format!(
+        "## Profile Snapshot\n\n\
+        Run **`{snapshot}`** from the command palette.\n\
         Takes a point-in-time snapshot without stopping the session.\n\n\
         Diagnostics are published immediately for the snapshot data.\n\
         Profiling continues — use `/profstop` to end the session.\n\n\
         > Useful for checking hotspots during a long-running profiling session."
-        .to_string();
+    );
     ("Profile Snapshot".to_string(), text)
 }
 
 fn slash_memleak() -> (String, String) {
-    let text = "\
-        ## Memory Leak Tracking\n\n\
-        Tracks object allocations via `tracemalloc` injection into an active debug session.\n\n\
+    let start = commands::MEMORY_START;
+    let snapshot = commands::MEMORY_SNAPSHOT;
+    let diff = commands::MEMORY_DIFF;
+    let refs = commands::MEMORY_REFERENCES;
+    let gc = commands::MEMORY_GC_COLLECT;
+    let alloc = memory_diagnostics::ALLOC;
+    let growth = memory_diagnostics::GROWTH;
+    let leak = memory_diagnostics::LEAK;
+    let cycle = memory_diagnostics::CYCLE;
+    let timeline = notifications::MEMORY_TIMELINE;
+    let text = format!(
+        "## Memory Leak Tracking\n\n\
+        Tracks object allocations via `tracemalloc` injection into an active debug session.\n\
+        Memory timeline data is delivered via `{timeline}` notifications.\n\n\
         ### How to start\n\
-        Run `basilisk.memory.start` from the command palette.\n\
+        Run **`{start}`** from the command palette.\n\
         Requires an active debug session (debugpy) — the LSP injects Python code via DAP evaluate.\n\n\
         ### Commands\n\
         | Command | Description |\n\
         |---------|-------------|\n\
-        | `basilisk.memory.start` | Begin tracking allocations |\n\
-        | `basilisk.memory.snapshot` | Capture allocation snapshot |\n\
-        | `basilisk.memory.diff` | Compare two snapshots for growth |\n\
-        | `basilisk.memory.references` | Walk object reference graph |\n\
-        | `basilisk.memory.gcCollect` | Force GC and report uncollectable |\n\n\
+        | `{start}` | Begin tracking allocations |\n\
+        | `{snapshot}` | Capture allocation snapshot |\n\
+        | `{diff}` | Compare two snapshots for growth |\n\
+        | `{refs}` | Walk object reference graph |\n\
+        | `{gc}` | Force GC and report uncollectable |\n\n\
         ### Diagnostics\n\
-        - `BSK-MEM-ALLOC` — top allocation sites (Hint)\n\
-        - `BSK-MEM-GROWTH` — memory growth detected (Warning)\n\
-        - `BSK-MEM-LEAK` — suspected leak (Warning)\n\
-        - `BSK-MEM-CYCLE` — reference cycle with `__del__` (Error)"
-        .to_string();
+        - `{alloc}` — top allocation sites (Hint)\n\
+        - `{growth}` — memory growth detected (Warning)\n\
+        - `{leak}` — suspected leak (Warning)\n\
+        - `{cycle}` — reference cycle with `__del__` (Error)"
+    );
     ("Memory Tracking".to_string(), text)
 }
 
 fn slash_memstop() -> (String, String) {
-    let text = "\
-        ## Stop Memory Tracking\n\n\
+    let leak = memory_diagnostics::LEAK;
+    let cycle = memory_diagnostics::CYCLE;
+    let text = format!(
+        "## Stop Memory Tracking\n\n\
         Stops `tracemalloc` injection and generates the final leak report.\n\n\
         Diagnostics published for each file with significant allocations.\n\
         Leak confidence: **Definite** > **High** > **Medium** > **Low**.\n\n\
+        - `{leak}` — suspected leak with confidence score (Warning)\n\
+        - `{cycle}` — reference cycle involving `__del__` finalizers (Error)\n\n\
         > Use `/memrefs <TypeName>` to inspect retention paths for leaked types."
-        .to_string();
+    );
     ("Memory Report".to_string(), text)
 }
 
 fn slash_memrefs(args: &[String]) -> (String, String) {
     let type_name = args.first().map_or("(unknown)", String::as_str);
+    let refs_cmd = commands::MEMORY_REFERENCES;
+    let cycle_code = memory_diagnostics::CYCLE;
     let text = format!(
         "## Reference Graph: `{type_name}`\n\n\
-         Run `basilisk.memory.references` with `{{\"targetType\": \"{type_name}\"}}`.\n\n\
-         Walks `gc.get_referrers()` from GC roots to instances of `{type_name}`.\n\n\
+         Run **`{refs_cmd}`** from the command palette with:\n\
+         ```json\n\
+         {{\"targetType\": \"{type_name}\", \"maxDepth\": 5, \"maxNodes\": 200}}\n\
+         ```\n\n\
+         Walks `gc.get_referrers()` from GC roots to all live instances of `{type_name}`.\n\n\
          ### Output\n\
          - **Nodes** — objects with type, size, repr\n\
          - **Edges** — reference relationships with labels (`.attr`, `[key]`)\n\
-         - **Cycles** — detected via DFS, flagged as `BSK-MEM-CYCLE`\n\
-         - **Retention path** — human-readable chain from root to target"
+         - **Cycles** — detected via DFS, flagged as `{cycle_code}`\n\
+         - **Retention path** — human-readable chain from GC root to target"
     );
     ("Reference Graph".to_string(), text)
 }
@@ -410,6 +459,21 @@ pub fn default_workspace_config() -> Value {
             config_keys::TEST_EXPLORER_ARGS: [],
             config_keys::TEST_EXPLORER_AUTO_DISCOVER_ON_SAVE: true,
             config_keys::TEST_EXPLORER_USE_UV_RUN: true
+        },
+        config_keys::PROFILER: {
+            config_keys::PROFILER_ENABLED: true,
+            config_keys::PROFILER_SAMPLE_RATE: 100,
+            config_keys::PROFILER_INCLUDE_NATIVE: false,
+            config_keys::PROFILER_LINE_THRESHOLD: 0.01,
+            config_keys::PROFILER_FUNC_THRESHOLD: 0.02,
+            config_keys::PROFILER_MAX_DIAGNOSTICS: 20,
+            config_keys::PROFILER_AUTO_ON_LAUNCH: false,
+            config_keys::PROFILER_DEFAULT_FORMAT: "speedscope"
+        },
+        config_keys::MEMORY: {
+            config_keys::MEMORY_TRACEBACK_DEPTH: 25,
+            config_keys::MEMORY_AUTO_SNAPSHOT_INTERVAL: 0,
+            config_keys::MEMORY_MAX_DIAGNOSTICS: 10
         }
     })
 }
