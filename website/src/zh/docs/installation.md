@@ -1,0 +1,211 @@
+---
+layout: layouts/docs.njk
+title: 安装
+description: 如何安装 Basilisk——预构建二进制文件、VS Code 扩展、Zed 扩展或从源代码构建。
+keywords: basilisk, 安装, cargo, rust, python类型检查器, vs code, zed
+lang: zh
+eleventyNavigation:
+  key: Installation
+  order: 2
+---
+
+# 安装
+
+Basilisk 是一个单一的 Rust 二进制文件，没有运行时依赖。无需 Node.js。无需 Python 解释器。安装后不需要包管理器。
+
+## VS Code 扩展（推荐）
+
+最快的入门方式。从 VS Code 市场安装 **Basilisk** 扩展：
+
+1. 打开 VS Code
+2. 进入扩展（`Ctrl+Shift+X` / `Cmd+Shift+X`）
+3. 搜索 **Basilisk**
+4. 点击**安装**
+
+**扩展在首次激活时自动下载适合您平台的正确 Basilisk 二进制文件。** 无需手动设置。二进制文件从 [GitHub Releases](https://github.com/MelbourneDeveloper/Basilisk/releases) 下载并存储在扩展的全局存储目录中。
+
+```bash
+git clone https://github.com/MelbourneDeveloper/Basilisk
+cd basilisk
+cargo build --release
+```
+
+| 操作系统 | 架构 |
+|----|-------------|
+| macOS | Apple Silicon (aarch64) |
+| macOS | Intel (x86_64) |
+| Linux | x86_64 |
+| Linux | aarch64 |
+| Windows | x86_64 |
+
+如果二进制文件已在您的 PATH 中（例如来自 `cargo install`），扩展将使用它而不是下载。
+
+## 预构建二进制文件
+
+从 [GitHub Releases](https://github.com/MelbourneDeveloper/Basilisk/releases) 下载适合您平台的最新版本：
+
+```bash
+# macOS (Apple Silicon)
+curl -sSfL https://github.com/MelbourneDeveloper/Basilisk/releases/latest/download/basilisk-darwin-aarch64.tar.gz | tar xz
+sudo mv basilisk /usr/local/bin/
+
+# macOS (Intel)
+curl -sSfL https://github.com/MelbourneDeveloper/Basilisk/releases/latest/download/basilisk-darwin-x86_64.tar.gz | tar xz
+sudo mv basilisk /usr/local/bin/
+
+# Linux (x86_64)
+curl -sSfL https://github.com/MelbourneDeveloper/Basilisk/releases/latest/download/basilisk-linux-x86_64.tar.gz | tar xz
+sudo mv basilisk /usr/local/bin/
+```
+
+验证安装：
+
+```bash
+basilisk --version
+```
+
+## 通过 Cargo 安装
+
+如果您已安装 Rust：
+
+```bash
+cargo install basilisk
+```
+
+这会将二进制文件安装到 `~/.cargo/bin/`，如果您通过 rustup 安装了 Rust，它通常已经在您的 PATH 中。
+
+## 从源代码构建
+
+```bash
+git clone https://github.com/MelbourneDeveloper/Basilisk
+cd Basilisk
+cargo build --release
+```
+
+二进制文件构建在 `target/release/basilisk`。将其添加到您的 PATH：
+
+```bash
+cp target/release/basilisk /usr/local/bin/
+```
+
+需要 Rust 1.87+。
+
+在 [github.com/MelbourneDeveloper/Basilisk](https://github.com/MelbourneDeveloper/Basilisk) 跟踪进度。
+
+## CI 集成
+
+Basilisk 自然地集成到任何 CI 管道中。在您的工作流程中下载二进制文件：
+
+```yaml
+# GitHub Actions 示例
+- name: 安装 Basilisk
+  run: |
+    curl -sSfL https://github.com/MelbourneDeveloper/Basilisk/releases/latest/download/basilisk-linux-x86_64.tar.gz | tar xz
+    sudo mv basilisk /usr/local/bin/
+
+- name: 类型检查
+  run: basilisk check src/
+```
+
+退出代码：
+- `0` — 未发现错误
+- `1` — 发现类型错误
+- `2` — 配置错误
+- `3` — 内部错误
+
+## Zed 扩展
+
+Basilisk 提供了一个原生 Zed 扩展，为 Python 文件注册 LSP。安装后，Basilisk 自动激活为所有 `.py` 文件的语言服务器。
+
+### 安装扩展
+
+1. 构建并安装 Basilisk CLI 二进制文件：
+
+```bash
+cargo install --path crates/basilisk-cli
+```
+
+这将二进制文件安装到 `~/.cargo/bin/basilisk`。
+
+2. 在 Zed 中安装开发扩展：
+
+- 打开命令面板：`Cmd+Shift+P`
+- 运行 **zed: install dev extension**
+- 从存储库中选择 `basilisk-zed/` 目录
+
+Zed 自动将扩展的 Rust 源代码编译为 WASM。您不需要预构建或复制任何 `.wasm` 文件。
+
+3. 打开一个 Python 文件——Basilisk 现在是您的 Python 语言服务器。
+
+### Zed 如何找到二进制文件
+
+Zed 扩展按以下顺序解析 Basilisk 二进制文件：
+
+1. **Zed LSP 设置** — 如果您在 Zed `settings.json` 中配置了显式路径：
+
+```json
+{
+  "lsp": {
+    "basilisk": {
+      "binary": {
+        "path": "/path/to/basilisk"
+      }
+    }
+  }
+}
+```
+
+2. **`BASILISK_PATH` 环境变量** — 设置此变量以覆盖默认位置
+3. **`~/.cargo/bin/basilisk`** — `cargo install` 放置二进制文件的默认位置
+
+Zed **不**从 PATH 解析裸命令名。扩展始终返回二进制文件的绝对路径。
+
+### 在 Zed 中配置 Basilisk 设置
+
+将 Basilisk 特定设置添加到您的 Zed `settings.json`：
+
+```json
+{
+  "lsp": {
+    "basilisk": {
+      "settings": {
+        "inlayHints": {
+          "paramNames": true,
+          "varTypes": true
+        },
+        "ruff": {
+          "enabled": true
+        }
+      }
+    }
+  }
+}
+```
+
+### 更改后重新构建
+
+如果您修改了 Basilisk 源代码：
+
+1. 重新构建 CLI 二进制文件：`cargo install --path crates/basilisk-cli --force`
+2. 在 Zed 中重新安装开发扩展：`Cmd+Shift+P` → **zed: install dev extension** → 选择 `basilisk-zed/`
+
+Zed 自动重新编译 WASM 并重新加载扩展。
+
+## 编辑器支持 (LSP)
+
+Basilisk 实现了语言服务器协议。任何支持 LSP 的编辑器都可以使用它：
+
+- **VS Code** — 通过官方 Basilisk 扩展（自动下载二进制文件）
+- **Zed** — 通过 Basilisk Zed 扩展（见上文）
+- **Neovim** — 通过 nvim-lspconfig
+- **Helix** — 原生 LSP 支持
+- **Emacs** — 通过 eglot 或 lsp-mode
+
+## VS Code 扩展如何找到二进制文件
+
+扩展按以下顺序解析 Basilisk 二进制文件：
+
+1. **`basilisk.executablePath` 设置** — 如果您设置了显式路径，则直接使用
+2. **系统 PATH** — 检查 `~/.cargo/bin/`、`/usr/local/bin/`、`/opt/homebrew/bin/`
+3. **扩展存储** — 检查之前下载的二进制文件
+4. **下载提示** — 提供从 GitHub Releases 下载匹配版本

@@ -183,6 +183,10 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 
 .nav-actions { display: flex; align-items: center; gap: var(--space-2); }
 
+.language-switcher { display: flex; align-items: center; }
+.lang-link { font-size: 0.85rem; padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); color: var(--color-text-secondary); border: 1px solid var(--color-border); text-decoration: none; transition: color 0.15s, border-color 0.15s; }
+.lang-link:hover { color: var(--color-text-primary); border-color: var(--color-text-secondary); }
+
 /* Dark-only site */
 .theme-toggle { display: none !important; }
 

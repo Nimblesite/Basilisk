@@ -13,7 +13,12 @@
       "mcp__too-many-cooks__message",
       "Bash(cargo test:*)",
       "Bash(cargo clippy:*)",
-      "Bash(make test:*)"
+      "Bash(make test:*)",
+      "Bash(find /Users/christianfindlay/Documents/Code/Basilisk/website -type f -name *.html -o -name *.js -o -name *.ts -o -name *.jsx -o -name *.tsx -o -name *.css -o -name *.json -o -name *.md)",
+      "Bash(find /Users/christianfindlay/Documents/Code/Basilisk -type d -name *i18n* -o -type d -name *locales* -o -type d -name *translation* -o -type d -name *lang*)",
+      "Bash(grep -r \"lang\\\\|i18n\\\\|translate\\\\|language\" /Users/christianfindlay/Documents/Code/Basilisk/website --include=*.js --include=*.ts --include=*.jsx --include=*.tsx --include=*.njk)",
+      "Bash(xargs ls:*)",
+      "Bash(find /Users/christianfindlay/Documents/Code/Basilisk/website -not -path */node_modules/* -not -path */_site/* -type d)"
     ]
   },
   "autoMemoryEnabled": false
