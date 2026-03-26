@@ -137,11 +137,7 @@ pub(in crate::server) async fn document_symbol(
         return Ok(None);
     };
     let syms = symbols::document_symbols(&resolved, &text);
-    if syms.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(DocumentSymbolResponse::Nested(syms)))
-    }
+    Ok(Some(DocumentSymbolResponse::Nested(syms)))
 }
 
 /// Handle `workspace/symbol`.
