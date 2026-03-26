@@ -129,7 +129,7 @@ fn line_range(line_1based: i32) -> Range {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::profiler::aggregator::{FrameKey, FunctionStats, SpeedscopeFrame};
+    use crate::profiler::aggregator::FunctionStats;
 
     /// Build profile data with known hot spots for testing.
     fn make_test_profile() -> ProfileData {
@@ -139,26 +139,29 @@ mod tests {
         data.total_samples = 100;
 
         // Hot line: /tmp/test.py:42 with 40 hits.
-        data.line_hits
+        let _ = data
+            .line_hits
             .entry("/tmp/test.py".to_owned())
             .or_default()
             .insert(42, 40);
 
         // Warm line: /tmp/test.py:50 with 10 hits.
-        data.line_hits
+        let _ = data
+            .line_hits
             .entry("/tmp/test.py".to_owned())
             .or_default()
             .insert(50, 10);
 
-        // Cold line: /tmp/test.py:60 with 1 hit (below default 1% threshold with
-        // 100 total line samples).
-        data.line_hits
+        // Cold line: /tmp/test.py:60 with 0 hits (below default 1% threshold).
+        let _ = data
+            .line_hits
             .entry("/tmp/test.py".to_owned())
             .or_default()
             .insert(60, 0);
 
         // Hot function.
-        data.function_stats
+        let _ = data
+            .function_stats
             .entry("/tmp/test.py".to_owned())
             .or_default()
             .insert(

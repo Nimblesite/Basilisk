@@ -106,6 +106,21 @@ impl std::fmt::Display for SamplerError {
 
 impl std::error::Error for SamplerError {}
 
+/// Convert a u32 PID to the platform-specific type py-spy expects.
+///
+/// py-spy uses `remoteprocess::Pid` which is `i32` on Unix and `u32` on Windows.
+fn to_pyspy_pid(pid: u32) -> py_spy::Pid {
+    #[cfg(target_os = "windows")]
+    {
+        pid
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        // Safe: PIDs on Unix fit in i32 (max PID is typically 2^22).
+        i32::try_from(pid).unwrap_or(0)
+    }
+}
+
 /// Start a sampler thread for the given configuration.
 ///
 /// Returns a handle that can be used to receive samples and stop the sampler.
@@ -114,7 +129,7 @@ impl std::error::Error for SamplerError {}
 ///
 /// Returns `SamplerError` if py-spy cannot attach to the target process.
 pub fn start_sampler(config: &SamplerConfig) -> Result<SamplerHandle, SamplerError> {
-    let pid = remapping::Pid::from(config.pid);
+    let pid = to_pyspy_pid(config.pid);
 
     let spy_config = py_spy::Config {
         sampling_rate: config.sample_rate,
@@ -133,7 +148,7 @@ pub fn start_sampler(config: &SamplerConfig) -> Result<SamplerHandle, SamplerErr
         let msg = err.to_string();
         if msg.contains("ermission") {
             SamplerError::PermissionDenied(msg)
-        } else if msg.contains("ot a python") || msg.contains("python") {
+        } else if msg.contains("ot a python") || msg.contains("ot Python") {
             SamplerError::NotPython(config.pid)
         } else if msg.contains("No such process") || msg.contains("not found") {
             SamplerError::ProcessNotFound(config.pid)
@@ -142,10 +157,10 @@ pub fn start_sampler(config: &SamplerConfig) -> Result<SamplerHandle, SamplerErr
         }
     })?;
 
-    let python_version = spy
-        .process
-        .version
-        .map_or_else(|| "unknown".to_owned(), |v| format!("{}.{}.{}", v.major, v.minor, v.patch));
+    let python_version = format!(
+        "{}.{}.{}",
+        spy.version.major, spy.version.minor, spy.version.patch
+    );
 
     info!(
         pid = config.pid,
@@ -220,44 +235,4 @@ fn sampler_loop(
     }
 
     info!("sampler thread exiting");
-}
-
-/// Re-export `remapping::Pid` helper to convert u32 to the platform-specific PID type.
-mod remapping {
-    /// Platform PID type wrapper.
-    #[derive(Debug, Clone, Copy)]
-    pub struct Pid(pub remapping_inner::RawPid);
-
-    impl From<u32> for Pid {
-        fn from(value: u32) -> Self {
-            Self(remapping_inner::RawPid::from(value))
-        }
-    }
-
-    impl From<Pid> for remapping_inner::RawPid {
-        fn from(value: Pid) -> Self {
-            value.0
-        }
-    }
-
-    /// Inner module to handle platform differences.
-    mod remapping_inner {
-        /// The raw PID type used by py-spy.
-        #[cfg(target_os = "windows")]
-        pub type RawPid = u32;
-        #[cfg(not(target_os = "windows"))]
-        pub type RawPid = i32;
-
-        impl From<u32> for RawPid {
-            #[cfg(target_os = "windows")]
-            fn from(value: u32) -> Self {
-                value
-            }
-
-            #[cfg(not(target_os = "windows"))]
-            fn from(value: u32) -> Self {
-                value as Self
-            }
-        }
-    }
 }

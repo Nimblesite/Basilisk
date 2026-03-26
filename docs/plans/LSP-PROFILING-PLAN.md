@@ -7,8 +7,12 @@ See [LSP-PROFILING-SPEC.md](../specs/LSP-PROFILING-SPEC.md) for the full technic
 ## Status
 
 - Slash command constants defined in `basilisk-common` (`PROFILE`, `PROFSTOP`, `PROFSNAPSHOT`, `MEMLEAK`, `MEMSTOP`, `MEMREFS`)
+- Profiler command constants defined in `basilisk-common` (`PROFILER_START`, `PROFILER_STOP`, `PROFILER_SNAPSHOT`, `PROFILER_LIST`)
+- Profiler diagnostic codes defined in `basilisk-common` (`BSK-PROF-LINE`, `BSK-PROF-FUNC`, `BSK-PROF-GIL`)
 - Zed extension has stub slash command handlers (return placeholder messages, no actual profiling)
-- **No profiling engine exists yet** — no py-spy, no inferno, no profiler module in LSP
+- **Phase 1 core engine COMPLETE** — py-spy, inferno, profiler module with all 6 files, fully wired into server
+- **Phase 2 VS Code extension COMPLETE** — commands, settings, keybindings, status bar, heat map decorations, flamegraph webview, extension wiring
+- **Server wiring COMPLETE** — profiler_handlers.rs, server/mod.rs field, shutdown hook, command dispatch all done
 
 ---
 
@@ -16,23 +20,33 @@ See [LSP-PROFILING-SPEC.md](../specs/LSP-PROFILING-SPEC.md) for the full technic
 
 ### Phase 1: Core Engine
 
-- [ ] Add `py-spy = "0.4"` and `inferno = "0.12"` to `crates/basilisk-lsp/Cargo.toml`
-- [ ] Create `crates/basilisk-lsp/src/profiler/mod.rs` — `ProfileSessionManager`
-- [ ] Create `crates/basilisk-lsp/src/profiler/sampler.rs` — py-spy wrapper, mpsc channel
-- [ ] Create `crates/basilisk-lsp/src/profiler/aggregator.rs` — `ProfileData`, hit counting
-- [ ] Create `crates/basilisk-lsp/src/profiler/export.rs` — speedscope JSON + flamegraph SVG
-- [ ] Create `crates/basilisk-lsp/src/profiler/diagnostics.rs` — LSP diagnostics from profile data
-- [ ] Create `crates/basilisk-lsp/src/profiler/commands.rs` — LSP command handlers
-- [ ] Wire profiler commands into `server.rs` and register in `initialize` capabilities
+- [x] Add `py-spy = "0.4"` and `inferno = "0.12"` to `crates/basilisk-lsp/Cargo.toml`
+- [x] Create `crates/basilisk-lsp/src/profiler/mod.rs` — `ProfileSessionManager`
+- [x] Create `crates/basilisk-lsp/src/profiler/sampler.rs` — py-spy wrapper, mpsc channel
+- [x] Create `crates/basilisk-lsp/src/profiler/aggregator.rs` — `ProfileData`, hit counting
+- [x] Create `crates/basilisk-lsp/src/profiler/export.rs` — speedscope JSON + flamegraph SVG
+- [x] Create `crates/basilisk-lsp/src/profiler/diagnostics.rs` — LSP diagnostics from profile data
+- [x] Create `crates/basilisk-lsp/src/profiler/commands.rs` — LSP command utilities
+- [x] Create `crates/basilisk-lsp/src/server/profiler_handlers.rs` — LSP command handlers (start/stop/snapshot/list)
+- [x] Add `profiler_manager` field to `LspServer` struct in `server/mod.rs`
+- [x] Add `profiler_handlers` module declaration in `server/mod.rs`
+- [x] Add `stop_all()` call in `shutdown` handler (`server/init.rs`)
+- [x] Add profiler command dispatch cases to `server/commands.rs`
+- [x] Uncomment `pub mod profiler` in `lib.rs`
+- [x] Compile and fix all errors — cargo check passes
 - [ ] Tests: attach to Python process, verify samples; profile CPU-bound script; multi-threaded
 
 ### Phase 2: VS Code Extension — Profiling UI
 
-- [ ] Add `basilisk.profileStart/Stop/Snapshot/AttachToDebug` commands to `package.json`
-- [ ] Add profiler status bar item
-- [ ] Create inline heat map decorations (`decorations.ts`)
-- [ ] Create flamegraph webview (animated, with pie chart, timeline, sunburst views)
-- [ ] Create profiler dashboard (summary cards, top functions, thread breakdown, GIL gauge, call tree, diff mode)
+- [x] Add `basilisk.profileStart/Stop/Snapshot/AttachToDebug` commands to `package.json`
+- [x] Add profiler settings (`sampleRate`, `includeNative`, `lineThreshold`, etc.) to `package.json`
+- [x] Add profiler keybindings to `package.json`
+- [x] Create `profiler.ts` — profiler client module (status bar, commands, flamegraph webview, progress listener)
+- [x] Create `profiler-decorations.ts` — inline heat map decorations (4-level heat palette, function + line annotations)
+- [x] Add profiler status bar item (pulsing orange during profiling, sample count + duration, click-to-stop)
+- [x] Create flamegraph webview (summary cards, hot functions/lines tables, click-to-source navigation, Basilisk brand palette)
+- [x] Wire profiler into `extension.ts` — activation and deactivation lifecycle
+- [x] Progress notification handler — live status bar updates from `basilisk/profiler/progress`
 - [ ] E2E tests: start/stop profiling, flamegraph opens, inline decorations, click-to-source
 
 ### Phase 3: Zed Extension — Profiling (wire up existing stubs)
@@ -87,3 +101,12 @@ See [LSP-PROFILING-SPEC.md](../specs/LSP-PROFILING-SPEC.md) for the full technic
 
 - [ ] Benchmark: profiler overhead <3% CPU, diagnostic generation <100ms
 - [ ] Profile diff comparison, profiling presets, "Profile on Launch" option
+
+### Phase 7: Testing
+
+NOTHING IS COMPLETE UNTIL THE E2E TESTS FOR THE VSIX AND ANY OTHER APPS THAT CAN HARNESS THE PROFILER HAVE FULL E2E TESTS THAT PROVE THE WHOLE THING IS WORKING
+WRITE TONNES OF TESTS WITH LOADS OF ASSERTIONS AND USER INTERACTIONS IN EACH TEST
+ITERATE ON THIS UNTIL IT IS COMPLETELY CLEAR THAT THIS FEATURE IS SMOOTH AND POLISHED
+
+Run the CI prep skill at the end
+[text](../../.claude/skills/ci-prep/SKILL.md)

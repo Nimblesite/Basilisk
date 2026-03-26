@@ -4,11 +4,10 @@
 //! (speedscope.app, browser) can consume.
 
 use std::collections::HashMap;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
-use tracing::{error, info};
+use tracing::info;
 
 use super::aggregator::ProfileData;
 
@@ -256,7 +255,7 @@ pub fn export(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::profiler::aggregator::{FrameKey, SpeedscopeFrame};
+    use crate::profiler::aggregator::SpeedscopeFrame;
 
     fn make_test_data() -> ProfileData {
         let mut data = ProfileData::default();
@@ -279,10 +278,12 @@ mod tests {
         });
 
         // Thread 1: two samples.
-        data.thread_stacks
+        let _ = data
+            .thread_stacks
             .insert(1, vec![vec![0, 1, 2], vec![0, 1]]);
-        data.thread_weights.insert(1, vec![0.01, 0.01]);
-        data.thread_names
+        let _ = data.thread_weights.insert(1, vec![0.01, 0.01]);
+        let _ = data
+            .thread_names
             .insert(1, "MainThread".to_owned());
 
         data.total_samples = 2;

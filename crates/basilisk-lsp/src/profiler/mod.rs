@@ -20,7 +20,7 @@ use std::collections::HashMap;
 use std::time::{Instant, SystemTime};
 
 use tokio::sync::Mutex;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 use aggregator::{HotspotConfig, ProfileData};
 use sampler::{SamplerConfig, SamplerError, SamplerHandle};
@@ -105,6 +105,8 @@ pub struct SessionInfo {
     pub session_id: String,
     /// Target process ID.
     pub pid: u32,
+    /// Python version string.
+    pub python_version: String,
     /// ISO 8601 start timestamp.
     pub started_at: String,
     /// Samples collected so far.
@@ -226,7 +228,7 @@ impl ProfileSessionManager {
 
         let sample_weight = 1.0 / f64::from(u32::try_from(rate).unwrap_or(100));
 
-        sessions.insert(
+        let _ = sessions.insert(
             session_id.clone(),
             ProfileSession {
                 session_id,
@@ -330,6 +332,7 @@ impl ProfileSessionManager {
                 SessionInfo {
                     session_id: session.session_id.clone(),
                     pid: session.pid,
+                    python_version: session.python_version.clone(),
                     started_at: session.started_at_iso.clone(),
                     sample_count: session.data.total_samples,
                     duration: session.started_at.elapsed().as_secs_f64(),

@@ -134,7 +134,7 @@ impl ProfileData {
                     .line_hits
                     .entry(frame.filename.clone())
                     .or_default()
-                    .entry(i32::try_from(frame.line).unwrap_or(0))
+                    .entry(frame.line)
                     .or_insert(0) += 1;
 
                 // Increment function stats.
@@ -146,7 +146,7 @@ impl ProfileData {
                     .or_insert_with(|| FunctionStats {
                         name: frame.name.clone(),
                         file: frame.filename.clone(),
-                        line: i32::try_from(frame.line).unwrap_or(0),
+                        line: frame.line,
                         total_samples: 0,
                         self_samples: 0,
                     });
@@ -161,14 +161,14 @@ impl ProfileData {
                 let key = FrameKey {
                     name: frame.name.clone(),
                     file: frame.filename.clone(),
-                    line: i32::try_from(frame.line).unwrap_or(0),
+                    line: frame.line,
                 };
                 let idx = *self.frame_index.entry(key).or_insert_with(|| {
                     let idx = self.frames.len();
                     self.frames.push(SpeedscopeFrame {
                         name: frame.name.clone(),
                         file: frame.filename.clone(),
-                        line: i32::try_from(frame.line).unwrap_or(0),
+                        line: frame.line,
                     });
                     idx
                 });
@@ -211,7 +211,7 @@ impl ProfileData {
                 .iter()
                 .filter_map(|(&line, &samples)| {
                     let pct = if total_line_samples > 0 {
-                        (samples as f64 / total_line_samples as f64) * 100.0
+                        pct_of(samples, total_line_samples)
                     } else {
                         0.0
                     };
@@ -254,12 +254,12 @@ impl ProfileData {
         for funcs in self.function_stats.values() {
             for stats in funcs.values() {
                 let pct = if total_func_samples > 0 {
-                    (stats.total_samples as f64 / total_func_samples as f64) * 100.0
+                    pct_of(stats.total_samples, total_func_samples)
                 } else {
                     0.0
                 };
                 let self_pct = if total_func_samples > 0 {
-                    (stats.self_samples as f64 / total_func_samples as f64) * 100.0
+                    pct_of(stats.self_samples, total_func_samples)
                 } else {
                     0.0
                 };
@@ -279,6 +279,16 @@ impl ProfileData {
         result.sort_by(|a, b| b.samples.cmp(&a.samples));
         result
     }
+}
+
+/// Calculate the percentage of `part` in `total` (as u64 → f64 safely).
+///
+/// Uses intermediate `u32` conversion with saturation to avoid `as` casts.
+/// For profiling data, u32::MAX (4 billion samples) is more than sufficient.
+fn pct_of(part: u64, total: u64) -> f64 {
+    let part_f = f64::from(u32::try_from(part).unwrap_or(u32::MAX));
+    let total_f = f64::from(u32::try_from(total).unwrap_or(u32::MAX));
+    (part_f / total_f) * 100.0
 }
 
 /// A hot line exceeding the threshold.
@@ -320,9 +330,10 @@ mod tests {
     fn make_trace(
         thread_id: u64,
         active: bool,
-        frames: Vec<(&str, &str, usize)>,
+        frames: Vec<(&str, &str, i32)>,
     ) -> py_spy::StackTrace {
         py_spy::StackTrace {
+            pid: 0,
             thread_id,
             thread_name: Some(format!("Thread-{thread_id}")),
             owns_gil: false,
@@ -337,10 +348,11 @@ mod tests {
                     module: None,
                     locals: None,
                     is_entry: false,
+                    is_shim_entry: false,
                 })
                 .collect(),
             os_thread_id: None,
-            process_id: 0,
+            process_info: None,
         }
     }
 
