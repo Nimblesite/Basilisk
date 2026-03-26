@@ -144,7 +144,9 @@ function wireNotificationListener(
     // The initial notification from `initialized` may have been sent
     // before this handler was registered, so we request a fresh one.
     if (client.isRunning()) {
-      requestDiscovery(store).catch(() => {});
+      requestDiscovery(store).catch((err: unknown) => {
+        Logger.error(`Initial test discovery request failed: ${err}`);
+      });
     }
   }
 
