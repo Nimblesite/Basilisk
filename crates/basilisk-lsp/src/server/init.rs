@@ -271,7 +271,10 @@ pub(super) async fn did_change_configuration(
         guard.as_ref().map(|idx| idx.mode)
     };
     if current_mode == Some(new_mode) {
-        info!(?new_mode, "did_change_configuration: mode unchanged, skipping scan");
+        info!(
+            ?new_mode,
+            "did_change_configuration: mode unchanged, skipping scan"
+        );
         return;
     }
 
