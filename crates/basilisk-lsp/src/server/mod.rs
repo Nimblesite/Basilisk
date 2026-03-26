@@ -15,6 +15,7 @@ pub(super) mod init;
 pub(super) mod refactor_commands;
 pub(super) mod rule_override;
 pub(super) mod test_handlers;
+pub(super) mod profiler_handlers;
 pub(super) mod uv_handlers;
 
 macro_rules! diaglog {
@@ -100,6 +101,8 @@ pub struct LspServer {
     pub(super) workspace_roots: RwLock<Vec<std::path::PathBuf>>,
     /// Debug session manager — spawns debugpy and tracks active sessions.
     pub(super) debug_manager: crate::debug::DebugSessionManager,
+    /// Profiler session manager — py-spy sampling, aggregation, export.
+    pub(super) profiler_manager: crate::profiler::ProfileSessionManager,
     /// Debounced file-watcher task.
     pub(super) watcher_debounce: Mutex<Option<AbortHandle>>,
     /// Debounced module-changed notification task.
@@ -117,6 +120,7 @@ impl LspServer {
             index: Arc::new(RwLock::new(None)),
             workspace_roots: RwLock::new(Vec::new()),
             debug_manager: crate::debug::DebugSessionManager::new(),
+            profiler_manager: crate::profiler::ProfileSessionManager::new(),
             watcher_debounce: Mutex::new(None),
             module_changed_debounce: Mutex::new(None),
             test_config: RwLock::new(TestExplorerConfig::default()),

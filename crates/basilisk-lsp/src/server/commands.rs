@@ -96,6 +96,18 @@ pub(super) async fn dispatch_execute_command(
         basilisk_common::commands::TYPE_HEALTH => {
             super::activity_panel::execute_type_health(server, &params.arguments).await
         }
+        basilisk_common::commands::PROFILER_START => {
+            super::profiler_handlers::execute_profiler_start(server, &params.arguments).await
+        }
+        basilisk_common::commands::PROFILER_STOP => {
+            super::profiler_handlers::execute_profiler_stop(server, &params.arguments).await
+        }
+        basilisk_common::commands::PROFILER_SNAPSHOT => {
+            super::profiler_handlers::execute_profiler_snapshot(server, &params.arguments).await
+        }
+        basilisk_common::commands::PROFILER_LIST => {
+            super::profiler_handlers::execute_profiler_list(server, &params.arguments).await
+        }
         unknown => {
             server
                 .client

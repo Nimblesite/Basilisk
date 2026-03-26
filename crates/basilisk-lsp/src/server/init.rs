@@ -746,8 +746,9 @@ async fn check_pytest_from_index(
     }
 }
 
-/// Handle the `shutdown` request: stop all debug sessions.
+/// Handle the `shutdown` request: stop all debug and profiling sessions.
 pub(super) async fn shutdown(server: &LspServer) -> LspResult<()> {
     server.debug_manager.stop_all().await;
+    server.profiler_manager.stop_all().await;
     Ok(())
 }
