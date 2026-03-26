@@ -33,6 +33,28 @@ export interface MemorySnapshotResult {
   topAllocations: MemoryAllocation[];
 }
 
+/** Leak confidence level matching the LSP's `LeakConfidence` enum. */
+export type LeakConfidence = "LOW" | "MEDIUM" | "HIGH" | "DEFINITE";
+
+/** Per-line suspected leak data from the LSP diff diagnostics. */
+export interface SuspectedLeak {
+  file: string;
+  line: number;
+  sizeGrowth: number;
+  countGrowth: number;
+  currentSize: number;
+  confidence: LeakConfidence;
+  reason: string;
+}
+
+/** Memory diff result from the LSP. */
+export interface MemoryDiffResult {
+  totalGrowth: number;
+  totalFreed: number;
+  netGrowth: number;
+  suspectedLeaks: SuspectedLeak[];
+}
+
 // ── Decoration types ──────────────────────────────────────────────────────
 
 const memDecorationTypes = new Map<string, vscode.TextEditorDecorationType>();
@@ -69,6 +91,24 @@ function memColor(size: number): string {
   if (size >= 10_485_760) { return "#a78bfa"; }  // >10 MB — hot purple
   if (size >= 1_048_576) { return "#8b5cf6"; }   // >1 MB — warm purple
   return "#7c3aed";                                // <1 MB — base purple
+}
+
+function leakColor(confidence: LeakConfidence): string {
+  switch (confidence) {
+    case "DEFINITE": return "#ef4444"; // red-500 — definite leak
+    case "HIGH":     return "#f87171"; // red-400 — high confidence
+    case "MEDIUM":   return "#fb923c"; // orange-400 — medium confidence
+    case "LOW":      return "#a78bfa"; // purple — low confidence (warmup)
+  }
+}
+
+function confidenceBadge(confidence: LeakConfidence): string {
+  switch (confidence) {
+    case "DEFINITE": return "\u26d4 DEFINITE";
+    case "HIGH":     return "\u26a0 HIGH";
+    case "MEDIUM":   return "\u25cf MEDIUM";
+    case "LOW":      return "\u25cb LOW";
+  }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────
@@ -124,6 +164,60 @@ export function applyMemoryDecorations(result: MemorySnapshotResult): void {
   }
 
   Logger.info(`Memory decorations applied: ${result.topAllocations.length} allocations`);
+}
+
+/** Apply leak indicator decorations with confidence badges to visible editors. */
+export function applyLeakDecorations(result: MemoryDiffResult): void {
+  const leaksByFile = new Map<string, SuspectedLeak[]>();
+  for (const leak of result.suspectedLeaks) {
+    const existing = leaksByFile.get(leak.file);
+    if (existing !== undefined) {
+      existing.push(leak);
+    } else {
+      leaksByFile.set(leak.file, [leak]);
+    }
+  }
+
+  for (const editor of vscode.window.visibleTextEditors) {
+    const filePath = editor.document.uri.fsPath;
+    const leaks = leaksByFile.get(filePath);
+    if (leaks === undefined) { continue; }
+
+    const optionsByColor = new Map<string, vscode.DecorationOptions[]>();
+
+    for (const leak of leaks) {
+      const color = leakColor(leak.confidence);
+      const badge = confidenceBadge(leak.confidence);
+      const growth = formatBytes(Math.abs(leak.sizeGrowth));
+      const text = ` ${badge} +${growth} leak (${leak.countGrowth} objects)`;
+
+      const lineIdx = leak.line - 1;
+      if (lineIdx < 0 || lineIdx >= editor.document.lineCount) { continue; }
+
+      const range = new vscode.Range(
+        new vscode.Position(lineIdx, 0),
+        new vscode.Position(lineIdx, editor.document.lineAt(lineIdx).text.length),
+      );
+
+      const option: vscode.DecorationOptions = {
+        range,
+        renderOptions: { after: { contentText: text, color } },
+      };
+
+      const existing = optionsByColor.get(color);
+      if (existing !== undefined) {
+        existing.push(option);
+      } else {
+        optionsByColor.set(color, [option]);
+      }
+    }
+
+    for (const [color, options] of optionsByColor) {
+      editor.setDecorations(getMemDecorationTypeForColor(color), options);
+    }
+  }
+
+  Logger.info(`Leak decorations applied: ${result.suspectedLeaks.length} suspected leaks`);
 }
 
 /** Clear all memory decorations from visible editors. */

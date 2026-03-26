@@ -247,6 +247,171 @@ pub fn export(
     }
 }
 
+// ── Profile diff comparison ─────────────────────────────────────────────────
+
+/// A function that changed hotness between two profile sessions.
+#[derive(Debug, Clone, Serialize)]
+pub struct FunctionDiffEntry {
+    /// Function name.
+    pub name: String,
+    /// Source file path.
+    pub file: String,
+    /// Line number (1-based).
+    pub line: i32,
+    /// Percentage in profile A.
+    pub pct_a: f64,
+    /// Percentage in profile B.
+    pub pct_b: f64,
+    /// Absolute change in percentage points (B - A).
+    pub delta: f64,
+}
+
+/// Result of comparing two profile sessions.
+#[derive(Debug, Clone, Serialize)]
+pub struct ProfileDiffResult {
+    /// Functions that got hotter (higher percentage in B).
+    pub hotter: Vec<FunctionDiffEntry>,
+    /// Functions that got cooler (lower percentage in B).
+    pub cooler: Vec<FunctionDiffEntry>,
+    /// Functions with no significant change.
+    pub unchanged: Vec<FunctionDiffEntry>,
+}
+
+/// Significance threshold for profile diff (percentage points).
+const DIFF_SIGNIFICANCE_THRESHOLD: f64 = 0.5;
+
+/// Compare two profile sessions and export a JSON diff.
+///
+/// Functions are classified as hotter, cooler, or unchanged based on a
+/// significance threshold of 0.5 percentage points.
+///
+/// # Errors
+///
+/// Returns an error string if serialization or file writing fails.
+pub fn export_profile_diff(
+    data_a: &ProfileData,
+    data_b: &ProfileData,
+    output_dir: &Path,
+) -> Result<ExportResult, String> {
+    let diff = compute_profile_diff(data_a, data_b);
+
+    let json = serde_json::to_string_pretty(&diff)
+        .map_err(|err| format!("Failed to serialize profile diff: {err}"))?;
+
+    let path = output_dir.join("basilisk-profile-diff.json");
+    std::fs::write(&path, json.as_bytes())
+        .map_err(|err| format!("Failed to write diff file {}: {err}", path.display()))?;
+
+    info!(path = %path.display(), "exported profile diff JSON");
+
+    Ok(ExportResult {
+        path,
+        format: ExportFormat::Speedscope, // Re-using; it's JSON output
+    })
+}
+
+/// Compute the diff between two profile data sets.
+fn compute_profile_diff(data_a: &ProfileData, data_b: &ProfileData) -> ProfileDiffResult {
+    let before_pcts = collect_function_pcts(data_a);
+    let after_pcts = collect_function_pcts(data_b);
+
+    let mut all_keys: Vec<_> = before_pcts
+        .keys()
+        .chain(after_pcts.keys())
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .cloned()
+        .collect();
+    all_keys.sort();
+
+    let mut hotter = Vec::new();
+    let mut cooler = Vec::new();
+    let mut unchanged = Vec::new();
+
+    for key in all_keys {
+        let (before_val, after_val) = (
+            before_pcts.get(&key).copied().unwrap_or(0.0),
+            after_pcts.get(&key).copied().unwrap_or(0.0),
+        );
+        let delta = after_val - before_val;
+
+        let entry = FunctionDiffEntry {
+            name: key.name.clone(),
+            file: key.file.clone(),
+            line: key.line,
+            pct_a: before_val,
+            pct_b: after_val,
+            delta,
+        };
+
+        classify_diff_entry(entry, delta, &mut hotter, &mut cooler, &mut unchanged);
+    }
+
+    hotter.sort_by(|a, b| {
+        b.delta
+            .partial_cmp(&a.delta)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    cooler.sort_by(|a, b| {
+        a.delta
+            .partial_cmp(&b.delta)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    ProfileDiffResult {
+        hotter,
+        cooler,
+        unchanged,
+    }
+}
+
+/// Classify a diff entry into hotter, cooler, or unchanged.
+fn classify_diff_entry(
+    entry: FunctionDiffEntry,
+    delta: f64,
+    hotter: &mut Vec<FunctionDiffEntry>,
+    cooler: &mut Vec<FunctionDiffEntry>,
+    unchanged: &mut Vec<FunctionDiffEntry>,
+) {
+    if delta > DIFF_SIGNIFICANCE_THRESHOLD {
+        hotter.push(entry);
+    } else if delta < -DIFF_SIGNIFICANCE_THRESHOLD {
+        cooler.push(entry);
+    } else {
+        unchanged.push(entry);
+    }
+}
+
+/// Collect per-function self-sample percentages from profile data.
+fn collect_function_pcts(data: &ProfileData) -> HashMap<super::aggregator::FrameKey, f64> {
+    let total: u64 = data
+        .function_stats
+        .values()
+        .flat_map(HashMap::values)
+        .map(|s| s.self_samples)
+        .sum();
+
+    let total_f = f64::from(u32::try_from(total).unwrap_or(u32::MAX));
+
+    let mut result = HashMap::new();
+    for funcs in data.function_stats.values() {
+        for stats in funcs.values() {
+            let pct = if total > 0 {
+                f64::from(u32::try_from(stats.self_samples).unwrap_or(u32::MAX)) / total_f * 100.0
+            } else {
+                0.0
+            };
+            let key = super::aggregator::FrameKey {
+                name: stats.name.clone(),
+                file: stats.file.clone(),
+                line: stats.line,
+            };
+            let _ = result.insert(key, pct);
+        }
+    }
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -348,5 +513,213 @@ mod tests {
         assert!(collapsed.contains("<module>"));
         assert!(collapsed.contains("process"));
         assert!(collapsed.contains("parse"));
+    }
+
+    #[test]
+    fn profile_diff_classifies_functions() {
+        use crate::profiler::aggregator::FunctionStats;
+
+        let mut data_a = ProfileData {
+            total_samples: 100,
+            ..ProfileData::default()
+        };
+        let funcs_a = data_a.function_stats.entry("a.py".to_owned()).or_default();
+        let _ = funcs_a.insert(
+            "hot_fn".to_owned(),
+            FunctionStats {
+                name: "hot_fn".to_owned(),
+                file: "a.py".to_owned(),
+                line: 1,
+                total_samples: 50,
+                self_samples: 50,
+            },
+        );
+        let _ = funcs_a.insert(
+            "other_fn".to_owned(),
+            FunctionStats {
+                name: "other_fn".to_owned(),
+                file: "a.py".to_owned(),
+                line: 10,
+                total_samples: 50,
+                self_samples: 50,
+            },
+        );
+
+        let mut data_b = ProfileData {
+            total_samples: 100,
+            ..ProfileData::default()
+        };
+        let funcs_b = data_b.function_stats.entry("a.py".to_owned()).or_default();
+        let _ = funcs_b.insert(
+            "hot_fn".to_owned(),
+            FunctionStats {
+                name: "hot_fn".to_owned(),
+                file: "a.py".to_owned(),
+                line: 1,
+                total_samples: 80,
+                self_samples: 80,
+            },
+        );
+        let _ = funcs_b.insert(
+            "other_fn".to_owned(),
+            FunctionStats {
+                name: "other_fn".to_owned(),
+                file: "a.py".to_owned(),
+                line: 10,
+                total_samples: 20,
+                self_samples: 20,
+            },
+        );
+
+        let diff = compute_profile_diff(&data_a, &data_b);
+        assert!(
+            !diff.hotter.is_empty(),
+            "hot_fn should be hotter in B (80% vs 50%)"
+        );
+        if let Some(first_hotter) = diff.hotter.first() {
+            assert_eq!(first_hotter.name, "hot_fn");
+            assert!(first_hotter.delta > 0.0);
+        }
+    }
+
+    #[test]
+    fn profile_diff_unchanged_when_same_pct() {
+        use crate::profiler::aggregator::FunctionStats;
+        let mut data = ProfileData {
+            total_samples: 100,
+            ..ProfileData::default()
+        };
+        let _ = data
+            .function_stats
+            .entry("a.py".to_owned())
+            .or_default()
+            .insert(
+                "fn_a".to_owned(),
+                FunctionStats {
+                    name: "fn_a".to_owned(),
+                    file: "a.py".to_owned(),
+                    line: 10,
+                    total_samples: 100,
+                    self_samples: 100,
+                },
+            );
+        let diff = compute_profile_diff(&data, &data);
+        assert!(diff.hotter.is_empty());
+        assert!(diff.cooler.is_empty());
+        assert_eq!(diff.unchanged.len(), 1);
+    }
+
+    #[test]
+    fn profile_diff_new_function_classified_hotter() {
+        use crate::profiler::aggregator::FunctionStats;
+        let data_a = ProfileData::default();
+        let mut data_b = ProfileData {
+            total_samples: 100,
+            ..ProfileData::default()
+        };
+        let _ = data_b
+            .function_stats
+            .entry("new.py".to_owned())
+            .or_default()
+            .insert(
+                "new_fn".to_owned(),
+                FunctionStats {
+                    name: "new_fn".to_owned(),
+                    file: "new.py".to_owned(),
+                    line: 1,
+                    total_samples: 100,
+                    self_samples: 100,
+                },
+            );
+        let diff = compute_profile_diff(&data_a, &data_b);
+        assert_eq!(diff.hotter.len(), 1);
+        if let Some(first_hotter) = diff.hotter.first() {
+            assert_eq!(first_hotter.name, "new_fn");
+        }
+    }
+
+    #[test]
+    fn export_profile_diff_writes_valid_json() -> Result<(), String> {
+        use crate::profiler::aggregator::FunctionStats;
+        let mut data_a = ProfileData {
+            total_samples: 100,
+            ..ProfileData::default()
+        };
+        let _ = data_a
+            .function_stats
+            .entry("a.py".to_owned())
+            .or_default()
+            .insert(
+                "fn_a".to_owned(),
+                FunctionStats {
+                    name: "fn_a".to_owned(),
+                    file: "a.py".to_owned(),
+                    line: 10,
+                    total_samples: 100,
+                    self_samples: 100,
+                },
+            );
+        let dir = std::env::temp_dir();
+        let result = export_profile_diff(&data_a, &ProfileData::default(), &dir)?;
+        assert!(result.path.exists());
+        let contents =
+            std::fs::read_to_string(&result.path).map_err(|err| format!("read: {err}"))?;
+        let json: serde_json::Value =
+            serde_json::from_str(&contents).map_err(|err| format!("parse: {err}"))?;
+        assert!(json.get("hotter").is_some());
+        assert!(json.get("cooler").is_some());
+        assert!(json.get("unchanged").is_some());
+        let _ = std::fs::remove_file(&result.path);
+        Ok(())
+    }
+
+    #[test]
+    fn speedscope_export_under_200ms_for_60k_samples() -> Result<(), String> {
+        // Phase 6 target: speedscope export for 60K samples <200ms.
+        let mut data = ProfileData {
+            total_samples: 60_000,
+            ..ProfileData::default()
+        };
+
+        // Build 60K stacks across 4 threads, 200 unique frames.
+        for frame_idx in 0..200_u32 {
+            data.frames.push(SpeedscopeFrame {
+                name: format!("func_{frame_idx}"),
+                file: format!("module_{}.py", frame_idx / 10),
+                line: i32::try_from(frame_idx % 50 + 1).unwrap_or(1),
+            });
+        }
+
+        for thread_id in 1..=4_u64 {
+            let mut stacks = Vec::with_capacity(15_000);
+            let mut weights = Vec::with_capacity(15_000);
+            for sample in 0..15_000_u32 {
+                let depth = (sample % 5) + 1;
+                let stack: Vec<usize> = (0..depth)
+                    .map(|d| usize::try_from((sample + d) % 200).unwrap_or(0))
+                    .collect();
+                stacks.push(stack);
+                weights.push(0.01);
+            }
+            let _ = data.thread_stacks.insert(thread_id, stacks);
+            let _ = data.thread_weights.insert(thread_id, weights);
+            let _ = data
+                .thread_names
+                .insert(thread_id, format!("Thread-{thread_id}"));
+        }
+
+        let dir = std::env::temp_dir();
+        let start = std::time::Instant::now();
+        let result = export_speedscope(&data, "bench-60k", 99999, 600.0, &dir)?;
+        let elapsed = start.elapsed();
+
+        assert!(
+            elapsed.as_millis() < 200,
+            "speedscope export took {elapsed:?}, should be <200ms"
+        );
+        assert!(result.path.exists());
+
+        let _ = std::fs::remove_file(&result.path);
+        Ok(())
     }
 }

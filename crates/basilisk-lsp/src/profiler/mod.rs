@@ -15,8 +15,14 @@ pub mod commands;
 pub mod diagnostics;
 pub mod export;
 pub mod memory;
+pub mod presets;
 pub mod privilege;
 pub mod sampler;
+
+#[cfg(test)]
+mod benchmarks;
+#[cfg(test)]
+mod pipeline_tests;
 
 use std::collections::HashMap;
 use std::time::{Instant, SystemTime};
@@ -198,6 +204,9 @@ impl ProfileSessionManager {
                 });
             }
         }
+
+        // Check privileges and elevate if needed before attaching the sampler.
+        privilege::elevate_if_needed(pid).await?;
 
         let rate = sample_rate.unwrap_or(100);
         let config = SamplerConfig {

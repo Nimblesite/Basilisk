@@ -276,4 +276,47 @@ mod tests {
         let diags = generate_diagnostics(&data, &config);
         assert!(diags.is_empty());
     }
+
+    #[test]
+    fn diagnostic_generation_under_100ms_for_large_profile() {
+        // Phase 6 benchmark target: diagnostic generation <100ms for 60K samples.
+        let mut data = ProfileData {
+            total_samples: 60_000,
+            ..ProfileData::default()
+        };
+
+        // Simulate 100 files, 50 hot lines each.
+        for file_idx in 0..100_u32 {
+            let file = format!("/tmp/module_{file_idx:03}.py");
+            let line_map = data.line_hits.entry(file.clone()).or_default();
+            for line in 1..=50 {
+                let _ = line_map.insert(line, u64::from(file_idx + 1) * 12);
+            }
+            let func_map = data.function_stats.entry(file.clone()).or_default();
+            let _ = func_map.insert(
+                format!("func_{file_idx}"),
+                FunctionStats {
+                    name: format!("func_{file_idx}"),
+                    file,
+                    line: 1,
+                    total_samples: u64::from(file_idx + 1) * 50,
+                    self_samples: u64::from(file_idx + 1) * 25,
+                },
+            );
+        }
+
+        let config = HotspotConfig::default();
+        let start = std::time::Instant::now();
+        let diags = generate_diagnostics(&data, &config);
+        let elapsed = start.elapsed();
+
+        assert!(
+            elapsed.as_millis() < 100,
+            "diagnostic generation took {elapsed:?}, should be <100ms"
+        );
+        assert!(
+            !diags.is_empty(),
+            "should generate diagnostics from large profile"
+        );
+    }
 }

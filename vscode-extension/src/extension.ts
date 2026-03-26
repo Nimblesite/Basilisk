@@ -20,6 +20,7 @@ import { registerTypeHealth } from "./type-health";
 import { registerInfoPanel } from "./info-panel";
 import { createStore, type Store } from "./store";
 import { registerProfiler, disposeProfiler } from "./profiler";
+import { registerMemoryProfiler, disposeMemoryProfiler } from "./memory-profiler";
 
 /** Priority for the Basilisk status bar item (higher = further left). */
 const STATUS_BAR_PRIORITY = 100;
@@ -152,6 +153,10 @@ function initExtension(context: vscode.ExtensionContext): void {
     const profilerDisposables = registerProfiler(context, store);
     singletonDisposables.push(...profilerDisposables);
 
+    // Memory profiler UI — commands, reference graph webview, memory dashboard.
+    const memoryDisposables = registerMemoryProfiler(context, store);
+    singletonDisposables.push(...memoryDisposables);
+
     // Walkthrough command — tracked in singletonDisposables for the same reason.
     singletonDisposables.push(
       vscode.commands.registerCommand("basilisk.openWalkthrough", () => {
@@ -190,6 +195,7 @@ function initExtension(context: vscode.ExtensionContext): void {
 
 export function deactivate(): Promise<void> | undefined {
   disposeProfiler();
+  disposeMemoryProfiler();
   const result = store?.client.value?.stop();
   // Set store = undefined BEFORE calling reset() so the onReset callback
   // (which checks `store !== undefined`) does NOT restart the LSP client.

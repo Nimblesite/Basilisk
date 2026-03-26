@@ -11,9 +11,11 @@
 //! - [`diff`] — Snapshot comparison and growth detection
 //! - [`leaks`] — Leak confidence scoring across multiple diffs
 
+pub mod diagnostics;
 pub mod diff;
 pub mod leaks;
 pub mod scripts;
+pub mod timeline;
 
 use serde::{Deserialize, Serialize};
 

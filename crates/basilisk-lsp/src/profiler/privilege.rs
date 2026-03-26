@@ -11,6 +11,8 @@
 
 use std::path::PathBuf;
 
+#[cfg(target_os = "linux")]
+use tracing::warn;
 use tracing::{debug, info};
 
 use super::ProfileError;
@@ -392,6 +394,47 @@ async fn spawn_elevated_helper(
     }
 }
 
+/// Return platform-specific help text for permission errors.
+///
+/// Provides actionable guidance when the user encounters a privilege error
+/// while trying to profile an external process.
+#[must_use]
+pub fn platform_permission_message() -> &'static str {
+    platform_permission_message_impl()
+}
+
+/// macOS-specific permission help text.
+#[cfg(target_os = "macos")]
+fn platform_permission_message_impl() -> &'static str {
+    "macOS requires elevated privileges to profile external processes. \
+     The Basilisk profiler helper will prompt for your password via the \
+     system dialog. To avoid this, profile processes launched from a \
+     debug session instead."
+}
+
+/// Linux-specific permission help text.
+#[cfg(target_os = "linux")]
+fn platform_permission_message_impl() -> &'static str {
+    "Linux profiling requires ptrace access. Options:\n\
+     1. Set ptrace_scope to 0: sudo sysctl kernel.yama.ptrace_scope=0\n\
+     2. Grant capability: sudo setcap cap_sys_ptrace+ep $(which basilisk)\n\
+     3. Profile child processes via debug sessions (no elevation needed)"
+}
+
+/// Windows-specific permission help text.
+#[cfg(target_os = "windows")]
+fn platform_permission_message_impl() -> &'static str {
+    "Windows allows profiling processes owned by the same user without \
+     elevation. If you encounter errors, ensure the target process is \
+     running under your user account."
+}
+
+/// Fallback permission help text.
+#[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+fn platform_permission_message_impl() -> &'static str {
+    "Profiling is not supported on this platform."
+}
+
 /// Generate a unique Unix socket path for helper communication.
 #[cfg(target_os = "macos")]
 fn create_socket_path(pid: u32) -> String {
@@ -461,5 +504,74 @@ mod tests {
         let path = create_socket_path(12345);
         assert!(path.contains("12345"));
         assert!(path.starts_with("/tmp/basilisk-profiler-"));
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn is_child_process_true_for_spawned_child() {
+        // Spawn a short-lived child and verify detection.
+        let child = std::process::Command::new("sleep").arg("10").spawn();
+
+        if let Ok(mut child_proc) = child {
+            let child_pid = child_proc.id();
+            assert!(is_child_process(child_pid));
+            let _ = child_proc.kill();
+            let _ = child_proc.wait();
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn check_ptrace_scope_parses_values() {
+        let result = read_ptrace_scope();
+        match result {
+            Ok(scope) => assert!(scope <= 3, "unexpected ptrace_scope: {scope}"),
+            Err(err) => assert!(
+                err.contains("ptrace_scope"),
+                "error should mention ptrace_scope: {err}"
+            ),
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_permissions_child_process_allowed() {
+        let child = std::process::Command::new("sleep").arg("10").spawn();
+
+        if let Ok(mut child_proc) = child {
+            let child_pid = child_proc.id();
+            let result = check_linux_permissions(child_pid);
+            assert!(result.is_ok());
+            assert_eq!(result.expect("checked above"), PermissionStatus::Allowed);
+            let _ = child_proc.kill();
+            let _ = child_proc.wait();
+        }
+    }
+
+    #[test]
+    fn platform_permission_message_is_not_empty() {
+        let msg = platform_permission_message();
+        assert!(!msg.is_empty());
+        assert!(msg.len() > 20, "message should be descriptive");
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn elevate_if_needed_allowed_for_child() -> Result<(), String> {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|err| format!("failed to build tokio runtime: {err}"))?;
+
+        let child = std::process::Command::new("sleep").arg("10").spawn();
+
+        if let Ok(mut child_proc) = child {
+            let child_pid = child_proc.id();
+            let result = rt.block_on(elevate_if_needed(child_pid));
+            assert!(result.is_ok(), "child process should not need elevation");
+            let _ = child_proc.kill();
+            let _ = child_proc.wait();
+        }
+        Ok(())
     }
 }

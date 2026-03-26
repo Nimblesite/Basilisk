@@ -40,7 +40,7 @@ pub struct ProfileData {
 }
 
 /// Key for deduplicating frames in the speedscope export.
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct FrameKey {
     /// Function name.
     pub name: String,

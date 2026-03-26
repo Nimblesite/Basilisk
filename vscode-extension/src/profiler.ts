@@ -38,6 +38,29 @@ const LSP_CMD = {
 /** LSP notification for profiling progress. */
 const PROFILER_PROGRESS_NOTIFICATION = "basilisk/profiler/progress";
 
+// ── Presets ───────────────────────────────────────────────────────────────
+
+interface PresetConfig {
+  sampleRate: number;
+  includeNative: boolean;
+}
+
+function resolvePreset(preset: string, cfg: vscode.WorkspaceConfiguration): PresetConfig {
+  switch (preset) {
+    case "lightweight":
+      return { sampleRate: 10, includeNative: false };
+    case "detailed":
+      return { sampleRate: 100, includeNative: true };
+    case "memory":
+      return { sampleRate: 50, includeNative: false };
+    default: // "default"
+      return {
+        sampleRate: cfg.get<number>("profiler.sampleRate", 100),
+        includeNative: cfg.get<boolean>("profiler.includeNative", false),
+      };
+  }
+}
+
 // ── State ─────────────────────────────────────────────────────────────────
 
 let profilerStatusBarItem: vscode.StatusBarItem | undefined;
@@ -87,6 +110,29 @@ export function registerProfiler(
     }),
   );
 
+  // "Profile on Launch" — automatically start profiling when a debug session starts.
+  disposables.push(
+    vscode.debug.onDidStartDebugSession((session) => {
+      const profileOnLaunch = vscode.workspace
+        .getConfiguration("basilisk")
+        .get<boolean>("profiler.profileOnLaunch", false);
+      if (profileOnLaunch && session.type === "basilisk-debug" && activeSessionId === undefined) {
+        Logger.info(`Profile on Launch: auto-profiling debug session ${session.id}`);
+        void handleProfileAttachToDebug(store);
+      }
+    }),
+  );
+
+  // Auto-stop profiling when debug session ends.
+  disposables.push(
+    vscode.debug.onDidTerminateDebugSession(() => {
+      if (activeSessionId !== undefined) {
+        Logger.info("Debug session ended — auto-stopping profiler");
+        void handleProfileStop(store);
+      }
+    }),
+  );
+
   return disposables;
 }
 
@@ -123,10 +169,15 @@ async function handleProfileStart(store: Store): Promise<void> {
   if (pidInput === undefined) { return; } // Cancelled.
 
   const cfg = vscode.workspace.getConfiguration("basilisk");
-  const sampleRate = cfg.get<number>("profiler.sampleRate", 100);
-  const includeNative = cfg.get<boolean>("profiler.includeNative", false);
+  const preset = cfg.get<string>("profiler.preset", "default");
 
-  const args: Record<string, unknown> = { sampleRate, includeNative };
+  // Apply preset overrides.
+  const presetConfig = resolvePreset(preset, cfg);
+
+  const args: Record<string, unknown> = {
+    sampleRate: presetConfig.sampleRate,
+    includeNative: presetConfig.includeNative,
+  };
   if (pidInput !== "") {
     args.pid = Number(pidInput);
   }

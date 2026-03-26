@@ -254,6 +254,8 @@ pub mod notifications {
     pub const MODULE_CHANGED: &str = "basilisk/moduleChanged";
     /// Periodic profiling progress update during active sessions.
     pub const PROFILER_PROGRESS: &str = "basilisk/profiler/progress";
+    /// Memory timeline data from auto-snapshot mode.
+    pub const MEMORY_TIMELINE: &str = "basilisk/memory/timeline";
 }
 
 /// Diagnostic code prefixes for profiling features.

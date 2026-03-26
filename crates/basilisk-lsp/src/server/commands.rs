@@ -241,6 +241,16 @@ pub(super) async fn execute_start_debug_session(
         });
     }
 
+    let arg = args
+        .first()
+        .cloned()
+        .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+
+    let profile_on_launch = arg
+        .get("profileOnLaunch")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+
     // Spawn debugpy and wait for it to accept connections.
     match server.debug_manager.start_session(&python).await {
         Ok((host, port, session_id)) => {
@@ -252,10 +262,20 @@ pub(super) async fn execute_start_debug_session(
                     format!("Basilisk: debug session {session_id} started on {host}:{port}"),
                 )
                 .await;
+
+            // If a debuggee PID is already known (attach mode), auto-profile.
+            let profiler_session_id = if let Some(debuggee_pid) = extract_debuggee_pid(&arg) {
+                super::profiler_handlers::maybe_profile_on_launch(server, &arg, debuggee_pid).await
+            } else {
+                None
+            };
+
             Ok(Some(serde_json::json!({
                 "host": host,
                 "port": port,
-                "sessionId": session_id
+                "sessionId": session_id,
+                "profileOnLaunch": profile_on_launch,
+                "profilerSessionId": profiler_session_id,
             })))
         }
         Err(err) => {
@@ -271,6 +291,13 @@ pub(super) async fn execute_start_debug_session(
             })
         }
     }
+}
+
+/// Extract a debuggee PID from the debug session args (attach mode).
+fn extract_debuggee_pid(arg: &serde_json::Value) -> Option<u32> {
+    arg.get("pid")
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|p| u32::try_from(p).ok())
 }
 
 /// Handle `basilisk.stopDebugSession`.

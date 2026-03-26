@@ -45,16 +45,30 @@ pub(super) async fn execute_profiler_start(
         return Err(profiler_error(-32001, "Missing required parameter: pid"));
     };
 
-    let sample_rate = arg.get("sampleRate").and_then(serde_json::Value::as_u64);
+    // Check for preset-based configuration first.
+    let preset_name = arg.get("preset").and_then(serde_json::Value::as_str);
 
-    let include_native = arg
-        .get("includeNative")
-        .and_then(serde_json::Value::as_bool);
-
-    let duration = arg
-        .get("duration")
-        .and_then(serde_json::Value::as_f64)
-        .map(std::time::Duration::from_secs_f64);
+    let (sample_rate, include_native, duration) = if let Some(preset) =
+        preset_name.and_then(crate::profiler::presets::ProfilingPreset::parse_name)
+    {
+        let config = crate::profiler::presets::preset_config(preset, target_pid);
+        info!(preset = ?preset, "using profiling preset");
+        (
+            Some(config.sample_rate),
+            Some(config.include_native),
+            config.duration,
+        )
+    } else {
+        let rate = arg.get("sampleRate").and_then(serde_json::Value::as_u64);
+        let native = arg
+            .get("includeNative")
+            .and_then(serde_json::Value::as_bool);
+        let dur = arg
+            .get("duration")
+            .and_then(serde_json::Value::as_f64)
+            .map(std::time::Duration::from_secs_f64);
+        (rate, native, dur)
+    };
 
     match server
         .profiler_manager
@@ -314,4 +328,90 @@ pub(super) async fn execute_profiler_list(
     Ok(Some(serde_json::json!({
         "sessions": sessions_json,
     })))
+}
+
+/// Check if a debug session start request includes `profileOnLaunch: true`.
+///
+/// If so, begin profiling the debuggee PID automatically. Called from the debug
+/// session start handler after debugpy spawns the target process.
+///
+/// # Returns
+///
+/// `Some(session_id)` if profiling was started, `None` if `profileOnLaunch` was
+/// not set or profiling failed (the debug session continues regardless).
+pub(super) async fn maybe_profile_on_launch(
+    server: &LspServer,
+    args: &serde_json::Value,
+    debuggee_pid: u32,
+) -> Option<String> {
+    let profile_on_launch = args
+        .get("profileOnLaunch")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+
+    if !profile_on_launch {
+        return None;
+    }
+
+    info!(debuggee_pid, "profileOnLaunch: auto-starting profiler");
+
+    let preset_name = args
+        .get("profilePreset")
+        .and_then(serde_json::Value::as_str);
+    let (sample_rate, duration) = resolve_launch_profile_config(args, preset_name, debuggee_pid);
+
+    match server
+        .profiler_manager
+        .start(debuggee_pid, Some(sample_rate), Some(false), duration)
+        .await
+    {
+        Ok(result) => {
+            server
+                .client
+                .log_message(
+                    MessageType::INFO,
+                    format!(
+                        "Basilisk: auto-profiling PID {} (Python {})",
+                        result.pid, result.python_version
+                    ),
+                )
+                .await;
+            Some(result.session_id)
+        }
+        Err(err) => {
+            error!(debuggee_pid, %err, "profileOnLaunch: failed to start profiler");
+            server
+                .client
+                .log_message(
+                    MessageType::WARNING,
+                    format!("Basilisk: auto-profiling failed: {err}"),
+                )
+                .await;
+            None
+        }
+    }
+}
+
+/// Resolve sample rate and duration from launch args or preset.
+fn resolve_launch_profile_config(
+    args: &serde_json::Value,
+    preset_name: Option<&str>,
+    pid: u32,
+) -> (u64, Option<std::time::Duration>) {
+    if let Some(preset) =
+        preset_name.and_then(crate::profiler::presets::ProfilingPreset::parse_name)
+    {
+        let config = crate::profiler::presets::preset_config(preset, pid);
+        (config.sample_rate, config.duration)
+    } else {
+        let rate = args
+            .get("profileSampleRate")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(100);
+        let dur = args
+            .get("profileDuration")
+            .and_then(serde_json::Value::as_f64)
+            .map(std::time::Duration::from_secs_f64);
+        (rate, dur)
+    }
 }
