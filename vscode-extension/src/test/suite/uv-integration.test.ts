@@ -3,11 +3,10 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { getStore } from '../../extension';
 import {
+    SUITE_SETUP_TIMEOUT_MS,
     setupLspTestSuite,
     teardownLspTestSuite,
 } from './test-helpers';
-
-const SUITE_SETUP_TIMEOUT_MS = 30_000;
 
 suite('Basilisk uv Integration Tests', () => {
     let tmpDir: string;

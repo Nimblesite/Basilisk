@@ -21,13 +21,11 @@ import {
     EXTENSION_ID,
     SERVER_START_WAIT_MS,
     COMMAND_WAIT_MS,
+    SUITE_SETUP_TIMEOUT_MS,
     setupLspTestSuite,
     teardownLspTestSuite,
     closeAllEditors,
 } from './test-helpers';
-
-/** Timeout for suite-level setup. */
-const SUITE_SETUP_TIMEOUT_MS = 30_000;
 
 /** Extra time for the restart cycle test. */
 const RESTART_CYCLE_TIMEOUT_MS = 25_000;

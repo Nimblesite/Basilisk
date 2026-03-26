@@ -19,6 +19,7 @@ import {
     DIAGNOSTIC_TIMEOUT_MS,
     NO_DIAGNOSTIC_WAIT_MS,
     SERVER_START_WAIT_MS,
+    SUITE_SETUP_TIMEOUT_MS,
     waitForDiagnostics,
     waitForDiagnosticsCleared,
     openPythonFile,
@@ -27,9 +28,6 @@ import {
     setupLspTestSuite,
     teardownLspTestSuite,
 } from './test-helpers';
-
-/** Timeout (ms) for suite-level setup (server start + activation). */
-const SUITE_SETUP_TIMEOUT_MS = 30_000;
 
 /** Extra buffer (ms) added to restart-test timeout to cover server restart. */
 const RESTART_EXTRA_TIMEOUT_MS = 20_000;

@@ -18,9 +18,8 @@ import {
     pollUntilResult,
     DIAGNOSTIC_TIMEOUT_MS,
     SERVER_START_WAIT_MS,
+    SUITE_SETUP_TIMEOUT_MS,
 } from './test-helpers';
-
-const SUITE_SETUP_TIMEOUT_MS = 30_000;
 
 // eslint-disable-next-line max-lines-per-function
 suite('LSP Refactoring Code Action Tests', () => {

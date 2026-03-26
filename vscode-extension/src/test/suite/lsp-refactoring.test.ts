@@ -18,9 +18,8 @@ import {
     pollUntilResult,
     DIAGNOSTIC_TIMEOUT_MS,
     SERVER_START_WAIT_MS,
+    SUITE_SETUP_TIMEOUT_MS,
 } from './test-helpers';
-
-const SUITE_SETUP_TIMEOUT_MS = 30_000;
 const RENAME_POLL_TIMEOUT_MS = 3_000;
 const LOCAL_VAR_START_LINE = 3;
 const LOCAL_VAR_END_LINE = 4;

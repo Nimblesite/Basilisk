@@ -19,14 +19,12 @@ import {
     EXTENSION_ID,
     DIAGNOSTIC_TIMEOUT_MS,
     SERVER_START_WAIT_MS,
+    SUITE_SETUP_TIMEOUT_MS,
     pollUntilResult,
     findBasiliskBinary,
     openPythonFile,
     closeAllEditors,
 } from './test-helpers';
-
-/** Timeout (ms) for the suite setup (binary discovery + LSP warmup). */
-const SUITE_SETUP_TIMEOUT_MS = 30_000;
 
 /** Additional time (ms) added to DIAGNOSTIC_TIMEOUT_MS for individual test timeouts. */
 const EXTRA_TEST_TIMEOUT_MS = 10_000;

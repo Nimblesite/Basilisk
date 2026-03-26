@@ -20,6 +20,7 @@ import {
     EXTENSION_ID,
     NO_DIAGNOSTIC_WAIT_MS,
     SERVER_START_WAIT_MS,
+    SUITE_SETUP_TIMEOUT_MS,
     closeAllEditors,
     findBasiliskBinary,
     openPythonFile,
@@ -36,9 +37,6 @@ const LARGE_TIMEOUT_BUFFER_MS = 10_000;
 
 /** Interval (ms) between server readiness polls during suite setup. */
 const SETUP_POLL_INTERVAL_MS = 200;
-
-/** Suite-level timeout (ms) for server startup. */
-const SUITE_SETUP_TIMEOUT_MS = 30_000;
 
 // ── Test-specific line/column positions ──────────────────────────────
 

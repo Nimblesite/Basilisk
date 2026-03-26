@@ -221,7 +221,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
     this.timeout(TEST_TIMEOUT_MS);
     const cfg = vscode.workspace.getConfiguration("basilisk");
     await cfg.update("testExplorer.framework", "pytest", vscode.ConfigurationTarget.Workspace);
-    assert.strictEqual(cfg.get<string>("testExplorer.framework"), "pytest");
+    assert.strictEqual(vscode.workspace.getConfiguration("basilisk").get<string>("testExplorer.framework"), "pytest");
     await cfg.update("testExplorer.framework", undefined, vscode.ConfigurationTarget.Workspace);
   });
 
@@ -229,7 +229,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
     this.timeout(TEST_TIMEOUT_MS);
     const cfg = vscode.workspace.getConfiguration("basilisk");
     await cfg.update("testExplorer.framework", "unittest", vscode.ConfigurationTarget.Workspace);
-    assert.strictEqual(cfg.get<string>("testExplorer.framework"), "unittest");
+    assert.strictEqual(vscode.workspace.getConfiguration("basilisk").get<string>("testExplorer.framework"), "unittest");
     await cfg.update("testExplorer.framework", undefined, vscode.ConfigurationTarget.Workspace);
   });
 
@@ -237,7 +237,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
     this.timeout(TEST_TIMEOUT_MS);
     const cfg = vscode.workspace.getConfiguration("basilisk");
     await cfg.update("testExplorer.pytestPath", "/custom/pytest", vscode.ConfigurationTarget.Workspace);
-    assert.strictEqual(cfg.get<string>("testExplorer.pytestPath"), "/custom/pytest");
+    assert.strictEqual(vscode.workspace.getConfiguration("basilisk").get<string>("testExplorer.pytestPath"), "/custom/pytest");
     await cfg.update("testExplorer.pytestPath", undefined, vscode.ConfigurationTarget.Workspace);
   });
 
@@ -245,7 +245,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
     this.timeout(TEST_TIMEOUT_MS);
     const cfg = vscode.workspace.getConfiguration("basilisk");
     await cfg.update("testExplorer.args", ["-v", "--tb=long"], vscode.ConfigurationTarget.Workspace);
-    const args = cfg.get<string[]>("testExplorer.args");
+    const args = vscode.workspace.getConfiguration("basilisk").get<string[]>("testExplorer.args");
     assert.deepStrictEqual(args, ["-v", "--tb=long"]);
     await cfg.update("testExplorer.args", undefined, vscode.ConfigurationTarget.Workspace);
   });
@@ -254,7 +254,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
     this.timeout(TEST_TIMEOUT_MS);
     const cfg = vscode.workspace.getConfiguration("basilisk");
     await cfg.update("testExplorer.useUvRun", false, vscode.ConfigurationTarget.Workspace);
-    assert.strictEqual(cfg.get<boolean>("testExplorer.useUvRun"), false);
+    assert.strictEqual(vscode.workspace.getConfiguration("basilisk").get<boolean>("testExplorer.useUvRun"), false);
     await cfg.update("testExplorer.useUvRun", undefined, vscode.ConfigurationTarget.Workspace);
   });
 
@@ -262,7 +262,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
     this.timeout(TEST_TIMEOUT_MS);
     const cfg = vscode.workspace.getConfiguration("basilisk");
     await cfg.update("testExplorer.enabled", false, vscode.ConfigurationTarget.Workspace);
-    assert.strictEqual(cfg.get<boolean>("testExplorer.enabled"), false);
+    assert.strictEqual(vscode.workspace.getConfiguration("basilisk").get<boolean>("testExplorer.enabled"), false);
     await cfg.update("testExplorer.enabled", undefined, vscode.ConfigurationTarget.Workspace);
   });
 
@@ -270,7 +270,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
     this.timeout(TEST_TIMEOUT_MS);
     const cfg = vscode.workspace.getConfiguration("basilisk");
     await cfg.update("testExplorer.autoDiscoverOnSave", false, vscode.ConfigurationTarget.Workspace);
-    assert.strictEqual(cfg.get<boolean>("testExplorer.autoDiscoverOnSave"), false);
+    assert.strictEqual(vscode.workspace.getConfiguration("basilisk").get<boolean>("testExplorer.autoDiscoverOnSave"), false);
     await cfg.update("testExplorer.autoDiscoverOnSave", undefined, vscode.ConfigurationTarget.Workspace);
   });
 
@@ -870,7 +870,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
     this.timeout(TEST_TIMEOUT_MS);
     const cfg = vscode.workspace.getConfiguration("basilisk");
     await cfg.update("testExplorer.coverageEnabled", true, vscode.ConfigurationTarget.Workspace);
-    assert.strictEqual(cfg.get<boolean>("testExplorer.coverageEnabled"), true);
+    assert.strictEqual(vscode.workspace.getConfiguration("basilisk").get<boolean>("testExplorer.coverageEnabled"), true);
     await cfg.update("testExplorer.coverageEnabled", undefined, vscode.ConfigurationTarget.Workspace);
   });
 
