@@ -164,6 +164,190 @@ fn unknown_command_has_no_completions() {
     assert!(slash_completions("unknown").is_empty());
 }
 
+// ── Profiler slash command content quality ───────────────────────────
+
+#[test]
+fn profile_output_documents_all_four_commands() {
+    let (_, text) = slash_command_output("profile", &[]).expect("should succeed");
+    assert!(
+        text.contains("basilisk.profiler.start"),
+        "must document start command"
+    );
+    assert!(
+        text.contains("basilisk.profiler.stop"),
+        "must document stop command"
+    );
+    assert!(
+        text.contains("basilisk.profiler.snapshot"),
+        "must document snapshot command"
+    );
+    assert!(
+        text.contains("basilisk.profiler.list"),
+        "must document list command"
+    );
+}
+
+#[test]
+fn profile_output_documents_output_formats() {
+    let (_, text) = slash_command_output("profile", &[]).expect("should succeed");
+    assert!(
+        text.contains("Speedscope"),
+        "must mention speedscope format"
+    );
+    assert!(
+        text.contains("Flamegraph") || text.contains("flamegraph"),
+        "must mention flamegraph"
+    );
+    assert!(
+        text.contains("BSK-PROF") || text.contains("diagnostics"),
+        "must mention diagnostics output"
+    );
+}
+
+#[test]
+fn profstop_output_documents_output_format_options() {
+    let (_, text) = slash_command_output("profstop", &[]).expect("should succeed");
+    assert!(
+        text.contains("speedscope"),
+        "must mention speedscope format option"
+    );
+    assert!(
+        text.contains("flamegraph"),
+        "must mention flamegraph format option"
+    );
+    assert!(
+        text.contains("summary"),
+        "must mention summary format option"
+    );
+}
+
+#[test]
+fn profstop_output_documents_diagnostic_delivery() {
+    let (_, text) = slash_command_output("profstop", &[]).expect("should succeed");
+    assert!(
+        text.contains("publishDiagnostics")
+            || text.contains("diagnostics")
+            || text.contains("hints"),
+        "must explain how diagnostics are delivered"
+    );
+    assert!(
+        text.contains("threshold") || text.contains("1%") || text.contains("2%"),
+        "should mention threshold behavior"
+    );
+}
+
+#[test]
+fn memleak_output_documents_tracemalloc_and_commands() {
+    let (_, text) = slash_command_output("memleak", &[]).expect("should succeed");
+    assert!(
+        text.contains("tracemalloc"),
+        "must mention tracemalloc engine"
+    );
+    assert!(
+        text.contains("basilisk.memory.start"),
+        "must document start command"
+    );
+    assert!(
+        text.contains("debug session") || text.contains("debugpy"),
+        "must mention debug session requirement"
+    );
+}
+
+#[test]
+fn memleak_output_documents_diagnostic_codes() {
+    let (_, text) = slash_command_output("memleak", &[]).expect("should succeed");
+    assert!(
+        text.contains("BSK-MEM") || text.contains("memory diagnostics"),
+        "must mention memory diagnostic codes or diagnostics"
+    );
+}
+
+#[test]
+fn memstop_output_documents_leak_detection() {
+    let (_, text) = slash_command_output("memstop", &[]).expect("should succeed");
+    assert!(
+        text.contains("leak") || text.contains("Leak"),
+        "must mention leak detection"
+    );
+    assert!(
+        text.contains("confidence") || text.contains("snapshot"),
+        "should mention confidence scoring or snapshots"
+    );
+}
+
+#[test]
+fn memrefs_output_documents_reference_graph() {
+    let args = vec!["DataFrame".to_string()];
+    let (_, text) = slash_command_output("memrefs", &args).expect("should succeed");
+    assert!(text.contains("DataFrame"), "must include the target type");
+    assert!(
+        text.contains("gc.get_referrers")
+            || text.contains("reference")
+            || text.contains("retention"),
+        "must explain reference graph walking"
+    );
+    assert!(
+        text.contains("Cycle")
+            || text.contains("cycle")
+            || text.contains("Retention")
+            || text.contains("retention"),
+        "should explain what the graph reveals"
+    );
+}
+
+#[test]
+fn profile_with_pid_includes_pid_in_output() {
+    for pid in ["1234", "99999", "1"] {
+        let args = vec![pid.to_string()];
+        let (_, text) = slash_command_output("profile", &args).expect("should succeed");
+        assert!(
+            text.contains(pid),
+            "output must include PID {pid} when provided"
+        );
+    }
+}
+
+#[test]
+fn all_profiler_commands_have_markdown_tables_or_lists() {
+    let profiler_cmds = [
+        slash_commands::PROFILE,
+        slash_commands::PROFSTOP,
+        slash_commands::MEMLEAK,
+    ];
+    for cmd in profiler_cmds {
+        let (_, text) = slash_command_output(cmd, &[]).expect(cmd);
+        let has_table = text.contains('|');
+        let has_list = text.contains("- ") || text.contains("1.");
+        assert!(
+            has_table || has_list,
+            "slash command {cmd} should have structured content (table or list)"
+        );
+    }
+}
+
+#[test]
+fn profiler_slash_commands_dont_contain_raw_code_paths() {
+    let cmds = [
+        slash_commands::PROFILE,
+        slash_commands::PROFSTOP,
+        slash_commands::PROFSNAPSHOT,
+        slash_commands::MEMLEAK,
+        slash_commands::MEMSTOP,
+        slash_commands::MEMREFS,
+    ];
+    for cmd in cmds {
+        let (_, text) = slash_command_output(cmd, &[]).expect(cmd);
+        assert!(
+            !text.contains("crates/"),
+            "slash command {cmd} should not expose internal code paths"
+        );
+        assert!(
+            !text.contains(".rs"),
+            "slash command {cmd} should not reference Rust source files"
+        );
+    }
+}
+
 // ── DAP config building ─────────────────────────────────────────────
 
 #[test]
