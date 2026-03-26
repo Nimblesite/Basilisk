@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use tokio::sync::RwLock;
 use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::{
     CallHierarchyServerCapability, CodeActionKind, CodeActionOptions, CodeActionProviderCapability,
@@ -206,15 +207,17 @@ pub(super) async fn initialized(server: &LspServer) {
                 )
                 .await;
 
-            // Send initial test discovery results.
-            send_initial_test_discovery(server).await;
+            // Spawn initial test discovery in the background so it never blocks
+            // the message loop.  The server must be able to respond to requests
+            // (e.g. documentSymbol) immediately after initialization completes.
+            spawn_initial_test_discovery(server);
             return;
         }
     }
     drop(guard);
 
-    // Send initial test discovery even in openFilesOnly mode.
-    send_initial_test_discovery(server).await;
+    // Spawn initial test discovery even in openFilesOnly mode.
+    spawn_initial_test_discovery(server);
 }
 
 /// Handle `didChangeConfiguration`: update the analysis mode on the index and
@@ -597,26 +600,107 @@ async fn update_test_explorer_config(server: &LspServer, settings: &serde_json::
     info!(?config, "test explorer config updated");
 }
 
-/// Send initial test discovery results to the client after workspace initialization.
-async fn send_initial_test_discovery(server: &LspServer) {
-    let roots = server.workspace_roots.read().await;
-    let Some(root) = roots.first().cloned() else {
-        return;
+/// Spawn initial test discovery in the background so the message loop stays
+/// responsive.  This follows the same pattern as `register_file_watchers`.
+fn spawn_initial_test_discovery(server: &LspServer) {
+    let client = server.client.clone();
+    let index = Arc::clone(&server.index);
+    let roots_lock = &server.workspace_roots;
+
+    // Read the workspace root synchronously (fast, just a lock read).
+    // We can't move the RwLock into the spawned task, so read it here.
+    let root = {
+        // Safety: we're in an async context but this is a tokio RwLock.
+        // Use try_read since we're in a sync fn — if the lock is held,
+        // skip discovery rather than blocking.
+        let Some(guard) = roots_lock.try_read().ok() else {
+            return;
+        };
+        guard.first().cloned()
     };
-    drop(roots);
 
-    let items = crate::test_discovery::discover_workspace_tests(&root);
-    let count: usize = items
-        .iter()
-        .map(|file_item| file_item.children.len() + 1)
-        .sum();
-    info!(count, "initial test discovery complete");
+    let Some(root) = root else { return };
 
-    super::test_handlers::send_test_discovery_notification(server, items).await;
+    drop(tokio::spawn(async move {
+        let items = crate::test_discovery::discover_workspace_tests(&root);
+        let count: usize = items
+            .iter()
+            .map(|file_item| file_item.children.len() + 1)
+            .sum();
+        info!(count, "initial test discovery complete");
 
-    // Check if pytest is available in the uv registry.
-    super::test_handlers::check_pytest_availability(server).await;
-    super::test_handlers::check_pytest_cov_availability(server).await;
+        let value = serde_json::json!({ "items": items });
+        client
+            .send_notification::<super::test_handlers::TestDiscoveryNotification>(value)
+            .await;
+
+        // Check pytest availability using the cloned index.
+        check_pytest_from_index(&client, &index, &root).await;
+    }));
+}
+
+/// Check pytest / pytest-cov availability using a cloned index Arc.
+///
+/// Standalone helper so `spawn_initial_test_discovery` can run without
+/// holding a reference to `LspServer`.
+async fn check_pytest_from_index(
+    client: &Client,
+    index: &Arc<RwLock<Option<WorkspaceIndex>>>,
+    root: &std::path::Path,
+) {
+    // We need workspace roots to detect uv — use root directly.
+    let roots = vec![root.to_path_buf()];
+    let is_uv = basilisk_uv::detect_uv_project(&roots).is_some();
+    if !is_uv {
+        return;
+    }
+
+    let has_pytest = {
+        let guard = index.read().await;
+        guard.as_ref().is_none_or(|idx| {
+            idx.registry
+                .as_ref()
+                .is_none_or(|reg| reg.has_package("pytest"))
+        })
+    };
+
+    if !has_pytest {
+        client
+            .log_message(
+                MessageType::WARNING,
+                "Basilisk: pytest not found in uv.lock. Run `uv add --dev pytest` to install it."
+                    .to_owned(),
+            )
+            .await;
+
+        let test_files = crate::test_discovery::discover_test_files(root);
+        for path in test_files {
+            let Ok(uri) = Url::from_file_path(&path) else {
+                continue;
+            };
+            let diag = super::test_handlers::make_pytest_not_found_diagnostic();
+            client.publish_diagnostics(uri, vec![diag], None).await;
+        }
+    }
+
+    let has_pytest_cov = {
+        let guard = index.read().await;
+        guard.as_ref().is_none_or(|idx| {
+            idx.registry
+                .as_ref()
+                .is_none_or(|reg| reg.has_package("pytest_cov"))
+        })
+    };
+
+    if !has_pytest_cov {
+        client
+            .log_message(
+                MessageType::INFO,
+                "Basilisk: pytest-cov not found in uv.lock. Run `uv add --dev pytest-cov` for coverage support."
+                    .to_owned(),
+            )
+            .await;
+    }
 }
 
 /// Handle the `shutdown` request: stop all debug sessions.

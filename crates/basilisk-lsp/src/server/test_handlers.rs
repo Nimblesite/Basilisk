@@ -353,63 +353,8 @@ impl tower_lsp::lsp_types::notification::Notification for CoverageResultNotifica
 /// Diagnostic code for pytest not found in uv project.
 pub(crate) const PYTEST_NOT_FOUND_CODE: &str = "BSK-W0014";
 
-/// Check if pytest is available in the uv package registry.
-///
-/// If a uv project is detected but pytest is not in the lock file, sends a
-/// warning to the client suggesting `uv add --dev pytest` and publishes a
-/// `BSK-W0014` diagnostic on each discovered test file so the code action
-/// system can offer a quick-fix.
-pub(super) async fn check_pytest_availability(server: &LspServer) {
-    let roots = server.workspace_roots.read().await;
-    let root = roots.first().cloned();
-    let is_uv = basilisk_uv::detect_uv_project(&roots).is_some();
-    drop(roots);
-
-    if !is_uv {
-        return;
-    }
-
-    let has_pytest = server
-        .with_index(|idx| {
-            Some(
-                idx.registry
-                    .as_ref()
-                    .is_none_or(|reg| reg.has_package("pytest")),
-            )
-        })
-        .await
-        .unwrap_or(true);
-
-    if !has_pytest {
-        server
-            .client
-            .log_message(
-                MessageType::WARNING,
-                "Basilisk: pytest not found in uv.lock. Run `uv add --dev pytest` to install it."
-                    .to_owned(),
-            )
-            .await;
-
-        // Publish BSK-W0014 diagnostic on each test file so the code action
-        // system can offer a "uv add --dev pytest" quick-fix.
-        if let Some(root) = root {
-            let test_files = crate::test_discovery::discover_test_files(&root);
-            for path in test_files {
-                let Ok(uri) = tower_lsp::lsp_types::Url::from_file_path(&path) else {
-                    continue;
-                };
-                let diag = make_pytest_not_found_diagnostic();
-                server
-                    .client
-                    .publish_diagnostics(uri, vec![diag], None)
-                    .await;
-            }
-        }
-    }
-}
-
 /// Build a `BSK-W0014` diagnostic for a test file missing pytest.
-fn make_pytest_not_found_diagnostic() -> Diagnostic {
+pub(super) fn make_pytest_not_found_diagnostic() -> Diagnostic {
     Diagnostic {
         range: Range {
             start: Position {
@@ -480,7 +425,7 @@ pub(super) async fn send_test_discovery_notification(
 }
 
 /// Custom notification type for test discovery results.
-struct TestDiscoveryNotification;
+pub(super) struct TestDiscoveryNotification;
 
 impl tower_lsp::lsp_types::notification::Notification for TestDiscoveryNotification {
     type Params = serde_json::Value;
