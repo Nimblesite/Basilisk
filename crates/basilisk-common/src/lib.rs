@@ -58,6 +58,15 @@ pub mod commands {
     /// Return type health statistics (coverage, errors, warnings per module).
     pub const TYPE_HEALTH: &str = "basilisk.typeHealth";
 
+    /// Start CPU profiling a Python process.
+    pub const PROFILER_START: &str = "basilisk.profiler.start";
+    /// Stop CPU profiling and return results.
+    pub const PROFILER_STOP: &str = "basilisk.profiler.stop";
+    /// Take a profiling snapshot without stopping.
+    pub const PROFILER_SNAPSHOT: &str = "basilisk.profiler.snapshot";
+    /// List active profiling sessions.
+    pub const PROFILER_LIST: &str = "basilisk.profiler.list";
+
     /// Command names advertised via `executeCommandProvider` capabilities.
     ///
     /// **The server is the single source of truth for commands.** Every command
@@ -90,6 +99,10 @@ pub mod commands {
         RUN_TESTS_COVERAGE,
         WORKSPACE_MODULES,
         TYPE_HEALTH,
+        PROFILER_START,
+        PROFILER_STOP,
+        PROFILER_SNAPSHOT,
+        PROFILER_LIST,
     ];
 }
 
@@ -220,6 +233,18 @@ pub mod release {
 pub mod notifications {
     /// Notification sent when a module's symbol table changes after re-analysis.
     pub const MODULE_CHANGED: &str = "basilisk/moduleChanged";
+    /// Periodic profiling progress update during active sessions.
+    pub const PROFILER_PROGRESS: &str = "basilisk/profiler/progress";
+}
+
+/// Diagnostic code prefixes for profiling features.
+pub mod profiler_diagnostics {
+    /// Hot line — above the configured CPU sample threshold.
+    pub const LINE: &str = "BSK-PROF-LINE";
+    /// Hot function — above the configured function threshold.
+    pub const FUNC: &str = "BSK-PROF-FUNC";
+    /// GIL contention detected on a thread.
+    pub const GIL: &str = "BSK-PROF-GIL";
 }
 
 /// Diagnostic code ranges defined in the Basilisk specification.

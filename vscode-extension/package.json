@@ -201,6 +201,30 @@
         "icon": "$(filter)"
       },
       {
+        "command": "basilisk.profileStart",
+        "title": "Basilisk: Start Profiling",
+        "category": "Basilisk",
+        "icon": "$(flame)"
+      },
+      {
+        "command": "basilisk.profileStop",
+        "title": "Basilisk: Stop Profiling",
+        "category": "Basilisk",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "basilisk.profileSnapshot",
+        "title": "Basilisk: Take Profile Snapshot",
+        "category": "Basilisk",
+        "icon": "$(device-camera)"
+      },
+      {
+        "command": "basilisk.profileAttachToDebug",
+        "title": "Basilisk: Profile Debug Session",
+        "category": "Basilisk",
+        "icon": "$(debug-alt)"
+      },
+      {
         "command": "basilisk.openWalkthrough",
         "title": "Basilisk: Getting Started",
         "category": "Basilisk"
@@ -258,6 +282,18 @@
         "key": "ctrl+shift+.",
         "mac": "cmd+shift+.",
         "when": "editorLangId == python"
+      },
+      {
+        "command": "basilisk.profileStart",
+        "key": "ctrl+shift+p ctrl+shift+s",
+        "mac": "cmd+shift+p cmd+shift+s",
+        "when": "editorLangId == python"
+      },
+      {
+        "command": "basilisk.profileStop",
+        "key": "ctrl+shift+p ctrl+shift+x",
+        "mac": "cmd+shift+p cmd+shift+x",
+        "when": "basilisk.profiling"
       }
     ],
     "breakpoints": [
@@ -500,6 +536,36 @@
           "type": "boolean",
           "default": false,
           "description": "Show coverage gutter decorations after running tests with coverage. Runs pytest with --cov flag."
+        },
+        "basilisk.profiler.sampleRate": {
+          "type": "number",
+          "default": 100,
+          "description": "Sampling rate in Hz for CPU profiling (1-1000)."
+        },
+        "basilisk.profiler.includeNative": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include native C extension frames in profile results."
+        },
+        "basilisk.profiler.lineThreshold": {
+          "type": "number",
+          "default": 1.0,
+          "description": "Minimum percentage of total samples for a line to appear as a hotspot (0.1-100)."
+        },
+        "basilisk.profiler.functionThreshold": {
+          "type": "number",
+          "default": 2.0,
+          "description": "Minimum percentage of total samples for a function to appear as a hotspot (0.1-100)."
+        },
+        "basilisk.profiler.maxDiagnosticsPerFile": {
+          "type": "number",
+          "default": 20,
+          "description": "Maximum number of profiling diagnostics per file."
+        },
+        "basilisk.profiler.showInlineHeatMap": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show inline heat map decorations for hot lines after profiling."
         },
         "basilisk.analysisMode": {
           "type": "string",
