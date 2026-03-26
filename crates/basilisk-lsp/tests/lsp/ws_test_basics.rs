@@ -78,7 +78,7 @@ async fn test_ws_did_change_updates_diagnostics() -> TestResult<()> {
 
     let initial_code = "def greet(name):\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///test.py", initial_code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     // Change to fully annotated code.
     fixture
@@ -113,7 +113,7 @@ async fn test_ws_did_close_clears_diagnostics() -> TestResult<()> {
 
     let python_code = "def greet(name):\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///test.py", python_code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     fixture.did_close("file:///test.py").await?;
 
@@ -135,7 +135,7 @@ async fn test_ws_hover_on_error_location() -> TestResult<()> {
 
     let python_code = "def greet(name):\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///test.py", python_code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     let hover = fixture
         .request(

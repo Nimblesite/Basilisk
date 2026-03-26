@@ -19,7 +19,7 @@ def main() -> None:
     greet(\"world\")
 ";
     fixture.did_open("file:///callh.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = send_request(
         &mut fixture,
@@ -53,7 +53,7 @@ def main() -> None:
     greet(\"world\")
 ";
     fixture.did_open("file:///callhi.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let prep = send_request(
         &mut fixture,
@@ -99,7 +99,7 @@ def main() -> None:
     greet(\"world\")
 ";
     fixture.did_open("file:///callho.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let prep = send_request(
         &mut fixture,
@@ -147,7 +147,7 @@ class Dog(Animal):
     breed: str
 ";
     fixture.did_open("file:///typeh.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = send_request(
         &mut fixture,
@@ -181,7 +181,7 @@ class Dog(Animal):
     breed: str
 ";
     fixture.did_open("file:///typehs.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let prep = send_request(
         &mut fixture,
@@ -231,7 +231,7 @@ class Dog(Animal):
     breed: str
 ";
     fixture.did_open("file:///typehsub.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let prep = send_request(
         &mut fixture,

@@ -60,6 +60,7 @@ pub(super) fn collect_class_body(
                         is_kw_only,
                         is_init_false,
                         is_init_var,
+                        alias: None,
                     });
                 }
             }
@@ -93,6 +94,7 @@ pub(super) fn collect_class_body(
                             is_kw_only: false,
                             is_init_false: false,
                             is_init_var: false,
+                            alias: None,
                         });
                     }
                 }

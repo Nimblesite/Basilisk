@@ -15,7 +15,7 @@ def greet(name: str) -> str:
 greet(\"hi\")
 ";
     fixture.did_open("file:///ws_highlight.py", code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     // Request documentHighlight at the position of `greet` on line 0 (character 4).
     let resp = fixture

@@ -23,9 +23,6 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 /// Emits BSK-E0053 when `assert_type(expr, T)` has a detectable type mismatch.
-///
-/// Currently disabled — requires full type inference to avoid false positives.
-/// Re-enable in `mod.rs` `run_all()` once the type engine is in place.
 pub(crate) struct AssertTypeMismatch;
 
 impl Rule for AssertTypeMismatch {
@@ -37,6 +34,18 @@ impl Rule for AssertTypeMismatch {
         {
             let actual = call.actual_type.as_deref().unwrap_or("unknown");
             let expected = call.expected_type.as_deref().unwrap_or("unknown");
+
+            // Skip when either type is unknown — cannot verify.
+            if actual == "unknown" || expected == "unknown" {
+                continue;
+            }
+
+            // When both types are identical modulo case, skip (resolver might
+            // have a case-sensitivity issue in matching).
+            if actual.eq_ignore_ascii_case(expected) {
+                continue;
+            }
+
             diagnostics.push(Diagnostic {
                 code: CODE.clone(),
                 severity: Severity::Error,

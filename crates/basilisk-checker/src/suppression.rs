@@ -47,8 +47,28 @@ pub fn parse_source_overrides(source: &str) -> SourceOverrides {
     let mut block_starts: Vec<(usize, LineOverride)> = Vec::new();
     let mut block_overrides = Vec::new();
 
+    // Track whether we've seen executable code (for file-level `# type: ignore`).
+    let mut seen_executable_code = false;
+
     for (line_idx, line) in source.lines().enumerate() {
         let trimmed = line.trim();
+
+        // File-level `# type: ignore` — must appear before any docstrings, imports,
+        // or other executable code (PEP 484).  Blank lines, shebangs, and comments
+        // are allowed before it.
+        if !seen_executable_code && trimmed == "# type: ignore" {
+            file_mode = Some(FileOverride::Specific {
+                mode: RuleMode::Ignore,
+                codes: Vec::new(), // empty = all rules
+            });
+            continue;
+        }
+
+        // Detect if this line is executable code (not blank, not a comment, not
+        // a shebang).  Once set, file-level `# type: ignore` is no longer valid.
+        if !seen_executable_code && !trimmed.is_empty() && !trimmed.starts_with('#') {
+            seen_executable_code = true;
+        }
 
         // File-level directives (must be standalone comment lines).
         if trimmed == "# basilisk: relaxed" {
@@ -98,42 +118,8 @@ pub fn parse_source_overrides(source: &str) -> SourceOverrides {
 
         // Per-line directives: `# type: ignore`, `# type: warning[CODE]`, etc.
         // These appear at the end of a line with code.
-        if let Some(rest) = find_comment_directive(line, "# type: ignore") {
-            let codes = parse_bracketed_codes(rest);
-            line_overrides.push((
-                line_idx,
-                LineOverride {
-                    mode: RuleMode::Ignore,
-                    codes,
-                },
-            ));
-        } else if let Some(rest) = find_comment_directive(line, "# type: disabled") {
-            let codes = parse_bracketed_codes(rest);
-            line_overrides.push((
-                line_idx,
-                LineOverride {
-                    mode: RuleMode::Disabled,
-                    codes,
-                },
-            ));
-        } else if let Some(rest) = find_comment_directive(line, "# type: warning") {
-            let codes = parse_bracketed_codes(rest);
-            line_overrides.push((
-                line_idx,
-                LineOverride {
-                    mode: RuleMode::Warning,
-                    codes,
-                },
-            ));
-        } else if let Some(rest) = find_comment_directive(line, "# type: info") {
-            let codes = parse_bracketed_codes(rest);
-            line_overrides.push((
-                line_idx,
-                LineOverride {
-                    mode: RuleMode::Info,
-                    codes,
-                },
-            ));
+        if let Some(line_override) = parse_line_override(line) {
+            line_overrides.push((line_idx, line_override));
         }
     }
 
@@ -219,6 +205,28 @@ fn apply_mode(mut diag: Diagnostic, mode: RuleMode) -> Option<Diagnostic> {
 /// Empty codes list means "all rules".
 fn override_matches(diag_code: &str, codes: &[String]) -> bool {
     codes.is_empty() || codes.iter().any(|c| c == diag_code)
+}
+
+/// Parse a per-line override from inline `# type: <mode>` directives.
+///
+/// Returns `Some(LineOverride)` if the line contains a recognised inline
+/// suppression or mode override, `None` otherwise.
+fn parse_line_override(line: &str) -> Option<LineOverride> {
+    const DIRECTIVES: &[(&str, RuleMode)] = &[
+        ("# type: ignore", RuleMode::Ignore),
+        ("# type: disabled", RuleMode::Disabled),
+        ("# type: warning", RuleMode::Warning),
+        ("# type: info", RuleMode::Info),
+    ];
+
+    for &(directive, mode) in DIRECTIVES {
+        if let Some(rest) = find_comment_directive(line, directive) {
+            let codes = parse_bracketed_codes(rest);
+            return Some(LineOverride { mode, codes });
+        }
+    }
+
+    None
 }
 
 /// Find a comment directive in a line, returning the rest of the string after it.

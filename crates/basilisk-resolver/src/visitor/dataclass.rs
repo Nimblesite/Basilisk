@@ -16,13 +16,19 @@ pub(super) fn apply_dataclass_transform(
     functions: &[FunctionInfo],
 ) {
     let factories = collect_dc_transform_factories(stmts);
+    let class_factories = collect_dc_transform_class_factories(stmts);
+    let metaclass_factories = collect_dc_transform_metaclass_factories(stmts);
 
-    if factories.is_empty() {
+    if factories.is_empty() && class_factories.is_empty() && metaclass_factories.is_empty() {
         return;
     }
     let mut specifier_overloads: std::collections::HashMap<&str, Vec<FieldSpecOverload>> =
         std::collections::HashMap::new();
-    for factory in &factories {
+    for factory in factories
+        .iter()
+        .chain(class_factories.iter())
+        .chain(metaclass_factories.iter())
+    {
         for spec_name in &factory.field_specifier_names {
             if specifier_overloads.contains_key(spec_name.as_str()) {
                 continue;
@@ -32,26 +38,34 @@ pub(super) fn apply_dataclass_transform(
         }
     }
 
+    // Apply function-based factories (classes decorated by factory functions).
     for cls in classes.iter_mut() {
-        let Some(factory) = find_matching_factory(stmts, &cls.name, &factories) else {
-            continue;
-        };
-        cls.is_dataclass = true;
-        cls.is_dataclass_kw_only = factory.kw_only_default;
-        cls.is_dataclass_frozen = factory.frozen_default;
+        if let Some(factory) = find_matching_factory(stmts, &cls.name, &factories) {
+            cls.is_dataclass = true;
+            cls.is_dataclass_kw_only = factory.kw_only_default;
+            cls.is_dataclass_frozen = factory.frozen_default;
+            cls.is_dataclass_order = factory.order_default;
 
-        // Check for per-class overrides like `@create_model(frozen=True)`
-        if let Some(class_def) = find_class_def(stmts, &cls.name) {
-            apply_class_decorator_overrides(class_def, &factory.name, cls);
-            resolve_transform_field_attrs(
-                class_def,
-                &mut cls.attributes,
-                &factory.field_specifier_names,
-                &specifier_overloads,
-                factory.kw_only_default,
-            );
+            if let Some(class_def) = find_class_def(stmts, &cls.name) {
+                apply_class_decorator_overrides(class_def, &factory.name, cls);
+                resolve_transform_field_attrs(
+                    class_def,
+                    &mut cls.attributes,
+                    &factory.field_specifier_names,
+                    &specifier_overloads,
+                    factory.kw_only_default,
+                );
+            }
         }
     }
+
+    // Apply class-based `@dataclass_transform` (subclasses of the decorated
+    // base class become dataclasses).
+    apply_class_or_metaclass_factories(stmts, classes, &class_factories, &specifier_overloads);
+
+    // Apply metaclass-based `@dataclass_transform` (classes whose metaclass
+    // is the decorated metaclass become dataclasses).
+    apply_metaclass_transform_factories(stmts, classes, &metaclass_factories, &specifier_overloads);
 }
 
 /// Collect `@dataclass_transform(...)` decorated functions at module level.
@@ -62,19 +76,253 @@ pub(super) fn collect_dc_transform_factories(stmts: &[Stmt]) -> Vec<DcTransformF
             continue;
         };
         for dec in &func.decorator_list {
-            let (is_dc_transform, kw_only_default, frozen_default, field_specifier_names) =
-                parse_dataclass_transform_decorator(&dec.expression);
-            if is_dc_transform {
+            if let Some(parsed) = parse_dataclass_transform_decorator(&dec.expression) {
                 out.push(DcTransformFactory {
                     name: func.name.to_string(),
-                    kw_only_default,
-                    frozen_default,
-                    field_specifier_names,
+                    kw_only_default: parsed.kw_only_default,
+                    frozen_default: parsed.frozen_default,
+                    order_default: parsed.order_default,
+                    field_specifier_names: parsed.field_specifier_names,
                 });
             }
         }
     }
     out
+}
+
+/// Collect `@dataclass_transform(...)` decorated classes (non-metaclass) at module level.
+///
+/// When `@dataclass_transform` is applied to a base class, all subclasses of
+/// that class are treated as dataclasses.
+fn collect_dc_transform_class_factories(stmts: &[Stmt]) -> Vec<DcTransformFactory> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        let Stmt::ClassDef(cls) = stmt else {
+            continue;
+        };
+        // Skip metaclasses (classes inheriting from `type`).
+        let is_metaclass = cls.arguments.as_ref().is_some_and(|args| {
+            args.args
+                .iter()
+                .any(|expr| matches!(expr, Expr::Name(n) if n.id.as_str() == "type"))
+        });
+        if is_metaclass {
+            continue;
+        }
+        for dec in &cls.decorator_list {
+            if let Some(parsed) = parse_dataclass_transform_decorator(&dec.expression) {
+                out.push(DcTransformFactory {
+                    name: cls.name.to_string(),
+                    kw_only_default: parsed.kw_only_default,
+                    frozen_default: parsed.frozen_default,
+                    order_default: parsed.order_default,
+                    field_specifier_names: parsed.field_specifier_names,
+                });
+            }
+        }
+    }
+    out
+}
+
+/// Collect `@dataclass_transform(...)` decorated metaclasses at module level.
+///
+/// When `@dataclass_transform` is applied to a metaclass, all classes using
+/// that metaclass (directly or transitively) are treated as dataclasses.
+fn collect_dc_transform_metaclass_factories(stmts: &[Stmt]) -> Vec<DcTransformFactory> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        let Stmt::ClassDef(cls) = stmt else {
+            continue;
+        };
+        // Only match metaclasses (classes inheriting from `type`).
+        let is_metaclass = cls.arguments.as_ref().is_some_and(|args| {
+            args.args
+                .iter()
+                .any(|expr| matches!(expr, Expr::Name(n) if n.id.as_str() == "type"))
+        });
+        if !is_metaclass {
+            continue;
+        }
+        for dec in &cls.decorator_list {
+            if let Some(parsed) = parse_dataclass_transform_decorator(&dec.expression) {
+                out.push(DcTransformFactory {
+                    name: cls.name.to_string(),
+                    kw_only_default: parsed.kw_only_default,
+                    frozen_default: parsed.frozen_default,
+                    order_default: parsed.order_default,
+                    field_specifier_names: parsed.field_specifier_names,
+                });
+            }
+        }
+    }
+    out
+}
+
+/// Mark subclasses of `@dataclass_transform`-decorated base classes as dataclasses.
+fn apply_class_or_metaclass_factories(
+    stmts: &[Stmt],
+    classes: &mut [ClassInfo],
+    class_factories: &[DcTransformFactory],
+    specifier_overloads: &std::collections::HashMap<&str, Vec<FieldSpecOverload>>,
+) {
+    if class_factories.is_empty() {
+        return;
+    }
+    let factory_names: Vec<&str> = class_factories.iter().map(|f| f.name.as_str()).collect();
+
+    for cls in classes.iter_mut() {
+        // Skip the base class itself (it is the factory, not a dataclass).
+        if factory_names.contains(&cls.name.as_str()) {
+            continue;
+        }
+        // Check if any base class (direct or transitive) is a factory.
+        let matching = cls.bases.iter().find_map(|base| {
+            let base_name = base.split('[').next().unwrap_or(base);
+            class_factories
+                .iter()
+                .find(|f| f.name == base_name)
+                .or_else(|| find_transitive_class_factory(stmts, base_name, class_factories))
+        });
+        if let Some(factory) = matching {
+            cls.is_dataclass = true;
+            cls.is_dataclass_kw_only = factory.kw_only_default;
+            cls.is_dataclass_frozen = factory.frozen_default;
+            cls.is_dataclass_order = factory.order_default;
+
+            if let Some(class_def) = find_class_def(stmts, &cls.name) {
+                apply_class_keyword_overrides(class_def, cls);
+                resolve_transform_field_attrs(
+                    class_def,
+                    &mut cls.attributes,
+                    &factory.field_specifier_names,
+                    specifier_overloads,
+                    factory.kw_only_default,
+                );
+            }
+        }
+    }
+}
+
+/// Walk the class hierarchy to find a transitive `@dataclass_transform` base class.
+fn find_transitive_class_factory<'a>(
+    stmts: &[Stmt],
+    class_name: &str,
+    class_factories: &'a [DcTransformFactory],
+) -> Option<&'a DcTransformFactory> {
+    let class_def = find_class_def(stmts, class_name)?;
+    let bases = class_def.arguments.as_ref()?;
+    for base_expr in &bases.args {
+        let base_name = match base_expr {
+            Expr::Name(n) => n.id.as_str(),
+            Expr::Subscript(sub) => {
+                if let Expr::Name(n) = sub.value.as_ref() {
+                    n.id.as_str()
+                } else {
+                    continue;
+                }
+            }
+            _ => continue,
+        };
+        if let Some(factory) = class_factories.iter().find(|f| f.name == base_name) {
+            return Some(factory);
+        }
+        if let Some(factory) = find_transitive_class_factory(stmts, base_name, class_factories) {
+            return Some(factory);
+        }
+    }
+    None
+}
+
+/// Mark classes using `@dataclass_transform`-decorated metaclasses as dataclasses.
+fn apply_metaclass_transform_factories(
+    stmts: &[Stmt],
+    classes: &mut [ClassInfo],
+    metaclass_factories: &[DcTransformFactory],
+    specifier_overloads: &std::collections::HashMap<&str, Vec<FieldSpecOverload>>,
+) {
+    if metaclass_factories.is_empty() {
+        return;
+    }
+
+    // Collect names of classes that directly use a factory metaclass.
+    let mut metaclass_base_names: Vec<String> = Vec::new();
+    for stmt in stmts {
+        let Stmt::ClassDef(cls) = stmt else {
+            continue;
+        };
+        let uses_factory_metaclass = cls.arguments.as_ref().is_some_and(|args| {
+            args.keywords.iter().any(|kw| {
+                kw.arg.as_ref().is_some_and(|a| a.as_str() == "metaclass")
+                    && metaclass_factories
+                        .iter()
+                        .any(|f| matches!(&kw.value, Expr::Name(n) if n.id.as_str() == f.name))
+            })
+        });
+        if uses_factory_metaclass {
+            metaclass_base_names.push(cls.name.to_string());
+        }
+    }
+
+    for cls in classes.iter_mut() {
+        // Skip the metaclass bases themselves (they are not dataclasses).
+        if metaclass_base_names.contains(&cls.name) {
+            continue;
+        }
+
+        // Check if any base is a class that uses the transform metaclass.
+        let matching = cls.bases.iter().find_map(|base| {
+            let base_name = base.split('[').next().unwrap_or(base);
+            if metaclass_base_names.iter().any(|n| n == base_name) {
+                // Find the factory for this metaclass base.
+                find_metaclass_factory_for_base(stmts, base_name, metaclass_factories)
+            } else {
+                None
+            }
+        });
+
+        // Also check if the class itself directly uses the metaclass.
+        let direct_match = matching.or_else(|| {
+            cls.metaclass_name
+                .as_ref()
+                .and_then(|mc_name| metaclass_factories.iter().find(|f| f.name == *mc_name))
+        });
+
+        if let Some(factory) = direct_match {
+            cls.is_dataclass = true;
+            cls.is_dataclass_kw_only = factory.kw_only_default;
+            cls.is_dataclass_frozen = factory.frozen_default;
+            cls.is_dataclass_order = factory.order_default;
+
+            if let Some(class_def) = find_class_def(stmts, &cls.name) {
+                apply_class_keyword_overrides(class_def, cls);
+                resolve_transform_field_attrs(
+                    class_def,
+                    &mut cls.attributes,
+                    &factory.field_specifier_names,
+                    specifier_overloads,
+                    factory.kw_only_default,
+                );
+            }
+        }
+    }
+}
+
+/// Find the `DcTransformFactory` for a class that uses a metaclass-based transform.
+fn find_metaclass_factory_for_base<'a>(
+    stmts: &[Stmt],
+    base_name: &str,
+    metaclass_factories: &'a [DcTransformFactory],
+) -> Option<&'a DcTransformFactory> {
+    let class_def = find_class_def(stmts, base_name)?;
+    let args = class_def.arguments.as_ref()?;
+    for kw in &args.keywords {
+        if kw.arg.as_ref().is_some_and(|a| a.as_str() == "metaclass") {
+            if let Expr::Name(n) = &kw.value {
+                return metaclass_factories.iter().find(|f| f.name == n.id.as_str());
+            }
+        }
+    }
+    None
 }
 
 /// Parse a `@dataclass_transform(...)` expression.
@@ -226,10 +474,41 @@ fn apply_class_decorator_overrides(
                     cls.is_dataclass_kw_only =
                         matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
                 }
+                "order" => {
+                    cls.is_dataclass_order =
+                        matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
+                }
                 _ => {}
             }
         }
         break;
+    }
+}
+
+/// Apply class-level keyword overrides from the class definition.
+///
+/// For `class Customer2(ModelBase, order=True)`, overrides the factory defaults
+/// using the keywords passed to the class definition itself (via `__init_subclass__`).
+fn apply_class_keyword_overrides(class_def: &StmtClassDef, cls: &mut ClassInfo) {
+    let Some(args) = class_def.arguments.as_ref() else {
+        return;
+    };
+    for kw in &args.keywords {
+        let Some(arg_name) = kw.arg.as_ref() else {
+            continue;
+        };
+        match arg_name.as_str() {
+            "frozen" => {
+                cls.is_dataclass_frozen = matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
+            }
+            "kw_only" => {
+                cls.is_dataclass_kw_only = matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
+            }
+            "order" => {
+                cls.is_dataclass_order = matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
+            }
+            _ => {}
+        }
     }
 }
 
@@ -344,6 +623,16 @@ pub(super) fn resolve_transform_field_attrs(
             attr.is_init_false = true;
         }
         attr.is_kw_only = effective_kw_only.unwrap_or(kw_only_default);
+
+        // Extract alias from field specifier call (e.g., `model_field(alias="other_name")`).
+        attr.alias = call.arguments.keywords.iter().find_map(|kw| {
+            if kw.arg.as_ref().is_some_and(|a| a.as_str() == "alias") {
+                if let Expr::StringLiteral(s) = &kw.value {
+                    return Some(s.value.to_str().to_owned());
+                }
+            }
+            None
+        });
     }
 }
 

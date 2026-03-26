@@ -150,4 +150,8 @@ pub struct ClassInfo {
     pub has_manual_slots: bool,
     /// The docstring of this class, if present (first statement is a string literal).
     pub docstring: Option<String>,
+    /// The type annotation text for `extra_items=<type>` on a `TypedDict`.
+    pub typeddict_extra_items_type: Option<String>,
+    /// Whether closed=True/False was explicitly specified on a `TypedDict`.
+    pub typeddict_closed: Option<bool>,
 }

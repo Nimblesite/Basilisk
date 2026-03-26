@@ -26,10 +26,14 @@
 //! - Per-path overrides (`per-path-overrides."vendor/**".rules.disabled`)
 
 pub mod collection_inference;
+pub mod constraint_solver;
 pub mod diagnostic;
+pub mod expr_inference;
 pub mod inference;
+pub mod narrowing;
 pub mod rules;
 pub mod span_util;
+pub mod subtyping;
 pub mod suppression;
 pub mod types;
 pub mod types_parsing;

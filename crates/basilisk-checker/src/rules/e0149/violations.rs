@@ -613,6 +613,200 @@ pub(super) fn check_type_stmt_circular(
 }
 
 // ---------------------------------------------------------------------------
+// Violation 8: generic type alias instantiation bound violation
+// ---------------------------------------------------------------------------
+
+/// Parse `type Name[S: int, T: str, **P] = ...` to extract param bounds.
+///
+/// Returns `alias_name → [(param_name, Some(bound_type))]` for aliases that
+/// have at least one bounded type parameter.
+fn build_alias_bound_map(
+    source: &str,
+) -> std::collections::HashMap<String, Vec<(String, Option<String>)>> {
+    let mut map = std::collections::HashMap::new();
+    for line in source.lines() {
+        let trimmed = line.trim();
+        if !trimmed.starts_with("type ") {
+            continue;
+        }
+        let after_type = &trimmed["type ".len()..];
+        let Some(bracket_pos) = after_type.find('[') else {
+            continue;
+        };
+        let name = after_type[..bracket_pos].trim().to_owned();
+        let after_bracket = &after_type[bracket_pos + 1..];
+        let end = find_closing_bracket(after_bracket);
+        let params: Vec<(String, Option<String>)> = after_bracket[..end]
+            .split(',')
+            .filter_map(parse_type_param_with_bound)
+            .collect();
+        if params.iter().any(|(_, b)| b.is_some()) {
+            let _ = map.insert(name, params);
+        }
+    }
+    map
+}
+
+/// Parse a single type parameter entry like `S: int`, `**P`, or `*Ts`.
+fn parse_type_param_with_bound(raw: &str) -> Option<(String, Option<String>)> {
+    let p = raw.trim().trim_start_matches('*').trim();
+    if p.is_empty() {
+        return None;
+    }
+    if let Some(colon_pos) = p.find(':') {
+        let name = p[..colon_pos].trim().to_owned();
+        let bound = p[colon_pos + 1..].trim().to_owned();
+        if name.is_empty() {
+            None
+        } else {
+            Some((name, Some(bound)))
+        }
+    } else {
+        Some((p.to_owned(), None))
+    }
+}
+
+/// Find the index of the closing `]` matching the opening `[` already consumed.
+fn find_closing_bracket(s: &str) -> usize {
+    let mut depth = 1usize;
+    for (i, ch) in s.char_indices() {
+        match ch {
+            '[' => depth += 1,
+            ']' => {
+                depth -= 1;
+                if depth == 0 {
+                    return i;
+                }
+            }
+            _ => {}
+        }
+    }
+    s.len()
+}
+
+/// Returns `true` when `arg` is within `bound` for builtin types.
+fn is_within_bound(arg: &str, bound: &str) -> bool {
+    if arg == bound || arg == "..." || arg == "Any" || arg == "any" {
+        return true;
+    }
+    matches!(
+        (arg, bound),
+        ("bool", "int" | "float" | "complex") | ("int", "float" | "complex") | ("float", "complex")
+    )
+}
+
+/// Extract the type arguments from `AliasName[arg1, arg2]` in `annotation`.
+fn extract_alias_args(annotation: &str, alias_name: &str) -> Option<String> {
+    let pattern = format!("{alias_name}[");
+    let start = annotation.find(&pattern)?;
+    let after = &annotation[start + pattern.len()..];
+    let end = find_closing_bracket(after);
+    Some(after[..end].to_owned())
+}
+
+/// Find the position of a top-level `=` (not inside brackets).
+fn find_top_level_eq(s: &str) -> Option<usize> {
+    let mut depth = 0i32;
+    for (i, ch) in s.char_indices() {
+        match ch {
+            '[' | '(' | '{' => depth += 1,
+            ']' | ')' | '}' => depth -= 1,
+            '=' if depth == 0 => return Some(i),
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Check annotation text for generic type alias bound violations.
+fn check_annotation_bounds(
+    annotation: &str,
+    alias_bounds: &std::collections::HashMap<String, Vec<(String, Option<String>)>>,
+    line_number: usize,
+    source: &str,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for (alias_name, params) in alias_bounds {
+        let Some(args_str) = extract_alias_args(annotation, alias_name) else {
+            continue;
+        };
+        let args = crate::rules::shared::split_top_level_commas(&args_str);
+        for (i, (_, bound_opt)) in params.iter().enumerate() {
+            let Some(bound) = bound_opt else { continue };
+            let Some(&arg) = args.get(i) else { break };
+            let arg = arg.trim();
+            if !is_within_bound(arg, bound) {
+                diagnostics.push(Diagnostic {
+                    code: CODE.clone(),
+                    severity: Severity::Error,
+                    message: format!(
+                        "Type argument `{arg}` does not satisfy bound `{bound}` \
+                         for type alias `{alias_name}`"
+                    ),
+                    span: span_for_line(source, line_number),
+                    path: path.to_owned(),
+                    help: Some(format!("`{arg}` is not assignable to bound `{bound}`")),
+                    note: None,
+                });
+                break; // one diagnostic per alias usage
+            }
+        }
+    }
+}
+
+/// Determine whether a source line is a variable annotation (not a def/class/type/comment).
+fn is_annotation_line(trimmed: &str) -> bool {
+    !trimmed.starts_with('#')
+        && !trimmed.starts_with("type ")
+        && !trimmed.starts_with("def ")
+        && !trimmed.starts_with("class ")
+        && !trimmed.starts_with("async def ")
+        && !trimmed.starts_with('@')
+}
+
+/// Check variable annotation lines for generic type alias bound violations.
+///
+/// For each `varname: AliasName[arg1, arg2]`, verifies each type argument
+/// satisfies the bound declared in `type AliasName[S: bound1, T: bound2]`.
+pub(super) fn check_type_alias_generic_bounds(
+    source: &str,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let alias_bounds = build_alias_bound_map(source);
+    if alias_bounds.is_empty() {
+        return;
+    }
+    for (line_idx, line) in source.lines().enumerate() {
+        let trimmed = line.trim();
+        if !is_annotation_line(trimmed) {
+            continue;
+        }
+        let code = trimmed.split_once('#').map_or(trimmed, |(c, _)| c).trim();
+        let Some(colon_pos) = code.find(':') else {
+            continue;
+        };
+        let after_colon = code[colon_pos + 1..].trim();
+        let annotation = if let Some(eq_pos) = find_top_level_eq(after_colon) {
+            after_colon[..eq_pos].trim()
+        } else {
+            after_colon
+        };
+        if !annotation.is_empty() {
+            check_annotation_bounds(
+                annotation,
+                &alias_bounds,
+                line_idx + 1,
+                source,
+                path,
+                diagnostics,
+            );
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Violation 3: method re-defines class type param with its own [T]
 // ---------------------------------------------------------------------------
 

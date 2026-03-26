@@ -126,3 +126,6 @@ mod coverage_boost_37;
 
 #[path = "checker/coverage_boost_38_tests.rs"]
 mod coverage_boost_38;
+
+#[path = "checker/subtyping_tests.rs"]
+mod subtyping;

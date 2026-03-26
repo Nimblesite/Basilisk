@@ -203,8 +203,9 @@ pub(super) fn collect_typeddict_key_violations<'a>(
     source: &'a str,
 ) -> Vec<TypedDictKeyViolation> {
     use std::collections::HashMap;
-    // (all_fields, field_types, is_total, has_extra_items)
-    type FieldMap<'x> = HashMap<&'x str, (Vec<&'x str>, HashMap<&'x str, String>, bool, bool)>;
+    // (all_fields, field_types, is_total, extra_items_type)
+    type FieldMap<'x> =
+        HashMap<&'x str, (Vec<&'x str>, HashMap<&'x str, String>, bool, Option<String>)>;
 
     let typeddict_fields: FieldMap<'a> = classes
         .iter()
@@ -220,14 +221,14 @@ pub(super) fn collect_typeddict_key_violations<'a>(
                     Some((a.name.as_str(), type_text))
                 })
                 .collect();
-            let has_extra_items = c.class_keywords.iter().any(|kw| kw == "extra_items");
+            let extra_items_type = c.typeddict_extra_items_type.clone();
             (
                 c.name.as_str(),
                 (
                     all_fields,
                     field_types,
                     c.is_typeddict_total,
-                    has_extra_items,
+                    extra_items_type,
                 ),
             )
         })
@@ -243,14 +244,14 @@ pub(super) fn collect_typeddict_key_violations<'a>(
     out
 }
 
-/// `(all_fields, field_types, is_total, has_extra_items)` map keyed by class name.
+/// `(all_fields, field_types, is_total, extra_items_type)` map keyed by class name.
 pub(super) type TdFieldMap<'a> = std::collections::HashMap<
     &'a str,
     (
         Vec<&'a str>,
         std::collections::HashMap<&'a str, String>,
         bool,
-        bool,
+        Option<String>,
     ),
 >;
 
@@ -294,7 +295,7 @@ pub(super) fn td_check_subscript_assign(
         let Some(class_name) = var_type.get(&var_name) else {
             continue;
         };
-        let Some((all_fields, field_types, _, has_extra_items)) = fields.get(class_name.as_str())
+        let Some((all_fields, field_types, _, extra_items_type)) = fields.get(class_name.as_str())
         else {
             continue;
         };
@@ -302,7 +303,7 @@ pub(super) fn td_check_subscript_assign(
             continue;
         };
         let key = key_str.value.to_string();
-        if !all_fields.contains(&key.as_str()) && !has_extra_items {
+        if !all_fields.contains(&key.as_str()) && extra_items_type.is_none() {
             out.push(TypedDictKeyViolation {
                 span: text_range_to_span(node.range()),
                 class_name: class_name.clone(),

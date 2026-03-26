@@ -17,7 +17,7 @@ class Greeter:
         return f\"Hello, {name}!\"
 ";
     fixture.did_open("file:///ws_selection.py", code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     // Cursor on the 'n' of `name` parameter (line 1, character 20).
     let resp = fixture
@@ -85,7 +85,7 @@ class Container:
         return result
 ";
     fixture.did_open("file:///ws_sel_chain.py", code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     // Cursor on 'result' inside the method body (line 2, character 8).
     let resp = fixture

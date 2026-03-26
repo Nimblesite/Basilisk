@@ -46,7 +46,7 @@ pub(super) fn td_check_regular_assign(
         let Some(class_name) = var_type.get(&var_name) else {
             continue;
         };
-        let Some((all_fields, field_types, is_total, has_extra_items)) =
+        let Some((all_fields, field_types, is_total, extra_items_type)) =
             fields.get(class_name.as_str())
         else {
             continue;
@@ -82,7 +82,7 @@ pub(super) fn td_check_regular_assign(
             .collect();
 
         // When `extra_items` is set, unknown keys are allowed.
-        let invalid_keys: Vec<String> = if *has_extra_items {
+        let invalid_keys: Vec<String> = if extra_items_type.is_some() {
             Vec::new()
         } else {
             literal_keys
@@ -109,31 +109,16 @@ pub(super) fn td_check_regular_assign(
             });
         }
 
-        // Check value types for each key-value pair
-        for item in &dict.items {
-            let Some(key_expr) = &item.key else { continue };
-            let Expr::StringLiteral(s) = key_expr else {
-                continue;
-            };
-            let key = s.value.to_string();
-            if !all_fields.contains(&key.as_str()) {
-                continue; // Already flagged as invalid key
-            }
-            if let Some(expected) = field_types.get(key.as_str()) {
-                if let Some(actual) = expr_literal_type_name(&item.value) {
-                    if !typeddict_field_type_compatible(actual, expected) {
-                        out.push(TypedDictKeyViolation {
-                            span: text_range_to_span(node.range()),
-                            class_name: class_name.clone(),
-                            kind: TypedDictKeyViolationKind::WrongSubscriptValueType {
-                                key,
-                                expected: expected.clone(),
-                            },
-                        });
-                    }
-                }
-            }
-        }
+        // Check value types for each key-value pair.
+        check_dict_item_types(
+            dict,
+            all_fields,
+            field_types,
+            extra_items_type.as_deref(),
+            class_name,
+            node.range(),
+            out,
+        );
     }
 }
 
@@ -149,7 +134,7 @@ pub(super) fn td_check_ann_assign(
         return;
     };
     let class_name = ann_name.id.as_str();
-    let Some((all_fields, field_types, is_total, has_extra_items)) = fields.get(class_name) else {
+    let Some((all_fields, field_types, is_total, extra_items_type)) = fields.get(class_name) else {
         return;
     };
     let Expr::Dict(dict) = value.as_ref() else {
@@ -183,7 +168,7 @@ pub(super) fn td_check_ann_assign(
         .collect();
 
     // When `extra_items` is set, unknown keys are allowed.
-    let invalid_keys: Vec<String> = if *has_extra_items {
+    let invalid_keys: Vec<String> = if extra_items_type.is_some() {
         Vec::new()
     } else {
         literal_keys
@@ -211,7 +196,7 @@ pub(super) fn td_check_ann_assign(
     }
 
     // Check value types in dict literal against field types.
-    let Some((_, field_types, _, _)) = fields.get(class_name) else {
+    let Some((_, field_types, _, extra_type)) = fields.get(class_name) else {
         return;
     };
     check_dict_value_types(
@@ -223,6 +208,98 @@ pub(super) fn td_check_ann_assign(
         fields,
         out,
     );
+    check_extra_items_values(
+        dict,
+        all_fields,
+        extra_type.as_deref(),
+        class_name,
+        node.range(),
+        out,
+    );
+}
+
+/// Check value types for extra keys against `extra_items` type.
+fn check_extra_items_values(
+    dict: &ruff_python_ast::ExprDict,
+    all_fields: &[&str],
+    extra_items_type: Option<&str>,
+    class_name: &str,
+    span_range: ruff_text_size::TextRange,
+    out: &mut Vec<TypedDictKeyViolation>,
+) {
+    let Some(expected) = extra_items_type else {
+        return;
+    };
+    let expected = strip_td_wrappers(expected);
+    for item in &dict.items {
+        let Some(Expr::StringLiteral(s)) = &item.key else {
+            continue;
+        };
+        let key = s.value.to_string();
+        if all_fields.contains(&key.as_str()) {
+            continue;
+        }
+        let Some(actual) = expr_literal_type_name(&item.value) else {
+            continue;
+        };
+        if !typeddict_field_type_compatible(actual, expected) {
+            out.push(TypedDictKeyViolation {
+                span: text_range_to_span(span_range),
+                class_name: class_name.to_owned(),
+                kind: TypedDictKeyViolationKind::WrongSubscriptValueType {
+                    key,
+                    expected: expected.to_owned(),
+                },
+            });
+        }
+    }
+}
+
+/// Check value types for items in a regular assign dict.
+fn check_dict_item_types(
+    dict: &ruff_python_ast::ExprDict,
+    all_fields: &[&str],
+    field_types: &std::collections::HashMap<&str, String>,
+    extra_items_type: Option<&str>,
+    class_name: &str,
+    span_range: ruff_text_size::TextRange,
+    out: &mut Vec<TypedDictKeyViolation>,
+) {
+    for item in &dict.items {
+        let Some(Expr::StringLiteral(s)) = &item.key else {
+            continue;
+        };
+        let key = s.value.to_string();
+        let Some(actual) = expr_literal_type_name(&item.value) else {
+            continue;
+        };
+        if all_fields.contains(&key.as_str()) {
+            if let Some(expected) = field_types.get(key.as_str()) {
+                if !typeddict_field_type_compatible(actual, expected) {
+                    out.push(TypedDictKeyViolation {
+                        span: text_range_to_span(span_range),
+                        class_name: class_name.to_owned(),
+                        kind: TypedDictKeyViolationKind::WrongSubscriptValueType {
+                            key,
+                            expected: expected.clone(),
+                        },
+                    });
+                }
+            }
+        } else if let Some(expected) = extra_items_type {
+            let stripped = strip_td_wrappers(expected);
+            if !typeddict_field_type_compatible(actual, stripped) {
+                out.push(TypedDictKeyViolation {
+                    span: text_range_to_span(span_range),
+                    class_name: class_name.to_owned(),
+                    kind: TypedDictKeyViolationKind::WrongSubscriptValueType {
+                        key,
+                        expected: stripped.to_owned(),
+                    },
+                });
+            }
+        }
+    }
 }
 
 /// Recursively check value types in a dict literal against `TypedDict` field types.
@@ -292,10 +369,12 @@ pub(super) fn td_check_expr_reads(
         Expr::Subscript(sub) => {
             if let Some(var_name) = expr_simple_name(&sub.value) {
                 if let Some(class_name) = var_type.get(&var_name) {
-                    if let Some((all_fields, _, _, _)) = fields.get(class_name.as_str()) {
+                    if let Some((all_fields, _, _, extra_items_type)) =
+                        fields.get(class_name.as_str())
+                    {
                         if let Expr::StringLiteral(key_str) = sub.slice.as_ref() {
                             let key = key_str.value.to_string();
-                            if !all_fields.contains(&key.as_str()) {
+                            if !all_fields.contains(&key.as_str()) && extra_items_type.is_none() {
                                 out.push(TypedDictKeyViolation {
                                     span: text_range_to_span(sub.range()),
                                     class_name: class_name.clone(),
@@ -304,8 +383,8 @@ pub(super) fn td_check_expr_reads(
                                     },
                                 });
                             }
-                        } else {
-                            // Non-literal key access on a TypedDict
+                        } else if extra_items_type.is_none() {
+                            // Non-literal key access on a TypedDict without extra_items
                             out.push(TypedDictKeyViolation {
                                 span: text_range_to_span(sub.range()),
                                 class_name: class_name.clone(),
@@ -351,9 +430,20 @@ pub(super) fn expr_literal_type_name(expr: &Expr) -> Option<&'static str> {
 /// Return `true` if an actual literal type is compatible with an expected `TypedDict` field type.
 pub(super) fn typeddict_field_type_compatible(actual: &str, expected: &str) -> bool {
     let stripped = strip_td_wrappers(expected);
-    actual == stripped
+    if actual == stripped
         || (actual == "bool" && stripped == "int")
         || (actual == "int" && stripped == "float")
+    {
+        return true;
+    }
+    // Handle union types: `int` is compatible with `int | None`, etc.
+    if stripped.contains(" | ") {
+        return stripped
+            .split(" | ")
+            .map(str::trim)
+            .any(|variant| typeddict_field_type_compatible(actual, variant));
+    }
+    false
 }
 
 /// Strip `Required[...]`, `NotRequired[...]`, `ReadOnly[...]`, and

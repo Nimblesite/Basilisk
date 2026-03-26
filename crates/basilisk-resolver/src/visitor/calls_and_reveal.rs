@@ -214,10 +214,12 @@ pub(super) fn call_site_from_expr(expr: &Expr) -> Option<CallSite> {
                 .map(|name| (name.to_string(), classify_rhs(&kw.value)))
         })
         .collect();
+    let has_kwargs_spread = call.arguments.keywords.iter().any(|kw| kw.arg.is_none());
     Some(CallSite {
         callee,
         args,
         keywords,
+        has_kwargs_spread,
         span: text_range_to_span(call.range()),
     })
 }
@@ -253,108 +255,104 @@ pub(crate) fn collect_assert_type_calls_from_stmts(
     params: &[(&str, &str)],
     source: &str,
 ) -> Vec<AssertTypeCallInfo> {
+    collect_assert_type_calls_from_stmts_cf(stmts, params, source, false)
+}
+
+fn collect_assert_type_calls_from_stmts_cf(
+    stmts: &[Stmt],
+    params: &[(&str, &str)],
+    source: &str,
+    inside_control_flow: bool,
+) -> Vec<AssertTypeCallInfo> {
     let mut out = Vec::new();
     for stmt in stmts {
-        collect_assert_type_calls_from_stmt(stmt, params, source, &mut out);
+        collect_assert_type_calls_from_stmt(stmt, params, source, inside_control_flow, &mut out);
     }
     out
 }
 
-pub(super) fn collect_assert_type_calls_from_stmt(
+/// Collect `assert_type` calls from a list of body blocks (all inside control flow).
+fn extend_from_cf_bodies(
+    bodies: &[&[Stmt]],
+    params: &[(&str, &str)],
+    source: &str,
+    out: &mut Vec<AssertTypeCallInfo>,
+) {
+    for body in bodies {
+        out.extend(collect_assert_type_calls_from_stmts_cf(
+            body, params, source, true,
+        ));
+    }
+}
+
+fn collect_assert_type_calls_from_stmt(
     stmt: &Stmt,
     params: &[(&str, &str)],
     source: &str,
+    inside_control_flow: bool,
     out: &mut Vec<AssertTypeCallInfo>,
 ) {
     match stmt {
         Stmt::Expr(node) => {
             if let Expr::Call(call) = node.value.as_ref() {
-                let is_assert_type =
-                    expr_simple_name(&call.func).is_some_and(|n| n == "assert_type");
-                if is_assert_type {
-                    out.push(build_assert_type_call_info(call, params, source));
+                if expr_simple_name(&call.func).is_some_and(|n| n == "assert_type") {
+                    out.push(build_assert_type_call_info(
+                        call,
+                        params,
+                        source,
+                        inside_control_flow,
+                    ));
                 }
             }
         }
         Stmt::FunctionDef(func) => {
-            // Build new param scope for the function body.
-            let new_params: Vec<(String, String)> =
-                build_param_scope_owned(&func.parameters, source);
+            let new_params = build_param_scope_owned(&func.parameters, source);
             let borrowed: Vec<(&str, &str)> = new_params
                 .iter()
                 .map(|(k, v)| (k.as_str(), v.as_str()))
                 .collect();
-            out.extend(collect_assert_type_calls_from_stmts(
-                &func.body, &borrowed, source,
+            out.extend(collect_assert_type_calls_from_stmts_cf(
+                &func.body, &borrowed, source, false,
             ));
         }
         Stmt::ClassDef(cls) => {
-            // Class bodies may contain methods; pass empty params at class level.
-            out.extend(collect_assert_type_calls_from_stmts(&cls.body, &[], source));
+            out.extend(collect_assert_type_calls_from_stmts_cf(
+                &cls.body,
+                &[],
+                source,
+                false,
+            ));
         }
         Stmt::If(node) => {
-            out.extend(collect_assert_type_calls_from_stmts(
-                &node.body, params, source,
-            ));
+            extend_from_cf_bodies(&[&node.body], params, source, out);
             for elif_else in &node.elif_else_clauses {
-                out.extend(collect_assert_type_calls_from_stmts(
-                    &elif_else.body,
-                    params,
-                    source,
-                ));
+                extend_from_cf_bodies(&[&elif_else.body], params, source, out);
             }
         }
         Stmt::For(node) => {
-            out.extend(collect_assert_type_calls_from_stmts(
-                &node.body, params, source,
-            ));
-            out.extend(collect_assert_type_calls_from_stmts(
-                &node.orelse,
-                params,
-                source,
-            ));
+            extend_from_cf_bodies(&[&node.body, &node.orelse], params, source, out);
         }
         Stmt::While(node) => {
-            out.extend(collect_assert_type_calls_from_stmts(
-                &node.body, params, source,
-            ));
-            out.extend(collect_assert_type_calls_from_stmts(
-                &node.orelse,
-                params,
-                source,
-            ));
+            extend_from_cf_bodies(&[&node.body, &node.orelse], params, source, out);
         }
         Stmt::With(node) => {
-            out.extend(collect_assert_type_calls_from_stmts(
-                &node.body, params, source,
-            ));
+            extend_from_cf_bodies(&[&node.body], params, source, out);
         }
         Stmt::Try(node) => {
-            out.extend(collect_assert_type_calls_from_stmts(
-                &node.body, params, source,
-            ));
+            extend_from_cf_bodies(
+                &[&node.body, &node.orelse, &node.finalbody],
+                params,
+                source,
+                out,
+            );
             for handler in &node.handlers {
                 let ExceptHandler::ExceptHandler(h) = handler;
-                out.extend(collect_assert_type_calls_from_stmts(
-                    &h.body, params, source,
-                ));
+                extend_from_cf_bodies(&[&h.body], params, source, out);
             }
-            out.extend(collect_assert_type_calls_from_stmts(
-                &node.orelse,
-                params,
-                source,
-            ));
-            out.extend(collect_assert_type_calls_from_stmts(
-                &node.finalbody,
-                params,
-                source,
-            ));
         }
         Stmt::Match(node) => {
             for case in &node.cases {
-                out.extend(collect_assert_type_calls_from_stmts(
-                    &case.body, params, source,
-                ));
+                extend_from_cf_bodies(&[&case.body], params, source, out);
             }
         }
         _ => {}
@@ -364,22 +362,23 @@ pub(super) fn collect_assert_type_calls_from_stmt(
 /// Build the parameter scope for a function: a list of `(param_name, annotation_text)` pairs.
 ///
 /// Parameters without annotations are excluded (no annotation text to compare against).
-pub(super) fn build_assert_type_call_info(
+fn build_assert_type_call_info(
     call: &ruff_python_ast::ExprCall,
     params: &[(&str, &str)],
     source: &str,
+    inside_control_flow: bool,
 ) -> AssertTypeCallInfo {
     let arg_count = call.arguments.args.len();
     let span = text_range_to_span(call.range());
 
     if arg_count != 2 {
-        // Arity error — type mismatch checking is not applicable.
         return AssertTypeCallInfo {
             arg_count,
             span,
             actual_type: None,
             expected_type: None,
             type_mismatch: false,
+            inside_control_flow,
         };
     }
 
@@ -390,6 +389,7 @@ pub(super) fn build_assert_type_call_info(
             actual_type: None,
             expected_type: None,
             type_mismatch: false,
+            inside_control_flow,
         };
     };
     let Some(second_arg) = call.arguments.args.get(1) else {
@@ -399,13 +399,11 @@ pub(super) fn build_assert_type_call_info(
             actual_type: None,
             expected_type: None,
             type_mismatch: false,
+            inside_control_flow,
         };
     };
 
-    // Determine the actual type of the first argument.
     let actual_type = resolve_actual_type(first_arg, params, source);
-
-    // Extract the expected type text from the second argument.
     let expected_type = extract_type_text(second_arg, source);
 
     // Compare normalized forms.
@@ -425,6 +423,7 @@ pub(super) fn build_assert_type_call_info(
         actual_type,
         expected_type,
         type_mismatch,
+        inside_control_flow,
     }
 }
 

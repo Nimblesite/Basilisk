@@ -15,7 +15,7 @@ fn test_zed_document_symbols() -> TestResult<()> {
 
     let code = "class MyClass:\n    def method(self) -> None:\n        pass\n\ndef standalone(x: int) -> int:\n    return x\n";
     fixture.did_open("file:///symbols.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let symbols = fixture.request(
         "textDocument/documentSymbol",
@@ -44,7 +44,7 @@ fn test_zed_execute_organize_imports() -> TestResult<()> {
 
     let code = "import os\nimport sys\n\ndef foo() -> None:\n    pass\n";
     fixture.did_open("file:///imports.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let result = fixture.request(
         "workspace/executeCommand",
@@ -135,7 +135,7 @@ fn test_zed_inlay_hints() -> TestResult<()> {
 
     let code = "def add(a: int, b: int) -> int:\n    return a + b\n\nresult = add(1, 2)\n";
     fixture.did_open("file:///hints.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let hints = fixture.request(
         "textDocument/inlayHint",
@@ -167,7 +167,7 @@ fn test_zed_semantic_tokens() -> TestResult<()> {
 
     let code = "def hello(name: str) -> str:\n    return name\n";
     fixture.did_open("file:///tokens.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let tokens = fixture.request(
         "textDocument/semanticTokens/full",
@@ -194,7 +194,7 @@ fn test_zed_go_to_definition() -> TestResult<()> {
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n\ngreet(\"world\")\n";
     fixture.did_open("file:///definition.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let definition = fixture.request(
         "textDocument/definition",
@@ -220,7 +220,7 @@ fn test_zed_find_references() -> TestResult<()> {
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n\ngreet(\"a\")\ngreet(\"b\")\n";
     fixture.did_open("file:///refs.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let refs = fixture.request(
         "textDocument/references",
@@ -249,7 +249,7 @@ fn test_zed_formatting() -> TestResult<()> {
 
     let code = "def  foo(  x:int  )->int:\n    return   x\n";
     fixture.did_open("file:///format.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let format_result = fixture.request(
         "textDocument/formatting",

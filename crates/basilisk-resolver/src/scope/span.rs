@@ -1,7 +1,7 @@
 //! Byte-offset span type for source location tracking.
 
 /// A byte-offset span within a source file.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Span {
     /// Byte offset of the start (inclusive).
     pub start: u32,

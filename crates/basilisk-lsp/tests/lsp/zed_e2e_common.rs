@@ -201,15 +201,20 @@ impl ZedLspFixture {
     }
 
     /// Wait for a `publishDiagnostics` notification, skipping unrelated messages.
-    #[must_use]
-    pub fn wait_for_diagnostics(&self) -> Option<String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no diagnostics notification arrives within the timeout.
+    pub fn wait_for_diagnostics(&self) -> TestResult<String> {
         for _ in 0..10 {
-            let msg = self.recv()?;
+            let Some(msg) = self.recv() else {
+                return Err("wait_for_diagnostics: timed out waiting for server message".into());
+            };
             if msg.contains("\"method\":\"textDocument/publishDiagnostics\"") {
-                return Some(msg);
+                return Ok(msg);
             }
         }
-        None
+        Err("wait_for_diagnostics: received 10 messages but none were publishDiagnostics".into())
     }
 
     /// Send a request and wait for the response with the matching ID.

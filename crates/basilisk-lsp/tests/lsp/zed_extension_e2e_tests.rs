@@ -236,7 +236,7 @@ fn test_zed_hover() -> TestResult<()> {
 
     let code = "def greet(name):\n    return f\"Hello, {name}!\"\n";
     fixture.did_open("file:///hover.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let hover = fixture.request(
         "textDocument/hover",
@@ -265,7 +265,7 @@ fn test_zed_completions() -> TestResult<()> {
 
     let code = "x: str = \"hello\"\nx.\n";
     fixture.did_open("file:///completion.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let completions = fixture.request(
         "textDocument/completion",
@@ -295,7 +295,7 @@ fn test_zed_code_actions() -> TestResult<()> {
 
     let code = "def greet(name):\n    return f\"Hello, {name}!\"\n";
     fixture.did_open("file:///actions.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let actions = fixture.request(
         "textDocument/codeAction",

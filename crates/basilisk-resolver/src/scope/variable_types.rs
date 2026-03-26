@@ -76,4 +76,9 @@ pub struct AttributeInfo {
     /// `InitVar` fields are not real attributes — they are passed as parameters
     /// to `__post_init__` and cannot be accessed as instance attributes.
     pub is_init_var: bool,
+    /// The alias name for the field in the constructor, if set via `alias="..."`.
+    ///
+    /// When a `dataclass_transform` field specifier provides `alias="other_name"`,
+    /// the constructor parameter uses `other_name` instead of the field name.
+    pub alias: Option<String>,
 }

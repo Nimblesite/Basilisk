@@ -392,7 +392,7 @@ async fn cross_module_goto_definition() -> TestResult<()> {
         .await?;
 
     // Wait for diagnostics from didOpen
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     // Go to definition on `target_func` in the import statement (line 0, col 28)
     let resp = fixture
@@ -476,7 +476,7 @@ async fn cross_module_find_references() -> TestResult<()> {
             "def shared_func(x: int) -> int:\n    return x\n",
         )
         .await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     // Find references on `shared_func` definition (line 0, col 4)
     let resp = fixture

@@ -8,7 +8,7 @@ use crate::rules::shared::contains_typevar_reference;
 use crate::span_util::slice_span;
 
 /// Extract the constructor class name from an expression like `ClassName(...)`.
-pub(super) fn extract_constructor_name(expr: &str) -> Option<&str> {
+pub(crate) fn extract_constructor_name(expr: &str) -> Option<&str> {
     let paren_pos = expr.find('(')?;
     let name = expr[..paren_pos].trim();
     if name.is_empty() || !name.chars().all(|c| c.is_alphanumeric() || c == '_') {

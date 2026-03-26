@@ -220,7 +220,12 @@ impl InferredType {
             )
             | (InferredType::LiteralString, InferredType::Str)
             // None is always assignable to Optional[T]
-            | (InferredType::None_, InferredType::Optional(_)) => true,
+            | (InferredType::None_, InferredType::Optional(_))
+            // Named types may be callable (classes, protocols, type objects).
+            // Without full signature resolution we cannot verify — assume
+            // compatible to avoid false positives.
+            | (InferredType::Named(_), InferredType::Callable(_))
+            | (InferredType::Callable(_), InferredType::Named(_)) => true,
             // Optional types are assignable to their non-optional counterparts
             (InferredType::Optional(inner), other) => inner.is_assignable_to(other),
             (inner, InferredType::Optional(other)) => inner.is_assignable_to(other),
@@ -235,10 +240,31 @@ impl InferredType {
                 a_key.is_assignable_to(b_key) && a_val.is_assignable_to(b_val)
             }
             (InferredType::Tuple(a), InferredType::Tuple(b)) => {
-                a.len() == b.len()
-                    && a.iter()
-                        .zip(b.iter())
-                        .all(|(a_elem, b_elem)| a_elem.is_assignable_to(b_elem))
+                // Variable-length tuple: tuple[T, ...] is Tuple([T, Named("...")])
+                if let Some(b_elem) = var_length_tuple_element(b) {
+                    return a.iter().all(|e| e.is_assignable_to(b_elem));
+                }
+                if let Some(a_elem) = var_length_tuple_element(a) {
+                    // tuple[Any, ...] is bidirectionally compatible with any tuple
+                    if matches!(a_elem, InferredType::Any) {
+                        return true;
+                    }
+                    // Variable-length source cannot satisfy fixed-length target.
+                    return false;
+                }
+                // If lengths differ and either contains Named elements (e.g.
+                // unpacked *tuple[T, ...] syntax), assume compatible — we
+                // cannot verify structural compatibility without expansion.
+                if a.len() != b.len() {
+                    let has_named = a
+                        .iter()
+                        .chain(b.iter())
+                        .any(|e| matches!(e, InferredType::Named(_)));
+                    return has_named;
+                }
+                a.iter()
+                    .zip(b.iter())
+                    .all(|(a_elem, b_elem)| a_elem.is_assignable_to(b_elem))
             }
             // Callable type assignability
             (InferredType::Callable(a), InferredType::Callable(b)) => {
@@ -299,11 +325,47 @@ impl InferredType {
                 let b_base = b_name.split('[').next().unwrap_or(b_name);
                 a_base == b_base
             }
-            // Ellipsis (`...`) parsed as Named is compatible when it appears
-            // inside Callable parameter lists (e.g. `Callable[..., T]`).
-            // For tuple annotations, `...` has special semantics that need
-            // structural checking, so we don't treat it as universally compatible.
+            // Concrete type to Named: check builtin MRO (e.g. None_ to Named("hashable")).
+            (concrete, InferredType::Named(target_name)) => {
+                if let Some(source_name) = concrete.builtin_type_name() {
+                    if let Some(mro) = crate::subtyping::builtin_mro(source_name) {
+                        return mro
+                            .iter()
+                            .any(|m| m.eq_ignore_ascii_case(target_name));
+                    }
+                }
+                false
+            }
             _ => false,
         }
     }
+
+    /// Map this type to its Python builtin type name for MRO lookups.
+    #[must_use]
+    fn builtin_type_name(&self) -> Option<&'static str> {
+        match self {
+            InferredType::Int => Some("int"),
+            InferredType::Str => Some("str"),
+            InferredType::Float => Some("float"),
+            InferredType::Bool => Some("bool"),
+            InferredType::Bytes => Some("bytes"),
+            InferredType::None_ => Some("NoneType"),
+            InferredType::List(_) => Some("list"),
+            InferredType::Dict(_, _) => Some("dict"),
+            InferredType::Set(_) => Some("set"),
+            InferredType::Tuple(_) => Some("tuple"),
+            _ => None,
+        }
+    }
+}
+
+/// Returns the element type if `elems` represents a variable-length
+/// tuple `tuple[T, ...]` (parsed as `Tuple([T, Named("...")])`.
+pub(crate) fn var_length_tuple_element(elems: &[InferredType]) -> Option<&InferredType> {
+    if let [first, InferredType::Named(name)] = elems {
+        if name == "..." {
+            return Some(first);
+        }
+    }
+    None
 }

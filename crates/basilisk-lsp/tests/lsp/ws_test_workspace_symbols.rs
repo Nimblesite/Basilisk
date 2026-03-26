@@ -12,10 +12,10 @@ async fn test_ws_workspace_symbols() -> TestResult<()> {
     let doc2 = "class Calculator:\n    value: int\n\ndef compute(x: int, y: int) -> int:\n    return x + y";
 
     fixture.did_open("file:///ws_sym_a.py", doc1).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     fixture.did_open("file:///ws_sym_b.py", doc2).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     // Query all symbols — empty string returns everything.
     let resp_all = fixture
@@ -80,7 +80,7 @@ async fn test_ws_workspace_symbols_empty_query() -> TestResult<()> {
     // Open a document with known symbols.
     let code = "class Dog:\n    breed: str\n\ndef bark(volume: int) -> str:\n    return \"woof\"";
     fixture.did_open("file:///ws_sym_empty.py", code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     // Empty query should return all symbols from all open documents.
     let resp = fixture
@@ -122,7 +122,7 @@ async fn test_ws_workspace_symbols_no_match() -> TestResult<()> {
     // Open a document with known symbols.
     let code = "class Apple:\n    color: str\n\ndef eat(fruit: str) -> str:\n    return fruit";
     fixture.did_open("file:///ws_sym_nomatch.py", code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     // Query for something that matches nothing in the document.
     let resp = fixture

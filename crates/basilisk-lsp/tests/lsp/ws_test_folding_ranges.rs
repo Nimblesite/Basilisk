@@ -23,7 +23,7 @@ def greet(name: str) -> str:
     return f\"Hello, {name}!\"
 ";
     fixture.did_open("file:///ws_folding.py", code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     let resp = fixture
         .request(
@@ -92,7 +92,7 @@ def main() -> None:
     pass
 ";
     fixture.did_open("file:///ws_fold_imports.py", code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     let resp = fixture
         .request(
@@ -157,7 +157,7 @@ def standalone(val: int) -> int:
     return val + 1
 ";
     fixture.did_open("file:///ws_fold_nested.py", code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     let resp = fixture
         .request(

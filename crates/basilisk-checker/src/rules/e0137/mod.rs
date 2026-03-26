@@ -27,7 +27,7 @@
 //!
 //! PEP 544: <https://typing.readthedocs.io/en/latest/spec/protocol.html#generic-protocols>
 
-mod helpers;
+pub(crate) mod helpers;
 
 use std::collections::HashMap;
 

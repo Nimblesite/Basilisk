@@ -33,9 +33,15 @@ impl Rule for ReturnTypeMismatch {
 
 fn check_function(func: &FunctionInfo, module: &ResolvedModule, out: &mut Vec<Diagnostic>) {
     // Generator functions have their own return type validation (E0120).
-    // Return values in generators go through Generator[Y, S, R]'s ReturnType,
-    // not the top-level annotation.
     if func.is_generator {
+        return;
+    }
+
+    // Dunder methods with special return-type semantics that E0013 cannot
+    // properly validate (e.g. `__exit__` returns bool for exception
+    // suppression, `__new__` returns the class or a union, `__call__` on
+    // metaclasses returns instances).
+    if is_special_return_dunder(&func.name) {
         return;
     }
 
@@ -46,15 +52,18 @@ fn check_function(func: &FunctionInfo, module: &ResolvedModule, out: &mut Vec<Di
         return;
     };
 
-    // Parse annotation text to InferredType
     let declared_type = InferredType::from_annotation(ann_text);
 
-    // Named types (e.g. `Sequence[float]`, `Iterable[int]`, forward references
-    // like `"Class | Any"`) require structural subtyping or generic variance
-    // analysis that E0013 cannot perform.  A concrete return like `list[int]`
-    // IS assignable to `Sequence[float]` at runtime, but `InferredType` has no
-    // knowledge of the class hierarchy.  Skip the check to avoid FPs.
+    // Named types require structural subtyping or generic variance analysis
+    // that E0013 cannot perform.  Skip to avoid FPs.
     if matches!(declared_type, InferredType::Named(_)) {
+        return;
+    }
+
+    // Literal return types (e.g. `-> Literal[True]`) require value-level
+    // inference that E0013 does not perform — `infer_rhs` returns the base
+    // type (`Bool`) not the literal value.  Skip to avoid FPs.
+    if contains_literal(&declared_type) {
         return;
     }
 
@@ -142,5 +151,30 @@ fn make_diagnostic(
         note: Some(
             "Basilisk requires the inferred return type to be assignable to the declared type".to_owned(),
         ),
+    }
+}
+
+/// Dunder methods whose return types have special semantics that simple
+/// return-value inference cannot validate.
+fn is_special_return_dunder(name: &str) -> bool {
+    matches!(
+        name,
+        "__new__"
+            | "__exit__"
+            | "__aexit__"
+            | "__call__"
+            | "__init_subclass__"
+            | "__class_getitem__"
+    )
+}
+
+/// Returns `true` if the type contains a `Literal` variant anywhere.
+fn contains_literal(ty: &InferredType) -> bool {
+    match ty {
+        InferredType::Literal(_) => true,
+        InferredType::Union(types) => types.iter().any(contains_literal),
+        InferredType::Optional(inner) => contains_literal(inner),
+        InferredType::Tuple(elems) => elems.iter().any(contains_literal),
+        _ => false,
     }
 }

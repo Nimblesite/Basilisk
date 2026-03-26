@@ -113,7 +113,7 @@ async fn test_ws_whole_module_did_close_keeps_diagnostics() -> TestResult<()> {
         )
         .await?;
     // Drain open diagnostics.
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     // Close the file.
     fixture.did_close(&file_uri).await?;
@@ -141,7 +141,7 @@ async fn test_ws_whole_module_did_close_non_disk_file_returns_empty_diagnostics(
     fixture
         .did_open(uri, "def greet(name):\n    return f\"Hello, {name}!\"\n")
         .await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     fixture.did_close(uri).await?;
 
@@ -232,7 +232,7 @@ async fn test_ws_whole_module_did_close_disk_file_keeps_diagnostics() -> TestRes
             "def greet(name):\n    return f\"Hello, {name}!\"\n",
         )
         .await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     // Close the file — in wholeModule mode the server re-analyses from disk.
     fixture.did_close(&file_uri).await?;

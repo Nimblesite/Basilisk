@@ -13,7 +13,7 @@ async fn test_ws_format_document() -> TestResult<()> {
     let code =
         "x:int=1\ny:str=\"hello\"\ndef   greet( name:str )->str:\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///ws_format.py", code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     let resp = fixture
         .request(
@@ -70,7 +70,7 @@ async fn test_ws_format_document_already_formatted() -> TestResult<()> {
     // Well-formatted Python code (PEP 8 compliant, trailing newline).
     let code = "x: int = 1\ny: str = \"hello\"\n\n\ndef greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n";
     fixture.did_open("file:///ws_format_clean.py", code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     let resp = fixture
         .request(
@@ -117,7 +117,7 @@ async fn test_ws_format_document_empty_file() -> TestResult<()> {
     // Empty file — formatting should not crash.
     let code = "";
     fixture.did_open("file:///ws_format_empty.py", code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     let resp = fixture
         .request(

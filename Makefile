@@ -4,11 +4,14 @@ SHELL := /bin/bash
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-EXTENSION_DIR := vscode-extension
-ZED_DIR       := basilisk-zed
-NVIM_DIR      := basilisk.nvim
-OPEN          ?= 0
-RULE          ?=
+EXTENSION_DIR    := vscode-extension
+ZED_DIR          := basilisk-zed
+NVIM_DIR         := basilisk.nvim
+CONFORMANCE_DIR  := crates/basilisk-cli/tests/conformance
+CONFORMANCE_REPO := python/typing
+CONFORMANCE_REF  := main
+OPEN             ?= 0
+RULE             ?=
 
 # Coverage thresholds (override via environment)
 TEST_COVERAGE_BASILISK_CHECKER  ?= 92
@@ -207,6 +210,36 @@ example-bad: ## Check examples/bad.py (expects errors)
 
 example-mixed: ## Check examples/mixed.py (expects some errors)
 	@cargo run -- check examples/mixed.py
+
+# ── Conformance ───────────────────────────────────────────────────────────
+
+.PHONY: conformance conformance-fetch
+
+conformance-fetch: ## Download PEP conformance test suite
+	@echo -e '\033[1m\033[0;36m▶ Fetching conformance suite\033[0m' && \
+	mkdir -p $(CONFORMANCE_DIR) && \
+	API_URL="https://api.github.com/repos/$(CONFORMANCE_REPO)/contents/conformance/tests?ref=$(CONFORMANCE_REF)" && \
+	FILE_LIST=$$(curl -fsSL "$$API_URL") && \
+	COUNT=$$(echo "$$FILE_LIST" | python3 -c "import json,sys; print(len([f for f in json.load(sys.stdin) if f['type']=='file' and f['name'].endswith('.py')]))") && \
+	echo "Downloading $$COUNT test files to $(CONFORMANCE_DIR)..." && \
+	echo "$$FILE_LIST" | python3 -c "\
+import json,sys,urllib.request,os; \
+dest=sys.argv[1]; files=[f for f in json.load(sys.stdin) if f['type']=='file' and f['name'].endswith('.py')]; \
+[urllib.request.urlretrieve(f['download_url'],os.path.join(dest,f['name'])) or (print(f'  {i}/{len(files)}') if i%25==0 or i==len(files) else None) for i,f in enumerate(files,1)]" \
+	"$(CONFORMANCE_DIR)" && \
+	echo -e '\033[0;32m✓ '"$$COUNT"' conformance files written\033[0m'
+
+conformance: ## Run PEP conformance harness (fetches if needed)
+	@if [ ! -d "$(CONFORMANCE_DIR)" ] || [ -z "$$(ls -A $(CONFORMANCE_DIR) 2>/dev/null)" ]; then \
+		$(MAKE) --no-print-directory conformance-fetch; \
+	else \
+		COUNT=$$(find $(CONFORMANCE_DIR) -name '*.py' | wc -l | tr -d ' ') && \
+		echo -e '\033[0;32m✓ Conformance suite already present ('"$$COUNT"' files) — skipping download\033[0m' && \
+		echo -e '\033[1;33m⚠ Use make conformance-fetch to force a re-download\033[0m'; \
+	fi && \
+	echo -e '\n\033[1m\033[0;36m▶ Running PEP conformance harness\033[0m\n' && \
+	cargo test --test conformance_tests -- --nocapture 2>&1 && \
+	echo -e '\n\033[0;32m✓ Done\033[0m'
 
 # ── Clean ─────────────────────────────────────────────────────────────────────
 

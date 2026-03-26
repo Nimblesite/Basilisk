@@ -68,7 +68,7 @@ def greet(name: str) -> str:
     return f\"Hello, {name}!\"
 ";
     fixture.did_open("file:///fold.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = send_request(
         &mut fixture,
@@ -100,7 +100,7 @@ def greet(name: str) -> str:
     return f\"Hello, {name}!\"
 ";
     fixture.did_open("file:///sel.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = send_request(
         &mut fixture,
@@ -133,7 +133,7 @@ def caller() -> None:
     greet(\"test\")
 ";
     fixture.did_open("file:///lens.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = send_request(
         &mut fixture,
@@ -161,7 +161,7 @@ def greet(name: str) -> str:
     return name
 ";
     fixture.did_open("file:///hl.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = send_request(
         &mut fixture,
@@ -187,7 +187,7 @@ fn test_lsp_did_save_rechecks() -> TestResult<()> {
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///save.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     fixture.send_json(&serde_json::json!({
         "jsonrpc": "2.0",
@@ -223,7 +223,7 @@ def greet(name: str) -> str:
     return name
 ";
     fixture.did_open("file:///wssym.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = send_request(
         &mut fixture,
@@ -252,7 +252,7 @@ fn test_lsp_formatting() -> TestResult<()> {
 
     let code = "def   greet( name:str )->str:\n    return    name\n";
     fixture.did_open("file:///fmt.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = send_request(
         &mut fixture,

@@ -276,6 +276,39 @@ fn collect_protocol_required_methods(
     methods
 }
 
+/// Emit a protocol conformance error diagnostic.
+fn emit_protocol_error(
+    protocol_name: &str,
+    rhs_class_name: &str,
+    detail: &str,
+    var: &basilisk_resolver::VariableInfo,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    diagnostics.push(Diagnostic {
+        code: CODE.clone(),
+        severity: Severity::Error,
+        message: format!(
+            "Class `{rhs_class_name}` is incompatible with protocol `{protocol_name}`: {detail}",
+        ),
+        span: var.name_span,
+        path: path.to_owned(),
+        help: None,
+        note: Some(
+            "Protocol classes use structural subtyping: the assigned class must \
+             implement all members declared by the protocol"
+                .to_owned(),
+        ),
+    });
+}
+
+/// Check if a method has a specific decorator.
+fn has_decorator(cls: &basilisk_resolver::ClassInfo, method: &str, dec: &str) -> bool {
+    cls.method_decorators
+        .iter()
+        .any(|(n, decs)| n == method && decs.iter().any(|d| d == dec))
+}
+
 /// Check if a concrete class satisfies a protocol's structural requirements.
 #[expect(
     clippy::too_many_arguments,
@@ -287,58 +320,360 @@ fn check_protocol_conformance(
     rhs_class_name: &str,
     class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
     class_methods: &HashMap<&str, Vec<&str>>,
-    _module: &ResolvedModule,
+    module: &ResolvedModule,
     var: &basilisk_resolver::VariableInfo,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let required_members = collect_protocol_required_methods(protocol_class, class_map);
+    let required_methods = collect_protocol_required_methods(protocol_class, class_map);
+    let required_attrs: Vec<&str> = protocol_class
+        .attributes
+        .iter()
+        .map(|a| a.name.as_str())
+        .collect();
 
-    // Get the RHS class methods.
     let rhs_methods: Vec<&str> = class_methods
         .get(rhs_class_name)
         .cloned()
         .unwrap_or_default();
 
-    // Get the RHS class attribute names. Class attributes, dataclass fields,
-    // and NamedTuple fields all satisfy protocol property requirements.
-    let rhs_attributes: Vec<&str> = class_map
-        .get(rhs_class_name)
+    let rhs_class = class_map.get(rhs_class_name);
+    let rhs_attributes: Vec<&str> = rhs_class
         .map(|cls| cls.attributes.iter().map(|a| a.name.as_str()).collect())
         .unwrap_or_default();
 
-    // Find missing members: a protocol member is satisfied by either a method
-    // or an attribute with the same name.
-    let missing: Vec<&str> = required_members
+    // Missing methods.
+    let missing_methods: Vec<&str> = required_methods
         .iter()
-        .filter(|m| {
-            let name = m.as_str();
-            !rhs_methods.contains(&name) && !rhs_attributes.contains(&name)
-        })
+        .filter(|m| !rhs_methods.contains(&m.as_str()) && !rhs_attributes.contains(&m.as_str()))
         .map(String::as_str)
         .collect();
 
-    if !missing.is_empty() {
-        let missing_list = missing.join("`, `");
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
-                "Class `{rhs_class_name}` is incompatible with protocol `{protocol_name}`: \
-                 missing method{} `{missing_list}`",
-                if missing.len() == 1 { "" } else { "s" }
+    // Missing attributes — skip if RHS has __init__ (likely sets attrs via self.x).
+    let rhs_has_init = rhs_methods.contains(&"__init__");
+    let missing_attrs: Vec<&str> = if rhs_has_init {
+        Vec::new()
+    } else {
+        required_attrs
+            .iter()
+            .filter(|a| !rhs_attributes.contains(a) && !rhs_methods.contains(a))
+            .copied()
+            .collect()
+    };
+
+    let all_missing: Vec<&str> = missing_methods
+        .iter()
+        .chain(missing_attrs.iter())
+        .copied()
+        .collect();
+
+    if !all_missing.is_empty() {
+        let list = all_missing.join("`, `");
+        emit_protocol_error(
+            protocol_name,
+            rhs_class_name,
+            &format!(
+                "missing member{} `{list}`",
+                if all_missing.len() == 1 { "" } else { "s" }
             ),
-            span: var.name_span,
-            path: path.to_owned(),
-            help: Some(format!(
-                "Add the missing method{} to `{rhs_class_name}` or use a compatible class",
-                if missing.len() == 1 { "" } else { "s" }
-            )),
-            note: Some(
-                "Protocol classes use structural subtyping: the assigned class must \
-                 implement all methods declared by the protocol"
-                    .to_owned(),
+            var,
+            path,
+            diagnostics,
+        );
+        return;
+    }
+
+    // Check attribute compatibility.
+    let Some(rhs_cls) = rhs_class else { return };
+    check_attr_compat(
+        protocol_name,
+        protocol_class,
+        rhs_class_name,
+        rhs_cls,
+        &rhs_methods,
+        &module.source,
+        var,
+        path,
+        diagnostics,
+    );
+
+    // Check method signature compatibility.
+    check_method_compat(
+        protocol_name,
+        protocol_class,
+        rhs_class_name,
+        rhs_cls,
+        module,
+        var,
+        path,
+        diagnostics,
+    );
+
+    // Check mutability (property setters, frozen dataclass, NamedTuple).
+    check_mutability(
+        protocol_name,
+        protocol_class,
+        rhs_class_name,
+        rhs_cls,
+        var,
+        path,
+        diagnostics,
+    );
+}
+
+/// Check protocol attribute compatibility (`ClassVar` vs instance, property vs method).
+#[expect(
+    clippy::too_many_arguments,
+    reason = "attribute compat check needs full context"
+)]
+fn check_attr_compat(
+    proto_name: &str,
+    proto_cls: &basilisk_resolver::ClassInfo,
+    rhs_name: &str,
+    rhs_cls: &basilisk_resolver::ClassInfo,
+    rhs_methods: &[&str],
+    source: &str,
+    var: &basilisk_resolver::VariableInfo,
+    path: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    for proto_attr in &proto_cls.attributes {
+        let ann = proto_attr
+            .annotation_span
+            .and_then(|sp| crate::span_util::slice_span(source, sp))
+            .unwrap_or("");
+        let proto_is_classvar = ann.trim().starts_with("ClassVar[");
+        let proto_is_property = has_decorator(proto_cls, &proto_attr.name, "property");
+
+        let rhs_attr = rhs_cls
+            .attributes
+            .iter()
+            .find(|a| a.name == proto_attr.name);
+
+        if let Some(rhs_a) = rhs_attr {
+            if proto_is_classvar {
+                let rhs_ann = rhs_a
+                    .annotation_span
+                    .and_then(|sp| crate::span_util::slice_span(source, sp))
+                    .unwrap_or("");
+                if !rhs_ann.trim().starts_with("ClassVar[") {
+                    emit_protocol_error(
+                        proto_name,
+                        rhs_name,
+                        &format!(
+                            "attribute `{}` must be a `ClassVar` to match protocol",
+                            proto_attr.name
+                        ),
+                        var,
+                        path,
+                        diags,
+                    );
+                }
+            } else if !proto_is_property {
+                // Protocol requires an instance variable — RHS must not be ClassVar.
+                let rhs_ann = rhs_a
+                    .annotation_span
+                    .and_then(|sp| crate::span_util::slice_span(source, sp))
+                    .unwrap_or("");
+                if rhs_ann.trim().starts_with("ClassVar[") {
+                    emit_protocol_error(
+                        proto_name,
+                        rhs_name,
+                        &format!(
+                            "attribute `{}` must be an instance variable, not `ClassVar`",
+                            proto_attr.name
+                        ),
+                        var,
+                        path,
+                        diags,
+                    );
+                }
+            }
+        } else if rhs_methods.contains(&proto_attr.name.as_str()) {
+            // RHS has method, protocol wants property or attribute.
+            if proto_is_property && !has_decorator(rhs_cls, &proto_attr.name, "property") {
+                emit_protocol_error(
+                    proto_name,
+                    rhs_name,
+                    &format!(
+                        "`{}` must be a property, not a plain method",
+                        proto_attr.name
+                    ),
+                    var,
+                    path,
+                    diags,
+                );
+            }
+        }
+    }
+}
+
+/// Check protocol method signature compatibility.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "method compat check needs full context"
+)]
+fn check_method_compat(
+    proto_name: &str,
+    proto_cls: &basilisk_resolver::ClassInfo,
+    rhs_name: &str,
+    rhs_cls: &basilisk_resolver::ClassInfo,
+    module: &ResolvedModule,
+    var: &basilisk_resolver::VariableInfo,
+    path: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    let proto_methods: Vec<&basilisk_resolver::FunctionInfo> = module
+        .functions
+        .iter()
+        .filter(|f| f.class_name.as_deref() == Some(&proto_cls.name))
+        .collect();
+
+    for proto_fn in &proto_methods {
+        if proto_fn.name.starts_with('_') {
+            continue;
+        }
+
+        let rhs_fn = module
+            .functions
+            .iter()
+            .find(|f| f.class_name.as_deref() == Some(rhs_name) && f.name == proto_fn.name);
+        let Some(rhs_method) = rhs_fn else { continue };
+
+        let proto_params: Vec<&str> = proto_fn
+            .parameters
+            .iter()
+            .filter(|p| p.name != "self" && p.name != "cls")
+            .map(|p| p.name.as_str())
+            .collect();
+
+        let rhs_is_static = has_decorator(rhs_cls, &rhs_method.name, "staticmethod");
+        let rhs_params: Vec<&str> = rhs_method
+            .parameters
+            .iter()
+            .filter(|p| {
+                if rhs_is_static {
+                    true
+                } else {
+                    p.name != "self" && p.name != "cls"
+                }
+            })
+            .map(|p| p.name.as_str())
+            .collect();
+
+        // Staticmethod with `self` parameter is wrong.
+        if rhs_is_static
+            && rhs_method
+                .parameters
+                .first()
+                .is_some_and(|p| p.name == "self")
+        {
+            emit_protocol_error(
+                proto_name,
+                rhs_name,
+                &format!(
+                    "method `{}`: static method should not have `self` parameter",
+                    proto_fn.name
+                ),
+                var,
+                path,
+                diags,
+            );
+            continue;
+        }
+
+        // Check parameter names.
+        if proto_params.len() == rhs_params.len() {
+            for (pp, rp) in proto_params.iter().zip(rhs_params.iter()) {
+                if pp != rp {
+                    emit_protocol_error(
+                        proto_name,
+                        rhs_name,
+                        &format!(
+                            "method `{}`: parameter `{rp}` should be `{pp}`",
+                            proto_fn.name
+                        ),
+                        var,
+                        path,
+                        diags,
+                    );
+                    break;
+                }
+            }
+        }
+
+        // Check positional-only violation: protocol has standard params but RHS has them as
+        // keyword-only (via `*` separator) or positional-only (via `/`).
+        if proto_fn.vararg.is_none() && rhs_method.vararg.is_some() && rhs_method.kwarg.is_none() {
+            emit_protocol_error(proto_name, rhs_name, &format!(
+                "method `{}`: keyword-only parameters not compatible with protocol's positional params",
+                proto_fn.name
+            ), var, path, diags);
+        }
+    }
+}
+
+/// Check protocol mutability requirements (property setters, `NamedTuple`, frozen dataclass).
+fn check_mutability(
+    proto_name: &str,
+    proto_cls: &basilisk_resolver::ClassInfo,
+    rhs_name: &str,
+    rhs_cls: &basilisk_resolver::ClassInfo,
+    var: &basilisk_resolver::VariableInfo,
+    path: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    let is_named_tuple = rhs_cls.bases.iter().any(|b| b == "NamedTuple");
+    let is_frozen_dc = rhs_cls.is_dataclass && rhs_cls.is_dataclass_frozen;
+
+    // Check if protocol has property setters.
+    for (method_name, decorators) in &proto_cls.method_decorators {
+        let is_setter = decorators.iter().any(|d| d.contains("setter"));
+        if !is_setter {
+            continue;
+        }
+
+        if is_named_tuple {
+            emit_protocol_error(
+                proto_name,
+                rhs_name,
+                &format!(
+                    "`{method_name}` requires a writable property but NamedTuple is immutable"
+                ),
+                var,
+                path,
+                diags,
+            );
+        } else if is_frozen_dc {
+            emit_protocol_error(
+                proto_name,
+                rhs_name,
+                &format!(
+                "`{method_name}` requires a writable property but frozen dataclass is immutable"
             ),
-        });
+                var,
+                path,
+                diags,
+            );
+        } else {
+            // Check for read-only property (getter without setter).
+            let has_property = has_decorator(rhs_cls, method_name, "property");
+            let has_setter = rhs_cls
+                .method_decorators
+                .iter()
+                .any(|(n, decs)| n == method_name && decs.iter().any(|d| d.contains("setter")));
+            if has_property && !has_setter {
+                emit_protocol_error(
+                    proto_name,
+                    rhs_name,
+                    &format!(
+                    "`{method_name}` requires a writable property but implementation is read-only"
+                ),
+                    var,
+                    path,
+                    diags,
+                );
+            }
+        }
     }
 }

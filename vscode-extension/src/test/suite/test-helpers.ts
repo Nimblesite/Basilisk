@@ -71,14 +71,14 @@ export function findBasiliskBinary(): string | undefined {
 }
 
 /**
- * Wait until at least one diagnostic appears for the given URI,
- * or until the timeout elapses — whichever comes first.
+ * Wait until at least one diagnostic appears for the given URI.
+ * Throws if no diagnostics arrive before the timeout elapses.
  */
 export async function waitForDiagnostics(
     uri: vscode.Uri,
     timeoutMs: number = DIAGNOSTIC_TIMEOUT_MS
 ): Promise<vscode.Diagnostic[]> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         const existing = vscode.languages.getDiagnostics(uri);
         if (existing.length > 0) {
             resolve(existing);
@@ -87,7 +87,15 @@ export async function waitForDiagnostics(
 
         const timeout = setTimeout(() => {
             disposable.dispose();
-            resolve(vscode.languages.getDiagnostics(uri));
+            const stale = vscode.languages.getDiagnostics(uri);
+            if (stale.length > 0) {
+                resolve(stale);
+            } else {
+                reject(new Error(
+                    `waitForDiagnostics timed out after ${timeoutMs}ms — ` +
+                    `no diagnostics appeared for ${uri.fsPath}`
+                ));
+            }
         }, timeoutMs);
 
         const disposable = vscode.languages.onDidChangeDiagnostics((event) => {
@@ -104,14 +112,14 @@ export async function waitForDiagnostics(
 }
 
 /**
- * Wait for diagnostics to clear (reach zero) for the given URI,
- * or until the timeout elapses.
+ * Wait for diagnostics to clear (reach zero) for the given URI.
+ * Throws if diagnostics remain when the timeout elapses.
  */
 export async function waitForDiagnosticsCleared(
     uri: vscode.Uri,
     timeoutMs: number = DIAGNOSTIC_TIMEOUT_MS
 ): Promise<vscode.Diagnostic[]> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         const existing = vscode.languages.getDiagnostics(uri);
         if (existing.length === 0) {
             resolve([]);
@@ -120,7 +128,16 @@ export async function waitForDiagnosticsCleared(
 
         const timeout = setTimeout(() => {
             disposable.dispose();
-            resolve(vscode.languages.getDiagnostics(uri));
+            const remaining = vscode.languages.getDiagnostics(uri);
+            if (remaining.length === 0) {
+                resolve([]);
+            } else {
+                reject(new Error(
+                    `waitForDiagnosticsCleared timed out after ${timeoutMs}ms — ` +
+                    `${remaining.length} diagnostic(s) still present for ${uri.fsPath}: ` +
+                    remaining.map((d) => d.message).join('; ')
+                ));
+            }
         }, timeoutMs);
 
         const disposable = vscode.languages.onDidChangeDiagnostics((event) => {
@@ -145,8 +162,8 @@ export interface PollOptions<T> {
 }
 
 /**
- * Poll an async function until it returns a truthy, non-empty result.
- * Avoids fixed sleeps by retrying at short intervals.
+ * Poll an async function until it returns a result satisfying the predicate.
+ * Throws if the predicate is never satisfied before the timeout elapses.
  *
  * Supports two calling conventions:
  * - `pollUntilResult({ fn, predicate, timeoutMs?, intervalMs? })`
@@ -166,7 +183,13 @@ export async function pollUntilResult<T>(
         if (predicate(result)) {return result;}
         await new Promise<void>((r) => setTimeout(r, intervalMs));
     }
-    return fn();
+    // One final attempt after deadline.
+    const last = await fn();
+    if (predicate(last)) {return last;}
+    throw new Error(
+        `pollUntilResult timed out after ${timeoutMs}ms — ` +
+        `predicate never satisfied (last result: ${JSON.stringify(last)})`
+    );
 }
 
 /**
@@ -249,14 +272,24 @@ export async function setupLspTestSuite(
     const dummyDoc = await vscode.workspace.openTextDocument(dummyUri);
     await vscode.window.showTextDocument(dummyDoc);
     const deadline = Date.now() + SERVER_START_WAIT_MS;
+    let serverReady = false;
     while (Date.now() < deadline) {
         try {
             const syms = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
                 'vscode.executeDocumentSymbolProvider', dummyUri
             );
-            if (syms !== null && syms !== undefined) {break;}
+            if (syms !== null && syms !== undefined) {
+                serverReady = true;
+                break;
+            }
         } catch { /* server not ready yet */ }
         await new Promise<void>((r) => setTimeout(r, SERVER_READINESS_POLL_INTERVAL_MS));
+    }
+    if (!serverReady) {
+        throw new Error(
+            `LSP server failed to become responsive within ${SERVER_START_WAIT_MS}ms. ` +
+            'Ensure the basilisk binary is built: cargo build -p basilisk-cli'
+        );
     }
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
 

@@ -33,18 +33,29 @@ async function prewarmLsp(): Promise<void> {
 
     const pollIntervalMs = 200;
     const deadline = Date.now() + SERVER_START_WAIT_MS;
+    let serverReady = false;
     while (Date.now() < deadline) {
         try {
             const syms = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
                 'vscode.executeDocumentSymbolProvider', dummyUri
             );
-            if (syms !== null && syms !== undefined) { break; }
+            if (syms !== null && syms !== undefined) {
+                serverReady = true;
+                break;
+            }
         } catch { /* server not ready yet */ }
         await new Promise<void>((r) => setTimeout(r, pollIntervalMs));
     }
 
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     fs.rmSync(tmpDir, { recursive: true, force: true });
+
+    if (!serverReady) {
+        throw new Error(
+            `prewarmLsp: LSP server failed to respond within ${SERVER_START_WAIT_MS}ms. ` +
+            'All tests will fail. Build the binary: cargo build -p basilisk-cli'
+        );
+    }
 }
 
 export async function run(): Promise<void> {

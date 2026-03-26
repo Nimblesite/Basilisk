@@ -85,7 +85,7 @@ fn test_lsp_did_change_updates_diagnostics() -> TestResult<()> {
 
     let initial_code = "def greet(name):\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///test.py", initial_code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     // Change the document to fully annotated code.
     fixture.send_json(&serde_json::json!({
@@ -117,7 +117,7 @@ fn test_lsp_did_close_clears_diagnostics() -> TestResult<()> {
 
     let python_code = "def greet(name):\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///test.py", python_code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     fixture.send_json(&serde_json::json!({
         "jsonrpc": "2.0",
@@ -144,7 +144,7 @@ fn test_lsp_hover_on_error_location() -> TestResult<()> {
 
     let python_code = "def greet(name):\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///test.py", python_code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     fixture.send_json(&serde_json::json!({
         "jsonrpc": "2.0",

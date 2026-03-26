@@ -36,6 +36,11 @@ pub struct CallSite {
     /// Only populated for keyword arguments with an explicit name (`arg=val`).
     /// Star-unpacked kwargs (`**kw`) are not included.
     pub keywords: Vec<(String, RhsKind)>,
+    /// Whether the call uses a `**kwargs` spread (e.g. `func(**td)`).
+    ///
+    /// When `true`, the caller may be supplying keyword arguments via an
+    /// unpacked mapping and positional-argument checks should be skipped.
+    pub has_kwargs_spread: bool,
     /// The span of the entire call expression.
     pub span: Span,
 }
@@ -156,6 +161,11 @@ pub struct AssertTypeCallInfo {
     pub expected_type: Option<String>,
     /// `true` when `actual_type` and `expected_type` are both known and do not match.
     pub type_mismatch: bool,
+    /// `true` when the `assert_type` call is inside a control flow branch
+    /// (if/elif/else, with, try/except, match/case, for/while) where type
+    /// narrowing may have occurred. E0053 should suppress mismatches in these
+    /// contexts because the actual type may have been narrowed.
+    pub inside_control_flow: bool,
 }
 
 /// What kind of second argument was passed to a `TypedDict(...)` functional call.

@@ -18,7 +18,7 @@ def greet(name: str, greeting: str) -> str:
 result: str = greet()
 ";
     fixture.did_open("file:///ws_kwarg_comp.py", code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     // Cursor inside greet() — line 3, character 20 (after the opening paren)
     let resp = fixture
@@ -61,7 +61,7 @@ def greet(name: str, greeting: str) -> str:
 result: str = greet(name=\"world\", )
 ";
     fixture.did_open("file:///ws_kwarg_skip.py", code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     // Cursor after "name=\"world\", " — line 3, character 33
     let resp = fixture
@@ -105,7 +105,7 @@ def render(w: Widget) -> str:
 count: int = 0
 ";
     fixture.did_open("file:///ws_comp_kinds.py", code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     let resp = fixture
         .request(
@@ -175,7 +175,7 @@ def helper(x: int) -> int:
 hel
 ";
     fixture.did_open("file:///compdoc.py", code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     let resp = fixture
         .request(

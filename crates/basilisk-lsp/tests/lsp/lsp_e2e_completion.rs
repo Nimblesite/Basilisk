@@ -31,7 +31,7 @@ def greet(animal: Animal) -> str:
 x: int = 42
 ";
     fixture.did_open("file:///comp.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     // Request completion at end of file (empty prefix → all symbols)
     let resp = request_completion(&mut fixture, "file:///comp.py", 9, 0, 10)?
@@ -80,7 +80,7 @@ def helper(x: int) -> int:
 
 gr";
     fixture.did_open("file:///prefix.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     // Cursor at the end of "gr" on the last line (line 9, character 2)
     let resp = request_completion(&mut fixture, "file:///prefix.py", 9, 2, 11)?
@@ -112,7 +112,7 @@ import os
 
 ";
     fixture.did_open("file:///imports.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     // Completion at empty position (line 3)
     let resp = request_completion(&mut fixture, "file:///imports.py", 3, 0, 12)?
@@ -149,7 +149,7 @@ class Dog:
 
 Dog.";
     fixture.did_open("file:///dot.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     // Cursor after "Dog." on last line (line 8, character 4)
     let resp = request_completion(&mut fixture, "file:///dot.py", 8, 4, 13)?
@@ -188,7 +188,7 @@ class Cat:
     def describe(self) -> str:
         return self.";
     fixture.did_open("file:///selfdot.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     // Cursor after "self." inside describe method (line 6, character 20)
     let resp = request_completion(&mut fixture, "file:///selfdot.py", 6, 20, 14)?
@@ -220,7 +220,7 @@ fn test_lsp_completion_builtins() -> TestResult<()> {
 
     let code = "pri";
     fixture.did_open("file:///builtins.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     // Cursor after "pri" (line 0, character 3)
     let resp = request_completion(&mut fixture, "file:///builtins.py", 0, 3, 15)?
@@ -253,7 +253,7 @@ def calculate(x: int, y: int, op: str) -> int:
 
 cal";
     fixture.did_open("file:///detail.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     // Cursor after "cal" (line 3, character 3)
     let resp = request_completion(&mut fixture, "file:///detail.py", 3, 3, 16)?
@@ -278,7 +278,7 @@ fn test_lsp_completion_on_empty_file() -> TestResult<()> {
 
     // Empty file should still return builtins
     fixture.did_open("file:///empty.py", "")?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = request_completion(&mut fixture, "file:///empty.py", 0, 0, 17)?
         .ok_or("no completion response")?;

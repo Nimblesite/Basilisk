@@ -15,6 +15,13 @@ use super::annotation::is_simple_name;
 /// Parse an annotated declaration line: `name: annotation` or `name: annotation = value`.
 /// Returns `(name, annotation_text)` on success.
 pub(super) fn parse_annotated_decl(line: &str) -> Option<(String, String)> {
+    let (name, ann, _) = parse_annotated_decl_full(line)?;
+    Some((name, ann))
+}
+
+/// Parse an annotated declaration with optional value.
+/// Returns `(name, annotation_text, Option<rhs_text>)` on success.
+pub(super) fn parse_annotated_decl_full(line: &str) -> Option<(String, String, Option<String>)> {
     // Must contain `:` before any `=`.
     let colon_pos = line.find(':')?;
     let name = line[..colon_pos].trim();
@@ -23,11 +30,20 @@ pub(super) fn parse_annotated_decl(line: &str) -> Option<(String, String)> {
     }
     let after_colon = line[colon_pos + 1..].trim();
     // Strip `= value` part if present (at top level).
-    let annotation = strip_assignment_rhs(after_colon).trim().to_owned();
+    let stripped = strip_assignment_rhs(after_colon);
+    let annotation = stripped.trim().to_owned();
     if annotation.is_empty() {
         return None;
     }
-    Some((name.to_owned(), annotation))
+    // Extract RHS if present.
+    let rhs = if after_colon.len() > stripped.len() {
+        let rest = after_colon[stripped.len() + 1..].trim();
+        let rest = strip_trailing_comment(rest);
+        if rest.is_empty() { None } else { Some(rest.to_owned()) }
+    } else {
+        None
+    };
+    Some((name.to_owned(), annotation, rhs))
 }
 
 /// Strip the `= value` suffix from an annotation string, respecting brackets.

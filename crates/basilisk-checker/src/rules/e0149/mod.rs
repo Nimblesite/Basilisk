@@ -46,8 +46,8 @@ use helpers::leading_indent;
 use violations::{
     check_decorator_uses_class_type_param, check_method_redefines_class_type_param,
     check_module_level_type_param_use, check_pep695_bound_cross_references,
-    check_type_stmt_circular, check_type_stmt_in_function, check_type_stmt_uses_old_typevar,
-    collect_pep695_type_params,
+    check_type_alias_generic_bounds, check_type_stmt_circular, check_type_stmt_in_function,
+    check_type_stmt_uses_old_typevar, collect_pep695_type_params,
 };
 
 const CODE: ErrorCode = ErrorCode {
@@ -166,7 +166,10 @@ impl Rule for Pep695TypeParamScopingViolation {
         // --- Violation 7: misuse of PEP 695 type aliases ---
         check_type_alias_misuse(module, diagnostics);
 
-        // --- Violation 8: type argument violates type parameter bound ---
+        // --- Violation 8: generic type alias instantiation bound violations ---
+        check_type_alias_generic_bounds(source, path, diagnostics);
+
+        // --- Violation 9: type alias annotation bound violations ---
         check_type_alias_bound_violations(module, diagnostics);
     }
 }

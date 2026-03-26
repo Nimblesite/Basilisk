@@ -3,7 +3,7 @@
 > **Score**: 124/146 (84.9%)
 > **Tests**: `crates/basilisk-cli/tests/conformance/`
 > **Status CSV**: `conformance/conformance_status.csv`
-> **Run**: `./conformance/conformance.sh` or `cargo test --test conformance_tests -- --nocapture`
+> **Run**: `make conformance` or `cargo test --test conformance_tests -- --nocapture`
 
 ---
 

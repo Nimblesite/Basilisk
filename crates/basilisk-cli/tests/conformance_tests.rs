@@ -16,7 +16,7 @@
 //! The conformance files must be downloaded first:
 //!
 //! ```text
-//! ./conformance/fetch-conformance.sh
+//! make conformance-fetch
 //! cargo test --test conformance_tests -- --nocapture
 //! ```
 //!
@@ -115,7 +115,11 @@ fn parse_annotation(line: &str) -> Option<Annotation> {
     // `# E` possibly followed by `: explanation` or nothing
     if rest.starts_with('E') {
         let after = rest["E".len()..].trim_start();
-        if after.is_empty() || after.starts_with(':') || after.starts_with(' ') {
+        if after.is_empty()
+            || after.starts_with(':')
+            || after.starts_with(' ')
+            || after.starts_with('(')
+        {
             return Some(Annotation::Required);
         }
     }
@@ -388,7 +392,7 @@ fn conformance_score() {
     if !conformance_dir.exists() {
         println!();
         println!("  ⚠  Conformance suite not downloaded.");
-        println!("  Run: ./conformance/fetch-conformance.sh");
+        println!("  Run: make conformance-fetch");
         println!("  Then rerun: cargo test --test conformance_tests -- --nocapture");
         println!();
         return;
@@ -406,7 +410,7 @@ fn conformance_score() {
 
     if files.is_empty() {
         println!("  Conformance directory exists but contains no .py files.");
-        println!("  Run: ./conformance/fetch-conformance.sh");
+        println!("  Run: make conformance-fetch");
         return;
     }
 
@@ -416,7 +420,7 @@ fn conformance_score() {
 
     assert!(
         totals.files > 0,
-        "No conformance files found. Run ./conformance/fetch-conformance.sh first."
+        "No conformance files found. Run make conformance-fetch first."
     );
 }
 

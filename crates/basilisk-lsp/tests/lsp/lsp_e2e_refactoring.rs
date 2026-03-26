@@ -40,7 +40,7 @@ fn test_refactor_extract_variable_offered() -> TestResult<()> {
 
     let code = "result = some_func(42) + other_func(7)\n";
     fixture.did_open("file:///extract_var.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = request_code_actions(
         &mut fixture,
@@ -72,7 +72,7 @@ fn test_refactor_extract_constant_offered() -> TestResult<()> {
 
     let code = "import os\n\ndef f() -> int:\n    return 42\n";
     fixture.did_open("file:///extract_const.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = request_code_actions(
         &mut fixture,
@@ -100,7 +100,7 @@ fn test_refactor_extract_function_offered() -> TestResult<()> {
 
     let code = "def main() -> None:\n    x: int = 1\n    y: int = x + 1\n    print(y)\n";
     fixture.did_open("file:///extract_fn.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = request_code_actions(
         &mut fixture,
@@ -130,7 +130,7 @@ fn test_refactor_extract_function_rejects_yield() -> TestResult<()> {
 
     let code = "def gen() -> None:\n    yield 1\n    yield 2\n";
     fixture.did_open("file:///no_yield.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = request_code_actions(
         &mut fixture,
@@ -158,7 +158,7 @@ fn test_refactor_convert_union_offered() -> TestResult<()> {
 
     let code = "from typing import Union\nx: Union[int, str] = 1\n";
     fixture.did_open("file:///union.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = request_code_actions(
         &mut fixture,
@@ -184,7 +184,7 @@ fn test_refactor_convert_optional_offered() -> TestResult<()> {
 
     let code = "from typing import Optional\nx: Optional[int] = None\n";
     fixture.did_open("file:///optional.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = request_code_actions(
         &mut fixture,
@@ -212,7 +212,7 @@ fn test_refactor_convert_fstring_offered() -> TestResult<()> {
 
     let code = "name: str = \"world\"\nx: str = f\"hello {name}\"\n";
     fixture.did_open("file:///fstr.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = request_code_actions(
         &mut fixture,
@@ -240,7 +240,7 @@ fn test_refactor_convert_dict_offered() -> TestResult<()> {
 
     let code = "x: dict[str, int] = dict(a=1, b=2)\n";
     fixture.did_open("file:///dictconv.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = request_code_actions(
         &mut fixture,
@@ -266,7 +266,7 @@ fn test_refactor_convert_list_offered() -> TestResult<()> {
 
     let code = "x: list[int] = list()\n";
     fixture.did_open("file:///listconv.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = request_code_actions(
         &mut fixture,
@@ -294,7 +294,7 @@ fn test_refactor_convert_ternary_offered() -> TestResult<()> {
 
     let code = "def f(cond: bool) -> int:\n    x: int = 1 if cond else 0\n    return x\n";
     fixture.did_open("file:///ternary.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = request_code_actions(
         &mut fixture,
@@ -322,7 +322,7 @@ fn test_refactor_inline_variable_offered() -> TestResult<()> {
 
     let code = "def f() -> None:\n    temp = calculate()\n    result = temp + 1\n";
     fixture.did_open("file:///inline_var.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = request_code_actions(
         &mut fixture,
@@ -350,7 +350,7 @@ fn test_refactor_inline_function_offered() -> TestResult<()> {
 
     let code = "def double(x: int) -> int:\n    return x * 2\n\nresult: int = double(5)\n";
     fixture.did_open("file:///inline_fn.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = request_code_actions(
         &mut fixture,
@@ -378,7 +378,7 @@ fn test_refactor_move_symbol_offered() -> TestResult<()> {
 
     let code = "import os\n\nclass MyWidget:\n    pass\n";
     fixture.did_open("file:///move.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = request_code_actions(
         &mut fixture,
@@ -411,7 +411,7 @@ fn test_refactor_convert_namedtuple_offered() -> TestResult<()> {
     let code =
         "from typing import NamedTuple\n\nclass Point(NamedTuple):\n    x: int\n    y: int\n";
     fixture.did_open("file:///nt.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = request_code_actions(
         &mut fixture,
@@ -447,7 +447,7 @@ def inner() -> None:
     print(x)
 ";
     fixture.did_open("file:///scope_rename.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     // Rename `x` in outer — should NOT touch `x` in inner.
     let resp = send_request(
@@ -483,7 +483,7 @@ fn test_refactor_extract_variable_edit_correctness() -> TestResult<()> {
 
     let code = "result: int = some_func(42) + other_func(7)\n";
     fixture.did_open("file:///ev_edit.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = request_code_actions(
         &mut fixture,
@@ -522,7 +522,7 @@ fn test_refactor_inline_variable_edit_correctness() -> TestResult<()> {
 
     let code = "def f() -> None:\n    temp = calculate()\n    result = temp + 1\n";
     fixture.did_open("file:///iv_edit.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = request_code_actions(
         &mut fixture,
@@ -562,7 +562,7 @@ fn test_refactor_extract_variable_not_offered_for_empty_selection() -> TestResul
 
     let code = "x: int = 1\n";
     fixture.did_open("file:///ev_empty.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = request_code_actions(
         &mut fixture,
@@ -588,7 +588,7 @@ fn test_refactor_move_symbol_not_offered_for_assignment() -> TestResult<()> {
 
     let code = "x: int = 42\n";
     fixture.did_open("file:///no_move.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = request_code_actions(&mut fixture, "file:///no_move.py", 0, 0, 0, 0, 318)?;
 

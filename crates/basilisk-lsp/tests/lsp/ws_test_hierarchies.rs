@@ -11,7 +11,7 @@ async fn test_ws_call_hierarchy() -> TestResult<()> {
     fixture
         .did_open("file:///ws_call_hierarchy.py", source)
         .await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     // prepareCallHierarchy at the position of `foo` (line 0, character 4)
     let prepare_resp = fixture
@@ -81,7 +81,7 @@ class Puppy(Dog):
     fixture
         .did_open("file:///ws_type_hierarchy.py", source)
         .await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     // prepareTypeHierarchy on `Dog` (line 3, character 6 — inside the class name)
     let prepare_resp = fixture

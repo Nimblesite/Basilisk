@@ -798,6 +798,12 @@ fn check_dataclass_unknown_kwargs(
         return;
     }
 
+    // Skip `@dataclass_transform` classes — they may use field aliases
+    // (e.g. `model_field(alias="other_name")`) that we cannot parse.
+    if uses_dataclass_transform(class_info, class_map) {
+        return;
+    }
+
     // Collect fields from this class and all base classes (for inherited fields).
     let mut known_fields: std::collections::HashSet<&str> = std::collections::HashSet::new();
     collect_dataclass_fields(class_info, class_map, &mut known_fields);
@@ -908,4 +914,26 @@ fn check_generic_nt_arg_types(
             });
         }
     }
+}
+
+/// Returns `true` if the class uses `@dataclass_transform` (via a base class
+/// that defines `__init_subclass__` with keyword parameters, or via a
+/// metaclass with `@dataclass_transform`).
+fn uses_dataclass_transform(
+    class_info: &basilisk_resolver::ClassInfo,
+    class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
+) -> bool {
+    for base_name in &class_info.bases {
+        let base_stripped = base_name.split('[').next().unwrap_or(base_name);
+        if let Some(base_info) = class_map.get(base_stripped) {
+            if base_info
+                .method_names
+                .iter()
+                .any(|m| m == "__init_subclass__")
+            {
+                return true;
+            }
+        }
+    }
+    false
 }

@@ -143,14 +143,20 @@ impl WsTestFixture {
     }
 
     /// Wait for a `publishDiagnostics` notification, skipping unrelated messages.
-    pub async fn wait_for_diagnostics(&mut self) -> Option<String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no diagnostics notification arrives within the timeout.
+    pub async fn wait_for_diagnostics(&mut self) -> TestResult<String> {
         for _ in 0..10 {
-            let msg = self.recv().await?;
+            let Some(msg) = self.recv().await else {
+                return Err("wait_for_diagnostics: timed out waiting for server message".into());
+            };
             if msg.contains("\"method\":\"textDocument/publishDiagnostics\"") {
-                return Some(msg);
+                return Ok(msg);
             }
         }
-        None
+        Err("wait_for_diagnostics: received 10 messages but none were publishDiagnostics".into())
     }
 
     /// Send a `textDocument/didClose` notification for `uri`.
@@ -210,10 +216,7 @@ pub async fn open_and_diagnose(uri: &str, code: &str) -> TestResult<(WsTestFixtu
     let mut fixture = WsTestFixture::new().await?;
     let _ = fixture.initialize().await?;
     fixture.did_open(uri, code).await?;
-    let diag = fixture
-        .wait_for_diagnostics()
-        .await
-        .ok_or("no diagnostics published")?;
+    let diag = fixture.wait_for_diagnostics().await?;
     Ok((fixture, diag))
 }
 
@@ -249,10 +252,7 @@ pub async fn code_action_for(
     action_id: u64,
     diag_code: &str,
 ) -> TestResult<String> {
-    let diag_msg = fixture
-        .wait_for_diagnostics()
-        .await
-        .ok_or("no diagnostics published")?;
+    let diag_msg = fixture.wait_for_diagnostics().await?;
 
     let diag_json: serde_json::Value = serde_json::from_str(&diag_msg)?;
     let diagnostics = diag_json["params"]["diagnostics"]

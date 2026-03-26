@@ -15,7 +15,7 @@ use super::calls_and_reveal::expr_to_type_arg;
 use super::class_info::collect_class_body;
 use super::core::text_range_to_span;
 use super::dataclass::{dataclass_bool_flag_is_false, dataclass_flag};
-use super::function_info::collect_name_refs_from_expr;
+use super::function_info::{annotation_source_text, collect_name_refs_from_expr};
 use super::generics::extract_generic_params;
 use super::type_alias::type_param_name;
 use super::ENUM_BASES;
@@ -94,6 +94,8 @@ pub(super) fn class_info_from(
         is_dataclass_slots: is_dataclass && dataclass_flag(class, "slots"),
         has_manual_slots: class_has_manual_slots(class),
         docstring: extract_docstring(&class.body),
+        typeddict_extra_items_type: extract_typeddict_extra_items_type(class),
+        typeddict_closed: extract_typeddict_closed(class),
     }
 }
 
@@ -175,6 +177,29 @@ fn extract_class_keywords(class: &StmtClassDef) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// Extract the type annotation text for `extra_items=<type>` on a `TypedDict`.
+fn extract_typeddict_extra_items_type(class: &StmtClassDef) -> Option<String> {
+    class.arguments.as_ref().and_then(|args| {
+        args.keywords
+            .iter()
+            .find(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "extra_items"))
+            .map(|kw| annotation_source_text(&kw.value))
+    })
+}
+
+/// Extract the `closed=True/False` value on a `TypedDict`, if specified.
+fn extract_typeddict_closed(class: &StmtClassDef) -> Option<bool> {
+    class.arguments.as_ref().and_then(|args| {
+        args.keywords
+            .iter()
+            .find(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "closed"))
+            .and_then(|kw| match &kw.value {
+                Expr::BooleanLiteral(b) => Some(b.value),
+                _ => None,
+            })
+    })
+}
+
 fn extract_metaclass_name(class: &StmtClassDef) -> Option<String> {
     class.arguments.as_ref().and_then(|args| {
         args.keywords
@@ -223,6 +248,8 @@ pub(super) struct DcTransformFactory {
     pub(super) kw_only_default: bool,
     /// `frozen_default` from the decorator (default `false`).
     pub(super) frozen_default: bool,
+    /// `order_default` from the decorator (default `false`).
+    pub(super) order_default: bool,
     /// Field specifier function names extracted from `field_specifiers=(...)`.
     pub(super) field_specifier_names: Vec<String>,
 }
@@ -239,14 +266,31 @@ pub(super) struct FieldSpecOverload {
 
 /// Scan module-level statements for `@dataclass_transform(...)` decorated functions
 /// and apply their semantics to classes decorated by those factories.
-pub(super) fn parse_dataclass_transform_decorator(expr: &Expr) -> (bool, bool, bool, Vec<String>) {
+/// Parsed result from a `@dataclass_transform(...)` decorator.
+pub(super) struct DcTransformParsed {
+    pub(super) kw_only_default: bool,
+    pub(super) frozen_default: bool,
+    pub(super) order_default: bool,
+    pub(super) field_specifier_names: Vec<String>,
+}
+
+impl DcTransformParsed {
+    const DEFAULT: Self = Self {
+        kw_only_default: false,
+        frozen_default: false,
+        order_default: false,
+        field_specifier_names: Vec::new(),
+    };
+}
+
+pub(super) fn parse_dataclass_transform_decorator(expr: &Expr) -> Option<DcTransformParsed> {
     let Expr::Call(call) = expr else {
         if let Expr::Name(n) = expr {
             if n.id.as_str() == "dataclass_transform" {
-                return (true, false, false, Vec::new());
+                return Some(DcTransformParsed::DEFAULT);
             }
         }
-        return (false, false, false, Vec::new());
+        return None;
     };
     let is_dc = match call.func.as_ref() {
         Expr::Name(n) => n.id.as_str() == "dataclass_transform",
@@ -254,11 +298,12 @@ pub(super) fn parse_dataclass_transform_decorator(expr: &Expr) -> (bool, bool, b
         _ => false,
     };
     if !is_dc {
-        return (false, false, false, Vec::new());
+        return None;
     }
 
     let mut kw_only_default = false;
     let mut frozen_default = false;
+    let mut order_default = false;
     let mut field_specifier_names = Vec::new();
 
     for kw in &call.arguments.keywords {
@@ -271,6 +316,9 @@ pub(super) fn parse_dataclass_transform_decorator(expr: &Expr) -> (bool, bool, b
             }
             "frozen_default" => {
                 frozen_default = matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
+            }
+            "order_default" => {
+                order_default = matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
             }
             "field_specifiers" => {
                 if let Expr::Tuple(tup) = &kw.value {
@@ -285,7 +333,12 @@ pub(super) fn parse_dataclass_transform_decorator(expr: &Expr) -> (bool, bool, b
         }
     }
 
-    (true, kw_only_default, frozen_default, field_specifier_names)
+    Some(DcTransformParsed {
+        kw_only_default,
+        frozen_default,
+        order_default,
+        field_specifier_names,
+    })
 }
 
 /// Build overload info for a field specifier function.

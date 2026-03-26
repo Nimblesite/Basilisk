@@ -21,7 +21,7 @@ def greet(animal: Animal) -> str:
 x: int = 42
 ";
     fixture.did_open("file:///ws_semtok.py", code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     let resp = fixture
         .request(
@@ -115,7 +115,7 @@ def greet(name: str) -> str:
     return name
 ";
     fixture.did_open("file:///ws_semtok_dec.py", code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     let resp = fixture
         .request(

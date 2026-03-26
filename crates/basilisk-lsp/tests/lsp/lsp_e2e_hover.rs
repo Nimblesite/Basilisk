@@ -13,7 +13,7 @@ fn test_lsp_hover_shows_function_signature() -> TestResult<()> {
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///hover.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     // Hover on "greet" (line 0, character 4)
     let resp = send_request(
@@ -47,7 +47,7 @@ fn test_lsp_hover_shows_class_signature() -> TestResult<()> {
     let code =
         "class Animal:\n    name: str\n    def speak(self) -> str:\n        return self.name\n";
     fixture.did_open("file:///hclass.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     // Hover on "Animal" (line 0, character 6)
     let resp = send_request(
@@ -76,7 +76,7 @@ fn test_lsp_hover_shows_variable_type() -> TestResult<()> {
 
     let code = "x: int = 42\n";
     fixture.did_open("file:///hvar.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     // Hover on "x" (line 0, character 0)
     let resp = send_request(
@@ -107,7 +107,7 @@ fn test_lsp_hover_function_exact_signature() -> TestResult<()> {
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///hover_exact.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = send_request(
         &mut fixture,
@@ -146,7 +146,7 @@ fn test_lsp_hover_from_call_site() -> TestResult<()> {
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n\nresult: str = greet(\"world\")\n";
     fixture.did_open("file:///hover_call.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = send_request(
         &mut fixture,
@@ -181,7 +181,7 @@ fn test_lsp_hover_parameter_shows_type() -> TestResult<()> {
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///hover_param.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = send_request(
         &mut fixture,
@@ -216,7 +216,7 @@ fn test_lsp_hover_class_attribute() -> TestResult<()> {
 
     let code = "class Animal:\n    name: str\n    age: int\n";
     fixture.did_open("file:///hover_attr.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = send_request(
         &mut fixture,
@@ -257,7 +257,7 @@ def calculate(x: int) -> int:
     return x * x
 ";
     fixture.did_open("file:///docstr.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = send_request(
         &mut fixture,
@@ -290,7 +290,7 @@ def calculate(x: int) -> int:
 result: int = calculate(5)
 ";
     fixture.did_open("file:///docstr_call.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = send_request(
         &mut fixture,
@@ -323,7 +323,7 @@ def helper(x: int) -> int:
 hel
 ";
     fixture.did_open("file:///compdoc.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = send_request(
         &mut fixture,

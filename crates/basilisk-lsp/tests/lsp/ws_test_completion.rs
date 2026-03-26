@@ -31,7 +31,7 @@ def greet(animal: Animal) -> str:
 x: int = 42
 ";
     fixture.did_open("file:///comp.py", code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     let resp = fixture
         .request(
@@ -121,7 +121,7 @@ def helper(x: int) -> int:
 
 gr";
     fixture.did_open("file:///prefix.py", code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     let resp = fixture
         .request(
@@ -161,7 +161,7 @@ import os
 
 ";
     fixture.did_open("file:///imports.py", code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     let resp = fixture
         .request(
@@ -206,7 +206,7 @@ class Dog:
 
 Dog.";
     fixture.did_open("file:///dot.py", code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     let resp = fixture
         .request(
@@ -253,7 +253,7 @@ class Cat:
     def describe(self) -> str:
         return self.";
     fixture.did_open("file:///selfdot.py", code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     let resp = fixture
         .request(
@@ -293,7 +293,7 @@ async fn test_ws_completion_builtins() -> TestResult<()> {
 
     let code = "pri";
     fixture.did_open("file:///builtins.py", code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     let resp = fixture
         .request(
@@ -333,7 +333,7 @@ def calculate(x: int, y: int, op: str) -> int:
 
 cal";
     fixture.did_open("file:///detail.py", code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     let resp = fixture
         .request(
@@ -364,7 +364,7 @@ async fn test_ws_completion_on_empty_file() -> TestResult<()> {
     let _ = fixture.initialize().await?;
 
     fixture.did_open("file:///empty.py", "").await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     let resp = fixture
         .request(

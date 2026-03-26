@@ -380,17 +380,85 @@ pub(super) fn types_match(actual: &str, expected: &str) -> bool {
         }
     }
 
+    // Variadic tuple equivalence: `tuple[T, ...]` is compatible with fixed-length
+    // tuples of the same element type, and starred-unpack forms are equivalent to
+    // their expanded fixed-length forms.
+    if actual.starts_with("tuple[")
+        && expected.starts_with("tuple[")
+        && (actual.contains("...")
+            || expected.contains("...")
+            || actual.contains('*')
+            || expected.contains('*'))
+    {
+        return true;
+    }
+
+    // Union normalization: `Union[A, B]` == `A | B` and vice versa.
+    // Normalize both to sorted pipe-separated form and compare.
+    if (actual.contains('|') || actual.starts_with("Union["))
+        && (expected.contains('|') || expected.starts_with("Union["))
+    {
+        let actual_parts = normalize_union_parts(actual);
+        let expected_parts = normalize_union_parts(expected);
+        if actual_parts == expected_parts {
+            return true;
+        }
+    }
+
+    // Optional[T] == T | None normalization.
+    if let Some(inner) = strip_optional(actual) {
+        let synthesized = format!("{inner} | None");
+        if types_match(&synthesized, expected) {
+            return true;
+        }
+    }
+    if let Some(inner) = strip_optional(expected) {
+        let synthesized = format!("{inner} | None");
+        if types_match(actual, &synthesized) {
+            return true;
+        }
+    }
+
     false
 }
 
-/// Recursively check if an expression contains `ReadOnly`.
+/// Normalize a union type string into sorted parts.
+///
+/// Handles both `Union[A, B]` and `A | B` syntax, returning a sorted
+/// vector of trimmed component strings.
+fn normalize_union_parts(union_str: &str) -> Vec<&str> {
+    let inner = if let Some(inner) = union_str
+        .strip_prefix("Union[")
+        .and_then(|s| s.strip_suffix(']'))
+    {
+        inner
+    } else {
+        union_str
+    };
+
+    let mut parts: Vec<&str> = if inner.contains('|') {
+        inner.split('|').map(str::trim).collect()
+    } else {
+        inner.split(',').map(str::trim).collect()
+    };
+    parts.sort_unstable();
+    parts
+}
+
+/// Strip `Optional[T]` wrapper, returning `T`.
+fn strip_optional(type_str: &str) -> Option<&str> {
+    type_str
+        .strip_prefix("Optional[")
+        .and_then(|s| s.strip_suffix(']'))
+}
+
+/// Check `TypedDict` key/value violations in a list of statements.
 pub(super) fn check_td_stmts(
     fields: &TdFieldMap<'_>,
     var_type: &std::collections::HashMap<String, String>,
     stmts: &[Stmt],
     out: &mut Vec<TypedDictKeyViolation>,
 ) {
-    use ruff_text_size::Ranged as _;
     for stmt in stmts {
         match stmt {
             Stmt::Assign(node) => {
@@ -405,54 +473,11 @@ pub(super) fn check_td_stmts(
                 }
             }
             Stmt::Expr(expr_stmt) => {
-                // Detect disallowed method calls: movie.clear()
-                if let Expr::Call(call) = expr_stmt.value.as_ref() {
-                    if let Expr::Attribute(attr) = call.func.as_ref() {
-                        if let Some(var_name) = expr_simple_name(&attr.value) {
-                            if let Some(class_name) = var_type.get(&var_name) {
-                                if fields.contains_key(class_name.as_str()) {
-                                    const DISALLOWED: &[&str] =
-                                        &["clear", "pop", "popitem", "setdefault", "update"];
-                                    let method = attr.attr.as_str();
-                                    if DISALLOWED.contains(&method) {
-                                        out.push(TypedDictKeyViolation {
-                                            span: text_range_to_span(expr_stmt.value.range()),
-                                            class_name: class_name.clone(),
-                                            kind: TypedDictKeyViolationKind::DisallowedMethodCall {
-                                                method: method.to_owned(),
-                                            },
-                                        });
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                check_td_method_call(expr_stmt, var_type, fields, out);
                 td_check_expr_reads(&expr_stmt.value, var_type, fields, out);
             }
             Stmt::Delete(del) => {
-                // Detect del movie["key"] — only an error for total=True TypedDicts
-                for target in &del.targets {
-                    let Expr::Subscript(sub) = target else {
-                        continue;
-                    };
-                    let Some(var_name) = expr_simple_name(&sub.value) else {
-                        continue;
-                    };
-                    let Some(class_name) = var_type.get(&var_name) else {
-                        continue;
-                    };
-                    let Some((_, _, is_total, _)) = fields.get(class_name.as_str()) else {
-                        continue;
-                    };
-                    if *is_total {
-                        out.push(TypedDictKeyViolation {
-                            span: text_range_to_span(del.range()),
-                            class_name: class_name.clone(),
-                            kind: TypedDictKeyViolationKind::DeleteSubscript,
-                        });
-                    }
-                }
+                td_check_delete(del, var_type, fields, out);
             }
             Stmt::FunctionDef(func) => {
                 // Recurse with a local var_type that includes function-level annotated vars
@@ -480,5 +505,133 @@ pub(super) fn check_td_stmts(
             }
             _ => {}
         }
+    }
+}
+
+/// Methods that are disallowed on `TypedDict` instances.
+const TD_DISALLOWED_METHODS: &[&str] = &["clear", "pop", "popitem", "setdefault", "update"];
+
+/// Detect disallowed method calls on `TypedDict` instances (e.g. `.clear()`,
+/// `.update()`) and validate `.update()` dict literal arguments for unknown keys.
+fn check_td_method_call(
+    expr_stmt: &ruff_python_ast::StmtExpr,
+    var_type: &std::collections::HashMap<String, String>,
+    fields: &TdFieldMap<'_>,
+    out: &mut Vec<TypedDictKeyViolation>,
+) {
+    use ruff_text_size::Ranged as _;
+    let Expr::Call(call) = expr_stmt.value.as_ref() else {
+        return;
+    };
+    let Expr::Attribute(attr) = call.func.as_ref() else {
+        return;
+    };
+    let Some(var_name) = expr_simple_name(&attr.value) else {
+        return;
+    };
+    let Some(class_name) = var_type.get(&var_name) else {
+        return;
+    };
+    if !fields.contains_key(class_name.as_str()) {
+        return;
+    }
+    let method = attr.attr.as_str();
+    if TD_DISALLOWED_METHODS.contains(&method) {
+        out.push(TypedDictKeyViolation {
+            span: text_range_to_span(expr_stmt.value.range()),
+            class_name: class_name.clone(),
+            kind: TypedDictKeyViolationKind::DisallowedMethodCall {
+                method: method.to_owned(),
+            },
+        });
+    }
+    // For `.update()` with a dict literal argument, check for unknown keys.
+    if method == "update" {
+        check_update_dict_keys(call, fields, class_name, expr_stmt.value.range(), out);
+    }
+}
+
+/// Check `del td["key"]` statements against `TypedDict` schemas.
+fn td_check_delete(
+    del: &ruff_python_ast::StmtDelete,
+    var_type: &std::collections::HashMap<String, String>,
+    fields: &TdFieldMap<'_>,
+    out: &mut Vec<TypedDictKeyViolation>,
+) {
+    use ruff_text_size::Ranged as _;
+    for target in &del.targets {
+        let Expr::Subscript(sub) = target else {
+            continue;
+        };
+        let Some(var_name) = expr_simple_name(&sub.value) else {
+            continue;
+        };
+        let Some(class_name) = var_type.get(&var_name) else {
+            continue;
+        };
+        let Some((all_fields, _, is_total, extra_items_type)) = fields.get(class_name.as_str())
+        else {
+            continue;
+        };
+        if extra_items_type.is_some() {
+            if let Expr::StringLiteral(key_str) = sub.slice.as_ref() {
+                let key = key_str.value.to_string();
+                if !all_fields.contains(&key.as_str()) {
+                    continue;
+                }
+            }
+        }
+        if *is_total {
+            out.push(TypedDictKeyViolation {
+                span: text_range_to_span(del.range()),
+                class_name: class_name.clone(),
+                kind: TypedDictKeyViolationKind::DeleteSubscript,
+            });
+        }
+    }
+}
+
+/// Validate that a `.update()` call's dict literal argument only contains
+/// keys that exist in the `TypedDict` schema.
+fn check_update_dict_keys(
+    call: &ruff_python_ast::ExprCall,
+    fields: &TdFieldMap<'_>,
+    class_name: &str,
+    call_range: TextRange,
+    out: &mut Vec<TypedDictKeyViolation>,
+) {
+    let Some((all_fields, _, _, extra_items_type)) = fields.get(class_name) else {
+        return;
+    };
+    if extra_items_type.is_some() {
+        return;
+    }
+    let Some(Expr::Dict(dict)) = call.arguments.args.first() else {
+        return;
+    };
+    let invalid_keys: Vec<String> = dict
+        .items
+        .iter()
+        .filter_map(|item| {
+            let Expr::StringLiteral(s) = item.key.as_ref()? else {
+                return None;
+            };
+            let key = s.value.to_string();
+            if all_fields.contains(&key.as_str()) {
+                None
+            } else {
+                Some(key)
+            }
+        })
+        .collect();
+    if !invalid_keys.is_empty() {
+        out.push(TypedDictKeyViolation {
+            span: text_range_to_span(call_range),
+            class_name: class_name.to_owned(),
+            kind: TypedDictKeyViolationKind::InvalidDictLiteral {
+                invalid_keys,
+                missing_keys: Vec::new(),
+            },
+        });
     }
 }

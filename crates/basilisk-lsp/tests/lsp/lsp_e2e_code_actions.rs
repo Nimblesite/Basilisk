@@ -24,7 +24,7 @@ def greet(animal: Animal) -> str:
 x: int = 42
 ";
     fixture.did_open("file:///symbols.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = send_request(
         &mut fixture,
@@ -65,7 +65,7 @@ class Calculator:
         return self.value * x
 ";
     fixture.did_open("file:///nested.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = send_request(
         &mut fixture,
@@ -104,7 +104,7 @@ def greet(name: str, greeting: str) -> str:
 result: str = greet(\"world\", \"Hi\")
 ";
     fixture.did_open("file:///sighel.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = send_request(
         &mut fixture,
@@ -146,7 +146,7 @@ def greet(name: str) -> str:
 result: str = greet(\"world\")
 ";
     fixture.did_open("file:///refs.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = send_request(
         &mut fixture,
@@ -177,7 +177,7 @@ fn test_lsp_prepare_rename() -> TestResult<()> {
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n";
     fixture.did_open("file:///rename.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = send_request(
         &mut fixture,
@@ -209,7 +209,7 @@ def greet(name: str) -> str:
 result: str = greet(\"world\")
 ";
     fixture.did_open("file:///ren.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = send_request(
         &mut fixture,
@@ -243,7 +243,7 @@ fn test_lsp_inlay_hints_variable_types() -> TestResult<()> {
 
     let code = "x = 42\ny = \"hello\"\nz = True\n";
     fixture.did_open("file:///inlay.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = send_request(
         &mut fixture,
@@ -293,7 +293,7 @@ def greet(animal: Animal) -> str:
 x: int = 42
 ";
     fixture.did_open("file:///semtok.py", code)?;
-    let _ = fixture.wait_for_diagnostics();
+    fixture.wait_for_diagnostics()?;
 
     let resp = send_request(
         &mut fixture,
