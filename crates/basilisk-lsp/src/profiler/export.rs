@@ -103,10 +103,10 @@ pub fn export_speedscope(
     let profiles: Vec<SpeedscopeProfile> = thread_ids
         .iter()
         .map(|&tid| {
-            let name = data
-                .thread_names
-                .get(&tid)
-                .map_or_else(|| format!("Thread {tid}"), |n| format!("Thread {tid} ({n})"));
+            let name = data.thread_names.get(&tid).map_or_else(
+                || format!("Thread {tid}"),
+                |n| format!("Thread {tid} ({n})"),
+            );
 
             let stacks = data.thread_stacks.get(&tid).cloned().unwrap_or_default();
             let weights = data.thread_weights.get(&tid).cloned().unwrap_or_default();
@@ -169,19 +169,14 @@ pub fn export_flamegraph(
 
     let mut options = inferno::flamegraph::Options::default();
     options.title = format!("Basilisk Profile \u{2014} {session_id}");
-    options.count_name = "samples".to_owned();
-    options.colors = inferno::flamegraph::color::Palette::Basic(
-        inferno::flamegraph::color::BasicPalette::Hot,
-    );
+    "samples".clone_into(&mut options.count_name);
+    options.colors =
+        inferno::flamegraph::color::Palette::Basic(inferno::flamegraph::color::BasicPalette::Hot);
     options.flame_chart = false;
 
     let mut svg_bytes: Vec<u8> = Vec::new();
-    inferno::flamegraph::from_lines(
-        &mut options,
-        collapsed.lines(),
-        &mut svg_bytes,
-    )
-    .map_err(|err| format!("Flamegraph rendering failed: {err}"))?;
+    inferno::flamegraph::from_lines(&mut options, collapsed.lines(), &mut svg_bytes)
+        .map_err(|err| format!("Flamegraph rendering failed: {err}"))?;
 
     let filename = format!("basilisk-{session_id}.flamegraph.svg");
     let path = output_dir.join(filename);
@@ -282,9 +277,7 @@ mod tests {
             .thread_stacks
             .insert(1, vec![vec![0, 1, 2], vec![0, 1]]);
         let _ = data.thread_weights.insert(1, vec![0.01, 0.01]);
-        let _ = data
-            .thread_names
-            .insert(1, "MainThread".to_owned());
+        let _ = data.thread_names.insert(1, "MainThread".to_owned());
 
         data.total_samples = 2;
 
@@ -292,53 +285,58 @@ mod tests {
     }
 
     #[test]
-    fn speedscope_json_valid_structure() {
+    fn speedscope_json_valid_structure() -> Result<(), String> {
         let data = make_test_data();
         let dir = std::env::temp_dir();
 
-        let result = export_speedscope(&data, "test-001", 12345, 5.2, &dir);
-        assert!(result.is_ok(), "export should succeed: {result:?}");
-
-        let result = result.expect("already checked");
+        let result = export_speedscope(&data, "test-001", 12345, 5.2, &dir)?;
         assert!(result.path.exists());
         assert_eq!(result.format, ExportFormat::Speedscope);
 
         // Parse and validate structure.
-        let contents = std::fs::read_to_string(&result.path).expect("read file");
+        let contents =
+            std::fs::read_to_string(&result.path).map_err(|err| format!("read file: {err}"))?;
         let json: serde_json::Value =
-            serde_json::from_str(&contents).expect("valid JSON");
+            serde_json::from_str(&contents).map_err(|err| format!("parse JSON: {err}"))?;
 
         assert!(json.get("$schema").is_some());
         assert!(json.get("shared").is_some());
         assert!(json.get("profiles").is_some());
 
-        let frames = json["shared"]["frames"].as_array().expect("frames array");
+        let frames = json
+            .get("shared")
+            .and_then(|s| s.get("frames"))
+            .and_then(serde_json::Value::as_array)
+            .ok_or("missing shared.frames array")?;
         assert_eq!(frames.len(), 3);
 
-        let profiles = json["profiles"].as_array().expect("profiles array");
+        let profiles = json
+            .get("profiles")
+            .and_then(serde_json::Value::as_array)
+            .ok_or("missing profiles array")?;
         assert_eq!(profiles.len(), 1); // one thread
 
         // Clean up.
         let _ = std::fs::remove_file(&result.path);
+        Ok(())
     }
 
     #[test]
-    fn flamegraph_svg_renders() {
+    fn flamegraph_svg_renders() -> Result<(), String> {
         let data = make_test_data();
         let dir = std::env::temp_dir();
 
-        let result = export_flamegraph(&data, "test-002", &dir);
-        assert!(result.is_ok(), "export should succeed: {result:?}");
-
-        let result = result.expect("already checked");
+        let result = export_flamegraph(&data, "test-002", &dir)?;
         assert!(result.path.exists());
         assert_eq!(result.format, ExportFormat::Flamegraph);
 
-        let contents = std::fs::read_to_string(&result.path).expect("read file");
+        let contents =
+            std::fs::read_to_string(&result.path).map_err(|err| format!("read file: {err}"))?;
         assert!(contents.contains("<svg"), "should be SVG");
 
         // Clean up.
         let _ = std::fs::remove_file(&result.path);
+        Ok(())
     }
 
     #[test]

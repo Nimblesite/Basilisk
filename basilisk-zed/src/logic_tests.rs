@@ -14,18 +14,17 @@ use super::*;
 #[test]
 fn profile_without_pid() {
     let (label, text) = slash_command_output("profile", &[]).expect("should succeed");
-    assert_eq!(label, "Profile Started");
-    assert!(text.contains("Profiling Started"));
+    assert_eq!(label, "CPU Profiling");
     assert!(text.contains("active Python process"));
     assert!(text.contains("py-spy"));
-    assert!(text.contains("/profstop"));
+    assert!(text.contains("basilisk.profiler.start"));
 }
 
 #[test]
 fn profile_with_pid() {
     let args = vec!["1234".to_string()];
     let (label, text) = slash_command_output("profile", &args).expect("should succeed");
-    assert_eq!(label, "Profile Started");
+    assert_eq!(label, "CPU Profiling");
     assert!(text.contains("PID `1234`"));
     assert!(text.contains("Speedscope"));
 }
@@ -33,8 +32,8 @@ fn profile_with_pid() {
 #[test]
 fn profstop_output() {
     let (label, text) = slash_command_output("profstop", &[]).expect("should succeed");
-    assert_eq!(label, "Profile Results");
-    assert!(text.contains("Profiling stopped"));
+    assert_eq!(label, "Stop Profiling");
+    assert!(text.contains("basilisk.profiler.stop"));
     assert!(text.contains("flamegraph"));
 }
 
@@ -42,7 +41,7 @@ fn profstop_output() {
 fn profsnapshot_output() {
     let (label, text) = slash_command_output("profsnapshot", &[]).expect("should succeed");
     assert_eq!(label, "Profile Snapshot");
-    assert!(text.contains("Snapshot captured"));
+    assert!(text.contains("basilisk.profiler.snapshot"));
     assert!(text.contains("continues"));
 }
 
@@ -50,15 +49,15 @@ fn profsnapshot_output() {
 fn memleak_output() {
     let (label, text) = slash_command_output("memleak", &[]).expect("should succeed");
     assert_eq!(label, "Memory Tracking");
-    assert!(text.contains("Tracking"));
-    assert!(text.contains("/memstop"));
+    assert!(text.contains("tracemalloc"));
+    assert!(text.contains("basilisk.memory.start"));
 }
 
 #[test]
 fn memstop_output() {
     let (label, text) = slash_command_output("memstop", &[]).expect("should succeed");
     assert_eq!(label, "Memory Report");
-    assert!(text.contains("stopped"));
+    assert!(text.contains("Stops"));
     assert!(text.contains("/memrefs"));
 }
 
@@ -68,7 +67,7 @@ fn memrefs_with_type() {
     let (label, text) = slash_command_output("memrefs", &args).expect("should succeed");
     assert_eq!(label, "Reference Graph");
     assert!(text.contains("DataFrame"));
-    assert!(text.contains("retention paths"));
+    assert!(text.contains("gc.get_referrers"));
 }
 
 #[test]
@@ -85,7 +84,7 @@ fn unknown_command_errors() {
     assert!(err.contains("nonexistent"));
 }
 
-// ── All six slash commands produce non-empty markdown ────────────────────
+// ── All slash commands produce non-empty markdown ────────────────────
 
 #[test]
 fn all_slash_commands_produce_output() {
@@ -137,7 +136,7 @@ fn slash_output_is_markdown() {
     }
 }
 
-// ── Slash command completions ────────────────────────────────────────────
+// ── Slash command completions ────────────────────────────────────────
 
 #[test]
 fn profile_completions() {
@@ -165,7 +164,7 @@ fn unknown_command_has_no_completions() {
     assert!(slash_completions("unknown").is_empty());
 }
 
-// ── DAP config building ─────────────────────────────────────────────────
+// ── DAP config building ─────────────────────────────────────────────
 
 #[test]
 fn build_dap_config_defaults() {
@@ -199,7 +198,7 @@ fn build_dap_config_with_values() {
     assert_eq!(config["cwd"], "/home/user/project");
 }
 
-// ── DAP request kind ────────────────────────────────────────────────────
+// ── DAP request kind ────────────────────────────────────────────────
 
 #[test]
 fn launch_by_default() {
@@ -239,7 +238,7 @@ fn unknown_request_kind_errors() {
     assert!(is_attach_request(&config).is_err());
 }
 
-// ── DAP scenario builders ───────────────────────────────────────────────
+// ── DAP scenario builders ───────────────────────────────────────────
 
 #[test]
 fn launch_scenario_fields() {
@@ -274,7 +273,7 @@ fn attach_scenario_no_pid() {
     assert_eq!(scenario["request"], "attach");
 }
 
-// ── Workspace configuration ─────────────────────────────────────────────
+// ── Workspace configuration ─────────────────────────────────────────
 
 #[test]
 fn default_config_has_inlay_hints() {
@@ -328,7 +327,7 @@ fn wrap_config_nests_under_basilisk() {
     assert_eq!(wrapped["basilisk"]["foo"], "bar");
 }
 
-// ── Binary resolution helpers ───────────────────────────────────────────
+// ── Binary resolution helpers ───────────────────────────────────────
 
 #[test]
 fn find_env_var_present() {
@@ -367,7 +366,7 @@ fn cargo_bin_path_trailing_slash() {
     );
 }
 
-// ── Version check ───────────────────────────────────────────────────────
+// ── Version check ───────────────────────────────────────────────────
 
 #[test]
 fn newer_major() {
@@ -406,7 +405,7 @@ fn v_prefix_same() {
     assert!(!is_newer_version("v0.1.0", "v0.1.0"));
 }
 
-// ── Test slash commands ─────────────────────────────────────────────────
+// ── Test slash commands ─────────────────────────────────────────────
 
 #[test]
 fn tests_discovery_workspace() {
@@ -480,7 +479,7 @@ fn tests_no_completions() {
     assert!(completions.is_empty());
 }
 
-// ── Test explorer workspace config ──────────────────────────────────────
+// ── Test explorer workspace config ──────────────────────────────────
 
 #[test]
 fn default_config_has_test_explorer() {
@@ -513,7 +512,7 @@ fn wrap_config_preserves_test_explorer() {
     assert_eq!(wrapped["basilisk"]["testExplorer"]["useUvRun"], false);
 }
 
-// ── Activity panel slash command tests ────────────────────────────────
+// ── Activity panel slash command tests ────────────────────────────
 
 #[test]
 fn modules_workspace_scope() {

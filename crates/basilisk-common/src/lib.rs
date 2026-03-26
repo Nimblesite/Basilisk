@@ -67,6 +67,19 @@ pub mod commands {
     /// List active profiling sessions.
     pub const PROFILER_LIST: &str = "basilisk.profiler.list";
 
+    /// Start memory tracking in the active debug session.
+    pub const MEMORY_START: &str = "basilisk.memory.start";
+    /// Take a memory allocation snapshot.
+    pub const MEMORY_SNAPSHOT: &str = "basilisk.memory.snapshot";
+    /// Compare two memory snapshots to find leaks.
+    pub const MEMORY_DIFF: &str = "basilisk.memory.diff";
+    /// Walk the reference graph for a specific object type.
+    pub const MEMORY_REFERENCES: &str = "basilisk.memory.references";
+    /// List objects of a given type with sizes and reference counts.
+    pub const MEMORY_OBJECTS_BY_TYPE: &str = "basilisk.memory.objectsByType";
+    /// Force garbage collection and report what was collected.
+    pub const MEMORY_GC_COLLECT: &str = "basilisk.memory.gcCollect";
+
     /// Command names advertised via `executeCommandProvider` capabilities.
     ///
     /// **The server is the single source of truth for commands.** Every command
@@ -103,6 +116,12 @@ pub mod commands {
         PROFILER_STOP,
         PROFILER_SNAPSHOT,
         PROFILER_LIST,
+        MEMORY_START,
+        MEMORY_SNAPSHOT,
+        MEMORY_DIFF,
+        MEMORY_REFERENCES,
+        MEMORY_OBJECTS_BY_TYPE,
+        MEMORY_GC_COLLECT,
     ];
 }
 
@@ -245,6 +264,18 @@ pub mod profiler_diagnostics {
     pub const FUNC: &str = "BSK-PROF-FUNC";
     /// GIL contention detected on a thread.
     pub const GIL: &str = "BSK-PROF-GIL";
+}
+
+/// Diagnostic code prefixes for memory profiling features.
+pub mod memory_diagnostics {
+    /// Memory allocation hotspot — high allocation volume at a source line.
+    pub const ALLOC: &str = "BSK-MEM-ALLOC";
+    /// Memory growth — allocation size increased between snapshots.
+    pub const GROWTH: &str = "BSK-MEM-GROWTH";
+    /// Suspected memory leak — consistent growth across multiple snapshots.
+    pub const LEAK: &str = "BSK-MEM-LEAK";
+    /// Reference cycle detected — objects with `__del__` in a cycle (uncollectable).
+    pub const CYCLE: &str = "BSK-MEM-CYCLE";
 }
 
 /// Diagnostic code ranges defined in the Basilisk specification.

@@ -225,6 +225,30 @@
         "icon": "$(debug-alt)"
       },
       {
+        "command": "basilisk.memoryStart",
+        "title": "Basilisk: Start Memory Tracking",
+        "category": "Basilisk",
+        "icon": "$(database)"
+      },
+      {
+        "command": "basilisk.memorySnapshot",
+        "title": "Basilisk: Take Memory Snapshot",
+        "category": "Basilisk",
+        "icon": "$(device-camera)"
+      },
+      {
+        "command": "basilisk.memoryStop",
+        "title": "Basilisk: Stop Memory Tracking",
+        "category": "Basilisk",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "basilisk.memoryReferences",
+        "title": "Basilisk: Show Reference Graph",
+        "category": "Basilisk",
+        "icon": "$(type-hierarchy)"
+      },
+      {
         "command": "basilisk.openWalkthrough",
         "title": "Basilisk: Getting Started",
         "category": "Basilisk"

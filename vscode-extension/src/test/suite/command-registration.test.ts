@@ -69,6 +69,10 @@ const MANIFEST_COMMANDS = [
     'basilisk.copyQualifiedName',
     'basilisk.toggleModuleExplorerView',
     'basilisk.filterModuleExplorer',
+    'basilisk.profileStart',
+    'basilisk.profileStop',
+    'basilisk.profileSnapshot',
+    'basilisk.profileAttachToDebug',
     'basilisk.openWalkthrough',
 ] as const;
 
@@ -109,6 +113,10 @@ const SERVER_COMMANDS = [
     'basilisk.runTestsCoverage',
     'basilisk.workspaceModules',
     'basilisk.typeHealth',
+    'basilisk.profiler.start',
+    'basilisk.profiler.stop',
+    'basilisk.profiler.snapshot',
+    'basilisk.profiler.list',
 ] as const;
 
 /** Assert that registering a command succeeds (it was NOT already registered). */

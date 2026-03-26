@@ -12,10 +12,11 @@ pub(super) mod commands;
 pub(super) mod document;
 pub(super) mod handlers;
 pub(super) mod init;
+pub(super) mod memory_handlers;
+pub(super) mod profiler_handlers;
 pub(super) mod refactor_commands;
 pub(super) mod rule_override;
 pub(super) mod test_handlers;
-pub(super) mod profiler_handlers;
 pub(super) mod uv_handlers;
 
 macro_rules! diaglog {

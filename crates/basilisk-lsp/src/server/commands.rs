@@ -11,11 +11,8 @@ use tracing::{debug, error, info, warn};
 
 use super::LspServer;
 
-/// Dispatch `workspace/executeCommand` to the appropriate handler.
-pub(super) async fn dispatch_execute_command(
-    server: &LspServer,
-    params: ExecuteCommandParams,
-) -> LspResult<Option<serde_json::Value>> {
+/// Log the incoming command for debugging.
+async fn log_command(server: &LspServer, params: &ExecuteCommandParams) {
     server
         .client
         .log_message(
@@ -27,6 +24,14 @@ pub(super) async fn dispatch_execute_command(
             ),
         )
         .await;
+}
+
+/// Dispatch `workspace/executeCommand` to the appropriate handler.
+pub(super) async fn dispatch_execute_command(
+    server: &LspServer,
+    params: ExecuteCommandParams,
+) -> LspResult<Option<serde_json::Value>> {
+    log_command(server, &params).await;
 
     match params.command.as_str() {
         basilisk_common::commands::ORGANIZE_IMPORTS => {
@@ -96,17 +101,17 @@ pub(super) async fn dispatch_execute_command(
         basilisk_common::commands::TYPE_HEALTH => {
             super::activity_panel::execute_type_health(server, &params.arguments).await
         }
-        basilisk_common::commands::PROFILER_START => {
-            super::profiler_handlers::execute_profiler_start(server, &params.arguments).await
-        }
-        basilisk_common::commands::PROFILER_STOP => {
-            super::profiler_handlers::execute_profiler_stop(server, &params.arguments).await
-        }
-        basilisk_common::commands::PROFILER_SNAPSHOT => {
-            super::profiler_handlers::execute_profiler_snapshot(server, &params.arguments).await
-        }
-        basilisk_common::commands::PROFILER_LIST => {
-            super::profiler_handlers::execute_profiler_list(server, &params.arguments).await
+        basilisk_common::commands::PROFILER_START
+        | basilisk_common::commands::PROFILER_STOP
+        | basilisk_common::commands::PROFILER_SNAPSHOT
+        | basilisk_common::commands::PROFILER_LIST
+        | basilisk_common::commands::MEMORY_START
+        | basilisk_common::commands::MEMORY_SNAPSHOT
+        | basilisk_common::commands::MEMORY_DIFF
+        | basilisk_common::commands::MEMORY_REFERENCES
+        | basilisk_common::commands::MEMORY_OBJECTS_BY_TYPE
+        | basilisk_common::commands::MEMORY_GC_COLLECT => {
+            dispatch_profiler_or_memory(server, &params.command, &params.arguments).await
         }
         unknown => {
             server
@@ -118,6 +123,47 @@ pub(super) async fn dispatch_execute_command(
                 .await;
             Ok(None)
         }
+    }
+}
+
+/// Dispatch profiler and memory commands to their respective handlers.
+async fn dispatch_profiler_or_memory(
+    server: &LspServer,
+    command: &str,
+    args: &[serde_json::Value],
+) -> LspResult<Option<serde_json::Value>> {
+    match command {
+        basilisk_common::commands::PROFILER_START => {
+            super::profiler_handlers::execute_profiler_start(server, args).await
+        }
+        basilisk_common::commands::PROFILER_STOP => {
+            super::profiler_handlers::execute_profiler_stop(server, args).await
+        }
+        basilisk_common::commands::PROFILER_SNAPSHOT => {
+            super::profiler_handlers::execute_profiler_snapshot(server, args).await
+        }
+        basilisk_common::commands::PROFILER_LIST => {
+            super::profiler_handlers::execute_profiler_list(server, args).await
+        }
+        basilisk_common::commands::MEMORY_START => {
+            super::memory_handlers::execute_memory_start(server, args).await
+        }
+        basilisk_common::commands::MEMORY_SNAPSHOT => {
+            super::memory_handlers::execute_memory_snapshot(server, args).await
+        }
+        basilisk_common::commands::MEMORY_DIFF => {
+            super::memory_handlers::execute_memory_diff(server, args).await
+        }
+        basilisk_common::commands::MEMORY_REFERENCES => {
+            super::memory_handlers::execute_memory_references(server, args).await
+        }
+        basilisk_common::commands::MEMORY_OBJECTS_BY_TYPE => {
+            super::memory_handlers::execute_memory_objects_by_type(server, args).await
+        }
+        basilisk_common::commands::MEMORY_GC_COLLECT => {
+            super::memory_handlers::execute_memory_gc_collect(server, args).await
+        }
+        _ => Ok(None),
     }
 }
 

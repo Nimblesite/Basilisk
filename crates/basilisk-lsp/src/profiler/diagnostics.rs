@@ -6,9 +6,7 @@
 
 use std::collections::HashMap;
 
-use tower_lsp::lsp_types::{
-    Diagnostic, DiagnosticSeverity, NumberOrString, Position, Range, Url,
-};
+use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, NumberOrString, Position, Range, Url};
 use tracing::info;
 
 use super::aggregator::{HotspotConfig, ProfileData};
@@ -28,10 +26,7 @@ pub type DiagnosticsByUri = HashMap<Url, Vec<Diagnostic>>;
 /// Returns diagnostics grouped by file URI, ready to be published via
 /// `textDocument/publishDiagnostics`.
 #[must_use]
-pub fn generate_diagnostics(
-    data: &ProfileData,
-    config: &HotspotConfig,
-) -> DiagnosticsByUri {
+pub fn generate_diagnostics(data: &ProfileData, config: &HotspotConfig) -> DiagnosticsByUri {
     let mut result: DiagnosticsByUri = HashMap::new();
 
     // Hot lines → BSK-PROF-LINE diagnostics.
@@ -131,12 +126,17 @@ mod tests {
     use super::*;
     use crate::profiler::aggregator::FunctionStats;
 
+    /// Helper to create a file URI, mapping the `()` error to a `String`.
+    fn file_uri(path: &str) -> Result<Url, String> {
+        Url::from_file_path(path).map_err(|()| format!("failed to create URI from {path}"))
+    }
+
     /// Build profile data with known hot spots for testing.
     fn make_test_profile() -> ProfileData {
-        let mut data = ProfileData::default();
-
-        // 100 samples total.
-        data.total_samples = 100;
+        let mut data = ProfileData {
+            total_samples: 100,
+            ..ProfileData::default()
+        };
 
         // Hot line: /tmp/test.py:42 with 40 hits.
         let _ = data
@@ -179,13 +179,15 @@ mod tests {
     }
 
     #[test]
-    fn generates_line_diagnostics() {
+    fn generates_line_diagnostics() -> Result<(), String> {
         let data = make_test_profile();
         let config = HotspotConfig::default();
         let diags = generate_diagnostics(&data, &config);
 
-        let uri = Url::from_file_path("/tmp/test.py").expect("valid path");
-        let file_diags = diags.get(&uri).expect("should have diagnostics");
+        let uri = file_uri("/tmp/test.py")?;
+        let file_diags = diags
+            .get(&uri)
+            .ok_or("should have diagnostics for /tmp/test.py")?;
 
         // Should have at least one BSK-PROF-LINE diagnostic.
         let line_diags: Vec<_> = file_diags
@@ -207,16 +209,20 @@ mod tests {
             assert_eq!(diag.severity, Some(DiagnosticSeverity::HINT));
             assert_eq!(diag.source.as_deref(), Some(SOURCE));
         }
+
+        Ok(())
     }
 
     #[test]
-    fn generates_function_diagnostics() {
+    fn generates_function_diagnostics() -> Result<(), String> {
         let data = make_test_profile();
         let config = HotspotConfig::default();
         let diags = generate_diagnostics(&data, &config);
 
-        let uri = Url::from_file_path("/tmp/test.py").expect("valid path");
-        let file_diags = diags.get(&uri).expect("should have diagnostics");
+        let uri = file_uri("/tmp/test.py")?;
+        let file_diags = diags
+            .get(&uri)
+            .ok_or("should have diagnostics for /tmp/test.py")?;
 
         let func_diags: Vec<_> = file_diags
             .iter()
@@ -233,11 +239,16 @@ mod tests {
         );
 
         // Check message contains function name.
-        let msg = &func_diags[0].message;
+        let msg = &func_diags
+            .first()
+            .ok_or("expected at least one function diagnostic")?
+            .message;
         assert!(
             msg.contains("process_data"),
             "message should contain function name"
         );
+
+        Ok(())
     }
 
     #[test]
@@ -248,16 +259,14 @@ mod tests {
     }
 
     #[test]
-    fn clear_diagnostics_empties_all() {
-        let uris = vec![
-            Url::from_file_path("/tmp/a.py").expect("valid"),
-            Url::from_file_path("/tmp/b.py").expect("valid"),
-        ];
+    fn clear_diagnostics_empties_all() -> Result<(), String> {
+        let uris = vec![file_uri("/tmp/a.py")?, file_uri("/tmp/b.py")?];
         let cleared = clear_diagnostics(&uris);
         assert_eq!(cleared.len(), 2);
         for diags in cleared.values() {
             assert!(diags.is_empty());
         }
+        Ok(())
     }
 
     #[test]

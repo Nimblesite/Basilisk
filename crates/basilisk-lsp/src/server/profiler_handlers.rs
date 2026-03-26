@@ -42,15 +42,10 @@ pub(super) async fn execute_profiler_start(
         .map(|p| u32::try_from(p).unwrap_or(0));
 
     let Some(target_pid) = pid else {
-        return Err(profiler_error(
-            -32001,
-            "Missing required parameter: pid",
-        ));
+        return Err(profiler_error(-32001, "Missing required parameter: pid"));
     };
 
-    let sample_rate = arg
-        .get("sampleRate")
-        .and_then(serde_json::Value::as_u64);
+    let sample_rate = arg.get("sampleRate").and_then(serde_json::Value::as_u64);
 
     let include_native = arg
         .get("includeNative")
@@ -134,7 +129,9 @@ pub(super) async fn execute_profiler_stop(
                 _ => crate::profiler::export::ExportFormat::Speedscope,
             };
 
-            let output_file = if format_str != "summary" {
+            let output_file = if format_str == "summary" {
+                None
+            } else {
                 match crate::profiler::export::export(
                     &result.data,
                     export_format,
@@ -149,19 +146,9 @@ pub(super) async fn execute_profiler_stop(
                         None
                     }
                 }
-            } else {
-                None
             };
 
-            // Publish profiling diagnostics.
-            let diag_map =
-                crate::profiler::diagnostics::generate_diagnostics(&result.data, &result.hotspot_config);
-            for (uri, diags) in &diag_map {
-                server
-                    .client
-                    .publish_diagnostics(uri.clone(), diags.clone(), None)
-                    .await;
-            }
+            publish_profiler_diagnostics(server, &result.data, &result.hotspot_config).await;
 
             server
                 .client
@@ -174,35 +161,8 @@ pub(super) async fn execute_profiler_stop(
                 )
                 .await;
 
-            let hot_funcs_json: Vec<serde_json::Value> = result
-                .hot_functions
-                .iter()
-                .take(10)
-                .map(|f| {
-                    serde_json::json!({
-                        "name": f.name,
-                        "file": f.file,
-                        "line": f.line,
-                        "samples": f.samples,
-                        "percentage": f.percentage,
-                        "selfPercentage": f.self_percentage,
-                    })
-                })
-                .collect();
-
-            let hot_lines_json: Vec<serde_json::Value> = result
-                .hot_lines
-                .iter()
-                .take(10)
-                .map(|l| {
-                    serde_json::json!({
-                        "file": l.file,
-                        "line": l.line,
-                        "samples": l.samples,
-                        "percentage": l.percentage,
-                    })
-                })
-                .collect();
+            let hot_funcs_json = build_hot_functions_json(&result.hot_functions);
+            let hot_lines_json = build_hot_lines_json(&result.hot_lines);
 
             Ok(Some(serde_json::json!({
                 "sessionId": result.session_id,
@@ -246,14 +206,7 @@ pub(super) async fn execute_profiler_snapshot(
     match server.profiler_manager.snapshot(session_id).await {
         Ok(result) => {
             // Publish diagnostics from snapshot.
-            let diag_map =
-                crate::profiler::diagnostics::generate_diagnostics(&result.data, &result.hotspot_config);
-            for (uri, diags) in &diag_map {
-                server
-                    .client
-                    .publish_diagnostics(uri.clone(), diags.clone(), None)
-                    .await;
-            }
+            publish_profiler_diagnostics(server, &result.data, &result.hotspot_config).await;
 
             server
                 .client
@@ -266,21 +219,7 @@ pub(super) async fn execute_profiler_snapshot(
                 )
                 .await;
 
-            let hot_funcs_json: Vec<serde_json::Value> = result
-                .hot_functions
-                .iter()
-                .take(10)
-                .map(|f| {
-                    serde_json::json!({
-                        "name": f.name,
-                        "file": f.file,
-                        "line": f.line,
-                        "samples": f.samples,
-                        "percentage": f.percentage,
-                        "selfPercentage": f.self_percentage,
-                    })
-                })
-                .collect();
+            let hot_funcs_json = build_hot_functions_json(&result.hot_functions);
 
             Ok(Some(serde_json::json!({
                 "sessionId": result.session_id,
@@ -295,6 +234,59 @@ pub(super) async fn execute_profiler_snapshot(
             Err(profiler_error(code, err.to_string()))
         }
     }
+}
+
+/// Publish profiling diagnostics for all files with hotspots.
+async fn publish_profiler_diagnostics(
+    server: &LspServer,
+    data: &crate::profiler::aggregator::ProfileData,
+    hotspot_config: &crate::profiler::aggregator::HotspotConfig,
+) {
+    let diag_map = crate::profiler::diagnostics::generate_diagnostics(data, hotspot_config);
+    for (uri, diags) in &diag_map {
+        server
+            .client
+            .publish_diagnostics(uri.clone(), diags.clone(), None)
+            .await;
+    }
+}
+
+/// Build JSON array for hot functions (top 10).
+fn build_hot_functions_json(
+    hot_functions: &[crate::profiler::aggregator::HotFunction],
+) -> Vec<serde_json::Value> {
+    hot_functions
+        .iter()
+        .take(10)
+        .map(|f| {
+            serde_json::json!({
+                "name": f.name,
+                "file": f.file,
+                "line": f.line,
+                "samples": f.samples,
+                "percentage": f.percentage,
+                "selfPercentage": f.self_percentage,
+            })
+        })
+        .collect()
+}
+
+/// Build JSON array for hot lines (top 10).
+fn build_hot_lines_json(
+    hot_lines: &[crate::profiler::aggregator::HotLine],
+) -> Vec<serde_json::Value> {
+    hot_lines
+        .iter()
+        .take(10)
+        .map(|l| {
+            serde_json::json!({
+                "file": l.file,
+                "line": l.line,
+                "samples": l.samples,
+                "percentage": l.percentage,
+            })
+        })
+        .collect()
 }
 
 /// Handle `basilisk.profiler.list` — list active profiling sessions.

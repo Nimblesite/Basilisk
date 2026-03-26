@@ -38,61 +38,93 @@ fn slash_profile(args: &[String]) -> (String, String) {
         None => "active Python process".to_string(),
     };
     let text = format!(
-        "## Profiling Started\n\n\
+        "## CPU Profiling\n\n\
          **Target:** {target}\n\n\
-         Collecting CPU samples via `py-spy`. \
-         Use `/profstop` to stop and view results, \
-         or `/profsnapshot` for a snapshot without stopping.\n\n\
-         Results will appear as:\n\
-         - **LSP diagnostics** — per-line timing hints in the editor\n\
-         - **Speedscope JSON** — opened in browser for flamegraph view"
+         Basilisk profiles Python processes via `py-spy` (zero overhead, no instrumentation).\n\n\
+         ### How to start\n\
+         Run `basilisk.profiler.start` from the command palette with `{{\"pid\": <PID>}}`.\n\
+         If profiling a debug session, the PID is auto-detected.\n\n\
+         ### Results\n\
+         - **Inline diagnostics** — `BSK-PROF-LINE` / `BSK-PROF-FUNC` hints on hot lines\n\
+         - **Speedscope JSON** — written to `/tmp/`, open in browser at speedscope.app\n\
+         - **Flamegraph SVG** — request `\"format\": \"flamegraph\"` on stop\n\n\
+         ### Commands\n\
+         | Command | Description |\n\
+         |---------|-------------|\n\
+         | `basilisk.profiler.start` | Begin sampling |\n\
+         | `basilisk.profiler.stop` | Stop and export results |\n\
+         | `basilisk.profiler.snapshot` | Snapshot without stopping |\n\
+         | `basilisk.profiler.list` | List active sessions |"
     );
-    ("Profile Started".to_string(), text)
+    ("CPU Profiling".to_string(), text)
 }
 
 fn slash_profstop() -> (String, String) {
     let text = "\
-        ## Profile Results\n\n\
-        Profiling stopped. Results sent via LSP diagnostics.\n\n\
-        | Metric | Value |\n\
-        |--------|-------|\n\
-        | Status | Stopped |\n\
-        | Output | LSP hint diagnostics + speedscope JSON |\n\n\
-        > Hot functions and per-line timing are visible as editor hints.\n\
-        > Open the speedscope file in your browser for a flamegraph."
+        ## Stop Profiling\n\n\
+        Run `basilisk.profiler.stop` from the command palette with:\n\
+        ```json\n\
+        {\"sessionId\": \"<session-id>\", \"format\": \"speedscope\"}\n\
+        ```\n\n\
+        ### Output formats\n\
+        | Format | Description |\n\
+        |--------|-------------|\n\
+        | `speedscope` | JSON for speedscope.app (default) |\n\
+        | `flamegraph` | SVG flamegraph via inferno |\n\
+        | `summary` | Text-only, no file export |\n\n\
+        ### What happens on stop\n\
+        1. Sampling thread stops, remaining samples drained\n\
+        2. Hot lines/functions computed (above 1%/2% threshold)\n\
+        3. `publishDiagnostics` sent for each profiled file — hints appear inline\n\
+        4. Export file written to temp directory\n\n\
+        > Open the speedscope JSON at `https://www.speedscope.app` for an interactive flamegraph."
         .to_string();
-    ("Profile Results".to_string(), text)
+    ("Stop Profiling".to_string(), text)
 }
 
 fn slash_profsnapshot() -> (String, String) {
     let text = "\
         ## Profile Snapshot\n\n\
-        Snapshot captured. **Profiling continues.**\n\n\
-        Results sent via LSP diagnostics. \
-        Use `/profstop` to stop, or `/profsnapshot` again for another snapshot."
+        Run `basilisk.profiler.snapshot` from the command palette.\n\
+        Takes a point-in-time snapshot without stopping the session.\n\n\
+        Diagnostics are published immediately for the snapshot data.\n\
+        Profiling continues — use `/profstop` to end the session.\n\n\
+        > Useful for checking hotspots during a long-running profiling session."
         .to_string();
     ("Profile Snapshot".to_string(), text)
 }
 
 fn slash_memleak() -> (String, String) {
     let text = "\
-        ## Memory Tracking Started\n\n\
-        Tracking object allocations via debug session.\n\n\
-        Use `/memstop` to stop and generate a leak report, \
-        or `/memrefs <TypeName>` to query retention paths for a specific type."
+        ## Memory Leak Tracking\n\n\
+        Tracks object allocations via `tracemalloc` injection into an active debug session.\n\n\
+        ### How to start\n\
+        Run `basilisk.memory.start` from the command palette.\n\
+        Requires an active debug session (debugpy) — the LSP injects Python code via DAP evaluate.\n\n\
+        ### Commands\n\
+        | Command | Description |\n\
+        |---------|-------------|\n\
+        | `basilisk.memory.start` | Begin tracking allocations |\n\
+        | `basilisk.memory.snapshot` | Capture allocation snapshot |\n\
+        | `basilisk.memory.diff` | Compare two snapshots for growth |\n\
+        | `basilisk.memory.references` | Walk object reference graph |\n\
+        | `basilisk.memory.gcCollect` | Force GC and report uncollectable |\n\n\
+        ### Diagnostics\n\
+        - `BSK-MEM-ALLOC` — top allocation sites (Hint)\n\
+        - `BSK-MEM-GROWTH` — memory growth detected (Warning)\n\
+        - `BSK-MEM-LEAK` — suspected leak (Warning)\n\
+        - `BSK-MEM-CYCLE` — reference cycle with `__del__` (Error)"
         .to_string();
     ("Memory Tracking".to_string(), text)
 }
 
 fn slash_memstop() -> (String, String) {
     let text = "\
-        ## Memory Leak Report\n\n\
-        Memory tracking stopped. Leak report sent via LSP diagnostics.\n\n\
-        | Metric | Value |\n\
-        |--------|-------|\n\
-        | Status | Stopped |\n\
-        | Output | LSP diagnostics with confidence scores |\n\n\
-        > Use `/memrefs <TypeName>` to inspect retention paths for specific types."
+        ## Stop Memory Tracking\n\n\
+        Stops `tracemalloc` injection and generates the final leak report.\n\n\
+        Diagnostics published for each file with significant allocations.\n\
+        Leak confidence: **Definite** > **High** > **Medium** > **Low**.\n\n\
+        > Use `/memrefs <TypeName>` to inspect retention paths for leaked types."
         .to_string();
     ("Memory Report".to_string(), text)
 }
@@ -101,9 +133,13 @@ fn slash_memrefs(args: &[String]) -> (String, String) {
     let type_name = args.first().map_or("(unknown)", String::as_str);
     let text = format!(
         "## Reference Graph: `{type_name}`\n\n\
-         Querying retention paths for `{type_name}`...\n\n\
-         Results will show the reference chain from GC roots \
-         to instances of `{type_name}`, helping identify why objects are not collected."
+         Run `basilisk.memory.references` with `{{\"targetType\": \"{type_name}\"}}`.\n\n\
+         Walks `gc.get_referrers()` from GC roots to instances of `{type_name}`.\n\n\
+         ### Output\n\
+         - **Nodes** — objects with type, size, repr\n\
+         - **Edges** — reference relationships with labels (`.attr`, `[key]`)\n\
+         - **Cycles** — detected via DFS, flagged as `BSK-MEM-CYCLE`\n\
+         - **Retention path** — human-readable chain from root to target"
     );
     ("Reference Graph".to_string(), text)
 }

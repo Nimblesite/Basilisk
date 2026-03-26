@@ -199,11 +199,7 @@ impl ProfileData {
         }
 
         // Compute total line samples across all files to get proper percentages.
-        let total_line_samples: u64 = self
-            .line_hits
-            .values()
-            .flat_map(HashMap::values)
-            .sum();
+        let total_line_samples: u64 = self.line_hits.values().flat_map(HashMap::values).sum();
 
         let mut result = Vec::new();
         for (file, lines) in &self.line_hits {
@@ -284,7 +280,7 @@ impl ProfileData {
 /// Calculate the percentage of `part` in `total` (as u64 → f64 safely).
 ///
 /// Uses intermediate `u32` conversion with saturation to avoid `as` casts.
-/// For profiling data, u32::MAX (4 billion samples) is more than sufficient.
+/// For profiling data, `u32::MAX` (4 billion samples) is more than sufficient.
 fn pct_of(part: u64, total: u64) -> f64 {
     let part_f = f64::from(u32::try_from(part).unwrap_or(u32::MAX));
     let total_f = f64::from(u32::try_from(total).unwrap_or(u32::MAX));
@@ -381,23 +377,25 @@ mod tests {
             1
         );
 
-        let leaf_stats = data
+        let leaf = data
             .function_stats
             .get("src/a.py")
             .and_then(|m| m.get("leaf_fn"));
-        assert!(leaf_stats.is_some());
-        let leaf = leaf_stats.expect("leaf_fn must exist");
-        assert_eq!(leaf.total_samples, 1);
-        assert_eq!(leaf.self_samples, 1);
+        assert!(leaf.is_some(), "leaf_fn must exist in function_stats");
+        if let Some(leaf) = leaf {
+            assert_eq!(leaf.total_samples, 1);
+            assert_eq!(leaf.self_samples, 1);
+        }
 
-        let caller_stats = data
+        let caller = data
             .function_stats
             .get("src/a.py")
             .and_then(|m| m.get("caller_fn"));
-        assert!(caller_stats.is_some());
-        let caller = caller_stats.expect("caller_fn must exist");
-        assert_eq!(caller.total_samples, 1);
-        assert_eq!(caller.self_samples, 0);
+        assert!(caller.is_some(), "caller_fn must exist in function_stats");
+        if let Some(caller) = caller {
+            assert_eq!(caller.total_samples, 1);
+            assert_eq!(caller.self_samples, 0);
+        }
     }
 
     #[test]

@@ -178,9 +178,11 @@ pub fn start_sampler(config: &SamplerConfig) -> Result<SamplerHandle, SamplerErr
     let join_handle = std::thread::Builder::new()
         .name(format!("profiler-pid-{target_pid}"))
         .spawn(move || {
-            sampler_loop(spy, sender, stop_clone, sample_interval, duration_limit);
+            sampler_loop(spy, &sender, &stop_clone, sample_interval, duration_limit);
         })
-        .map_err(|err| SamplerError::AttachFailed(format!("Failed to spawn sampler thread: {err}")))?;
+        .map_err(|err| {
+            SamplerError::AttachFailed(format!("Failed to spawn sampler thread: {err}"))
+        })?;
 
     Ok(SamplerHandle {
         stop_flag,
@@ -194,8 +196,8 @@ pub fn start_sampler(config: &SamplerConfig) -> Result<SamplerHandle, SamplerErr
 /// The main sampling loop, running on a dedicated OS thread.
 fn sampler_loop(
     mut spy: py_spy::PythonSpy,
-    sender: mpsc::Sender<SampleBatch>,
-    stop_flag: Arc<AtomicBool>,
+    sender: &mpsc::Sender<SampleBatch>,
+    stop_flag: &Arc<AtomicBool>,
     sample_interval: Duration,
     duration_limit: Option<Duration>,
 ) {
