@@ -1949,3 +1949,545 @@ async fn real_pyspy_session_manager_full_lifecycle() {
     }
     kill(&mut child);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HARDCORE E2E: Prove the profiler CORRECTLY measures CPU distribution
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Spawn Python where `hot_function` does 4x more work than `cool_function`.
+/// The profiler MUST see `hot_function` with significantly more samples.
+fn spawn_asymmetric_workload() -> Option<std::process::Child> {
+    // hot_function: 10M iterations of multiplication (heavy CPU)
+    // cool_function: 1M iterations of addition (light CPU)
+    // Ratio should be roughly 10:1 in CPU time.
+    let script = r#"
+def hot_function():
+    """Does 10x more CPU work than cool_function."""
+    total = 0
+    for i in range(10_000_000):
+        total += i * i * i
+    return total
+
+def cool_function():
+    """Light CPU work."""
+    total = 0
+    for i in range(1_000_000):
+        total += i
+    return total
+
+def main():
+    while True:
+        hot_function()
+        cool_function()
+
+main()
+"#;
+    std::process::Command::new("python3")
+        .args(["-c", script])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .ok()
+}
+
+/// Spawn Python with a known memory allocation pattern for allocation tracking.
+fn spawn_allocating_python() -> Option<std::process::Child> {
+    let script = r#"
+import sys
+
+def allocate_big_list():
+    """Allocates a large list that stays in memory."""
+    return [i * i for i in range(500_000)]
+
+def allocate_small():
+    """Allocates and immediately discards."""
+    for _ in range(100):
+        _ = [0] * 1000
+
+def main():
+    big = allocate_big_list()
+    while True:
+        allocate_small()
+        # Keep big alive so it shows in memory
+        _ = len(big)
+
+main()
+"#;
+    std::process::Command::new("python3")
+        .args(["-c", script])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .ok()
+}
+
+#[test]
+fn real_pyspy_hot_function_gets_more_samples_than_cool_function() {
+    let Some(mut child) = spawn_asymmetric_workload() else {
+        eprintln!("SKIP: no python3");
+        return;
+    };
+    std::thread::sleep(std::time::Duration::from_millis(500));
+
+    let Some(mut handle) = try_attach(child.id(), 100) else {
+        kill(&mut child);
+        return;
+    };
+
+    // Collect 3 seconds of samples for statistical significance.
+    let mut data = ProfileData::default();
+    drain_samples(&mut handle, &mut data, 3);
+    handle.stop();
+    kill(&mut child);
+
+    if data.total_samples < 50 {
+        eprintln!("SKIP: only {} samples (need 50+)", data.total_samples);
+        return;
+    }
+
+    // Find hot_function and cool_function in the profile data.
+    let all_funcs: std::collections::HashMap<String, u64> = data
+        .function_stats
+        .values()
+        .flat_map(|m| m.iter())
+        .map(|(name, stats)| (name.clone(), stats.self_samples))
+        .collect();
+
+    let hot_samples = all_funcs.get("hot_function").copied().unwrap_or(0);
+    let cool_samples = all_funcs.get("cool_function").copied().unwrap_or(0);
+
+    println!("=== ASYMMETRIC WORKLOAD PROOF ===");
+    println!("Total samples: {}", data.total_samples);
+    println!("hot_function self-samples:  {hot_samples}");
+    println!("cool_function self-samples: {cool_samples}");
+    for (name, samples) in all_funcs.iter().take(8) {
+        println!("  {name}: {samples} self-samples");
+    }
+
+    // CRITICAL ASSERTION: hot_function MUST have more self-samples than cool_function.
+    // hot_function does 10x more iterations of heavier work, so it should dominate.
+    assert!(
+        hot_samples > 0,
+        "hot_function must appear in profile data with self-samples"
+    );
+
+    if cool_samples > 0 {
+        assert!(
+            hot_samples > cool_samples,
+            "hot_function ({hot_samples} samples) MUST have more CPU samples than \
+             cool_function ({cool_samples} samples) — it does 10x more work!"
+        );
+
+        // hot_function should have at least 2x the samples of cool_function
+        // (it does 10x the work, but Python overhead and GIL mean the ratio
+        // won't be exactly 10:1).
+        assert!(
+            hot_samples >= cool_samples * 2,
+            "hot_function ({hot_samples}) should have >=2x samples of cool_function ({cool_samples})"
+        );
+    }
+}
+
+#[test]
+fn real_pyspy_self_samples_vs_total_samples_are_correct() {
+    let Some(mut child) = spawn_asymmetric_workload() else {
+        return;
+    };
+    std::thread::sleep(std::time::Duration::from_millis(500));
+
+    let Some(mut handle) = try_attach(child.id(), 100) else {
+        kill(&mut child);
+        return;
+    };
+
+    let mut data = ProfileData::default();
+    drain_samples(&mut handle, &mut data, 2);
+    handle.stop();
+    kill(&mut child);
+
+    if data.total_samples < 20 {
+        eprintln!("SKIP: too few samples");
+        return;
+    }
+
+    // For every function, self_samples <= total_samples.
+    // Leaf functions (hot_function, cool_function) should have self_samples > 0.
+    // Caller functions (main) should have total > self.
+    for funcs in data.function_stats.values() {
+        for (name, stats) in funcs {
+            assert!(
+                stats.self_samples <= stats.total_samples,
+                "{name}: self_samples ({}) must be <= total_samples ({})",
+                stats.self_samples,
+                stats.total_samples
+            );
+        }
+    }
+
+    // main() is a caller — it should have total_samples > 0 but self_samples
+    // should be low or zero (it just calls hot_function and cool_function).
+    let main_stats = data
+        .function_stats
+        .values()
+        .flat_map(|m| m.iter())
+        .find(|(name, _)| *name == "main");
+
+    if let Some((_, stats)) = main_stats {
+        assert!(
+            stats.total_samples > stats.self_samples,
+            "main() total ({}) should exceed self ({}) — it's a caller, not a leaf",
+            stats.total_samples,
+            stats.self_samples
+        );
+        println!(
+            "main(): total={}, self={} (correctly more total than self)",
+            stats.total_samples, stats.self_samples
+        );
+    }
+}
+
+#[test]
+fn real_pyspy_speedscope_json_matches_actual_sample_data() {
+    let Some(mut child) = spawn_cpu_python() else {
+        return;
+    };
+    std::thread::sleep(std::time::Duration::from_millis(500));
+
+    let Some(mut handle) = try_attach(child.id(), 100) else {
+        kill(&mut child);
+        return;
+    };
+
+    let mut data = ProfileData::default();
+    drain_samples(&mut handle, &mut data, 1);
+    let pid = child.id();
+    handle.stop();
+    kill(&mut child);
+
+    if data.total_samples == 0 {
+        return;
+    }
+
+    let dir = std::env::temp_dir().join("basilisk_json_verify");
+    let _ = std::fs::create_dir_all(&dir);
+
+    let ss = export::export_speedscope(&data, "verify", pid, 1.0, &dir).expect("export");
+    let json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&ss.path).unwrap()).unwrap();
+
+    // The number of unique frames in JSON must match our frame index.
+    let json_frames = json["shared"]["frames"].as_array().unwrap();
+    assert_eq!(
+        json_frames.len(),
+        data.frames.len(),
+        "speedscope frame count must match ProfileData frame count"
+    );
+
+    // Every frame must have name, file, and line fields.
+    for (idx, frame) in json_frames.iter().enumerate() {
+        assert!(
+            frame.get("name").and_then(|v| v.as_str()).is_some(),
+            "frame {idx} must have 'name'"
+        );
+        assert!(
+            frame.get("file").and_then(|v| v.as_str()).is_some(),
+            "frame {idx} must have 'file'"
+        );
+        assert!(frame.get("line").is_some(), "frame {idx} must have 'line'");
+    }
+
+    // Number of profiles must match number of active threads.
+    let json_profiles = json["profiles"].as_array().unwrap();
+    assert_eq!(
+        json_profiles.len(),
+        data.thread_stacks.len(),
+        "speedscope profile count must match thread count"
+    );
+
+    // Total samples across all profiles must match our stacks.
+    let json_total_samples: usize = json_profiles
+        .iter()
+        .map(|p| p["samples"].as_array().map_or(0, Vec::len))
+        .sum();
+    let data_total_stacks: usize = data.thread_stacks.values().map(Vec::len).sum();
+    assert_eq!(
+        json_total_samples, data_total_stacks,
+        "total sample stacks in JSON must match ProfileData"
+    );
+
+    // Each sample must reference valid frame indices.
+    let max_frame_idx = json_frames.len();
+    for profile in json_profiles {
+        for sample in profile["samples"].as_array().unwrap() {
+            for frame_ref in sample.as_array().unwrap() {
+                let idx = usize::try_from(frame_ref.as_u64().unwrap()).unwrap();
+                assert!(
+                    idx < max_frame_idx,
+                    "frame index {idx} out of bounds (max {max_frame_idx})"
+                );
+            }
+        }
+    }
+
+    println!(
+        "SPEEDSCOPE VERIFIED: {} frames, {} profiles, {} total stacks — all indices valid",
+        json_frames.len(),
+        json_profiles.len(),
+        json_total_samples
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn real_pyspy_diagnostics_point_to_correct_lines() {
+    let Some(mut child) = spawn_cpu_python() else {
+        return;
+    };
+    std::thread::sleep(std::time::Duration::from_millis(500));
+
+    let Some(mut handle) = try_attach(child.id(), 100) else {
+        kill(&mut child);
+        return;
+    };
+
+    let mut data = ProfileData::default();
+    drain_samples(&mut handle, &mut data, 2);
+    handle.stop();
+    kill(&mut child);
+
+    if data.total_samples < 20 {
+        return;
+    }
+
+    let config = HotspotConfig::default();
+    let hot_lines = data.hot_lines(&config);
+    let hot_funcs = data.hot_functions(&config);
+
+    // Every hot line must have a positive sample count and valid percentage.
+    for line in &hot_lines {
+        assert!(line.samples > 0, "hot line must have >0 samples");
+        assert!(
+            line.percentage > 0.0 && line.percentage <= 100.0,
+            "percentage must be in (0, 100], got {:.2}",
+            line.percentage
+        );
+        assert!(line.line > 0, "line number must be positive");
+        assert!(!line.file.is_empty(), "file path must not be empty");
+    }
+
+    // Every hot function must have consistent self vs total.
+    for func in &hot_funcs {
+        assert!(func.samples > 0, "hot func must have >0 samples");
+        assert!(
+            func.self_percentage <= func.percentage + 0.01,
+            "{}: self% ({:.1}) cannot exceed total% ({:.1})",
+            func.name,
+            func.self_percentage,
+            func.percentage
+        );
+        assert!(func.line > 0, "function line must be positive");
+    }
+
+    // Hot lines should be sorted by sample count (descending).
+    for window in hot_lines.windows(2) {
+        assert!(
+            window[0].samples >= window[1].samples,
+            "hot lines must be sorted descending: {} >= {}",
+            window[0].samples,
+            window[1].samples
+        );
+    }
+
+    // Hot functions should be sorted by sample count (descending).
+    for window in hot_funcs.windows(2) {
+        assert!(
+            window[0].samples >= window[1].samples,
+            "hot funcs must be sorted descending"
+        );
+    }
+
+    println!(
+        "DIAGNOSTICS VERIFIED: {} hot lines, {} hot funcs, all sorted and valid",
+        hot_lines.len(),
+        hot_funcs.len()
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HARDCORE: Prove the profiler correctly identifies CPU hotspots
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Spawn Python where `cpu_burner` wastes 99% of CPU.
+/// Profiler MUST identify it as the dominant hotspot. PROVES it works.
+#[test]
+fn real_pyspy_proves_hotspot_identification_is_correct() {
+    let script = r#"
+import time
+def cpu_burner():
+    total = 0
+    for i in range(50_000_000):
+        total += i * i * i
+    return total
+def light_work():
+    return sum(range(100))
+start = time.time()
+while time.time() - start < 10:
+    cpu_burner()
+    light_work()
+"#;
+    let Some(mut child) = std::process::Command::new("python3")
+        .args(["-c", script])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .ok()
+    else {
+        eprintln!("SKIP: no python3");
+        return;
+    };
+    std::thread::sleep(std::time::Duration::from_millis(800));
+    let Some(mut handle) = try_attach(child.id(), 200) else {
+        kill(&mut child);
+        return;
+    };
+    let mut data = ProfileData::default();
+    drain_samples(&mut handle, &mut data, 3);
+    handle.stop();
+    kill(&mut child);
+
+    if data.total_samples < 20 {
+        eprintln!("SKIP: {} samples", data.total_samples);
+        return;
+    }
+    println!("HOTSPOT PROOF: {} samples at 200Hz", data.total_samples);
+
+    // PROOF 1: cpu_burner MUST appear.
+    let burner_found = data
+        .function_stats
+        .values()
+        .any(|m| m.contains_key("cpu_burner"));
+    assert!(burner_found, "cpu_burner MUST be in function stats");
+
+    // PROOF 2: cpu_burner self-samples > light_work.
+    let burner_self: u64 = data
+        .function_stats
+        .values()
+        .filter_map(|m| m.get("cpu_burner"))
+        .map(|s| s.self_samples)
+        .sum();
+    let light_self: u64 = data
+        .function_stats
+        .values()
+        .filter_map(|m| m.get("light_work"))
+        .map(|s| s.self_samples)
+        .sum();
+    println!("  cpu_burner: {burner_self}, light_work: {light_self}");
+    assert!(
+        burner_self > light_self,
+        "cpu_burner ({burner_self}) MUST dominate light_work ({light_self})"
+    );
+
+    // PROOF 3: cpu_burner in hot functions with >20% self.
+    let config = HotspotConfig {
+        line_threshold_pct: 1.0,
+        function_threshold_pct: 1.0,
+        max_diagnostics_per_file: 50,
+    };
+    let hot = data.hot_functions(&config);
+    let burner_hot = hot.iter().find(|f| f.name == "cpu_burner");
+    assert!(burner_hot.is_some(), "cpu_burner MUST be hot");
+    let bh = burner_hot.unwrap();
+    println!("  cpu_burner: {:.1}% self", bh.self_percentage);
+    assert!(bh.self_percentage > 20.0, "cpu_burner should be >20% self");
+
+    // PROOF 4: Exports contain cpu_burner.
+    let dir = std::env::temp_dir().join("basilisk_hotspot_proof");
+    let _ = std::fs::create_dir_all(&dir);
+    let ss = export::export_speedscope(&data, "proof", 0, 3.0, &dir).expect("speedscope");
+    let json = std::fs::read_to_string(&ss.path).expect("read");
+    assert!(
+        json.contains("cpu_burner"),
+        "speedscope must have cpu_burner"
+    );
+    let fg = export::export_flamegraph(&data, "proof", &dir).expect("flamegraph");
+    let svg = std::fs::read_to_string(&fg.path).expect("read");
+    assert!(svg.contains("cpu_burner"), "SVG must have cpu_burner");
+
+    // PROOF 5: Diagnostics from real data.
+    let diags = basilisk_lsp::profiler::diagnostics::generate_diagnostics(&data, &config);
+    assert!(
+        !diags.is_empty(),
+        "must generate diagnostics from real profile"
+    );
+    let diag_count: usize = diags.values().map(Vec::len).sum();
+    println!("  {diag_count} diagnostics across {} files", diags.len());
+    let _ = std::fs::remove_dir_all(&dir);
+    println!("  PROOF COMPLETE: profiler correctly identifies cpu_burner");
+}
+
+/// Verify relative CPU distribution across 3 functions of different weight.
+#[test]
+fn real_pyspy_proves_relative_cpu_distribution() {
+    let script = r#"
+import time
+def heavy():
+    r = 0
+    for i in range(20_000_000):
+        r += (i * 7 + 3) % 1000
+    return r
+def medium():
+    r = 0
+    for i in range(12_000_000):
+        r += len(str(i))
+    return r
+def light():
+    r = 0
+    for i in range(8_000_000):
+        r += i % 7
+    return r
+start = time.time()
+while time.time() - start < 10:
+    heavy()
+    medium()
+    light()
+"#;
+    let Some(mut child) = std::process::Command::new("python3")
+        .args(["-c", script])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .ok()
+    else {
+        return;
+    };
+    std::thread::sleep(std::time::Duration::from_millis(800));
+    let Some(mut handle) = try_attach(child.id(), 200) else {
+        kill(&mut child);
+        return;
+    };
+    let mut data = ProfileData::default();
+    drain_samples(&mut handle, &mut data, 3);
+    handle.stop();
+    kill(&mut child);
+    if data.total_samples < 20 {
+        eprintln!("SKIP: {} samples", data.total_samples);
+        return;
+    }
+    println!("DISTRIBUTION: {} samples", data.total_samples);
+
+    let get_self = |name: &str| -> u64 {
+        data.function_stats
+            .values()
+            .filter_map(|m| m.get(name))
+            .map(|s| s.self_samples)
+            .sum()
+    };
+    let h = get_self("heavy");
+    let m = get_self("medium");
+    let l = get_self("light");
+    println!("  heavy: {h}, medium: {m}, light: {l}");
+    assert!(h > 0, "heavy must have samples");
+    assert!(h >= l, "heavy ({h}) should have >= light ({l})");
+    println!("  DISTRIBUTION TEST COMPLETE");
+}

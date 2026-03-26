@@ -23,6 +23,8 @@ pub mod sampler;
 mod benchmarks;
 #[cfg(test)]
 mod pipeline_tests;
+#[cfg(test)]
+mod scenario_tests;
 
 use std::collections::HashMap;
 use std::time::{Instant, SystemTime};
