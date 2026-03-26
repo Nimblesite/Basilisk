@@ -260,6 +260,21 @@ pub(super) async fn did_change_configuration(
         return;
     };
 
+    // Check whether the mode actually changed — skip the expensive write
+    // lock + workspace scan if it hasn't.  The background scan spawned by
+    // `initialized()` holds a READ lock on the index; acquiring a WRITE
+    // lock here would block the entire message loop until that scan
+    // finishes, preventing `textDocument/didOpen` and other requests from
+    // being processed.
+    let current_mode = {
+        let guard = server.index.read().await;
+        guard.as_ref().map(|idx| idx.mode)
+    };
+    if current_mode == Some(new_mode) {
+        info!(?new_mode, "did_change_configuration: mode unchanged, skipping scan");
+        return;
+    }
+
     // Update the mode on the index.
     {
         let mut guard = server.index.write().await;
