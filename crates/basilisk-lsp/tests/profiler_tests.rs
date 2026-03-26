@@ -1003,3 +1003,619 @@ fn profile_error_codes_are_negative() {
         assert!(code < 0, "error code should be negative, got: {code}");
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FULL PIPELINE E2E TESTS
+// These test the ENTIRE profiling pipeline end-to-end:
+// py-spy traces → aggregate → hot spots → export → diagnostics → verify
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Simulate a realistic multi-file Python web application being profiled:
+/// - main.py calls handle_request
+/// - handle_request calls parse_json + query_db + render_template
+/// - parse_json is the hotspot (called from tight loop)
+/// - query_db has moderate CPU usage
+/// - render_template is cool
+///
+/// This creates 500 samples across 3 threads, then verifies the entire
+/// pipeline produces correct hotspot identification, valid exports, and
+/// properly formatted diagnostics.
+#[test]
+fn full_pipeline_realistic_web_app_profile() {
+    use basilisk_lsp::profiler::diagnostics;
+
+    let mut data = ProfileData::default();
+    let sample_weight = 0.01; // 100 Hz
+
+    // Simulate 500 sampling ticks with realistic distribution.
+    for tick in 0..500 {
+        let mut traces = Vec::new();
+
+        // Thread 1 (MainThread): handle_request → parse_json (hot path).
+        // parse_json is the leaf 60% of the time.
+        if tick % 5 < 3 {
+            traces.push(make_trace(
+                1,
+                true,
+                vec![
+                    ("parse_json", "/app/src/parser.py", 42),
+                    ("handle_request", "/app/src/views.py", 15),
+                    ("main", "/app/main.py", 8),
+                ],
+            ));
+        } else if tick % 5 == 3 {
+            // query_db is the leaf 20% of the time.
+            traces.push(make_trace(
+                1,
+                true,
+                vec![
+                    ("query_db", "/app/src/database.py", 78),
+                    ("handle_request", "/app/src/views.py", 20),
+                    ("main", "/app/main.py", 8),
+                ],
+            ));
+        } else {
+            // render_template is the leaf 20% of the time.
+            traces.push(make_trace(
+                1,
+                true,
+                vec![
+                    ("render_template", "/app/src/templates.py", 33),
+                    ("handle_request", "/app/src/views.py", 25),
+                    ("main", "/app/main.py", 8),
+                ],
+            ));
+        }
+
+        // Thread 2 (Worker): background_task (always active).
+        traces.push(make_trace(
+            2,
+            true,
+            vec![("background_task", "/app/src/worker.py", 12)],
+        ));
+
+        // Thread 3 (GC): idle most of the time, active 5%.
+        let gc_active = tick % 20 == 0;
+        traces.push(make_trace(
+            3,
+            gc_active,
+            vec![("gc_collect", "/app/src/gc_helper.py", 5)],
+        ));
+
+        data.ingest_traces(&traces, sample_weight, false);
+    }
+
+    // ─── Verify aggregation results ──────────────────────────────
+    assert_eq!(data.total_samples, 500, "should have 500 sample ticks");
+
+    // Thread names.
+    assert!(data.thread_names.contains_key(&1), "thread 1 should exist");
+    assert!(data.thread_names.contains_key(&2), "thread 2 should exist");
+    assert!(data.thread_names.contains_key(&3), "thread 3 should exist");
+
+    // Thread sample counts.
+    assert!(
+        data.thread_samples.get(&1).copied().unwrap_or(0) > 0,
+        "thread 1 should have samples"
+    );
+    assert!(
+        data.thread_samples.get(&2).copied().unwrap_or(0) > 0,
+        "thread 2 should have samples"
+    );
+
+    // Line hits: parser.py:42 should be the hottest line.
+    let parser_hits = data
+        .line_hits
+        .get("/app/src/parser.py")
+        .and_then(|m| m.get(&42))
+        .copied()
+        .unwrap_or(0);
+    assert!(
+        parser_hits >= 200,
+        "parser.py:42 should have 300 hits (60% of 500), got {parser_hits}"
+    );
+
+    // Function stats: parse_json should have the most self_samples.
+    let parse_json_stats = data
+        .function_stats
+        .get("/app/src/parser.py")
+        .and_then(|m| m.get("parse_json"))
+        .expect("parse_json should have stats");
+    assert!(
+        parse_json_stats.self_samples >= 200,
+        "parse_json self_samples should be ~300, got {}",
+        parse_json_stats.self_samples
+    );
+    assert!(
+        parse_json_stats.total_samples >= 200,
+        "parse_json total_samples should be ~300, got {}",
+        parse_json_stats.total_samples
+    );
+
+    // handle_request should have high total but low self (it's a caller).
+    let handle_request_stats = data
+        .function_stats
+        .get("/app/src/views.py")
+        .and_then(|m| m.get("handle_request"))
+        .expect("handle_request should have stats");
+    assert!(
+        handle_request_stats.total_samples >= 400,
+        "handle_request total should be ~500 (appears in all stacks), got {}",
+        handle_request_stats.total_samples
+    );
+    assert_eq!(
+        handle_request_stats.self_samples, 0,
+        "handle_request should have 0 self samples (never the leaf)"
+    );
+
+    // ─── Verify hot spots ────────────────────────────────────────
+    let config = HotspotConfig::default();
+    let hot_lines = data.hot_lines(&config);
+    let hot_funcs = data.hot_functions(&config);
+
+    assert!(
+        !hot_lines.is_empty(),
+        "should identify hot lines in a 500-sample profile"
+    );
+    assert!(
+        !hot_funcs.is_empty(),
+        "should identify hot functions in a 500-sample profile"
+    );
+
+    // parse_json's line should be the hottest.
+    let hottest_line = &hot_lines[0];
+    assert_eq!(
+        hottest_line.file, "/app/src/parser.py",
+        "hottest line should be in parser.py"
+    );
+    assert_eq!(hottest_line.line, 42, "hottest line should be line 42");
+    assert!(
+        hottest_line.percentage > 10.0,
+        "hottest line should be >10%, got {:.1}%",
+        hottest_line.percentage
+    );
+
+    // parse_json or background_task should be the hottest function.
+    let hottest_func = &hot_funcs[0];
+    assert!(
+        hottest_func.name == "parse_json" || hottest_func.name == "background_task",
+        "hottest function should be parse_json or background_task, got {}",
+        hottest_func.name
+    );
+
+    // ─── Verify speedscope export ────────────────────────────────
+    let output_dir = std::env::temp_dir().join("basilisk-pipeline-test");
+    let _ = std::fs::create_dir_all(&output_dir);
+
+    let speedscope_result =
+        export::export_speedscope(&data, "pipeline-test", 12345, 5.0, &output_dir);
+    assert!(
+        speedscope_result.is_ok(),
+        "speedscope export should succeed: {:?}",
+        speedscope_result.err()
+    );
+
+    let speedscope_export = speedscope_result.unwrap();
+    assert!(
+        speedscope_export.path.exists(),
+        "speedscope file should exist on disk"
+    );
+
+    let speedscope_json: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(&speedscope_export.path).expect("read speedscope"),
+    )
+    .expect("parse speedscope JSON");
+
+    // Validate speedscope structure.
+    assert!(
+        speedscope_json.get("$schema").is_some(),
+        "should have $schema"
+    );
+    let shared_frames = speedscope_json["shared"]["frames"]
+        .as_array()
+        .expect("shared.frames should be array");
+    assert!(
+        shared_frames.len() >= 5,
+        "should have at least 5 unique frames (parse_json, query_db, render_template, handle_request, main, background_task, gc_collect), got {}",
+        shared_frames.len()
+    );
+
+    let profiles = speedscope_json["profiles"]
+        .as_array()
+        .expect("profiles should be array");
+    assert!(
+        profiles.len() >= 2,
+        "should have at least 2 thread profiles (thread 1 + thread 2), got {}",
+        profiles.len()
+    );
+
+    // Verify each profile has samples and weights.
+    for (idx, profile) in profiles.iter().enumerate() {
+        let samples = profile["samples"]
+            .as_array()
+            .unwrap_or(&Vec::new())
+            .len();
+        let weights = profile["weights"]
+            .as_array()
+            .unwrap_or(&Vec::new())
+            .len();
+        assert_eq!(
+            samples, weights,
+            "profile {idx}: samples count should equal weights count"
+        );
+        assert!(
+            samples > 0,
+            "profile {idx}: should have at least 1 sample"
+        );
+    }
+
+    // ─── Verify flamegraph SVG export ────────────────────────────
+    let flamegraph_result = export::export_flamegraph(&data, "pipeline-test", &output_dir);
+    assert!(
+        flamegraph_result.is_ok(),
+        "flamegraph export should succeed: {:?}",
+        flamegraph_result.err()
+    );
+
+    let flamegraph_export = flamegraph_result.unwrap();
+    assert!(
+        flamegraph_export.path.exists(),
+        "flamegraph SVG should exist on disk"
+    );
+
+    let svg_content =
+        std::fs::read_to_string(&flamegraph_export.path).expect("read flamegraph SVG");
+    assert!(svg_content.contains("<svg"), "should be valid SVG");
+    assert!(
+        svg_content.contains("parse_json"),
+        "SVG should contain parse_json function name"
+    );
+    assert!(
+        svg_content.contains("handle_request"),
+        "SVG should contain handle_request function name"
+    );
+
+    // ─── Verify diagnostics generation ───────────────────────────
+    let diag_map = diagnostics::generate_diagnostics(&data, &config);
+
+    assert!(
+        !diag_map.is_empty(),
+        "should generate diagnostics for at least one file"
+    );
+
+    // Find diagnostics for parser.py.
+    let parser_diags: Vec<_> = diag_map
+        .iter()
+        .filter(|(uri, _)| uri.path().contains("parser.py"))
+        .collect();
+    assert!(
+        !parser_diags.is_empty(),
+        "should have diagnostics for parser.py"
+    );
+
+    // Check diagnostic message format.
+    for (_, diags) in &parser_diags {
+        for diag in diags.iter() {
+            assert_eq!(
+                diag.source.as_deref(),
+                Some("basilisk-profiler"),
+                "diagnostic source should be basilisk-profiler"
+            );
+            assert!(
+                diag.message.contains("CPU") || diag.message.contains("Hot"),
+                "diagnostic message should mention CPU or Hot, got: {}",
+                diag.message
+            );
+            assert!(
+                diag.severity.is_some(),
+                "diagnostic should have a severity"
+            );
+        }
+    }
+
+    // ─── Verify profile diff between two sessions ────────────────
+    let mut data_after_optimization = ProfileData::default();
+    // After "optimizing" parse_json, it's now only 20% instead of 60%.
+    for tick in 0..500 {
+        let mut traces = Vec::new();
+        if tick % 5 == 0 {
+            traces.push(make_trace(
+                1,
+                true,
+                vec![
+                    ("parse_json", "/app/src/parser.py", 42),
+                    ("handle_request", "/app/src/views.py", 15),
+                    ("main", "/app/main.py", 8),
+                ],
+            ));
+        } else {
+            traces.push(make_trace(
+                1,
+                true,
+                vec![
+                    ("query_db", "/app/src/database.py", 78),
+                    ("handle_request", "/app/src/views.py", 20),
+                    ("main", "/app/main.py", 8),
+                ],
+            ));
+        }
+        traces.push(make_trace(
+            2,
+            true,
+            vec![("background_task", "/app/src/worker.py", 12)],
+        ));
+        data_after_optimization.ingest_traces(&traces, sample_weight, false);
+    }
+
+    let diff_result =
+        export::export_profile_diff(&data, &data_after_optimization, &output_dir);
+    assert!(
+        diff_result.is_ok(),
+        "profile diff export should succeed"
+    );
+
+    let diff_path = diff_result.unwrap().path;
+    assert!(diff_path.exists(), "diff JSON file should exist");
+
+    let diff_json: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(&diff_path).expect("read diff"),
+    )
+    .expect("parse diff JSON");
+
+    assert!(
+        diff_json.get("hotter").is_some(),
+        "diff should have 'hotter' array"
+    );
+    assert!(
+        diff_json.get("cooler").is_some(),
+        "diff should have 'cooler' array"
+    );
+    assert!(
+        diff_json.get("unchanged").is_some(),
+        "diff should have 'unchanged' array"
+    );
+
+    // parse_json should be cooler after optimization.
+    let cooler = diff_json["cooler"]
+        .as_array()
+        .expect("cooler should be array");
+    let parse_json_cooler = cooler
+        .iter()
+        .find(|entry| entry["name"].as_str() == Some("parse_json"));
+    assert!(
+        parse_json_cooler.is_some(),
+        "parse_json should appear in cooler list after optimization"
+    );
+
+    // query_db should be hotter (now gets more relative time).
+    let hotter = diff_json["hotter"]
+        .as_array()
+        .expect("hotter should be array");
+    let query_db_hotter = hotter
+        .iter()
+        .find(|entry| entry["name"].as_str() == Some("query_db"));
+    assert!(
+        query_db_hotter.is_some(),
+        "query_db should appear in hotter list after optimization"
+    );
+
+    // ─── Cleanup ─────────────────────────────────────────────────
+    let _ = std::fs::remove_dir_all(&output_dir);
+}
+
+/// Test memory profiling pipeline: snapshot parsing → diff → leak detection → diagnostics.
+#[test]
+fn full_pipeline_memory_profiling_leak_detection() {
+    use basilisk_lsp::profiler::memory::diagnostics as mem_diag;
+
+    // Simulate 3 memory snapshots showing a cache growing over time.
+    let snapshot_output_1 = r#"debug output line 1
+__BASILISK_MEM__{"current": 10000000, "peak": 10000000, "gcObjects": 5000, "gcCounts": [100, 10, 1], "stats": [{"file": "/app/src/cache.py", "line": 34, "size": 5000000, "count": 1000, "traceback": [{"file": "/app/src/cache.py", "line": 34}]}, {"file": "/app/src/loader.py", "line": 12, "size": 3000000, "count": 500, "traceback": [{"file": "/app/src/loader.py", "line": 12}]}]}
+more output"#;
+
+    let snapshot_output_2 = r#"debug output
+__BASILISK_MEM__{"current": 25000000, "peak": 25000000, "gcObjects": 12000, "gcCounts": [200, 20, 2], "stats": [{"file": "/app/src/cache.py", "line": 34, "size": 18000000, "count": 5000, "traceback": [{"file": "/app/src/cache.py", "line": 34}]}, {"file": "/app/src/loader.py", "line": 12, "size": 3000000, "count": 500, "traceback": [{"file": "/app/src/loader.py", "line": 12}]}]}"#;
+
+    let snapshot_output_3 = r#"__BASILISK_MEM__{"current": 45000000, "peak": 45000000, "gcObjects": 20000, "gcCounts": [300, 30, 3], "stats": [{"file": "/app/src/cache.py", "line": 34, "size": 35000000, "count": 12000, "traceback": [{"file": "/app/src/cache.py", "line": 34}]}, {"file": "/app/src/loader.py", "line": 12, "size": 3200000, "count": 510, "traceback": [{"file": "/app/src/loader.py", "line": 12}]}]}"#;
+
+    // Parse all 3 snapshots.
+    let snap1 = memory::parse_snapshot_output(snapshot_output_1, "snap-001")
+        .expect("should parse snapshot 1");
+    let snap2 = memory::parse_snapshot_output(snapshot_output_2, "snap-002")
+        .expect("should parse snapshot 2");
+    let snap3 = memory::parse_snapshot_output(snapshot_output_3, "snap-003")
+        .expect("should parse snapshot 3");
+
+    // Verify snapshot 1 fields.
+    assert_eq!(snap1.snapshot_id, "snap-001");
+    assert_eq!(snap1.current_memory, 10_000_000);
+    assert_eq!(snap1.peak_memory, 10_000_000);
+    assert_eq!(snap1.gc_objects, 5000);
+    assert_eq!(snap1.gc_counts, vec![100, 10, 1]);
+    assert_eq!(snap1.top_allocations.len(), 2);
+
+    // Verify snapshot 3 shows significant growth.
+    assert_eq!(snap3.current_memory, 45_000_000);
+    assert!(
+        snap3.current_memory > snap1.current_memory * 3,
+        "memory should have grown >3x between snap1 and snap3"
+    );
+
+    // cache.py should be the top allocator in snap3.
+    let cache_alloc = snap3
+        .top_allocations
+        .iter()
+        .find(|a| a.file.contains("cache.py"))
+        .expect("cache.py should be in top allocations");
+    assert_eq!(cache_alloc.line, 34);
+    assert_eq!(cache_alloc.size, 35_000_000);
+    assert_eq!(cache_alloc.count, 12_000);
+    assert!(!cache_alloc.traceback.is_empty(), "should have traceback");
+
+    // loader.py should have stable allocation (not leaking).
+    let loader_alloc = snap3
+        .top_allocations
+        .iter()
+        .find(|a| a.file.contains("loader.py"))
+        .expect("loader.py should be in top allocations");
+    assert!(
+        loader_alloc.size < 4_000_000,
+        "loader.py should be stable at ~3MB"
+    );
+
+    // ─── Simulate diff detection ─────────────────────────────────
+    // Create growth entries for the leak tracker.
+    let growth_1_to_2: Vec<AllocationGrowth> = vec![
+        AllocationGrowth {
+            file: "/app/src/cache.py".to_owned(),
+            line: 34,
+            size_growth: 13_000_000, // 5MB → 18MB
+            count_growth: 4000,
+            current_size: 18_000_000,
+            current_count: 5000,
+            traceback: vec![TraceFrame {
+                file: "/app/src/cache.py".to_owned(),
+                line: 34,
+            }],
+        },
+        AllocationGrowth {
+            file: "/app/src/loader.py".to_owned(),
+            line: 12,
+            size_growth: 0,
+            count_growth: 0,
+            current_size: 3_000_000,
+            current_count: 500,
+            traceback: vec![],
+        },
+    ];
+
+    let growth_2_to_3: Vec<AllocationGrowth> = vec![AllocationGrowth {
+        file: "/app/src/cache.py".to_owned(),
+        line: 34,
+        size_growth: 17_000_000, // 18MB → 35MB
+        count_growth: 7000,
+        current_size: 35_000_000,
+        current_count: 12_000,
+        traceback: vec![TraceFrame {
+            file: "/app/src/cache.py".to_owned(),
+            line: 34,
+        }],
+    }];
+
+    // Run leak detection across diffs.
+    let mut tracker = LeakTracker::new();
+    let leaks_1 = tracker.process_growths(&growth_1_to_2);
+    assert!(!leaks_1.is_empty(), "should detect growth in cache.py");
+    assert_eq!(
+        leaks_1[0].confidence,
+        LeakConfidence::Low,
+        "first growth should be Low confidence"
+    );
+
+    let leaks_2 = tracker.process_growths(&growth_2_to_3);
+    assert!(!leaks_2.is_empty(), "should detect continued growth");
+
+    // cache.py should now be Medium confidence (2 consecutive growths).
+    let cache_leak = leaks_2
+        .iter()
+        .find(|l| l.file.contains("cache.py"))
+        .expect("cache.py should be in leaks");
+    assert_eq!(
+        cache_leak.confidence,
+        LeakConfidence::Medium,
+        "2 consecutive growths should be Medium"
+    );
+    assert!(
+        cache_leak.size_growth > 10_000_000,
+        "growth should be >10MB"
+    );
+
+    // ─── Generate memory diagnostics ─────────────────────────────
+    let alloc_diags = mem_diag::generate_alloc_diagnostics(&snap3.top_allocations, 1_000_000);
+    assert!(
+        !alloc_diags.is_empty(),
+        "should generate allocation diagnostics for allocations >1MB"
+    );
+
+    // Check that cache.py gets an allocation diagnostic.
+    let cache_diag_found = alloc_diags.iter().any(|(uri, diags)| {
+        uri.path().contains("cache.py")
+            && diags
+                .iter()
+                .any(|d| d.message.contains("Allocation") && d.message.contains("MB"))
+    });
+    assert!(
+        cache_diag_found,
+        "cache.py should have allocation diagnostic mentioning MB"
+    );
+
+    // Generate leak diagnostics.
+    let leak_diags = mem_diag::generate_leak_diagnostics(&leaks_2);
+    assert!(
+        !leak_diags.is_empty(),
+        "should generate leak diagnostics"
+    );
+
+    // Check diagnostic severity matches confidence.
+    let cache_leak_diag = leak_diags
+        .iter()
+        .find(|(uri, _)| uri.path().contains("cache.py"));
+    assert!(
+        cache_leak_diag.is_some(),
+        "cache.py should have leak diagnostic"
+    );
+    let (_, diags) = cache_leak_diag.unwrap();
+    assert!(!diags.is_empty(), "should have at least one diagnostic");
+    assert!(
+        diags[0].message.contains("growth") || diags[0].message.contains("leak"),
+        "diagnostic should mention growth or leak, got: {}",
+        diags[0].message
+    );
+}
+
+/// Test presets produce correct configurations and can be used in the pipeline.
+#[test]
+fn presets_produce_valid_configs_for_pipeline() {
+    use basilisk_lsp::profiler::presets::{preset_config, ProfilingPreset};
+
+    let quick = preset_config(ProfilingPreset::Quick, 12345);
+    assert_eq!(quick.pid, 12345);
+    assert_eq!(quick.sample_rate, 100);
+    assert!(quick.duration.is_some());
+    assert_eq!(
+        quick.duration.unwrap().as_secs(),
+        10,
+        "Quick preset should be 10 seconds"
+    );
+
+    let detailed = preset_config(ProfilingPreset::Detailed, 12345);
+    assert_eq!(detailed.sample_rate, 200);
+    assert_eq!(detailed.duration.unwrap().as_secs(), 60);
+
+    let long = preset_config(ProfilingPreset::LongRunning, 12345);
+    assert_eq!(long.sample_rate, 50);
+    assert!(
+        long.duration.is_none(),
+        "LongRunning should have no duration limit"
+    );
+
+    // Verify parse_name covers all variants.
+    assert_eq!(
+        ProfilingPreset::parse_name("quick"),
+        Some(ProfilingPreset::Quick)
+    );
+    assert_eq!(
+        ProfilingPreset::parse_name("detailed"),
+        Some(ProfilingPreset::Detailed)
+    );
+    assert_eq!(
+        ProfilingPreset::parse_name("longRunning"),
+        Some(ProfilingPreset::LongRunning)
+    );
+    assert_eq!(
+        ProfilingPreset::parse_name("long_running"),
+        Some(ProfilingPreset::LongRunning)
+    );
+    assert_eq!(ProfilingPreset::parse_name("nonexistent"), None);
+    assert_eq!(ProfilingPreset::parse_name(""), None);
+}
