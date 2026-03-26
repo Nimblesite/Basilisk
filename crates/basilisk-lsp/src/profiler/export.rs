@@ -713,9 +713,15 @@ mod tests {
         let result = export_speedscope(&data, "bench-60k", 99999, 600.0, &dir)?;
         let elapsed = start.elapsed();
 
+        // Debug builds are ~5x slower than release.
+        #[cfg(debug_assertions)]
+        let timing_limit = 1000;
+        #[cfg(not(debug_assertions))]
+        let timing_limit = 200;
+
         assert!(
-            elapsed.as_millis() < 200,
-            "speedscope export took {elapsed:?}, should be <200ms"
+            elapsed.as_millis() < timing_limit,
+            "speedscope export took {elapsed:?}, should be <{timing_limit}ms"
         );
         assert!(result.path.exists());
 

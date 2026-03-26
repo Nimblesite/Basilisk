@@ -10,6 +10,8 @@ eleventyNavigation:
 
 # Introduction
 
+![PLACEHOLDER: Basilisk VS Code extension showing diagnostics, autocomplete, and type checking in a Python file](intro-vscode-overview.png)
+
 Basilisk is a **complete Python language server** that replaces Pylance and Pyright. Everything Pylance does — autocomplete, go-to-definition, hover information, refactoring, diagnostics, integrated debugging, profiling — Basilisk does too, fully open source and strict by default.
 
 It is not just a type checker. It is a feature-complete LSP with first-class extensions for **VS Code**, **Neovim**, and **Zed** — plus any other editor that speaks the Language Server Protocol. No proprietary extensions. No Node.js. A single Rust binary.
@@ -24,10 +26,12 @@ Basilisk takes a different position. **It replaces the entire Pylance stack** �
 
 ## What Basilisk is
 
+![PLACEHOLDER: Split view showing Basilisk running in VS Code, Neovim, and Zed side by side](intro-editor-support.png)
+
 - A **full-featured language server** (LSP) — autocomplete, go-to-definition, hover, find references, rename, [16 refactoring actions](/docs/refactoring/), code actions, inlay hints
 - **Editor extensions** for VS Code, Neovim (0.10+), and Zed — install it, disable Pylance, and everything works
 - An **integrated debugger** — press F5 to debug Python with breakpoints, stepping, variable inspection, and watch expressions, all brokered through the Basilisk LSP
-- An **integrated profiler** — py-spy profiling with heatmap visualization directly in your editor
+- An **integrated profiler** — CPU profiling via py-spy with inline heatmap annotations, flamegraphs, memory leak detection, and reference graph visualization, all inside your editor
 - A **strict-by-default type checker** — no `--strict` flag, no gradual mode, no opt-in
 - A **CLI tool** for CI integration — exits with code 1 when errors are found
 - A **migration assistant** that reads your existing `pyrightconfig.json` or `mypy.ini`
@@ -68,6 +72,8 @@ These are not runtime constructs. They are statically checked annotations. Code 
 
 ## Project status
 
+![PLACEHOLDER: Basilisk project status dashboard showing phase completion and feature checklist](intro-project-status.png)
+
 Basilisk is currently at **v0.1.0** — the core checker, LSP server, and VS Code extension are all working. Autocomplete, go-to-definition, hover, diagnostics, and inlay hints are shipping today.
 
 | Phase | Milestone | Status |
@@ -97,4 +103,5 @@ Basilisk is a Cargo workspace with 14 Rust crates, each owning one layer of the 
 - [Quick Start](/docs/quick-start/) — your first type check in under 5 minutes
 - [Refactoring](/docs/refactoring/) — all 16 refactoring code actions (extract, inline, move, rename, convert)
 - [Debugging](/docs/debugging/) — set breakpoints, step through code, inspect variables
+- [Profiler](/docs/profiler/) — CPU heatmaps, flamegraphs, memory leak detection, and reference graphs
 - [All Rules](/docs/rules/) — browse every BSK-E and BSK-W diagnostic code

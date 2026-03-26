@@ -57,13 +57,24 @@ export function buildRefGraphHtml(data: RefGraphData): string {
     const edgesJson = JSON.stringify(data.edges);
     const cyclesJson = JSON.stringify(data.cycles);
 
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Basilisk Reference Graph</title>
-  <style>
+    return [
+        refGraphHead(),
+        refGraphBody(data),
+        refGraphScriptPart1(nodesJson, edgesJson, cyclesJson),
+        refGraphScriptPart2(),
+        refGraphScriptPart2b(),
+        refGraphScriptPart2c(),
+        refGraphScriptPart3(),
+        refGraphScriptPart3nodes(),
+        refGraphScriptPart3a(),
+        refGraphScriptPart3b(),
+        refGraphScriptPart3c(),
+        `</script>\n</body>\n</html>`,
+    ].join("\n");
+}
+
+function refGraphCssLocal(): string {
+    return `
     ${PROFILER_CSS_VARS}
     ${PROFILER_CSS_RESET}
     body { padding: 0; overflow: hidden; }
@@ -107,6 +118,11 @@ export function buildRefGraphHtml(data: RefGraphData): string {
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+`;
+}
+
+function refGraphCssCanvas(): string {
+    return `
     canvas {
       display: block;
       width: 100%;
@@ -129,9 +145,22 @@ export function buildRefGraphHtml(data: RefGraphData): string {
     }
     .tooltip .type-label { color: var(--prof-mem-critical); font-weight: 600; }
     .tooltip .size-label { color: var(--prof-mem-hot); }
-  </style>
-</head>
-<body>
+`;
+}
+
+function refGraphHead(): string {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Basilisk Reference Graph</title>
+  <style>${refGraphCssLocal()}${refGraphCssCanvas()}</style>
+</head>`;
+}
+
+function refGraphBody(data: RefGraphData): string {
+    return `<body>
   <div class="toolbar">
     <span class="title">RETENTION GRAPH</span>
     <span>\u2014 ${escapeHtml(data.targetType)} (${formatBytesTs(data.targetSize)})</span>
@@ -144,9 +173,11 @@ export function buildRefGraphHtml(data: RefGraphData): string {
     <span class="retention-path">${escapeHtml(data.retentionPath)}</span>
   </div>
   <canvas id="graph"></canvas>
-  <div class="tooltip" id="tooltip"></div>
+  <div class="tooltip" id="tooltip"></div>`;
+}
 
-  <script>
+function refGraphScriptPart1(nodesJson: string, edgesJson: string, cyclesJson: string): string {
+    return `<script>
     const vscode = acquireVsCodeApi();
     ${PROFILER_JS_UTILS}
 
@@ -202,6 +233,11 @@ export function buildRefGraphHtml(data: RefGraphData): string {
     resize();
     window.addEventListener('resize', resize);
 
+`;
+}
+
+function refGraphScriptPart2(): string {
+    return `
     // ── Layout modes ─────────────────────────────────────────────────
     function applyTreeLayout() {
       const levels = new Map();
@@ -260,6 +296,11 @@ export function buildRefGraphHtml(data: RefGraphData): string {
     document.getElementById('layout').addEventListener('change', e => setLayout(e.target.value));
     document.getElementById('search').addEventListener('input', e => { searchTerm = e.target.value.toLowerCase(); });
 
+`;
+}
+
+function refGraphScriptPart2b(): string {
+    return `
     // ── Color scheme (Basilisk design system) ────────────────────────
     function nodeColor(node) {
       if (cycleNodeIds.has(node.id)) return '#f87171';
@@ -305,6 +346,11 @@ export function buildRefGraphHtml(data: RefGraphData): string {
           nodes[j].vy += fy;
         }
       }
+`;
+}
+
+function refGraphScriptPart2c(): string {
+    return `
       // Spring attraction along edges.
       for (const edge of rawEdges) {
         const a = nodeMap.get(edge.from);
@@ -328,6 +374,11 @@ export function buildRefGraphHtml(data: RefGraphData): string {
       }
     }
 
+`;
+}
+
+function refGraphScriptPart3(): string {
+    return `
     // ── Rendering ────────────────────────────────────────────────────
     function draw() {
       ctx.clearRect(0, 0, width, height);
@@ -359,6 +410,11 @@ export function buildRefGraphHtml(data: RefGraphData): string {
         }
       }
 
+`;
+}
+
+function refGraphScriptPart3nodes(): string {
+    return `
       // Draw nodes.
       for (const node of nodes) {
         const visible = matchesSearch(node);
@@ -399,6 +455,11 @@ export function buildRefGraphHtml(data: RefGraphData): string {
       ctx.restore();
     }
 
+`;
+}
+
+function refGraphScriptPart3a(): string {
+    return `
     // ── Animation loop ───────────────────────────────────────────────
     function tick() {
       if (frame < SETTLE_FRAMES) { simulate(); }
@@ -408,6 +469,11 @@ export function buildRefGraphHtml(data: RefGraphData): string {
     }
     tick();
 
+`;
+}
+
+function refGraphScriptPart3b(): string {
+    return `
     // ── Interaction: pan, zoom, click ────────────────────────────────
     canvas.addEventListener('wheel', e => {
       e.preventDefault();
@@ -442,6 +508,11 @@ export function buildRefGraphHtml(data: RefGraphData): string {
         offsetY = e.clientY - dragStartY;
       }
 
+`;
+}
+
+function refGraphScriptPart3c(): string {
+    return `
       // Tooltip.
       const mx = (e.clientX - offsetX) / scale;
       const my = (e.clientY - 44 - offsetY) / scale;
@@ -474,10 +545,7 @@ export function buildRefGraphHtml(data: RefGraphData): string {
       if (msg.type === 'navigateToSource' && msg.file && msg.line) {
         vscode.postMessage(msg);
       }
-    });
-  </script>
-</body>
-</html>`;
+    });`;
 }
 
 // ── Helper functions (server-side, used during HTML generation) ────────────
@@ -491,10 +559,17 @@ function escapeHtml(str: string): string {
         .replace(/"/g, "&quot;");
 }
 
+/** 1 GiB in bytes. */
+const BYTES_PER_GIB = 1_073_741_824;
+/** 1 MiB in bytes. */
+const BYTES_PER_MIB = 1_048_576;
+/** 1 KiB in bytes. */
+const BYTES_PER_KIB = 1024;
+
 /** Format byte count for display in toolbar. */
 function formatBytesTs(bytes: number): string {
-    if (bytes >= 1_073_741_824) { return `${(bytes / 1_073_741_824).toFixed(1)} GB`; }
-    if (bytes >= 1_048_576) { return `${(bytes / 1_048_576).toFixed(1)} MB`; }
-    if (bytes >= 1024) { return `${(bytes / 1024).toFixed(1)} KB`; }
+    if (bytes >= BYTES_PER_GIB) { return `${(bytes / BYTES_PER_GIB).toFixed(1)} GB`; }
+    if (bytes >= BYTES_PER_MIB) { return `${(bytes / BYTES_PER_MIB).toFixed(1)} MB`; }
+    if (bytes >= BYTES_PER_KIB) { return `${(bytes / BYTES_PER_KIB).toFixed(1)} KB`; }
     return `${bytes} B`;
 }

@@ -53,11 +53,27 @@ interface HeatLevel {
   barMaxLen: number;
 }
 
+/** Minimum percentage for "critical" heat classification. */
+const HEAT_CRITICAL_PCT = 20;
+/** Minimum percentage for "hot" heat classification. */
+const HEAT_HOT_PCT = 10;
+/** Minimum percentage for "warm" heat classification. */
+const HEAT_WARM_PCT = 5;
+
+/** Max bar length for critical heat level. */
+const BAR_LEN_CRITICAL = 10;
+/** Max bar length for hot heat level. */
+const BAR_LEN_HOT = 8;
+/** Max bar length for warm heat level. */
+const BAR_LEN_WARM = 6;
+/** Max bar length for cool heat level. */
+const BAR_LEN_COOL = 4;
+
 const HEAT_LEVELS: HeatLevel[] = [
-  { minPct: 20, color: "#e8500a", barChar: "\u2588", barMaxLen: 10 },
-  { minPct: 10, color: "#f97316", barChar: "\u2588", barMaxLen: 8 },
-  { minPct: 5, color: "#fbbf24", barChar: "\u2588", barMaxLen: 6 },
-  { minPct: 1, color: "#4a5468", barChar: "\u2588", barMaxLen: 4 },
+  { minPct: HEAT_CRITICAL_PCT, color: "#e8500a", barChar: "\u2588", barMaxLen: BAR_LEN_CRITICAL },
+  { minPct: HEAT_HOT_PCT, color: "#f97316", barChar: "\u2588", barMaxLen: BAR_LEN_HOT },
+  { minPct: HEAT_WARM_PCT, color: "#fbbf24", barChar: "\u2588", barMaxLen: BAR_LEN_WARM },
+  { minPct: 1, color: "#4a5468", barChar: "\u2588", barMaxLen: BAR_LEN_COOL },
 ];
 
 function heatLevelFor(pct: number): HeatLevel | undefined {
@@ -93,6 +109,90 @@ function getDecorationTypeForColor(color: string): vscode.TextEditorDecorationTy
  * Apply inline heat map decorations to all visible editors based on
  * profiling results.
  */
+/** Group items by file path into a map. */
+function groupByFile<T extends { file: string }>(items: T[]): Map<string, T[]> {
+  const grouped = new Map<string, T[]>();
+  for (const item of items) {
+    const existing = grouped.get(item.file);
+    if (existing !== undefined) {
+      existing.push(item);
+    } else {
+      grouped.set(item.file, [item]);
+    }
+  }
+  return grouped;
+}
+
+/** Add a decoration option to the color-keyed options map. */
+function addDecorationOption(
+  optionsByColor: Map<string, vscode.DecorationOptions[]>,
+  color: string,
+  option: vscode.DecorationOptions,
+): void {
+  const existing = optionsByColor.get(color);
+  if (existing !== undefined) {
+    existing.push(option);
+  } else {
+    optionsByColor.set(color, [option]);
+  }
+}
+
+/** Build line-level heat decoration options for a single editor. */
+function buildLineDecorations(
+  editor: vscode.TextEditor,
+  lines: ProfileHotLine[],
+  optionsByColor: Map<string, vscode.DecorationOptions[]>,
+): void {
+  for (const line of lines) {
+    const level = heatLevelFor(line.percentage);
+    if (level === undefined) { continue; }
+
+    const barLen = Math.ceil((line.percentage / level.minPct) * (level.barMaxLen / 2));
+    const bar = level.barChar.repeat(Math.min(barLen, level.barMaxLen));
+    const text = ` ${bar} ${line.percentage.toFixed(1)}% (${line.samples} samples)`;
+    const lineIdx = line.line - 1;
+    if (lineIdx < 0 || lineIdx >= editor.document.lineCount) { continue; }
+
+    const range = new vscode.Range(
+      new vscode.Position(lineIdx, 0),
+      new vscode.Position(lineIdx, editor.document.lineAt(lineIdx).text.length),
+    );
+
+    addDecorationOption(optionsByColor, level.color, {
+      range,
+      renderOptions: { after: { contentText: text, color: level.color } },
+    });
+  }
+}
+
+/** Build function-level heat decoration options for a single editor. */
+function buildFuncDecorations(
+  editor: vscode.TextEditor,
+  funcs: ProfileHotFunction[],
+  ctx: { lines: ProfileHotLine[] | undefined; optionsByColor: Map<string, vscode.DecorationOptions[]> },
+): void {
+  const { lines, optionsByColor } = ctx;
+  for (const func of funcs) {
+    const level = heatLevelFor(func.percentage);
+    if (level === undefined) { continue; }
+    if (lines?.some((l) => l.line === func.line) === true) { continue; }
+
+    const text = ` ${func.name} \u2014 ${func.percentage.toFixed(1)}% CPU (${func.selfPercentage.toFixed(1)}% self)`;
+    const lineIdx = func.line - 1;
+    if (lineIdx < 0 || lineIdx >= editor.document.lineCount) { continue; }
+
+    const range = new vscode.Range(
+      new vscode.Position(lineIdx, 0),
+      new vscode.Position(lineIdx, editor.document.lineAt(lineIdx).text.length),
+    );
+
+    addDecorationOption(optionsByColor, level.color, {
+      range,
+      renderOptions: { after: { contentText: text, color: level.color } },
+    });
+  }
+}
+
 export function applyProfileDecorations(result: ProfileResult): void {
   const showHeatMap = vscode.workspace
     .getConfiguration("basilisk")
@@ -105,116 +205,25 @@ export function applyProfileDecorations(result: ProfileResult): void {
 
   clearProfileDecorations();
 
-  // Group hot lines by file path.
-  const linesByFile = new Map<string, ProfileHotLine[]>();
-  for (const line of result.hotLines) {
-    const existing = linesByFile.get(line.file);
-    if (existing !== undefined) {
-      existing.push(line);
-    } else {
-      linesByFile.set(line.file, [line]);
-    }
-  }
+  const linesByFile = groupByFile(result.hotLines);
+  const funcsByFile = groupByFile(result.hotFunctions);
 
-  // Also group hot functions for function-level decorations at definition lines.
-  const funcsByFile = new Map<string, ProfileHotFunction[]>();
-  for (const func of result.hotFunctions) {
-    const existing = funcsByFile.get(func.file);
-    if (existing !== undefined) {
-      existing.push(func);
-    } else {
-      funcsByFile.set(func.file, [func]);
-    }
-  }
-
-  // Apply decorations to each visible editor.
   for (const editor of vscode.window.visibleTextEditors) {
     const filePath = editor.document.uri.fsPath;
-
-    // Build decoration options per heat level color.
     const optionsByColor = new Map<string, vscode.DecorationOptions[]>();
 
-    // Line-level heat decorations.
     const lines = linesByFile.get(filePath);
     if (lines !== undefined) {
-      for (const line of lines) {
-        const level = heatLevelFor(line.percentage);
-        if (level === undefined) { continue; }
-
-        const barLen = Math.ceil((line.percentage / level.minPct) * (level.barMaxLen / 2));
-        const bar = level.barChar.repeat(Math.min(barLen, level.barMaxLen));
-        const text = ` ${bar} ${line.percentage.toFixed(1)}% (${line.samples} samples)`;
-
-        const lineIdx = line.line - 1;
-        if (lineIdx < 0 || lineIdx >= editor.document.lineCount) { continue; }
-
-        const range = new vscode.Range(
-          new vscode.Position(lineIdx, 0),
-          new vscode.Position(lineIdx, editor.document.lineAt(lineIdx).text.length)
-        );
-
-        const option: vscode.DecorationOptions = {
-          range,
-          renderOptions: {
-            after: {
-              contentText: text,
-              color: level.color,
-            },
-          },
-        };
-
-        const existing = optionsByColor.get(level.color);
-        if (existing !== undefined) {
-          existing.push(option);
-        } else {
-          optionsByColor.set(level.color, [option]);
-        }
-      }
+      buildLineDecorations(editor, lines, optionsByColor);
     }
 
-    // Function-level heat decorations (at the def line).
     const funcs = funcsByFile.get(filePath);
     if (funcs !== undefined) {
-      for (const func of funcs) {
-        const level = heatLevelFor(func.percentage);
-        if (level === undefined) { continue; }
-
-        // Skip if a line decoration already exists at this line.
-        if (lines?.some((l) => l.line === func.line) === true) { continue; }
-
-        const text = ` ${func.name} \u2014 ${func.percentage.toFixed(1)}% CPU (${func.selfPercentage.toFixed(1)}% self)`;
-
-        const lineIdx = func.line - 1;
-        if (lineIdx < 0 || lineIdx >= editor.document.lineCount) { continue; }
-
-        const range = new vscode.Range(
-          new vscode.Position(lineIdx, 0),
-          new vscode.Position(lineIdx, editor.document.lineAt(lineIdx).text.length)
-        );
-
-        const option: vscode.DecorationOptions = {
-          range,
-          renderOptions: {
-            after: {
-              contentText: text,
-              color: level.color,
-            },
-          },
-        };
-
-        const existing = optionsByColor.get(level.color);
-        if (existing !== undefined) {
-          existing.push(option);
-        } else {
-          optionsByColor.set(level.color, [option]);
-        }
-      }
+      buildFuncDecorations(editor, funcs, { lines, optionsByColor });
     }
 
-    // Apply all collected decorations.
     for (const [color, options] of optionsByColor) {
-      const decorationType = getDecorationTypeForColor(color);
-      editor.setDecorations(decorationType, options);
+      editor.setDecorations(getDecorationTypeForColor(color), options);
     }
   }
 

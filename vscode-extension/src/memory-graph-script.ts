@@ -6,19 +6,36 @@
  * Separated from memory-graph-html.ts for the 500 LOC limit.
  */
 
+/** Serialized JSON data injected into the graph webview script. */
+interface GraphScriptData {
+  nodesJson: string;
+  edgesJson: string;
+  cyclesJson: string;
+  retentionPathJson: string;
+}
+
 /** Build the inline JS for the graph webview, injecting serialized data. */
-export function buildGraphScript(
-  nodesJson: string,
-  edgesJson: string,
-  cyclesJson: string,
-  retentionPathJson: string,
-): string {
+export function buildGraphScript(data: GraphScriptData): string {
+  return [
+    buildScriptGlobals(data),
+    buildScriptHelpers(),
+    buildScriptSimulation(),
+    buildScriptDrawEdges(),
+    buildScriptDrawNodes(),
+    buildScriptDrawAndHitTest(),
+    buildScriptSidebar(),
+    buildScriptInteraction(),
+    buildScriptBootstrap(),
+  ].join("\n");
+}
+
+function buildScriptGlobals(data: GraphScriptData): string {
   return `
     var vscode = acquireVsCodeApi();
-    var rawNodes = ${nodesJson};
-    var rawEdges = ${edgesJson};
-    var cycles = ${cyclesJson};
-    var retentionPath = ${retentionPathJson};
+    var rawNodes = ${data.nodesJson};
+    var rawEdges = ${data.edgesJson};
+    var cycles = ${data.cyclesJson};
+    var retentionPath = ${data.retentionPathJson};
 
     var cycleNodeIds = new Set();
     for (var ci = 0; ci < cycles.length; ci++) {
@@ -57,8 +74,11 @@ export function buildGraphScript(
     var filterText = '';
     var pulsePhase = 0;
     var draggedNode = null;
-    var isDragging = false;
+    var isDragging = false;`;
+}
 
+function buildScriptHelpers(): string {
+  return `
     function nodeRadius(size) {
       return Math.min(MAX_NODE_RADIUS, NODE_BASE_RADIUS + Math.sqrt(size / 1024) * 2);
     }
@@ -89,8 +109,11 @@ export function buildGraphScript(
         if (rawNodes[i].id === id) { return rawNodes[i]; }
       }
       return undefined;
-    }
+    }`;
+}
 
+function buildScriptInitPositions(): string {
+  return `
     function initPositions() {
       var cX = canvas.width / 2;
       var cY = canvas.height / 2;
@@ -100,13 +123,19 @@ export function buildGraphScript(
         positions.set(rawNodes[i].id, { x: cX + r * Math.cos(a), y: cY + r * Math.sin(a) });
         velocities.set(rawNodes[i].id, { x: 0, y: 0 });
       }
-    }
+    }`;
+}
 
+function buildScriptSimulation(): string {
+  return `${buildScriptInitPositions()}${buildScriptSimulateForces()}`;
+}
+
+function buildScriptSimulateForces(): string {
+  return `
     function simulateForces() {
       if (simulationStep >= SIMULATION_STEPS) { return; }
       simulationStep++;
-      var cX = canvas.width / 2;
-      var cY = canvas.height / 2;
+      var cX = canvas.width / 2, cY = canvas.height / 2;
       for (var i = 0; i < rawNodes.length; i++) {
         var pA = positions.get(rawNodes[i].id);
         if (!pA) { continue; }
@@ -159,8 +188,11 @@ export function buildGraphScript(
         p.x = Math.max(r, Math.min(canvas.width - r, p.x));
         p.y = Math.max(r, Math.min(canvas.height - r, p.y));
       }
-    }
+    }`;
+}
 
+function buildScriptDrawEdges(): string {
+  return `
     function drawEdges() {
       for (var i = 0; i < rawEdges.length; i++) {
         var e = rawEdges[i];
@@ -212,6 +244,11 @@ export function buildGraphScript(
       }
     }
 
+`;
+}
+
+function buildScriptDrawNodes(): string {
+  return `
     function drawNodes() {
       for (var i = 0; i < rawNodes.length; i++) {
         var n = rawNodes[i];
@@ -256,6 +293,11 @@ export function buildGraphScript(
       }
     }
 
+`;
+}
+
+function buildScriptDrawAndHitTest(): string {
+  return `
     function draw() {
       var dpr = window.devicePixelRatio || 1;
       canvas.width = canvas.offsetWidth * dpr;
@@ -281,6 +323,11 @@ export function buildGraphScript(
       return null;
     }
 
+`;
+}
+
+function buildScriptSidebar(): string {
+  return `
     function updateSidebar(node) {
       var content = document.getElementById('sidebar-content');
       var pathContainer = document.getElementById('retention-path');
@@ -328,8 +375,11 @@ export function buildGraphScript(
       } else {
         pathContainer.innerHTML = '';
       }
-    }
+    }`;
+}
 
+function buildScriptInteraction(): string {
+  return `
     canvas.addEventListener('mousedown', function(evt) {
       var rect = canvas.getBoundingClientRect();
       var node = findNodeAt(evt.clientX - rect.left, evt.clientY - rect.top);
@@ -379,6 +429,11 @@ export function buildGraphScript(
       hoveredNodeId = null;
       tooltipEl.classList.remove('visible');
     });
+`;
+}
+
+function buildScriptBootstrap(): string {
+  return `
     canvas.addEventListener('dblclick', function(evt) {
       var rect = canvas.getBoundingClientRect();
       var node = findNodeAt(evt.clientX - rect.left, evt.clientY - rect.top);
@@ -389,7 +444,6 @@ export function buildGraphScript(
     searchInput.addEventListener('input', function() {
       filterText = searchInput.value.toLowerCase();
     });
-
     function tick() {
       simulateForces();
       draw();

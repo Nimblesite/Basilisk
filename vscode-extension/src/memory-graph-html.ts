@@ -221,7 +221,7 @@ export function buildGraphHtml(graph: ReferenceGraph): string {
 </head>
 <body>
 ${GRAPH_BODY}
-  <script>${buildGraphScript(nodesJson, edgesJson, cyclesJson, retentionPathJson)}</script>
+  <script>${buildGraphScript({ nodesJson, edgesJson, cyclesJson, retentionPathJson })}</script>
 </body>
 </html>`;
 }

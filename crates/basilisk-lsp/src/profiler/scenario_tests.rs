@@ -416,7 +416,13 @@ fn scenario_10k_samples_performance_and_correctness() {
     assert_eq!(main_fn.samples, 6000, "main is in json+regex stacks");
     assert_eq!(main_fn.self_samples, 0, "main is never the leaf");
 
-    // ── Performance: export speedscope in <200ms ────────────────────
+    // ── Performance: export speedscope ──────────────────────────────
+    // Debug builds are ~5x slower than release, so we scale the budgets.
+    #[cfg(debug_assertions)]
+    let (ss_budget, fg_budget, diag_budget) = (1000u128, 2500u128, 500u128);
+    #[cfg(not(debug_assertions))]
+    let (ss_budget, fg_budget, diag_budget) = (200u128, 500u128, 100u128);
+
     let dir = std::env::temp_dir().join("basilisk_10k_test");
     let _ = std::fs::create_dir_all(&dir);
 
@@ -424,28 +430,28 @@ fn scenario_10k_samples_performance_and_correctness() {
     let ss = export_speedscope(&data, "10k-test", 99999, 100.0, &dir).expect("export");
     let ss_elapsed = start.elapsed();
     assert!(
-        ss_elapsed.as_millis() < 200,
-        "speedscope for 10K samples should be <200ms, took {}ms",
+        ss_elapsed.as_millis() < ss_budget,
+        "speedscope for 10K samples should be <{ss_budget}ms, took {}ms",
         ss_elapsed.as_millis()
     );
 
-    // ── Performance: flamegraph in <500ms ────────────────────────────
+    // ── Performance: flamegraph ──────────────────────────────────────
     let start = std::time::Instant::now();
     let fg = export_flamegraph(&data, "10k-test", &dir).expect("flamegraph");
     let fg_elapsed = start.elapsed();
     assert!(
-        fg_elapsed.as_millis() < 500,
-        "flamegraph for 10K samples should be <500ms, took {}ms",
+        fg_elapsed.as_millis() < fg_budget,
+        "flamegraph for 10K samples should be <{fg_budget}ms, took {}ms",
         fg_elapsed.as_millis()
     );
 
-    // ── Performance: diagnostics in <100ms ──────────────────────────
+    // ── Performance: diagnostics ─────────────────────────────────────
     let start = std::time::Instant::now();
     let diags = generate_diagnostics(&data, &config);
     let diag_elapsed = start.elapsed();
     assert!(
-        diag_elapsed.as_millis() < 100,
-        "diagnostics for 10K samples should be <100ms, took {}ms",
+        diag_elapsed.as_millis() < diag_budget,
+        "diagnostics for 10K samples should be <{diag_budget}ms, took {}ms",
         diag_elapsed.as_millis()
     );
 

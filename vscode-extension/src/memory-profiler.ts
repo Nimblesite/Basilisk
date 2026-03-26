@@ -15,10 +15,8 @@ import * as vscode from "vscode";
 import { Logger } from "./logger";
 import type { Store } from "./store";
 import {
-  applyMemoryDecorations,
   clearMemoryDecorations,
   disposeMemoryDecorations,
-  type MemoryAllocation,
   type MemorySnapshotResult,
 } from "./memory-decorations";
 
@@ -47,24 +45,27 @@ export function registerMemoryProfiler(
   context: vscode.ExtensionContext,
   store: Store,
 ): vscode.Disposable[] {
+  /** Status bar priority — lower than main Basilisk item. */
+  const MEMORY_STATUS_BAR_PRIORITY = 98;
+
   memoryStatusBarItem = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Left,
-    98,
+    MEMORY_STATUS_BAR_PRIORITY,
   );
   memoryStatusBarItem.command = "basilisk.memoryStop";
 
   const disposables: vscode.Disposable[] = [
     memoryStatusBarItem,
-    vscode.commands.registerCommand("basilisk.memoryStart", () =>
+    vscode.commands.registerCommand("basilisk.memoryStart", async () =>
       handleMemoryStart(store),
     ),
-    vscode.commands.registerCommand("basilisk.memorySnapshot", () =>
+    vscode.commands.registerCommand("basilisk.memorySnapshot", async () =>
       handleMemorySnapshot(store),
     ),
-    vscode.commands.registerCommand("basilisk.memoryStop", () =>
-      handleMemoryStop(store),
-    ),
-    vscode.commands.registerCommand("basilisk.memoryReferences", () =>
+    vscode.commands.registerCommand("basilisk.memoryStop", () => {
+      handleMemoryStop(store);
+    }),
+    vscode.commands.registerCommand("basilisk.memoryReferences", async () =>
       handleMemoryReferences(store),
     ),
   ];
@@ -96,12 +97,13 @@ async function handleMemoryStart(store: Store): Promise<void> {
   }
 
   try {
-    const result = (await client.sendRequest("workspace/executeCommand", {
+    const TRACEBACK_DEPTH = 25;
+    const result = await client.sendRequest<{ memorySessionId: string } | null>("workspace/executeCommand", {
       command: LSP_MEM_CMD.start,
-      arguments: [{ tracebackDepth: 25 }],
-    })) as { memorySessionId: string } | null;
+      arguments: [{ tracebackDepth: TRACEBACK_DEPTH }],
+    });
 
-    if (result?.memorySessionId) {
+    if (result?.memorySessionId !== undefined && result.memorySessionId !== "") {
       activeMemorySessionId = result.memorySessionId;
       updateMemoryStatusBar("tracking");
       Logger.info(
@@ -125,10 +127,10 @@ async function handleMemorySnapshot(store: Store): Promise<void> {
   }
 
   try {
-    const result = (await client.sendRequest("workspace/executeCommand", {
+    const result = await client.sendRequest<MemorySnapshotResult | null>("workspace/executeCommand", {
       command: LSP_MEM_CMD.snapshot,
       arguments: [{ memorySessionId: activeMemorySessionId }],
-    })) as MemorySnapshotResult | null;
+    });
 
     if (result !== null) {
       Logger.info(`Memory snapshot taken: ${activeMemorySessionId}`);
@@ -140,7 +142,7 @@ async function handleMemorySnapshot(store: Store): Promise<void> {
   }
 }
 
-async function handleMemoryStop(store: Store): Promise<void> {
+function handleMemoryStop(_store: Store): void {
   activeMemorySessionId = undefined;
   updateMemoryStatusBar("idle");
   clearMemoryDecorations();
@@ -164,16 +166,18 @@ async function handleMemoryReferences(store: Store): Promise<void> {
   }
 
   try {
-    const result = (await client.sendRequest("workspace/executeCommand", {
+    const REF_GRAPH_MAX_DEPTH = 5;
+    const REF_GRAPH_MAX_NODES = 200;
+    const result = await client.sendRequest<ReferenceGraphResult | null>("workspace/executeCommand", {
       command: LSP_MEM_CMD.references,
       arguments: [
         {
           targetType: typeName.trim(),
-          maxDepth: 5,
-          maxNodes: 200,
+          maxDepth: REF_GRAPH_MAX_DEPTH,
+          maxNodes: REF_GRAPH_MAX_NODES,
         },
       ],
-    })) as ReferenceGraphResult | null;
+    });
 
     if (result !== null) {
       openRefGraphWebview(result);
@@ -188,7 +192,7 @@ async function handleMemoryReferences(store: Store): Promise<void> {
 // ── Status bar ────────────────────────────────────────────────────────────
 
 function updateMemoryStatusBar(state: "idle" | "tracking"): void {
-  if (memoryStatusBarItem === undefined) return;
+  if (memoryStatusBarItem === undefined) { return; }
 
   if (state === "tracking") {
     memoryStatusBarItem.text = "$(eye) Memory Tracking";
@@ -268,18 +272,8 @@ function openRefGraphWebview(result: ReferenceGraphResult): void {
   );
 }
 
-function buildRefGraphHtml(result: ReferenceGraphResult): string {
-  const nodesJson = JSON.stringify(result.graph?.nodes ?? []);
-  const edgesJson = JSON.stringify(result.graph?.edges ?? []);
-  const cyclesJson = JSON.stringify(result.graph?.cycles ?? []);
-  const retentionPath = result.graph?.retentionPath ?? [];
-
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Retention Graph \u2014 ${escapeHtml(result.targetType)}</title>
-  <style>
+function buildRefGraphCss(): string {
+  return `
     :root {
       --mem-critical: #c084fc;
       --mem-hot: #a78bfa;
@@ -322,31 +316,22 @@ function buildRefGraphHtml(result: ReferenceGraphResult): string {
     }
     .legend-item { display: flex; align-items: center; gap: 4px; }
     .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
-    .no-data { text-align: center; padding: 60px; color: var(--text-secondary); }
-  </style>
-</head>
-<body>
-  <h1><span class="accent">\u25C9</span> Retention Graph \u2014 <span class="accent">${escapeHtml(result.targetType)}</span></h1>
+    .no-data { text-align: center; padding: 60px; color: var(--text-secondary); }`;
+}
 
-  ${
-    retentionPath.length > 0
-      ? `<div class="retention-path">
+function buildRetentionPathHtml(retentionPath: string[]): string {
+  if (retentionPath.length === 0) { return ""; }
+  const steps = retentionPath
+    .map((step, i) => `<div class="${i === retentionPath.length - 1 ? "target" : "step"}">${escapeHtml(step)}</div>`)
+    .join("\n    ");
+  return `<div class="retention-path">
     <div class="label">Retention Path</div>
-    ${retentionPath.map((step, i) => `<div class="${i === retentionPath.length - 1 ? "target" : "step"}">${escapeHtml(step)}</div>`).join("\n    ")}
-  </div>`
-      : ""
-  }
+    ${steps}
+  </div>`;
+}
 
-  <canvas id="graph" width="800" height="500"></canvas>
-
-  <div class="legend">
-    <div class="legend-item"><div class="legend-dot" style="background: var(--mem-critical)"></div> Target object</div>
-    <div class="legend-item"><div class="legend-dot" style="background: var(--mem-info)"></div> Root retainer</div>
-    <div class="legend-item"><div class="legend-dot" style="background: var(--text-secondary)"></div> Intermediate</div>
-    <div class="legend-item"><div class="legend-dot" style="background: var(--mem-leak)"></div> Cycle member</div>
-  </div>
-
-  <script>
+function buildRefGraphScriptInit(nodesJson: string, edgesJson: string, cyclesJson: string): string {
+  return `
     const vscode = acquireVsCodeApi();
     const nodes = ${nodesJson};
     const edges = ${edgesJson};
@@ -362,11 +347,7 @@ function buildRefGraphHtml(result: ReferenceGraphResult): string {
       const canvas = document.getElementById('graph');
       const ctx = canvas.getContext('2d');
       const W = canvas.width, H = canvas.height;
-
-      // Flatten cycle node IDs for quick lookup.
       const cycleNodeIds = new Set(cycles.flat());
-
-      // Assign positions using force-directed layout (simplified).
       const nodeMap = new Map();
       nodes.forEach((n, i) => {
         nodeMap.set(n.id, {
@@ -377,12 +358,8 @@ function buildRefGraphHtml(result: ReferenceGraphResult): string {
           radius: Math.max(8, Math.min(30, Math.log2(Math.max(n.size, 1)) * 2)),
         });
       });
-
-      // Simple force simulation (60 iterations).
       for (let iter = 0; iter < 60; iter++) {
         const alpha = 0.3 * (1 - iter / 60);
-
-        // Repulsion between all nodes.
         const nodeList = Array.from(nodeMap.values());
         for (let i = 0; i < nodeList.length; i++) {
           for (let j = i + 1; j < nodeList.length; j++) {
@@ -396,8 +373,6 @@ function buildRefGraphHtml(result: ReferenceGraphResult): string {
             b.x += dx; b.y += dy;
           }
         }
-
-        // Attraction along edges.
         for (const edge of edges) {
           const a = nodeMap.get(edge.from), b = nodeMap.get(edge.to);
           if (!a || !b) continue;
@@ -409,31 +384,27 @@ function buildRefGraphHtml(result: ReferenceGraphResult): string {
           a.x += dx; a.y += dy;
           b.x -= dx; b.y -= dy;
         }
-
-        // Keep nodes in bounds.
         for (const n of nodeList) {
           n.x = Math.max(40, Math.min(W - 40, n.x));
           n.y = Math.max(40, Math.min(H - 40, n.y));
         }
-      }
+      }`;
+}
 
-      // Draw edges.
+function buildRefGraphScriptDraw(): string {
+  return `
       ctx.strokeStyle = 'rgba(136, 146, 164, 0.3)';
       ctx.lineWidth = 1;
       for (const edge of edges) {
         const a = nodeMap.get(edge.from), b = nodeMap.get(edge.to);
         if (!a || !b) continue;
-
         const isCycleEdge = cycleNodeIds.has(edge.from) && cycleNodeIds.has(edge.to);
         ctx.strokeStyle = isCycleEdge ? '#f87171' : 'rgba(136, 146, 164, 0.3)';
         ctx.lineWidth = isCycleEdge ? 2 : 1;
-
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
         ctx.lineTo(b.x, b.y);
         ctx.stroke();
-
-        // Edge label.
         if (edge.label) {
           const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
           ctx.fillStyle = '#8892a4';
@@ -441,15 +412,12 @@ function buildRefGraphHtml(result: ReferenceGraphResult): string {
           ctx.fillText(edge.label, mx + 4, my - 4);
         }
       }
-
-      // Draw nodes.
       for (const n of nodeMap.values()) {
         const isCycle = cycleNodeIds.has(n.id);
         const color = n.isTarget ? '#c084fc'
           : isCycle ? '#f87171'
           : n.depth <= 1 ? '#60a5fa'
           : '#8892a4';
-
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
         ctx.fillStyle = color + '33';
@@ -457,27 +425,53 @@ function buildRefGraphHtml(result: ReferenceGraphResult): string {
         ctx.strokeStyle = color;
         ctx.lineWidth = n.isTarget ? 3 : 1.5;
         ctx.stroke();
-
-        // Label.
         ctx.fillStyle = '#f0f2f7';
         ctx.font = '10px monospace';
         ctx.textAlign = 'center';
         ctx.fillText(n.type, n.x, n.y + n.radius + 14);
-
-        // Size label.
         ctx.fillStyle = '#8892a4';
         ctx.font = '9px monospace';
         ctx.fillText(formatBytes(n.size), n.x, n.y + n.radius + 26);
       }
     }
-
     function formatBytes(bytes) {
       if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + ' GB';
       if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
       if (bytes >= 1024) return (bytes / 1024).toFixed(1) + ' KB';
       return bytes + ' B';
-    }
-  </script>
+    }`;
+}
+
+function buildRefGraphScript(nodesJson: string, edgesJson: string, cyclesJson: string): string {
+  return buildRefGraphScriptInit(nodesJson, edgesJson, cyclesJson) +
+    buildRefGraphScriptDraw();
+}
+
+function buildRefGraphHtml(result: ReferenceGraphResult): string {
+  const nodesJson = JSON.stringify(result.graph?.nodes ?? []);
+  const edgesJson = JSON.stringify(result.graph?.edges ?? []);
+  const cyclesJson = JSON.stringify(result.graph?.cycles ?? []);
+  const retentionPath = result.graph?.retentionPath ?? [];
+  const escapedType = escapeHtml(result.targetType);
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Retention Graph \u2014 ${escapedType}</title>
+  <style>${buildRefGraphCss()}</style>
+</head>
+<body>
+  <h1><span class="accent">\u25C9</span> Retention Graph \u2014 <span class="accent">${escapedType}</span></h1>
+  ${buildRetentionPathHtml(retentionPath)}
+  <canvas id="graph" width="800" height="500"></canvas>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background: var(--mem-critical)"></div> Target object</div>
+    <div class="legend-item"><div class="legend-dot" style="background: var(--mem-info)"></div> Root retainer</div>
+    <div class="legend-item"><div class="legend-dot" style="background: var(--text-secondary)"></div> Intermediate</div>
+    <div class="legend-item"><div class="legend-dot" style="background: var(--mem-leak)"></div> Cycle member</div>
+  </div>
+  <script>${buildRefGraphScript(nodesJson, edgesJson, cyclesJson)}</script>
 </body>
 </html>`;
 }

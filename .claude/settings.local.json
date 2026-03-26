@@ -8,7 +8,12 @@
       "Skill(ci-prep)",
       "Skill(ci-prep:*)",
       "Bash(git check-ignore:*)",
-      "mcp__too-many-cooks__register"
+      "mcp__too-many-cooks__register",
+      "Bash(wc -l /Users/christianfindlay/Documents/Code/Basilisk/crates/basilisk-lsp/src/profiler/*.rs)",
+      "mcp__too-many-cooks__message",
+      "Bash(cargo test:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(make test:*)"
     ]
   },
   "autoMemoryEnabled": false

@@ -13,6 +13,12 @@ use super::aggregator::{FunctionStats, HotspotConfig, ProfileData, SpeedscopeFra
 use super::diagnostics::generate_diagnostics;
 use super::export::{export_flamegraph, export_speedscope};
 
+/// Timing multiplier: debug builds are ~5x slower than release.
+#[cfg(debug_assertions)]
+const TIMING_MULTIPLIER: u128 = 5;
+#[cfg(not(debug_assertions))]
+const TIMING_MULTIPLIER: u128 = 1;
+
 /// Build a large `ProfileData` with 60K samples, 200 unique frames, 4 threads.
 fn build_large_profile() -> ProfileData {
     let mut data = ProfileData {
@@ -81,8 +87,9 @@ fn bench_diagnostic_generation_under_100ms() {
     let elapsed = start.elapsed();
 
     assert!(
-        elapsed.as_millis() < 100,
-        "diagnostic generation took {elapsed:?}, target <100ms"
+        elapsed.as_millis() < 100 * TIMING_MULTIPLIER,
+        "diagnostic generation took {elapsed:?}, target <{}ms",
+        100 * TIMING_MULTIPLIER
     );
     assert!(
         !diags.is_empty(),
@@ -101,8 +108,9 @@ fn bench_speedscope_export_under_200ms() -> Result<(), String> {
     let elapsed = start.elapsed();
 
     assert!(
-        elapsed.as_millis() < 200,
-        "speedscope export took {elapsed:?}, target <200ms"
+        elapsed.as_millis() < 200 * TIMING_MULTIPLIER,
+        "speedscope export took {elapsed:?}, target <{}ms",
+        200 * TIMING_MULTIPLIER
     );
     assert!(result.path.exists());
 
@@ -122,8 +130,9 @@ fn bench_flamegraph_svg_under_500ms() -> Result<(), String> {
     let elapsed = start.elapsed();
 
     assert!(
-        elapsed.as_millis() < 500,
-        "flamegraph SVG export took {elapsed:?}, target <500ms"
+        elapsed.as_millis() < 500 * TIMING_MULTIPLIER,
+        "flamegraph SVG export took {elapsed:?}, target <{}ms",
+        500 * TIMING_MULTIPLIER
     );
     assert!(result.path.exists());
 

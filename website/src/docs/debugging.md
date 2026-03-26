@@ -10,6 +10,8 @@ eleventyNavigation:
 
 # Debugging
 
+![PLACEHOLDER: VS Code debug session showing breakpoint hit with Basilisk — Variables pane, call stack, and debug toolbar visible](debugging-vscode-overview.png)
+
 Basilisk includes a fully integrated Python debugger. Set breakpoints, step through code, inspect variables, and evaluate expressions — all without installing a separate debug extension. The Basilisk LSP server manages the debug session end to end.
 
 ## How it works

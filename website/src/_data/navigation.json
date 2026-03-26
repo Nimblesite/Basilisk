@@ -25,7 +25,9 @@
     {
       "title": "Features",
       "items": [
-        { "title": "Debugging", "url": "/docs/debugging/" }
+        { "title": "Debugging", "url": "/docs/debugging/" },
+        { "title": "Profiler", "url": "/docs/profiler/" },
+        { "title": "Refactoring", "url": "/docs/refactoring/" }
       ]
     },
     {

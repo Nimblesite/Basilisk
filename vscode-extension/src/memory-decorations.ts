@@ -79,18 +79,32 @@ function getMemDecorationTypeForColor(color: string): vscode.TextEditorDecoratio
 
 // ── Formatting ────────────────────────────────────────────────────────────
 
+/** 1 GiB in bytes. */
+const BYTES_PER_GIB = 1_073_741_824;
+/** 1 MiB in bytes. */
+const BYTES_PER_MIB = 1_048_576;
+/** 1 KiB in bytes. */
+const BYTES_PER_KIB = 1024;
+
+/** Threshold for "critical" memory allocation color (100 MiB). */
+const MEM_CRITICAL_THRESHOLD = 104_857_600;
+/** Threshold for "hot" memory allocation color (10 MiB). */
+const MEM_HOT_THRESHOLD = 10_485_760;
+/** Threshold for "warm" memory allocation color (1 MiB). */
+const MEM_WARM_THRESHOLD = 1_048_576;
+
 function formatBytes(bytes: number): string {
-  if (bytes >= 1_073_741_824) { return `${(bytes / 1_073_741_824).toFixed(1)} GB`; }
-  if (bytes >= 1_048_576) { return `${(bytes / 1_048_576).toFixed(1)} MB`; }
-  if (bytes >= 1024) { return `${(bytes / 1024).toFixed(1)} KB`; }
+  if (bytes >= BYTES_PER_GIB) { return `${(bytes / BYTES_PER_GIB).toFixed(1)} GB`; }
+  if (bytes >= BYTES_PER_MIB) { return `${(bytes / BYTES_PER_MIB).toFixed(1)} MB`; }
+  if (bytes >= BYTES_PER_KIB) { return `${(bytes / BYTES_PER_KIB).toFixed(1)} KB`; }
   return `${bytes} B`;
 }
 
 function memColor(size: number): string {
-  if (size >= 104_857_600) { return "#c084fc"; } // >100 MB — critical purple
-  if (size >= 10_485_760) { return "#a78bfa"; }  // >10 MB — hot purple
-  if (size >= 1_048_576) { return "#8b5cf6"; }   // >1 MB — warm purple
-  return "#7c3aed";                                // <1 MB — base purple
+  if (size >= MEM_CRITICAL_THRESHOLD) { return "#c084fc"; } // >100 MB — critical purple
+  if (size >= MEM_HOT_THRESHOLD) { return "#a78bfa"; }      // >10 MB — hot purple
+  if (size >= MEM_WARM_THRESHOLD) { return "#8b5cf6"; }     // >1 MB — warm purple
+  return "#7c3aed";                                          // <1 MB — base purple
 }
 
 function leakColor(confidence: LeakConfidence): string {

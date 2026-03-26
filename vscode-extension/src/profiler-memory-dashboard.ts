@@ -57,6 +57,38 @@ export function buildMemoryDashboardHtml(data: MemoryDashboardData): string {
     const allocsJson = JSON.stringify(data.topAllocations);
     const leaksJson = JSON.stringify(data.suspectedLeaks);
 
+    return [
+        dashboardHead(),
+        dashboardBody(data),
+        dashboardScriptPart1({ timelineJson, allocsJson, leaksJson, data }),
+        dashboardScriptPart1a(),
+        dashboardScriptPart1b(),
+        dashboardScriptPart2(),
+        `</script>\n</body>\n</html>`,
+    ].join("\n");
+}
+
+function dashboardCssComponents(): string {
+    return `
+    .badge-definite { background: #ef4444; color: #fff; }
+    .badge-high { background: #f87171; color: #fff; }
+    .badge-medium { background: #fb923c; color: #fff; }
+    .badge-low { background: #a78bfa; color: #fff; }
+    .heatmap-toggle { display: flex; gap: 8px; margin: 16px 0; }
+    .heatmap-btn {
+      padding: 6px 14px; background: var(--prof-surface);
+      border: 1px solid var(--prof-border); border-radius: 6px;
+      color: var(--prof-text); font-size: 12px; cursor: pointer;
+    }
+    .heatmap-btn.active { border-color: var(--prof-mem-critical); color: var(--prof-mem-critical); }
+    .heatmap-btn:hover { border-color: var(--prof-mem-hot); }
+    .leak-row { cursor: pointer; }
+    .leak-row:hover td { background: var(--prof-surface); }
+    .growth-positive { color: var(--prof-mem-leak); }
+    .growth-negative { color: var(--prof-success); }`;
+}
+
+function dashboardHead(): string {
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -91,102 +123,50 @@ export function buildMemoryDashboardHtml(data: MemoryDashboardData): string {
       font-weight: 600;
       font-family: 'JetBrains Mono', monospace;
     }
-    .badge-definite { background: #ef4444; color: #fff; }
-    .badge-high { background: #f87171; color: #fff; }
-    .badge-medium { background: #fb923c; color: #fff; }
-    .badge-low { background: #a78bfa; color: #fff; }
-    .heatmap-toggle {
-      display: flex;
-      gap: 8px;
-      margin: 16px 0;
-    }
-    .heatmap-btn {
-      padding: 6px 14px;
-      background: var(--prof-surface);
-      border: 1px solid var(--prof-border);
-      border-radius: 6px;
-      color: var(--prof-text);
-      font-size: 12px;
-      cursor: pointer;
-    }
-    .heatmap-btn.active {
-      border-color: var(--prof-mem-critical);
-      color: var(--prof-mem-critical);
-    }
-    .heatmap-btn:hover { border-color: var(--prof-mem-hot); }
-    .leak-row { cursor: pointer; }
-    .leak-row:hover td { background: var(--prof-surface); }
-    .growth-positive { color: var(--prof-mem-leak); }
-    .growth-negative { color: var(--prof-success); }
+    ${dashboardCssComponents()}
   </style>
-</head>
-<body>
+</head>`;
+}
+
+function dashboardBody(data: MemoryDashboardData): string {
+    return `<body>
   <h1><span class="accent">BASILISK</span> MEMORY DASHBOARD</h1>
-
   <div class="summary-cards">
-    <div class="card">
-      <div class="label">Current Memory</div>
-      <div class="value mem" id="current-mem">0</div>
-    </div>
-    <div class="card">
-      <div class="label">Peak Memory</div>
-      <div class="value peak" id="peak-mem">0</div>
-    </div>
-    <div class="card">
-      <div class="label">GC Objects</div>
-      <div class="value gc" id="gc-objects">0</div>
-    </div>
-    <div class="card">
-      <div class="label">Snapshots</div>
-      <div class="value snaps" id="snap-count">0</div>
-    </div>
+    <div class="card"><div class="label">Current Memory</div><div class="value mem" id="current-mem">0</div></div>
+    <div class="card"><div class="label">Peak Memory</div><div class="value peak" id="peak-mem">0</div></div>
+    <div class="card"><div class="label">GC Objects</div><div class="value gc" id="gc-objects">0</div></div>
+    <div class="card"><div class="label">Snapshots</div><div class="value snaps" id="snap-count">0</div></div>
   </div>
-
   <h2>Memory Timeline</h2>
-  <div class="timeline-container">
-    <canvas id="timeline" height="200"></canvas>
-  </div>
-
+  <div class="timeline-container"><canvas id="timeline" height="200"></canvas></div>
   <h2>Top Allocations</h2>
   <table class="data-table">
-    <thead>
-      <tr>
-        <th>Location</th>
-        <th>Size</th>
-        <th>Objects</th>
-        <th></th>
-      </tr>
-    </thead>
+    <thead><tr><th>Location</th><th>Size</th><th>Objects</th><th></th></tr></thead>
     <tbody id="alloc-body"></tbody>
   </table>
-
   <h2>Suspected Leaks</h2>
   <table class="data-table">
-    <thead>
-      <tr>
-        <th>Location</th>
-        <th>Confidence</th>
-        <th>Growth</th>
-        <th>Reason</th>
-      </tr>
-    </thead>
+    <thead><tr><th>Location</th><th>Confidence</th><th>Growth</th><th>Reason</th></tr></thead>
     <tbody id="leak-body"></tbody>
   </table>
-
   <h2>Heat Map Mode</h2>
   <div class="heatmap-toggle">
-    <button class="heatmap-btn${data.heatMapMode === "cpu" ? " active" : ""}" data-mode="cpu">
-      CPU (Orange)
-    </button>
-    <button class="heatmap-btn${data.heatMapMode === "memory" ? " active" : ""}" data-mode="memory">
-      Memory (Purple)
-    </button>
-    <button class="heatmap-btn${data.heatMapMode === "dual" ? " active" : ""}" data-mode="dual">
-      Dual (CPU + Memory)
-    </button>
-  </div>
+    <button class="heatmap-btn${data.heatMapMode === "cpu" ? " active" : ""}" data-mode="cpu">CPU (Orange)</button>
+    <button class="heatmap-btn${data.heatMapMode === "memory" ? " active" : ""}" data-mode="memory">Memory (Purple)</button>
+    <button class="heatmap-btn${data.heatMapMode === "dual" ? " active" : ""}" data-mode="dual">Dual (CPU + Memory)</button>
+  </div>`;
+}
 
-  <script>
+interface DashboardScriptData {
+    timelineJson: string;
+    allocsJson: string;
+    leaksJson: string;
+    data: MemoryDashboardData;
+}
+
+function dashboardScriptPart1(scriptData: DashboardScriptData): string {
+    const { data } = scriptData;
+    return `<script>
     const vscode = acquireVsCodeApi();
     ${PROFILER_JS_UTILS}
 
@@ -194,9 +174,9 @@ export function buildMemoryDashboardHtml(data: MemoryDashboardData): string {
     const peakMemory = ${data.peakMemory};
     const gcObjects = ${data.gcObjects};
     const snapshotCount = ${data.snapshotCount};
-    const timeline = ${timelineJson};
-    const allocations = ${allocsJson};
-    const leaks = ${leaksJson};
+    const timeline = ${scriptData.timelineJson};
+    const allocations = ${scriptData.allocsJson};
+    const leaks = ${scriptData.leaksJson};
 
     // ── Summary cards ──────────────────────────────────────────────
     document.getElementById('current-mem').textContent = formatBytes(currentMemory);
@@ -237,6 +217,11 @@ export function buildMemoryDashboardHtml(data: MemoryDashboardData): string {
       function xOf(t) { return pad.left + ((t - minT) / rangeT) * plotW; }
       function yOf(v) { return pad.top + plotH - (v / maxMem) * plotH; }
 
+`;
+}
+
+function dashboardScriptPart1a(): string {
+    return `
       // Axes.
       ctx.strokeStyle = '#1a1f2e';
       ctx.lineWidth = 1;
@@ -261,6 +246,11 @@ export function buildMemoryDashboardHtml(data: MemoryDashboardData): string {
         ctx.stroke();
       }
 
+`;
+}
+
+function dashboardScriptPart1b(): string {
+    return `
       // Memory area fill.
       ctx.beginPath();
       ctx.moveTo(xOf(timeline[0].timestamp), yOf(0));
@@ -307,6 +297,11 @@ export function buildMemoryDashboardHtml(data: MemoryDashboardData): string {
     drawTimeline();
     window.addEventListener('resize', drawTimeline);
 
+`;
+}
+
+function dashboardScriptPart2(): string {
+    return `
     // ── Allocations table ──────────────────────────────────────────
     const allocBody = document.getElementById('alloc-body');
     const sorted = [...allocations].sort((a, b) => b.size - a.size);
@@ -354,10 +349,7 @@ export function buildMemoryDashboardHtml(data: MemoryDashboardData): string {
         btn.classList.add('active');
         vscode.postMessage({ type: 'setHeatMapMode', mode: btn.dataset.mode });
       });
-    }
-  </script>
-</body>
-</html>`;
+    }`;
 }
 
 /**
