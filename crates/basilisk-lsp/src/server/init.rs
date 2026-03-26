@@ -173,10 +173,16 @@ pub(super) async fn initialized(server: &LspServer) {
         register_file_watchers(&client).await;
     }));
 
-    let guard = server.index.read().await;
-    let Some(index) = guard.as_ref() else { return };
+    // Read the analysis mode, then release the lock immediately so the
+    // message loop is not blocked while the workspace scan runs.
+    let mode = {
+        let guard = server.index.read().await;
+        guard.as_ref().map(|idx| idx.mode)
+    };
 
-    match index.mode {
+    let Some(mode) = mode else { return };
+
+    match mode {
         AnalysisMode::OpenFilesOnly => {
             server
                 .client
@@ -191,32 +197,40 @@ pub(super) async fn initialized(server: &LspServer) {
                 .client
                 .log_message(MessageType::INFO, "Basilisk: scanning workspace files...")
                 .await;
-            let scan_result = scan_resolve_and_check(server, index).await;
-            drop(guard);
-            for (uri, diags) in scan_result.diagnostics {
-                server.client.publish_diagnostics(uri, diags, None).await;
-            }
-            server
-                .client
-                .log_message(
-                    MessageType::INFO,
-                    format!(
-                        "Basilisk: workspace scan complete — {} files, {} error(s)",
-                        scan_result.file_count, scan_result.error_count
-                    ),
-                )
-                .await;
 
-            // Spawn initial test discovery in the background so it never blocks
-            // the message loop.  The server must be able to respond to requests
-            // (e.g. documentSymbol) immediately after initialization completes.
-            spawn_initial_test_discovery(server);
-            return;
+            // Spawn the workspace scan in the background so the server can
+            // respond to requests (documentSymbol, etc.) while scanning.
+            // tower-lsp v0.20 processes messages sequentially — blocking here
+            // prevents ALL request handling until the scan completes.
+            let scan_client = server.client.clone();
+            let scan_index = Arc::clone(&server.index);
+            let scan_roots = {
+                let roots = server.workspace_roots.read().await;
+                roots.clone()
+            };
+            drop(tokio::spawn(async move {
+                let guard = scan_index.read().await;
+                if let Some(index) = guard.as_ref() {
+                    let scan_result = scan_resolve_and_check_with_roots(index, &scan_roots);
+                    drop(guard);
+                    for (uri, diags) in scan_result.diagnostics {
+                        scan_client.publish_diagnostics(uri, diags, None).await;
+                    }
+                    scan_client
+                        .log_message(
+                            MessageType::INFO,
+                            format!(
+                                "Basilisk: workspace scan complete — {} files, {} error(s)",
+                                scan_result.file_count, scan_result.error_count
+                            ),
+                        )
+                        .await;
+                }
+            }));
         }
     }
-    drop(guard);
 
-    // Spawn initial test discovery even in openFilesOnly mode.
+    // Spawn initial test discovery in the background.
     spawn_initial_test_discovery(server);
 }
 
@@ -352,22 +366,33 @@ struct ScanResult {
 /// This is the single source of truth for the scan+resolve+crossmod pipeline,
 /// used by both `initialized()` and `run_workspace_scan()`.
 async fn scan_resolve_and_check(server: &LspServer, index: &WorkspaceIndex) -> ScanResult {
+    let roots = server.workspace_roots.read().await;
+    let result = scan_resolve_and_check_with_roots(index, &roots);
+    drop(roots);
+    result
+}
+
+/// Core scan logic that takes roots directly instead of `&LspServer`.
+///
+/// This allows the scan to run in a spawned task with cloned data.
+fn scan_resolve_and_check_with_roots(
+    index: &WorkspaceIndex,
+    roots: &[std::path::PathBuf],
+) -> ScanResult {
     let (results, file_count, error_count) = index.scan();
 
     // Resolve imports for all scanned files.
-    let roots = server.workspace_roots.read().await;
     let config = roots
         .first()
         .map(|r| crate::config::load_config(r))
         .unwrap_or_default();
 
     // Detect uv project, build package registry and discover workspace members.
-    let registry = build_uv_registry(&roots);
+    let registry = build_uv_registry(roots);
     let mut search_paths =
-        crate::import_resolver::ImportSearchPaths::from_config(&roots, &config, registry);
-    search_paths.workspace_members = discover_workspace_members(&roots);
+        crate::import_resolver::ImportSearchPaths::from_config(roots, &config, registry);
+    search_paths.workspace_members = discover_workspace_members(roots);
     crate::import_resolver::resolve_workspace_imports(index, &search_paths);
-    drop(roots);
 
     // Cross-module: populate imported symbols and rebuild import graph, then re-check.
     let diagnostics = if matches!(index.mode, AnalysisMode::CrossModule) {
