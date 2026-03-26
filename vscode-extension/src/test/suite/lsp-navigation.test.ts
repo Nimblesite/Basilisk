@@ -16,6 +16,7 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import {
     DIAGNOSTIC_TIMEOUT_MS,
+    SUITE_SETUP_TIMEOUT_MS,
     closeAllEditors,
     openPythonFile,
     pollUntilResult,
@@ -77,7 +78,7 @@ suite('LSP Navigation & Code Action Tests', () => {
     let tmpDir: string;
 
     suiteSetup(async function () {
-        this.timeout(LARGE_TIMEOUT_BUFFER_MS * 2);
+        this.timeout(SUITE_SETUP_TIMEOUT_MS);
         const setup = await setupLspTestSuite('basilisk-nav-test-');
         tmpDir = setup.tmpDir;
     });

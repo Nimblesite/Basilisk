@@ -18,6 +18,7 @@ import {
     EXTENSION_ID,
     NO_DIAGNOSTIC_WAIT_MS,
     SERVER_START_WAIT_MS,
+    SUITE_SETUP_TIMEOUT_MS,
     closeAllEditors,
     openPythonFile,
     waitForDiagnostics,
@@ -180,7 +181,7 @@ suite('Analysis Mode Tests', () => {
     // -------------------------------------------------------
 
     test('wholeModule: startup scan publishes diagnostics for closed file in workspace root', async function () {
-        this.timeout(DIAGNOSTIC_TIMEOUT_MS + LARGE_TIMEOUT_BUFFER_MS);
+        this.timeout(SUITE_SETUP_TIMEOUT_MS);
 
         // Determine the workspace root that VS Code opened.
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
