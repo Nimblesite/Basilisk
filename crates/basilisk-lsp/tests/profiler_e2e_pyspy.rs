@@ -30,9 +30,13 @@
     clippy::needless_raw_string_hashes
 )]
 
+mod common;
+
 use std::io::Write;
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
+
+use common::ProcessGuard;
 
 use basilisk_lsp::profiler::aggregator::{HotspotConfig, ProfileData};
 use basilisk_lsp::profiler::diagnostics::generate_diagnostics;
@@ -47,8 +51,9 @@ fn python_path() -> String {
 }
 
 /// Spawn a CPU-bound Python script that burns CPU in a known function.
-/// Returns the child process and the temp file path.
-fn spawn_cpu_bound_python() -> (Child, std::path::PathBuf) {
+/// The script self-terminates after 30 seconds to prevent orphaned processes.
+/// Returns a `ProcessGuard` (kills on drop) and the temp file path.
+fn spawn_cpu_bound_python() -> (ProcessGuard, std::path::PathBuf) {
     let dir = std::env::temp_dir().join("basilisk_profiler_e2e");
     std::fs::create_dir_all(&dir).expect("create temp dir");
     let script_path = dir.join("cpu_burner.py");
@@ -81,7 +86,9 @@ def main():
     print("READY", flush=True)
     sys.stdout.flush()
 
-    while True:
+    # Self-terminate after 30 seconds to prevent orphaned processes.
+    deadline = time.time() + 30
+    while time.time() < deadline:
         hot_function()
         warm_function()
         cold_function()
@@ -99,13 +106,13 @@ if __name__ == "__main__":
         .spawn()
         .expect("spawn Python process");
 
-    (child, script_path)
+    (ProcessGuard::new(child), script_path)
 }
 
 /// Wait for the Python process to print "READY".
-fn wait_for_ready(child: &mut Child) {
+fn wait_for_ready(guard: &mut ProcessGuard) {
     use std::io::BufRead;
-    let stdout = child.stdout.as_mut().expect("stdout");
+    let stdout = guard.child_mut().stdout.as_mut().expect("stdout");
     let mut reader = std::io::BufReader::new(stdout);
     let mut line = String::new();
 
@@ -287,9 +294,9 @@ fn verify_lsp_diagnostics(result: &basilisk_lsp::profiler::StopResult) {
 #[tokio::test]
 #[ignore = "requires elevated privileges (sudo) on macOS"]
 async fn e2e_profile_cpu_bound_python_and_find_hotspots() {
-    let (mut child, _script_path) = spawn_cpu_bound_python();
-    let pid = child.id();
-    wait_for_ready(&mut child);
+    let (mut guard, _script_path) = spawn_cpu_bound_python();
+    let pid = guard.id();
+    wait_for_ready(&mut guard);
     tokio::time::sleep(Duration::from_millis(500)).await;
 
     let manager = ProfileSessionManager::new();
@@ -304,8 +311,6 @@ async fn e2e_profile_cpu_bound_python_and_find_hotspots() {
                 || msg.contains("profiler-helper")
             {
                 eprintln!("SKIP: py-spy permission denied (expected on macOS without root): {msg}");
-                let _ = child.kill();
-                let _ = child.wait();
                 return;
             }
             panic!("start profiling failed unexpectedly: {msg}");
@@ -340,8 +345,7 @@ async fn e2e_profile_cpu_bound_python_and_find_hotspots() {
         .await
         .expect("stop profiling");
 
-    let _ = child.kill();
-    let _ = child.wait();
+    guard.kill();
 
     assert!(
         result.total_samples > 50,

@@ -20,6 +20,10 @@
     unused_imports
 )]
 
+mod common;
+
+use common::ProcessGuard;
+
 use basilisk_lsp::profiler::aggregator::{
     FrameKey, FunctionStats, HotFunction, HotLine, HotspotConfig, ProfileData, SpeedscopeFrame,
 };
@@ -1641,8 +1645,10 @@ fn presets_produce_valid_configs_for_pipeline() {
 
 use basilisk_lsp::profiler::sampler::SamplerConfig;
 
-fn spawn_cpu_python() -> Option<std::process::Child> {
+fn spawn_cpu_python() -> Option<ProcessGuard> {
     let script = r#"
+import time
+
 def hot_function():
     total = 0
     for i in range(10_000_000):
@@ -1655,7 +1661,9 @@ def warm_function():
         total += i
     return total
 
-while True:
+# Self-terminate after 30 seconds to prevent orphaned processes.
+deadline = time.time() + 30
+while time.time() < deadline:
     hot_function()
     warm_function()
 "#;
@@ -1665,15 +1673,20 @@ while True:
         .stderr(std::process::Stdio::null())
         .spawn()
         .ok()
+        .map(ProcessGuard::new)
 }
 
-fn spawn_threaded_python() -> Option<std::process::Child> {
+fn spawn_threaded_python() -> Option<ProcessGuard> {
     let script = r#"
-import threading
+import threading, time
+
 def cpu_worker():
+    # Self-terminate after 30 seconds to prevent orphaned processes.
+    deadline = time.time() + 30
     total = 0
-    for i in range(100_000_000):
-        total += i * i
+    while time.time() < deadline:
+        total += sum(range(100_000))
+
 threads = [threading.Thread(target=cpu_worker, daemon=True) for _ in range(3)]
 for t in threads:
     t.start()
@@ -1686,6 +1699,7 @@ for t in threads:
         .stderr(std::process::Stdio::null())
         .spawn()
         .ok()
+        .map(ProcessGuard::new)
 }
 
 fn try_attach(pid: u32, rate: u64) -> Option<basilisk_lsp::profiler::sampler::SamplerHandle> {
@@ -1725,20 +1739,19 @@ fn drain_samples(
     }
 }
 
-fn kill(child: &mut std::process::Child) {
-    let _ = child.kill();
-    let _ = child.wait();
+fn kill(guard: &mut ProcessGuard) {
+    guard.kill();
 }
 
 #[test]
 fn real_pyspy_detects_python_version() {
-    let Some(mut child) = spawn_cpu_python() else {
+    let Some(mut guard) = spawn_cpu_python() else {
         eprintln!("SKIP: no python3");
         return;
     };
     std::thread::sleep(std::time::Duration::from_millis(500));
-    let Some(handle) = try_attach(child.id(), 100) else {
-        kill(&mut child);
+    let Some(handle) = try_attach(guard.id(), 100) else {
+        kill(&mut guard);
         return;
     };
     assert!(!handle.python_version.is_empty());
@@ -1751,24 +1764,24 @@ fn real_pyspy_detects_python_version() {
         .unwrap_or(0);
     assert!(major >= 3, "need Python 3+, got: {}", handle.python_version);
     handle.stop();
-    kill(&mut child);
+    kill(&mut guard);
 }
 
 #[test]
 fn real_pyspy_collects_cpu_samples_with_named_functions() {
-    let Some(mut child) = spawn_cpu_python() else {
+    let Some(mut guard) = spawn_cpu_python() else {
         return;
     };
     std::thread::sleep(std::time::Duration::from_millis(500));
-    let Some(mut handle) = try_attach(child.id(), 100) else {
-        kill(&mut child);
+    let Some(mut handle) = try_attach(guard.id(), 100) else {
+        kill(&mut guard);
         return;
     };
 
     let mut data = ProfileData::default();
     drain_samples(&mut handle, &mut data, 2);
     handle.stop();
-    kill(&mut child);
+    kill(&mut guard);
 
     assert!(
         data.total_samples >= 10,
@@ -1798,20 +1811,20 @@ fn real_pyspy_collects_cpu_samples_with_named_functions() {
 
 #[test]
 fn real_pyspy_exports_speedscope_and_flamegraph_from_live_data() {
-    let Some(mut child) = spawn_cpu_python() else {
+    let Some(mut guard) = spawn_cpu_python() else {
         return;
     };
     std::thread::sleep(std::time::Duration::from_millis(500));
-    let Some(mut handle) = try_attach(child.id(), 100) else {
-        kill(&mut child);
+    let Some(mut handle) = try_attach(guard.id(), 100) else {
+        kill(&mut guard);
         return;
     };
 
     let mut data = ProfileData::default();
     drain_samples(&mut handle, &mut data, 1);
     handle.stop();
-    let pid = child.id();
-    kill(&mut child);
+    let pid = guard.id();
+    kill(&mut guard);
 
     if data.total_samples == 0 {
         eprintln!("SKIP: 0 samples");
@@ -1855,19 +1868,19 @@ fn real_pyspy_exports_speedscope_and_flamegraph_from_live_data() {
 
 #[test]
 fn real_pyspy_multithreaded_sees_multiple_threads() {
-    let Some(mut child) = spawn_threaded_python() else {
+    let Some(mut guard) = spawn_threaded_python() else {
         return;
     };
     std::thread::sleep(std::time::Duration::from_millis(800));
-    let Some(mut handle) = try_attach(child.id(), 100) else {
-        kill(&mut child);
+    let Some(mut handle) = try_attach(guard.id(), 100) else {
+        kill(&mut guard);
         return;
     };
 
     let mut data = ProfileData::default();
     drain_samples(&mut handle, &mut data, 2);
     handle.stop();
-    kill(&mut child);
+    kill(&mut guard);
 
     if data.total_samples == 0 {
         eprintln!("SKIP: 0 samples");
@@ -1892,11 +1905,11 @@ fn real_pyspy_multithreaded_sees_multiple_threads() {
 
 #[tokio::test]
 async fn real_pyspy_session_manager_full_lifecycle() {
-    let Some(mut child) = spawn_cpu_python() else {
+    let Some(mut guard) = spawn_cpu_python() else {
         return;
     };
     std::thread::sleep(std::time::Duration::from_millis(500));
-    let pid = child.id();
+    let pid = guard.id();
     let mgr = ProfileSessionManager::new();
 
     let start = match mgr.start(pid, Some(100), Some(false), None).await {
@@ -1904,7 +1917,7 @@ async fn real_pyspy_session_manager_full_lifecycle() {
         Err(err) => {
             // On macOS, SIP can block task_for_pid even for child processes.
             eprintln!("SKIP session manager ({err})");
-            kill(&mut child);
+            kill(&mut guard);
             return;
         }
     };
@@ -1947,7 +1960,7 @@ async fn real_pyspy_session_manager_full_lifecycle() {
             f.name, f.percentage, f.self_percentage
         );
     }
-    kill(&mut child);
+    kill(&mut guard);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1956,11 +1969,13 @@ async fn real_pyspy_session_manager_full_lifecycle() {
 
 /// Spawn Python where `hot_function` does 4x more work than `cool_function`.
 /// The profiler MUST see `hot_function` with significantly more samples.
-fn spawn_asymmetric_workload() -> Option<std::process::Child> {
+fn spawn_asymmetric_workload() -> Option<ProcessGuard> {
     // hot_function: 10M iterations of multiplication (heavy CPU)
     // cool_function: 1M iterations of addition (light CPU)
     // Ratio should be roughly 10:1 in CPU time.
     let script = r#"
+import time
+
 def hot_function():
     """Does 10x more CPU work than cool_function."""
     total = 0
@@ -1976,7 +1991,9 @@ def cool_function():
     return total
 
 def main():
-    while True:
+    # Self-terminate after 30 seconds to prevent orphaned processes.
+    deadline = time.time() + 30
+    while time.time() < deadline:
         hot_function()
         cool_function()
 
@@ -1988,12 +2005,13 @@ main()
         .stderr(std::process::Stdio::null())
         .spawn()
         .ok()
+        .map(ProcessGuard::new)
 }
 
 /// Spawn Python with a known memory allocation pattern for allocation tracking.
-fn spawn_allocating_python() -> Option<std::process::Child> {
+fn spawn_allocating_python() -> Option<ProcessGuard> {
     let script = r#"
-import sys
+import sys, time
 
 def allocate_big_list():
     """Allocates a large list that stays in memory."""
@@ -2006,7 +2024,9 @@ def allocate_small():
 
 def main():
     big = allocate_big_list()
-    while True:
+    # Self-terminate after 30 seconds to prevent orphaned processes.
+    deadline = time.time() + 30
+    while time.time() < deadline:
         allocate_small()
         # Keep big alive so it shows in memory
         _ = len(big)
@@ -2019,18 +2039,19 @@ main()
         .stderr(std::process::Stdio::null())
         .spawn()
         .ok()
+        .map(ProcessGuard::new)
 }
 
 #[test]
 fn real_pyspy_hot_function_gets_more_samples_than_cool_function() {
-    let Some(mut child) = spawn_asymmetric_workload() else {
+    let Some(mut guard) = spawn_asymmetric_workload() else {
         eprintln!("SKIP: no python3");
         return;
     };
     std::thread::sleep(std::time::Duration::from_millis(500));
 
-    let Some(mut handle) = try_attach(child.id(), 100) else {
-        kill(&mut child);
+    let Some(mut handle) = try_attach(guard.id(), 100) else {
+        kill(&mut guard);
         return;
     };
 
@@ -2038,7 +2059,7 @@ fn real_pyspy_hot_function_gets_more_samples_than_cool_function() {
     let mut data = ProfileData::default();
     drain_samples(&mut handle, &mut data, 3);
     handle.stop();
-    kill(&mut child);
+    kill(&mut guard);
 
     if data.total_samples < 50 {
         eprintln!("SKIP: only {} samples (need 50+)", data.total_samples);
@@ -2090,20 +2111,20 @@ fn real_pyspy_hot_function_gets_more_samples_than_cool_function() {
 
 #[test]
 fn real_pyspy_self_samples_vs_total_samples_are_correct() {
-    let Some(mut child) = spawn_asymmetric_workload() else {
+    let Some(mut guard) = spawn_asymmetric_workload() else {
         return;
     };
     std::thread::sleep(std::time::Duration::from_millis(500));
 
-    let Some(mut handle) = try_attach(child.id(), 100) else {
-        kill(&mut child);
+    let Some(mut handle) = try_attach(guard.id(), 100) else {
+        kill(&mut guard);
         return;
     };
 
     let mut data = ProfileData::default();
     drain_samples(&mut handle, &mut data, 2);
     handle.stop();
-    kill(&mut child);
+    kill(&mut guard);
 
     if data.total_samples < 20 {
         eprintln!("SKIP: too few samples");
@@ -2148,21 +2169,21 @@ fn real_pyspy_self_samples_vs_total_samples_are_correct() {
 
 #[test]
 fn real_pyspy_speedscope_json_matches_actual_sample_data() {
-    let Some(mut child) = spawn_cpu_python() else {
+    let Some(mut guard) = spawn_cpu_python() else {
         return;
     };
     std::thread::sleep(std::time::Duration::from_millis(500));
 
-    let Some(mut handle) = try_attach(child.id(), 100) else {
-        kill(&mut child);
+    let Some(mut handle) = try_attach(guard.id(), 100) else {
+        kill(&mut guard);
         return;
     };
 
     let mut data = ProfileData::default();
     drain_samples(&mut handle, &mut data, 1);
-    let pid = child.id();
+    let pid = guard.id();
     handle.stop();
-    kill(&mut child);
+    kill(&mut guard);
 
     if data.total_samples == 0 {
         return;
@@ -2241,20 +2262,20 @@ fn real_pyspy_speedscope_json_matches_actual_sample_data() {
 
 #[test]
 fn real_pyspy_diagnostics_point_to_correct_lines() {
-    let Some(mut child) = spawn_cpu_python() else {
+    let Some(mut guard) = spawn_cpu_python() else {
         return;
     };
     std::thread::sleep(std::time::Duration::from_millis(500));
 
-    let Some(mut handle) = try_attach(child.id(), 100) else {
-        kill(&mut child);
+    let Some(mut handle) = try_attach(guard.id(), 100) else {
+        kill(&mut guard);
         return;
     };
 
     let mut data = ProfileData::default();
     drain_samples(&mut handle, &mut data, 2);
     handle.stop();
-    kill(&mut child);
+    kill(&mut guard);
 
     if data.total_samples < 20 {
         return;
@@ -2336,25 +2357,26 @@ while time.time() - start < 10:
     cpu_burner()
     light_work()
 "#;
-    let Some(mut child) = std::process::Command::new("python3")
+    let Some(mut guard) = std::process::Command::new("python3")
         .args(["-c", script])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()
         .ok()
+        .map(ProcessGuard::new)
     else {
         eprintln!("SKIP: no python3");
         return;
     };
     std::thread::sleep(std::time::Duration::from_millis(800));
-    let Some(mut handle) = try_attach(child.id(), 200) else {
-        kill(&mut child);
+    let Some(mut handle) = try_attach(guard.id(), 200) else {
+        kill(&mut guard);
         return;
     };
     let mut data = ProfileData::default();
     drain_samples(&mut handle, &mut data, 3);
     handle.stop();
-    kill(&mut child);
+    kill(&mut guard);
 
     if data.total_samples < 20 {
         eprintln!("SKIP: {} samples", data.total_samples);
@@ -2452,24 +2474,25 @@ while time.time() - start < 10:
     medium()
     light()
 "#;
-    let Some(mut child) = std::process::Command::new("python3")
+    let Some(mut guard) = std::process::Command::new("python3")
         .args(["-c", script])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()
         .ok()
+        .map(ProcessGuard::new)
     else {
         return;
     };
     std::thread::sleep(std::time::Duration::from_millis(800));
-    let Some(mut handle) = try_attach(child.id(), 200) else {
-        kill(&mut child);
+    let Some(mut handle) = try_attach(guard.id(), 200) else {
+        kill(&mut guard);
         return;
     };
     let mut data = ProfileData::default();
     drain_samples(&mut handle, &mut data, 3);
     handle.stop();
-    kill(&mut child);
+    kill(&mut guard);
     if data.total_samples < 20 {
         eprintln!("SKIP: {} samples", data.total_samples);
         return;

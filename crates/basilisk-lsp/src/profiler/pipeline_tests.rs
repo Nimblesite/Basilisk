@@ -284,6 +284,24 @@ fn count_diags_with_code(diags: &[tower_lsp::lsp_types::Diagnostic], code: &str)
 // They require Python 3 on PATH and may require elevated privileges on macOS
 // for non-child processes (but child processes work without root).
 
+/// RAII guard that kills a child process on drop.
+/// Prevents orphaned Python processes when tests panic.
+struct ProcessGuard(std::process::Child);
+
+impl ProcessGuard {
+    fn kill(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+impl Drop for ProcessGuard {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
 /// Python script that burns CPU in a known function for a predictable duration.
 const HOTSPOT_SCRIPT: &str = r#"
 import os, sys, time
@@ -312,8 +330,8 @@ print("DONE", flush=True)
 "#;
 
 /// Spawn a Python process running the hotspot script.
-/// Returns (child, pid) — the child handle and its PID.
-fn spawn_hotspot_python() -> Option<(std::process::Child, u32)> {
+/// Returns (`ProcessGuard`, pid) — the guard kills on drop to prevent orphans.
+fn spawn_hotspot_python() -> Option<(ProcessGuard, u32)> {
     let mut child = std::process::Command::new("python3")
         .args(["-c", HOTSPOT_SCRIPT])
         .stdout(std::process::Stdio::piped())
@@ -334,7 +352,7 @@ fn spawn_hotspot_python() -> Option<(std::process::Child, u32)> {
 
     let pid: u32 = ready_line.strip_prefix("READY:")?.trim().parse().ok()?;
 
-    Some((child, pid))
+    Some((ProcessGuard(child), pid))
 }
 
 /// REAL TEST: Spawn Python → attach py-spy → sample → verify hotspot in data.
@@ -358,7 +376,7 @@ fn real_pyspy_attach_sample_and_verify_hotspot() {
         return;
     }
 
-    let Some((mut child, pid)) = spawn_hotspot_python() else {
+    let Some((mut guard, pid)) = spawn_hotspot_python() else {
         eprintln!("SKIP: failed to spawn Python hotspot process");
         return;
     };
@@ -379,7 +397,6 @@ fn real_pyspy_attach_sample_and_verify_hotspot() {
         let msg = err.to_string();
         if msg.contains("ermission") || msg.contains("denied") || msg.contains("attach") {
             eprintln!("SKIP: py-spy permission denied (expected on macOS without root): {msg}");
-            let _ = child.kill();
             return;
         }
     }
@@ -388,7 +405,6 @@ fn real_pyspy_attach_sample_and_verify_hotspot() {
         Ok(h) => h,
         Err(err) => {
             eprintln!("SKIP: py-spy attach failed: {err}");
-            let _ = child.kill();
             return;
         }
     };
@@ -412,8 +428,7 @@ fn real_pyspy_attach_sample_and_verify_hotspot() {
 
     // Stop sampler and clean up Python process.
     handle.stop();
-    let _ = child.kill();
-    let _ = child.wait();
+    guard.kill();
 
     // ── ASSERTIONS: We must have collected real samples ──────────────
     assert!(
@@ -589,7 +604,7 @@ async fn real_session_manager_lifecycle() {
         return;
     }
 
-    let Some((mut child, pid)) = spawn_hotspot_python() else {
+    let Some((mut guard, pid)) = spawn_hotspot_python() else {
         eprintln!("SKIP: failed to spawn Python");
         return;
     };
@@ -602,7 +617,6 @@ async fn real_session_manager_lifecycle() {
         let msg = err.to_string();
         if msg.contains("ermission") || msg.contains("denied") || msg.contains("attach") {
             eprintln!("SKIP: py-spy permission denied: {msg}");
-            let _ = child.kill();
             return;
         }
     }
@@ -611,7 +625,6 @@ async fn real_session_manager_lifecycle() {
         Ok(s) => s,
         Err(err) => {
             eprintln!("SKIP: start failed: {err}");
-            let _ = child.kill();
             return;
         }
     };
@@ -692,8 +705,7 @@ async fn real_session_manager_lifecycle() {
         "stopping an already-stopped session should fail"
     );
 
-    let _ = child.kill();
-    let _ = child.wait();
+    guard.kill();
 
     eprintln!("REAL session manager lifecycle test PASSED");
 }

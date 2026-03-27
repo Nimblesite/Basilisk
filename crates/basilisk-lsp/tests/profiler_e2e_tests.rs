@@ -24,9 +24,13 @@
     clippy::needless_raw_string_hashes
 )]
 
+mod common;
+
 use std::io::BufRead;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
+
+use common::ProcessGuard;
 
 use basilisk_lsp::profiler::aggregator::{HotspotConfig, ProfileData};
 use basilisk_lsp::profiler::diagnostics::generate_diagnostics;
@@ -53,18 +57,20 @@ fn python3_available() -> bool {
 }
 
 /// Spawn a Python child process with the given inline script.
-/// Returns the `Child` handle. The caller is responsible for killing it.
-fn spawn_python(script: &str) -> Child {
-    Command::new(python_path())
+/// Returns a `ProcessGuard` that kills the child on drop.
+fn spawn_python(script: &str) -> ProcessGuard {
+    let child = Command::new(python_path())
         .args(["-c", script])
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
-        .expect("failed to spawn python3 — is it installed?")
+        .expect("failed to spawn python3 — is it installed?");
+    ProcessGuard::new(child)
 }
 
-/// Spawn a Python child from a script file. Returns the child and temp path.
-fn spawn_python_file(script: &str) -> (Child, std::path::PathBuf) {
+/// Spawn a Python child from a script file.
+/// Returns a `ProcessGuard` (kills on drop) and the temp path.
+fn spawn_python_file(script: &str) -> (ProcessGuard, std::path::PathBuf) {
     let dir = std::env::temp_dir().join("basilisk_profiler_e2e_tests");
     std::fs::create_dir_all(&dir).expect("create temp dir");
     let script_path = dir.join(format!(
@@ -83,13 +89,13 @@ fn spawn_python_file(script: &str) -> (Child, std::path::PathBuf) {
         .spawn()
         .expect("failed to spawn python3");
 
-    (child, script_path)
+    (ProcessGuard::new(child), script_path)
 }
 
 /// Wait until the child's stdout emits a line containing `marker`.
 /// Times out after `timeout`.
-fn wait_for_marker(child: &mut Child, marker: &str, timeout: Duration) {
-    let stdout = child.stdout.as_mut().expect("child stdout");
+fn wait_for_marker(guard: &mut ProcessGuard, marker: &str, timeout: Duration) {
+    let stdout = guard.child_mut().stdout.as_mut().expect("child stdout");
     let mut reader = std::io::BufReader::new(stdout);
     let mut line = String::new();
     let deadline = Instant::now() + timeout;
@@ -111,12 +117,6 @@ fn wait_for_marker(child: &mut Child, marker: &str, timeout: Duration) {
     }
 }
 
-/// Gracefully kill a child process and wait for it.
-fn kill_child(child: &mut Child) {
-    let _ = child.kill();
-    let _ = child.wait();
-}
-
 // ── Tests ───────────────────────────────────────────────────────────────────
 
 /// Attach to a real Python child process and verify we receive sample batches
@@ -132,20 +132,21 @@ fn test_attach_to_python_process_and_sample() {
     let script = r#"
 import sys, time
 print("READY", flush=True)
-# CPU-bound loop so py-spy gets real samples
+# CPU-bound loop with timeout to prevent orphaned processes.
+deadline = time.time() + 30
 total = 0
-for _ in range(100_000_000):
+while time.time() < deadline:
     total += sum(range(100))
 "#;
 
-    let mut child = spawn_python(script);
-    wait_for_marker(&mut child, "READY", Duration::from_secs(10));
+    let mut guard = spawn_python(script);
+    wait_for_marker(&mut guard, "READY", Duration::from_secs(10));
 
     // Give the process a moment to enter the hot loop.
     std::thread::sleep(Duration::from_millis(200));
 
     let config = SamplerConfig {
-        pid: child.id(),
+        pid: guard.id(),
         sample_rate: 100,
         include_native: false,
         include_idle: true,
@@ -173,7 +174,7 @@ for _ in range(100_000_000):
     );
 
     // 3. PID matches what we asked for
-    assert_eq!(handle.pid, child.id(), "handle.pid must match child PID");
+    assert_eq!(handle.pid, guard.id(), "handle.pid must match child PID");
 
     // Receive at least 5 sample batches.
     let mut batches = Vec::new();
@@ -222,7 +223,7 @@ for _ in range(100_000_000):
         "frame filename must not be empty"
     );
 
-    kill_child(&mut child);
+    guard.kill();
 }
 
 /// Collect samples from a sampler handle into a `ProfileData`, then stop.
@@ -336,23 +337,25 @@ fn test_full_pipeline_real_python() {
     }
 
     let script = r#"
-import sys
+import sys, time
 
 def hot():
     """CPU hotspot function."""
     return [x**2 for _ in range(100_000) for x in range(10)]
 
 print("READY", flush=True)
-for _ in range(5000):
+# Self-terminate after 30 seconds to prevent orphaned processes.
+deadline = time.time() + 30
+while time.time() < deadline:
     hot()
 "#;
 
-    let (mut child, script_path) = spawn_python_file(script);
-    wait_for_marker(&mut child, "READY", Duration::from_secs(10));
+    let (mut guard, script_path) = spawn_python_file(script);
+    wait_for_marker(&mut guard, "READY", Duration::from_secs(10));
     std::thread::sleep(Duration::from_millis(300));
 
     let config = SamplerConfig {
-        pid: child.id(),
+        pid: guard.id(),
         sample_rate: 100,
         include_native: false,
         include_idle: false,
@@ -361,8 +364,8 @@ for _ in range(5000):
 
     let mut handle = start_sampler(&config).expect("start_sampler should succeed");
     let data = collect_and_stop(&mut handle, Duration::from_secs(3), 0.01);
-    let child_pid = child.id();
-    kill_child(&mut child);
+    let child_pid = guard.id();
+    guard.kill();
 
     // 1. total_samples > 0
     assert!(
@@ -417,12 +420,12 @@ fn test_sampler_detects_python_version() {
         return;
     }
 
-    let mut child =
+    let mut guard =
         spawn_python("import sys; print('READY', flush=True); import time; time.sleep(10)");
-    wait_for_marker(&mut child, "READY", Duration::from_secs(10));
+    wait_for_marker(&mut guard, "READY", Duration::from_secs(10));
 
     let config = SamplerConfig {
-        pid: child.id(),
+        pid: guard.id(),
         sample_rate: 10,
         include_native: false,
         include_idle: false,
@@ -479,7 +482,7 @@ fn test_sampler_detects_python_version() {
     );
 
     handle.stop();
-    kill_child(&mut child);
+    guard.kill();
 }
 
 /// Verify that attaching to an already-exited process returns a meaningful error.
@@ -492,11 +495,11 @@ fn test_sampler_handles_process_exit_gracefully() {
     }
 
     // Spawn a Python process that exits immediately.
-    let mut child = spawn_python("pass");
-    let pid = child.id();
+    let mut guard = spawn_python("pass");
+    let pid = guard.id();
 
     // Wait for it to actually exit.
-    let status = child.wait().expect("wait for child");
+    let status = guard.child_mut().wait().expect("wait for child");
     assert!(status.success(), "child should exit successfully");
 
     // Give the OS a moment to clean up.
@@ -567,30 +570,32 @@ fn test_concurrent_sessions_different_pids() {
     }
 
     let script = r#"
-import sys
+import sys, time
 print("READY", flush=True)
+# Self-terminate after 30 seconds to prevent orphaned processes.
+deadline = time.time() + 30
 total = 0
-for _ in range(100_000_000):
+while time.time() < deadline:
     total += sum(range(50))
 "#;
 
-    let mut child_a = spawn_python(script);
-    let mut child_b = spawn_python(script);
+    let mut guard_a = spawn_python(script);
+    let mut guard_b = spawn_python(script);
 
-    wait_for_marker(&mut child_a, "READY", Duration::from_secs(10));
-    wait_for_marker(&mut child_b, "READY", Duration::from_secs(10));
+    wait_for_marker(&mut guard_a, "READY", Duration::from_secs(10));
+    wait_for_marker(&mut guard_b, "READY", Duration::from_secs(10));
 
     std::thread::sleep(Duration::from_millis(200));
 
     let config_a = SamplerConfig {
-        pid: child_a.id(),
+        pid: guard_a.id(),
         sample_rate: 50,
         include_native: false,
         include_idle: true,
         duration: None,
     };
     let config_b = SamplerConfig {
-        pid: child_b.id(),
+        pid: guard_b.id(),
         sample_rate: 50,
         include_native: false,
         include_idle: true,
@@ -668,8 +673,8 @@ for _ in range(100_000_000):
         "sanity: drained a reasonable number from B"
     );
 
-    kill_child(&mut child_a);
-    kill_child(&mut child_b);
+    guard_a.kill();
+    guard_b.kill();
 }
 
 /// Verify idle thread filtering: with `include_idle=false`, sleeping threads
@@ -692,19 +697,21 @@ t = threading.Thread(target=sleeper, daemon=True)
 t.start()
 
 print("READY", flush=True)
-# CPU-bound work on the main thread
+# CPU-bound work on the main thread.
+# Self-terminate after 30 seconds to prevent orphaned processes.
+deadline = time.time() + 30
 total = 0
-for _ in range(100_000_000):
+while time.time() < deadline:
     total += sum(range(100))
 "#;
 
-    let mut child = spawn_python(script);
-    wait_for_marker(&mut child, "READY", Duration::from_secs(10));
+    let mut guard = spawn_python(script);
+    wait_for_marker(&mut guard, "READY", Duration::from_secs(10));
     std::thread::sleep(Duration::from_millis(300));
 
     // Profile with include_idle=false
     let config = SamplerConfig {
-        pid: child.id(),
+        pid: guard.id(),
         sample_rate: 100,
         include_native: false,
         include_idle: false,
@@ -784,7 +791,7 @@ for _ in range(100_000_000):
         "should have function samples from active threads"
     );
 
-    kill_child(&mut child);
+    guard.kill();
 }
 
 /// Profile a known CPU hotspot and verify the profiler accurately identifies
@@ -798,7 +805,7 @@ fn test_profile_data_accuracy_cpu_bound() {
     }
 
     let script = r#"
-import sys
+import sys, time
 
 def cpu_burner():
     """This function MUST dominate the profile."""
@@ -809,16 +816,18 @@ def cpu_burner():
 
 print("READY", flush=True)
 # Call the burner repeatedly — all CPU time should be here.
-while True:
+# Self-terminate after 30 seconds to prevent orphaned processes.
+deadline = time.time() + 30
+while time.time() < deadline:
     cpu_burner()
 "#;
 
-    let (mut child, script_path) = spawn_python_file(script);
-    wait_for_marker(&mut child, "READY", Duration::from_secs(10));
+    let (mut guard, script_path) = spawn_python_file(script);
+    wait_for_marker(&mut guard, "READY", Duration::from_secs(10));
     std::thread::sleep(Duration::from_millis(300));
 
     let config = SamplerConfig {
-        pid: child.id(),
+        pid: guard.id(),
         sample_rate: 100,
         include_native: false,
         include_idle: false,
@@ -843,7 +852,7 @@ while True:
         data.ingest_traces(&batch.traces, sample_weight, false);
     }
 
-    kill_child(&mut child);
+    guard.kill();
 
     // 1. We collected a substantial number of samples
     assert!(
