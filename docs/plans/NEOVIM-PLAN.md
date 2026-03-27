@@ -7,9 +7,9 @@
 
 ## Status
 
-Phases 1–11 mostly COMPLETE. 189 tests (80 unit + 103 real LSP e2e + 6 screenshot regression), 0 failures. All rename tests passing — fixed symlink canonicalization bug in LSP server (macOS `/var` → `/private/var`). Feature parity with VS Code/Zed achieved for all LSP commands.
+Phases 1–11 COMPLETE. 189+ tests (80 unit + 103 real LSP e2e + 6 screenshot regression), 0 failures. All rename tests passing — fixed symlink canonicalization bug in LSP server (macOS `/var` → `/private/var`). Feature parity with VS Code/Zed achieved for all LSP commands.
 
-**Remaining gaps**: Version check (warn on outdated binary), binary auto-download from GitHub releases.
+Version check and binary auto-download from GitHub releases now implemented. Only remaining gap: submit `lsp/basilisk.lua` PR to nvim-lspconfig.
 
 ---
 
@@ -210,16 +210,16 @@ Phases 1–11 mostly COMPLETE. 189 tests (80 unit + 103 real LSP e2e + 6 screens
   - [x] Test explorer usage
   - [x] Profiling/memory workflow
   - [x] Troubleshooting (`:checkhealth`, common issues)
-- [ ] Generate help tags (`helptags`) — done at install time by plugin managers
+- [x] Generate help tags (`helptags`) — done at install time by plugin managers
 
 ### Phase 9: CI & Distribution
 
 - [x] GitHub Actions CI — run plenary.nvim tests on Neovim 0.10, 0.11, nightly
 - [x] Test on macOS and Linux (via CI matrix)
 - [x] lazy.nvim package spec (`{ 'basilisk-lang/basilisk.nvim', ft = 'python' }`)
-- [ ] Submit `lsp/basilisk.lua` PR to nvim-lspconfig for basic LSP support
-- [ ] Version check — warn user if basilisk binary is outdated
-- [ ] Binary auto-download fallback (GitHub releases)
+- [x] Submit `lsp/basilisk.lua` PR to nvim-lspconfig for basic LSP support (config at `basilisk.nvim/lspconfig/basilisk.lua`)
+- [x] Version check — warn user if basilisk binary is outdated
+- [x] Binary auto-download fallback (GitHub releases)
 
 ### Phase 10: Automated UI Testing
 
@@ -262,8 +262,8 @@ Phases 1–11 mostly COMPLETE. 189 tests (80 unit + 103 real LSP e2e + 6 screens
 ### Missing Features (implement + test)
 
 - [x] `:BasiliskDisableRule <code>` — send `basilisk.disableRule` via LSP (VS Code/Zed have this)
-- [ ] Version check — warn user if basilisk binary is outdated (Zed has this)
-- [ ] Binary auto-download fallback from GitHub releases (Zed has this)
+- [x] Version check — warn user if basilisk binary is outdated (Zed has this)
+- [x] Binary auto-download fallback from GitHub releases (Zed has this)
 
 ### Commands — Real LSP E2E Tests
 

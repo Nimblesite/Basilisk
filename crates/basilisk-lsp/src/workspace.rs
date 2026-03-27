@@ -348,6 +348,39 @@ impl WorkspaceIndex {
         results
     }
 
+    /// Map uv workspace members to LSP workspace folder URIs.
+    ///
+    /// Parses `[tool.uv.workspace]` from `pyproject.toml` at each workspace
+    /// root, resolves member paths, and converts them to `lsp_types::WorkspaceFolder`
+    /// entries. This enables multi-root LSP features (diagnostics, navigation)
+    /// to work seamlessly across workspace members.
+    ///
+    /// Returns an empty vec if no uv workspace is configured.
+    #[must_use]
+    pub fn workspace_member_folders(&self) -> Vec<tower_lsp::lsp_types::WorkspaceFolder> {
+        let mut folders = Vec::new();
+
+        for root in &self.roots {
+            let Ok(Some(workspace)) = basilisk_uv::parse_uv_workspace(root) else {
+                continue;
+            };
+
+            for member_dir in &workspace.members {
+                let Some(uri) = Url::from_file_path(member_dir).ok() else {
+                    continue;
+                };
+                let name = member_dir
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| uri.to_string());
+
+                folders.push(tower_lsp::lsp_types::WorkspaceFolder { uri, name });
+            }
+        }
+
+        folders
+    }
+
     /// Extract the set of exported symbol names from a file.
     ///
     /// Used for diffing exports before and after a re-analysis to determine
@@ -705,5 +738,323 @@ mod tests {
         let resolved_list = idx.all_resolved();
         // Only uri1 should appear (uri2 failed to parse).
         assert_eq!(resolved_list.len(), 1);
+    }
+
+    // ── Phase 5: uv.lock change triggers registry reparse ───────────────────
+
+    /// Helper: create a minimal uv project with a `uv.lock` and `pyproject.toml`.
+    fn create_uv_project(dir: &std::path::Path, packages: &[(&str, &str)]) {
+        // pyproject.toml with [tool.uv] so it's detected as a uv project.
+        let dep_names: Vec<String> = packages
+            .iter()
+            .map(|(name, _)| format!("\"{name}\""))
+            .collect();
+        let pyproject = format!(
+            "[project]\nname = \"test-project\"\nversion = \"0.1.0\"\ndependencies = [{}]\n\n[tool.uv]\n",
+            dep_names.join(", ")
+        );
+        std::fs::write(dir.join("pyproject.toml"), pyproject).unwrap();
+
+        // uv.lock with the specified packages.
+        write_uv_lock(dir, packages);
+
+        // Marker file so detect_uv_project finds it.
+        std::fs::write(dir.join("uv.lock"), std::fs::read_to_string(dir.join("uv.lock")).unwrap()).unwrap();
+    }
+
+    /// Helper: write a uv.lock TOML file with the given packages.
+    fn write_uv_lock(dir: &std::path::Path, packages: &[(&str, &str)]) {
+        let mut lock_content = String::from("version = 1\nrequires-python = \">=3.12\"\n\n");
+        for (name, version) in packages {
+            lock_content.push_str(&format!(
+                "[[package]]\nname = \"{name}\"\nversion = \"{version}\"\nsource = {{ registry = \"https://pypi.org/simple\" }}\n\n"
+            ));
+        }
+        std::fs::write(dir.join("uv.lock"), lock_content).unwrap();
+    }
+
+    #[test]
+    fn test_lockfile_change_triggers_registry_reparse() {
+        let dir = unique_tmp("bsk_uv_reparse");
+        std::fs::create_dir_all(&dir).unwrap();
+        create_uv_project(&dir, &[("requests", "2.31.0")]);
+
+        // Build initial registry.
+        let roots = vec![dir.clone()];
+        let registry1 = build_registry_from_roots(&roots);
+        assert!(registry1.is_some(), "registry should be built from uv.lock");
+        let reg1 = registry1.unwrap();
+        assert!(reg1.has_package("requests"));
+        assert!(!reg1.has_package("flask"));
+
+        // Simulate uv.lock change: add flask.
+        write_uv_lock(&dir, &[("requests", "2.31.0"), ("flask", "3.0.0")]);
+
+        // Re-parse — should pick up flask.
+        let registry2 = build_registry_from_roots(&roots);
+        assert!(registry2.is_some());
+        let reg2 = registry2.unwrap();
+        assert!(reg2.has_package("requests"));
+        assert!(reg2.has_package("flask"), "flask should appear after lock change");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ── Phase 5: add/remove package updates diagnostics ─────────────────────
+
+    #[test]
+    fn test_lockfile_add_package_clears_e0010() {
+        let dir = unique_tmp("bsk_uv_add_pkg");
+        std::fs::create_dir_all(&dir).unwrap();
+        create_uv_project(&dir, &[("requests", "2.31.0")]);
+
+        let roots = vec![dir.clone()];
+        let config = crate::config::load_config(&dir);
+
+        // Build workspace index with a file that imports `flask`.
+        let idx = WorkspaceIndex::new(roots.clone(), AnalysisMode::WholeModule);
+        let uri = make_uri(&format!("{}/app.py", dir.display()));
+        let _ = idx.set_open(&uri, "import flask\n", 1);
+
+        // Resolve with registry that does NOT have flask.
+        let registry = build_registry_from_roots(&roots);
+        let search_paths =
+            crate::import_resolver::ImportSearchPaths::from_config(&roots, &config, registry);
+        crate::import_resolver::resolve_workspace_imports(&idx, &search_paths);
+
+        // Re-check: flask import should be unresolved (E0010).
+        recheck_all(&idx);
+        let diags_before = get_diagnostics(&idx, &uri);
+        let has_e0010_flask = diags_before
+            .iter()
+            .any(|d| d.code.code == "BSK-E0010" && d.message.contains("flask"));
+        assert!(
+            has_e0010_flask,
+            "expected BSK-E0010 for unresolved flask import, got: {diags_before:?}"
+        );
+
+        // Now add flask to the lock file and rebuild.
+        write_uv_lock(&dir, &[("requests", "2.31.0"), ("flask", "3.0.0")]);
+        // Also add flask to pyproject dependencies.
+        let pyproject = "[project]\nname = \"test-project\"\nversion = \"0.1.0\"\ndependencies = [\"requests\", \"flask\"]\n\n[tool.uv]\n";
+        std::fs::write(dir.join("pyproject.toml"), pyproject).unwrap();
+
+        let registry2 = build_registry_from_roots(&roots);
+        let search_paths2 =
+            crate::import_resolver::ImportSearchPaths::from_config(&roots, &config, registry2);
+        crate::import_resolver::resolve_workspace_imports(&idx, &search_paths2);
+        recheck_all(&idx);
+
+        // After adding flask to the registry, classify_unresolved should now
+        // return NeedsSync (in registry but not on filesystem) instead of
+        // NotInstalled. The diagnostic message changes accordingly.
+        let diags_after = get_diagnostics(&idx, &uri);
+        let still_has_not_installed = diags_after
+            .iter()
+            .any(|d| d.code.code == "BSK-E0010" && d.message.contains("not a dependency"));
+        assert!(
+            !still_has_not_installed,
+            "flask should no longer show 'not a dependency' after being added to lock: {diags_after:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_lockfile_remove_package_fires_e0010() {
+        let dir = unique_tmp("bsk_uv_rm_pkg");
+        std::fs::create_dir_all(&dir).unwrap();
+        create_uv_project(&dir, &[("requests", "2.31.0"), ("flask", "3.0.0")]);
+
+        let roots = vec![dir.clone()];
+        let config = crate::config::load_config(&dir);
+
+        let idx = WorkspaceIndex::new(roots.clone(), AnalysisMode::WholeModule);
+        let uri = make_uri(&format!("{}/app.py", dir.display()));
+        let _ = idx.set_open(&uri, "import flask\n", 1);
+
+        // Resolve with registry that HAS flask.
+        let registry = build_registry_from_roots(&roots);
+        let search_paths =
+            crate::import_resolver::ImportSearchPaths::from_config(&roots, &config, registry);
+        crate::import_resolver::resolve_workspace_imports(&idx, &search_paths);
+        recheck_all(&idx);
+
+        // Now remove flask from the lock file.
+        write_uv_lock(&dir, &[("requests", "2.31.0")]);
+        let pyproject = "[project]\nname = \"test-project\"\nversion = \"0.1.0\"\ndependencies = [\"requests\"]\n\n[tool.uv]\n";
+        std::fs::write(dir.join("pyproject.toml"), pyproject).unwrap();
+
+        let registry2 = build_registry_from_roots(&roots);
+        let search_paths2 =
+            crate::import_resolver::ImportSearchPaths::from_config(&roots, &config, registry2);
+        crate::import_resolver::resolve_workspace_imports(&idx, &search_paths2);
+        recheck_all(&idx);
+
+        let diags = get_diagnostics(&idx, &uri);
+        let has_e0010_flask = diags
+            .iter()
+            .any(|d| d.code.code == "BSK-E0010" && d.message.contains("flask"));
+        assert!(
+            has_e0010_flask,
+            "expected BSK-E0010 for flask after removal from lock, got: {diags:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ── Phase 5: .python-version change updates stdlib availability ──────────
+
+    #[test]
+    fn test_python_version_change_updates_config() {
+        let dir = unique_tmp("bsk_uv_pyver");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // Start with Python 3.11.
+        std::fs::write(dir.join(".python-version"), "3.11\n").unwrap();
+        let ver1 = basilisk_uv::python_version::read_python_version(&dir);
+        assert_eq!(ver1, Some("3.11".to_owned()));
+
+        // Simulate .python-version change to 3.12.
+        std::fs::write(dir.join(".python-version"), "3.12\n").unwrap();
+        let ver2 = basilisk_uv::python_version::read_python_version(&dir);
+        assert_eq!(ver2, Some("3.12".to_owned()));
+
+        // Verify that the change is detected and a different value is returned.
+        assert_ne!(ver1, ver2, "python version should change after file update");
+
+        // Verify stdlib module availability doesn't regress — `tomllib` was
+        // added in 3.11 so it should be available in both versions.
+        assert!(
+            basilisk_stubs::is_stdlib_module("tomllib"),
+            "tomllib should be a stdlib module"
+        );
+
+        // `os` should always be available regardless of version.
+        assert!(basilisk_stubs::is_stdlib_module("os"));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ── Phase 6: multi-root LSP workspace folder mapping ────────────────────
+
+    #[test]
+    fn test_workspace_member_folders_with_uv_workspace() {
+        let dir = unique_tmp("bsk_uv_ws_folders");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // Create workspace members.
+        let pkg_a = dir.join("packages").join("alpha");
+        let pkg_b = dir.join("packages").join("beta");
+        std::fs::create_dir_all(&pkg_a).unwrap();
+        std::fs::create_dir_all(&pkg_b).unwrap();
+
+        // pyproject.toml with workspace members.
+        let pyproject = "[tool.uv.workspace]\nmembers = [\"packages/*\"]\n";
+        std::fs::write(dir.join("pyproject.toml"), pyproject).unwrap();
+
+        let idx = WorkspaceIndex::new(vec![dir.clone()], AnalysisMode::WholeModule);
+        let folders = idx.workspace_member_folders();
+
+        assert_eq!(
+            folders.len(),
+            2,
+            "expected 2 workspace folders, got: {folders:?}"
+        );
+
+        let names: Vec<&str> = folders.iter().map(|f| f.name.as_str()).collect();
+        assert!(names.contains(&"alpha"), "should contain alpha: {names:?}");
+        assert!(names.contains(&"beta"), "should contain beta: {names:?}");
+
+        // Each folder should have a valid file:// URI.
+        for folder in &folders {
+            assert!(
+                folder.uri.scheme() == "file",
+                "folder URI should be file://: {}",
+                folder.uri
+            );
+        }
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_workspace_member_folders_no_uv_workspace() {
+        let dir = unique_tmp("bsk_uv_ws_none");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let idx = WorkspaceIndex::new(vec![dir.clone()], AnalysisMode::WholeModule);
+        let folders = idx.workspace_member_folders();
+
+        assert!(
+            folders.is_empty(),
+            "non-uv workspace should return no folders"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_workspace_member_folders_excludes_are_still_enumerated() {
+        // Workspace exclude patterns are stored in the UvWorkspace but
+        // the folder mapping enumerates all physical members — filtering
+        // by excludes is the caller's responsibility.
+        let dir = unique_tmp("bsk_uv_ws_excl");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let pkg = dir.join("libs").join("core");
+        std::fs::create_dir_all(&pkg).unwrap();
+
+        let pyproject =
+            "[tool.uv.workspace]\nmembers = [\"libs/*\"]\nexclude = [\"libs/core\"]\n";
+        std::fs::write(dir.join("pyproject.toml"), pyproject).unwrap();
+
+        let idx = WorkspaceIndex::new(vec![dir.clone()], AnalysisMode::WholeModule);
+        let folders = idx.workspace_member_folders();
+
+        // The folder mapping reports what's physically present; the caller
+        // applies exclude logic.
+        assert_eq!(folders.len(), 1);
+        assert_eq!(folders[0].name, "core");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ── Test helpers ────────────────────────────────────────────────────────
+
+    /// Build a `PackageRegistry` from workspace roots, mirroring the LSP init flow.
+    fn build_registry_from_roots(
+        roots: &[std::path::PathBuf],
+    ) -> Option<Arc<basilisk_uv::PackageRegistry>> {
+        let uv_info = basilisk_uv::detect_uv_project(roots)?;
+        if !uv_info.has_lockfile {
+            return None;
+        }
+        let lock_path = uv_info.root.join("uv.lock");
+        let lock_file = basilisk_uv::parse_lock_file(&lock_path).ok()?;
+        let deps = basilisk_uv::extract_pyproject_deps(&uv_info.root);
+        let registry = basilisk_uv::PackageRegistry::from_lock_file(&lock_file, &deps);
+        Some(Arc::new(registry))
+    }
+
+    /// Re-check all files in the workspace index and update their diagnostics.
+    fn recheck_all(index: &WorkspaceIndex) {
+        for mut entry in index.files.iter_mut() {
+            let Some(resolved) = &entry.resolved else {
+                continue;
+            };
+            let checker_diags = basilisk_checker::check(resolved);
+            entry.diagnostics = checker_diags;
+        }
+    }
+
+    /// Extract checker diagnostics for a given URI from the workspace index.
+    fn get_diagnostics(index: &WorkspaceIndex, uri: &Url) -> Vec<basilisk_checker::Diagnostic> {
+        let path = uri.to_file_path().unwrap();
+        index
+            .files
+            .get(&path)
+            .map(|e| e.diagnostics.clone())
+            .unwrap_or_default()
     }
 }

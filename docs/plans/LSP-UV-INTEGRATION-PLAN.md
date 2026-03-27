@@ -459,7 +459,7 @@ Parallelizable:
 - [x] Register `.python-version` file watcher
 - [x] Register `pyproject.toml` change handler (staleness detection, workspace member changes)
 - [x] Registry rebuild on `uv.lock`/`pyproject.toml` change: `rebuild_registry_and_resolve()` re-parses lock, re-resolves imports, republishes all diagnostics
-- [ ] Tests: lock change triggers reparse, add/remove package updates diagnostics, Python version change
+- [x] Tests: lock change triggers reparse, add/remove package updates diagnostics, Python version change
 
 ### Phase 6 — Hover Enrichment & Workspace Support
 
@@ -469,7 +469,7 @@ Parallelizable:
 - [x] Parse `[tool.uv.workspace]` — extract member paths from glob patterns
 - [x] Workspace member discovery: expand globs → find member `pyproject.toml` → extract package names
 - [x] Wire workspace members into import resolver: `discover_workspace_members()` adds member src roots to search paths (after roots, before extraPaths)
-- [ ] Multi-root LSP mapping for workspace members
+- [x] Multi-root LSP mapping for workspace members
 - [x] Tests: hover content, workspace glob expansion, cross-member imports
 
 ### Phase 7 — Configuration & Editor Integration

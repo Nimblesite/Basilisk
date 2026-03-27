@@ -99,7 +99,16 @@ function M.setup(opts)
   register_notification_handlers()
 
   -- Start the LSP client.
-  lsp.start(M.config)
+  local started = lsp.start(M.config)
+
+  -- Check for updates asynchronously after successful start.
+  if started then
+    local bin = require("basilisk.binary")
+    local bin_path = bin.resolve(M.config.binary_path)
+    if bin_path then
+      bin.check_for_updates(bin_path)
+    end
+  end
 
   -- Register user commands.
   commands.register(M.config)

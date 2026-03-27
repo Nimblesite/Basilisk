@@ -81,6 +81,22 @@ Watch Zed's extension API evolution. The headless platform work (for AI agents) 
 - [x] Improved highlights: f-string interpolation, walrus operator, exception builtins, dunder methods, import paths, generic type params, lambda params, decorator calls
 - [ ] Verify: highlighting, outline panel, bracket matching, auto-indent (manual — requires Zed with extension installed)
 
+#### Code Review Findings (2026-03-27)
+
+All 7 query files (267 lines total) reviewed. Queries are well-structured and syntactically correct.
+
+| File | Lines | Status |
+|------|-------|--------|
+| `highlights.scm` | 143 | Good — covers keywords, 40+ builtins, exceptions, f-strings, walrus, PEP 695 generics, dunder methods |
+| `brackets.scm` | 3 | Complete — all three bracket pairs |
+| `outline.scm` | 27 | Good — functions, async functions, classes, methods, decorated definitions |
+| `indents.scm` | 34 | Good — all compound statements + brackets indent, control flow statements dedent |
+| `injections.scm` | 16 | Good — SQL heuristic (SELECT/INSERT/etc.) and `re.*()` regex injection |
+| `textobjects.scm` | 14 | Good — function/class around+inside, comments, parameters |
+| `runnables.scm` | 24 | Good — `if __name__`, pytest functions/classes, unittest methods |
+
+**No blocking issues found.** Manual verification with Zed still required to confirm visual behavior.
+
 ### Phase 3: Debugging (DAP)
 
 - [x] Create `debug_adapter_schemas/basilisk-debug.json` (launch + attach schema with `oneOf`)
@@ -88,13 +104,45 @@ Watch Zed's extension API evolution. The headless platform work (for AI agents) 
 - [x] Implement `dap_request_kind()` and `dap_config_to_scenario()`
 - [ ] Test: breakpoints, stepping, variables, debug console, attach mode, error handling (manual — no Zed test framework)
 
+#### Code Review Findings (2026-03-27)
+
+DAP implementation is comprehensive across all three editors (Zed, VS Code, Neovim).
+
+**Working features (verified by code review + existing tests):**
+- Launch mode (spawn debugpy, connect, launch program)
+- Attach mode (connect to running debugpy listener, 3s timeout fallback)
+- Breakpoints (set/clear/hit detection)
+- Stepping (into/over/out, with stepOut auto-next and structural line skipping quirk fixes)
+- Variables and scopes (local inspection, watch expressions)
+- Call stack navigation
+- Evaluate / debug console
+- Python resolution (BASILISK_PYTHON → venv → system fallback)
+- debugpy validation (clear error if not installed)
+- Process cleanup (no orphaned processes)
+
+**Test coverage:**
+- Rust unit tests: port allocation, session ID, python resolution, debugpy check, port consumption regression test
+- Neovim integration: 8 stepping test functions covering list ops, dict ops, nested calls, loops, conditionals, types, classes, scopes
+- LSP E2E: `test_zed_execute_start_debug_session()` verifies graceful handling
+
+**Manual Zed testing still required** — no Zed extension test framework exists.
+
 ### Phase 4: Slash Commands (Profiling & Memory)
 
 - [x] Register `/profile`, `/profstop`, `/profsnapshot`, `/memleak`, `/memstop`, `/memrefs` slash commands
 - [x] Implement `run_slash_command()` dispatch with markdown output
 - [x] Implement `complete_slash_command_argument()` for PID and type suggestions
 - [x] Format output as real markdown with headers, tables, code blocks, and usage hints
-- [ ] Wire slash commands to actual LSP profiler/memory commands (blocked on profiling engine)
+- [x] ~~Wire slash commands to actual LSP profiler/memory commands~~ — **Not possible:** Zed `zed_extension_api` 0.7.0 does not expose `workspace/executeCommand` from slash commands. Slash commands can only return `SlashCommandOutput` (text). Current implementation is correct: commands provide documentation guiding users to the command palette. See `LSP-PROFILING-PLAN.md` for confirmation of this API limitation.
+
+#### Resolution (2026-03-27)
+
+The Zed slash command API is a **text-only interface** for the AI assistant panel. It cannot trigger LSP commands. The current implementation correctly returns rich markdown documentation with:
+- Exact LSP command names (`basilisk.profiler.start`, etc.)
+- JSON parameter examples users can copy
+- Preset tables, output format descriptions, diagnostic code explanations
+
+This matches Zed's architecture: LSP commands are triggered via the command palette, not slash commands. **No code change needed.**
 
 ### Phase 5: Polish & Publishing
 
@@ -102,3 +150,24 @@ Watch Zed's extension API evolution. The headless platform work (for AI agents) 
 - [x] Set up CI: WASM build, native clippy + tests, cross-platform matrix (ubuntu + macOS)
 - [x] Extract testable pure logic into `logic.rs` with 41 unit tests in `logic_tests.rs`
 - [ ] Publish to Zed extension registry
+
+#### Publishing Requirements (2026-03-27)
+
+Publishing to the Zed extension registry requires a PR to `zed-industries/extensions`:
+
+1. Add Basilisk repo as a Git submodule under `extensions/basilisk`
+2. Add entry to `extensions.toml` with `path = "basilisk-zed"` (since extension is in a subdirectory)
+3. Run `pnpm sort-extensions` to sort alphabetically
+4. PR is reviewed by Zed team, then auto-published on merge
+
+**Current readiness:**
+| Requirement | Status |
+|---|---|
+| `extension.toml` metadata (id, name, version, authors, description, repository) | Ready |
+| `Cargo.toml` + Rust source | Ready |
+| Tree-sitter grammars/queries | Ready |
+| Debug adapter schema | Ready |
+| Theme | Ready |
+| LICENSE file | **MISSING — must add before publishing** |
+
+**Blocker:** A LICENSE file (MIT, Apache 2.0, etc.) must be present at the repo root or in `basilisk-zed/`. Zed requires accepted open-source licenses for all extensions since October 2025.

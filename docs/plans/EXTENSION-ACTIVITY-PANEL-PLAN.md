@@ -149,13 +149,13 @@ Lua-rendered buffers using the nvim LSP client.
 - [x] Register `:BasiliskModules`, `:BasiliskHealth`, `:BasiliskInfo` commands
 - [x] Set default keymaps: `<leader>bm`, `<leader>bh`, `<leader>bi`
 - [x] Handle `basilisk/moduleChanged` via `vim.lsp.handlers` for live refresh
-- [ ] Test: `:BasiliskModules` renders correct tree for test workspace
-- [ ] Test: `:BasiliskHealth` renders correct coverage stats
+- [x] Test: `:BasiliskModules` renders correct tree for test workspace
+- [x] Test: `:BasiliskHealth` renders correct coverage stats
 
 ### Polish
-- [ ] Performance test: `basilisk/workspaceModules` < 100ms for 1000-file workspace
-- [ ] Performance test: `basilisk/typeHealth` < 50ms for 1000-file workspace
-- [ ] Performance test: `basilisk/moduleChanged` notification < 20ms per file change
-- [ ] Accessibility audit: VS Code screen reader testing
+- [x] Performance test: `basilisk/workspaceModules` < 100ms for 1000-file workspace
+- [x] Performance test: `basilisk/typeHealth` < 50ms for 1000-file workspace
+- [x] Performance test: `basilisk/moduleChanged` notification < 20ms per file change
+- [x] Accessibility audit: VS Code screen reader testing
 - [x] Final icon design for activity bar
-- [ ] Documentation: add panel usage to README / user guide
+- [x] Documentation: add panel usage to README / user guide

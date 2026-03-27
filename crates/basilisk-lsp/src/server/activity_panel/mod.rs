@@ -3,6 +3,7 @@
 //! Implements `basilisk.workspaceModules` and `basilisk.typeHealth` execute-command
 //! handlers that power the Module Explorer and Type Health panels in editor extensions.
 
+mod benchmarks;
 mod helpers;
 mod module_tree;
 mod type_health;
