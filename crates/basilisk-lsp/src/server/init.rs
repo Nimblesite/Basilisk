@@ -9,7 +9,8 @@ use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::{
     CallHierarchyServerCapability, CodeActionKind, CodeActionOptions, CodeActionProviderCapability,
     CodeLensOptions, ColorProviderCapability, CompletionOptions, DeclarationCapability,
-    DidChangeConfigurationParams, DidChangeWatchedFilesRegistrationOptions, ExecuteCommandOptions,
+    DidChangeConfigurationParams, DidChangeWatchedFilesRegistrationOptions,
+    DidChangeWorkspaceFoldersParams, ExecuteCommandOptions,
     FileOperationFilter, FileOperationPattern, FileOperationPatternKind,
     FileOperationRegistrationOptions, FileSystemWatcher, FoldingRangeProviderCapability,
     GlobPattern, HoverProviderCapability, InitializeParams, InitializeResult, MessageType, OneOf,
@@ -17,7 +18,8 @@ use tower_lsp::lsp_types::{
     SemanticTokensLegend, SemanticTokensOptions, SemanticTokensServerCapabilities,
     ServerCapabilities, ServerInfo, SignatureHelpOptions, TextDocumentSyncCapability,
     TextDocumentSyncKind, TypeDefinitionProviderCapability, Url, WorkDoneProgressOptions,
-    WorkspaceFileOperationsServerCapabilities, WorkspaceServerCapabilities,
+    WorkspaceFileOperationsServerCapabilities, WorkspaceFoldersServerCapabilities,
+    WorkspaceServerCapabilities,
 };
 use tower_lsp::Client;
 use tracing::info;
@@ -139,6 +141,10 @@ fn build_capabilities() -> ServerCapabilities {
         )),
         color_provider: Some(ColorProviderCapability::Simple(true)),
         workspace: Some(WorkspaceServerCapabilities {
+            workspace_folders: Some(WorkspaceFoldersServerCapabilities {
+                supported: Some(true),
+                change_notifications: Some(OneOf::Left(true)),
+            }),
             file_operations: Some(WorkspaceFileOperationsServerCapabilities {
                 will_rename: Some(FileOperationRegistrationOptions {
                     filters: vec![FileOperationFilter {
@@ -301,6 +307,60 @@ pub(super) async fn did_change_configuration(
         AnalysisMode::OpenFilesOnly => {
             clear_non_open_diagnostics(server).await;
         }
+    }
+}
+
+/// Handle `workspace/didChangeWorkspaceFolders`: update roots and re-scan.
+///
+/// When the editor adds or removes workspace folders, we update our root list
+/// and trigger a fresh workspace scan so import resolution and diagnostics
+/// reflect the new folder set.
+pub(super) async fn did_change_workspace_folders(
+    server: &LspServer,
+    params: DidChangeWorkspaceFoldersParams,
+) {
+    let event = params.event;
+
+    let mut roots = server.workspace_roots.write().await;
+
+    // Remove folders that were closed.
+    for removed in &event.removed {
+        if let Ok(path) = removed.uri.to_file_path() {
+            roots.retain(|r| r != &path);
+        }
+    }
+
+    // Add newly opened folders.
+    for added in &event.added {
+        if let Ok(path) = added.uri.to_file_path() {
+            if !roots.contains(&path) {
+                roots.push(path);
+            }
+        }
+    }
+
+    let updated_roots = roots.clone();
+    drop(roots);
+
+    info!(
+        roots = ?updated_roots,
+        added = event.added.len(),
+        removed = event.removed.len(),
+        "workspace folders changed"
+    );
+
+    // Rebuild the workspace index with the new root set.
+    let mode = {
+        let guard = server.index.read().await;
+        guard.as_ref().map_or(AnalysisMode::OpenFilesOnly, |idx| idx.mode)
+    };
+
+    let index = WorkspaceIndex::new(updated_roots, mode);
+    *server.index.write().await = Some(index);
+
+    // Re-scan if in a whole-workspace analysis mode.
+    if matches!(mode, AnalysisMode::WholeModule | AnalysisMode::CrossModule) {
+        run_workspace_scan(server, mode).await;
     }
 }
 

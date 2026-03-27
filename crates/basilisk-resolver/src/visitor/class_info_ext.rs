@@ -356,6 +356,7 @@ pub(super) fn import_infos_from(node: &StmtImport) -> Vec<ImportInfo> {
             package_dep_kind: None,
             package_version: None,
             package_name: None,
+            unresolved_reason: None,
         })
         .collect()
 }
@@ -380,6 +381,7 @@ pub(super) fn import_from_infos_from(node: &StmtImportFrom) -> Vec<ImportInfo> {
             package_dep_kind: None,
             package_version: None,
             package_name: None,
+            unresolved_reason: None,
         }];
     }
 
@@ -392,6 +394,9 @@ pub(super) fn import_from_infos_from(node: &StmtImportFrom) -> Vec<ImportInfo> {
         resolution: ImportResolution::Unresolved,
         resolved_path: None,
         package_dep_kind: None,
+        package_version: None,
+        package_name: None,
+        unresolved_reason: None,
     }]
 }
 

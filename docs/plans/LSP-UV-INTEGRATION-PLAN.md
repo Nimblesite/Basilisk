@@ -414,9 +414,9 @@ Parallelizable:
 - [x] `detect.rs` — detect uv projects via `uv.lock`, `[tool.uv]`, `.venv/pyvenv.cfg`
 - [x] `lockfile.rs` — parse `uv.lock` TOML into `LockFile` / `LockPackage` structs
 - [x] `registry.rs` — `PackageRegistry` HashMap: normalized import name → `PackageInfo`
-- [x] `import_map.rs` — package-to-import-name mapping (13 known mismatches + normalization fallback)
+- [x] `import_map.rs` — package-to-import-name mapping (65 known mismatches + normalization fallback)
 - [x] `python_version.rs` — read `.python-version` file
-- [x] Tests: detection (uv vs non-uv), lock parsing (basic, markers, workspace), registry lookup, import name mapping, `.python-version` — **67 tests passing**
+- [x] Tests: detection (uv vs non-uv), lock parsing (basic, markers, workspace), registry lookup, import name mapping, `.python-version` — **117 tests passing**
 
 ### Phase 2 — Wire into Import Resolver
 
@@ -431,7 +431,7 @@ Parallelizable:
 
 ### Phase 3 — Enhanced Diagnostics
 
-- [ ] BSK-E0010: context-aware messages based on `UnresolvedReason` (not just "unresolved import") — e0010.rs still uses a single generic message
+- [x] BSK-E0010: context-aware messages based on `UnresolvedReason` (NotInstalled/NotInDeps/NeedsSync/WrongPythonVersion/Unknown)
 - [ ] BSK-E0010: attach `code_action_data` to diagnostic for quick-fix wiring — not implemented
 - [x] BSK-W0010: missing stubs diagnostic (package installed but no `.pyi`)
 - [x] BSK-W0011: undeclared dependency import (transitive dep used directly) — fires when `package_dep_kind == Transitive`
@@ -463,7 +463,7 @@ Parallelizable:
 
 ### Phase 6 — Hover Enrichment & Workspace Support
 
-- [ ] Hover on import: show package version, source, stub status from registry — `package_info` is always `None`
+- [x] Hover on import: show package version from registry (populated via `enrich_with_package_info()`)
 - [x] Hover on workspace member import: show "Workspace member" + path (detected via non-site-packages path)
 - [x] Hover on imports: show dependency classification (direct/dev/transitive) from uv registry
 - [x] Parse `[tool.uv.workspace]` — extract member paths from glob patterns

@@ -41,7 +41,8 @@ use tower_lsp::lsp_types::{
     CodeActionParams, CodeActionResponse, CodeLens, CodeLensParams, ColorInformation,
     ColorPresentation, ColorPresentationParams, CompletionItem, CompletionParams,
     CompletionResponse, DidChangeConfigurationParams, DidChangeTextDocumentParams,
-    DidChangeWatchedFilesParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
+    DidChangeWatchedFilesParams, DidChangeWorkspaceFoldersParams, DidCloseTextDocumentParams,
+    DidOpenTextDocumentParams,
     DidSaveTextDocumentParams, DocumentColorParams, DocumentFormattingParams, DocumentHighlight,
     DocumentHighlightParams, DocumentSymbolParams, DocumentSymbolResponse, ExecuteCommandParams,
     FoldingRange, FoldingRangeParams, GotoDefinitionParams, GotoDefinitionResponse, Hover,
@@ -195,6 +196,10 @@ impl tower_lsp::LanguageServer for LspServer {
 
     async fn did_change_configuration(&self, params: DidChangeConfigurationParams) {
         init::did_change_configuration(self, params).await;
+    }
+
+    async fn did_change_workspace_folders(&self, params: DidChangeWorkspaceFoldersParams) {
+        init::did_change_workspace_folders(self, params).await;
     }
 
     async fn shutdown(&self) -> LspResult<()> {

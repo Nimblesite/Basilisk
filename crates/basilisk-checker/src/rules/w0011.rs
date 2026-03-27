@@ -86,6 +86,9 @@ mod tests {
                 "/venv/lib/python3.12/site-packages/urllib3/__init__.py",
             )),
             package_dep_kind: Some(PackageDepKind::Transitive),
+            package_version: None,
+            package_name: None,
+            unresolved_reason: None,
         };
         let module = make_module(vec![import]);
         let mut diagnostics = Vec::new();
@@ -107,6 +110,9 @@ mod tests {
                 "/venv/lib/python3.12/site-packages/requests/__init__.py",
             )),
             package_dep_kind: Some(PackageDepKind::Direct),
+            package_version: None,
+            package_name: None,
+            unresolved_reason: None,
         };
         let module = make_module(vec![import]);
         let mut diagnostics = Vec::new();
@@ -126,6 +132,9 @@ mod tests {
                 "/venv/lib/python3.12/site-packages/pytest/__init__.py",
             )),
             package_dep_kind: Some(PackageDepKind::Dev),
+            package_version: None,
+            package_name: None,
+            unresolved_reason: None,
         };
         let module = make_module(vec![import]);
         let mut diagnostics = Vec::new();
@@ -143,6 +152,9 @@ mod tests {
             resolution: ImportResolution::SourcePy,
             resolved_path: None,
             package_dep_kind: None,
+            package_version: None,
+            package_name: None,
+            unresolved_reason: None,
         };
         let module = make_module(vec![import]);
         let mut diagnostics = Vec::new();
@@ -160,6 +172,9 @@ mod tests {
             resolution: ImportResolution::Unresolved,
             resolved_path: None,
             package_dep_kind: Some(PackageDepKind::Transitive),
+            package_version: None,
+            package_name: None,
+            unresolved_reason: None,
         };
         let module = make_module(vec![import]);
         let mut diagnostics = Vec::new();
@@ -177,6 +192,9 @@ mod tests {
             resolution: ImportResolution::SourcePy,
             resolved_path: Some(PathBuf::from("/workspace/mylib/__init__.py")),
             package_dep_kind: None,
+            package_version: None,
+            package_name: None,
+            unresolved_reason: None,
         };
         let module = make_module(vec![import]);
         let mut diagnostics = Vec::new();

@@ -113,6 +113,15 @@ fn format_import_hover(import_info: &ImportInfo) -> String {
         }
     }
 
+    // Show package name and version from the uv registry.
+    if let Some(ref version) = import_info.package_version {
+        let display_name = import_info
+            .package_name
+            .as_deref()
+            .unwrap_or(&import_info.module);
+        parts.push(format!("**Package**: {display_name} v{version}"));
+    }
+
     // Show dependency classification from uv registry.
     if let Some(ref dep_kind) = import_info.package_dep_kind {
         let label = match dep_kind {
