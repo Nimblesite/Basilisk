@@ -214,10 +214,9 @@ Version check and binary auto-download from GitHub releases now implemented. Onl
 
 ### Phase 9: CI & Distribution
 
-- [x] GitHub Actions CI — run plenary.nvim tests on Neovim 0.10, 0.11, nightly
-- [x] Test on macOS and Linux (via CI matrix)
+- [x] GitHub Actions CI — run plenary.nvim tests on Ubuntu with Neovim 0.11
 - [x] lazy.nvim package spec (`{ 'basilisk-lang/basilisk.nvim', ft = 'python' }`)
-- [x] Submit `lsp/basilisk.lua` PR to nvim-lspconfig for basic LSP support (config at `basilisk.nvim/lspconfig/basilisk.lua`)
+- [ ] Submit `lsp/basilisk.lua` PR to nvim-lspconfig for basic LSP support (config at `basilisk.nvim/lspconfig/basilisk.lua`)
 - [x] Version check — warn user if basilisk binary is outdated
 - [x] Binary auto-download fallback (GitHub releases)
 

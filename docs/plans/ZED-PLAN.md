@@ -168,6 +168,6 @@ Publishing to the Zed extension registry requires a PR to `zed-industries/extens
 | Tree-sitter grammars/queries | Ready |
 | Debug adapter schema | Ready |
 | Theme | Ready |
-| LICENSE file | **MISSING — must add before publishing** |
+| LICENSE file | Ready (MIT, NIMBLESITE PTY LTD) |
 
-**Blocker:** A LICENSE file (MIT, Apache 2.0, etc.) must be present at the repo root or in `basilisk-zed/`. Zed requires accepted open-source licenses for all extensions since October 2025.
+**Resolved:** MIT LICENSE file added to `basilisk-zed/` (matches repo root license).
