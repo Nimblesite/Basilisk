@@ -39,7 +39,7 @@ Reference implementation. All three panels.
    - Per-module rows with coverage %, errors, warnings, adoption badge
    - Sort cycling
 4. Implement `BasiliskInfoProvider` (`TreeDataProvider`)
-   - Static tree: Getting Started, Feature Status, Quick Actions, Server Info
+   - Static tree: Feature Status, Quick Actions, Server Info
    - Feature Status items read settings, click toggles them
    - Quick Actions items fire existing commands
    - Server Info fetched from LSP init response + `basilisk/typeHealth` stats

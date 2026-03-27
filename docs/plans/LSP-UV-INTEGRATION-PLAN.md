@@ -241,7 +241,7 @@ Every successful `uv` command triggers:
 | `code_action_sync` | W0013 stale lock → code action to sync |
 | `uv_command_sync` | Execute `basilisk.uv.sync` → subprocess runs, lock re-parsed |
 | `uv_command_add` | Execute `basilisk.uv.add {package: "flask"}` → subprocess runs with correct args |
-| `uv_binary_not_found` | uv not on PATH → graceful error, code actions hidden |
+| `uv_binary_not_found` | uv not on PATH → graceful error (code actions NOT yet hidden) |
 
 **Deliverable**: Users can fix dependency issues with one click directly from diagnostics.
 
@@ -384,7 +384,7 @@ Parallelizable:
 |------|------------|
 | `uv.lock` format changes | Pin to lock file `version` field. Log warning on unknown version, fall back to filesystem-only |
 | Large lock files (1000+ packages) | Parse is still fast (TOML in Rust). Registry is a HashMap — O(1) lookup |
-| Package name ≠ import name | Known mapping table covers top 200 packages. Filesystem fallback for unknown |
+| Package name ≠ import name | Known mapping table covers 13 known mismatches. Normalization fallback for unknown |
 | uv not installed | Lock file parsing still works (it's just a file). Only `basilisk.uv.*` commands disabled |
 | Non-uv projects regress | All uv code paths gated behind `detect_uv_project()`. Comprehensive non-uv test suite |
 | Subprocess hangs | 30-second timeout on all `uv` subprocess calls. Kill on timeout, report error |
@@ -414,7 +414,7 @@ Parallelizable:
 - [x] `detect.rs` — detect uv projects via `uv.lock`, `[tool.uv]`, `.venv/pyvenv.cfg`
 - [x] `lockfile.rs` — parse `uv.lock` TOML into `LockFile` / `LockPackage` structs
 - [x] `registry.rs` — `PackageRegistry` HashMap: normalized import name → `PackageInfo`
-- [x] `import_map.rs` — package-to-import-name mapping (top 200 mismatches + normalization fallback)
+- [x] `import_map.rs` — package-to-import-name mapping (13 known mismatches + normalization fallback)
 - [x] `python_version.rs` — read `.python-version` file
 - [x] Tests: detection (uv vs non-uv), lock parsing (basic, markers, workspace), registry lookup, import name mapping, `.python-version` — **67 tests passing**
 
@@ -431,12 +431,12 @@ Parallelizable:
 
 ### Phase 3 — Enhanced Diagnostics
 
-- [x] BSK-E0010: context-aware messages based on `UnresolvedReason` (not just "unresolved import")
-- [x] BSK-E0010: attach `code_action_data` to diagnostic for quick-fix wiring
+- [ ] BSK-E0010: context-aware messages based on `UnresolvedReason` (not just "unresolved import") — e0010.rs still uses a single generic message
+- [ ] BSK-E0010: attach `code_action_data` to diagnostic for quick-fix wiring — not implemented
 - [x] BSK-W0010: missing stubs diagnostic (package installed but no `.pyi`)
 - [x] BSK-W0011: undeclared dependency import (transitive dep used directly) — fires when `package_dep_kind == Transitive`
-- [x] BSK-W0012: unused dependency (in deps but never imported — whole-module only) — skeleton ready, awaits workspace-level aggregate import data
-- [x] BSK-W0013: stale lock (`pyproject.toml` mtime > `uv.lock` mtime) — skeleton ready
+- [ ] BSK-W0012: unused dependency (in deps but never imported — whole-module only) — skeleton ready, awaits workspace-level aggregate import data
+- [ ] BSK-W0013: stale lock (`pyproject.toml` mtime > `uv.lock` mtime) — skeleton ready
 - [x] Gate W0010 behind `uv.stubSuggestions` config (default true)
 - [x] Gate W0011–W0013 behind `uv.dependencyDiagnostics` config (default false)
 - [x] Config parsing: `basilisk.json` `uv.stubSuggestions`/`uv.dependencyDiagnostics`, `pyproject.toml` `[tool.basilisk.uv]`
@@ -450,7 +450,7 @@ Parallelizable:
 - [x] `uv_commands.rs` — thin subprocess wrapper: spawn `uv` with args, 30s timeout, stream output
 - [x] LSP commands: `basilisk.uv.sync`, `basilisk.uv.add`, `basilisk.uv.addDev`, `basilisk.uv.remove`, `basilisk.uv.lock`, `basilisk.uv.createEnv`
 - [x] Post-command hook: `run_uv_and_refresh()` — all uv commands trigger `rebuild_registry_and_resolve()` on success
-- [x] Graceful degradation: hide uv commands/actions when `uv` binary not found
+- [ ] Graceful degradation: hide uv commands/actions when `uv` binary not found — code actions are not hidden when uv binary is missing
 - [x] Tests: code action generation, command execution, binary-not-found handling
 
 ### Phase 5 — File Watchers & Hot Reload
@@ -463,13 +463,13 @@ Parallelizable:
 
 ### Phase 6 — Hover Enrichment & Workspace Support
 
-- [x] Hover on import: show package version, source, stub status from registry
+- [ ] Hover on import: show package version, source, stub status from registry — `package_info` is always `None`
 - [x] Hover on workspace member import: show "Workspace member" + path (detected via non-site-packages path)
 - [x] Hover on imports: show dependency classification (direct/dev/transitive) from uv registry
 - [x] Parse `[tool.uv.workspace]` — extract member paths from glob patterns
 - [x] Workspace member discovery: expand globs → find member `pyproject.toml` → extract package names
 - [x] Wire workspace members into import resolver: `discover_workspace_members()` adds member src roots to search paths (after roots, before extraPaths)
-- [x] Multi-root LSP mapping for workspace members
+- [ ] Multi-root LSP mapping for workspace members — not implemented in LSP protocol sense
 - [x] Tests: hover content, workspace glob expansion, cross-member imports
 
 ### Phase 7 — Configuration & Editor Integration

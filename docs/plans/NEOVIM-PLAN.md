@@ -7,9 +7,9 @@
 
 ## Status
 
-Phases 1–11 COMPLETE. 189+ tests (80 unit + 103 real LSP e2e + 6 screenshot regression), 0 failures. All rename tests passing — fixed symlink canonicalization bug in LSP server (macOS `/var` → `/private/var`). Feature parity with VS Code/Zed achieved for all LSP commands.
+Phases 1–11 COMPLETE. 784+ tests (265 unit + 300 LSP e2e + 71 DAP + 70 UI + 78 other), 0 failures. All rename tests passing — fixed symlink canonicalization bug in LSP server (macOS `/var` → `/private/var`). Feature parity with VS Code/Zed achieved for all LSP commands.
 
-Version check and binary auto-download from GitHub releases now implemented. Only remaining gap: submit `lsp/basilisk.lua` PR to nvim-lspconfig.
+Version check and binary auto-download from GitHub releases now implemented. Remaining gap: submit `lsp/basilisk.lua` PR to nvim-lspconfig (see Phase 9 TODO).
 
 ---
 
@@ -73,7 +73,7 @@ Version check and binary auto-download from GitHub releases now implemented. Onl
 ### Phase 1: Plugin Scaffolding & LSP Connection
 
 - [x] Create `basilisk.nvim/` directory with full plugin structure (`plugin/`, `lua/basilisk/`, `ftplugin/`, `after/lsp/`, `doc/`, `tests/`)
-- [x] `plugin/basilisk.lua` — auto-loaded entry point with version guard (Neovim >= 0.10), user command registration, autocmds
+- [x] `plugin/basilisk.lua` — auto-loaded entry point with double-load guard
 - [x] `lua/basilisk/init.lua` — `setup()` entry, config merge with defaults, module orchestration
 - [x] `lua/basilisk/config.lua` — default config table with LuaCATS type annotations, validation function
 - [x] `lua/basilisk/log.lua` — logger wrapping `vim.notify` with configurable log levels + optional file logging
@@ -87,9 +87,9 @@ Version check and binary auto-download from GitHub releases now implemented. Onl
 #### Tests (Phase 1)
 
 - [x] `tests/minimal_init.lua` — isolated test init with plenary.nvim
-- [x] `tests/basilisk/binary_spec.lua` — binary resolution cascade tests (5 tests passing)
-- [x] `tests/basilisk/config_spec.lua` — config merge, validation, type annotation coverage (17 tests passing)
-- [x] `tests/basilisk/lsp_spec.lua` — LSP client config generation, settings passthrough, error recovery logic (2 tests passing)
+- [x] `tests/basilisk/binary_spec.lua` — binary resolution cascade tests
+- [x] `tests/basilisk/config_spec.lua` — config merge, validation, type annotation coverage
+- [x] `tests/basilisk/lsp_spec.lua` — LSP client config generation, settings passthrough, error recovery logic
 
 ### Phase 2: User Commands & Custom LSP Command Registration
 
@@ -134,7 +134,7 @@ Version check and binary auto-download from GitHub releases now implemented. Onl
 - [x] DapTcpProxy implementation using `vim.uv`:
   - [x] `vim.uv.new_tcp()` — TCP socket creation and management
   - [x] Content-Length header framing for DAP messages
-  - [x] Intercept `stepOut` — inject auto-`next` for structural lines (try:, with:, if:)
+  - [x] Intercept `stepOut` — inject auto-`next` for structural lines (delegated to server-side handling)
   - [x] Inject `exited` event before `terminated` if missing
   - [x] Fast disconnect — respond immediately post-termination
   - [ ] Attach mode timeout — 3s timeout with synthetic success response (needs integration testing)
@@ -229,13 +229,13 @@ Version check and binary auto-download from GitHub releases now implemented. Onl
 - [x] `tests/ui/helpers.lua` — shared utilities: wait for condition, find floating window, assert extmarks, buffer keymaps
 - [x] CI integration — run UI tests in GitHub Actions via `nvim --headless` on Neovim 0.10, 0.11, nightly
 
-#### Status Line Tests (10 tests passing)
+#### Status Line Tests
 
 - [x] `require('basilisk.statusline').get()` — assert correct string for each state (starting, ready, error, stopped)
 - [x] `lualine_component` — assert it returns a valid lualine component table with callable function and color
 - [x] State transitions — simulate state changes and assert status/color updates
 
-#### Test Tree Tests (11 tests passing)
+#### Test Tree Tests
 
 - [x] Parse simple test output — file > function hierarchy
 - [x] Parse class-based tests — file > class > function hierarchy

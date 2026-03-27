@@ -147,8 +147,8 @@ This matches Zed's architecture: LSP commands are triggered via the command pale
 ### Phase 5: Polish & Publishing
 
 - [x] Create Basilisk theme (`themes/basilisk-dark.json`)
-- [x] Set up CI: WASM build, native clippy + tests, cross-platform matrix (ubuntu + macOS)
-- [x] Extract testable pure logic into `logic.rs` with 41 unit tests in `logic_tests.rs`
+- [x] Set up CI: WASM build, native clippy + tests, Ubuntu CI
+- [x] Extract testable pure logic into `logic.rs` with 96 unit tests in `logic_tests.rs`
 - [ ] Publish to Zed extension registry
 
 #### Publishing Requirements (2026-03-27)

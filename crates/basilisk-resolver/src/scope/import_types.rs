@@ -60,4 +60,14 @@ pub struct ImportInfo {
     /// `None` for non-uv projects, stdlib modules, or local imports.
     /// Set during workspace import resolution.
     pub package_dep_kind: Option<PackageDepKind>,
+    /// Package version from the lock file (e.g. `"2.31.0"`).
+    ///
+    /// Populated during workspace import resolution when a uv registry is
+    /// available. `None` for stdlib, local, or non-uv imports.
+    pub package_version: Option<String>,
+    /// Package name from the lock file (e.g. `"requests"`).
+    ///
+    /// Populated during workspace import resolution when a uv registry is
+    /// available. `None` for stdlib, local, or non-uv imports.
+    pub package_name: Option<String>,
 }
