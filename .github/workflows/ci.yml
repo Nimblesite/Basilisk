@@ -224,3 +224,43 @@ jobs:
           eval "$(luarocks path)"
           export PATH="$HOME/.luarocks/bin:$PATH"
           ./scripts/test-nvim.sh
+
+  # ── Test gate (standard job name per repo standards) ───────────────────────
+  test:
+    name: All Tests
+    needs: [test-rust, test-vscode, test-nvim, zed]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: always()
+    steps:
+      - name: Check test results
+        run: |
+          if [[ "${{ needs.test-rust.result }}" != "success" ]] || \
+             [[ "${{ needs.test-vscode.result }}" != "success" ]] || \
+             [[ "${{ needs.test-nvim.result }}" != "success" ]] || \
+             [[ "${{ needs.zed.result }}" != "success" ]]; then
+            echo "One or more test jobs failed"
+            exit 1
+          fi
+          echo "All test jobs passed"
+
+  # ── Build gate (standard job name per repo standards) ──────────────────────
+  build:
+    name: Build
+    needs: [test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Install lld
+        run: sudo apt-get update && sudo apt-get install -y lld
+
+      - name: Build Rust (release)
+        run: cargo build --release
