@@ -167,6 +167,13 @@ pub struct ProfileSessionManager {
     sessions: Mutex<HashMap<String, ProfileSession>>,
 }
 
+impl std::fmt::Debug for ProfileSessionManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProfileSessionManager")
+            .finish_non_exhaustive()
+    }
+}
+
 impl Default for ProfileSessionManager {
     fn default() -> Self {
         Self::new()

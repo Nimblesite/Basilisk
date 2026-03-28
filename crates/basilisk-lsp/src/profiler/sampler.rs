@@ -12,6 +12,7 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
 /// A batch of stack traces from a single sampling tick.
+#[derive(Debug)]
 pub struct SampleBatch {
     /// The stack traces collected in this tick.
     pub traces: Vec<py_spy::StackTrace>,
@@ -56,6 +57,15 @@ pub struct SamplerHandle {
     pub python_version: String,
     /// The PID being profiled.
     pub pid: u32,
+}
+
+impl std::fmt::Debug for SamplerHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SamplerHandle")
+            .field("python_version", &self.python_version)
+            .field("pid", &self.pid)
+            .finish_non_exhaustive()
+    }
 }
 
 impl SamplerHandle {

@@ -18,6 +18,7 @@ use crate::workspace_scan::{collect_python_files, deduplicate_by_stem, path_to_u
 // ── FileEntry ────────────────────────────────────────────────────────────────
 
 /// Per-file analysis state cached in the workspace index.
+#[derive(Debug)]
 pub struct FileEntry {
     /// FNV-1a hash of the source text at last analysis; used for invalidation.
     pub source_hash: u64,
@@ -57,6 +58,16 @@ pub struct WorkspaceIndex {
     /// Built during workspace initialisation and rebuilt when `uv.lock`
     /// changes. Used for import classification and dependency diagnostics.
     pub registry: Option<Arc<PackageRegistry>>,
+}
+
+impl std::fmt::Debug for WorkspaceIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WorkspaceIndex")
+            .field("roots", &self.roots)
+            .field("mode", &self.mode)
+            .field("file_count", &self.files.len())
+            .finish_non_exhaustive()
+    }
 }
 
 impl WorkspaceIndex {
@@ -767,11 +778,13 @@ mod tests {
 
     /// Helper: write a uv.lock TOML file with the given packages.
     fn write_uv_lock(dir: &std::path::Path, packages: &[(&str, &str)]) {
+        use std::fmt::Write as _;
         let mut lock_content = String::from("version = 1\nrequires-python = \">=3.12\"\n\n");
         for (name, version) in packages {
-            lock_content.push_str(&format!(
+            let _ = write!(
+                lock_content,
                 "[[package]]\nname = \"{name}\"\nversion = \"{version}\"\nsource = {{ registry = \"https://pypi.org/simple\" }}\n\n"
-            ));
+            );
         }
         std::fs::write(dir.join("uv.lock"), lock_content).unwrap();
     }
@@ -1020,7 +1033,9 @@ mod tests {
         // The folder mapping reports what's physically present; the caller
         // applies exclude logic.
         assert_eq!(folders.len(), 1);
-        assert_eq!(folders[0].name, "core");
+        if let Some(folder) = folders.first() {
+            assert_eq!(folder.name, "core");
+        }
 
         let _ = std::fs::remove_dir_all(&dir);
     }
