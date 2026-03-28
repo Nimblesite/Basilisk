@@ -61,6 +61,7 @@ Once all checks pass cleanly, report:
 - Which checks ran
 - That all passed
 - Any significant fixes that were made
+- If you're fixing CI failures, you MUST commit/push and monitor the action log. Upon failure, REPEAT the process
 
 ## Rules
 
