@@ -259,4 +259,66 @@ mod tests {
             "should not find import outside its span"
         );
     }
+
+    #[test]
+    fn test_hover_shows_package_version_and_name() {
+        let source = "import requests\n";
+        let parsed = basilisk_parser::parse_source(source.to_owned(), "test.py".to_owned())
+            .expect("test source should parse");
+        let mut resolved = basilisk_resolver::resolve(&parsed).expect("resolution should not fail");
+        if let Some(import) = resolved.imports.first_mut() {
+            import.resolution = ImportResolution::SourcePy;
+            import.resolved_path = Some(std::path::PathBuf::from(
+                "/venv/lib/python3.12/site-packages/requests/__init__.py",
+            ));
+            import.package_name = Some("requests".to_owned());
+            import.package_version = Some("2.31.0".to_owned());
+            import.package_dep_kind = Some(PackageDepKind::Direct);
+        }
+
+        let hover = hover_at(&resolved, source, 10, &[]);
+        let hover = hover.expect("hover should be Some");
+        let HoverContents::Markup(markup) = hover.contents else {
+            panic!("expected Markup hover contents");
+        };
+
+        assert!(
+            markup.value.contains("requests v2.31.0"),
+            "should show package name and version: {}",
+            markup.value
+        );
+        assert!(
+            markup.value.contains("direct dependency"),
+            "should show dependency kind: {}",
+            markup.value
+        );
+    }
+
+    #[test]
+    fn test_hover_no_package_info_for_stdlib() {
+        let source = "import os\n";
+        let resolved = resolve_with_patched_import(
+            source,
+            ImportResolution::StubPyi,
+            Some(std::path::PathBuf::from("/usr/lib/python3.12/os.pyi")),
+        );
+
+        let hover = hover_at(&resolved, source, 7, &[]);
+        let hover = hover.expect("hover should be Some");
+        let HoverContents::Markup(markup) = hover.contents else {
+            panic!("expected Markup hover contents");
+        };
+
+        // stdlib imports should not show package version or dependency kind.
+        assert!(
+            !markup.value.contains("**Package**"),
+            "stdlib should not show package info: {}",
+            markup.value
+        );
+        assert!(
+            !markup.value.contains("**Dependency**"),
+            "stdlib should not show dependency kind: {}",
+            markup.value
+        );
+    }
 }

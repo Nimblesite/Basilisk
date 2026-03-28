@@ -10,14 +10,14 @@ use tower_lsp::lsp_types::{
     CallHierarchyServerCapability, CodeActionKind, CodeActionOptions, CodeActionProviderCapability,
     CodeLensOptions, ColorProviderCapability, CompletionOptions, DeclarationCapability,
     DidChangeConfigurationParams, DidChangeWatchedFilesRegistrationOptions,
-    DidChangeWorkspaceFoldersParams, ExecuteCommandOptions,
-    FileOperationFilter, FileOperationPattern, FileOperationPatternKind,
-    FileOperationRegistrationOptions, FileSystemWatcher, FoldingRangeProviderCapability,
-    GlobPattern, HoverProviderCapability, InitializeParams, InitializeResult, MessageType, OneOf,
-    Registration, RenameOptions, SelectionRangeProviderCapability, SemanticTokensFullOptions,
-    SemanticTokensLegend, SemanticTokensOptions, SemanticTokensServerCapabilities,
-    ServerCapabilities, ServerInfo, SignatureHelpOptions, TextDocumentSyncCapability,
-    TextDocumentSyncKind, TypeDefinitionProviderCapability, Url, WorkDoneProgressOptions,
+    DidChangeWorkspaceFoldersParams, ExecuteCommandOptions, FileOperationFilter,
+    FileOperationPattern, FileOperationPatternKind, FileOperationRegistrationOptions,
+    FileSystemWatcher, FoldingRangeProviderCapability, GlobPattern, HoverProviderCapability,
+    InitializeParams, InitializeResult, MessageType, OneOf, Registration, RenameOptions,
+    SelectionRangeProviderCapability, SemanticTokensFullOptions, SemanticTokensLegend,
+    SemanticTokensOptions, SemanticTokensServerCapabilities, ServerCapabilities, ServerInfo,
+    SignatureHelpOptions, TextDocumentSyncCapability, TextDocumentSyncKind,
+    TypeDefinitionProviderCapability, Url, WorkDoneProgressOptions,
     WorkspaceFileOperationsServerCapabilities, WorkspaceFoldersServerCapabilities,
     WorkspaceServerCapabilities,
 };
@@ -158,7 +158,6 @@ fn build_capabilities() -> ServerCapabilities {
                 }),
                 ..Default::default()
             }),
-            ..Default::default()
         }),
         ..Default::default()
     }
@@ -352,7 +351,9 @@ pub(super) async fn did_change_workspace_folders(
     // Rebuild the workspace index with the new root set.
     let mode = {
         let guard = server.index.read().await;
-        guard.as_ref().map_or(AnalysisMode::OpenFilesOnly, |idx| idx.mode)
+        guard
+            .as_ref()
+            .map_or(AnalysisMode::OpenFilesOnly, |idx| idx.mode)
     };
 
     let index = WorkspaceIndex::new(updated_roots, mode);

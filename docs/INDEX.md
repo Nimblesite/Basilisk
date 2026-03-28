@@ -30,14 +30,9 @@ Implementation roadmaps tracking phasing, priorities, and progress.
 
 | File | Description |
 |---|---|
-| [LSP-PLAN.md](plans/LSP-PLAN.md) | Overall LSP roadmap — seven phases from core features through cross-module analysis. |
+| [LSP-PLAN.md](plans/LSP-PLAN.md) | Overall LSP roadmap — seven phases from core features through cross-module analysis. Includes remaining items from completed plans (profiling, activity panel, Neovim, Zed, uv integration). |
 | [CHECKER-CROSS-MODULE-PLAN.md](plans/CHECKER-CROSS-MODULE-PLAN.md) | Cross-file LSP features, type provenance, Salsa integration, auto-stub generation. |
 | [CHECKER-PEP-CONFORMANCE-PLAN.md](plans/CHECKER-PEP-CONFORMANCE-PLAN.md) | PEP conformance push — target 85%, tiered task list by complexity and impact. |
 | [LSP-AI-PLAN.md](plans/LSP-AI-PLAN.md) | AI provider abstraction — model-agnostic hooks for fixes, completions, refactoring. |
-| [LSP-PROFILING-PLAN.md](plans/LSP-PROFILING-PLAN.md) | Embed py-spy profiler into LSP for CPU profiling and hotspot visualization. |
-| [LSP-UV-INTEGRATION-PLAN.md](plans/LSP-UV-INTEGRATION-PLAN.md) | uv project detection, lock file parsing, dependency intelligence. |
 | [CHECK-ELIMINATE-FALSE-POSITIVES.md](plans/CHECK-ELIMINATE-FALSE-POSITIVES.md) | Eliminate conformance suite false positives — rule-specific fixes and engine work. |
 | [CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md](plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md) | Type narrowing and full inference engine — NarrowingEngine, expression inference, ConstraintSolver, class hierarchy subtyping. |
-| [ZED-PLAN.md](plans/ZED-PLAN.md) | Zed extension — LSP scaffolding, tree-sitter queries, DAP support. |
-| [LSP-TEST-INTEGRATION-PLAN.md](plans/LSP-TEST-INTEGRATION-PLAN.md) | Test integration rollout — Rust library, LSP protocol, VS Code/Neovim/Zed integration, coverage. |
-| [EXTENSION-ACTIVITY-PANEL-PLAN.md](plans/EXTENSION-ACTIVITY-PANEL-PLAN.md) | Activity panel rollout — LSP backend, VS Code panels, Zed slash commands, Neovim buffers. |

@@ -1,53 +1,128 @@
-# Build
+# =============================================================================
+# OS
+# =============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# =============================================================================
+# IDE / Editor
+# =============================================================================
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# =============================================================================
+# Rust
+# =============================================================================
 target/
+*.wasm
+
+# =============================================================================
+# TypeScript / Node / VS Code extension
+# =============================================================================
+node_modules/
+vscode-extension/out/
+vscode-extension/.vscode-test/
+vscode-extension/coverage/
+*.vsix
+*.tgz
+.npm/
+.cache/
+.vscode-test/
+.vscode-test-web/
+.nyc_output/
+
+# =============================================================================
+# Python
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# =============================================================================
+# Zed extension
+# =============================================================================
 basilisk-zed/extension.wasm
 basilisk-zed/dist/
 
+# =============================================================================
+# Neovim plugin
+# =============================================================================
+basilisk.nvim/luacov.report.out
+basilisk.nvim/luacov.stats.out
+
+# =============================================================================
 # Coverage & mutation testing
+# =============================================================================
+coverage/
 lcov.info
 *.profraw
+*.profdata
+htmlcov/
+.coverage
+coverage.xml
+coverage.out
+coverage-summary.json
+TestResults/
 mutants.out/
 mutants.out.old/
 mutants.out.backup-*/
 
+# =============================================================================
 # Benchmarks
+# =============================================================================
 benchmarks/results/
 
-# Python
-.venv/
-.mypy_cache/
-__pycache__/
-.pytest_cache/
-
-# Node / VS Code extension
-node_modules/
-vscode-extension/out/
-vscode-extension/.vscode-test/
-*.vsix
-
+# =============================================================================
 # Conformance test suite (fetched via conformance/fetch-conformance.sh)
+# =============================================================================
 crates/basilisk-cli/tests/conformance/
 
+# =============================================================================
 # Tool / agent state
+# =============================================================================
 .aider*
 .commandtree/
 .too_many_cooks/
 .playwright-mcp/
 coordination/
 logs/
+nohup.out
 
-# OS
-.DS_Store
+# =============================================================================
+# Secrets / local overrides
+# =============================================================================
+.env
+.env.local
+.env.*.local
+*.secret
+*.pem
+*.key
+!*.pub.key
 
-basilisk-zed/dist/
-
-*.wasm
-
-vscode-extension/coverage/
-
-coverage/
-
-basilisk.nvim/luacov.report.out
-
-basilisk.nvim/luacov.stats.out
+# =============================================================================
+# Temporary
+# =============================================================================
+tmp/
+temp/
+scratch/
 URGENT_READ_ME_NOW.md

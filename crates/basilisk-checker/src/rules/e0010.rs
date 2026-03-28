@@ -148,7 +148,9 @@ mod tests {
         let mut diagnostics = Vec::new();
         ImportFromUntypedModule.check(&module, &mut diagnostics);
         assert_eq!(diagnostics.len(), 1);
-        assert!(diagnostics[0].message.contains("no type information available"));
+        assert!(diagnostics[0]
+            .message
+            .contains("no type information available"));
     }
 
     #[test]
@@ -158,7 +160,9 @@ mod tests {
         let mut diagnostics = Vec::new();
         ImportFromUntypedModule.check(&module, &mut diagnostics);
         assert_eq!(diagnostics.len(), 1);
-        assert!(diagnostics[0].message.contains("is not a dependency in pyproject.toml"));
+        assert!(diagnostics[0]
+            .message
+            .contains("is not a dependency in pyproject.toml"));
         assert!(diagnostics[0]
             .help
             .as_ref()
@@ -189,7 +193,10 @@ mod tests {
 
     #[test]
     fn wrong_python_version_message() {
-        let import = make_import("some_versioned_pkg", Some(UnresolvedReason::WrongPythonVersion));
+        let import = make_import(
+            "some_versioned_pkg",
+            Some(UnresolvedReason::WrongPythonVersion),
+        );
         let module = make_module(vec![import]);
         let mut diagnostics = Vec::new();
         ImportFromUntypedModule.check(&module, &mut diagnostics);
@@ -206,7 +213,9 @@ mod tests {
         let mut diagnostics = Vec::new();
         ImportFromUntypedModule.check(&module, &mut diagnostics);
         assert_eq!(diagnostics.len(), 1);
-        assert!(diagnostics[0].message.contains("no type information available"));
+        assert!(diagnostics[0]
+            .message
+            .contains("no type information available"));
     }
 
     #[test]
@@ -216,7 +225,9 @@ mod tests {
         let mut diagnostics = Vec::new();
         ImportFromUntypedModule.check(&module, &mut diagnostics);
         assert_eq!(diagnostics.len(), 1);
-        assert!(diagnostics[0].message.contains("no type information available"));
+        assert!(diagnostics[0]
+            .message
+            .contains("no type information available"));
     }
 
     #[test]

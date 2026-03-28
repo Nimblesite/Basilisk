@@ -200,3 +200,30 @@ Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE 
 - [ ] Auto string splitting on Enter — multi-line string continuation
 - [ ] Graceful syntax error recovery — analysis continues on partial/broken code
 - [ ] Jupyter notebook cell awareness — cross-cell type checking
+
+---
+
+## Remaining Items (from completed plans)
+
+> Migrated from deleted plans: LSP-PROFILING-PLAN, EXTENSION-ACTIVITY-PANEL-PLAN, NEOVIM-PLAN, ZED-PLAN, LSP-UV-INTEGRATION-PLAN.
+
+### Zed Extension
+
+- [ ] Verify: highlighting, outline panel, bracket matching, auto-indent (manual — requires Zed with extension installed)
+- [ ] Test: breakpoints, stepping, variables, debug console, attach mode (manual — no Zed test framework)
+- [ ] Publish to Zed extension registry (PR to `zed-industries/extensions`)
+- [ ] When Zed adds panel API: implement native activity panels using same LSP commands
+
+### Neovim Extension
+
+- [ ] Verify all 21 core LSP features work (requires running basilisk binary against a real Python project)
+- [ ] DapTcpProxy integration tests with live TCP
+- [ ] Submit `lsp/basilisk.lua` PR to nvim-lspconfig
+
+### uv Integration
+
+- [ ] BSK-E0010: attach `code_action_data` to diagnostic for quick-fix wiring
+- [ ] BSK-W0012: unused dependency (in deps but never imported — whole-module only)
+- [ ] BSK-W0013: stale lock (`pyproject.toml` mtime > `uv.lock` mtime)
+- [ ] Graceful degradation: hide uv commands/actions when `uv` binary not found
+- [ ] Multi-root LSP mapping for workspace members (not implemented in LSP protocol sense)

@@ -67,7 +67,10 @@ const KNOWN_MISMATCHES: &[(&str, &str)] = &[
     ("setuptools", "setuptools"),
     ("simplejson", "simplejson"),
     ("six", "six"),
-    ("sphinxcontrib-serializinghtml", "sphinxcontrib.serializinghtml"),
+    (
+        "sphinxcontrib-serializinghtml",
+        "sphinxcontrib.serializinghtml",
+    ),
     ("tensorflow-gpu", "tensorflow"),
     ("typing-extensions", "typing_extensions"),
     ("websocket-client", "websocket"),
@@ -360,7 +363,10 @@ mod tests {
 
     #[test]
     fn known_mismatch_flask_sqlalchemy() {
-        assert_eq!(package_to_import_name("flask-sqlalchemy"), "flask_sqlalchemy");
+        assert_eq!(
+            package_to_import_name("flask-sqlalchemy"),
+            "flask_sqlalchemy"
+        );
     }
 
     #[test]

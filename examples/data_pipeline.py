@@ -10,24 +10,24 @@ from typing import Any, overload
 
 
 # ── BSK-E0003: unannotated empty collections at module scope ─────────────────
-_schema_cache = {}                         # BSK-E0003: empty dict
-_transform_registry = []                   # BSK-E0003: empty list
+_schema_cache = {}  # BSK-E0003: empty dict
+_transform_registry = []  # BSK-E0003: empty list
 
 
 # ── BSK-E0001/E0002: untyped ETL stage functions ─────────────────────────────
-def extract(source, options):              # BSK-E0001: source, options untyped
+def extract(source, options):  # BSK-E0001: source, options untyped
     records = source.read_all()
-    return records                         # BSK-E0002: no return type
+    return records  # BSK-E0002: no return type
 
 
-def transform(records, schema, strict):   # BSK-E0001: three untyped params
+def transform(records, schema, strict):  # BSK-E0001: three untyped params
     result = []
     for row in records:
         result.append(row)
-    return result                          # BSK-E0002: no return type
+    return result  # BSK-E0002: no return type
 
 
-def load(records, destination):           # BSK-E0001: records, destination untyped
+def load(records, destination):  # BSK-E0001: records, destination untyped
     destination.write(records)
     # implicit return None — no annotation # BSK-E0002: no return type
 
@@ -38,9 +38,9 @@ def coerce_field(value: Any, target_type: Any) -> Any:  # BSK-E0011 ×3
 
 
 # ── BSK-E0014: type-incompatible constant assignments ────────────────────────
-BATCH_SIZE: int = "1000"                   # BSK-E0014: str, not int
-NULL_SENTINEL: float = "NaN"               # BSK-E0014: str, not float
-MAX_ERRORS: int = 0.5                      # BSK-E0014: float, not int
+BATCH_SIZE: int = "1000"  # BSK-E0014: str, not int
+NULL_SENTINEL: float = "NaN"  # BSK-E0014: str, not float
+MAX_ERRORS: int = 0.5  # BSK-E0014: float, not int
 
 
 # ── BSK-E0017: subclass narrows column type incompatibly ─────────────────────
@@ -51,12 +51,13 @@ class Column:
 
 
 class PartitionKey(Column):
-    nullable: int = 0                      # BSK-E0017: int overrides bool
+    nullable: int = 0  # BSK-E0017: int overrides bool
 
 
 # ── BSK-E0018: name used before any assignment in the module ─────────────────
 def validate_schema(name: str) -> bool:
-    return name in _known_types            # BSK-E0018: _known_types undefined
+    return name in _known_types  # BSK-E0018: _known_types undefined
+
 
 _known_types: set[str] = {"int", "str", "float", "bool"}
 
@@ -68,7 +69,7 @@ def detect_encoding(raw_bytes: bytes) -> str:
     elif raw_bytes[:2] in (b"\xff\xfe", b"\xfe\xff"):
         encoding = "utf-16"
     # no else branch — encoding may be unbound if no BOM matches
-    return encoding                        # BSK-E0019: encoding may be unbound
+    return encoding  # BSK-E0019: encoding may be unbound
 
 
 # ── BSK-E0021: unannotated overload params produce a duplicate ───────────────
@@ -85,8 +86,8 @@ def read_source(path: str) -> list[dict[str, str]]:
 
 
 # ── BSK-E0022: list literal used as a dict key ───────────────────────────────
-def empty_schema() -> dict[list[str], str]:    # unhashable key type in annotation
-    return {["a", "b"]: "string"}              # BSK-E0022: list literal as key
+def empty_schema() -> dict[list[str], str]:  # unhashable key type in annotation
+    return {["a", "b"]: "string"}  # BSK-E0022: list literal as key
 
 
 # ── BSK-E0025: override not decorated ───────────────────────────────────────

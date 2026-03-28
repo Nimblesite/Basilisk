@@ -371,8 +371,7 @@ impl WorkspaceIndex {
                 };
                 let name = member_dir
                     .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| uri.to_string());
+                    .map_or_else(|| uri.to_string(), |n| n.to_string_lossy().into_owned());
 
                 folders.push(tower_lsp::lsp_types::WorkspaceFolder { uri, name });
             }
@@ -759,7 +758,11 @@ mod tests {
         write_uv_lock(dir, packages);
 
         // Marker file so detect_uv_project finds it.
-        std::fs::write(dir.join("uv.lock"), std::fs::read_to_string(dir.join("uv.lock")).unwrap()).unwrap();
+        std::fs::write(
+            dir.join("uv.lock"),
+            std::fs::read_to_string(dir.join("uv.lock")).unwrap(),
+        )
+        .unwrap();
     }
 
     /// Helper: write a uv.lock TOML file with the given packages.
@@ -795,7 +798,10 @@ mod tests {
         assert!(registry2.is_some());
         let reg2 = registry2.unwrap();
         assert!(reg2.has_package("requests"));
-        assert!(reg2.has_package("flask"), "flask should appear after lock change");
+        assert!(
+            reg2.has_package("flask"),
+            "flask should appear after lock change"
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -1005,8 +1011,7 @@ mod tests {
         let pkg = dir.join("libs").join("core");
         std::fs::create_dir_all(&pkg).unwrap();
 
-        let pyproject =
-            "[tool.uv.workspace]\nmembers = [\"libs/*\"]\nexclude = [\"libs/core\"]\n";
+        let pyproject = "[tool.uv.workspace]\nmembers = [\"libs/*\"]\nexclude = [\"libs/core\"]\n";
         std::fs::write(dir.join("pyproject.toml"), pyproject).unwrap();
 
         let idx = WorkspaceIndex::new(vec![dir.clone()], AnalysisMode::WholeModule);

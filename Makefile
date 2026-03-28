@@ -59,7 +59,15 @@ lint-vsix: ## Lint VS Code extension (ESLint)
 
 # ── Format ───────────────────────────────────────────────────────────────────
 
-.PHONY: format format-rust format-python format-vsix
+.PHONY: fmt fmt-check format format-rust format-python format-vsix
+
+fmt: format ## Format all code (standard alias)
+
+fmt-check: ## Check formatting without modifying (used in CI)
+	@echo -e '\033[1m\033[0;36m▶ Checking formatting\033[0m' && \
+	cargo fmt --all -- --check && \
+	ruff format --check --exclude '*/fixtures/*' . && \
+	echo -e '\033[0;32m✓ Format check passed\033[0m'
 
 format: format-rust format-python format-vsix ## Format all code
 
@@ -207,6 +215,19 @@ example-bad: ## Check examples/bad.py (expects errors)
 
 example-mixed: ## Check examples/mixed.py (expects some errors)
 	@cargo run -- check examples/mixed.py
+
+# ── Standard Aliases ─────────────────────────────────────────────────────────
+
+.PHONY: check ci coverage coverage-check
+
+check: lint test ## lint + test (pre-commit validation)
+
+ci: lint test build ## lint + test + build (full CI simulation)
+
+coverage: test-rust ## Generate coverage report (OPEN=1 to view)
+	@OPEN=1 bash scripts/test-rust.sh
+
+coverage-check: test-rust ## Assert per-crate coverage thresholds
 
 # ── Clean ─────────────────────────────────────────────────────────────────────
 

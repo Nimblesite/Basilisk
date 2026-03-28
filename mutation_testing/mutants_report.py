@@ -86,11 +86,12 @@ def render_mutant_row(outcome: dict, mutants_out: Path, idx: int) -> str:
 
 
 def _esc(s: str) -> str:
-    return (s
-        .replace("&", "&amp;")
+    return (
+        s.replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
-        .replace('"', "&quot;"))
+        .replace('"', "&quot;")
+    )
 
 
 def generate(outcomes_path: Path, output_path: Path) -> None:
@@ -279,6 +280,8 @@ function filterTable(tableId, query) {{
 
 
 if __name__ == "__main__":
-    outcomes = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("mutants.out/outcomes.json")
+    outcomes = (
+        Path(sys.argv[1]) if len(sys.argv) > 1 else Path("mutants.out/outcomes.json")
+    )
     output = Path(sys.argv[2]) if len(sys.argv) > 2 else Path("mutants_report.html")
     generate(outcomes, output)

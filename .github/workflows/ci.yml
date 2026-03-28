@@ -19,6 +19,7 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -30,11 +31,17 @@ jobs:
         with:
           cache-on-failure: true
 
-      - name: Install lld
-        run: sudo apt-get update && sudo apt-get install -y lld
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
-      - name: cargo fmt --check
-        run: cargo fmt --all --check
+      - name: Install lld and ruff
+        run: |
+          sudo apt-get update && sudo apt-get install -y lld
+          pip install ruff
+
+      - name: Format check (Rust + Python)
+        run: make fmt-check
 
       - name: clippy (workspace)
         run: cargo clippy --release --all-targets
@@ -46,6 +53,7 @@ jobs:
   zed:
     name: Zed Extension
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -70,6 +78,7 @@ jobs:
   test-rust:
     name: Rust Tests & Coverage
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       TEST_COVERAGE_BASILISK_CHECKER: ${{ vars.TEST_COVERAGE_BASILISK_CHECKER || '92' }}
       TEST_COVERAGE_BASILISK_CLI: ${{ vars.TEST_COVERAGE_BASILISK_CLI || '94' }}
@@ -126,6 +135,7 @@ jobs:
   test-vscode:
     name: VS Code Extension
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       TEST_COVERAGE_VSIX: ${{ vars.TEST_COVERAGE_VSIX || '60' }}
     steps:
@@ -178,6 +188,7 @@ jobs:
   test-nvim:
     name: Neovim Extension
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       TEST_COVERAGE_NVIM: ${{ vars.TEST_COVERAGE_NVIM || '30' }}
     steps:

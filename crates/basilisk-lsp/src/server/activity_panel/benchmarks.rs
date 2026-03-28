@@ -95,9 +95,7 @@ mod tests {
 
         // Verify structure: each module should have symbols.
         for module in tree.iter().take(5) {
-            let symbols = module
-                .get("symbols")
-                .and_then(serde_json::Value::as_array);
+            let symbols = module.get("symbols").and_then(serde_json::Value::as_array);
             assert!(
                 symbols.is_some_and(|s| !s.is_empty()),
                 "each module should have symbols"

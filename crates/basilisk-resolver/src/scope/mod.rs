@@ -17,7 +17,9 @@ pub use external_symbol::{ExternalSymbol, ExternalSymbolKind};
 pub use function_types::{
     FunctionInfo, ParameterInfo, ReturnAnnotationKind, ReturnStmtInfo, YieldExprInfo,
 };
-pub use import_types::{ImportInfo, ImportKind, ImportResolution, PackageDepKind, UnresolvedReason};
+pub use import_types::{
+    ImportInfo, ImportKind, ImportResolution, PackageDepKind, UnresolvedReason,
+};
 pub use module_types::{
     AnnotatedTooFewArgs, AssertTypeCallInfo, CallSite, CompareOp, FloatParamIntAttrAccess,
     GenericSubscriptSite, LiteralStringEnumMismatch, MatchStmtInfo, ModuleAttrAccessInfo,
