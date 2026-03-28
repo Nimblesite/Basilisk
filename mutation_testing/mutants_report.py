@@ -4,7 +4,6 @@
 import json
 import sys
 from pathlib import Path
-from datetime import datetime, timezone
 
 
 def load_diff(mutants_out: Path, diff_path: str | None) -> str:

@@ -40,7 +40,7 @@ def main() -> None:
     header = f"{'Rule':<{rule_w}}" + "".join(f"{t:>{COL}}" for t in TOOLS)
     sep = "\u2500" * len(header)
 
-    print(f"\n  Basilisk Benchmark Report")
+    print("\n  Basilisk Benchmark Report")
     print(f"  {sep}")
     print(f"  {header}")
     print(f"  {sep}")
