@@ -81,6 +81,12 @@ fn check_permissions_for_platform(pid: u32) -> Result<PermissionStatus, String> 
 }
 
 /// Platform-specific permission check dispatch.
+///
+/// The Result type is kept for cross-platform signature consistency.
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "Cross-platform signature consistency with macOS variant"
+)]
 #[cfg(target_os = "linux")]
 fn check_permissions_for_platform(pid: u32) -> Result<PermissionStatus, String> {
     Ok(check_linux_permissions(pid))
