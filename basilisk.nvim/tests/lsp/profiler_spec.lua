@@ -89,8 +89,7 @@ describe("profiler -- command registration", function()
 
     local profiler_commands = { "BasiliskProfile", "BasiliskProfileStop", "BasiliskProfileSnapshot" }
     for _, cmd in ipairs(profiler_commands) do
-      local ok = pcall(vim.api.nvim_get_commands, {})[cmd] ~= nil or pcall(vim.cmd, cmd .. " --help")
-      -- Just verify the command exists by checking it doesn't error with "not found".
+      -- Verify the command exists by checking it parses without "not found" error.
       local exists = pcall(function()
         vim.api.nvim_parse_cmd(cmd, {})
       end)

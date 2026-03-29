@@ -329,11 +329,17 @@ while time.time() < end_time:
 print("DONE", flush=True)
 "#;
 
-/// Spawn a Python process running the hotspot script.
+/// Spawn a Python process running the hotspot script from a temp file.
+///
+/// Using a file (not `python3 -c`) ensures py-spy reports absolute paths,
+/// which `Url::from_file_path` needs for diagnostic generation.
 /// Returns (`ProcessGuard`, pid) — the guard kills on drop to prevent orphans.
 fn spawn_hotspot_python() -> Option<(ProcessGuard, u32)> {
+    let script_path = std::env::temp_dir().join("basilisk_hotspot_test.py");
+    std::fs::write(&script_path, HOTSPOT_SCRIPT).ok()?;
+
     let mut child = std::process::Command::new("python3")
-        .args(["-c", HOTSPOT_SCRIPT])
+        .arg(&script_path)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
         .spawn()

@@ -83,7 +83,7 @@ fn check_permissions_for_platform(pid: u32) -> Result<PermissionStatus, String> 
 /// Platform-specific permission check dispatch.
 #[cfg(target_os = "linux")]
 fn check_permissions_for_platform(pid: u32) -> Result<PermissionStatus, String> {
-    check_linux_permissions(pid)
+    Ok(check_linux_permissions(pid))
 }
 
 /// Platform-specific permission check dispatch.
@@ -131,41 +131,41 @@ fn check_macos_permissions(pid: u32) -> PermissionStatus {
 /// - `ptrace_scope` = 2: admin-only, requires `CAP_SYS_PTRACE`.
 /// - `ptrace_scope` = 3: no ptrace at all.
 #[cfg(target_os = "linux")]
-fn check_linux_permissions(pid: u32) -> Result<PermissionStatus, String> {
+fn check_linux_permissions(pid: u32) -> PermissionStatus {
     if is_child_process(pid) {
         debug!(pid, "target is a child process, no elevation needed");
-        return Ok(PermissionStatus::Allowed);
+        return PermissionStatus::Allowed;
     }
 
     if is_running_as_root() {
-        return Ok(PermissionStatus::Allowed);
+        return PermissionStatus::Allowed;
     }
 
     match read_ptrace_scope() {
-        Ok(0) => Ok(PermissionStatus::Allowed),
-        Ok(1) => Ok(PermissionStatus::Denied(
+        Ok(0) => PermissionStatus::Allowed,
+        Ok(1) => PermissionStatus::Denied(
             "ptrace_scope is 1 (restricted). Only parent processes can trace children. \
              Options: run `sudo sysctl kernel.yama.ptrace_scope=0` or \
              `sudo setcap cap_sys_ptrace+ep $(which basilisk)` or \
              profile child processes via debug sessions."
                 .to_owned(),
-        )),
-        Ok(2) => Ok(PermissionStatus::Denied(
+        ),
+        Ok(2) => PermissionStatus::Denied(
             "ptrace_scope is 2 (admin-only). Requires CAP_SYS_PTRACE. \
              Run: `sudo setcap cap_sys_ptrace+ep $(which basilisk)`"
                 .to_owned(),
-        )),
-        Ok(3) => Ok(PermissionStatus::Denied(
+        ),
+        Ok(3) => PermissionStatus::Denied(
             "ptrace_scope is 3 (no ptrace). Profiling external processes is disabled \
              by kernel policy. Profile child processes via debug sessions instead."
                 .to_owned(),
-        )),
-        Ok(scope) => Ok(PermissionStatus::Denied(format!(
+        ),
+        Ok(scope) => PermissionStatus::Denied(format!(
             "Unknown ptrace_scope value: {scope}"
-        ))),
+        )),
         Err(err) => {
             warn!(%err, "could not read ptrace_scope, assuming allowed");
-            Ok(PermissionStatus::Allowed)
+            PermissionStatus::Allowed
         }
     }
 }
@@ -289,32 +289,32 @@ fn is_running_as_root() -> bool {
 // ── Elevation ──────────────────────────────────────────────────────────────
 
 /// Attempt platform-specific privilege elevation for profiling.
+///
+/// On macOS, spawns the elevated helper via `osascript`.
+/// On Linux/Windows, elevation is not supported — returns an error.
 async fn attempt_elevation(pid: u32) -> Result<(), ProfileError> {
-    attempt_elevation_for_platform(pid).await
-}
+    #[cfg(target_os = "macos")]
+    {
+        let helper_path = find_helper_binary()?;
+        info!(
+            pid,
+            helper = %helper_path.display(),
+            "spawning elevated profiler helper via osascript"
+        );
+        spawn_elevated_helper(&helper_path, pid).await
+    }
 
-/// macOS elevation: spawn the helper via `osascript` with admin privileges.
-#[cfg(target_os = "macos")]
-async fn attempt_elevation_for_platform(pid: u32) -> Result<(), ProfileError> {
-    let helper_path = find_helper_binary()?;
-    info!(
-        pid,
-        helper = %helper_path.display(),
-        "spawning elevated profiler helper via osascript"
-    );
-    spawn_elevated_helper(&helper_path, pid).await
-}
-
-/// Linux and Windows do not use the helper binary for elevation.
-#[cfg(not(target_os = "macos"))]
-async fn attempt_elevation_for_platform(_pid: u32) -> Result<(), ProfileError> {
-    Err(ProfileError::Sampler(
-        super::sampler::SamplerError::PermissionDenied(
-            "Privilege elevation is only supported on macOS. \
-             On Linux, adjust ptrace_scope or use setcap."
-                .to_owned(),
-        ),
-    ))
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = pid;
+        Err(ProfileError::Sampler(
+            super::sampler::SamplerError::PermissionDenied(
+                "Privilege elevation is only supported on macOS. \
+                 On Linux, adjust ptrace_scope or use setcap."
+                    .to_owned(),
+            ),
+        ))
+    }
 }
 
 /// Locate the `basilisk-profiler-helper` binary.
@@ -494,9 +494,8 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn linux_reads_ptrace_scope_without_panic() {
-        // Should return Ok regardless of the actual scope value.
-        let result = check_linux_permissions(1);
-        assert!(result.is_ok());
+        // Should return a valid status regardless of the actual scope value.
+        let _result = check_linux_permissions(1);
     }
 
     #[cfg(target_os = "macos")]
@@ -542,8 +541,7 @@ mod tests {
         if let Ok(mut child_proc) = child {
             let child_pid = child_proc.id();
             let result = check_linux_permissions(child_pid);
-            assert!(result.is_ok());
-            assert_eq!(result.expect("checked above"), PermissionStatus::Allowed);
+            assert_eq!(result, PermissionStatus::Allowed);
             let _ = child_proc.kill();
             let _ = child_proc.wait();
         }
