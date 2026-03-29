@@ -47,7 +47,9 @@
       "Bash(make fmt-check:*)",
       "Bash(ruff check:*)",
       "Bash(black .)",
-      "Bash(find /Users/christianfindlay/Documents/Code/Basilisk -maxdepth 3 \\\\\\(-name *.md -path */plan* -o -name *.md -path */docs/* -o -name PLAN.md \\\\\\))"
+      "Bash(find /Users/christianfindlay/Documents/Code/Basilisk -maxdepth 3 \\\\\\(-name *.md -path */plan* -o -name *.md -path */docs/* -o -name PLAN.md \\\\\\))",
+      "Bash(echo \"exit: $?\")",
+      "Bash(gh pr:*)"
     ]
   },
   "autoMemoryEnabled": false
