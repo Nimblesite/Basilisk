@@ -106,13 +106,13 @@ fn scenario_django_request_identifies_orm_as_bottleneck() {
 
     // Simulate 1000 sample batches: 600 ORM, 250 template, 150 view.
     for _ in 0..600 {
-        data.ingest_traces(&[orm_stack.clone()], 0.01, false);
+        data.ingest_traces(std::slice::from_ref(&orm_stack), 0.01, false);
     }
     for _ in 0..250 {
-        data.ingest_traces(&[template_stack.clone()], 0.01, false);
+        data.ingest_traces(std::slice::from_ref(&template_stack), 0.01, false);
     }
     for _ in 0..150 {
-        data.ingest_traces(&[view_stack.clone()], 0.01, false);
+        data.ingest_traces(std::slice::from_ref(&view_stack), 0.01, false);
     }
 
     assert_eq!(
@@ -251,16 +251,16 @@ fn scenario_multithreaded_pipeline_finds_cpu_thread() {
 
     // 100 active reader, 200 idle reader (skipped), 600 transform, 100 writer.
     for _ in 0..100 {
-        data.ingest_traces(&[reader_active.clone()], 0.01, false);
+        data.ingest_traces(std::slice::from_ref(&reader_active), 0.01, false);
     }
     for _ in 0..200 {
-        data.ingest_traces(&[reader_idle.clone()], 0.01, false);
+        data.ingest_traces(std::slice::from_ref(&reader_idle), 0.01, false);
     }
     for _ in 0..600 {
-        data.ingest_traces(&[transform.clone()], 0.01, false);
+        data.ingest_traces(std::slice::from_ref(&transform), 0.01, false);
     }
     for _ in 0..100 {
-        data.ingest_traces(&[writer.clone()], 0.01, false);
+        data.ingest_traces(std::slice::from_ref(&writer), 0.01, false);
     }
 
     let config = HotspotConfig::default();
@@ -393,7 +393,7 @@ fn scenario_10k_samples_performance_and_correctness() {
     let dist = [4000, 2000, 2500, 1000, 500];
     for (stack, &count) in stacks.iter().zip(&dist) {
         for _ in 0..count {
-            data.ingest_traces(&[stack.clone()], 0.01, false);
+            data.ingest_traces(std::slice::from_ref(stack), 0.01, false);
         }
     }
 

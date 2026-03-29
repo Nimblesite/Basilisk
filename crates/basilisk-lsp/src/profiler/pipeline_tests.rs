@@ -597,7 +597,7 @@ fn real_pyspy_attach_sample_and_verify_hotspot() {
     );
 }
 
-/// REAL TEST: Verify ProfileSessionManager lifecycle with a real Python process.
+/// REAL TEST: Verify `ProfileSessionManager` lifecycle with a real Python process.
 ///
 /// Tests start → list → snapshot → stop → verify results.
 #[tokio::test]
