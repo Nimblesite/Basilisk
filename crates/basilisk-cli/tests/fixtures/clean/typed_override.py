@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import override, Any
-from basilisk.safety import Borrowed, Owned
+from basilisk.safety import Borrowed
 
 
 class Animal:

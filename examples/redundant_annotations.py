@@ -3,6 +3,25 @@
 # W0050 fires when the annotation adds no information beyond what inference provides.
 # E0005 does NOT fire when a subclass overrides a parent's annotated attribute.
 
+import asyncio
+from abc import ABC, abstractmethod
+from contextlib import contextmanager
+from dataclasses import dataclass
+from typing import (
+    Callable,
+    Final,
+    Generator,
+    Iterator,
+    NamedTuple,
+    Optional,
+    Protocol,
+    TypeAlias,
+    TypedDict,
+    Union,
+    cast,
+    overload,
+)
+
 # ---------------------------------------------------------------------------
 # Module-level: scalar literals are always inferrable
 # ---------------------------------------------------------------------------
@@ -336,7 +355,10 @@ def comprehension_annotations() -> None:
 # ---------------------------------------------------------------------------
 
 double = 2  # W0050 — obviously int (near lambdas for context)
-fn = lambda x: x * 2  # NO W0050 — no annotation to be redundant
+
+
+def fn(x):  # noqa: ANN001, ANN201 — NO W0050 — no annotation to be redundant
+    return x * 2
 
 
 # ---------------------------------------------------------------------------
@@ -435,8 +457,6 @@ def walrus_examples() -> None:
 # Type alias assignments: NOT redundant (these define types, not values)
 # ---------------------------------------------------------------------------
 
-from typing import TypeAlias
-
 Vector: TypeAlias = list[float]  # NO W0050 — type alias definition
 Matrix: TypeAlias = list[list[float]]  # NO W0050 — type alias definition
 
@@ -478,8 +498,6 @@ def increment() -> None:
 # Dataclass-style: fields with explicit types
 # ---------------------------------------------------------------------------
 
-from dataclasses import dataclass
-
 
 @dataclass
 class Point:
@@ -498,8 +516,6 @@ class LabeledPoint:
 # NamedTuple: annotations are part of the structure definition
 # ---------------------------------------------------------------------------
 
-from typing import NamedTuple
-
 
 class Coordinate(NamedTuple):
     x: float  # NO W0050 — NamedTuple field, annotation required
@@ -510,8 +526,6 @@ class Coordinate(NamedTuple):
 # ---------------------------------------------------------------------------
 # TypedDict: annotations are the definition
 # ---------------------------------------------------------------------------
-
-from typing import TypedDict
 
 
 class UserDict(TypedDict):
@@ -545,8 +559,6 @@ def constructor_non_redundant() -> None:
 # ---------------------------------------------------------------------------
 # Cast and assertion patterns
 # ---------------------------------------------------------------------------
-
-from typing import cast
 
 
 def cast_patterns() -> None:
@@ -583,8 +595,6 @@ class Node:
 # Union types: NOT redundant
 # ---------------------------------------------------------------------------
 
-from typing import Union, Optional
-
 maybe_int: Optional[int] = None  # NO W0050 — Optional adds info beyond None
 either: Union[int, str] = 42  # NO W0050 — Union adds info beyond int
 
@@ -593,8 +603,6 @@ either: Union[int, str] = 42  # NO W0050 — Union adds info beyond int
 # Final: annotation may be redundant but Final qualifier is not
 # ---------------------------------------------------------------------------
 
-from typing import Final
-
 MAX_SIZE: Final[int] = 100  # W0050 — int is redundant (Final alone suffices)
 MAX_NAME: Final = "limit"  # NO W0050 — no redundant type, just Final
 
@@ -602,8 +610,6 @@ MAX_NAME: Final = "limit"  # NO W0050 — no redundant type, just Final
 # ---------------------------------------------------------------------------
 # Callable annotations
 # ---------------------------------------------------------------------------
-
-from typing import Callable
 
 
 def apply_func(
@@ -615,8 +621,6 @@ def apply_func(
 # ---------------------------------------------------------------------------
 # Async functions: same rules apply
 # ---------------------------------------------------------------------------
-
-import asyncio
 
 
 async def async_redundant() -> int:  # W0050 — inferrable from `return 42`
@@ -635,8 +639,6 @@ async def async_none() -> None:  # W0050 — async with no return implies None
 # Generator annotations
 # ---------------------------------------------------------------------------
 
-from typing import Generator, Iterator
-
 
 def gen_needed() -> Generator[int, None, None]:  # NO W0050 — Generator type adds info
     yield 1
@@ -652,21 +654,17 @@ def iter_needed() -> Iterator[str]:  # NO W0050 — Iterator type adds info
 # Context managers
 # ---------------------------------------------------------------------------
 
-from contextlib import contextmanager
-
 
 @contextmanager
-def managed_resource() -> Generator[
-    str, None, None
-]:  # NO W0050 — Generator type needed
+def managed_resource() -> (
+    Generator[str, None, None]
+):  # NO W0050 — Generator type needed
     yield "resource"
 
 
 # ---------------------------------------------------------------------------
 # Overloaded functions: annotations are required
 # ---------------------------------------------------------------------------
-
-from typing import overload
 
 
 @overload
@@ -683,8 +681,6 @@ def process(x: int | str) -> int | str:
 # Protocol: annotations define the interface
 # ---------------------------------------------------------------------------
 
-from typing import Protocol
-
 
 class Drawable(Protocol):
     def draw(self) -> None:  # NO W0050 — Protocol method signature
@@ -696,8 +692,6 @@ class Drawable(Protocol):
 # ---------------------------------------------------------------------------
 # Abstract methods: annotations define the contract
 # ---------------------------------------------------------------------------
-
-from abc import ABC, abstractmethod
 
 
 class Shape(ABC):

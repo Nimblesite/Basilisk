@@ -1,8 +1,11 @@
 from typing import Protocol
 
+
 class MyProtocol(Protocol):
     timeout: str
+
     def get_value(self) -> int: ...
+
 
 import sys
 

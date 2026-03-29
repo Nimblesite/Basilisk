@@ -1,4 +1,5 @@
 from typing import TypeVar
+
 T1 = TypeVar("T1", int)
 T2 = TypeVar("T2", int)
 T3 = TypeVar("T3", int)

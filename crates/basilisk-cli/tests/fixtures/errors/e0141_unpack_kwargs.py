@@ -6,5 +6,7 @@ class Options(TypedDict):
     age: int
 
 
-def func(name: str, **kwargs: Unpack[Options]) -> None:  # E: name overlaps with TypedDict key
+def func(
+    name: str, **kwargs: Unpack[Options]
+) -> None:  # E: name overlaps with TypedDict key
     pass

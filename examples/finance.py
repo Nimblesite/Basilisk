@@ -23,7 +23,7 @@ def black_scholes(S, K, T, r, sigma):  # BSK-E0001: five untyped params
     import math
 
     d1 = (math.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * math.sqrt(T))
-    d2 = d1 - sigma * math.sqrt(T)
+    _d2 = d1 - sigma * math.sqrt(T)
     # omit N(d1)/N(d2) for brevity
     return S - K * math.exp(-r * T)  # BSK-E0002: no return type
 

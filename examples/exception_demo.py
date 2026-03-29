@@ -18,20 +18,20 @@ def main() -> None:
     # 1. KeyError — inspect exc, exc.args
     try:
         data: dict[str, int] = {"a": 1, "b": 2}
-        value = data["missing_key"]
+        _value = data["missing_key"]
     except KeyError as exc:
         print(f"Caught KeyError: {exc}")  # breakpoint here
 
     # 2. ZeroDivisionError — inspect exc.args[0]
     try:
-        result = 100 / 0
+        _result = 100 / 0
     except ZeroDivisionError as exc:
         print(f"Caught ZeroDivisionError: {exc}")  # breakpoint here
 
     # 3. IndexError — inspect type(exc), exc.args
     try:
         numbers: list[int] = [10, 20, 30]
-        bad = numbers[99]
+        _bad = numbers[99]
     except IndexError as exc:
         print(f"Caught IndexError: {exc}")  # breakpoint here
 

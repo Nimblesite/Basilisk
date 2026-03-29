@@ -306,7 +306,7 @@ fn e0002_function_in_else_branch_of_version_guard() -> Result<(), Box<dyn std::e
     assert_diagnostics(
         &src,
         &diags,
-        &[Expected::error("BSK-E0002", "`new_feature`", 7, 9)],
+        &[Expected::error("BSK-E0002", "`new_feature`", 9, 9)],
     );
     Ok(())
 }

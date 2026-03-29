@@ -3,11 +3,7 @@ from __future__ import annotations
 import os
 import sys
 import re
-import json
-import pathlib
 from typing import Optional
-from collections import defaultdict
-from dataclasses import dataclass
 
 
 def get_path() -> str:

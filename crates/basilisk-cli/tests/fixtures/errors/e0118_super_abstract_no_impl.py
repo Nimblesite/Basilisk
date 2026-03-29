@@ -4,8 +4,7 @@ from abc import abstractmethod
 
 class PColor(Protocol):
     @abstractmethod
-    def draw(self) -> str:
-        ...
+    def draw(self) -> str: ...
 
 
 class BadColor(PColor):
