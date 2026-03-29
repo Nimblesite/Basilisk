@@ -9,6 +9,7 @@
 //! to profile a given PID, and on macOS spawns the elevated helper binary
 //! via `osascript` when needed.
 
+#[cfg(target_os = "macos")]
 use std::path::PathBuf;
 
 #[cfg(target_os = "linux")]

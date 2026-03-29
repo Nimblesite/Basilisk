@@ -132,7 +132,7 @@ def generate(outcomes_path: Path, output_path: Path) -> None:
             <th>Status</th><th>Location</th><th>Function</th>
             <th>Replacement</th><th>Time</th>
           </tr></thead>
-          <tbody>{''.join(rows)}</tbody>
+          <tbody>{"".join(rows)}</tbody>
         </table>"""
 
     html = f"""<!DOCTYPE html>
@@ -237,14 +237,14 @@ def generate(outcomes_path: Path, output_path: Path) -> None:
 
 <div id="tab-missed" class="tab-content active">
   <div class="filter"><input type="text" placeholder="Filter by file, function, replacement…" oninput="filterTable('tab-missed-table', this.value)"></div>
-  {table(rows_missed, 'tab-missed-table')}
+  {table(rows_missed, "tab-missed-table")}
 </div>
 <div id="tab-caught" class="tab-content">
   <div class="filter"><input type="text" placeholder="Filter by file, function, replacement…" oninput="filterTable('tab-caught-table', this.value)"></div>
-  {table(rows_caught, 'tab-caught-table')}
+  {table(rows_caught, "tab-caught-table")}
 </div>
 <div id="tab-other" class="tab-content">
-  {table(rows_other, 'tab-other-table')}
+  {table(rows_other, "tab-other-table")}
 </div>
 
 <script>
