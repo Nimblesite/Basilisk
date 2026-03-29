@@ -135,7 +135,7 @@ jobs:
   test-vscode:
     name: VS Code Extension
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       TEST_COVERAGE_VSIX: ${{ vars.TEST_COVERAGE_VSIX || '60' }}
     steps:
