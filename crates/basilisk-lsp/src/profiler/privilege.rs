@@ -286,33 +286,30 @@ fn is_running_as_root() -> bool {
 
 // ── Elevation ──────────────────────────────────────────────────────────────
 
-/// Attempt platform-specific privilege elevation for profiling.
-///
-/// On macOS, spawns the elevated helper via `osascript`.
-/// On Linux/Windows, elevation is not supported — returns an error.
+/// macOS elevation: spawn the helper via `osascript` with admin privileges.
+#[cfg(target_os = "macos")]
 async fn attempt_elevation(pid: u32) -> Result<(), ProfileError> {
-    #[cfg(target_os = "macos")]
-    {
-        let helper_path = find_helper_binary()?;
-        info!(
-            pid,
-            helper = %helper_path.display(),
-            "spawning elevated profiler helper via osascript"
-        );
-        spawn_elevated_helper(&helper_path, pid).await
-    }
+    let helper_path = find_helper_binary()?;
+    info!(
+        pid,
+        helper = %helper_path.display(),
+        "spawning elevated profiler helper via osascript"
+    );
+    spawn_elevated_helper(&helper_path, pid).await
+}
 
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = pid;
-        Err(ProfileError::Sampler(
-            super::sampler::SamplerError::PermissionDenied(
-                "Privilege elevation is only supported on macOS. \
-                 On Linux, adjust ptrace_scope or use setcap."
-                    .to_owned(),
-            ),
-        ))
-    }
+/// Linux and Windows do not support elevation — returns an error immediately.
+#[cfg(not(target_os = "macos"))]
+async fn attempt_elevation(_pid: u32) -> Result<(), ProfileError> {
+    // Yield once to satisfy the `async` requirement (callers `.await` this).
+    tokio::task::yield_now().await;
+    Err(ProfileError::Sampler(
+        super::sampler::SamplerError::PermissionDenied(
+            "Privilege elevation is only supported on macOS. \
+             On Linux, adjust ptrace_scope or use setcap."
+                .to_owned(),
+        ),
+    ))
 }
 
 /// Locate the `basilisk-profiler-helper` binary.
