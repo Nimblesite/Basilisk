@@ -160,9 +160,7 @@ fn check_linux_permissions(pid: u32) -> PermissionStatus {
              by kernel policy. Profile child processes via debug sessions instead."
                 .to_owned(),
         ),
-        Ok(scope) => PermissionStatus::Denied(format!(
-            "Unknown ptrace_scope value: {scope}"
-        )),
+        Ok(scope) => PermissionStatus::Denied(format!("Unknown ptrace_scope value: {scope}")),
         Err(err) => {
             warn!(%err, "could not read ptrace_scope, assuming allowed");
             PermissionStatus::Allowed

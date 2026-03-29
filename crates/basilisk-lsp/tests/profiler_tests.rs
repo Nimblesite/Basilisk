@@ -2357,8 +2357,12 @@ while time.time() - start < 10:
     cpu_burner()
     light_work()
 "#;
+    // Write to a temp file so py-spy reports absolute paths (needed for diagnostic URIs).
+    let script_path = std::env::temp_dir().join("basilisk_hotspot_proof.py");
+    std::fs::write(&script_path, script).expect("write temp script");
+
     let Some(mut guard) = std::process::Command::new("python3")
-        .args(["-c", script])
+        .arg(&script_path)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()
@@ -2445,6 +2449,7 @@ while time.time() - start < 10:
     let diag_count: usize = diags.values().map(Vec::len).sum();
     println!("  {diag_count} diagnostics across {} files", diags.len());
     let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_file(&script_path);
     println!("  PROOF COMPLETE: profiler correctly identifies cpu_burner");
 }
 
