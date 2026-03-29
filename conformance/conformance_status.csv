@@ -11,7 +11,7 @@ BSK-E0047|BSK-E0048|BSK-E0092,aliases_implicit.py,aliases,PASS,22,0,1
 BSK-E0014|BSK-E0050,aliases_newtype.py,aliases,PASS,14,0,0
 BSK-E0014|BSK-E0104,aliases_recursive.py,aliases,PASS,11,0,18
 BSK-E0057|BSK-E0149,aliases_type_statement.py,aliases,PASS,25,0,0
-BSK-E0014|BSK-E0130,aliases_typealiastype.py,aliases,FAIL,0,22,3
+BSK-E0014|BSK-E0130|BSK-E0151,aliases_typealiastype.py,aliases,PASS,22,0,3
 BSK-E0107,aliases_variance.py,aliases,PASS,4,0,0
 ,annotations_coroutines.py,annotations,PASS,0,0,0
 BSK-E0047,annotations_forward_refs.py,annotations,PASS,19,0,0

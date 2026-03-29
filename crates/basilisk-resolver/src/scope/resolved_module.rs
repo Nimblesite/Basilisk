@@ -20,7 +20,8 @@ use super::{
         GeneratorViolation, HistoricalPositionalViolation, InvalidStringAnnotation,
         LiteralAugmentedAssignViolation, LocalClassVarViolation, Pep695BoundViolation,
         ProtocolClassObjectViolation, ProtocolInstantiationViolation, ProtocolRtcViolation,
-        ProtocolSelfViolation, ReadOnlyViolationInfo, TupleIndexViolation, UnboundTypeVarUsage,
+        ProtocolSelfViolation, ReadOnlyViolationInfo, TupleIndexViolation,
+        TypeAliasTypeViolation, UnboundTypeVarUsage,
     },
 };
 
@@ -95,6 +96,8 @@ pub struct ResolvedModule {
     pub imported_final_names: std::collections::HashSet<String>,
     /// Module-level `TypeAliasType(...)` call sites.
     pub type_alias_type_calls: Vec<TypeAliasTypeCallInfo>,
+    /// Violations detected in `TypeAliasType(...)` calls.
+    pub type_alias_type_violations: Vec<TypeAliasTypeViolation>,
     /// PEP 695 `type X = rhs` alias statements.
     pub type_statements: Vec<TypeStatementInfo>,
     /// `Annotated[...]` subscriptions with too few type arguments (< 2).
