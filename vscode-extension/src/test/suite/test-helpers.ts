@@ -39,6 +39,18 @@ export const DEFAULT_POLL_INTERVAL_MS = 100;
 /** Interval (ms) between server readiness polls during setup. */
 const SERVER_READINESS_POLL_INTERVAL_MS = 200;
 
+/**
+ * Module-level flag: once any poll (prewarmLsp or setupLspTestSuite)
+ * confirms the LSP server is responsive, subsequent calls skip the
+ * expensive 60-second poll entirely.
+ */
+let lspReadyConfirmed = false;
+
+/** Mark the LSP server as confirmed ready (called from prewarmLsp). */
+export function markLspReady(): void {
+    lspReadyConfirmed = true;
+}
+
 
 /**
  * Resolves the absolute path to the basilisk binary built from Cargo.
@@ -243,22 +255,28 @@ export async function setupLspTestSuite(
     }
 
     // Poll until the LSP server is responsive.
-    const dummyPath = path.join(tmpDir, '__init__.py');
-    fs.writeFileSync(dummyPath, '', 'utf8');
-    const dummyUri = vscode.Uri.file(dummyPath);
-    const dummyDoc = await vscode.workspace.openTextDocument(dummyUri);
-    await vscode.window.showTextDocument(dummyDoc);
-    const deadline = Date.now() + SERVER_START_WAIT_MS;
-    while (Date.now() < deadline) {
-        try {
-            const syms = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
-                'vscode.executeDocumentSymbolProvider', dummyUri
-            );
-            if (syms !== null && syms !== undefined) {break;}
-        } catch { /* server not ready yet */ }
-        await new Promise<void>((r) => setTimeout(r, SERVER_READINESS_POLL_INTERVAL_MS));
+    // Skip if a prior call (prewarmLsp or earlier suite) already confirmed readiness.
+    if (!lspReadyConfirmed) {
+        const dummyPath = path.join(tmpDir, '__init__.py');
+        fs.writeFileSync(dummyPath, '', 'utf8');
+        const dummyUri = vscode.Uri.file(dummyPath);
+        const dummyDoc = await vscode.workspace.openTextDocument(dummyUri);
+        await vscode.window.showTextDocument(dummyDoc);
+        const deadline = Date.now() + SERVER_START_WAIT_MS;
+        while (Date.now() < deadline) {
+            try {
+                const syms = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+                    'vscode.executeDocumentSymbolProvider', dummyUri
+                );
+                if (syms !== null && syms !== undefined) {
+                    lspReadyConfirmed = true;
+                    break;
+                }
+            } catch { /* server not ready yet */ }
+            await new Promise<void>((r) => setTimeout(r, SERVER_READINESS_POLL_INTERVAL_MS));
+        }
+        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     }
-    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
 
     return { tmpDir, basiliskBinary: binary };
 }

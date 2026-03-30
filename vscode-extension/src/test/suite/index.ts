@@ -8,6 +8,7 @@ import {
     EXTENSION_ID,
     SERVER_START_WAIT_MS,
     SUITE_SETUP_TIMEOUT_MS,
+    markLspReady,
 } from './test-helpers';
 
 /**
@@ -38,7 +39,10 @@ async function prewarmLsp(): Promise<void> {
             const syms = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
                 'vscode.executeDocumentSymbolProvider', dummyUri
             );
-            if (syms !== null && syms !== undefined) { break; }
+            if (syms !== null && syms !== undefined) {
+                markLspReady();
+                break;
+            }
         } catch { /* server not ready yet */ }
         await new Promise<void>((r) => setTimeout(r, pollIntervalMs));
     }
