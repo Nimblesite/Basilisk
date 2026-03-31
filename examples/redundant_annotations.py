@@ -656,9 +656,9 @@ from contextlib import contextmanager
 
 
 @contextmanager
-def managed_resource() -> (
-    Generator[str, None, None]
-):  # NO W0050 — Generator type needed
+def managed_resource() -> Generator[
+    str, None, None
+]:  # NO W0050 — Generator type needed
     yield "resource"
 
 
