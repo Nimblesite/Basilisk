@@ -117,3 +117,106 @@ fn e0003_diagnostic_has_help() -> Result<(), Box<dyn std::error::Error>> {
     assert!(diag.note.is_some(), "E0003 should have note text");
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Regression tests: scalar literals must NEVER produce false-positive E0003.
+// These tests exercise real-world patterns that previously regressed.
+// ---------------------------------------------------------------------------
+
+/// Each scalar literal type individually — exhaustive per-type regression guard.
+#[test]
+fn e0003_regression_each_scalar_type_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
+    let cases = [
+        ("int",   "count = 42\n"),
+        ("float", "rate = 3.14\n"),
+        ("str",   "name = \"hello\"\n"),
+        ("bool",  "flag = True\n"),
+        ("bytes", "data = b\"raw\"\n"),
+    ];
+    for (type_name, source) in cases {
+        let diags = run(source)?;
+        let e0003_diags: Vec<_> = diags
+            .iter()
+            .filter(|d| d.code.code == "BSK-E0003")
+            .collect();
+        assert!(
+            e0003_diags.is_empty(),
+            "{type_name} literal must not fire E0003 (regression), got: {:?}",
+            e0003_diags.iter().map(|d| &d.message).collect::<Vec<_>>()
+        );
+    }
+    Ok(())
+}
+
+/// Multiple module-level scalar literals — zero E0003.
+#[test]
+fn e0003_regression_multiple_scalars_no_false_positives() -> Result<(), Box<dyn std::error::Error>> {
+    let source = "\
+host = \"localhost\"
+port = 5432
+debug = True
+version = 1.0
+magic = b\"\\x00\"
+";
+    let diags = run(source)?;
+    let e0003_diags: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0003")
+        .collect();
+    assert!(
+        e0003_diags.is_empty(),
+        "module-level scalar literals must not fire E0003 (regression), got: {:?}",
+        e0003_diags.iter().map(|d| &d.message).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// Lambda assignments at module level — not unresolvable, no E0003.
+#[test]
+fn e0003_regression_lambda_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
+    let diags = run("fn = lambda x: x * 2\n")?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0003"),
+        "lambda assignment should not fire E0003 (regression)"
+    );
+    Ok(())
+}
+
+/// The exact pattern from the example file: `double = 2` near lambdas.
+#[test]
+fn e0003_regression_example_file_pattern() -> Result<(), Box<dyn std::error::Error>> {
+    let source = "\
+double = 2
+fn = lambda x: x * 2
+";
+    let diags = run(source)?;
+    let e0003_diags: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0003")
+        .collect();
+    assert!(
+        e0003_diags.is_empty(),
+        "example file pattern (scalar + lambda) must not fire E0003 (regression), got: {:?}",
+        e0003_diags.iter().map(|d| &d.message).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// Unresolvable types MUST still fire — ensure suppression is not over-broad.
+#[test]
+fn e0003_regression_unresolvable_types_still_fire() -> Result<(), Box<dyn std::error::Error>> {
+    let cases = [
+        ("empty list", "items = []\n"),
+        ("empty dict", "mapping = {}\n"),
+        ("None",       "result = None\n"),
+    ];
+    for (desc, source) in cases {
+        let diags = run(source)?;
+        assert!(
+            codes(&diags).contains(&"BSK-E0003"),
+            "{desc} must still fire E0003 — type is genuinely unresolvable, got: {:?}",
+            codes(&diags)
+        );
+    }
+    Ok(())
+}

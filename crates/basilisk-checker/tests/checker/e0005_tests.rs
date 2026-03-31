@@ -180,3 +180,160 @@ class Foo:
     );
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Regression tests: scalar literals must NEVER produce false-positive E0005.
+// These tests exercise real-world patterns that previously regressed.
+// ---------------------------------------------------------------------------
+
+/// The exact pattern from the `redundant_annotations.py` example file:
+/// an inheritance hierarchy where parent and children use scalar literals.
+/// NONE of these should fire E0005.
+#[test]
+fn e0005_regression_animal_hierarchy_no_false_positives() -> Result<(), Box<dyn std::error::Error>> {
+    let source = "\
+class Animal:
+    sound = \"...\"
+    legs = 4
+
+class Dog(Animal):
+    sound = \"woof\"
+
+class Cat(Animal):
+    sound = \"meow\"
+
+class Snake(Animal):
+    legs = 0
+    sound = \"hiss\"
+";
+    let diags = run(source)?;
+    let e0005_diags: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0005")
+        .collect();
+    assert!(
+        e0005_diags.is_empty(),
+        "scalar literal attrs in animal hierarchy must not fire E0005 (regression), got: {:?}",
+        e0005_diags.iter().map(|d| &d.message).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// The config override pattern: base config with scalar defaults, subclasses
+/// override with new scalar values. No E0005 anywhere.
+#[test]
+fn e0005_regression_config_override_pattern() -> Result<(), Box<dyn std::error::Error>> {
+    let source = "\
+class DatabaseConfig:
+    host = \"localhost\"
+    port = 5432
+    pool_size = 10
+    ssl = False
+
+class ProductionDB(DatabaseConfig):
+    host = \"db.prod.internal\"
+    port = 5433
+    ssl = True
+    pool_size = 50
+
+class StagingDB(DatabaseConfig):
+    host = \"db.staging.internal\"
+    pool_size = 5
+";
+    let diags = run(source)?;
+    let e0005_diags: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0005")
+        .collect();
+    assert!(
+        e0005_diags.is_empty(),
+        "config override pattern with scalar literals must not fire E0005 (regression), got: {:?}",
+        e0005_diags.iter().map(|d| &d.message).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// Standalone classes with scalar literals — type is trivially inferrable.
+#[test]
+fn e0005_regression_standalone_scalar_classes() -> Result<(), Box<dyn std::error::Error>> {
+    let source = "\
+class Standalone:
+    value = 42
+
+class UnannotatedParent:
+    raw = 99
+
+class ChildOfUnannotated(UnannotatedParent):
+    raw = 100
+
+class UnrelatedToBaseRoute:
+    path = \"/unrelated\"
+";
+    let diags = run(source)?;
+    let e0005_diags: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0005")
+        .collect();
+    assert!(
+        e0005_diags.is_empty(),
+        "standalone classes with scalar literals must not fire E0005 (regression), got: {:?}",
+        e0005_diags.iter().map(|d| &d.message).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// Each scalar literal type individually — exhaustive per-type regression guard.
+#[test]
+fn e0005_regression_each_scalar_type_individually() -> Result<(), Box<dyn std::error::Error>> {
+    let cases = [
+        ("int",   "class A:\n    x = 42\n"),
+        ("float", "class B:\n    x = 3.14\n"),
+        ("str",   "class C:\n    x = \"hello\"\n"),
+        ("bool",  "class D:\n    x = True\n"),
+        ("bytes", "class E:\n    x = b\"data\"\n"),
+        ("None",  "class F:\n    x = None\n"),
+    ];
+    for (type_name, source) in cases {
+        let diags = run(source)?;
+        let e0005_diags: Vec<_> = diags
+            .iter()
+            .filter(|d| d.code.code == "BSK-E0005")
+            .collect();
+        assert!(
+            e0005_diags.is_empty(),
+            "{type_name} literal must not fire E0005 (regression), got: {:?}",
+            e0005_diags.iter().map(|d| &d.message).collect::<Vec<_>>()
+        );
+    }
+    Ok(())
+}
+
+/// Mixed class: some attrs are scalar (suppressed), some are not (should fire).
+/// Ensures the filter is precise — only scalars suppressed, non-inferrable still fires.
+#[test]
+fn e0005_regression_mixed_scalar_and_non_inferrable() -> Result<(), Box<dyn std::error::Error>> {
+    let source = "\
+class Mixed:
+    name = \"default\"
+    count = 0
+    flag = False
+    unknown = some_call()
+";
+    let diags = run(source)?;
+    let e0005_diags: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0005")
+        .collect();
+    assert_eq!(
+        e0005_diags.len(),
+        1,
+        "only the non-inferrable attr should fire E0005, scalars must be suppressed, got: {:?}",
+        e0005_diags.iter().map(|d| &d.message).collect::<Vec<_>>()
+    );
+    assert!(
+        e0005_diags[0].message.contains("unknown"),
+        "E0005 should fire for `unknown`, got: {}",
+        e0005_diags[0].message
+    );
+    Ok(())
+}
