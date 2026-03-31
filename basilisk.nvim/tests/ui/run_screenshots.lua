@@ -210,7 +210,8 @@ T["diagnostics_untyped"] = function()
   local tmpdir = setup_project(child)
   start_lsp(child)
   open_and_wait(child, tmpdir, "bad.py", "def greet(name):\n    return name\n\ndef add(a, b):\n    return a + b\n\nx = greet('world')\n")
-  expect.reference_screenshot(child.get_screenshot(), nil, { directory = screenshot_dir })
+  -- Threshold: highlight group IDs shift across environments (local vs CI).
+  assert_screenshot(child.get_screenshot(), 0.10, { directory = screenshot_dir })
   child.stop()
 end
 
@@ -219,7 +220,8 @@ T["diagnostics_clean"] = function()
   local tmpdir = setup_project(child)
   start_lsp(child)
   open_and_wait(child, tmpdir, "good.py", "def greet(name: str) -> str:\n    return 'Hello ' + name\n\ndef add(a: int, b: int) -> int:\n    return a + b\n\nx: str = greet('world')\n")
-  expect.reference_screenshot(child.get_screenshot(), nil, { directory = screenshot_dir })
+  -- Threshold: highlight group IDs shift across environments (local vs CI).
+  assert_screenshot(child.get_screenshot(), 0.10, { directory = screenshot_dir })
   child.stop()
 end
 
@@ -242,7 +244,8 @@ T["test_explorer_panel"] = function()
   open_and_wait(child, tmpdir, "panel.py", "x: int = 1\n")
   register_commands(child)
   child.lua("vim.cmd('BasiliskTestToggle'); vim.wait(500)")
-  expect.reference_screenshot(child.get_screenshot(), nil, { directory = screenshot_dir })
+  -- Threshold: highlight group IDs shift across environments (local vs CI).
+  assert_screenshot(child.get_screenshot(), 0.10, { directory = screenshot_dir })
   child.stop()
 end
 
@@ -256,7 +259,8 @@ T["diagnostic_float"] = function()
     vim.diagnostic.open_float()
     vim.wait(500)
   ]])
-  expect.reference_screenshot(child.get_screenshot(), nil, { directory = screenshot_dir })
+  -- Threshold: highlight group IDs shift across environments (local vs CI).
+  assert_screenshot(child.get_screenshot(), 0.10, { directory = screenshot_dir })
   child.stop()
 end
 
