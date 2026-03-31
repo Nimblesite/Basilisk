@@ -4,10 +4,6 @@ title: 重构
 description: Basilisk 中所有 16 个重构代码操作——提取、内联、移动、重命名、转换和更改签名。
 keywords: basilisk, 重构, 提取变量, 提取函数, 内联, 移动符号, 重命名, 代码操作, pylance
 lang: zh
-eleventyNavigation:
-  key: Refactoring
-  parent: Introduction
-  order: 7
 ---
 
 # 重构

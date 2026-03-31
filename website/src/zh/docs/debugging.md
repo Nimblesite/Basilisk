@@ -4,9 +4,6 @@ title: 调试
 description: Basilisk 集成的 Python 调试——设置断点、单步执行代码、检查变量和评估表达式。无需单独的调试扩展。
 keywords: basilisk, 调试, python, debugpy, 断点, 单步执行, 变量, 监视, 调试控制台, vs code, zed, dap
 lang: zh
-eleventyNavigation:
-  key: Debugging
-  order: 4
 ---
 
 # 调试

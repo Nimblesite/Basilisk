@@ -1,8 +1,11 @@
 ---
 layout: layouts/docs.njk
 title: Code Quality — W0090–W0099
-description: Warnings for patterns that are legal but problematic.
+description: "Basilisk code quality warnings — unnecessary type:ignore comments, deprecated APIs, Python 2 style type comments, assertions with side effects, and mutable default arguments. BSK-W0090 through W0099."
 keywords: basilisk, code quality, deprecated, mutable default, BSK-W0090, BSK-W0099
+date: 2026-02-28
+dateModified: 2026-03-31
+author: The Basilisk Project
 eleventyNavigation:
   key: Code Quality
   parent: Rules

@@ -4,9 +4,6 @@ title: 安装
 description: 如何安装 Basilisk——预构建二进制文件、VS Code 扩展、Zed 扩展或从源代码构建。
 keywords: basilisk, 安装, cargo, rust, python类型检查器, vs code, zed
 lang: zh
-eleventyNavigation:
-  key: Installation
-  order: 2
 ---
 
 # 安装

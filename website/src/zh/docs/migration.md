@@ -4,9 +4,6 @@ title: 迁移指南
 description: 如何从 Pyright 或 mypy 迁移到 Basilisk，包括配置导入和每路径覆盖。
 keywords: 迁移到basilisk, 从pyright, 从mypy, python类型检查器迁移
 lang: zh
-eleventyNavigation:
-  key: Migration
-  order: 7
 ---
 
 # 迁移指南

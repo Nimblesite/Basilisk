@@ -4,10 +4,6 @@ title: 类型安全 — E0010–E0025
 description: 捕获类型不匹配、错误注解和不健全类型使用的规则。
 keywords: basilisk, 类型安全, 类型不匹配, BSK-E0012, BSK-E0013, BSK-E0016
 lang: zh
-eleventyNavigation:
-  key: Type Safety
-  parent: Rules
-  order: 2
 ---
 
 # 类型安全 — E0010–E0025

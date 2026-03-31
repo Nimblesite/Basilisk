@@ -4,9 +4,6 @@ title: Mojo 风格安全注解
 description: Basilisk 的所有权、不可变性和强制转换安全分析——标准 Python 中的 Mojo 概念。
 keywords: basilisk所有权, borrowed, inout, owned, mojo, python所有权分析
 lang: zh
-eleventyNavigation:
-  key: Mojo Safety
-  order: 8
 ---
 
 # Mojo 风格安全注解

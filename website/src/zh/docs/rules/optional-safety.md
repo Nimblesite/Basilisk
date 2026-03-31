@@ -4,10 +4,6 @@ title: 可选安全 — E0070–E0073
 description: 防止对 Optional 值进行不安全访问的规则。
 keywords: basilisk, optional, none, nullable, BSK-E0070, BSK-E0073
 lang: zh
-eleventyNavigation:
-  key: Optional Safety
-  parent: Rules
-  order: 7
 ---
 
 # 可选安全 — E0070–E0073

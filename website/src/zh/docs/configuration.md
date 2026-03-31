@@ -4,9 +4,6 @@ title: 配置参考
 description: Basilisk pyproject.toml 配置选项的完整参考。
 keywords: basilisk, 配置, pyproject.toml, 设置
 lang: zh
-eleventyNavigation:
-  key: Configuration
-  order: 4
 ---
 
 # 配置参考

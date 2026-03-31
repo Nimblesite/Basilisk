@@ -1,8 +1,11 @@
 ---
 layout: layouts/docs.njk
-title: Configuration Reference
-description: Complete reference for Basilisk's pyproject.toml configuration options.
+title: "Configuration Reference — pyproject.toml Settings"
+description: "Complete reference for all Basilisk configuration options in pyproject.toml. Severity overrides, per-path rules, inline suppressions, and Ruff integration."
 keywords: basilisk, configuration, pyproject.toml, settings
+date: 2026-02-28
+dateModified: 2026-03-31
+author: The Basilisk Project
 eleventyNavigation:
   key: Configuration
   order: 4

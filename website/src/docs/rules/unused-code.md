@@ -1,8 +1,11 @@
 ---
 layout: layouts/docs.njk
 title: Unused Code — W0080–W0089
-description: Warnings for code that is defined but never used.
+description: "Basilisk unused code warnings — unused imports, variables, functions, parameters, and unreachable code branches. BSK-W0080 through W0089."
 keywords: basilisk, unused, dead code, unreachable, BSK-W0080, BSK-W0089
+date: 2026-02-28
+dateModified: 2026-03-31
+author: The Basilisk Project
 eleventyNavigation:
   key: Unused Code
   parent: Rules

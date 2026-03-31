@@ -246,6 +246,9 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 @media (max-width: 1023px) {
   .sidebar { position: static; max-height: none; padding-right: 0; border-bottom: 1px solid var(--color-border); padding-bottom: var(--space-6); }
 }
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+}
 
 .docs-nav, .sidebar nav { padding: 0; }
 .docs-nav ul, .sidebar nav ul { list-style: none; margin: 0; padding: 0; }

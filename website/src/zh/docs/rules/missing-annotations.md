@@ -4,10 +4,6 @@ title: 缺失注解 — E0001–E0009
 description: 标记缺少类型信息的代码的规则。
 keywords: basilisk, 缺失注解, 类型注解, BSK-E0001, BSK-E0002
 lang: zh
-eleventyNavigation:
-  key: Missing Annotations
-  parent: Rules
-  order: 1
 ---
 
 # 缺失注解 — E0001–E0009

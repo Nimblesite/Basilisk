@@ -1,8 +1,11 @@
 ---
 layout: layouts/docs.njk
-title: Installation
-description: How to install Basilisk — pre-built binaries, VS Code extension, Zed extension, or build from source.
+title: "Install Basilisk — VS Code, Neovim, Zed, or CLI"
+description: "Install the Basilisk Python language server via VS Code Marketplace, pre-built binaries, cargo install, or build from source. Supports macOS, Linux, and Windows."
 keywords: basilisk, install, cargo, rust, python type checker, vs code, zed
+date: 2026-02-28
+dateModified: 2026-03-31
+author: The Basilisk Project
 eleventyNavigation:
   key: Installation
   order: 2
