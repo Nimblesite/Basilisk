@@ -65,6 +65,7 @@ Once all checks pass cleanly, report:
 
 ## Rules
 
+- Running all the tests that the CI runs is critical. They must all pass.
 - NEVER stop with failing checks. Loop until everything is green.
 - NEVER suppress lint warnings with `#[allow(...)]` — fix the code.
 - NEVER remove test assertions or delete tests to make them pass.

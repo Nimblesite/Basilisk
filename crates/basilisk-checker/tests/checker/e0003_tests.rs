@@ -127,10 +127,10 @@ fn e0003_diagnostic_has_help() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn e0003_regression_each_scalar_type_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
     let cases = [
-        ("int",   "count = 42\n"),
+        ("int", "count = 42\n"),
         ("float", "rate = 3.14\n"),
-        ("str",   "name = \"hello\"\n"),
-        ("bool",  "flag = True\n"),
+        ("str", "name = \"hello\"\n"),
+        ("bool", "flag = True\n"),
         ("bytes", "data = b\"raw\"\n"),
     ];
     for (type_name, source) in cases {
@@ -150,7 +150,8 @@ fn e0003_regression_each_scalar_type_no_false_positive() -> Result<(), Box<dyn s
 
 /// Multiple module-level scalar literals — zero E0003.
 #[test]
-fn e0003_regression_multiple_scalars_no_false_positives() -> Result<(), Box<dyn std::error::Error>> {
+fn e0003_regression_multiple_scalars_no_false_positives() -> Result<(), Box<dyn std::error::Error>>
+{
     let source = "\
 host = \"localhost\"
 port = 5432
@@ -208,7 +209,7 @@ fn e0003_regression_unresolvable_types_still_fire() -> Result<(), Box<dyn std::e
     let cases = [
         ("empty list", "items = []\n"),
         ("empty dict", "mapping = {}\n"),
-        ("None",       "result = None\n"),
+        ("None", "result = None\n"),
     ];
     for (desc, source) in cases {
         let diags = run(source)?;

@@ -190,7 +190,8 @@ class Foo:
 /// an inheritance hierarchy where parent and children use scalar literals.
 /// NONE of these should fire E0005.
 #[test]
-fn e0005_regression_animal_hierarchy_no_false_positives() -> Result<(), Box<dyn std::error::Error>> {
+fn e0005_regression_animal_hierarchy_no_false_positives() -> Result<(), Box<dyn std::error::Error>>
+{
     let source = "\
 class Animal:
     sound = \"...\"
@@ -286,12 +287,12 @@ class UnrelatedToBaseRoute:
 #[test]
 fn e0005_regression_each_scalar_type_individually() -> Result<(), Box<dyn std::error::Error>> {
     let cases = [
-        ("int",   "class A:\n    x = 42\n"),
+        ("int", "class A:\n    x = 42\n"),
         ("float", "class B:\n    x = 3.14\n"),
-        ("str",   "class C:\n    x = \"hello\"\n"),
-        ("bool",  "class D:\n    x = True\n"),
+        ("str", "class C:\n    x = \"hello\"\n"),
+        ("bool", "class D:\n    x = True\n"),
         ("bytes", "class E:\n    x = b\"data\"\n"),
-        ("None",  "class F:\n    x = None\n"),
+        ("None", "class F:\n    x = None\n"),
     ];
     for (type_name, source) in cases {
         let diags = run(source)?;
