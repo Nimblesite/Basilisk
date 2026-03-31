@@ -9,9 +9,8 @@ Run the full test suite and report results.
 
 ## Steps
 
-1. Run `make test`
-2. Run `make coverage-check`
-3. Report: total tests, passed, failed, skipped, coverage %
+1. Run `make test` (includes coverage thresholds)
+2. Report: total tests, passed, failed, skipped, coverage %
 4. If any test fails, show the full failure output
 
 ## Rules

@@ -11,9 +11,8 @@ Carefully search for duplicate code, duplicate tests, and dead code across the r
 
 Before touching ANY code, verify these conditions. If any fail, stop and report why.
 
-1. Run `make test` — all tests must pass. If tests fail, stop. Do not dedup a broken codebase.
-2. Run `make coverage-check` — coverage must meet the repo's threshold. If it doesn't, stop.
-3. Rust and TypeScript are statically typed — proceed.
+1. Run `make test` — all tests must pass (includes coverage thresholds). If tests fail, stop. Do not dedup a broken codebase.
+2. Rust and TypeScript are statically typed — proceed.
 
 ## Steps
 
@@ -31,7 +30,7 @@ Dedup Progress:
 
 ### Step 1 — Inventory test coverage
 
-1. Run `make test` and `make coverage-check` to confirm green baseline
+1. Run `make test` to confirm green baseline (includes coverage thresholds)
 2. Note the current coverage percentage — this is the floor. It must not drop.
 3. Identify which files/modules have coverage and which do not. Only files WITH coverage are candidates for dedup.
 
@@ -66,24 +65,24 @@ For each change: **change -> test -> verify coverage -> continue or revert**.
 
 #### 5a. Remove dead code
 - Delete dead code identified in Step 2
-- After each deletion: run `make test` and `make coverage-check`
+- After each deletion: run `make test`
 - If tests fail or coverage drops: **revert immediately**
 
 #### 5b. Merge duplicate code
 - Extract shared logic into a single function/module
 - Update all call sites
-- After each merge: run `make test` and `make coverage-check`
+- After each merge: run `make test`
 - If tests fail: **revert immediately**
 
 #### 5c. Remove duplicate tests
 - Delete the redundant test (keep the more thorough one)
-- After each deletion: run `make coverage-check`
+- After each deletion: run `make test`
 - If coverage drops: **revert immediately**
 
 ### Step 6 — Final verification
 
 1. Run `make test` — all tests must still pass
-2. Run `make coverage-check` — coverage must be >= the baseline from Step 1
+2. Run `make test` — coverage must be >= the baseline from Step 1
 3. Run `make lint` and `make fmt-check` — code must be clean
 4. Report: what was removed, what was merged, final coverage vs baseline
 

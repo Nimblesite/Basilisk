@@ -10,20 +10,6 @@ NVIM_DIR      := basilisk.nvim
 OPEN          ?= 0
 RULE          ?=
 
-# Coverage thresholds (override via environment)
-TEST_COVERAGE_BASILISK_CHECKER  ?= 92
-TEST_COVERAGE_BASILISK_CLI      ?= 94
-TEST_COVERAGE_BASILISK_DB       ?= 100
-TEST_COVERAGE_BASILISK_LSP      ?= 74
-TEST_COVERAGE_BASILISK_MOJO     ?= 91
-TEST_COVERAGE_BASILISK_PARSER   ?= 100
-TEST_COVERAGE_BASILISK_PLUGIN   ?= 100
-TEST_COVERAGE_BASILISK_RESOLVER ?= 95
-TEST_COVERAGE_BASILISK_STUBS    ?= 100
-TEST_COVERAGE_BASILISK_CONFIG   ?= 92
-TEST_COVERAGE_VSIX              ?= 60
-TEST_COVERAGE_NVIM              ?= 30
-
 # ── Build ─────────────────────────────────────────────────────────────────────
 
 .PHONY: build build-rust build-vsix
@@ -46,8 +32,9 @@ build-vsix: ## Build VS Code extension
 
 lint: lint-rust lint-vsix ## Lint all languages
 
-lint-rust: ## Lint Rust (clippy + fmt)
+lint-rust: ## Lint Rust (check + clippy + fmt)
 	@echo -e '\033[1m\033[0;36m▶ Linting Rust\033[0m' && \
+	cargo check --workspace --all-targets && \
 	cargo clippy --workspace --all-targets -- -D warnings && \
 	cargo fmt --all -- --check && \
 	echo -e '\033[0;32m✓ Rust lint passed\033[0m'
@@ -99,25 +86,14 @@ test: audit ## Run full test suite (Rust first, then extensions in parallel)
 audit: ## Check all required build/test dependencies
 	@bash scripts/audit.sh
 
-test-rust: ## Run Rust tests with coverage + thresholds (OPEN=1 for report)
-	@OPEN=$(OPEN) \
-	TEST_COVERAGE_BASILISK_CHECKER=$(TEST_COVERAGE_BASILISK_CHECKER) \
-	TEST_COVERAGE_BASILISK_CLI=$(TEST_COVERAGE_BASILISK_CLI) \
-	TEST_COVERAGE_BASILISK_DB=$(TEST_COVERAGE_BASILISK_DB) \
-	TEST_COVERAGE_BASILISK_LSP=$(TEST_COVERAGE_BASILISK_LSP) \
-	TEST_COVERAGE_BASILISK_MOJO=$(TEST_COVERAGE_BASILISK_MOJO) \
-	TEST_COVERAGE_BASILISK_PARSER=$(TEST_COVERAGE_BASILISK_PARSER) \
-	TEST_COVERAGE_BASILISK_PLUGIN=$(TEST_COVERAGE_BASILISK_PLUGIN) \
-	TEST_COVERAGE_BASILISK_RESOLVER=$(TEST_COVERAGE_BASILISK_RESOLVER) \
-	TEST_COVERAGE_BASILISK_STUBS=$(TEST_COVERAGE_BASILISK_STUBS) \
-	TEST_COVERAGE_BASILISK_CONFIG=$(TEST_COVERAGE_BASILISK_CONFIG) \
-	bash scripts/test-rust.sh
+test-rust: ## Run Rust tests with coverage (OPEN=1 for report)
+	@OPEN=$(OPEN) bash scripts/test-rust.sh
 
-test-vsix: ## Run VS Code extension tests + coverage threshold
-	@TEST_COVERAGE_VSIX=$(TEST_COVERAGE_VSIX) bash scripts/test-vscode.sh
+test-vsix: ## Run VS Code extension tests
+	@bash scripts/test-vscode.sh
 
 test-nvim: ## Run Neovim extension e2e + screenshot tests
-	@TEST_COVERAGE_NVIM=$(TEST_COVERAGE_NVIM) bash scripts/test-nvim.sh
+	@bash scripts/test-nvim.sh
 
 test-zed: ## Run Zed extension tests
 	@bash scripts/test-zed.sh
@@ -200,34 +176,11 @@ setup: ## Install all build/test dependencies
 benchmark: build-rust ## Run benchmarks (RULE=e0034 to filter)
 	@RULE='$(RULE)' bash scripts/benchmark.sh
 
-# ── Examples ──────────────────────────────────────────────────────────────────
-
-.PHONY: example-all example-good example-bad example-mixed
-
-example-all: ## Check all example files
-	@cargo run -- check examples/
-
-example-good: ## Check examples/good.py (expects clean pass)
-	@cargo run -- check examples/good.py
-
-example-bad: ## Check examples/bad.py (expects errors)
-	@cargo run -- check examples/bad.py
-
-example-mixed: ## Check examples/mixed.py (expects some errors)
-	@cargo run -- check examples/mixed.py
-
 # ── Standard Aliases ─────────────────────────────────────────────────────────
 
-.PHONY: check ci coverage coverage-check
-
-check: lint test ## lint + test (pre-commit validation)
+.PHONY: ci
 
 ci: lint test build ## lint + test + build (full CI simulation)
-
-coverage: test-rust ## Generate coverage report (OPEN=1 to view)
-	@OPEN=1 bash scripts/test-rust.sh
-
-coverage-check: test-rust ## Assert per-crate coverage thresholds
 
 # ── Clean ─────────────────────────────────────────────────────────────────────
 
