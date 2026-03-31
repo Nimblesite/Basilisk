@@ -23,9 +23,18 @@ impl Rule for MissingVariableType {
         module
             .module_vars
             .iter()
-            .filter(|var| !var.has_annotation)
+            .filter(|var| !var.has_annotation && is_unresolvable(&var.rhs_kind))
             .for_each(|var| diagnostics.push(make_diagnostic(var, &module.path)));
     }
+}
+
+/// Returns `true` for RHS kinds whose element/value type cannot be inferred
+/// from the literal alone.
+fn is_unresolvable(rhs: &RhsKind) -> bool {
+    matches!(
+        rhs,
+        RhsKind::EmptyList | RhsKind::EmptyDict | RhsKind::NoneValue
+    )
 }
 
 fn make_diagnostic(var: &VariableInfo, path: &str) -> Diagnostic {

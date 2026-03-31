@@ -56,78 +56,51 @@ fn e0003_annotated_none_no_diagnostic() -> Result<(), Box<dyn std::error::Error>
 }
 
 #[test]
-fn e0003_non_empty_list_fires_strict() -> Result<(), Box<dyn std::error::Error>> {
+fn e0003_non_empty_list_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("items = [1, 2, 3]\n")?;
     assert!(
-        codes(&diags).contains(&"BSK-E0003"),
-        "unannotated non-empty list should fire E0003 in strict mode, got: {:?}",
-        codes(&diags)
+        !codes(&diags).contains(&"BSK-E0003"),
+        "non-empty list with inferrable element types should not fire E0003"
     );
     Ok(())
 }
 
 #[test]
-fn e0003_string_literal_fires_strict() -> Result<(), Box<dyn std::error::Error>> {
+fn e0003_string_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("name = \"hello\"\n")?;
     assert!(
-        codes(&diags).contains(&"BSK-E0003"),
-        "unannotated string literal should fire E0003 in strict mode, got: {:?}",
-        codes(&diags)
+        !codes(&diags).contains(&"BSK-E0003"),
+        "string literal should not fire E0003 — type is trivially str"
     );
     Ok(())
 }
 
 #[test]
-fn e0003_int_literal_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn e0003_int_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("count = 42\n")?;
     assert!(
-        codes(&diags).contains(&"BSK-E0003"),
-        "unannotated int literal should fire E0003 (strict mode requires annotation), got: {:?}",
-        codes(&diags)
+        !codes(&diags).contains(&"BSK-E0003"),
+        "int literal should not fire E0003 — type is trivially int"
     );
     Ok(())
 }
 
 #[test]
-fn e0003_string_literal_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("label = \"hello\"\n")?;
-    assert!(
-        codes(&diags).contains(&"BSK-E0003"),
-        "unannotated string literal should fire E0003 (strict mode requires annotation), got: {:?}",
-        codes(&diags)
-    );
-    Ok(())
-}
-
-#[test]
-fn e0003_bool_literal_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn e0003_bool_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("flag = True\n")?;
     assert!(
-        codes(&diags).contains(&"BSK-E0003"),
-        "unannotated bool literal should fire E0003 (strict mode requires annotation), got: {:?}",
-        codes(&diags)
+        !codes(&diags).contains(&"BSK-E0003"),
+        "bool literal should not fire E0003 — type is trivially bool"
     );
     Ok(())
 }
 
 #[test]
-fn e0003_non_empty_list_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("items = [1, 2, 3]\n")?;
-    assert!(
-        codes(&diags).contains(&"BSK-E0003"),
-        "unannotated non-empty list should fire E0003 (strict mode requires annotation), got: {:?}",
-        codes(&diags)
-    );
-    Ok(())
-}
-
-#[test]
-fn e0003_call_expr_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn e0003_call_expr_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("result = some_function()\n")?;
     assert!(
-        codes(&diags).contains(&"BSK-E0003"),
-        "unannotated call expression should fire E0003 (strict mode requires annotation), got: {:?}",
-        codes(&diags)
+        !codes(&diags).contains(&"BSK-E0003"),
+        "call expression should not fire E0003 — type resolution is deferred"
     );
     Ok(())
 }
