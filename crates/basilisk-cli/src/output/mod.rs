@@ -46,6 +46,28 @@ pub enum OutputFormat {
     Json,
 }
 
+/// Terminal colour mode.
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum ColorMode {
+    /// Detect automatically (colours when stdout is a terminal).
+    Auto,
+    /// Always emit ANSI colour codes.
+    Always,
+    /// Never emit ANSI colour codes.
+    Never,
+}
+
+impl ColorMode {
+    /// Configure the `colored` crate based on the chosen mode.
+    pub fn apply(self) {
+        match self {
+            Self::Auto => {} // `colored` auto-detects by default
+            Self::Always => colored::control::set_override(true),
+            Self::Never => colored::control::set_override(false),
+        }
+    }
+}
+
 /// Associates a file path with its source text for span-to-line-col mapping.
 pub struct FileSource {
     /// The file path.
@@ -150,7 +172,7 @@ mod tests {
     #[test]
     fn render_snippet_on_second_line() {
         let source = "def foo(): pass\ndef bar(x): pass";
-        render_snippet(source, 20, 23);
+        render_snippet(source, 20, 23, Severity::Error);
     }
 
     // ── JSON output ───────────────────────────────────────────────────────────
@@ -447,7 +469,7 @@ mod tests {
         // With `p * 1` mutant: line_start = 5, col_start = 8 - 5 = 3 (wrong)
         // We can't easily capture output here, but the test must not panic.
         let source = "hello\nworld";
-        render_snippet(source, 8, 10);
+        render_snippet(source, 8, 10, Severity::Error);
     }
 
     /// `BinaryOperator` `+` → `-` / `+` mutants at line 168: `col_start = start - line_start`.
@@ -459,7 +481,7 @@ mod tests {
         // line_start = 7, col_start = 9 - 7 = 2 (correct)
         // `+` mutant: col_start = 9 + 7 = 16 → " ".repeat(16) would succeed but be wrong
         let source = "abcdef\nghijkl";
-        render_snippet(source, 9, 12); // must not panic or OOM
+        render_snippet(source, 9, 12, Severity::Error); // must not panic or OOM
     }
 
     /// `BinaryOperator` `+` → `-` mutant at line 169: `col_end = (end - line_start).min(len)`.
@@ -469,7 +491,7 @@ mod tests {
     fn render_snippet_col_end_no_overflow() {
         let source = "abcdef\nghijkl";
         // span covers "kl" at bytes 12..14
-        render_snippet(source, 12, 14); // must not panic
+        render_snippet(source, 12, 14, Severity::Error); // must not panic
     }
 
     /// Verify `render_snippet` produces correct underline length.

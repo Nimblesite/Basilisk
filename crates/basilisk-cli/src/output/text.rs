@@ -1,6 +1,6 @@
-//! Rustc-style text rendering for diagnostics.
+//! Rustc-style text rendering for diagnostics with terminal colours.
 //!
-//! Example output:
+//! Example output (without ANSI codes):
 //! ```text
 //! error[BSK-E0001]: Missing parameter type annotation for `data`
 //!   --> src/utils.py:14:5
@@ -13,7 +13,8 @@
 //!    = see: https://www.basilisk-python.dev/errors/BSK-E0001
 //! ```
 
-use basilisk_checker::Diagnostic;
+use basilisk_checker::{Diagnostic, Severity};
+use colored::Colorize as _;
 
 use super::FileSource;
 
@@ -27,14 +28,26 @@ pub fn render_diagnostics(diagnostics: &[Diagnostic], sources: &[FileSource]) ->
             let source = sources.iter().find(|s| s.path == d.path);
             render_one(d, source.map(|s| s.text.as_str()));
         })
-        .filter(|d| d.severity == basilisk_checker::Severity::Error)
+        .filter(|d| d.severity == Severity::Error)
         .count()
+}
+
+/// Apply the appropriate colour to a severity label.
+fn color_severity(severity: Severity, text: &str) -> String {
+    match severity {
+        Severity::Error | Severity::SafetyViolation => text.red().bold().to_string(),
+        Severity::Warning => text.yellow().bold().to_string(),
+        Severity::Info => text.blue().bold().to_string(),
+    }
 }
 
 /// Render a single diagnostic to stdout in rustc style.
 pub(super) fn render_one(diag: &Diagnostic, source: Option<&str>) {
     // Header: error[BSK-E0001]: Message
-    println!("{}[{}]: {}", diag.severity, diag.code.code, diag.message);
+    let severity_label = color_severity(diag.severity, &format!("{}", diag.severity));
+    let code = format!("[{}]", diag.code.code).bold();
+    let message = diag.message.bold();
+    println!("{severity_label}{code}: {message}");
 
     // Location: --> path:line:col
     let location = source.map_or_else(
@@ -45,21 +58,34 @@ pub(super) fn render_one(diag: &Diagnostic, source: Option<&str>) {
         },
     );
 
-    println!("  --> {location}");
+    println!("  {} {location}", "-->".blue().bold());
 
     // Source snippet with underline
     if let Some(src) = source {
-        render_snippet(src, diag.span.start_usize(), diag.span.end_usize());
+        render_snippet(src, diag.span.start_usize(), diag.span.end_usize(), diag.severity);
     }
 
     // Annotations
     if let Some(help) = &diag.help {
-        println!("   = help: {help}");
+        println!(
+            "   {} {}: {help}",
+            "=".blue().bold(),
+            "help".cyan().bold(),
+        );
     }
     if let Some(note) = &diag.note {
-        println!("   = note: {note}");
+        println!(
+            "   {} {}: {note}",
+            "=".blue().bold(),
+            "note".cyan().bold(),
+        );
     }
-    println!("   = see: {}", diag.code.docs_url);
+    println!(
+        "   {} {}: {}",
+        "=".blue().bold(),
+        "see".cyan().bold(),
+        diag.code.docs_url,
+    );
     println!();
 }
 
@@ -73,7 +99,7 @@ pub(super) fn byte_offset_to_line_col(source: &str, offset: usize) -> (usize, us
 }
 
 /// Render a source line with a `^^^^` underline for the highlighted span.
-pub(super) fn render_snippet(source: &str, start: usize, end: usize) {
+pub(super) fn render_snippet(source: &str, start: usize, end: usize, severity: Severity) {
     let (line_num, _) = byte_offset_to_line_col(source, start);
     let line_start = source[..start].rfind('\n').map_or(0, |p| p + 1);
     let line_text = source[line_start..].lines().next().unwrap_or("");
@@ -84,13 +110,15 @@ pub(super) fn render_snippet(source: &str, start: usize, end: usize) {
 
     let line_num_width = line_num.to_string().len();
     let pad = " ".repeat(line_num_width);
+    let pipe = "|".blue().bold();
+    let line_num_str = line_num.to_string().blue().bold();
+    let underline = color_severity(severity, &"^".repeat(underline_len));
 
-    println!("{pad}   |");
-    println!("{line_num} | {line_text}");
+    println!("{pad}   {pipe}");
+    println!("{line_num_str} {pipe} {line_text}");
     println!(
-        "{pad}   | {spaces}{underline}",
+        "{pad}   {pipe} {spaces}{underline}",
         spaces = " ".repeat(col_start),
-        underline = "^".repeat(underline_len),
     );
-    println!("{pad}   |");
+    println!("{pad}   {pipe}");
 }

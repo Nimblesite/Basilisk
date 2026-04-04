@@ -10,9 +10,10 @@ use std::collections::HashSet;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
+use colored::Colorize as _;
 use tracing::{error, info, warn};
 
-use crate::output::{render_diagnostics, render_diagnostics_json, FileSource, OutputFormat};
+use crate::output::{render_diagnostics, render_diagnostics_json, ColorMode, FileSource, OutputFormat};
 
 mod adopt;
 mod fix;
@@ -47,6 +48,9 @@ enum Command {
         /// Output format: text (default, human-readable) or json (machine-readable).
         #[arg(long, default_value = "text")]
         output: OutputFormat,
+        /// When to use terminal colours: auto (default), always, or never.
+        #[arg(long, default_value = "auto")]
+        color: ColorMode,
     },
     /// Apply autofixes to one or more files or directories.
     Fix {
@@ -101,7 +105,14 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
 
     let exit_code: u8 = match cli.command {
-        Command::Check { paths, output } => run_check(&paths, output),
+        Command::Check {
+            paths,
+            output,
+            color,
+        } => {
+            color.apply();
+            run_check(&paths, output)
+        }
         Command::Fix {
             paths,
             r#unsafe: include_unsafe,
@@ -157,16 +168,21 @@ fn run_check(paths: &[String], format: OutputFormat) -> u8 {
                 let error_count = render_diagnostics(&diagnostics, &sources);
                 let total = diagnostics.len();
                 if total == 0 {
-                    println!("All checked. No issues found.");
+                    println!("{}", "All checked. No issues found.".green().bold());
                     0
                 } else {
-                    println!(
+                    let summary = format!(
                         "Found {} diagnostic{} ({} error{}).",
                         total,
                         pluralise(total),
                         error_count,
                         pluralise(error_count),
                     );
+                    if error_count > 0 {
+                        println!("{}", summary.red().bold());
+                    } else {
+                        println!("{}", summary.yellow().bold());
+                    }
                     u8::from(error_count > 0)
                 }
             }
@@ -204,11 +220,42 @@ fn collect_and_check(
 
     let python_files = collect_python_files(paths, &excluded)?;
 
+    // Build import search paths (venv, uv registry, workspace members).
+    // Use cwd as the project root — pyproject.toml, uv.lock, and .venv
+    // live at the project root, not necessarily in the checked path.
+    let project_root = find_project_root(&config_root);
+    let canonical_root = std::fs::canonicalize(&project_root).unwrap_or(project_root.clone());
+    let mut roots = vec![canonical_root.clone()];
+
+    // Add checked directories as search roots for sibling imports.
+    for path_str in paths {
+        let p = std::path::Path::new(path_str);
+        let dir = if p.is_dir() { p } else { p.parent().unwrap_or(p) };
+        if let Ok(abs) = std::fs::canonicalize(dir) {
+            if !roots.contains(&abs) {
+                roots.push(abs);
+            }
+        }
+    }
+
+    // Add include paths from WorkspaceConfig as search roots.
+    let lsp_config = basilisk_lsp::config::load_config(&project_root);
+    let registry = build_uv_registry(&roots);
+    let mut search_paths =
+        basilisk_lsp::import_resolver::ImportSearchPaths::from_config(&roots, &lsp_config, registry);
+    // Ensure all roots are also in extra_paths for module resolution.
+    search_paths.roots = roots;
+    info!(
+        site_packages = ?search_paths.site_packages,
+        has_registry = search_paths.registry.is_some(),
+        "built import search paths"
+    );
+
     let mut all_diagnostics = Vec::new();
     let mut sources = Vec::new();
 
     for path in python_files {
-        match process_file(&path) {
+        match process_file(&path, &search_paths) {
             Ok((diags, source)) => {
                 all_diagnostics.extend(diags);
                 sources.push(FileSource { path, text: source });
@@ -222,12 +269,102 @@ fn collect_and_check(
     Ok((all_diagnostics, sources))
 }
 
-fn process_file(path: &str) -> Result<(Vec<basilisk_checker::Diagnostic>, String), String> {
+/// Build a uv package registry from workspace roots, if this is a uv project.
+fn build_uv_registry(
+    roots: &[std::path::PathBuf],
+) -> Option<std::sync::Arc<basilisk_uv::PackageRegistry>> {
+    let uv_info = basilisk_uv::detect_uv_project(roots)?;
+
+    if !uv_info.has_lockfile {
+        info!(
+            root = %uv_info.root.display(),
+            "uv project detected but no uv.lock — skipping registry"
+        );
+        return None;
+    }
+
+    let lock_path = uv_info.root.join("uv.lock");
+    let lock_file = match basilisk_uv::parse_lock_file(&lock_path) {
+        Ok(lock) => lock,
+        Err(err) => {
+            warn!(
+                path = %lock_path.display(),
+                %err,
+                "failed to parse uv.lock — package registry unavailable"
+            );
+            return None;
+        }
+    };
+
+    let deps = basilisk_uv::extract_pyproject_deps(&uv_info.root);
+    let registry = basilisk_uv::PackageRegistry::from_lock_file(&lock_file, &deps);
+
+    let pkg_count = registry.all_packages().count();
+    info!(
+        root = %uv_info.root.display(),
+        packages = pkg_count,
+        direct_deps = deps.len(),
+        "built uv package registry"
+    );
+
+    Some(std::sync::Arc::new(registry))
+}
+
+fn process_file(
+    path: &str,
+    search_paths: &basilisk_lsp::import_resolver::ImportSearchPaths,
+) -> Result<(Vec<basilisk_checker::Diagnostic>, String), String> {
     let parsed = basilisk_parser::parse_file(path).map_err(|e| e.to_string())?;
     let source = parsed.source.clone();
-    let resolved = basilisk_resolver::resolve(&parsed).map_err(|e| e.to_string())?;
+    let mut resolved = basilisk_resolver::resolve(&parsed).map_err(|e| e.to_string())?;
+
+    // Resolve imports against venv/site-packages and uv registry.
+    resolve_file_imports(&mut resolved, search_paths);
+
     let diags = basilisk_checker::check(&resolved);
     Ok((diags, source))
+}
+
+/// Resolve imports for a single file using the search paths.
+fn resolve_file_imports(
+    resolved: &mut basilisk_resolver::ResolvedModule,
+    search_paths: &basilisk_lsp::import_resolver::ImportSearchPaths,
+) {
+    for import in &mut resolved.imports {
+        let result = basilisk_lsp::import_resolver::resolve_module(
+            &import.module,
+            search_paths,
+        );
+        if let Some(r) = result {
+            import.resolution = r.resolution;
+            import.resolved_path = Some(r.path);
+        } else if !basilisk_stubs::is_stdlib_module(&import.module) {
+            import.unresolved_reason = Some(
+                basilisk_lsp::import_resolver::classify_unresolved(
+                    &import.module,
+                    search_paths,
+                ),
+            );
+        }
+    }
+}
+
+/// Walk up from `start` to find the project root (directory containing
+/// `pyproject.toml` or `uv.lock`). Falls back to cwd, then `start`.
+fn find_project_root(start: &std::path::Path) -> std::path::PathBuf {
+    let abs = std::fs::canonicalize(start).unwrap_or_else(|_| start.to_path_buf());
+    let mut current = abs.as_path();
+    loop {
+        if current.join("pyproject.toml").is_file() || current.join("uv.lock").is_file() {
+            return current.to_path_buf();
+        }
+        match current.parent() {
+            Some(parent) => current = parent,
+            None => break,
+        }
+    }
+    // Fallback: cwd, then the original start path.
+    std::env::current_dir().unwrap_or_else(|_| start.to_path_buf())
 }
 
 /// Return `"s"` for counts != 1, empty string otherwise.
