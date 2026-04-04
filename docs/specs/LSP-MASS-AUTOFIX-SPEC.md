@@ -151,7 +151,7 @@ demoted = ["BSK-E0001", "BSK-E0002"]
 
 AI Typing is an AI-assisted type inference feature that goes beyond what deterministic analysis can achieve. When Basilisk encounters a diagnostic it cannot autofix (typically missing type information), it feeds the **full analyzer context** — the AST, inferred types, call graph, usage patterns, and surrounding code — to an AI model. The model returns its best guess for the correct fix.
 
-> For the full AI provider abstraction, request/response types, and implementation plan, see [LSP-AI-SPEC.md](LSP-AI-SPEC.md). This section documents only the integration point between Mass Autofix and the AI layer.
+> For the full AI provider abstraction, request/response types, and implementation plan, see [LSP-AI-SPEC.md §LSPAI-FEATURE-MASSAUTOFIX](LSP-AI-SPEC.md#LSPAI-FEATURE-MASSAUTOFIX). This section documents only the integration point between Mass Autofix and the AI layer.
 
 ### Scope
 

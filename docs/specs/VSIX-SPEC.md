@@ -61,11 +61,11 @@ vscode-extension/
 
 ## LSP Client Configuration {#VSIX-LSP}
 
-> See `LSP-ARCHITECTURE-SPEC.md` for all LSP features, custom commands, and shared configuration settings.
+> See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-FEATURES](LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES) for all LSP features, [§LSPARCH-CMDS](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDS) for custom commands, and [§LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG) for shared configuration settings.
 
 ```typescript
 const serverOptions: ServerOptions = {
-  command: resolvedBinaryPath,  // resolved via binary resolution cascade (LSP-ARCHITECTURE-SPEC.md)
+  command: resolvedBinaryPath,  // resolved via binary resolution cascade (LSP-ARCHITECTURE-SPEC.md §LSPARCH-BINRES)
   args: ["lsp"],
 };
 
@@ -83,7 +83,7 @@ client.start();
 
 ## Commands {#VSIX-CMDS}
 
-> **Command Registration Rule**: See `LSP-ARCHITECTURE-SPEC.md` § Command Registration Rule. The extension MUST NOT call `registerCommand()` for any command the LSP server advertises. Server commands are auto-registered by `vscode-languageclient` from the server's `executeCommandProvider` capabilities. Client-side UI (input prompts, toasts) belongs in the `executeCommand` middleware.
+> **Command Registration Rule**: See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CMDRULE](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDRULE). The extension MUST NOT call `registerCommand()` for any command the LSP server advertises. Server commands are auto-registered by `vscode-languageclient` from the server's `executeCommandProvider` capabilities. Client-side UI (input prompts, toasts) belongs in the `executeCommand` middleware.
 
 ### `package.json` contribution
 
@@ -113,7 +113,7 @@ client.start();
 | `basilisk.useLsp` | `true` | Use LSP mode vs subprocess fallback |
 | `basilisk.trace.server` | `"off"` | LSP communication trace level |
 
-All other settings are shared across editors (see `LSP-ARCHITECTURE-SPEC.md`).
+All other settings are shared across editors (see [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)).
 
 ---
 
@@ -127,7 +127,7 @@ Persistent item showing server state and diagnostic count:
 
 Additional indicators (future):
 - Type completeness indicator: `"87% typed"`
-- Migration dashboard — see [EXTENSION-ACTIVITY-PANEL-SPEC.md](EXTENSION-ACTIVITY-PANEL-SPEC.md)
+- Migration dashboard — see [EXTENSION-ACTIVITY-PANEL-SPEC.md §ACTPANEL-HEALTH](EXTENSION-ACTIVITY-PANEL-SPEC.md#ACTPANEL-HEALTH)
 - Ownership visualization (gutter icons: borrowed/owned/inout)
 
 ---
@@ -143,15 +143,15 @@ Additional indicators (future):
 
 ## Test Explorer Integration {#VSIX-TESTS}
 
-> See `LSP-TEST-INTEGRATION-SPEC.md` for full test explorer architecture, data model, configuration, and features.
-> VS Code-specific wiring (TestController API, TestRunProfile) is documented in the VS Code section of that spec.
+> See [LSP-TEST-INTEGRATION-SPEC.md §TESTINT-ARCH](LSP-TEST-INTEGRATION-SPEC.md#TESTINT-ARCH) for full test explorer architecture, data model, configuration, and features.
+> VS Code-specific wiring (TestController API, TestRunProfile) is documented in [LSP-TEST-INTEGRATION-SPEC.md §TESTINT-VSCODE](LSP-TEST-INTEGRATION-SPEC.md#TESTINT-VSCODE).
 
 ---
 
 ## Python Debugger (DAP) {#VSIX-DAP}
 
-> See `LSP-ARCHITECTURE-SPEC.md` § Custom LSP Commands for `basilisk/startDebugSession` and `basilisk/stopDebugSession`.
-> See `LSP-ARCHITECTURE-SPEC.md` § DapTcpProxy for the shared proxy specification that all editors implement.
+> See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CMDS](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDS) for `basilisk/startDebugSession` and `basilisk/stopDebugSession`.
+> See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-DAPPROXY](LSP-ARCHITECTURE-SPEC.md#LSPARCH-DAPPROXY) for the shared proxy specification that all editors implement.
 
 ### VS Code-Specific DAP Architecture {#VSIX-DAP-ARCH}
 
@@ -181,7 +181,7 @@ VS Code's `activeDebugSession` may not be cleared when `onDidTerminateDebugSessi
 
 ### DAP Features {#VSIX-DAP-FEATURES}
 
-> See `LSP-ARCHITECTURE-SPEC.md` § DapTcpProxy for the full shared feature list.
+> See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-DAPPROXY](LSP-ARCHITECTURE-SPEC.md#LSPARCH-DAPPROXY) for the full shared feature list.
 
 | Feature | Description |
 |---------|-------------|
@@ -230,7 +230,7 @@ VS Code's `activeDebugSession` may not be cleared when `onDidTerminateDebugSessi
 
 ## Binary Resolution {#VSIX-BINRES}
 
-> See `LSP-ARCHITECTURE-SPEC.md` § Binary Resolution Order for the shared cascade.
+> See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-BINRES](LSP-ARCHITECTURE-SPEC.md#LSPARCH-BINRES) for the shared cascade.
 
 VS Code-specific resolution order:
 1. VS Code setting: `basilisk.executablePath`

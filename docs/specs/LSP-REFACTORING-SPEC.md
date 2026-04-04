@@ -1,7 +1,7 @@
 # LSP Refactoring Spec
 
 **Status**: Draft
-**Depends on**: [LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md), [LSP-ANALYSIS-MODES-SPEC.md](LSP-ANALYSIS-MODES-SPEC.md)
+**Depends on**: [LSP-ARCHITECTURE-SPEC.md §LSPARCH-FEATURES](LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES), [LSP-ANALYSIS-MODES-SPEC.md §ANALYSIS-CROSSLSP](LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-CROSSLSP)
 
 ## Overview {#REFACTOR-OVERVIEW}
 
@@ -9,7 +9,7 @@ Deterministic, type-aware refactoring tools that bring Basilisk to feature parit
 
 ## Design Principles {#REFACTOR-PRINCIPLES}
 
-1. **Deterministic first** — every refactoring produces a single, predictable result. AI-assisted variants live in [LSP-AI-SPEC.md](LSP-AI-SPEC.md), never here.
+1. **Deterministic first** — every refactoring produces a single, predictable result. AI-assisted variants live in [LSP-AI-SPEC.md §LSPAI-FEATURE-REFACTOR](LSP-AI-SPEC.md#LSPAI-FEATURE-REFACTOR), never here.
 2. **Type-aware** — refactorings use full type information (resolved types, import graph, call sites) to produce correct transformations.
 3. **Cross-file** — all refactorings that affect imports or references operate across the workspace via the import graph.
 4. **Atomic undo** — each refactoring returns a single `WorkspaceEdit` so the user can undo in one step.

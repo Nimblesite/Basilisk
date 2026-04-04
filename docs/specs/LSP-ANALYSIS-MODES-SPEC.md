@@ -234,7 +234,7 @@ Same as `wholeModule`, with an additional pass: the import graph is built from `
 
 Incremental text edits are applied to the in-memory buffer, then parse → resolve → check runs for the changed file. In `crossModule`, direct importers are queued for re-analysis if the exported symbol table changed.
 
-### File-Watcher Event {#ANALYSIS-INCR-WATCH} (`wholeModule` / `crossModule`)
+### File-Watcher Event {#ANALYSIS-INCR-WATCH}
 
 If the file is open, the event is ignored. Otherwise the file is read from disk; if `source_hash` is unchanged the entry is left as-is. If changed, the pipeline re-runs.
 

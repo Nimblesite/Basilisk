@@ -33,33 +33,7 @@ Rust does not have a flag that disables the borrow checker. TypeScript's `strict
 
 ### Mojo: The North Star {#CHKARCH-MOJO}
 
-Mojo demonstrated that Python-family syntax can support ownership semantics, immutability by default, and zero implicit coercion -- concepts previously associated only with systems languages like Rust and C++.
-
-Basilisk draws direct inspiration from Mojo's type discipline:
-
-- **Mojo's `fn` vs `def`**: In Basilisk, all `def` functions are strict by default. No keyword distinction needed because there is no permissive mode.
-- **Mojo's ownership model**: Basilisk adapts `borrowed`, `owned`, and `inout` as static analysis annotations over standard Python.
-- **Mojo's structural immutability**: Basilisk enforces immutability by default for function parameters and typed structures.
-
-Basilisk serves as a bridge. Until the Mojo compiler can do everything CPython does, Basilisk brings Mojo's type discipline to every Python codebase today -- without requiring a new compiler, a new runtime, or any dependency on Mojo itself. Code that passes Basilisk's checks should be compatible with Mojo's type expectations.
-
-### What Basilisk Is {#CHKARCH-WHAT}
-
-- A statically typed Python dialect (like TypeScript is to JavaScript)
-- A static analyzer, language server, and CI tool
-- Strongly typed by default -- you opt OUT of strictness, not in
-- Compatible with standard CPython
-- Compatible with Mojo's type discipline (no dependency on Mojo tooling)
-- Built on existing open-source tools wherever possible
-- 100% open source with open governance
-
-### What Basilisk Is Not {#CHKARCH-WHATNOT}
-
-- Not a Python compiler or runtime
-- Not a fork of any existing tool
-- Not dependent on any Microsoft proprietary technology
-- Not a Mojo dependency -- it references Mojo's concepts, not its code
-- Not a gradual type checker -- gradual typing is what we're replacing
+Mojo demonstrated that Python-family syntax can support ownership semantics, immutability by default, and zero implicit coercion. Basilisk adapts these concepts as static analysis rules over standard Python -- no Mojo dependency required.
 
 ### Project Principles {#CHKARCH-PRINCIPLES}
 
@@ -75,115 +49,7 @@ Basilisk serves as a bridge. Until the Mojo compiler can do everything CPython d
 
 ## Ecosystem Gap Analysis {#CHKARCH-GAP}
 
-### Current Landscape {#CHKARCH-LANDSCAPE}
-
-The Python type checking landscape is in a generational shift. Three Rust-based type checkers launched in 2025 (ty, Pyrefly, Zuban), challenging the TypeScript incumbent (Pyright) and the aging Python-based tools (mypy, Pytype). Google has deprecated Pytype. Meta is replacing Pyre with Pyrefly.
-
-Yet every single tool -- new and old -- defaults to gradual typing. None enforce complete type safety. None adopt Mojo-inspired ownership semantics. The ecosystem has fast tools, but no tool that treats Python as a typed language.
-
-### Tool-by-Tool Assessment {#CHKARCH-TOOLS}
-
-#### Pyright {#CHKARCH-TOOLS-PYRIGHT}
-
-| Attribute | Value |
-|---|---|
-| Language | TypeScript |
-| License | MIT |
-| Strictness | Gradual (4 modes: off/basic/standard/strict) |
-| PEP Conformance | ~95% (best in class) |
-| LSP | Yes |
-| Incremental | Yes (lazy evaluation) |
-| Plugin System | No |
-
-**Strengths**: Best PEP conformance. Fast incremental analysis. Powers Pylance (the de facto VS Code experience). 81 diagnostic rules. Excellent type narrowing and flow analysis.
-
-**Weaknesses**: Strict mode is opt-in, not default. Pylance's IDE features (semantic highlighting, IntelliCode, refactoring code actions, auto-import) are proprietary and locked to Microsoft's VS Code. Requires Node.js runtime. No ownership analysis. No plugin system (Microsoft explicitly rejected this). Configuration cannot decrease severity below mode defaults.
-
-**What we reuse**: Nothing directly. Pyright is TypeScript -- we can't link to it. But its diagnostic rule catalog (81 rules) is the benchmark for our own rule set.
-
-#### mypy {#CHKARCH-TOOLS-MYPY}
-
-| Attribute | Value |
-|---|---|
-| Language | Python/C |
-| License | MIT |
-| Strictness | Gradual |
-| PEP Conformance | ~85% |
-| LSP | No (third-party pylsp, unrecommended) |
-| Incremental | Daemon mode (fragile) |
-| Plugin System | Yes (Python hooks) |
-
-**Strengths**: Original type checker. Plugin system enables framework support (Django, SQLAlchemy). Large user base. Mature.
-
-**Weaknesses**: Slow -- 10-100x slower than Rust-based tools. No first-class LSP. Daemon mode is fragile. Declining relevance as Rust-based tools emerge. PEP adoption velocity is low.
-
-**What we reuse**: mypy's plugin API design is a reference for our own extension system. The mypy stubs ecosystem (`types-*` packages) feeds into typeshed which we consume.
-
-#### ty (Astral) {#CHKARCH-TOOLS-TY}
-
-| Attribute | Value |
-|---|---|
-| Language | Rust |
-| License | MIT |
-| Strictness | Gradual |
-| PEP Conformance | ~15% (beta, Dec 2025) |
-| LSP | Yes |
-| Incremental | Salsa-based (500x faster than Pyright) |
-| Plugin System | Planned |
-
-**Strengths**: 500x faster incremental updates than Pyright (4.7ms vs 2.38s on PyTorch). Built by the Ruff team (Astral). Salsa-based incremental architecture is production-proven (rust-analyzer). rustc-quality diagnostics. MIT license.
-
-**Weaknesses**: Only ~15% PEP conformance (early beta). Years from full coverage. No ownership analysis. Plugin system not yet designed.
-
-**What we reuse**: ty's Salsa-based architecture is the model for our incremental computation. Astral also maintains `ruff_python_parser` (MIT) which we should evaluate as our parser. The Ruff linter itself handles formatting and linting -- we should depend on it rather than recreating those features.
-
-#### Pyrefly (Meta) {#CHKARCH-TOOLS-PYREFLY}
-
-| Attribute | Value |
-|---|---|
-| Language | Rust |
-| License | MIT |
-| Strictness | Gradual |
-| PEP Conformance | ~58% (alpha, May 2025) |
-| LSP | Yes |
-| Incremental | Yes (module-level) |
-| Plugin System | No |
-
-**Strengths**: 1.8 million LOC/sec throughput. Auto-infers types for unannotated code. Built and battle-tested on Instagram's codebase. Good documentation.
-
-**Weaknesses**: ~58% conformance. Single-org focus (Meta's internal needs drive priorities). No strict-by-default mode. No ownership analysis. No plugin system.
-
-**What we reuse**: Pyrefly's type inference engine design is a reference. Their approach to inferring return types and local variable types from unannotated code is relevant for our inference engine (which must infer locals even in strict mode).
-
-#### Zuban {#CHKARCH-TOOLS-ZUBAN}
-
-| Attribute | Value |
-|---|---|
-| Language | Rust |
-| License | AGPL (commercial license available) |
-| Strictness | Gradual |
-| PEP Conformance | ~69% (best among Rust tools) |
-| LSP | Yes |
-| Incremental | No (single-threaded) |
-| Plugin System | No |
-
-**Strengths**: Best PEP conformance of any Rust-based checker (69%). Dual-mode support (Pyright-compatible and mypy-compatible). Built by the author of Jedi. Uses ~50% less memory/CPU than competitors.
-
-**Weaknesses**: AGPL license may deter corporate adoption. Single-threaded. No plugin system. No ownership analysis.
-
-**What we reuse**: Zuban's conformance test results are a benchmark. Its dual-mode configuration approach (supporting both mypy and Pyright config formats) informs our migration tooling.
-
-#### Ruff (Astral) {#CHKARCH-TOOLS-RUFF}
-
-| Attribute | Value |
-|---|---|
-| Language | Rust |
-| License | MIT |
-| Scope | Linting + Formatting (NOT type checking) |
-
-**Strengths**: Lightning-fast Rust-based linter and formatter. 700+ lint rules. Drop-in replacement for flake8, isort, Black. Massive adoption.
-
-**What we reuse**: Ruff is a direct dependency. Basilisk does NOT recreate linting or formatting. We delegate to Ruff for all lint rules and code formatting. We also evaluate `ruff_python_parser` as our Python parser crate.
+See the project README for competitive analysis.
 
 ### Capability Matrix {#CHKARCH-MATRIX}
 
@@ -207,21 +73,6 @@ Yet every single tool -- new and old -- defaults to gradual typing. None enforce
 | Migration tooling | N/A | N/A | No | No | No | N/A | **mypy + Pyright import** |
 | VS Code extension | Pylance (proprietary) | No | Yes | Yes | Yes | Yes | **Yes (open source)** |
 | No Microsoft dependency | No (Node.js) | Yes | Yes | Yes | Yes | Yes | **Yes** |
-
-### Structural Gaps No Existing Tool Addresses {#CHKARCH-GAPS}
-
-1. **Strict-by-default with no permissive mode** -- Every tool treats strictness as opt-in. No tool treats untyped code as an error by default.
-2. **Ownership/borrowing as static analysis** -- No Python type checker tracks value ownership or flags use-after-move.
-3. **Immutability-by-default for parameters** -- No tool flags mutation of function parameters without explicit annotation.
-4. **Implicit copy detection** -- No tool warns when large structures are implicitly copied.
-5. **No implicit type coercion** -- No tool flags `int`-to-`float` promotion or `bool`-as-`int` usage.
-6. **First-class open-source VS Code experience** -- The best Python IDE experience (Pylance) is proprietary. The open-source alternatives are fragmented.
-7. **Unified toolchain** -- No single tool provides type checking + linting + formatting + LSP + VSIX as one coherent experience. (Basilisk achieves this by integrating with Ruff, not by reimplementing.)
-8. **Mojo compatibility** -- No tool validates code against Mojo's type discipline.
-
-### Opportunity {#CHKARCH-OPPORTUNITY}
-
-The technology is ready (Rust-based type checkers are proven). The philosophy is unoccupied (no tool is strict-by-default). The ecosystem needs it (Python is the world's most popular language with the weakest type enforcement). Mojo proved the concepts are sound. Basilisk brings them to every Python codebase today.
 
 ---
 
@@ -516,27 +367,7 @@ Full support for:
 
 ## Mojo-Inspired Safety Analysis {#CHKARCH-MOJO-SAFETY}
 
-### Design Philosophy {#CHKARCH-MOJO-PHILOSOPHY}
-
-Mojo proved that Python-family syntax can enforce ownership, immutability, and coercion safety. Basilisk adapts these concepts as static analysis rules over standard Python using existing annotation mechanisms (`typing.Annotated`, decorators, `dataclass(frozen=True)`).
-
-No Mojo code is used. No Mojo runtime is required. The analysis is additive -- it runs as additional passes alongside standard type checking.
-
-Code that passes Basilisk's Mojo-safety checks should be structurally compatible with Mojo's type expectations when Mojo achieves full Python compatibility.
-
-### Function Strictness {#CHKARCH-MOJO-FUNCSTRICT}
-
-All functions require complete type annotations. This is not a separate mode -- it is the default behavior (Section 4.1).
-
-```python
-# In Mojo, `fn` enforces strict typing. In Basilisk, all `def` is strict.
-# No new keyword needed.
-
-def add(a: int, b: int) -> int:  # OK in both Basilisk and Mojo
-    return a + b
-```
-
-**Difference from Mojo**: Mojo has `fn` (strict) vs `def` (dynamic). Basilisk has only `def`, and it is always strict. There is no dynamic mode to escape to.
+Basilisk adapts Mojo's ownership, immutability, and coercion concepts as static analysis rules over standard Python using `typing.Annotated`, decorators, and `dataclass(frozen=True)`. No Mojo code or runtime is required.
 
 ### Ownership and Lifetime Tracking {#CHKARCH-MOJO-OWNERSHIP}
 
@@ -570,8 +401,6 @@ print(buf)   # OK: InOut reference still valid
 - `BSK-E0032`: Implicit copy of large structure (suggest explicit `.copy()`)
 - `BSK-W0033`: Missing ownership annotation on mutable parameter (suggestion)
 
-**Difference from Mojo**: Mojo enforces ownership at the compiler level with the `^` transfer operator. Basilisk enforces it via static analysis of annotation-decorated parameters. The `^` operator does not exist in Python -- Basilisk uses `Owned` annotation + use-after-move tracking instead.
-
 ### Immutability by Default {#CHKARCH-MOJO-IMMUTABLE}
 
 Function parameters are treated as immutable by default. Mutation of a parameter produces a diagnostic unless annotated with `InOut`:
@@ -600,8 +429,6 @@ class Point:
     y: float
 ```
 
-**Difference from Mojo**: Mojo's `borrowed` is the default parameter convention. Basilisk mirrors this -- parameters are immutable by default in both systems.
-
 ### Structural Discipline {#CHKARCH-MOJO-STRUCTURAL}
 
 ```python
@@ -623,8 +450,6 @@ c.timeout = 30  # ERROR: dynamic attribute on typed structure [BSK-E0050]
 - `BSK-E0052`: Missing `__del__` on class managing resources (when detectable)
 - `BSK-W0053`: Class should use `__slots__` for performance (suggestion)
 
-**Difference from Mojo**: Mojo's `struct` is static by definition -- no dynamic attributes. Basilisk enforces this via analysis of classes with type annotations.
-
 ### No Implicit Type Coercion {#CHKARCH-MOJO-COERCION}
 
 ```python
@@ -636,8 +461,6 @@ y: int = int(True)   # OK: explicit conversion
 
 z: str = b"hello"    # ERROR: implicit bytes-to-str [BSK-E0062]
 ```
-
-**Difference from Mojo**: Mojo forbids implicit conversions entirely. Basilisk mirrors this philosophy -- all type conversions must be explicit.
 
 ### Mojo Compatibility Matrix {#CHKARCH-MOJO-COMPAT}
 
@@ -1009,10 +832,6 @@ basilisk init                     # Generate starter pyproject.toml config
 
 ## Stub System {#CHKARCH-STUBS}
 
-### Problem {#CHKARCH-STUBS-PROBLEM}
-
-typeshed is a centralized repository of stubs maintained by volunteers. It does not scale. Only ~70% of popular packages have any type coverage. Average coverage per package is ~35%. Maintaining stubs for thousands of packages is unsustainable.
-
 ### Auto-Stub Generation {#CHKARCH-STUBS-AUTOGEN}
 
 Basilisk includes a stub generation engine with three modes:
@@ -1036,10 +855,6 @@ Basilisk bundles a copy of typeshed and uses it as the Tier 1 baseline for stand
 ---
 
 ## Plugin and Extension System {#CHKARCH-PLUGINS}
-
-### Motivation {#CHKARCH-PLUGINS-MOTIVATION}
-
-Framework-specific type checking (Django ORM, SQLAlchemy, Pydantic, FastAPI) cannot be built into the core. A plugin system allows community extensions without forking.
 
 ### Architecture {#CHKARCH-PLUGINS-ARCH}
 

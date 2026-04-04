@@ -8,8 +8,8 @@ Additionally, users need a way to auto-generate best-effort stubs for untyped pa
 
 This plan consolidates TODOs from:
 - `docs/plans/CHECKER-CROSS-MODULE-PLAN.md` (Phases 3-6)
-- `docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md` (Sections 3, 6)
-- `docs/specs/LSP-UV-INTEGRATION-SPEC.md` (Sections 5, 7, 8)
+- [CHECKER-STUB-RESOLUTION-SPEC.md §STUBRES-PROVENANCE](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PROVENANCE) and [§STUBRES-AUTOGEN](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-AUTOGEN)
+- [LSP-UV-INTEGRATION-SPEC.md §LSPUV-WORKSPACE](../specs/LSP-UV-INTEGRATION-SPEC.md#LSPUV-WORKSPACE), [§LSPUV-HOVER](../specs/LSP-UV-INTEGRATION-SPEC.md#LSPUV-HOVER), and [§LSPUV-CMDS](../specs/LSP-UV-INTEGRATION-SPEC.md#LSPUV-CMDS)
 
 ---
 
@@ -114,7 +114,7 @@ When hovering over an imported symbol, look up `imported_symbols` provenance and
 - `StubTier3` -> `" (best-effort stub, may be inaccurate)"`
 - `StubTier1` + typeshed -> `" (typeshed)"`
 
-### 2.5 uv-enriched hover (from LSP-UV-INTEGRATION-SPEC section 8)
+### 2.5 uv-enriched hover (from [LSP-UV-INTEGRATION-SPEC.md §LSPUV-HOVER](../specs/LSP-UV-INTEGRATION-SPEC.md#LSPUV-HOVER))
 
 When `PackageRegistry` is available, also show:
 - Package version and direct/transitive classification

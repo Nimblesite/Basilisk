@@ -67,7 +67,7 @@ All features listed here follow standard Python 3.12 semantics. For the definiti
 - Closures with captured variables
 
 **Type System**
-- All PEPs listed in [CHECKER-ARCHITECTURE-SPEC.md Section 4.2](CHECKER-ARCHITECTURE-SPEC.md) (PEP 484, 526, 544, 585, 586, 589, 591, 604, 612, 613, 634, 646, 647, 673, 675, 681, 692, 695, 696, 698, 702, 742)
+- All PEPs listed in [CHECKER-ARCHITECTURE-SPEC.md §CHKARCH-PEPS](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-PEPS) (PEP 484, 526, 544, 585, 586, 589, 591, 604, 612, 613, 634, 646, 647, 673, 675, 681, 692, 695, 696, 698, 702, 742)
 - `Union`, `Optional`, `Literal`, `Final`, `ClassVar`
 - `TypeVar`, `TypeVarTuple`, `ParamSpec` (PEP 612)
 - `Protocol` (structural subtyping, PEP 544)
@@ -151,7 +151,7 @@ graph TD
 ```
 
 For the existing parser, resolver, and checker stages, see:
-- [CHECKER-ARCHITECTURE-SPEC.md Section 7](CHECKER-ARCHITECTURE-SPEC.md) for architecture details
+- [CHECKER-ARCHITECTURE-SPEC.md §CHKARCH-ARCH](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH) for architecture details
 - [CHECKER-TYPE-INFERENCE-SPEC.md](CHECKER-TYPE-INFERENCE-SPEC.md) for inference rules
 
 ### HIR Stage {#COMPILER-HIR}
@@ -300,7 +300,7 @@ The compiler performs escape analysis: if a value is never stored into a heap ob
 
 ### Ownership Annotations {#COMPILER-MEMORY-OWNERSHIP}
 
-The ownership annotations from [CHECKER-ARCHITECTURE-SPEC.md Section 5](CHECKER-ARCHITECTURE-SPEC.md) (`Borrowed`, `Owned`, `InOut`) are optimization hints that work across **all** memory backends:
+The ownership annotations from [CHECKER-ARCHITECTURE-SPEC.md §CHKARCH-MOJO-OWNERSHIP](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-MOJO-OWNERSHIP) (`Borrowed`, `Owned`, `InOut`) are optimization hints that work across **all** memory backends:
 
 | Annotation | Compiler Effect |
 |---|---|
@@ -824,7 +824,7 @@ print(p.distance())
 
 ### Test Layers {#COMPILER-TESTING-LAYERS}
 
-The compiler follows the same testing philosophy as the analyzer (see [CHECKER-ARCHITECTURE-SPEC.md Section 17](CHECKER-ARCHITECTURE-SPEC.md)):
+The compiler follows the same testing philosophy as the analyzer (see [CHECKER-ARCHITECTURE-SPEC.md §CHKARCH-TESTING](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING)):
 
 | Layer | Location | What It Tests |
 |---|---|---|

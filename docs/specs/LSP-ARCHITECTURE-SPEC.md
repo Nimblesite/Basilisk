@@ -4,10 +4,10 @@
 
 This is the **single source of truth** for all LSP features, DAP integration, custom commands, configuration settings, and binary resolution. Editor-specific specs (VS Code, Zed, Neovim) MUST reference this document rather than duplicating LSP details.
 
-- **VS Code**: `VSIX-SPEC.md`
-- **Zed**: `ZED-SPEC.md`
-- **Neovim**: `NEOVIM-SPEC.md`
-- **uv Integration**: `LSP-UV-INTEGRATION-SPEC.md` — environment detection, lock file intelligence, package commands
+- **VS Code**: [`VSIX-SPEC.md`](VSIX-SPEC.md)
+- **Zed**: [`ZED-SPEC.md`](ZED-SPEC.md)
+- **Neovim**: [`NEOVIM-SPEC.md`](NEOVIM-SPEC.md)
+- **uv Integration**: [`LSP-UV-INTEGRATION-SPEC.md`](LSP-UV-INTEGRATION-SPEC.md) — environment detection, lock file intelligence, package commands
 
 ⚠️ KEY DESIGN PRINCIPLE: LSP DRIVES THE FUNCTIONALITY - NOT THE IDE EXTENSION
 ⚠️ IDE EXTENSIONS LISTEN FOR THINGS LIKE COMMANDS FROM THE LSP AND ADJUST ACCORDINGLY
@@ -53,8 +53,8 @@ These settings are sent to the LSP server via `workspace/configuration` under th
 | `basilisk.debugger.enabled` | `boolean` | `true` | Enable debugger |
 | `basilisk.debugger.typeChecking` | `boolean` | `false` | Enable type assertion breakpoints |
 | `basilisk.debugger.debugpyPath` | `string` | `"debugpy"` | Path to debugpy module |
-| `basilisk.testExplorer.*` | — | — | See `LSP-TEST-INTEGRATION-SPEC.md` § Configuration Settings |
-| `basilisk.uv.enabled` | `boolean` | `true` | Enable uv integration (auto-detected, see `LSP-UV-INTEGRATION-SPEC.md`) |
+| `basilisk.testExplorer.*` | — | — | See [LSP-TEST-INTEGRATION-SPEC.md §TESTINT-CONFIG](LSP-TEST-INTEGRATION-SPEC.md#TESTINT-CONFIG) |
+| `basilisk.uv.enabled` | `boolean` | `true` | Enable uv integration (auto-detected, see [LSP-UV-INTEGRATION-SPEC.md §LSPUV-DETECT](LSP-UV-INTEGRATION-SPEC.md#LSPUV-DETECT)) |
 | `basilisk.uv.executablePath` | `string` | `""` (auto-detect) | Path to `uv` binary (only needed for commands, not detection) |
 | `basilisk.uv.autoSync` | `boolean` | `false` | Auto-run `uv sync` when `pyproject.toml` changes |
 | `basilisk.uv.stubSuggestions` | `boolean` | `true` | Suggest installing type stub packages |
@@ -90,7 +90,7 @@ This rule applies equally to VS Code, Neovim, and Zed extensions.
 | `basilisk/memory/start` | `{}` | `{sessionId}` | Start memory leak tracking |
 | `basilisk/memory/stop` | `{sessionId}` | `{leakReport}` | Stop tracking, return leak report |
 | `basilisk/memory/refs` | `{typeName}` | `{retentionPaths}` | Query retention paths for a type |
-| `basilisk.uv.sync` | `{}` | `{}` | Run `uv sync` in project root (see `LSP-UV-INTEGRATION-SPEC.md`) |
+| `basilisk.uv.sync` | `{}` | `{}` | Run `uv sync` in project root (see [LSP-UV-INTEGRATION-SPEC.md §LSPUV-CMDS](LSP-UV-INTEGRATION-SPEC.md#LSPUV-CMDS)) |
 | `basilisk.uv.add` | `{package}` | `{}` | Run `uv add <package>` |
 | `basilisk.uv.addDev` | `{package}` | `{}` | Run `uv add --dev <package>` |
 | `basilisk.uv.remove` | `{package}` | `{}` | Run `uv remove <package>` |

@@ -4,7 +4,7 @@
 >
 > **Plan**: [LSP-UV-INTEGRATION-PLAN.md](../plans/LSP-UV-INTEGRATION-PLAN.md)
 >
-> **LSP Spec**: [LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md) — configuration, commands, binary resolution
+> **LSP Spec**: [LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md) — [configuration](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG), [commands](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDS), [binary resolution](LSP-ARCHITECTURE-SPEC.md#LSPARCH-UV-BINRES)
 
 ---
 
@@ -380,8 +380,8 @@ These are explicitly **out of scope**:
 
 | Spec | Interaction |
 |------|-------------|
-| [LSP-ANALYSIS-MODES-SPEC.md](LSP-ANALYSIS-MODES-SPEC.md) | `PackageRegistry` feeds into import resolution for all analysis modes |
+| [LSP-ANALYSIS-MODES-SPEC.md §ANALYSIS-MODES](LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-MODES) | `PackageRegistry` feeds into import resolution for all analysis modes |
 | [CHECKER-CROSS-MODULE-PLAN.md](../plans/CHECKER-CROSS-MODULE-PLAN.md) | Phase 1 (stub infrastructure) gains lock-file-aware stub detection |
-| [LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md) | New commands, settings, and file watchers added |
-| [LSP-MASS-AUTOFIX-SPEC.md](LSP-MASS-AUTOFIX-SPEC.md) | Mass autofix can batch `uv add --dev` for all missing stubs |
-| [LSP-TEST-INTEGRATION-SPEC.md](LSP-TEST-INTEGRATION-SPEC.md) | `uv run pytest` for deterministic test execution, `PackageRegistry` verifies pytest/pytest-cov availability, code actions to install missing test dependencies |
+| [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CMDS](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDS) | New commands, settings, and file watchers added |
+| [LSP-MASS-AUTOFIX-SPEC.md §AUTOFIX-MASS](LSP-MASS-AUTOFIX-SPEC.md#AUTOFIX-MASS) | Mass autofix can batch `uv add --dev` for all missing stubs |
+| [LSP-TEST-INTEGRATION-SPEC.md §TESTINT-UV](LSP-TEST-INTEGRATION-SPEC.md#TESTINT-UV) | `uv run pytest` for deterministic test execution, `PackageRegistry` verifies pytest/pytest-cov availability, code actions to install missing test dependencies |

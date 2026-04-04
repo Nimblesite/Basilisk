@@ -1,15 +1,15 @@
 # Cross-Module Analysis — Plan
 
-> **Spec**: [LSP-ANALYSIS-MODES-SPEC.md](../specs/LSP-ANALYSIS-MODES-SPEC.md)
-> **Stubs Spec**: [CHECKER-STUB-RESOLUTION-SPEC.md](../specs/CHECKER-STUB-RESOLUTION-SPEC.md)
+> **Spec**: [LSP-ANALYSIS-MODES-SPEC.md §ANALYSIS-CROSS](../specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-CROSS)
+> **Stubs Spec**: [CHECKER-STUB-RESOLUTION-SPEC.md §STUBRES-PEP561](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561)
 > **Branch**: `crossmodule`
 
 ---
 
 ## Completed
 
-- **Stub infrastructure** (Phase 1) — PEP 561 resolution, typeshed bundling, `.pyi` parsing, config overrides, Python env detection. See [CHECKER-STUB-RESOLUTION-SPEC.md](../specs/CHECKER-STUB-RESOLUTION-SPEC.md).
-- **Import graph** (Phase 2) — `ImportGraph` with forward/reverse edges, topological ordering, cycle detection, `ExternalSymbol` model, two-pass cross-module population, invalidation cascading. See [LSP-ANALYSIS-MODES-SPEC.md](../specs/LSP-ANALYSIS-MODES-SPEC.md) §4-5.
+- **Stub infrastructure** (Phase 1) — PEP 561 resolution, typeshed bundling, `.pyi` parsing, config overrides, Python env detection. See [CHECKER-STUB-RESOLUTION-SPEC.md §STUBRES-PEP561](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561).
+- **Import graph** (Phase 2) — `ImportGraph` with forward/reverse edges, topological ordering, cycle detection, `ExternalSymbol` model, two-pass cross-module population, invalidation cascading. See [LSP-ANALYSIS-MODES-SPEC.md §ANALYSIS-GRAPH](../specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-GRAPH) and [§ANALYSIS-SYMBOLS](../specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-SYMBOLS).
 - **Cross-file Go to Definition** — follow `resolved_path`, find symbol's `name_span` in target `ResolvedModule`
 - **Cross-file Find All References** — use import graph reverse edges, search all importers
 - **Auto-import completion** — `SymbolIndex`, `suggest_imports()`, `additionalTextEdits` for import insertion
@@ -41,7 +41,7 @@ A project adopting Basilisk with third-party imports:
 
 ### With uv Integration (Future)
 
-See [LSP-UV-INTEGRATION-SPEC.md](../specs/LSP-UV-INTEGRATION-SPEC.md):
+See [LSP-UV-INTEGRATION-SPEC.md §LSPUV-DETECT](../specs/LSP-UV-INTEGRATION-SPEC.md#LSPUV-DETECT):
 
 1. **Zero config**: auto-detect `uv.lock`, `.python-version`, full dependency graph
 2. **Actionable diagnostics**: BSK-E0010 says "run `uv add requests`" with one-click code action

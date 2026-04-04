@@ -1,7 +1,7 @@
 # Stub Resolution & Type Provenance — Specification
 
 > **Crate**: `basilisk-stubs` (resolution, typeshed bundling), `basilisk-config` (overrides)
-> **Related**: [LSP-UV-INTEGRATION-SPEC.md](LSP-UV-INTEGRATION-SPEC.md) — `PackageRegistry` accelerates stub discovery
+> **Related**: [LSP-UV-INTEGRATION-SPEC.md §LSPUV-LOCK-REGISTRY](LSP-UV-INTEGRATION-SPEC.md#LSPUV-LOCK-REGISTRY) — `PackageRegistry` accelerates stub discovery
 
 ---
 
@@ -16,7 +16,7 @@ Following [PEP 561](https://peps.python.org/pep-0561/), matching Pyright's behav
 5. **Bundled typeshed** — stdlib stubs compiled into the binary from `basilisk-stubs`
 6. **No stubs found** — type resolves to `Unknown`, BSK-E0010 fires
 
-> **uv fast path**: In uv projects, steps 3–4 are accelerated by the `PackageRegistry` parsed from `uv.lock`. The registry knows every installed package and whether a companion stub package exists — no site-packages directory walk needed. See `LSP-UV-INTEGRATION-SPEC.md` section 3.
+> **uv fast path**: In uv projects, steps 3–4 are accelerated by the `PackageRegistry` parsed from `uv.lock`. The registry knows every installed package and whether a companion stub package exists — no site-packages directory walk needed. See [LSP-UV-INTEGRATION-SPEC.md §LSPUV-LOCK-REGISTRY](LSP-UV-INTEGRATION-SPEC.md#LSPUV-LOCK-REGISTRY).
 
 ---
 
@@ -109,7 +109,7 @@ One diagnostic at the import site is worth more than fifty cascading errors at u
 | typeshed symbol | `os.path.join (typeshed)` |
 | Tier 1 stub symbol | `requests.get(...) -> Response` (no annotation — trusted) |
 
-> **uv enrichment** (future): In uv projects, import hovers additionally show package version, direct/transitive classification, and stub package status from the `PackageRegistry`. See `LSP-UV-INTEGRATION-SPEC.md` section 8.
+> **uv enrichment** (future): In uv projects, import hovers additionally show package version, direct/transitive classification, and stub package status from the `PackageRegistry`. See [LSP-UV-INTEGRATION-SPEC.md §LSPUV-HOVER](LSP-UV-INTEGRATION-SPEC.md#LSPUV-HOVER).
 
 ---
 

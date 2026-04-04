@@ -30,6 +30,8 @@
     "[rust]": {
         "editor.defaultFormatter": "rust-lang.rust-analyzer"
     },
+    // ── Basilisk LSP Trace ────────────────────────────────────────────────
+    "basilisk.trace.server": "verbose",
     "workbench.colorCustomizations": {
         "titleBar.activeBackground": "#e8500a",
         "titleBar.activeForeground": "#f0f2f7",

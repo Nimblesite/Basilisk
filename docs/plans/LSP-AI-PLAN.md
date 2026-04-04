@@ -5,7 +5,7 @@
 **Prerequisites:**
 - Diagnostic pipeline: EXISTS (BSK-E#### codes, spans, messages)
 - Code actions: EXISTS (E0001-E0003, W0050 quick fixes, suppress, imports)
-- Mass Autofix spec: EXISTS (but Phase 5 AI Typing Hooks not yet implemented)
+- Mass Autofix spec: EXISTS ([LSP-MASS-AUTOFIX-SPEC.md §AUTOFIX-AI](../specs/LSP-MASS-AUTOFIX-SPEC.md#AUTOFIX-AI) — Phase 5 AI Typing Hooks not yet implemented)
 - AI provider code: NOTHING exists
 
 **This plan expands:** `LSP-MASS-AUTOFIX-PLAN.md` Phase 5 (AI Typing Hooks — stubs only). That phase was designed as a stub. This plan upgrades the stubs to a full provider abstraction. Mass Autofix Phases 1-4 are **completely independent of this plan** — they are deterministic features that work without AI. AI is an optional enhancement layer that plugs in after deterministic fixes for diagnostics that can't be fixed otherwise.
@@ -57,7 +57,7 @@
 
 5. **Context truncation**:
    - `src/truncation.rs` — `fn truncate_request(request: &mut AiFixRequest, max_tokens: usize)`.
-   - Priority-based truncation per spec.
+   - Priority-based truncation per [LSP-AI-SPEC.md §LSPAI-TRUNCATION](../specs/LSP-AI-SPEC.md#LSPAI-TRUNCATION).
 
 ### Deliverables
 - Compiles. All existing tests pass. Zero behavioral changes.
@@ -169,7 +169,7 @@
    - Alternative (simpler): make AI code actions on-demand only — user triggers `basilisk/ai/suggestFix` command explicitly.
 
 3. **Mass autofix AI enhancement** (optional layer on top of deterministic mass autofix):
-   - Mass autofix runs first — deterministic, independent of AI, as defined in `LSP-MASS-AUTOFIX-SPEC.md`.
+   - Mass autofix runs first — deterministic, independent of AI, as defined in [LSP-MASS-AUTOFIX-SPEC.md §AUTOFIX-MASS](../specs/LSP-MASS-AUTOFIX-SPEC.md#AUTOFIX-MASS).
    - After deterministic fixes are applied, if AI is enabled:
      - Collect remaining unfixed diagnostics (those with no deterministic fix).
      - Batch them to `suggest_fixes_batch`.
