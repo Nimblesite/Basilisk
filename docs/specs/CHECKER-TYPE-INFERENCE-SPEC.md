@@ -472,7 +472,7 @@ def sort(items: list[C]) -> list[C]: ...
 
 TypeVar bound constraints are **upper bounds**: any subtype of `Comparable` satisfies `C`. The solved type is the argument type itself (not widened to the bound).
 
-### 6.4 Variance Inference (PEP 695)
+### Variance Inference {#TYPEINF-GENERICS-VARIANCE}
 
 With PEP 695 generic syntax, Basilisk **automatically infers variance**:
 
@@ -501,7 +501,7 @@ class Consumer[T]:
 > **Authority**: [PEP 695 §Variance Inference](https://peps.python.org/pep-0695/#variance-inference).
 > [Conformance suite `generics_variance_inference.py`](https://github.com/python/typing/blob/main/conformance/tests/generics_variance_inference.py).
 
-### 6.5 TypeVar Defaults (PEP 696)
+### TypeVar Defaults {#TYPEINF-GENERICS-DEFAULTS}
 
 ```python
 from typing import TypeVar
@@ -517,7 +517,7 @@ d = Container[str]()    # Container[str] — explicit wins
 
 > **Authority**: [PEP 696](https://peps.python.org/pep-0696/).
 
-### 6.6 ParamSpec
+### ParamSpec {#TYPEINF-GENERICS-PARAMSPEC}
 
 ```python
 from typing import ParamSpec, Callable
@@ -537,9 +537,9 @@ def logged(f: Callable[P, T]) -> Callable[P, T]:
 
 ---
 
-## 7. Type Narrowing
+## Type Narrowing {#TYPEINF-NARROWING}
 
-### 7.1 `isinstance` Narrowing
+### `isinstance` Narrowing {#TYPEINF-NARROWING-ISINSTANCE}
 
 ```python
 def f(x: int | str) -> None:
@@ -555,7 +555,7 @@ Narrowing with `isinstance` against a union:
 
 For `isinstance(x, (A, B))` (tuple of types): the `if` branch narrows to `A | B`.
 
-### 7.2 `is None` / `is not None`
+### `is None` / `is not None` {#TYPEINF-NARROWING-NONE}
 
 ```python
 def f(x: int | None) -> None:
@@ -565,7 +565,7 @@ def f(x: int | None) -> None:
         reveal_type(x)  # int
 ```
 
-### 7.3 Truthiness Narrowing
+### Truthiness Narrowing {#TYPEINF-NARROWING-TRUTHY}
 
 ```python
 def f(x: str | None) -> None:
@@ -575,7 +575,7 @@ def f(x: str | None) -> None:
 
 Truthiness narrowing removes falsy types from the union (`None`, `Literal[0]`, `Literal[""]`, `Literal[False]`) in the truthy branch, and narrows to falsy types in the falsy branch.
 
-### 7.4 Assignment Narrowing
+### Assignment Narrowing {#TYPEINF-NARROWING-ASSIGN}
 
 ```python
 x: int | str = get_value()
@@ -585,7 +585,7 @@ reveal_type(x)  # int — narrowed by assignment
 
 After an assignment, the type of the variable is the type of the assigned value (possibly narrower than the declared type).
 
-### 7.5 Pattern Matching Narrowing (PEP 634)
+### Pattern Matching Narrowing {#TYPEINF-NARROWING-MATCH}
 
 ```python
 def process(cmd: Command) -> None:

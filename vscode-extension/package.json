@@ -469,7 +469,7 @@
             "messages",
             "verbose"
           ],
-          "default": "off",
+          "default": "verbose",
           "description": "Trace LSP communication for debugging."
         },
         "basilisk.inlayHints.parameterNames": {

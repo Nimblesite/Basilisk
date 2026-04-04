@@ -53,6 +53,18 @@ pub struct BasiliskConfig {
     /// declared dependencies, and stale lock files. Disabled by default.
     /// Maps to `basilisk.uv.dependencyDiagnostics` in the LSP config.
     pub uv_dependency_diagnostics: bool,
+
+    /// Auto-stub generation mode: `"runtime"`, `"ast"`, `"hybrid"`, or `"disabled"`.
+    ///
+    /// Controls how `basilisk stubs generate` creates `.pyi` files for
+    /// untyped packages. Defaults to `"hybrid"`.
+    pub auto_stub_mode: String,
+
+    /// Directory for auto-generated stubs.
+    ///
+    /// Generated `.pyi` files are placed here and automatically included
+    /// in the stub search path. Defaults to `".basilisk/stubs"`.
+    pub auto_stub_path: PathBuf,
 }
 
 impl Default for BasiliskConfig {
@@ -68,6 +80,8 @@ impl Default for BasiliskConfig {
             per_path_overrides: HashMap::new(),
             uv_stub_suggestions: true,
             uv_dependency_diagnostics: false,
+            auto_stub_mode: "hybrid".to_owned(),
+            auto_stub_path: PathBuf::from(".basilisk/stubs"),
         }
     }
 }
