@@ -32,6 +32,7 @@ use basilisk_resolver::{ResolvedModule, Span};
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 use crate::span_util::slice_span;
 
+use super::shared::extract_callee_name;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
@@ -375,17 +376,4 @@ fn check_expr_for_initvar_access(
     }
 }
 
-/// Extract the callee class name from the RHS text of an assignment.
-/// Returns `Some("ClassName")` for `ClassName(...)` or `ClassName[T](...)`.
-fn extract_callee_name(rhs_text: &str) -> Option<&str> {
-    let before_bracket = rhs_text.split('[').next()?;
-    let before_paren = before_bracket.split('(').next()?;
-    let name = before_paren.trim();
-    if name.is_empty() {
-        return None;
-    }
-    if !name.starts_with(|c: char| c.is_ascii_uppercase()) {
-        return None;
-    }
-    Some(name)
-}
+

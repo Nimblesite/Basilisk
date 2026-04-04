@@ -34,6 +34,7 @@ use basilisk_resolver::ResolvedModule;
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 use crate::span_util::slice_span;
 
+use super::shared::extract_callee_name;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
@@ -180,22 +181,6 @@ fn extract_base_class_name(expr: &ruff_python_ast::Expr) -> Option<String> {
         }
         _ => None,
     }
-}
-
-/// Extract the callee name from a RHS text like `ClassName(...)` or `ClassName[T](...)`.
-fn extract_callee_name(rhs_text: &str) -> Option<&str> {
-    // Handle `ClassName[T](...)` by stripping everything from `[` onwards first.
-    let before_bracket = rhs_text.split('[').next()?;
-    let before_paren = before_bracket.split('(').next()?;
-    let name = before_paren.trim();
-    if name.is_empty() {
-        return None;
-    }
-    // Class names start with uppercase (heuristic).
-    if !name.starts_with(|c: char| c.is_ascii_uppercase()) {
-        return None;
-    }
-    Some(name)
 }
 
 /// Extract the callee class name from a call expression AST node.
