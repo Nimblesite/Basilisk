@@ -1,12 +1,12 @@
 # Basilisk Debug Integration via debugpy
 
-## Goal
+## Goal {#LSPDEBUG-GOAL}
 
 The Basilisk LSP **is** the debug adapter. When the editor needs to debug Python, it sends a custom LSP request. The LSP spawns debugpy on a TCP port and tells the editor where to connect. No separate binary, no separate process, no bundling. One LSP, both editors.
 
 MAX CODE SHARING BETWEEN RUST COMPONENTS!!!
 
-## Architecture
+## Architecture {#LSPDEBUG-ARCH}
 
 ```mermaid
 graph TB
@@ -38,7 +38,7 @@ graph TB
 
 The LSP already runs as a long-lived process. It already knows the workspace roots and can resolve the Python interpreter. Adding debug session management is a natural extension — not a separate system.
 
-## How It Works
+## How It Works {#LSPDEBUG-FLOW}
 
 ```mermaid
 sequenceDiagram
@@ -70,11 +70,11 @@ sequenceDiagram
 
 The editor's DAP client connects directly to debugpy over TCP. The LSP just brokers the connection — it doesn't proxy any DAP traffic.
 
-## Part 1: LSP Custom Requests (Rust)
+## LSP Custom Requests {#LSPDEBUG-LSP}
 
 Add two custom requests to the LSP server and a Python resolver module.
 
-### `basilisk/startDebugSession`
+### startDebugSession {#LSPDEBUG-START}
 
 The LSP only needs to know which Python to use. All DAP config (program, args, justMyCode, etc.) goes directly from the editor to debugpy after the TCP connection is established.
 
@@ -98,7 +98,7 @@ The LSP only needs to know which Python to use. All DAP config (program, args, j
 
 The LSP waits until debugpy is actually accepting TCP connections before returning. This avoids a race where the editor tries to connect before debugpy is ready.
 
-### `basilisk/stopDebugSession`
+### stopDebugSession {#LSPDEBUG-STOP}
 
 **Request:**
 ```json
@@ -114,7 +114,7 @@ The LSP waits until debugpy is actually accepting TCP connections before returni
 }
 ```
 
-### Rust implementation sketch
+### Rust Implementation {#LSPDEBUG-RUST}
 
 Add a `debug.rs` module to `basilisk-lsp`:
 
@@ -199,7 +199,7 @@ async fn wait_for_port(port: u16, timeout: Duration) -> Result<(), DebugError> {
 }
 ```
 
-### Python resolver
+### Python Resolver {#LSPDEBUG-PYRES}
 
 The LSP already has workspace roots. The resolver checks them:
 
@@ -243,7 +243,7 @@ pub async fn check_debugpy(python: &str) -> Result<(), DebugError> {
 }
 ```
 
-### Wire into the LSP server
+### LSP Server Wiring {#LSPDEBUG-WIRE}
 
 In `server.rs`, add the `DebugSessionManager` to `LspServer` and handle the custom requests via `execute_command`:
 
@@ -301,7 +301,7 @@ execute_command_provider: Some(ExecuteCommandOptions {
 }),
 ```
 
-## Part 2: VS Code Extension
+## VS Code Extension {#LSPDEBUG-VSCODE}
 
 The extension registers a debug type and a factory. When VS Code starts a debug session, the factory asks the LSP to spawn debugpy and returns the TCP port.
 
@@ -441,11 +441,11 @@ context.subscriptions.push(
 
 That's it. The factory sends one LSP request and gets back a port. No process spawning in TypeScript.
 
-## Zed Compatibility
+## Zed Compatibility {#LSPDEBUG-ZED}
 
 The debug integration is editor-agnostic by design. All logic lives in the LSP — the editor just sends `basilisk.startDebugSession` and connects to the returned TCP port. Nothing in this design is VS Code-specific. When Zed's debug adapter support matures to allow LSP-initiated DAP connections, it will work without changes to the Rust side.
 
-## Data Flow: Attach Session
+## Attach Session Flow {#LSPDEBUG-ATTACH}
 
 ```mermaid
 sequenceDiagram
@@ -462,7 +462,7 @@ sequenceDiagram
 
 For attach, the editor connects directly to the remote debugpy server. The LSP is not involved.
 
-## Component Diagram
+## Component Diagram {#LSPDEBUG-COMPONENTS}
 
 ```mermaid
 graph LR
@@ -494,7 +494,7 @@ graph LR
     DEBUG -->|"spawns"| DEBUGPY
 ```
 
-## Error Handling
+## Error Handling {#LSPDEBUG-ERRORS}
 
 When debugpy is not installed, the LSP returns a clear error:
 
@@ -520,7 +520,7 @@ When the Python interpreter can't be found, the error tells the user exactly wha
 }
 ```
 
-## Design Decisions
+## Design Decisions {#LSPDEBUG-DECISIONS}
 
 **The LSP is the debug adapter.** No separate binary or proxy process. The LSP spawns debugpy and tells the editor where to connect. One process does everything.
 
@@ -530,13 +530,13 @@ When the Python interpreter can't be found, the error tells the user exactly wha
 
 **Session lifecycle managed by the LSP.** The LSP tracks spawned debugpy processes and cleans them up on stop requests or shutdown. No orphaned processes.
 
-## Python Version Targeting
+## Python Version Targeting {#LSPDEBUG-PYTHON}
 
 **Primary target: Python 3.12** — this is the canonical version for the entire Basilisk project.
 
 debugpy uses `sys.settrace` (via pydevd internally) on Python 3.12. This is the traditional debugging mechanism and is fully supported.
 
-### Python 3.14 and the Future of Debugging
+### Python 3.14 Future {#LSPDEBUG-PY314}
 
 Python 3.14 introduces two significant debugging enhancements that do **not** affect our current implementation but are worth tracking:
 
@@ -548,7 +548,7 @@ Python 3.14 introduces two significant debugging enhancements that do **not** af
 
 **Future opportunity:** When debugpy adopts `sys.monitoring` internally, breakpoint performance will improve dramatically for 3.14+ users with no changes needed on our side. If we later want to support PEP 768's attach-by-PID, that would be an additive feature behind a version check — not a rewrite.
 
-## Prerequisite
+## Prerequisites {#LSPDEBUG-PREREQ}
 
 Users need debugpy installed in their Python 3.12 environment:
 
@@ -558,6 +558,6 @@ pip install debugpy
 
 The LSP checks for this on the first debug request and returns an actionable error if it's missing.
 
-## Licensing
+## Licensing {#LSPDEBUG-LICENSE}
 
 debugpy is MIT-licensed. Basilisk invokes it as a subprocess — no bundling, no licensing concerns.

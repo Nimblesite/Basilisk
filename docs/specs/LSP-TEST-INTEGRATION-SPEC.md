@@ -6,7 +6,7 @@
 
 ---
 
-## Architecture
+## Architecture {#TESTINT-ARCH}
 
 Test integration follows the same subprocess-delegation pattern as formatting (Ruff) and debugging (debugpy):
 
@@ -18,7 +18,7 @@ The Rust implementation lives in `crates/basilisk-lsp/src/test_discovery.rs`.
 
 ---
 
-## Supported Frameworks
+## Supported Frameworks {#TESTINT-FRAMEWORKS}
 
 | Framework | Detection |
 |---|---|
@@ -28,7 +28,7 @@ The Rust implementation lives in `crates/basilisk-lsp/src/test_discovery.rs`.
 
 ---
 
-## Test Item Data Model
+## Test Item Data Model {#TESTINT-MODEL}
 
 ```rust
 pub struct TestItem {
@@ -41,7 +41,7 @@ pub struct TestItem {
 }
 ```
 
-### Test Item Hierarchy
+### Test Item Hierarchy {#TESTINT-HIERARCHY}
 
 ```
 tests/
@@ -59,7 +59,7 @@ tests/
 
 ---
 
-## Test Discovery
+## Test Discovery {#TESTINT-DISCOVERY}
 
 - Scan workspace for `test_*.py` and `*_test.py` files
 - Parse with `basilisk-parser` to extract test items without importing
@@ -68,18 +68,18 @@ tests/
 
 ---
 
-## Test Execution
+## Test Execution {#TESTINT-EXEC}
 
 - Execute via `pytest` subprocess with node ID targeting (e.g. `pytest tests/test_api.py::test_login`)
 - Honour `pytest.ini`, `pyproject.toml [tool.pytest]`, conftest fixtures
 - Support running: individual test, test class, test file, entire suite
 - Parse output to extract pass/fail/skip/error status per test item
 
-### uv-Aware Execution
+### uv-Aware Execution {#TESTINT-UV}
 
 In uv projects, test execution uses `uv run` instead of invoking pytest directly. This guarantees the correct virtual environment is active without manual `VIRTUAL_ENV` setup.
 
-#### Pytest Resolution Cascade
+#### Pytest Resolution {#TESTINT-UV-PYTEST}
 
 | Priority | Strategy | When |
 |----------|----------|------|
@@ -94,7 +94,7 @@ When `uv run` is used:
 - No risk of running tests against a stale or wrong environment
 - Coverage tools (`pytest-cov`) installed via `uv add --dev` are available without extra config
 
-#### Environment Variables
+#### Environment Variables {#TESTINT-UV-ENV}
 
 When NOT using `uv run`, the LSP sets environment variables on the subprocess:
 

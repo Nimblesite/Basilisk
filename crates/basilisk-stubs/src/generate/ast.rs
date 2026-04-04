@@ -54,13 +54,13 @@ pub fn generate_ast_stubs_from_source(
         match stmt {
             Stmt::FunctionDef(func) => {
                 let name = func.name.as_str();
-                if should_export(name, &all_names) {
+                if should_export(name, all_names.as_ref()) {
                     lines.push(format_function_def(func, source));
                 }
             }
             Stmt::ClassDef(class) => {
                 let name = class.name.as_str();
-                if should_export(name, &all_names) {
+                if should_export(name, all_names.as_ref()) {
                     lines.push(format_class_def(class));
                 }
             }
@@ -117,7 +117,7 @@ fn extract_all_names(stmts: &[Stmt]) -> Option<Vec<String>> {
 }
 
 /// Check if a name should be exported (public or in `__all__`).
-fn should_export(name: &str, all_names: &Option<Vec<String>>) -> bool {
+fn should_export(name: &str, all_names: Option<&Vec<String>>) -> bool {
     if let Some(names) = all_names {
         names.iter().any(|n| n == name)
     } else {

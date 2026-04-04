@@ -1,6 +1,6 @@
 # Mass Autofix & Gradual Adoption — Specification
 
-## Problem
+## Problem {#AUTOFIX-PROBLEM}
 
 When a user opens an existing Python module in Basilisk for the first time, the file is **red with errors**. Every missing type annotation, every implicit `Any`, every untyped parameter — they all fire as hard errors. This is correct behavior (strict-by-default is the point), but it makes Basilisk hostile to adoption on existing codebases. The user cannot work productively when the entire file is a wall of red.
 
@@ -9,9 +9,9 @@ We need two things:
 1. **Mass Autofix** — apply every safe autofix in one action (single diagnostic, file, or entire module).
 2. **Gradual Adoption Mode** — after autofixing everything possible, demote all remaining errors to warnings *per-file*, so the user sees yellow instead of red and can fix issues incrementally without being blocked.
 
-## Feature 1: Mass Autofix
+## Mass Autofix {#AUTOFIX-MASS}
 
-### Overview
+### Overview {#AUTOFIX-MASS-OVERVIEW}
 
 Basilisk already produces diagnostics with structured fix metadata. Mass Autofix extends this so that **all applicable fixes can be applied in a single action** at three scopes:
 
@@ -21,7 +21,7 @@ Basilisk already produces diagnostics with structured fix metadata. Mass Autofix
 | **File** | Command / code action at file level | Applies all fixable diagnostics in the current file |
 | **Module / Workspace** | Command palette / CLI flag | Applies all fixable diagnostics across all files in scope |
 
-### Fix Classification
+### Fix Classification {#AUTOFIX-CLASSIFY}
 
 Every autofix is classified into one of two safety tiers:
 
@@ -35,7 +35,7 @@ When the user triggers Mass Autofix, they choose one of:
 - **Safe only** (default) — applies only `SafeFix` items.
 - **All fixes** — applies both `SafeFix` and `UnsafeFix` items, with each unsafe fix marked in a review list.
 
-### Diagnostic Fix Metadata
+### Fix Metadata {#AUTOFIX-METADATA}
 
 Each diagnostic that supports autofix carries a `Fix` structure:
 
@@ -68,7 +68,7 @@ pub enum FixSource {
 }
 ```
 
-### VS Code Extension Integration
+### VS Code Integration {#AUTOFIX-MASS-VSCODE}
 
 The extension exposes Mass Autofix through:
 
@@ -80,7 +80,7 @@ The extension exposes Mass Autofix through:
    - `Basilisk: Fix All in Workspace`
 3. **CLI** — `basilisk fix [--unsafe] [path]`
 
-### Conflict Resolution
+### Conflict Resolution {#AUTOFIX-CONFLICTS}
 
 When multiple fixes target overlapping text ranges in the same file:
 
@@ -89,21 +89,21 @@ When multiple fixes target overlapping text ranges in the same file:
 3. The losing fix is skipped and reported as "skipped due to conflict".
 4. After applying all non-conflicting fixes, diagnostics are re-evaluated. Skipped fixes may become applicable on the next pass.
 
-### Undo
+### Undo {#AUTOFIX-UNDO}
 
 Mass Autofix is a single undo unit in VS Code. One `Ctrl+Z` reverts all changes from the batch.
 
 ---
 
-## Feature 2: Gradual Adoption Mode
+## Gradual Adoption Mode {#AUTOFIX-ADOPTION}
 
-### Overview
+### Overview {#AUTOFIX-ADOPTION-OVERVIEW}
 
 After Mass Autofix has done everything it can, there will still be diagnostics that cannot be auto-fixed. In a strict-by-default checker, these are **errors** — red squiggles that block the user's flow.
 
 Gradual Adoption Mode **demotes all remaining unfixable errors to warnings per-file**. The user sees yellow instead of red. They can work productively and fix warnings one by one at their own pace.
 
-### How It Works
+### How It Works {#AUTOFIX-ADOPTION-FLOW}
 
 1. User triggers **"Basilisk: Adopt File"** (or "Adopt Workspace").
 2. Basilisk runs Mass Autofix (safe only) on the target scope.
@@ -113,7 +113,7 @@ Gradual Adoption Mode **demotes all remaining unfixable errors to warnings per-f
 4. The override list is written to a `.basilisk/adoptions.toml` file in the project root.
 5. From this point on, Basilisk uses `Warning` severity for those codes in those files.
 
-### Adoption File Format
+### Adoption File Format {#AUTOFIX-ADOPTION-FILE}
 
 ```toml
 # .basilisk/adoptions.toml
@@ -129,14 +129,14 @@ demoted = ["BSK-E0001", "BSK-E0003", "BSK-E0012"]
 demoted = ["BSK-E0001", "BSK-E0002"]
 ```
 
-### Behavior Rules
+### Behavior Rules {#AUTOFIX-ADOPTION-RULES}
 
 - **New code is still strict.** If you create a new file, all rules are errors. Adoption only applies to files that have been explicitly adopted.
 - **New violations in adopted files are still errors.** If an adopted file has `BSK-E0001` demoted, and the user adds a *new* function with a missing type annotation, that new `BSK-E0001` is still a warning (the demotion is per-code-per-file, not per-instance). This is intentional — the user should not be blocked.
 - **Fixing all instances of a demoted code auto-removes the override.** When Basilisk detects that a file has zero remaining instances of a demoted code, it removes that code from the adoption file. The file progressively "graduates" to full strictness.
 - **Manual un-adoption.** The user can remove entries from `adoptions.toml` manually or via `Basilisk: Un-adopt File` to restore full strictness.
 
-### VS Code Extension Integration
+### VS Code Integration {#AUTOFIX-ADOPTION-VSCODE}
 
 1. **Command Palette**:
    - `Basilisk: Adopt File` — autofix + demote remaining errors for current file
@@ -147,76 +147,11 @@ demoted = ["BSK-E0001", "BSK-E0002"]
 
 ---
 
-## Feature 3: AI Typing (Hooks — Future Implementation)
-
-### Overview
+## AI Typing Hooks {#AUTOFIX-AI}
 
 AI Typing is an AI-assisted type inference feature that goes beyond what deterministic analysis can achieve. When Basilisk encounters a diagnostic it cannot autofix (typically missing type information), it feeds the **full analyzer context** — the AST, inferred types, call graph, usage patterns, and surrounding code — to an AI model. The model returns its best guess for the correct fix.
 
-This is **not** "run AI over the codebase." It is a targeted, context-rich query where the analyzer provides structured diagnostic context and the AI provides a structured fix response.
-
-### How It Works
-
-1. **Analyzer produces a diagnostic** with no deterministic fix available (e.g., `BSK-E0001: Missing parameter type annotation` where usage analysis is ambiguous).
-2. **The fix pipeline checks for AI hooks.** If AI Typing is enabled, it assembles a context payload:
-   - The diagnostic itself (code, message, location)
-   - The function/class/module AST surrounding the diagnostic
-   - All type information Basilisk has already inferred
-   - Call sites for the function (who calls it, with what types)
-   - Import graph (what types are available)
-   - Any docstrings or comments that hint at intent
-3. **The context payload is sent to the AI model** via a defined interface (see below).
-4. **The AI returns a `Fix`** with `source: FixSource::AiAssisted` and `safety: FixSafety::Unsafe` (AI fixes are always classified as unsafe).
-5. **The fix is presented to the user** with clear indication that it is AI-generated. It is never auto-applied without user confirmation.
-
-### Context Payload Structure
-
-```rust
-pub struct AiTypingRequest {
-    /// The diagnostic to fix
-    pub diagnostic: Diagnostic,
-    /// AST context around the diagnostic location
-    pub ast_context: AstContext,
-    /// All type information inferred so far for this scope
-    pub inferred_types: Vec<InferredType>,
-    /// Call sites that reference the target symbol
-    pub call_sites: Vec<CallSite>,
-    /// Available types from imports and builtins
-    pub available_types: Vec<TypeName>,
-    /// Raw source lines surrounding the diagnostic
-    pub source_context: String,
-}
-
-pub struct AiTypingResponse {
-    /// The proposed fix
-    pub fix: Fix,
-    /// Confidence score (0.0 - 1.0)
-    pub confidence: f32,
-    /// Human-readable explanation of why this type was chosen
-    pub reasoning: String,
-}
-```
-
-### Hook Interface
-
-The AI Typing system is designed as a **trait-based hook** so that:
-
-- Different AI providers can be plugged in (Claude, local models, etc.)
-- The feature can be disabled entirely (default)
-- Testing can use mock implementations
-
-```rust
-pub trait AiTypingProvider: Send + Sync {
-    /// Given a diagnostic context, return a proposed fix
-    fn suggest_fix(
-        &self,
-        request: AiTypingRequest,
-    ) -> Result<Option<AiTypingResponse>, AiTypingError>;
-
-    /// Whether this provider is available and configured
-    fn is_available(&self) -> bool;
-}
-```
+> For the full AI provider abstraction, request/response types, and implementation plan, see [LSP-AI-SPEC.md](LSP-AI-SPEC.md). This section documents only the integration point between Mass Autofix and the AI layer.
 
 ### Scope
 
@@ -231,7 +166,7 @@ This ensures the fix pipeline is AI-ready without blocking the core autofix and 
 
 ---
 
-## Summary
+## Summary {#AUTOFIX-SUMMARY}
 
 | Feature | User sees | Scope | Safety |
 |---|---|---|---|

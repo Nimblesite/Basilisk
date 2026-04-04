@@ -1,10 +1,10 @@
 # Basilisk Profiling — Specification
 
-## Goal
+## Goal {#PROFILE-GOAL}
 
 Embed a state-of-the-art Python profiler directly into the Basilisk LSP. No `pip install`. No separate tool. One binary does type checking, debugging, and profiling. The profiler attaches to running Python processes, samples call stacks, and surfaces hotspots inline in the editor — VS Code and Zed.
 
-## Why py-spy
+## Why py-spy {#PROFILE-PYSPY}
 
 py-spy is a **Rust crate on crates.io**. Basilisk is Rust. This is the only Python profiler that can be embedded as a library dependency in a Rust project.
 
@@ -22,7 +22,7 @@ py-spy is a **Rust crate on crates.io**. Basilisk is Rust. This is the only Pyth
 
 py-spy reads the target process's memory directly via OS calls (`vm_read` on macOS, `process_vm_readv` on Linux, `ReadProcessMemory` on Windows). It resolves the CPython interpreter state and walks `PyFrameObject` chains to build stack traces. Zero injection, zero instrumentation, zero overhead on the target.
 
-## Architecture
+## Architecture {#PROFILE-ARCH}
 
 ```mermaid
 graph TB
@@ -57,7 +57,7 @@ graph TB
     DIAG -->|"publishDiagnostics"| UI
 ```
 
-### Core Components
+### Core Components {#PROFILE-COMPONENTS}
 
 **`ProfileSessionManager`** — Owns active profiling sessions. One session per PID. Handles start/stop/snapshot lifecycle. Lives in the LSP server alongside `DebugSessionManager`.
 
@@ -69,9 +69,9 @@ graph TB
 
 **`ProfilingDiagnosticsGenerator`** — Converts aggregated samples into LSP diagnostics. Each hot line becomes a `Diagnostic` with severity `Hint` and a message like `"38.2% CPU (412 samples)"`. Publishes via `textDocument/publishDiagnostics`.
 
-## py-spy Rust API
+## py-spy Rust API {#PROFILE-API}
 
-### Dependency
+### Dependency {#PROFILE-DEP}
 
 ```toml
 # Cargo.toml
@@ -79,7 +79,7 @@ graph TB
 py-spy = "0.4"
 ```
 
-### Key Types
+### Key Types {#PROFILE-TYPES}
 
 ```rust
 // Attach to a running Python process
@@ -110,7 +110,7 @@ for trace in &traces {
 }
 ```
 
-### Sampler (Higher-Level)
+### Sampler {#PROFILE-SAMPLER}
 
 py-spy provides a `Sampler` struct that manages the sampling thread:
 
@@ -124,7 +124,7 @@ for sample in sampler {
 }
 ```
 
-### Platform Permissions
+### Platform Permissions {#PROFILE-PERMS}
 
 | Platform | Requirement | Impact |
 |---|---|---|
@@ -136,11 +136,11 @@ for sample in sampler {
 
 Alternative: if the Python process was spawned by Basilisk's debug session manager, the LSP already has the child PID and can trace it directly (parent can trace child on macOS without root).
 
-## LSP Protocol
+## LSP Protocol {#PROFILE-PROTOCOL}
 
-### Custom Requests
+### Custom Requests {#PROFILE-REQUESTS}
 
-#### `basilisk/profiler/start`
+#### basilisk/profiler/start {#PROFILE-REQUESTS-START}
 
 Start profiling a Python process.
 
@@ -178,7 +178,7 @@ If `duration` is set (seconds), profiling stops automatically after that time.
 { "code": -32004, "message": "Already profiling PID 12345 (session prof-a1b2c3)" }
 ```
 
-#### `basilisk/profiler/stop`
+#### basilisk/profiler/stop {#PROFILE-REQUESTS-STOP}
 
 Stop profiling and return results.
 
@@ -228,7 +228,7 @@ Stop profiling and return results.
 }
 ```
 
-#### `basilisk/profiler/snapshot`
+#### basilisk/profiler/snapshot {#PROFILE-REQUESTS-SNAPSHOT}
 
 Take a point-in-time snapshot without stopping the session.
 
@@ -241,7 +241,7 @@ Take a point-in-time snapshot without stopping the session.
 
 **Response:** Same as `stop`, but profiling continues.
 
-#### `basilisk/profiler/list`
+#### basilisk/profiler/list {#PROFILE-REQUESTS-LIST}
 
 List active profiling sessions.
 
@@ -260,9 +260,9 @@ List active profiling sessions.
 }
 ```
 
-### LSP Notifications
+### LSP Notifications {#PROFILE-NOTIFICATIONS}
 
-#### `basilisk/profiler/diagnostics`
+#### basilisk/profiler/diagnostics {#PROFILE-NOTIFICATIONS-DIAG}
 
 After `stop` or `snapshot`, the LSP publishes profiling diagnostics for every file that appeared in the samples:
 
@@ -304,7 +304,7 @@ After `stop` or `snapshot`, the LSP publishes profiling diagnostics for every fi
 
 Profiling diagnostics use severity `Hint` (4) so they don't pollute error/warning counts. They carry the source `"basilisk-profiler"` for filtering.
 
-#### `basilisk/profiler/progress`
+#### basilisk/profiler/progress {#PROFILE-NOTIFICATIONS-PROGRESS}
 
 Periodic notification during active profiling:
 
@@ -322,9 +322,9 @@ Periodic notification during active profiling:
 
 Editors can display this in a status indicator.
 
-## Sample Aggregation
+## Sample Aggregation {#PROFILE-AGGREGATION}
 
-### Data Structures
+### Data Structures {#PROFILE-AGGREGATION-STRUCTS}
 
 ```rust
 /// Accumulated profiling data for a single session
@@ -361,7 +361,7 @@ struct FunctionStats {
 }
 ```
 
-### Aggregation Logic
+### Aggregation Logic {#PROFILE-AGGREGATION-LOGIC}
 
 For each `get_stack_traces()` call:
 
@@ -374,7 +374,7 @@ For each `get_stack_traces()` call:
    - Record the stack as frame indices for speedscope export
 2. Increment `total_samples`
 
-### Hotspot Threshold
+### Hotspot Threshold {#PROFILE-AGGREGATION-THRESHOLD}
 
 Only lines/functions above a configurable threshold generate diagnostics:
 
@@ -382,9 +382,9 @@ Only lines/functions above a configurable threshold generate diagnostics:
 - **Function threshold**: 2% of total samples (default)
 - **Maximum diagnostics per file**: 20 (to avoid flooding)
 
-## Speedscope Export
+## Speedscope Export {#PROFILE-SPEEDSCOPE}
 
-### Format
+### Format {#PROFILE-SPEEDSCOPE-FORMAT}
 
 ```json
 {
@@ -413,7 +413,7 @@ Only lines/functions above a configurable threshold generate diagnostics:
 }
 ```
 
-### Mapping
+### Mapping {#PROFILE-SPEEDSCOPE-MAPPING}
 
 | py-spy | Speedscope |
 |---|---|
@@ -425,7 +425,7 @@ Only lines/functions above a configurable threshold generate diagnostics:
 
 Stacks in speedscope are root-first (callers before callees). py-spy returns leaf-first. Reverse the frame order when building `samples` entries.
 
-## Flamegraph SVG Export
+## Flamegraph SVG Export {#PROFILE-FLAMEGRAPH}
 
 For direct SVG flamegraph output, use the `inferno` crate (Rust port of Brendan Gregg's FlameGraph):
 
@@ -436,11 +436,11 @@ inferno = "0.12"
 
 Convert aggregated stacks to collapsed format and pipe through `inferno::flamegraph::from_lines()`.
 
-## Visualization Design System
+## Visualization Design System {#PROFILE-VIS}
 
 All profiler visualizations use the Basilisk brand identity. Dark-first. High contrast. Unmistakable.
 
-### Brand Palette for Profiling
+### Brand Palette for Profiling {#PROFILE-VIS-PALETTE}
 
 | Token | Hex | Usage |
 |---|---|---|
@@ -460,14 +460,14 @@ All profiler visualizations use the Basilisk brand identity. Dark-first. High co
 | `--prof-text` | `#f0f2f7` | Primary text |
 | `--prof-text-secondary` | `#8892a4` | Secondary text |
 
-### Typography
+### Typography {#PROFILE-VIS-TYPOGRAPHY}
 
 - **Headings**: Space Grotesk 600
 - **Labels / Data**: Space Grotesk 500
 - **Code / Filenames**: JetBrains Mono 400
 - **Numbers / Percentages**: JetBrains Mono 500
 
-### Animation Principles
+### Animation Principles {#PROFILE-VIS-ANIMATION}
 
 All profiler animations follow these rules:
 
@@ -477,11 +477,11 @@ All profiler animations follow these rules:
 4. **Loading states**: Pulsing Basilisk orange glow on `--prof-surface` background. No spinners.
 5. **Microinteractions**: Hover a flamegraph frame → subtle brightness increase + tooltip slide-in. Click → brief flash of `--prof-critical` before navigation.
 
-### Chart Components
+### Chart Components {#PROFILE-VIS-CHARTS}
 
 All charts are rendered in the VS Code WebviewPanel using a custom renderer built on Canvas 2D (no heavy dependencies like d3 — fast, minimal, Basilisk-styled).
 
-#### Flamegraph
+#### Flamegraph {#PROFILE-VIS-CHARTS-FLAME}
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -501,7 +501,7 @@ All charts are rendered in the VS Code WebviewPanel using a custom renderer buil
 - Search: highlight matching frames with `--prof-critical` border, dim non-matches
 - Animated zoom transitions (200ms ease)
 
-#### Donut Chart — Function Breakdown
+#### Donut Chart {#PROFILE-VIS-CHARTS-DONUT}
 
 ```
          ╭───────╮
@@ -520,7 +520,7 @@ All charts are rendered in the VS Code WebviewPanel using a custom renderer buil
 - Click a slice: filters flamegraph to that function's subtree
 - Legend sorted by percentage, top 5 named, rest grouped as "other"
 
-#### Timeline — CPU% Over Time
+#### Timeline {#PROFILE-VIS-CHARTS-TIMELINE}
 
 ```
 100% ┤
@@ -542,7 +542,7 @@ All charts are rendered in the VS Code WebviewPanel using a custom renderer buil
 - Live mode: line extends rightward in real-time during active profiling
 - Stacked area chart variant available (toggle)
 
-#### Sunburst Chart — Hierarchical View
+#### Sunburst Chart {#PROFILE-VIS-CHARTS-SUNBURST}
 
 ```
               ╭─────────╮
@@ -564,7 +564,7 @@ All charts are rendered in the VS Code WebviewPanel using a custom renderer buil
 - Click to drill down (center refocuses on clicked frame)
 - Animated transitions between drill-down levels (300ms ease)
 
-#### Memory Leak Retention Graph (see Memory Leak Tracking below)
+#### Memory Leak Retention Graph {#PROFILE-VIS-CHARTS-MEMLEAK}
 
 ```
      obj A ──refs──▶ obj B ──refs──▶ obj C
@@ -581,7 +581,7 @@ All charts are rendered in the VS Code WebviewPanel using a custom renderer buil
 - Click a node: expand its referrers/referents, show type, size, creation traceback
 - Filter by type, minimum size, or search by repr
 
-#### GIL Contention Gauge
+#### GIL Contention Gauge {#PROFILE-VIS-CHARTS-GIL}
 
 ```
        ╭──────────────────╮
@@ -596,7 +596,7 @@ All charts are rendered in the VS Code WebviewPanel using a custom renderer buil
 - Green (<10%), amber (10-30%), red (>30%)
 - Updates in real-time during live profiling
 
-### Inline Heat Map (Editor Decorations)
+### Inline Heat Map {#PROFILE-VIS-HEATMAP}
 
 In VS Code, hot lines get colored decorations in the editor gutter and after the line:
 
@@ -627,7 +627,7 @@ For memory profiling, a separate decoration track uses the purple palette:
   13 │ cache[key] = transform(data)        ██████ 180 MB retained  ⚠ LEAK
 ```
 
-### Profiler Dashboard Layout
+### Profiler Dashboard Layout {#PROFILE-VIS-DASHBOARD}
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -664,9 +664,9 @@ For memory profiling, a separate decoration track uses the purple palette:
 
 Summary cards animate on load (numbers count up). The entire dashboard updates live during active profiling. All charts are interactive and cross-linked: clicking a function in the table highlights it in the flamegraph and timeline.
 
-## Editor Integration
+## Editor Integration {#PROFILE-EDITOR}
 
-### VS Code
+### VS Code {#PROFILE-EDITOR-VSCODE}
 
 The VS Code extension provides rich profiling UX:
 
@@ -690,7 +690,7 @@ The VS Code extension provides rich profiling UX:
 - Basilisk orange pulsing dot when actively profiling
 - Click to stop
 
-### Zed
+### Zed {#PROFILE-EDITOR-ZED}
 
 Zed's extension API is limited. Profiling works through:
 
@@ -727,7 +727,7 @@ Open in browser: https://www.speedscope.app/#profileURL=...
 - The slash command output includes the path and a speedscope.app URL
 - User opens in browser for full interactive flamegraph
 
-### Shared Code
+### Shared Code {#PROFILE-EDITOR-SHARED}
 
 | Component | Code Location | Used By |
 |---|---|---|
@@ -742,9 +742,9 @@ Open in browser: https://www.speedscope.app/#profileURL=...
 
 100% of the profiler engine is shared. Editors differ only in visualization.
 
-## Memory Profiling & Leak Detection
+## Memory Profiling & Leak Detection {#PROFILE-MEMORY}
 
-### Overview
+### Overview {#PROFILE-MEMORY-OVERVIEW}
 
 The Basilisk memory profiler is a comprehensive memory analysis tool built on two engines:
 
@@ -753,7 +753,7 @@ The Basilisk memory profiler is a comprehensive memory analysis tool built on tw
 
 Together they answer: **what allocated the memory, how much, and what's holding on to it.**
 
-### Architecture
+### Architecture {#PROFILE-MEMORY-ARCH}
 
 ```mermaid
 graph TB
@@ -792,11 +792,11 @@ graph TB
     GRAPH_BUILDER -->|"Cycle data"| MEM_GRAPH
 ```
 
-### How It Works
+### How It Works {#PROFILE-MEMORY-HOWTO}
 
 Memory profiling requires an active **debug session** (debugpy). The LSP injects Python code into the running process via DAP `evaluate` requests. This is the same debug session that Basilisk already manages — no extra setup.
 
-#### Step 1: Start Memory Tracking
+#### Step 1: Start Memory Tracking {#PROFILE-MEMORY-START}
 
 The LSP injects:
 ```python
@@ -807,7 +807,7 @@ gc.set_debug(gc.DEBUG_SAVEALL)  # preserve uncollectable objects
 
 `tracemalloc.start(25)` captures allocation tracebacks up to 25 frames deep. This is the foundation for per-line allocation data and allocation flamegraphs.
 
-#### Step 2: Take Snapshots
+#### Step 2: Take Snapshots {#PROFILE-MEMORY-SNAPSHOT}
 
 At any point, the LSP injects:
 ```python
@@ -839,7 +839,7 @@ print('__BASILISK_MEM__' + json.dumps(mem_info))
 
 The LSP parses the `__BASILISK_MEM__` marker from the evaluate response.
 
-#### Step 3: Diff Snapshots (Leak Detection)
+#### Step 3: Diff Snapshots {#PROFILE-MEMORY-DIFF}
 
 Take two snapshots separated by time. The diff reveals:
 
@@ -869,7 +869,7 @@ for stat in diff:
 
 Lines that consistently grow across multiple snapshot diffs are flagged as **suspected leaks**.
 
-#### Step 4: Reference Graph Walking (The Big One)
+#### Step 4: Reference Graph Walking {#PROFILE-MEMORY-REFGRAPH}
 
 This is where Basilisk does what no other IDE tool does. When you want to know **why** an object is alive — what's holding a reference to it — the LSP injects an introspection script that walks the reference graph using `gc.get_referrers()`.
 
@@ -1036,9 +1036,9 @@ def _detect_cycles(nodes, edges):
 
 This script is injected as a single DAP `evaluate` call. The result is a complete reference graph that the editor renders as an interactive force-directed visualization.
 
-### LSP Commands — Memory
+### LSP Commands {#PROFILE-MEMORY-COMMANDS}
 
-#### `basilisk/memory/start`
+#### basilisk/memory/start {#PROFILE-MEMORY-CMD-START}
 
 Start memory tracking in the active debug session.
 
@@ -1063,7 +1063,7 @@ If `snapshotInterval` is set (seconds), auto-snapshot at that interval for trend
 }
 ```
 
-#### `basilisk/memory/snapshot`
+#### basilisk/memory/snapshot {#PROFILE-MEMORY-CMD-SNAPSHOT}
 
 Take an allocation snapshot.
 
@@ -1092,7 +1092,7 @@ Take an allocation snapshot.
 }
 ```
 
-#### `basilisk/memory/diff`
+#### basilisk/memory/diff {#PROFILE-MEMORY-CMD-DIFF}
 
 Compare two snapshots to find leaks.
 
@@ -1151,7 +1151,7 @@ Compare two snapshots to find leaks.
 }
 ```
 
-#### `basilisk/memory/references`
+#### basilisk/memory/references {#PROFILE-MEMORY-CMD-REFS}
 
 Walk the reference graph for a specific object type. This is the **core leak investigation tool**.
 
@@ -1244,7 +1244,7 @@ Walk the reference graph for a specific object type. This is the **core leak inv
 
 The `retentionPath` is the human-readable chain: **the module `src.cache` has an attribute `cache_instance` which is an `LRUCache`, which contains a key `'huge_dataset'` pointing to a `dict`, which holds your 248 MB `DataFrame`.** That's your leak.
 
-#### `basilisk/memory/objectsByType`
+#### basilisk/memory/objectsByType {#PROFILE-MEMORY-CMD-OBJECTS}
 
 List all objects of a given type with their sizes and reference counts.
 
@@ -1289,7 +1289,7 @@ List all objects of a given type with their sizes and reference counts.
 }
 ```
 
-#### `basilisk/memory/gcCollect`
+#### basilisk/memory/gcCollect {#PROFILE-MEMORY-CMD-GC}
 
 Force a garbage collection and report what was collected.
 
@@ -1313,7 +1313,7 @@ Force a garbage collection and report what was collected.
 
 Uncollectable objects (those with `__del__` in a cycle) are highlighted as **definite leaks**.
 
-### Visualization — Reference Graph
+### Visualization — Reference Graph {#PROFILE-MEMORY-VIS-REFGRAPH}
 
 The reference graph is the crown jewel of the memory profiler. It answers the question every developer asks when hunting leaks: **"What the fuck is holding on to this?"**
 
@@ -1371,7 +1371,7 @@ The reference graph is the crown jewel of the memory profiler. It answers the qu
 - **Filter controls**: filter by type, minimum size, or search by repr substring
 - **Layout modes**: force-directed (default), tree (hierarchical, top-down), radial (target at center)
 
-### Visualization — Memory Timeline
+### Visualization — Memory Timeline {#PROFILE-MEMORY-VIS-TIMELINE}
 
 ```
 Memory ┤
@@ -1395,7 +1395,7 @@ Memory ┤
 - Hover: crosshair showing exact values at that snapshot
 - Click: drill into that snapshot's top allocations
 
-### Visualization — Allocation Flamegraph
+### Visualization — Allocation Flamegraph {#PROFILE-MEMORY-VIS-FLAME}
 
 Same flamegraph component as CPU profiling, but:
 - X-axis = bytes allocated (not time)
@@ -1403,7 +1403,7 @@ Same flamegraph component as CPU profiling, but:
 - Each frame shows `function_name (file:line) — 24.5 MB (15,234 objects)`
 - Answers: "Where did the memory come from?" (allocation callstack)
 
-### Leak Confidence Scoring
+### Leak Confidence Scoring {#PROFILE-MEMORY-CONFIDENCE}
 
 Not all growing allocations are leaks. Basilisk scores suspected leaks:
 
@@ -1421,7 +1421,7 @@ The editor shows confidence badges next to suspected leak diagnostics:
   35 │ results.append(row)             ████ 5 MB growth  ℹ LOW — may be normal accumulation
 ```
 
-### Diagnostic Codes — Memory
+### Diagnostic Codes {#PROFILE-MEMORY-CODES}
 
 | Code | Severity | Meaning |
 |---|---|---|
@@ -1431,7 +1431,7 @@ The editor shows confidence badges next to suspected leak diagnostics:
 | `BSK-MEM-CYCLE` | Error | Reference cycle with `__del__` — definite leak, uncollectable |
 | `BSK-MEM-UNCOLLECTABLE` | Error | gc reports uncollectable object |
 
-### Integration with CPU Profiler
+### Integration with CPU Profiler {#PROFILE-MEMORY-CPU-INTEGRATION}
 
 CPU and memory profiling can run simultaneously. The dashboard shows both:
 
@@ -1439,7 +1439,7 @@ CPU and memory profiling can run simultaneously. The dashboard shows both:
 - **Correlated flamegraph**: toggle between CPU time and memory allocation views of the same call stacks
 - **"Hot and Heavy" filter**: show only functions that are both CPU-intensive AND memory-intensive — the real optimization targets
 
-### Shared Code — Memory
+### Shared Code {#PROFILE-MEMORY-SHARED}
 
 | Component | Code Location | Used By |
 |---|---|---|
@@ -1454,9 +1454,9 @@ CPU and memory profiling can run simultaneously. The dashboard shows both:
 
 All memory analysis logic lives in the LSP. The editors only handle visualization.
 
-## Permissions Model
+## Permissions Model {#PROFILE-PERMISSIONS}
 
-### macOS
+### macOS {#PROFILE-PERMISSIONS-MACOS}
 
 `vm_read` (Mach task port access) requires one of:
 - Running as root
@@ -1470,20 +1470,20 @@ All memory analysis logic lives in the LSP. The editors only handle visualizatio
 
 2. **External process profiling (elevation needed):** Spawn `basilisk-profiler-helper` via `osascript -e 'do shell script "..." with administrator privileges'`. The helper runs as root, attaches to the target via py-spy, and streams samples back to the LSP over a Unix domain socket. The user sees a single macOS password prompt.
 
-### Linux
+### Linux {#PROFILE-PERMISSIONS-LINUX}
 
 Works without root if `/proc/sys/kernel/yama/ptrace_scope` is `0` (classic). Many distros default to `1` (restricted). Options:
 - `sudo basilisk lsp` (heavy-handed)
 - `sudo setcap cap_sys_ptrace+ep $(which basilisk)` (one-time, persistent)
 - Profile child processes only (no restriction)
 
-### Windows
+### Windows {#PROFILE-PERMISSIONS-WINDOWS}
 
 `ReadProcessMemory` works without elevation for processes owned by the same user. No special handling needed.
 
-## Configuration
+## Configuration {#PROFILE-CONFIG}
 
-### LSP Settings
+### LSP Settings {#PROFILE-CONFIG-SETTINGS}
 
 ```json
 {
@@ -1503,7 +1503,7 @@ Works without root if `/proc/sys/kernel/yama/ptrace_scope` is `0` (classic). Man
 }
 ```
 
-### Diagnostic Codes
+### Diagnostic Codes {#PROFILE-CONFIG-CODES}
 
 | Code | Severity | Meaning |
 |---|---|---|
@@ -1511,7 +1511,7 @@ Works without root if `/proc/sys/kernel/yama/ptrace_scope` is `0` (classic). Man
 | `BSK-PROF-FUNC` | Hint | Hot function (above threshold) |
 | `BSK-PROF-GIL` | Info | GIL contention detected (thread frequently waiting for GIL) |
 
-## Error Handling
+## Error Handling {#PROFILE-ERRORS}
 
 | Scenario | Error Code | Message | Recovery |
 |---|---|---|---|
@@ -1522,7 +1522,7 @@ Works without root if `/proc/sys/kernel/yama/ptrace_scope` is `0` (classic). Man
 | Process exited during profiling | N/A | Session auto-stops, partial results returned | Normal completion |
 | Unsupported Python version | -32005 | "Python {version} not supported (need 3.3+)" | Upgrade Python |
 
-## Performance Targets
+## Performance Targets {#PROFILE-PERF}
 
 | Metric | Target |
 |---|---|
@@ -1532,34 +1532,34 @@ Works without root if `/proc/sys/kernel/yama/ptrace_scope` is `0` (classic). Man
 | Speedscope export for 60K samples | <200ms |
 | Flamegraph SVG for 60K samples | <500ms |
 
-## Testing Strategy
+## Testing Strategy {#PROFILE-TESTING}
 
-### Unit Tests
+### Unit Tests {#PROFILE-TESTING-UNIT}
 
 - `aggregator.rs`: Verify hit counts, function stats, threshold filtering
 - `export.rs`: Verify speedscope JSON matches schema, frame deduplication, stack reversal
 - `diagnostics.rs`: Verify diagnostic message format, severity, threshold filtering
 
-### Integration Tests
+### Integration Tests {#PROFILE-TESTING-INTEGRATION}
 
 - Start a known Python script, attach profiler, verify hot function matches expected bottleneck
 - Profile a debug session, verify PID auto-detection
 - Verify speedscope output opens correctly in speedscope.app
 - Verify diagnostics appear for hot lines and disappear after clearing
 
-### E2E Tests (VS Code)
+### E2E Tests (VS Code) {#PROFILE-TESTING-E2E-VSCODE}
 
 - Command palette "Profile" → attach to running script → stop → verify flamegraph opens
 - Debug session → "Profile Debug Session" → verify inline decorations appear
 - Verify diagnostics update on snapshot
 
-### E2E Tests (Zed)
+### E2E Tests (Zed) {#PROFILE-TESTING-E2E-ZED}
 
 - `/profile {pid}` → verify slash command output contains hot functions
 - `/profstop` → verify speedscope file written
 - Verify hint diagnostics appear for hot lines
 
-### Platform Tests
+### Platform Tests {#PROFILE-TESTING-PLATFORM}
 
 - macOS: verify privilege escalation prompt appears for external process
 - macOS: verify debug-session profiling works without elevation

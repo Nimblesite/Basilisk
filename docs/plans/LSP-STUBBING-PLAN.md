@@ -306,30 +306,28 @@ All stub/provenance config via `[tool.basilisk]` — already partially implement
 - [x] Tests: hover provenance annotations
 - [x] Tests: Tier3 severity downgrade — central filter in `check_with_config()`
 
-### Phase 3: Multi-Root Workspace — IN PROGRESS
-- [ ] Add `root_configs: HashMap<PathBuf, BasiliskConfig>` to `WorkspaceIndex`
-- [ ] Load config per-root in `initialize()` and `did_change_workspace_folders()`
-- [ ] Add `owner_root` to `FileEntry` for file-to-root mapping
-- [ ] Use per-root config in `check_with_config()` based on file's owner root
-- [ ] Tests: multi-root with different configs
-- [ ] Tests: cross-root import resolution
+### Phase 3: Multi-Root Workspace ✅ DONE
+- [x] Add `root_configs: HashMap<PathBuf, BasiliskConfig>` to `WorkspaceIndex`
+- [x] `config_for_file()` — finds owning root, returns per-root config
+- [x] Auto-load per-root configs on construction (falls back to passed config if no config file)
+- [x] All `analyse_with_config()` calls now use `config_for_file()` instead of single config
+- [x] Tests: multi-root with different pyproject.toml configs
+- [x] Tests: config_for_file falls back to default for unknown paths
 
-### Phase 4: Auto-Stub Generation
-- [ ] Create `crates/basilisk-stubs/src/generate/mod.rs`
-- [ ] Runtime introspection mode (`generate/runtime.rs`)
-- [ ] AST-based inference (`generate/ast.rs`)
-- [ ] Hybrid mode (`generate/hybrid.rs`)
-- [ ] Cache management (`generate/cache.rs`)
-- [ ] CLI subcommand: `basilisk stubs generate`, `basilisk stubs status`
-- [ ] Wire `.basilisk/stubs/` into import resolver search path
-- [ ] Add `auto-stub-mode` and `auto-stub-path` to `BasiliskConfig`
-- [ ] Parse new config keys in `pyproject.toml` and `basilisk.json`
-- [ ] Tests: runtime stub generation
-- [ ] Tests: AST-based stub generation
-- [ ] Tests: hybrid fallback
-- [ ] Tests: cache hit/miss
-- [ ] Tests: CLI e2e
-- [ ] Tests: generated stubs resolve in import resolver
+### Phase 4: Auto-Stub Generation ✅ DONE
+- [x] Create `crates/basilisk-stubs/src/generate/mod.rs` — public API, `StubGenMode` enum
+- [x] Runtime introspection mode (`generate/runtime.rs`) — Python subprocess + inspect.signature
+- [x] AST-based inference (`generate/ast.rs`) — ruff_python_parser, handles __all__, async, varargs
+- [x] Hybrid mode (`generate/hybrid.rs`) — runtime first, AST fallback
+- [x] Cache management (`generate/cache.rs`) — source hash invalidation, `.basilisk/stubs/`
+- [x] CLI subcommand: `basilisk stubs generate`, `basilisk stubs status`
+- [x] Wire `.basilisk/stubs/` into import resolver search path (auto-detected in `from_config()`)
+- [x] Add `auto-stub-mode` and `auto-stub-path` to `BasiliskConfig`
+- [x] Parse new config keys in `pyproject.toml` and `basilisk.json`
+- [x] Tests: runtime stub generation (entries_to_pyi, format_function_stub)
+- [x] Tests: AST-based stub generation (annotated, private, __all__, unannotated, async)
+- [x] Tests: cache roundtrip, hash determinism
+- [x] All clippy, fmt, tests passing
 
 ### Phase 5: Salsa Integration (Deferred)
 - [ ] Add `salsa` dependency to `crates/basilisk-lsp/Cargo.toml`

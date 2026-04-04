@@ -6,7 +6,7 @@ This spec defines the AI layer in Basilisk's LSP server. AI enhances every part 
 
 ---
 
-## Design Principles
+## Design Principles {#LSPAI-PRINCIPLES}
 
 1. **Model-agnostic.** Basilisk never imports an AI SDK. It defines a trait. Providers implement it. Swap models by changing a config line.
 2. **Structured in, structured out.** The LSP sends rich analyzer context (AST, types, call graph, diagnostics). The provider returns structured fixes. No "paste this code and ask GPT to fix it" — the AI gets the same context the type checker has.
@@ -17,9 +17,9 @@ This spec defines the AI layer in Basilisk's LSP server. AI enhances every part 
 
 ---
 
-## Provider Abstraction
+## Provider Abstraction {#LSPAI-PROVIDER}
 
-### The `AiProvider` Trait
+### AiProvider Trait {#LSPAI-TRAIT}
 
 The core abstraction. Every AI integration implements this. The LSP server holds a `Box<dyn AiProvider>` and doesn't know or care what's behind it.
 
@@ -133,7 +133,7 @@ pub trait AiProvider: Send + Sync {
 }
 ```
 
-### Provider Capabilities
+### Provider Capabilities {#LSPAI-CAPS}
 
 Not all models are equal. A 7B local model shouldn't be asked to do complex cross-file refactoring. The provider declares what it can do.
 
@@ -203,7 +203,7 @@ pub struct AiProviderCapabilities {
 
 Providers should set capabilities honestly. The LSP trusts these flags — it won't offer features the provider can't handle.
 
-### Provider Errors
+### Provider Errors {#LSPAI-ERRORS}
 
 ```rust
 pub enum AiProviderError {
@@ -224,11 +224,11 @@ pub enum AiProviderError {
 
 ---
 
-## Context Payload
+## Context Payload {#LSPAI-CONTEXT}
 
 The AI doesn't get raw source and a prayer. It gets the same structured data the type checker uses.
 
-### `AiFixRequest`
+### AiFixRequest {#LSPAI-TYPES-FIX-REQ}
 
 ```rust
 pub struct AiFixRequest {
@@ -300,7 +300,7 @@ pub enum AvailableTypeSource {
 }
 ```
 
-### `AiFixResponse`
+### AiFixResponse {#LSPAI-TYPES-FIX-RESP}
 
 ```rust
 pub struct AiFixResponse {
@@ -328,7 +328,7 @@ pub struct AlternativeFix {
 }
 ```
 
-### `AiImportRequest` / `AiImportResponse`
+### AiImportRequest / AiImportResponse {#LSPAI-TYPES-IMPORT}
 
 ```rust
 pub struct AiImportRequest {
@@ -383,7 +383,7 @@ pub struct ImportSuggestion {
 }
 ```
 
-### `AiRenameRequest` / `AiRenameResponse`
+### AiRenameRequest / AiRenameResponse {#LSPAI-TYPES-RENAME}
 
 ```rust
 pub struct AiRenameRequest {
@@ -433,7 +433,7 @@ pub struct RenameSuggestion {
 }
 ```
 
-### `AiRefactorRequest` / `AiRefactorResponse`
+### AiRefactorRequest / AiRefactorResponse {#LSPAI-TYPES-REFACTOR}
 
 ```rust
 pub struct AiRefactorRequest {
@@ -479,7 +479,7 @@ pub struct RefactorSuggestion {
 }
 ```
 
-### `AiExplainRequest` / `AiExplainResponse`
+### AiExplainRequest / AiExplainResponse {#LSPAI-TYPES-EXPLAIN}
 
 ```rust
 pub struct AiExplainRequest {
@@ -499,7 +499,7 @@ pub struct AiExplainResponse {
 }
 ```
 
-### `AiDocstringRequest` / `AiDocstringResponse`
+### AiDocstringRequest / AiDocstringResponse {#LSPAI-TYPES-DOCSTRING}
 
 ```rust
 pub struct AiDocstringRequest {
@@ -534,7 +534,7 @@ pub struct AiDocstringResponse {
 }
 ```
 
-### `AiStubRequest` / `AiStubResponse`
+### AiStubRequest / AiStubResponse {#LSPAI-TYPES-STUB}
 
 ```rust
 pub struct AiStubRequest {
@@ -568,7 +568,7 @@ pub struct AiStubResponse {
 }
 ```
 
-### `AiCompletionRequest` / `AiCompletionResponse`
+### AiCompletionRequest / AiCompletionResponse {#LSPAI-TYPES-COMPLETION}
 
 ```rust
 pub struct AiCompletionRequest {
@@ -615,7 +615,7 @@ pub struct AiCompletionItem {
 }
 ```
 
-### `AiSemanticSearchRequest` / `AiSemanticSearchResponse`
+### AiSemanticSearchRequest / AiSemanticSearchResponse {#LSPAI-TYPES-SEARCH}
 
 ```rust
 pub struct AiSemanticSearchRequest {
@@ -651,7 +651,7 @@ pub struct SemanticSearchResult {
 }
 ```
 
-### `AiDeadCodeRequest` / `AiDeadCodeResponse`
+### AiDeadCodeRequest / AiDeadCodeResponse {#LSPAI-TYPES-DEADCODE}
 
 ```rust
 pub struct AiDeadCodeRequest {
@@ -688,7 +688,7 @@ pub struct AiDeadCodeResponse {
 }
 ```
 
-### `AiModernizeRequest` / `AiModernizeResponse`
+### AiModernizeRequest / AiModernizeResponse {#LSPAI-TYPES-MODERNIZE}
 
 ```rust
 pub struct AiModernizeRequest {
@@ -721,7 +721,7 @@ pub struct ModernizeSuggestion {
 }
 ```
 
-### `AiNextEditRequest` / `AiNextEditResponse`
+### AiNextEditRequest / AiNextEditResponse {#LSPAI-TYPES-NEXTEDIT}
 
 ```rust
 pub struct AiNextEditRequest {
@@ -771,11 +771,11 @@ pub struct NextEditPrediction {
 
 ---
 
-## Built-in Provider Implementations
+## Built-in Provider Implementations {#LSPAI-PROVIDERS}
 
 Basilisk ships with provider implementations for common backends. No AI SDK dependencies in the core — providers use HTTP/process I/O only.
 
-### `NoOpProvider` (Default)
+### NoOpProvider {#LSPAI-PROVIDERS-NOOP}
 
 ```rust
 pub struct NoOpProvider;
@@ -783,7 +783,7 @@ pub struct NoOpProvider;
 
 Returns `is_available() = false`. All AI features silently disabled. Zero overhead.
 
-### `OpenAiCompatibleProvider`
+### OpenAiCompatibleProvider {#LSPAI-PROVIDERS-OPENAI}
 
 Covers any model behind an OpenAI-compatible API: OpenAI, Azure OpenAI, Ollama, LM Studio, vLLM, llama.cpp server, Groq, Together, Fireworks, etc.
 
@@ -807,7 +807,7 @@ model = "codellama:13b"
 # api-key via BASILISK_AI_API_KEY env var (never in config files)
 ```
 
-### `AnthropicProvider`
+### AnthropicProvider {#LSPAI-PROVIDERS-ANTHROPIC}
 
 Claude models via the Anthropic API.
 
@@ -819,7 +819,7 @@ pub struct AnthropicProvider {
 }
 ```
 
-### `CopilotProvider`
+### CopilotProvider {#LSPAI-PROVIDERS-COPILOT}
 
 GitHub Copilot integration. Uses the Copilot LSP's existing authentication and model routing — no separate API key needed if the user has Copilot active.
 
@@ -833,7 +833,7 @@ pub struct CopilotProvider {
 
 This provider proxies through the GitHub Copilot agent that VS Code / Neovim already runs. If Copilot is installed and authenticated, Basilisk can use it. No extra setup.
 
-### `ProcessProvider`
+### ProcessProvider {#LSPAI-PROVIDERS-PROCESS}
 
 Run any local model via a subprocess. For users who have their own inference setup (llama.cpp CLI, custom scripts, etc.).
 
@@ -849,9 +849,9 @@ The subprocess receives an `AiFixRequest` as JSON on stdin and writes an `AiFixR
 
 ---
 
-## AI-Powered LSP Features
+## AI-Powered LSP Features {#LSPAI-FEATURES}
 
-### Feature 1: AI Type Annotation Suggestions
+### Feature 1: AI Type Annotation Suggestions {#LSPAI-FEATURE-ANNOTATIONS}
 
 **When**: A diagnostic fires for a missing type annotation (BSK-E0001 through BSK-E0005) and the deterministic fix provider either has no fix or only has a low-confidence heuristic.
 
@@ -866,7 +866,7 @@ The subprocess receives an `AiFixRequest` as JSON on stdin and writes an `AiFixR
 
 **Why this works**: The model isn't guessing blind. It sees that `data` is passed to `json.loads()` in the function body, that the function is called with `str` arguments in 3 places, and that `str` is available in scope. It returns `data: str` with high confidence.
 
-### Feature 2: AI Type Error Fixes
+### Feature 2: AI Type Error Fixes {#LSPAI-FEATURE-TYPEERROR}
 
 **When**: A type error diagnostic (BSK-E0010 through BSK-E0025) fires and there's no deterministic fix.
 
@@ -881,7 +881,7 @@ The subprocess receives an `AiFixRequest` as JSON on stdin and writes an `AiFixR
 
 **Safety**: Always `Unsafe`. The model might suggest `int(x)` when the real fix is changing the annotation. User reviews.
 
-### Feature 3: AI-Enhanced Mass Autofix (Optional Enhancement)
+### Feature 3: AI-Enhanced Mass Autofix {#LSPAI-FEATURE-MASSAUTOFIX}
 
 Mass Autofix is a **deterministic feature** defined in `LSP-MASS-AUTOFIX-SPEC.md`. It works without AI. AI is an optional second pass that handles the leftovers — diagnostics that deterministic fixers can't resolve.
 
@@ -898,7 +898,7 @@ Mass Autofix is a **deterministic feature** defined in `LSP-MASS-AUTOFIX-SPEC.md
 
 **Batch efficiency**: The `suggest_fixes_batch` method lets providers send all remaining diagnostics in one API call. For cloud models, this means one round-trip instead of N.
 
-### Feature 4: Diagnostic Explanation
+### Feature 4: Diagnostic Explanation {#LSPAI-FEATURE-EXPLAIN}
 
 **When**: User hovers over a diagnostic or explicitly requests explanation.
 
@@ -911,7 +911,7 @@ Mass Autofix is a **deterministic feature** defined in `LSP-MASS-AUTOFIX-SPEC.md
 
 **This is the lowest-risk AI feature.** It doesn't modify code. It only explains. Good candidate for small/local models.
 
-### Feature 5: AI Docstring Generation
+### Feature 5: AI Docstring Generation {#LSPAI-FEATURE-DOCSTRING}
 
 **When**: User requests docstring generation for a function or class.
 
@@ -922,7 +922,7 @@ Mass Autofix is a **deterministic feature** defined in `LSP-MASS-AUTOFIX-SPEC.md
 3. Model receives the function signature, body, inferred types, and call sites.
 4. Returns a docstring in the project's preferred style (Google, NumPy, reST — detected from existing docstrings or configured).
 
-### Feature 6: AI Import Resolution
+### Feature 6: AI Import Resolution {#LSPAI-FEATURE-IMPORT}
 
 **Enhances**: deterministic import resolver (`completion.rs`, cross-module analysis)
 
@@ -941,7 +941,7 @@ Mass Autofix is a **deterministic feature** defined in `LSP-MASS-AUTOFIX-SPEC.md
 
 **Safety**: `Unsafe`. Wrong import = wrong dependency. User reviews.
 
-### Feature 7: AI Rename Suggestions
+### Feature 7: AI Rename Suggestions {#LSPAI-FEATURE-RENAME}
 
 **Enhances**: deterministic rename (`references.rs`, F2 in editors)
 
@@ -959,7 +959,7 @@ Mass Autofix is a **deterministic feature** defined in `LSP-MASS-AUTOFIX-SPEC.md
 
 **Safety**: Safe-ish — it only suggests a name. The rename itself is deterministic. But the user still confirms.
 
-### Feature 8: AI Refactoring Suggestions
+### Feature 8: AI Refactoring Suggestions {#LSPAI-FEATURE-REFACTOR}
 
 **Enhances**: deterministic code actions (`code_actions/`)
 
@@ -992,7 +992,7 @@ Mass Autofix is a **deterministic feature** defined in `LSP-MASS-AUTOFIX-SPEC.md
 
 **Safety**: Always `Unsafe`. Refactoring changes behavior if the AI gets the boundaries wrong.
 
-### Feature 9: AI-Enhanced Completions
+### Feature 9: AI-Enhanced Completions {#LSPAI-FEATURE-COMPLETIONS}
 
 **Enhances**: deterministic completion (`completion.rs`)
 
@@ -1018,7 +1018,7 @@ User types "response."
                              └── too slow → discard, user sees deterministic list
 ```
 
-### Feature 10: AI Stub Generation
+### Feature 10: AI Stub Generation {#LSPAI-FEATURE-STUBS}
 
 **Enhances**: stub resolution (LSP-ARCHITECTURE-SPEC.md stub system, `basilisk stubs generate` CLI)
 
@@ -1039,7 +1039,7 @@ User types "response."
 
 **CLI integration**: `basilisk stubs generate --ai thirdparty` triggers this from the command line.
 
-### Feature 11: AI Dead Code Detection
+### Feature 11: AI Dead Code Detection {#LSPAI-FEATURE-DEADCODE}
 
 **Enhances**: deterministic reference counting (`code_lens.rs` "N references")
 
@@ -1057,7 +1057,7 @@ User types "response."
 
 **False positive prevention**: Without AI, dead code detection in Python is nearly useless for non-trivial projects because frameworks register everything dynamically. With AI, it becomes actually useful.
 
-### Feature 12: AI Code Modernization
+### Feature 12: AI Code Modernization {#LSPAI-FEATURE-MODERNIZE}
 
 **Enhances**: deterministic diagnostics (could be BSK-W#### modernization rules)
 
@@ -1091,7 +1091,7 @@ User types "response."
 
 **Python version awareness**: Suggestions only appear if the project's target Python version supports the feature. The model receives `python_version` in the request. No point suggesting `match` for a Python 3.8 project.
 
-### Feature 13: AI Semantic Search
+### Feature 13: AI Semantic Search {#LSPAI-FEATURE-SEARCH}
 
 **Enhances**: workspace symbol search (`symbols.rs`, Ctrl+T / `#` in editors)
 
@@ -1114,7 +1114,7 @@ User types "response."
 
 **Custom command**: `basilisk/ai/findByIntent` — can also be used programmatically.
 
-### Feature 14: AI Next-Edit Prediction
+### Feature 14: AI Next-Edit Prediction {#LSPAI-FEATURE-NEXTEDIT}
 
 **Enhances**: the entire editing flow (no deterministic equivalent)
 
@@ -1144,9 +1144,9 @@ User types "response."
 
 ---
 
-## Configuration
+## Configuration {#LSPAI-CONFIG}
 
-### `pyproject.toml`
+### pyproject.toml {#LSPAI-CONFIG-TOML}
 
 ```toml
 [tool.basilisk.ai]
@@ -1224,7 +1224,7 @@ next-edit-timeout-ms = 200
 next-edit-debounce-ms = 500
 ```
 
-### Editor Settings
+### Editor Settings {#LSPAI-CONFIG-EDITOR}
 
 All editors expose these under the `basilisk.ai` namespace:
 
@@ -1243,7 +1243,7 @@ All editors expose these under the `basilisk.ai` namespace:
 | `basilisk.ai.proactiveRefactoring` | `boolean` | `false` | Show AI refactoring hints proactively (as diagnostics) |
 | `basilisk.ai.semanticSearch` | `boolean` | `true` | Enable semantic search in workspace symbol picker |
 
-### Environment Variables
+### Environment Variables {#LSPAI-CONFIG-ENV}
 
 | Variable | Description |
 |----------|-------------|
@@ -1254,9 +1254,9 @@ All editors expose these under the `basilisk.ai` namespace:
 
 ---
 
-## LSP Protocol Integration
+## LSP Protocol Integration {#LSPAI-PROTOCOL}
 
-### Code Actions
+### Code Actions {#LSPAI-PROTOCOL-ACTIONS}
 
 AI-generated code actions use distinct `CodeActionKind` values so editors can filter them:
 
@@ -1288,7 +1288,7 @@ AI code actions carry extra data in the `data` field:
 }
 ```
 
-### Custom Commands
+### Custom Commands {#LSPAI-PROTOCOL-COMMANDS}
 
 | Command | Arguments | Response | Description |
 |---------|-----------|----------|-------------|
@@ -1305,7 +1305,7 @@ AI code actions carry extra data in the `data` field:
 | `basilisk/ai/suggestModernization` | `{uri, range}` | `AiModernizeResponse` | Suggest modern Python patterns |
 | `basilisk/ai/status` | `{}` | `{provider, available, capabilities}` | Check AI provider status |
 
-### Status Reporting
+### Status Reporting {#LSPAI-PROTOCOL-STATUS}
 
 When AI is enabled, the LSP reports provider status via `window/showMessage` on initialization:
 
@@ -1315,7 +1315,7 @@ When AI is enabled, the LSP reports provider status via `window/showMessage` on 
 
 ---
 
-## Context Truncation
+## Context Truncation {#LSPAI-TRUNCATION}
 
 Small local models can't handle 100K tokens of context. The LSP adapts:
 
@@ -1329,7 +1329,7 @@ Small local models can't handle 100K tokens of context. The LSP adapts:
 
 ---
 
-## Security & Privacy
+## Security & Privacy {#LSPAI-SECURITY}
 
 1. **API keys never in config files.** Always environment variables. The LSP refuses to read API keys from `pyproject.toml` or editor settings.
 2. **Local models = zero data exfiltration.** Ollama, LM Studio, llama.cpp all run on localhost. Nothing leaves the machine.
@@ -1339,7 +1339,7 @@ Small local models can't handle 100K tokens of context. The LSP adapts:
 
 ---
 
-## Relationship to Existing Specs
+## Relationship to Existing Specs {#LSPAI-RELATIONSHIPS}
 
 Mass Autofix is a **deterministic, standalone feature**. It does not require AI. It works without AI. AI does not replace it. This spec defines an **optional enhancement layer** that plugs into the existing fix pipeline for diagnostics that deterministic fixers cannot handle.
 
@@ -1357,11 +1357,11 @@ Mass Autofix is a **deterministic, standalone feature**. It does not require AI.
 
 ---
 
-## Testing Strategy
+## Testing Strategy {#LSPAI-TESTING}
 
 AI features are tested without real AI models. The provider trait enables this:
 
-### Mock Provider
+### Mock Provider {#LSPAI-TESTING-MOCK}
 
 ```rust
 pub struct MockProvider {
@@ -1385,7 +1385,7 @@ pub struct MockProvider {
 
 A mock provider that returns pre-configured responses for any AI feature. Used in E2E tests. Supports simulated latency for testing timeout behavior.
 
-### Test Categories
+### Test Categories {#LSPAI-TESTING-CATEGORIES}
 
 | Test | What it checks |
 |------|---------------|
@@ -1409,6 +1409,6 @@ A mock provider that returns pre-configured responses for any AI feature. Used i
 | **Next-edit prediction** | Edit debouncing works correctly; predictions for correct locations; ghost text shown/dismissed properly; too-slow predictions discarded |
 | **Feature isolation** | Disabling one feature doesn't affect others; capability flags respected; feature toggles in config override capabilities |
 
-### No Real API Calls in CI
+### No Real API Calls in CI {#LSPAI-TESTING-CI}
 
 Tests use `MockProvider` or `NoOpProvider`. Real provider integration is tested manually or in a dedicated integration test suite that requires explicit opt-in (`BASILISK_AI_INTEGRATION_TEST=1`).
