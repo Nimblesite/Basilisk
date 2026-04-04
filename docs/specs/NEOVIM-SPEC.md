@@ -6,7 +6,7 @@ A first-class Neovim plugin that connects to the same `basilisk lsp` binary as t
 
 **CRITICAL: AIMING FOR FEATURE PARITY BETWEEN NEOVIM, VS CODE, AND ZED EXTENSIONS**
 
-All LSP features, DAP integration, custom commands, configuration settings, and binary resolution are defined in **`LSP-ARCHITECTURE-SPEC.md`** — the single source of truth. This spec only documents **Neovim-specific implementation details**.
+All LSP features, DAP integration, custom commands, configuration settings, and binary resolution are defined in **[LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md)** — the single source of truth. This spec only documents **Neovim-specific implementation details**.
 
 ## Critical Docs
 

@@ -9,7 +9,7 @@ Share code between the Zed extension and the other crates AMAP - even if just sh
 
 **CRITICAL: AIMING FOR FEATURE PARITY BETWEEN ZED, VS CODE, AND NEOVIM EXTENSIONS**
 
-All LSP features, DAP integration, custom commands, configuration settings, and binary resolution are defined in **`LSP-ARCHITECTURE-SPEC.md`** — the single source of truth. This spec only documents **Zed-specific implementation details**.
+All LSP features, DAP integration, custom commands, configuration settings, and binary resolution are defined in **[LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md)** — the single source of truth. This spec only documents **Zed-specific implementation details**.
 
 CRITICAL: We only target Wasm 64 bit. We don't need to support 32 bit wasm for now
 
@@ -343,7 +343,7 @@ Target assets:
         "python": "/path/to/python3"
       },
       "settings": {
-        // All keys from LSP-ARCHITECTURE-SPEC.md "Shared Configuration Settings"
+        // All keys from LSP-ARCHITECTURE-SPEC.md §LSPARCH-CONFIG
         // nested under the "basilisk" key
         "inlayHints": {
           "parameterNames": true,

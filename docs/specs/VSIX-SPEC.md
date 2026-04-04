@@ -6,7 +6,7 @@ A first-class VS Code extension that connects to the `basilisk lsp` binary. The 
 
 **CRITICAL: AIMING FOR FEATURE PARITY BETWEEN VS CODE, ZED, AND NEOVIM EXTENSIONS**
 
-All LSP features, DAP integration, custom commands, configuration settings, and binary resolution are defined in **`LSP-ARCHITECTURE-SPEC.md`** — the single source of truth. This spec only documents **VS Code-specific implementation details**.
+All LSP features, DAP integration, custom commands, configuration settings, and binary resolution are defined in **[LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md)** — the single source of truth. This spec only documents **VS Code-specific implementation details**.
 
 ## Critical Docs
 

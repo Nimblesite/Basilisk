@@ -1,7 +1,7 @@
 # LSP Analysis Modes — Specification
 
 > **Scope**: How the LSP server decides which files to analyse and how symbol graphs are shared
-> **Related**: [LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md) — LSP features and protocol
+> **Related**: [LSP-ARCHITECTURE-SPEC.md §LSPARCH-FEATURES](LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES) — LSP features and protocol
 
 ---
 

@@ -855,9 +855,9 @@ The test runner asserts that compilation fails and the error output contains the
 
 ## References {#COMPILER-REFERENCES}
 
-- [CHECKER-ARCHITECTURE-SPEC.md](CHECKER-ARCHITECTURE-SPEC.md) -- Basilisk type system specification
+- [CHECKER-ARCHITECTURE-SPEC.md §CHKARCH-TYPESYS](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TYPESYS) -- Basilisk type system specification
 - [CHECKER-TYPE-INFERENCE-SPEC.md](CHECKER-TYPE-INFERENCE-SPEC.md) -- Type inference rules
-- [stub-strategy.md](stub-strategy.md) -- Stub resolution and type provenance
+- [CHECKER-STUB-RESOLUTION-SPEC.md](CHECKER-STUB-RESOLUTION-SPEC.md) -- Stub resolution and type provenance
 - [Python Language Reference (3.12)](https://docs.python.org/3.12/reference/)
 - [Python Typing Specification](https://typing.python.org/en/latest/spec/index.html)
 - [PEP Conformance Suite](https://github.com/python/typing/blob/main/conformance/README.md)
