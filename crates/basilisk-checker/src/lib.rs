@@ -101,10 +101,11 @@ pub fn check_with_config(
             }
 
             // 3. Cascade suppression: suppress downstream errors that reference
-            //    symbols from unresolved imports. BSK-E0010 itself is never
-            //    suppressed — it is the root-cause diagnostic.
-            if code != "BSK-E0010"
-                && code != "BSK-W0010"
+            //    symbols from unresolved imports. Only applies to type-checking
+            //    rules whose results depend on resolved import types. Structural
+            //    rules (Final, deprecated, Protocol, Generic params, etc.) fire
+            //    independently of type resolution and must never be suppressed.
+            if is_cascade_suppressible(code)
                 && should_suppress_cascade(&diag, &untyped_names, source)
             {
                 return None;
@@ -143,6 +144,25 @@ pub fn check_with_config(
             suppression::apply_overrides_at_line(diag, diag_line, &inline_overrides)
         })
         .collect()
+}
+
+/// Returns `true` if this diagnostic code can be cascade-suppressed.
+///
+/// Only type-checking rules whose results depend on knowing the resolved type
+/// of an imported symbol are eligible.  Structural / semantic rules (Final
+/// re-assignment, deprecated usage, Protocol member checks, Generic param
+/// validation, etc.) fire independently of import resolution.
+fn is_cascade_suppressible(code: &str) -> bool {
+    matches!(
+        code,
+        "BSK-E0012"  // wrong call
+        | "BSK-E0013" // attribute not found
+        | "BSK-E0014" // type mismatch
+        | "BSK-E0015" // missing return type
+        | "BSK-E0018" // undefined variable
+        | "BSK-E0041" // too few arguments
+        | "BSK-E0053" // assert_type mismatch
+    )
 }
 
 /// Check whether a diagnostic should be suppressed because it references a
