@@ -13,6 +13,8 @@
 //!    = see: https://www.basilisk-python.dev/errors/BSK-E0001
 //! ```
 
+use std::fmt::Write as _;
+
 use basilisk_checker::{Diagnostic, Severity};
 use colored::Colorize as _;
 
@@ -26,7 +28,7 @@ pub fn render_diagnostics(diagnostics: &[Diagnostic], sources: &[FileSource]) ->
         .iter()
         .inspect(|d| {
             let source = sources.iter().find(|s| s.path == d.path);
-            render_one(d, source.map(|s| s.text.as_str()));
+            print!("{}", format_one(d, source.map(|s| s.text.as_str())));
         })
         .filter(|d| d.severity == Severity::Error)
         .count()
@@ -41,13 +43,15 @@ fn color_severity(severity: Severity, text: &str) -> String {
     }
 }
 
-/// Render a single diagnostic to stdout in rustc style.
-pub(super) fn render_one(diag: &Diagnostic, source: Option<&str>) {
+/// Format a single diagnostic as a rustc-style string with ANSI colours.
+pub(super) fn format_one(diag: &Diagnostic, source: Option<&str>) -> String {
+    let mut out = String::new();
+
     // Header: error[BSK-E0001]: Message
     let severity_label = color_severity(diag.severity, &format!("{}", diag.severity));
     let code = format!("[{}]", diag.code.code).bold();
     let message = diag.message.bold();
-    println!("{severity_label}{code}: {message}");
+    let _ = writeln!(out, "{severity_label}{code}: {message}");
 
     // Location: --> path:line:col
     let location = source.map_or_else(
@@ -58,35 +62,44 @@ pub(super) fn render_one(diag: &Diagnostic, source: Option<&str>) {
         },
     );
 
-    println!("  {} {location}", "-->".blue().bold());
+    let _ = writeln!(out, "  {} {location}", "-->".blue().bold());
 
     // Source snippet with underline
     if let Some(src) = source {
-        render_snippet(src, diag.span.start_usize(), diag.span.end_usize(), diag.severity);
+        out.push_str(&format_snippet(
+            src,
+            diag.span.start_usize(),
+            diag.span.end_usize(),
+            diag.severity,
+        ));
     }
 
     // Annotations
     if let Some(help) = &diag.help {
-        println!(
+        let _ = writeln!(
+            out,
             "   {} {}: {help}",
             "=".blue().bold(),
             "help".cyan().bold(),
         );
     }
     if let Some(note) = &diag.note {
-        println!(
+        let _ = writeln!(
+            out,
             "   {} {}: {note}",
             "=".blue().bold(),
             "note".cyan().bold(),
         );
     }
-    println!(
+    let _ = writeln!(
+        out,
         "   {} {}: {}",
         "=".blue().bold(),
         "see".cyan().bold(),
         diag.code.docs_url,
     );
-    println!();
+    out.push('\n');
+    out
 }
 
 /// Convert a byte offset into (1-based line number, 1-based column number).
@@ -98,8 +111,8 @@ pub(super) fn byte_offset_to_line_col(source: &str, offset: usize) -> (usize, us
     (line, col)
 }
 
-/// Render a source line with a `^^^^` underline for the highlighted span.
-pub(super) fn render_snippet(source: &str, start: usize, end: usize, severity: Severity) {
+/// Format a source line with a `^^^^` underline for the highlighted span.
+pub(super) fn format_snippet(source: &str, start: usize, end: usize, severity: Severity) -> String {
     let (line_num, _) = byte_offset_to_line_col(source, start);
     let line_start = source[..start].rfind('\n').map_or(0, |p| p + 1);
     let line_text = source[line_start..].lines().next().unwrap_or("");
@@ -114,11 +127,14 @@ pub(super) fn render_snippet(source: &str, start: usize, end: usize, severity: S
     let line_num_str = line_num.to_string().blue().bold();
     let underline = color_severity(severity, &"^".repeat(underline_len));
 
-    println!("{pad}   {pipe}");
-    println!("{line_num_str} {pipe} {line_text}");
-    println!(
+    let mut out = String::new();
+    let _ = writeln!(out, "{pad}   {pipe}");
+    let _ = writeln!(out, "{line_num_str} {pipe} {line_text}");
+    let _ = writeln!(
+        out,
         "{pad}   {pipe} {spaces}{underline}",
         spaces = " ".repeat(col_start),
     );
-    println!("{pad}   {pipe}");
+    let _ = writeln!(out, "{pad}   {pipe}");
+    out
 }

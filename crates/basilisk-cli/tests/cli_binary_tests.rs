@@ -34,10 +34,20 @@ fn fixture(rel: &str) -> String {
 }
 
 fn run_check(paths: &[&str]) -> Result<Output, Box<dyn std::error::Error>> {
+    run_check_with_args(paths, &[])
+}
+
+fn run_check_with_args(
+    paths: &[&str],
+    extra_args: &[&str],
+) -> Result<Output, Box<dyn std::error::Error>> {
     let mut cmd = binary();
     let _ = cmd.arg("check");
     for p in paths {
         let _ = cmd.arg(p);
+    }
+    for a in extra_args {
+        let _ = cmd.arg(a);
     }
     Ok(cmd.output()?)
 }
@@ -265,6 +275,168 @@ fn output_severity_label_is_error() -> Result<(), Box<dyn std::error::Error>> {
         stdout(&out).contains("error[BSK-"),
         "severity label must be 'error', got:\n{}",
         stdout(&out)
+    );
+    Ok(())
+}
+
+// ── Terminal colours ─────────────────────────────────────────────────────────
+
+/// ANSI escape sequences produced by the `colored` crate.
+const BOLD_RED: &str = "\x1b[1;31m";
+const BOLD_BLUE: &str = "\x1b[1;34m";
+const BOLD_CYAN: &str = "\x1b[1;36m";
+const BOLD: &str = "\x1b[1m";
+
+#[test]
+fn color_always_emits_ansi_for_error_label() -> Result<(), Box<dyn std::error::Error>> {
+    let out = run_check_with_args(
+        &[&fixture("errors/e0001_single_param.py")],
+        &["--color", "always"],
+    )?;
+    let text = stdout(&out);
+    assert!(
+        text.contains(BOLD_RED),
+        "--color always must emit bold-red ANSI for error label, got:\n{text}"
+    );
+    Ok(())
+}
+
+#[test]
+fn color_always_emits_ansi_for_error_code() -> Result<(), Box<dyn std::error::Error>> {
+    let out = run_check_with_args(
+        &[&fixture("errors/e0001_single_param.py")],
+        &["--color", "always"],
+    )?;
+    let text = stdout(&out);
+    assert!(
+        text.contains(&format!("{BOLD}[BSK-E0001]")),
+        "--color always must emit bold error code, got:\n{text}"
+    );
+    Ok(())
+}
+
+#[test]
+fn color_always_emits_ansi_for_arrow() -> Result<(), Box<dyn std::error::Error>> {
+    let out = run_check_with_args(
+        &[&fixture("errors/e0001_single_param.py")],
+        &["--color", "always"],
+    )?;
+    let text = stdout(&out);
+    assert!(
+        text.contains(&format!("{BOLD_BLUE}-->")),
+        "--color always must emit bold-blue arrow, got:\n{text}"
+    );
+    Ok(())
+}
+
+#[test]
+fn color_always_emits_ansi_for_pipe() -> Result<(), Box<dyn std::error::Error>> {
+    let out = run_check_with_args(
+        &[&fixture("errors/e0001_single_param.py")],
+        &["--color", "always"],
+    )?;
+    let text = stdout(&out);
+    assert!(
+        text.contains(&format!("{BOLD_BLUE}|")),
+        "--color always must emit bold-blue pipe, got:\n{text}"
+    );
+    Ok(())
+}
+
+#[test]
+fn color_always_emits_ansi_for_caret_underline() -> Result<(), Box<dyn std::error::Error>> {
+    let out = run_check_with_args(
+        &[&fixture("errors/e0001_single_param.py")],
+        &["--color", "always"],
+    )?;
+    let text = stdout(&out);
+    assert!(
+        text.contains(&format!("{BOLD_RED}^")),
+        "--color always must emit bold-red caret underline, got:\n{text}"
+    );
+    Ok(())
+}
+
+#[test]
+fn color_always_emits_ansi_for_help_label() -> Result<(), Box<dyn std::error::Error>> {
+    let out = run_check_with_args(
+        &[&fixture("errors/e0001_single_param.py")],
+        &["--color", "always"],
+    )?;
+    let text = stdout(&out);
+    assert!(
+        text.contains(&format!("{BOLD_CYAN}help")),
+        "--color always must emit bold-cyan help label, got:\n{text}"
+    );
+    Ok(())
+}
+
+#[test]
+fn color_always_emits_ansi_for_note_label() -> Result<(), Box<dyn std::error::Error>> {
+    let out = run_check_with_args(
+        &[&fixture("errors/e0001_single_param.py")],
+        &["--color", "always"],
+    )?;
+    let text = stdout(&out);
+    assert!(
+        text.contains(&format!("{BOLD_CYAN}note")),
+        "--color always must emit bold-cyan note label, got:\n{text}"
+    );
+    Ok(())
+}
+
+#[test]
+fn color_always_emits_ansi_for_see_label() -> Result<(), Box<dyn std::error::Error>> {
+    let out = run_check_with_args(
+        &[&fixture("errors/e0001_single_param.py")],
+        &["--color", "always"],
+    )?;
+    let text = stdout(&out);
+    assert!(
+        text.contains(&format!("{BOLD_CYAN}see")),
+        "--color always must emit bold-cyan see label, got:\n{text}"
+    );
+    Ok(())
+}
+
+#[test]
+fn color_never_strips_all_ansi() -> Result<(), Box<dyn std::error::Error>> {
+    let out = run_check_with_args(
+        &[&fixture("errors/e0001_single_param.py")],
+        &["--color", "never"],
+    )?;
+    let text = stdout(&out);
+    assert!(
+        !text.contains("\x1b["),
+        "--color never must not emit any ANSI codes, got:\n{text}"
+    );
+    Ok(())
+}
+
+#[test]
+fn color_never_clean_file_strips_all_ansi() -> Result<(), Box<dyn std::error::Error>> {
+    let out = run_check_with_args(
+        &[&fixture("clean/fully_typed_module.py")],
+        &["--color", "never"],
+    )?;
+    let text = stdout(&out);
+    assert!(
+        !text.contains("\x1b["),
+        "--color never must not emit any ANSI codes for clean output, got:\n{text}"
+    );
+    Ok(())
+}
+
+#[test]
+fn color_always_clean_file_emits_ansi() -> Result<(), Box<dyn std::error::Error>> {
+    let out = run_check_with_args(
+        &[&fixture("clean/fully_typed_module.py")],
+        &["--color", "always"],
+    )?;
+    let text = stdout(&out);
+    assert!(
+        text.contains("\x1b["),
+        "--color always must emit ANSI codes even for clean output, got:\n{text}"
     );
     Ok(())
 }

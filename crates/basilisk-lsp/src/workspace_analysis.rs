@@ -32,17 +32,6 @@ pub(crate) fn make_entry(
     }
 }
 
-/// Run the full parse → resolve → check pipeline on `text`.
-///
-/// Always returns a `FileEntry` (resolved may be `None` on failure) and the
-/// corresponding LSP diagnostics.
-pub(crate) fn analyse(
-    text: &str,
-    path: &Path,
-) -> (FileEntry, Vec<tower_lsp::lsp_types::Diagnostic>) {
-    analyse_with_config(text, path, &basilisk_config::BasiliskConfig::default())
-}
-
 /// Run the full parse → resolve → check pipeline with project-level config.
 ///
 /// Applies per-module, per-path, and global rule severity overrides from

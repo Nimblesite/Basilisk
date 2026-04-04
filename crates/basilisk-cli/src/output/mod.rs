@@ -84,11 +84,35 @@ pub struct FileSource {
 mod tests {
     use super::*;
     use json::JsonDiagnostic;
-    use text::{byte_offset_to_line_col, render_one, render_snippet};
+    use text::{byte_offset_to_line_col, format_one, format_snippet};
 
     use basilisk_checker::Diagnostic;
     use basilisk_checker::{ErrorCode, Severity};
     use basilisk_resolver::Span;
+
+    // ── ANSI escape sequences produced by the `colored` crate ────────────────
+
+    /// Bold red (used for error severity labels and underlines).
+    const BOLD_RED: &str = "\x1b[1;31m";
+    /// Bold yellow (used for warning severity labels and underlines).
+    const BOLD_YELLOW: &str = "\x1b[1;33m";
+    /// Bold blue (used for info labels, line numbers, pipes, arrows).
+    const BOLD_BLUE: &str = "\x1b[1;34m";
+    /// Bold cyan (used for help/note/see annotation labels).
+    const BOLD_CYAN: &str = "\x1b[1;36m";
+    /// Bold (used for error codes and messages).
+    const BOLD: &str = "\x1b[1m";
+    /// ANSI reset sequence.
+    const RESET: &str = "\x1b[0m";
+
+    /// Force colours on for the duration of a test.
+    ///
+    /// `colored` uses a global atomic; we force it to `true` so that
+    /// `format_one` / `format_snippet` always emit ANSI codes regardless
+    /// of whether the test runner's stdout is a TTY.
+    fn force_colors() {
+        colored::control::set_override(true);
+    }
 
     fn make_diag(help: Option<&str>, note: Option<&str>) -> Diagnostic {
         make_diag_with_severity(Severity::Error, help, note)
@@ -136,29 +160,327 @@ mod tests {
         assert_eq!(count, 1, "only errors should be counted, not warnings");
     }
 
+    // ── format_one: colour assertions ────────────────────────────────────────
+
     #[test]
-    fn render_one_without_source_falls_back_to_path() {
+    fn format_one_error_header_is_bold_red() {
+        force_colors();
         let diag = make_diag(Some("help"), Some("note"));
-        render_one(&diag, None);
+        let out = format_one(&diag, Some("def foo(x): pass"));
+        assert!(
+            out.contains(&format!("{BOLD_RED}error{RESET}")),
+            "error label must be bold red, got:\n{out}"
+        );
     }
 
     #[test]
-    fn render_one_without_help() {
-        let diag = make_diag(None, Some("note text"));
-        render_one(&diag, Some("def foo(x): pass"));
-    }
-
-    #[test]
-    fn render_one_without_note() {
-        let diag = make_diag(Some("help text"), None);
-        render_one(&diag, Some("def foo(x): pass"));
-    }
-
-    #[test]
-    fn render_one_without_help_or_note() {
+    fn format_one_error_code_is_bold() {
+        force_colors();
         let diag = make_diag(None, None);
-        render_one(&diag, Some("def foo(x): pass"));
+        let out = format_one(&diag, Some("def foo(x): pass"));
+        assert!(
+            out.contains(&format!("{BOLD}[BSK-E0001]{RESET}")),
+            "error code must be bold, got:\n{out}"
+        );
     }
+
+    #[test]
+    fn format_one_message_is_bold() {
+        force_colors();
+        let diag = make_diag(None, None);
+        let out = format_one(&diag, Some("def foo(x): pass"));
+        assert!(
+            out.contains(&format!(
+                "{BOLD}missing annotation for `x`{RESET}"
+            )),
+            "message must be bold, got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn format_one_arrow_is_bold_blue() {
+        force_colors();
+        let diag = make_diag(None, None);
+        let out = format_one(&diag, Some("def foo(x): pass"));
+        assert!(
+            out.contains(&format!("{BOLD_BLUE}-->{RESET}")),
+            "arrow must be bold blue, got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn format_one_help_label_is_bold_cyan() {
+        force_colors();
+        let diag = make_diag(Some("add a type"), None);
+        let out = format_one(&diag, Some("def foo(x): pass"));
+        assert!(
+            out.contains(&format!("{BOLD_CYAN}help{RESET}")),
+            "help label must be bold cyan, got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn format_one_note_label_is_bold_cyan() {
+        force_colors();
+        let diag = make_diag(None, Some("all params need types"));
+        let out = format_one(&diag, Some("def foo(x): pass"));
+        assert!(
+            out.contains(&format!("{BOLD_CYAN}note{RESET}")),
+            "note label must be bold cyan, got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn format_one_see_label_is_bold_cyan() {
+        force_colors();
+        let diag = make_diag(None, None);
+        let out = format_one(&diag, Some("def foo(x): pass"));
+        assert!(
+            out.contains(&format!("{BOLD_CYAN}see{RESET}")),
+            "see label must be bold cyan, got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn format_one_equals_sign_is_bold_blue() {
+        force_colors();
+        let diag = make_diag(Some("help"), None);
+        let out = format_one(&diag, Some("def foo(x): pass"));
+        assert!(
+            out.contains(&format!("{BOLD_BLUE}={RESET}")),
+            "equals sign must be bold blue, got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn format_one_warning_header_is_bold_yellow() {
+        force_colors();
+        let diag = make_diag_with_severity(Severity::Warning, None, None);
+        let out = format_one(&diag, Some("def foo(x): pass"));
+        assert!(
+            out.contains(&format!("{BOLD_YELLOW}warning{RESET}")),
+            "warning label must be bold yellow, got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn format_one_info_header_is_bold_blue() {
+        force_colors();
+        let diag = make_diag_with_severity(Severity::Info, None, None);
+        let out = format_one(&diag, Some("def foo(x): pass"));
+        assert!(
+            out.contains(&format!("{BOLD_BLUE}info{RESET}")),
+            "info label must be bold blue, got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn format_one_safety_violation_header_is_bold_red() {
+        force_colors();
+        let diag = make_diag_with_severity(Severity::SafetyViolation, None, None);
+        let out = format_one(&diag, Some("def foo(x): pass"));
+        assert!(
+            out.contains(&format!("{BOLD_RED}safety violation{RESET}")),
+            "safety violation label must be bold red, got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn format_one_without_source_falls_back_to_path() {
+        force_colors();
+        let diag = make_diag(Some("help"), Some("note"));
+        let out = format_one(&diag, None);
+        assert!(
+            out.contains("test.py"),
+            "must fall back to path when source is None"
+        );
+        // No snippet section when source is missing.
+        assert!(
+            !out.contains("def foo"),
+            "must not contain source snippet when source is None"
+        );
+    }
+
+    #[test]
+    fn format_one_without_help_omits_help_line() {
+        force_colors();
+        let diag = make_diag(None, Some("note text"));
+        let out = format_one(&diag, Some("def foo(x): pass"));
+        assert!(
+            !out.contains("help"),
+            "must omit help line when help is None"
+        );
+        assert!(out.contains("note text"), "must include note text");
+    }
+
+    #[test]
+    fn format_one_without_note_omits_note_line() {
+        force_colors();
+        let diag = make_diag(Some("help text"), None);
+        let out = format_one(&diag, Some("def foo(x): pass"));
+        assert!(out.contains("help text"), "must include help text");
+        assert!(
+            !out.contains("note"),
+            "must omit note line when note is None"
+        );
+    }
+
+    #[test]
+    fn format_one_without_help_or_note() {
+        force_colors();
+        let diag = make_diag(None, None);
+        let out = format_one(&diag, Some("def foo(x): pass"));
+        assert!(
+            !out.contains("help"),
+            "must omit help when None"
+        );
+        assert!(
+            !out.contains("note"),
+            "must omit note when None"
+        );
+        // Still must contain the see URL.
+        assert!(out.contains("BSK-E0001"), "must contain error code");
+        assert!(
+            out.contains("basilisk-python.dev"),
+            "must contain docs URL"
+        );
+    }
+
+    // ── format_snippet: colour assertions ────────────────────────────────────
+
+    #[test]
+    fn format_snippet_pipe_is_bold_blue() {
+        force_colors();
+        let out = format_snippet("def foo(x): pass", 8, 9, Severity::Error);
+        assert!(
+            out.contains(&format!("{BOLD_BLUE}|{RESET}")),
+            "pipe must be bold blue, got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn format_snippet_line_number_is_bold_blue() {
+        force_colors();
+        let out = format_snippet("def foo(x): pass", 8, 9, Severity::Error);
+        assert!(
+            out.contains(&format!("{BOLD_BLUE}1{RESET}")),
+            "line number must be bold blue, got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn format_snippet_error_underline_is_bold_red() {
+        force_colors();
+        let out = format_snippet("def foo(x): pass", 8, 9, Severity::Error);
+        assert!(
+            out.contains(&format!("{BOLD_RED}^{RESET}")),
+            "error underline must be bold red, got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn format_snippet_warning_underline_is_bold_yellow() {
+        force_colors();
+        let out = format_snippet("def foo(x): pass", 8, 9, Severity::Warning);
+        assert!(
+            out.contains(&format!("{BOLD_YELLOW}^{RESET}")),
+            "warning underline must be bold yellow, got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn format_snippet_info_underline_is_bold_blue() {
+        force_colors();
+        let out = format_snippet("def foo(x): pass", 8, 9, Severity::Info);
+        assert!(
+            out.contains(&format!("{BOLD_BLUE}^{RESET}")),
+            "info underline must be bold blue, got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn format_snippet_safety_violation_underline_is_bold_red() {
+        force_colors();
+        let out = format_snippet("def foo(x): pass", 8, 9, Severity::SafetyViolation);
+        assert!(
+            out.contains(&format!("{BOLD_RED}^{RESET}")),
+            "safety violation underline must be bold red, got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn format_snippet_multi_char_underline_length() {
+        force_colors();
+        // span covers "foo" at bytes 4..7 → 3 carets
+        let out = format_snippet("def foo(x): pass", 4, 7, Severity::Error);
+        assert!(
+            out.contains(&format!("{BOLD_RED}^^^{RESET}")),
+            "underline must be 3 carets for a 3-byte span, got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn format_snippet_contains_source_line() {
+        force_colors();
+        let out = format_snippet("def foo(x): pass", 8, 9, Severity::Error);
+        assert!(
+            out.contains("def foo(x): pass"),
+            "snippet must contain the source line, got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn format_snippet_on_second_line() {
+        force_colors();
+        let source = "def foo(): pass\ndef bar(x): pass";
+        let out = format_snippet(source, 20, 23, Severity::Error);
+        // Line 2 contains "def bar(x): pass", line number should be 2.
+        assert!(
+            out.contains(&format!("{BOLD_BLUE}2{RESET}")),
+            "second-line snippet must show line number 2, got:\n{out}"
+        );
+        assert!(
+            out.contains("def bar(x): pass"),
+            "must contain second source line, got:\n{out}"
+        );
+    }
+
+    // ── format_one: structural content assertions ────────────────────────────
+
+    #[test]
+    fn format_one_contains_file_location() {
+        force_colors();
+        let diag = make_diag(None, None);
+        let out = format_one(&diag, Some("def foo(x): pass"));
+        assert!(
+            out.contains("test.py:1:9"),
+            "must contain file:line:col location, got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn format_one_contains_source_snippet() {
+        force_colors();
+        let diag = make_diag(None, None);
+        let out = format_one(&diag, Some("def foo(x): pass"));
+        assert!(
+            out.contains("def foo(x): pass"),
+            "must contain source snippet, got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn format_one_contains_docs_url() {
+        force_colors();
+        let diag = make_diag(None, None);
+        let out = format_one(&diag, Some("def foo(x): pass"));
+        assert!(
+            out.contains("https://www.basilisk-python.dev/errors/BSK-E0001"),
+            "must contain docs URL, got:\n{out}"
+        );
+    }
+
+    // ── byte_offset_to_line_col ──────────────────────────────────────────────
 
     #[test]
     fn byte_offset_to_line_col_second_line() {
@@ -167,12 +489,6 @@ mod tests {
         let (line, col) = byte_offset_to_line_col(source, 16);
         assert_eq!(line, 2);
         assert_eq!(col, 1);
-    }
-
-    #[test]
-    fn render_snippet_on_second_line() {
-        let source = "def foo(): pass\ndef bar(x): pass";
-        render_snippet(source, 20, 23, Severity::Error);
     }
 
     // ── JSON output ───────────────────────────────────────────────────────────
@@ -453,53 +769,61 @@ mod tests {
         assert_eq!(col, 4, "clamped to len=3, col=4 (1-based after last char)");
     }
 
-    // ── render_snippet: - / * / + mutants (lines 165, 168, 169) ────────────
+    // ── format_snippet: structural / mutant tests ────────────────────────────
 
-    /// `BinaryOperator` `-`/`*` mutants at line 165: `line_start = rfind('\n').map_or(0, |p| p + 1)`.
+    /// `BinaryOperator` `-`/`*` mutants at `line_start = rfind('\n').map_or(0, |p| p + 1)`.
     /// The `+ 1` skips the newline byte. Without it, `line_start` points at '\n' itself.
-    /// That would make `col_start` negative (panic) or wrong.
-    /// This test indirectly validates by requiring `render_snippet` to not panic AND produce
-    /// meaningful output — if `line_start` is off by 1, `col_start` = start - (line_start-1) is wrong.
     #[test]
-    fn render_snippet_line_start_skips_newline() {
-        // "hello\nworld" — span at bytes 8..10 ("rl")
-        // line_start must be 6 (byte after '\n' at 5), not 5
-        // col_start = 8 - 6 = 2 (correct)
-        // With `p - 1` mutant: line_start = 4, col_start = 8 - 4 = 4 (wrong, but no panic)
-        // With `p * 1` mutant: line_start = 5, col_start = 8 - 5 = 3 (wrong)
-        // We can't easily capture output here, but the test must not panic.
+    fn format_snippet_line_start_skips_newline() {
+        force_colors();
         let source = "hello\nworld";
-        render_snippet(source, 8, 10, Severity::Error);
+        let out = format_snippet(source, 8, 10, Severity::Error);
+        // Must contain "world" (the source line), not "\nworld".
+        assert!(
+            out.contains("world"),
+            "snippet must contain source line, got:\n{out}"
+        );
+        // Underline must be 2 carets for a 2-byte span.
+        assert!(
+            out.contains(&format!("{BOLD_RED}^^{RESET}")),
+            "underline must be 2 carets (bold red), got:\n{out}"
+        );
     }
 
-    /// `BinaryOperator` `+` → `-` / `+` mutants at line 168: `col_start = start - line_start`.
-    /// If this becomes `start + line_start`, `col_start` would be huge and `.repeat()` would OOM.
-    /// We verify `render_snippet` completes without panic for a span mid-line.
+    /// `col_start = start - line_start`. If this becomes `start + line_start`,
+    /// `col_start` would be huge and the underline position would be wrong.
     #[test]
-    fn render_snippet_col_start_no_overflow() {
-        // "abcdef\nghijkl" — span at bytes 9..12 ("ijk")
-        // line_start = 7, col_start = 9 - 7 = 2 (correct)
-        // `+` mutant: col_start = 9 + 7 = 16 → " ".repeat(16) would succeed but be wrong
+    fn format_snippet_col_start_no_overflow() {
+        force_colors();
         let source = "abcdef\nghijkl";
-        render_snippet(source, 9, 12, Severity::Error); // must not panic or OOM
+        let out = format_snippet(source, 9, 12, Severity::Error);
+        // Must contain the source line.
+        assert!(out.contains("ghijkl"), "must contain source line");
+        // Underline must be 3 carets for "ijk".
+        assert!(
+            out.contains(&format!("{BOLD_RED}^^^{RESET}")),
+            "underline must be 3 carets, got:\n{out}"
+        );
     }
 
-    /// `BinaryOperator` `+` → `-` mutant at line 169: `col_end = (end - line_start).min(len)`.
-    /// If `end - line_start` becomes `end + line_start`, `col_end` > line len → clamped by .`min()`.
-    /// If it becomes `end - line_start` with wrong sign... verify no panic.
+    /// `col_end = (end - line_start).min(len)`. The span 12..14 extends past
+    /// the end of "ghijkl" (6 chars at line_start=7), so col_end is clamped
+    /// to line length. underline_len = 6 - 5 = 1.
     #[test]
-    fn render_snippet_col_end_no_overflow() {
+    fn format_snippet_col_end_no_overflow() {
+        force_colors();
         let source = "abcdef\nghijkl";
-        // span covers "kl" at bytes 12..14
-        render_snippet(source, 12, 14, Severity::Error); // must not panic
+        let out = format_snippet(source, 12, 14, Severity::Error);
+        assert!(out.contains("ghijkl"), "must contain source line");
+        assert!(
+            out.contains(&format!("{BOLD_RED}^{RESET}")),
+            "underline must be clamped to 1 caret, got:\n{out}"
+        );
     }
 
-    /// Verify `render_snippet` produces correct underline length.
-    /// We can't easily capture stdout, but we verify the inputs produce valid math:
-    /// `col_start` = start - `line_start`, `col_end` = (end - `line_start).min(len`)
-    /// `underline_len` = `col_end.saturating_sub(col_start).max(1)`
+    /// Verify `format_snippet` produces correct underline length.
     #[test]
-    fn render_snippet_arithmetic_properties() {
+    fn format_snippet_arithmetic_properties() {
         let source = "hello world\n";
         // span covers "world" at bytes 6..11
         // line_start = 0 (no newline before), col_start = 6, col_end = 11, underline = 5
@@ -515,4 +839,7 @@ mod tests {
         assert_eq!(col_end, 11);
         assert_eq!(underline_len, 5, "underline for 'world' must be 5 chars");
     }
+
+    // ColorMode::Never / Always are tested via subprocess in cli_binary_tests.rs
+    // because `colored` uses a global atomic that races with parallel unit tests.
 }

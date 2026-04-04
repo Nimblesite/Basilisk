@@ -61,8 +61,16 @@ pub(super) async fn initialize(
     // Store workspace roots for later use by import resolution.
     (*server.workspace_roots.write().await).clone_from(&roots);
 
+    // Load project-level checker config (pyproject.toml / basilisk.json) so
+    // that rule severity overrides, per-module, and per-path settings match
+    // the CLI.
+    let checker_config = roots
+        .first()
+        .map(|r| basilisk_config::load_basilisk_config(r))
+        .unwrap_or_default();
+
     // Build the workspace index now so `initialized()` can scan immediately.
-    let index = WorkspaceIndex::new(roots, mode);
+    let index = WorkspaceIndex::new(roots, mode, checker_config);
     *server.index.write().await = Some(index);
 
     Ok(InitializeResult {
@@ -356,7 +364,11 @@ pub(super) async fn did_change_workspace_folders(
             .map_or(AnalysisMode::OpenFilesOnly, |idx| idx.mode)
     };
 
-    let index = WorkspaceIndex::new(updated_roots, mode);
+    let checker_config = updated_roots
+        .first()
+        .map(|r| basilisk_config::load_basilisk_config(r))
+        .unwrap_or_default();
+    let index = WorkspaceIndex::new(updated_roots, mode, checker_config);
     *server.index.write().await = Some(index);
 
     // Re-scan if in a whole-workspace analysis mode.
@@ -521,7 +533,7 @@ fn recheck_with_cross_module_symbols(
             continue;
         };
 
-        let checker_diags = basilisk_checker::check(resolved);
+        let checker_diags = basilisk_checker::check_with_config(resolved, &index.checker_config);
         let lsp_diags: Vec<tower_lsp::lsp_types::Diagnostic> = checker_diags
             .iter()
             .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &entry.text))
@@ -644,7 +656,7 @@ pub(super) async fn rebuild_registry_and_resolve(server: &LspServer) {
         .iter_mut()
         .filter_map(|mut entry| {
             let resolved = entry.resolved.as_ref()?;
-            let checker_diags = basilisk_checker::check(resolved);
+            let checker_diags = basilisk_checker::check_with_config(resolved, &index.checker_config);
             let lsp_diags: Vec<tower_lsp::lsp_types::Diagnostic> = checker_diags
                 .iter()
                 .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &entry.text))
