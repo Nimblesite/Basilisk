@@ -85,20 +85,37 @@ pub struct TrackedType {
 
 ### Diagnostic Behaviour by Provenance {#STUBRES-PROVENANCE-DIAG}
 
-| Provenance | BSK-E0010 | Downstream type errors | LSP hover |
-|------------|-----------|----------------------|-----------|
-| Source | not fired | normal errors | shows inferred type |
-| StubTier1 | not fired | normal errors | shows stub type |
-| StubTier2 | not fired | normal errors | shows type + "(auto-generated stub)" |
-| StubTier3 | downgraded to info | warnings only | shows type + "(best-effort, may be inaccurate)" |
-| Untyped | error (default) | **suppressed** | shows "Unknown (no stubs)" |
+| Provenance | BSK-E0010 | Downstream type errors | LSP hover | Code Action |
+|------------|-----------|----------------------|-----------|-------------|
+| Source | not fired | normal errors | shows inferred type | — |
+| StubTier1 | not fired | normal errors | shows stub type | — |
+| StubTier2 | not fired | normal errors | shows type + "(auto-generated stub)" | — |
+| StubTier3 | downgraded to info | warnings only | shows type + "(best-effort, may be inaccurate)" | — |
+| Untyped | error (default) | **suppressed** | shows "Unknown (no stubs)" | one-click install via LSP |
 
 One diagnostic at the import site is worth more than fifty cascading errors at use sites. When provenance is `Untyped`:
 
 1. BSK-E0010 fires once at the import
 2. The imported symbol becomes `Unknown` with `Untyped` provenance
 3. Downstream rules check provenance — if one operand is `Untyped`, the cascade is suppressed
-4. The developer fixes the root cause (add stubs, suppress, or configure) rather than fighting noise
+4. The developer fixes it **with a single click** — the LSP provides code actions (quick fixes) that execute the appropriate `uv` command automatically
+
+### Code Actions for Unresolved Imports {#STUBRES-CODEACTIONS}
+
+**Principle**: Diagnostics MUST NOT tell users to run CLI commands. The LSP provides one-click code actions that do the work. The user should never leave the editor to fix a missing import.
+
+Every BSK-E0010 and BSK-W0010 diagnostic MUST have an associated code action:
+
+| Diagnostic | Scenario | Code Action | LSP Command |
+|------------|----------|-------------|-------------|
+| BSK-E0010 | Package not installed | "Add dependency: `{pkg}`" | `basilisk.uv.add` |
+| BSK-E0010 | Package not in deps (transitive only) | "Add dependency: `{pkg}`" | `basilisk.uv.add` |
+| BSK-E0010 | Package declared but not synced | "Sync environment" | `basilisk.uv.sync` |
+| BSK-W0010 | Package installed but no type stubs | "Install type stubs: `types-{pkg}`" | `basilisk.uv.addDev` |
+
+The code action executes via `workspace/executeCommand`. The LSP spawns `uv` as a subprocess, reports progress via `window/logMessage`, and triggers a full re-resolve on completion — the diagnostic clears automatically.
+
+Diagnostic help text should describe **what's wrong**, not what CLI command to run. The code action is the fix. See [LSP-UV-INTEGRATION-SPEC.md §LSPUV-ACTIONS](LSP-UV-INTEGRATION-SPEC.md#LSPUV-ACTIONS) for the full code action specification.
 
 ### Provenance in Hover {#STUBRES-PROVENANCE-HOVER}
 

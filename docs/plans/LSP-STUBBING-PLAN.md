@@ -277,7 +277,8 @@ All stub/provenance config via `[tool.basilisk]` — already partially implement
 3. **Auto-stub generation**: `basilisk stubs generate requests` produces valid `.pyi` in `.basilisk/stubs/`. Re-check shows BSK-E0010 cleared, BSK-W0010 shows "(best-effort stub)".
 4. **Config**: Set `rules."BSK-E0010" = "warning"` in `pyproject.toml`, confirm severity changes.
 5. **uv integration**: In a uv project, confirm hover shows package version and stub status.
-6. **Full CI**: `cargo clippy`, `cargo test`, `cargo fmt --check` all pass.
+6. **One-click code actions**: BSK-E0010 and BSK-W0010 diagnostics show quick fix code actions. Clicking the quick fix installs the package/stubs automatically. No CLI commands in help text.
+7. **Full CI**: `cargo clippy`, `cargo test`, `cargo fmt --check` all pass.
 
 ---
 
@@ -328,6 +329,17 @@ All stub/provenance config via `[tool.basilisk]` — already partially implement
 - [x] Tests: AST-based stub generation (annotated, private, __all__, unannotated, async)
 - [x] Tests: cache roundtrip, hash determinism
 - [x] All clippy, fmt, tests passing
+
+### Phase 4b: Diagnostic Help Text Cleanup ✅ DONE
+- [x] Remove "Run `uv add ...`" CLI instructions from BSK-E0010 help text (`e0010.rs`)
+- [x] Remove "Run `uv sync`" CLI instructions from BSK-E0010 help text
+- [x] Remove "`uv add --dev types-...`" CLI instructions from BSK-W0010 help text
+- [x] Remove "Run `uv lock`" CLI instructions from BSK-W0013 help text
+- [x] Remove "run `uv add --dev pytest`" from pytest-not-found messages (init.rs, test_handlers.rs)
+- [x] Replace with problem descriptions — the code action is the fix, not a CLI command
+- [x] All BSK-E0010/W0010/W0013/W0014 scenarios have corresponding code actions in `code_actions/mod.rs`
+- [x] Update tests to match new help text
+- [x] All tests passing (18 checker, 57 code action)
 
 ### Phase 5: Salsa Integration (Deferred)
 - [ ] Add `salsa` dependency to `crates/basilisk-lsp/Cargo.toml`

@@ -63,6 +63,9 @@ fn make_diagnostic(import: &ImportInfo, path: &str) -> Diagnostic {
 }
 
 /// Produce the diagnostic message and help text based on the unresolved reason.
+///
+/// Help text describes the problem — code actions (in the LSP layer) handle the
+/// fix. Users should never be told to run CLI commands manually.
 fn format_reason(import: &ImportInfo, root_module: &str) -> (String, String) {
     match &import.unresolved_reason {
         Some(UnresolvedReason::NotInstalled) => (
@@ -71,7 +74,7 @@ fn format_reason(import: &ImportInfo, root_module: &str) -> (String, String) {
                  pyproject.toml",
                 import.module
             ),
-            format!("Run `uv add {root_module}` to install the package"),
+            format!("`{root_module}` is not listed in project dependencies"),
         ),
         Some(UnresolvedReason::NotInDeps) => (
             format!(
@@ -79,15 +82,18 @@ fn format_reason(import: &ImportInfo, root_module: &str) -> (String, String) {
                  dependency; add it to [project.dependencies]",
                 import.module
             ),
-            format!("Run `uv add {root_module}` to declare it as a direct dependency"),
+            format!(
+                "`{root_module}` is available transitively but should be declared as a direct \
+                 dependency"
+            ),
         ),
         Some(UnresolvedReason::NeedsSync) => (
             format!(
-                "Cannot resolve import `{}` \u{2014} `{root_module}` is declared but not \
-                 synced; run `uv sync`",
+                "Cannot resolve import `{}` \u{2014} `{root_module}` is declared but the \
+                 environment is not synced",
                 import.module
             ),
-            "Run `uv sync` to install declared dependencies".to_owned(),
+            "Environment is out of sync with declared dependencies".to_owned(),
         ),
         Some(UnresolvedReason::WrongPythonVersion) => (
             format!(
@@ -103,8 +109,7 @@ fn format_reason(import: &ImportInfo, root_module: &str) -> (String, String) {
                 import.module
             ),
             format!(
-                "Run `uv add {root_module}` to install the package, or `uv add --dev \
-                 types-{root_module}` for type stubs"
+                "`{root_module}` is not installed or has no type stubs"
             ),
         ),
     }
@@ -168,7 +173,7 @@ mod tests {
         assert!(diagnostics[0]
             .help
             .as_ref()
-            .is_some_and(|h| h.contains("uv add requests")));
+            .is_some_and(|h| h.contains("not listed in project dependencies")));
     }
 
     #[test]
@@ -190,7 +195,10 @@ mod tests {
         ImportFromUntypedModule.check(&module, &mut diagnostics);
         assert_eq!(diagnostics.len(), 1);
         assert!(diagnostics[0].message.contains("not synced"));
-        assert!(diagnostics[0].message.contains("uv sync"));
+        assert!(diagnostics[0]
+            .help
+            .as_ref()
+            .is_some_and(|h| h.contains("out of sync")));
     }
 
     #[test]

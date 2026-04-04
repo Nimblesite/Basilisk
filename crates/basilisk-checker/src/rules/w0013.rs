@@ -46,7 +46,7 @@ impl StaleLockFile {
             message: "uv.lock is older than pyproject.toml — dependencies may be stale".to_owned(),
             span,
             path: path.to_owned(),
-            help: Some("Run `uv lock` to update the lock file".to_owned()),
+            help: Some("Lock file is out of date with pyproject.toml".to_owned()),
             note: Some(
                 "Stale lock files can cause incorrect import resolution and missing packages"
                     .to_owned(),

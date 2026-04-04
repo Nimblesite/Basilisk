@@ -134,6 +134,7 @@ mod tests {
             path: "test.py".to_owned(),
             help: help.map(str::to_owned),
             note: note.map(str::to_owned),
+            provenance: None,
         }
     }
 
@@ -610,6 +611,7 @@ mod tests {
             path: "a.py".to_owned(),
             help: None,
             note: None,
+            provenance: None,
         };
         let d2 = Diagnostic {
             code: ErrorCode {
@@ -622,6 +624,7 @@ mod tests {
             path: "a.py".to_owned(),
             help: None,
             note: None,
+            provenance: None,
         };
         let sources = [FileSource {
             path: "a.py".to_owned(),
@@ -677,6 +680,7 @@ mod tests {
             path: "b.py".to_owned(),
             help: None,
             note: None,
+            provenance: None,
         };
         let sources = [
             FileSource {

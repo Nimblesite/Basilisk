@@ -515,8 +515,7 @@ mod tests {
             )),
             code_description: None,
             source: Some("basilisk".to_owned()),
-            message: "pytest not found in uv.lock — run `uv add --dev pytest` to install it"
-                .to_owned(),
+            message: "pytest not found in uv.lock — use quick fix to install".to_owned(),
             tags: None,
             related_information: None,
             data: None,

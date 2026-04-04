@@ -786,7 +786,7 @@ async fn check_pytest_from_index(
         client
             .log_message(
                 MessageType::WARNING,
-                "Basilisk: pytest not found in uv.lock. Run `uv add --dev pytest` to install it."
+                "Basilisk: pytest not found in uv.lock — use the quick fix to install it"
                     .to_owned(),
             )
             .await;
@@ -814,7 +814,7 @@ async fn check_pytest_from_index(
         client
             .log_message(
                 MessageType::INFO,
-                "Basilisk: pytest-cov not found in uv.lock. Run `uv add --dev pytest-cov` for coverage support."
+                "Basilisk: pytest-cov not found in uv.lock — install it for coverage support"
                     .to_owned(),
             )
             .await;

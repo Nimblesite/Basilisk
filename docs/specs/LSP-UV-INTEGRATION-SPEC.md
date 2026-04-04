@@ -165,23 +165,25 @@ The detected Python version controls:
 
 ## Enhanced Diagnostics {#LSPUV-DIAG}
 
+**Principle**: Diagnostics describe the problem. Code actions fix it. Users MUST NEVER be told to "run" a CLI command — the LSP does it for them with a single click.
+
 ### Actionable Module Not Found {#LSPUV-DIAG-E0010}
 
-Current behavior: `"Unresolved import 'requests'"` — useless.
+With uv integration, BSK-E0010 becomes context-aware. Every actionable scenario MUST have an associated quick fix code action:
 
-With uv integration, BSK-E0010 becomes context-aware:
-
-| Scenario | Diagnostic Message | Code Action |
+| Scenario | Diagnostic Message | Quick Fix (one-click) |
 |---|---|---|
-| Package not installed, not in `pyproject.toml` | `Import "requests" could not be resolved. Package is not a dependency.` | `uv add requests` |
-| Package in `pyproject.toml` but env not synced | `Import "requests" could not be resolved. Run "uv sync" to install dependencies.` | `uv sync` |
-| Package installed but no stubs | `Import "requests" resolves but has no type stubs.` | `uv add --dev types-requests` |
+| Package not installed, not in `pyproject.toml` | `Cannot resolve import "requests" — not a dependency` | "Add dependency: `requests`" (executes `basilisk.uv.add`) |
+| Package in `pyproject.toml` but env not synced | `Cannot resolve import "requests" — declared but not synced` | "Sync environment" (executes `basilisk.uv.sync`) |
+| Package installed but no stubs | `Import "requests" resolves but has no type stubs` | "Install type stubs: `types-requests`" (executes `basilisk.uv.addDev`) |
 | Stdlib module, wrong Python version | `Module "tomllib" requires Python >= 3.11 (project targets 3.10)` | — |
 | Workspace member, not in deps | `Import "my_lib" resolves as workspace member "packages/my_lib"` | — (info, not error) |
 
+Help text in diagnostics MUST describe the problem, not prescribe a CLI command. The code action is the mechanism for fixing it. Diagnostic text like "Run `uv add foo`" is a UX failure — the user should see a quick fix lightbulb and click it.
+
 ### Missing Stub Suggestions {#LSPUV-DIAG-W0010}
 
-New warning when a package is installed but has no type information:
+Warning when a package is installed but has no type information:
 
 ```
 warning[BSK-W0010]: Package "requests" has no type information
@@ -190,8 +192,10 @@ warning[BSK-W0010]: Package "requests" has no type information
  3 | import requests
    | ^^^^^^^^^^^^^^^^ types will be inferred as Unknown
    |
-   = help: install type stubs: `uv add --dev types-requests`
+   = help: type stubs available — use quick fix to install
 ```
+
+Quick fix: "Install type stubs: `types-requests`" (executes `basilisk.uv.addDev`).
 
 The stub suggestion is only emitted when:
 - The package IS in `uv.lock` (confirmed installed)
@@ -256,17 +260,30 @@ Each workspace member becomes an LSP workspace folder. The LSP server maintains 
 
 ## Code Actions {#LSPUV-ACTIONS}
 
+**This is the primary UX for resolving import issues.** Users click a quick fix — the LSP handles everything. No terminal. No copy-pasting commands. One click.
+
 ### Quick Fixes {#LSPUV-ACTIONS-FIXES}
 
-| Trigger | Code Action Title | Command |
-|---------|-------------------|---------|
-| BSK-E0010 (unresolved, package available) | "Add dependency: `requests`" | `basilisk.uv.add` |
-| BSK-W0010 (no stubs) | "Install type stubs: `types-requests`" | `basilisk.uv.addDev` |
-| BSK-W0013 (stale lock) | "Sync environment" | `basilisk.uv.sync` |
+Every actionable diagnostic MUST have a corresponding code action. A diagnostic without a quick fix is a UX failure.
+
+| Trigger | Code Action Title | Command | Preferred? |
+|---------|-------------------|---------|------------|
+| BSK-E0010 (not installed) | "Add dependency: `{pkg}`" | `basilisk.uv.add` | yes |
+| BSK-E0010 (transitive only) | "Add dependency: `{pkg}`" | `basilisk.uv.add` | yes |
+| BSK-E0010 (not synced) | "Sync environment" | `basilisk.uv.sync` | yes |
+| BSK-W0010 (no stubs) | "Install type stubs: `types-{pkg}`" | `basilisk.uv.addDev` | yes |
+| BSK-W0013 (stale lock) | "Sync environment" | `basilisk.uv.sync` | no |
+| BSK-W0014 (pytest missing) | "Install pytest" | `basilisk.uv.addDev` | yes |
 
 ### Execution {#LSPUV-ACTIONS-EXEC}
 
-Code actions that invoke uv run as **LSP commands** via `workspace/executeCommand`. The LSP spawns `uv` as a subprocess, streams output to the client via `window/logMessage`, and triggers a lock file re-parse on completion.
+Code actions execute as **LSP commands** via `workspace/executeCommand`. The full lifecycle:
+
+1. User clicks quick fix in IDE
+2. LSP spawns `uv` as a subprocess in the project root
+3. Progress reported to client via `window/logMessage`
+4. On success: lock file re-parsed, imports re-resolved, diagnostics cleared automatically
+5. On failure: error shown to user via `window/showMessage`
 
 ```rust
 // Subprocess execution — NOT inline. Runs uv in project root.
@@ -276,6 +293,8 @@ pub struct UvCommand {
     pub cwd: PathBuf,
 }
 ```
+
+The user never leaves the editor. The diagnostic appears, they click the fix, and it's done.
 
 ---
 
