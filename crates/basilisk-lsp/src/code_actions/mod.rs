@@ -189,11 +189,14 @@ fn collect_refactoring_actions(
 
 /// Extract the top-level module name from a diagnostic message.
 ///
-/// Looks for a quoted identifier (single or double quotes) and returns the
-/// first dotted component, e.g. `"foo.bar"` yields `"foo"`.
+/// Looks for a quoted identifier (backticks, single or double quotes) and
+/// returns the first dotted component, e.g. `` `foo.bar` `` yields `"foo"`.
 fn extract_module_from_diagnostic(message: &str) -> Option<String> {
-    // Find content between quotes: 'module' or "module"
-    let start = message.find('\'').or_else(|| message.find('"'))?;
+    // Find content between quotes: `module`, 'module', or "module"
+    let start = message
+        .find('`')
+        .or_else(|| message.find('\''))
+        .or_else(|| message.find('"'))?;
     let quote_char = char::from(*message.as_bytes().get(start)?);
     let after_quote = message.get(start + 1..)?;
     let end = after_quote.find(quote_char)?;
@@ -380,6 +383,24 @@ mod tests {
         assert_eq!(
             extract_module_from_diagnostic(msg),
             Some("flask".to_owned())
+        );
+    }
+
+    #[test]
+    fn test_extract_module_from_diagnostic_backticks() {
+        let msg = "Cannot resolve import `six` \u{2014} no type information available";
+        assert_eq!(
+            extract_module_from_diagnostic(msg),
+            Some("six".to_owned())
+        );
+    }
+
+    #[test]
+    fn test_extract_module_from_diagnostic_backticks_dotted() {
+        let msg = "Cannot resolve import `agent_backend.db.session` \u{2014} no type information available";
+        assert_eq!(
+            extract_module_from_diagnostic(msg),
+            Some("agent_backend".to_owned())
         );
     }
 

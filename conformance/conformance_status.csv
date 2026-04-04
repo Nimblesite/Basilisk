@@ -48,7 +48,7 @@ BSK-E0111|BSK-E0138,dataclasses_transform_meta.py,dataclasses,PASS,6,0,1
 BSK-E0041|BSK-E0069|BSK-E0096,dataclasses_usage.py,dataclasses,PASS,8,0,0
 BSK-E0039|BSK-E0053,directives_assert_type.py,directives,PASS,7,0,0
 BSK-E0031,directives_cast.py,directives,PASS,3,0,0
-BSK-E0115,directives_deprecated.py,directives,PASS,12,0,1
+BSK-E0115,directives_deprecated.py,directives,FAIL,11,1,1
 BSK-E0012|BSK-E0013|BSK-E0041,directives_no_type_check.py,directives,PASS,1,0,0
 BSK-E0033,directives_reveal_type.py,directives,PASS,2,0,0
 BSK-E0014,directives_type_checking.py,directives,PASS,0,0,1
@@ -120,7 +120,7 @@ BSK-E0114|BSK-E0119,protocols_runtime_checkable.py,protocols,PASS,6,0,0
 BSK-E0014|BSK-E0099,protocols_subtyping.py,protocols,PASS,7,0,7
 BSK-E0110|BSK-E0133,protocols_variance.py,protocols,PASS,5,0,0
 BSK-E0045|BSK-E0058,qualifiers_annotated.py,qualifiers,PASS,20,0,0
-BSK-E0014|BSK-E0041|BSK-E0044|BSK-E0054|BSK-E0064,qualifiers_final_annotation.py,qualifiers,PASS,26,0,0
+BSK-E0014|BSK-E0041|BSK-E0044|BSK-E0054|BSK-E0064,qualifiers_final_annotation.py,qualifiers,FAIL,25,1,0
 BSK-E0034,qualifiers_final_decorator.py,qualifiers,PASS,3,0,0
 BSK-E0014,specialtypes_any.py,specialtypes,PASS,0,0,2
 BSK-E0062|BSK-E0070,specialtypes_never.py,specialtypes,PASS,3,0,0

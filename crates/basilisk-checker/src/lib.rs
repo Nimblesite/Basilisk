@@ -69,7 +69,10 @@ pub fn check_with_config(
     let untyped_names: std::collections::HashSet<String> = module
         .imports
         .iter()
-        .filter(|i| i.resolution == basilisk_resolver::scope::ImportResolution::Unresolved)
+        .filter(|i| {
+            i.resolution == basilisk_resolver::scope::ImportResolution::Unresolved
+                && !basilisk_stubs::is_stdlib_module(&i.module)
+        })
         .flat_map(|i| i.names.iter().cloned())
         .collect();
 

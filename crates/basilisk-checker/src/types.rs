@@ -211,9 +211,13 @@ impl InferredType {
             // string types assignable to LiteralString, LiteralString to str
             (InferredType::Int, InferredType::Float)
             | (
-                InferredType::Literal(_),
-                InferredType::Int | InferredType::Str | InferredType::Float | InferredType::Bool,
+                InferredType::Literal(LiteralValue::Int(_)),
+                InferredType::Int | InferredType::Float,
             )
+            | (InferredType::Literal(LiteralValue::Str(_)), InferredType::Str)
+            | (InferredType::Literal(LiteralValue::Float(_)), InferredType::Float)
+            | (InferredType::Literal(LiteralValue::Bool(_)), InferredType::Bool | InferredType::Int)
+            | (InferredType::Literal(LiteralValue::Bytes(_)), InferredType::Bytes)
             | (
                 InferredType::Str | InferredType::Literal(LiteralValue::Str(_)),
                 InferredType::LiteralString,
