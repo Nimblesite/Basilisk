@@ -53,6 +53,7 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
         note: Some(
             "PEP 557: `InitVar[T]` fields are passed to `__post_init__` and not stored on the instance".to_owned(),
         ),
+        provenance: None,
     }
 }
 
@@ -375,5 +376,3 @@ fn check_expr_for_initvar_access(
         check_expr_for_initvar_access(child, path, var_class_map, initvar_field_map, diagnostics);
     }
 }
-
-

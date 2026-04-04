@@ -115,6 +115,7 @@ impl Rule for NonProtocolBaseInProtocol {
                          Protocol classes (aside from `object`)"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
             }
         }

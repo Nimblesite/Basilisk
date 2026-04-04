@@ -225,6 +225,7 @@ fn validate_call(call: &ast::ExprCall, cp: &CallableParam, path: &str, diag: &mu
             path: path.to_owned(),
             help: Some("Callable parameters are positional-only".to_owned()),
             note: None,
+        provenance: None,
         });
         return;
     }
@@ -249,6 +250,7 @@ fn validate_call(call: &ast::ExprCall, cp: &CallableParam, path: &str, diag: &mu
                     cp.arg_types.join(", ")
                 )),
                 note: None,
+            provenance: None,
             });
         }
         std::cmp::Ordering::Greater => {
@@ -267,6 +269,7 @@ fn validate_call(call: &ast::ExprCall, cp: &CallableParam, path: &str, diag: &mu
                     cp.arg_types.join(", ")
                 )),
                 note: None,
+            provenance: None,
             });
         }
         std::cmp::Ordering::Equal => {
@@ -308,6 +311,7 @@ fn check_arg_types(
                     path: path.to_owned(),
                     help: None,
                     note: None,
+            provenance: None,
                 });
             }
         }

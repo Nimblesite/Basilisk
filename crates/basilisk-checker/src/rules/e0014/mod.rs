@@ -289,6 +289,7 @@ fn make_diagnostic(
         note: Some(
             "Basilisk requires the inferred type to be assignable to the declared type".to_owned(),
         ),
+        provenance: None,
     }
 }
 

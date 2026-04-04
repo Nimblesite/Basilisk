@@ -112,5 +112,6 @@ fn make_diagnostic(func: &FunctionInfo, path: &str) -> Diagnostic {
              or unconditional call to a NoReturn function on every exit path"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }

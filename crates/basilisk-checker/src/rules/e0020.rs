@@ -142,6 +142,7 @@ fn make_diagnostic(
             "`@overload` signatures are type-only; a concrete implementation is required at runtime"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }
 
@@ -165,5 +166,6 @@ fn make_single_overload_diagnostic(
             "Python's `@overload` protocol requires at least two type signatures before the implementation"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }

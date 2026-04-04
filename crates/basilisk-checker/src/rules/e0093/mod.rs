@@ -113,6 +113,7 @@ impl Rule for TypedDictKeyValidation {
                 path: module.path.clone(),
                 help: None,
                 note: None,
+            provenance: None,
             });
         }
     }

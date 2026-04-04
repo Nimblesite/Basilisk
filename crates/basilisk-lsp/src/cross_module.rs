@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use basilisk_resolver::scope::{ExternalSymbol, ExternalSymbolKind};
+use basilisk_stubs::TypeProvenance;
 
 use crate::workspace::WorkspaceIndex;
 
@@ -38,6 +39,7 @@ fn extract_exports(
                 source_path: source_path.to_path_buf(),
                 source_span: func.name_span,
                 signature: Some(signature),
+                provenance: Some(TypeProvenance::Source),
             },
         ));
     }
@@ -53,6 +55,7 @@ fn extract_exports(
                 source_path: source_path.to_path_buf(),
                 source_span: class.name_span,
                 signature: Some(format!("class {}", class.name)),
+                provenance: Some(TypeProvenance::Source),
             },
         ));
     }
@@ -73,6 +76,7 @@ fn extract_exports(
                 source_path: source_path.to_path_buf(),
                 source_span: var.name_span,
                 signature: None,
+                provenance: Some(TypeProvenance::Source),
             },
         ));
     }

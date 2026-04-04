@@ -361,6 +361,7 @@ pub(super) fn emit_literal_value_mismatch(
         note: Some(
             "PEP 586: Literal types are only compatible when their values match exactly".to_owned(),
         ),
+        provenance: None,
     });
 }
 
@@ -392,6 +393,7 @@ pub(super) fn emit_fstring_literal_string_error(
              expressions are compatible with `LiteralString`"
                 .to_owned(),
         ),
+        provenance: None,
     });
 }
 
@@ -425,6 +427,7 @@ pub(super) fn emit_invariant_container_mismatch(
              `list[LiteralString]` is not a subtype of `list[str]`"
                 .to_owned(),
         ),
+        provenance: None,
     });
 }
 
@@ -458,5 +461,6 @@ pub(super) fn emit_container_call_str_error(
              `LiteralString` is a strict subtype of `str`"
                 .to_owned(),
         ),
+        provenance: None,
     });
 }

@@ -274,6 +274,7 @@ fn check_expr_for_super_call(
                                  have no implementation to call via super()"
                                     .to_owned(),
                             ),
+                            provenance: None,
                         });
                     }
                 }

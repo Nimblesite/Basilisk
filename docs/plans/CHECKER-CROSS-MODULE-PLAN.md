@@ -36,8 +36,8 @@ A project adopting Basilisk with third-party imports:
 1. Install `-stubs` packages (`pip install types-requests`). Basilisk auto-discovers via PEP 561. E0010 disappears.
 2. Per-module overrides in `pyproject.toml` suppress noise for untyped packages.
 3. Cross-file Go to Definition, Find References, Rename, and auto-import work today.
-4. After Phase 4: packages without stubs show one import-site error instead of cascading noise.
-5. After Phase 6: run `basilisk stubs generate --all` for best-effort stubs on remaining packages.
+4. After type provenance: packages without stubs show one import-site error instead of cascading noise. See [LSP-STUBBING-PLAN.md](LSP-STUBBING-PLAN.md).
+5. After auto-stub generation: run `basilisk stubs generate --all` for best-effort stubs on remaining packages. See [LSP-STUBBING-PLAN.md](LSP-STUBBING-PLAN.md).
 
 ### With uv Integration (Future)
 
@@ -53,33 +53,4 @@ See [LSP-UV-INTEGRATION-SPEC.md](../specs/LSP-UV-INTEGRATION-SPEC.md):
 
 ## TODO
 
-### Phase 3: Multi-Root Workspace
-
-- [ ] Per-root config — each workspace folder gets its own config resolution
-- [ ] Merged index for multi-root — single `WorkspaceIndex` spans all roots, imports cross root boundaries
-
-### Phase 4: Type Provenance
-
-- [ ] Add `TypeProvenance` enum to `crates/basilisk-checker/src/types.rs`
-- [ ] Add `TrackedType` struct — `InferredType` + `TypeProvenance`
-- [ ] Propagate provenance through inference in `crates/basilisk-checker/src/inference.rs`
-- [ ] Cascade suppression filter in `check()` — suppress downstream errors from untyped imports
-- [ ] Tag diagnostics with provenance in `e0012.rs`, `e0013.rs`
-- [ ] Provenance in hover tooltips — show "(typeshed)", "(no stubs)", "(best-effort)" in `hover.rs`
-
-### Phase 5: Salsa Integration
-
-- [ ] Add `salsa` dependency to `crates/basilisk-lsp/Cargo.toml`
-- [ ] Define Salsa database in `crates/basilisk-lsp/src/salsa_db.rs` — input: source text, tracked: AST, resolved module, diagnostics
-- [ ] Migrate parse → Salsa query — `parse(file) -> ParsedModule` memoized
-- [ ] Migrate resolve → Salsa query — `resolve(file) -> ResolvedModule` memoized
-- [ ] Migrate check → Salsa query — `check(file) -> Vec<Diagnostic>` memoized
-- [ ] Cross-file invalidation via Salsa — changing a file only re-computes transitive dependents
-
-### Phase 6: Auto-Stub Generation
-
-- [ ] Runtime introspection mode in `crates/basilisk-stubs/src/generate/runtime.rs`
-- [ ] AST-based inference in `crates/basilisk-stubs/src/generate/ast.rs`
-- [ ] Hybrid mode in `crates/basilisk-stubs/src/generate/hybrid.rs`
-- [ ] Cache management in `crates/basilisk-stubs/src/cache.rs`
-- [ ] CLI subcommand — `basilisk stubs generate`, `basilisk stubs status`
+Phases 3–6 (Multi-Root Workspace, Type Provenance, Salsa Integration, Auto-Stub Generation) have been consolidated into [LSP-STUBBING-PLAN.md](LSP-STUBBING-PLAN.md).

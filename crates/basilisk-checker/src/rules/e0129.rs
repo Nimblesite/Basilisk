@@ -212,6 +212,7 @@ fn check_annotated_assignment(
             note: Some(
                 "int and bool Literal values are distinct even when numerically equal".to_owned(),
             ),
+            provenance: None,
         });
     }
 }
@@ -287,6 +288,7 @@ fn check_augmented_assignment(
              compatible with the declared Literal type"
                 .to_owned(),
         ),
+        provenance: None,
     });
 }
 

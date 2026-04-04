@@ -32,6 +32,7 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
             "PEP 589: TypedDict functional syntax has strict requirements on its arguments"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }
 

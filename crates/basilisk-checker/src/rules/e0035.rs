@@ -67,6 +67,7 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
             "PEP 655: `Required` and `NotRequired` are special forms for `TypedDict` keys only"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }
 

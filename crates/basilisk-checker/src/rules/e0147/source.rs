@@ -238,5 +238,6 @@ pub(super) fn make_diag(
             "See https://typing.readthedocs.io/en/latest/spec/tuples.html#type-compatibility-rules"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }

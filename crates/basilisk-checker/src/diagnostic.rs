@@ -1,6 +1,7 @@
 //! Diagnostic data types for Basilisk.
 
 use basilisk_resolver::Span;
+use basilisk_stubs::TypeProvenance;
 
 /// The severity level of a diagnostic.
 ///
@@ -86,4 +87,8 @@ pub struct Diagnostic {
     pub help: Option<String>,
     /// Optional note shown after the snippet.
     pub note: Option<String>,
+    /// Where the type information came from, if this diagnostic relates to
+    /// an imported symbol.  Used for tier-based severity adjustment (Tier3
+    /// diagnostics are downgraded to Info) and hover annotations.
+    pub provenance: Option<TypeProvenance>,
 }

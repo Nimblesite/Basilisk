@@ -54,6 +54,7 @@ fn make_diagnostic(message: String, span: Span, path: &str, help: &str) -> Diagn
         note: Some(
             "PEP 591: `Final` names may only be assigned once at declaration time".to_owned(),
         ),
+        provenance: None,
     }
 }
 

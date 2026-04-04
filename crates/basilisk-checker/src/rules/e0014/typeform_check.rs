@@ -304,6 +304,7 @@ fn check_typeform_constructor(
                 "TypeForm acts as a function that can be called with a single valid type expression"
                     .to_owned(),
             ),
+            provenance: None,
         });
     }
 }
@@ -377,6 +378,7 @@ fn check_typeform_param_args(
                     "TypeForm parameters require valid type expressions, not runtime values"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }

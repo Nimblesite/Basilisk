@@ -45,6 +45,7 @@ fn make_diag(message: String, span: Span, path: &str) -> Diagnostic {
         note: Some(
             "PEP 646: only a single TypeVarTuple is permitted per generic or tuple type".to_owned(),
         ),
+        provenance: None,
     }
 }
 

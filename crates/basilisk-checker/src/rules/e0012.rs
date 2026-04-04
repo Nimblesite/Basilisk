@@ -236,5 +236,6 @@ fn make_diagnostic(
             "Basilisk checks that literal arguments are compatible with declared parameter types"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }

@@ -180,5 +180,6 @@ fn make_diagnostic(var_name: &str, span: Span, path: &str) -> Diagnostic {
              from `Literal[...]` to the wider base type"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }

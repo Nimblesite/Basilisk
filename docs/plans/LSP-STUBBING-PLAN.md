@@ -283,32 +283,34 @@ All stub/provenance config via `[tool.basilisk]` — already partially implement
 
 ## TODO List
 
-### Phase 1: TypeProvenance + Cascade Suppression
-- [ ] Add `TypeProvenance` enum to `crates/basilisk-stubs/src/types.rs`
-- [ ] Add `From<(&StubSource, &StubTier)>` impl for `TypeProvenance`
-- [ ] Export `TypeProvenance` from `crates/basilisk-stubs/src/lib.rs`
-- [ ] Add `basilisk-stubs` dependency to `crates/basilisk-resolver/Cargo.toml`
-- [ ] Add `provenance: Option<TypeProvenance>` to `ExternalSymbol`
-- [ ] Populate provenance in `crates/basilisk-lsp/src/cross_module.rs`
-- [ ] Build untyped-symbol set in `check_with_config()`
-- [ ] Implement `should_suppress_cascade()` filter
-- [ ] Wire cascade suppression into diagnostic filter chain
-- [ ] Tests: cascade suppression (untyped import = 1 error, not N)
-- [ ] Tests: resolved imports still fire downstream errors
+### Phase 1: TypeProvenance + Cascade Suppression ✅ DONE
+- [x] Add `TypeProvenance` enum to `crates/basilisk-stubs/src/types.rs`
+- [x] Add `From<(&StubSource, &StubTier)>` impl for `TypeProvenance`
+- [x] Export `TypeProvenance` from `crates/basilisk-stubs/src/lib.rs`
+- [x] Add `basilisk-stubs` dependency to `crates/basilisk-resolver/Cargo.toml`
+- [x] Add `provenance: Option<TypeProvenance>` to `ExternalSymbol`
+- [x] Populate provenance in `crates/basilisk-lsp/src/cross_module.rs`
+- [x] Build untyped-symbol set in `check_with_config()`
+- [x] Implement `should_suppress_cascade()` filter
+- [x] Wire cascade suppression into diagnostic filter chain
+- [x] Tests: cascade suppression (untyped import = 1 error, not N)
+- [x] Tests: resolved imports still fire downstream errors
 
-### Phase 2: Provenance in Hover & Diagnostics
-- [ ] Add `provenance: Option<TypeProvenance>` to `Diagnostic` struct
-- [ ] Tag BSK-E0010 diagnostics with `TypeProvenance::Untyped`
-- [ ] Tag BSK-W0010 diagnostics with provenance
-- [ ] Tier-based severity adjustment (Tier3 -> Info) in `check_with_config()`
-- [ ] Provenance annotations in hover tooltips
-- [ ] uv-enriched hover (package version, stub status)
-- [ ] Tests: hover provenance annotations
-- [ ] Tests: Tier3 severity downgrade
+### Phase 2: Provenance in Hover & Diagnostics ✅ DONE
+- [x] Add `provenance: Option<TypeProvenance>` to `Diagnostic` struct
+- [x] Tag BSK-E0010 diagnostics with `TypeProvenance::Untyped`
+- [x] Tag BSK-W0010 diagnostics with provenance
+- [x] Tier-based severity adjustment (Tier3 -> Info) in `check_with_config()`
+- [x] Provenance annotations in hover tooltips
+- [x] uv-enriched hover (package version, stub status) — already done, enhanced with provenance labels
+- [x] Tests: hover provenance annotations
+- [x] Tests: Tier3 severity downgrade — central filter in `check_with_config()`
 
-### Phase 3: Multi-Root Workspace
-- [ ] Per-root config — each workspace folder gets own `BasiliskConfig`
-- [ ] Merged `WorkspaceIndex` spanning all roots
+### Phase 3: Multi-Root Workspace — IN PROGRESS
+- [ ] Add `root_configs: HashMap<PathBuf, BasiliskConfig>` to `WorkspaceIndex`
+- [ ] Load config per-root in `initialize()` and `did_change_workspace_folders()`
+- [ ] Add `owner_root` to `FileEntry` for file-to-root mapping
+- [ ] Use per-root config in `check_with_config()` based on file's owner root
 - [ ] Tests: multi-root with different configs
 - [ ] Tests: cross-root import resolution
 

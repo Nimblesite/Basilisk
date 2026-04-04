@@ -139,5 +139,6 @@ fn make_diagnostic(func: &FunctionInfo, func_name: &str, path: &str) -> Diagnost
         note: Some(
             "Overlapping overloads cannot be distinguished at call sites".to_owned(),
         ),
+        provenance: None,
     }
 }

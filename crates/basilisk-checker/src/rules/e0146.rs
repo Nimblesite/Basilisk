@@ -393,6 +393,7 @@ fn check_ann_assign(
                          are accessible on the class with compatible types"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
             }
         }
@@ -507,5 +508,6 @@ fn make_type_proto_diag(proto_name: &str, path: &str, span: Span) -> Diagnostic 
              concrete (non-protocol) subtypes of Proto"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }

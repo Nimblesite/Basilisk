@@ -197,5 +197,6 @@ fn make_diagnostic(
              catch typos in method names"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }

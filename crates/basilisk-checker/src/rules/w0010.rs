@@ -9,6 +9,7 @@
 //! ```
 
 use basilisk_resolver::{ImportInfo, ImportResolution, ResolvedModule};
+use basilisk_stubs::TypeProvenance;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
@@ -62,6 +63,7 @@ fn make_diagnostic(import: &ImportInfo, path: &str) -> Diagnostic {
             "Packages without type stubs or a `py.typed` marker provide no type information"
                 .to_owned(),
         ),
+        provenance: Some(TypeProvenance::Untyped),
     }
 }
 

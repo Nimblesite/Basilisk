@@ -149,6 +149,7 @@ pub(super) fn check_pep695_bound_cross_references(
                          same list"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
                 // Emit one diagnostic per violating param (not per cross-ref).
                 break;
@@ -270,6 +271,7 @@ pub(super) fn check_decorator_uses_class_type_param(
                  expressions are evaluated"
                     .to_owned(),
             ),
+            provenance: None,
         });
     }
 }
@@ -342,6 +344,7 @@ pub(super) fn check_module_level_type_param_use(
                      the body of the generic class or function"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }
@@ -427,6 +430,7 @@ pub(super) fn check_type_stmt_uses_old_typevar(
                      TypeVars created outside the statement's scope"
                         .to_owned(),
                 ),
+                provenance: None,
             });
             // One diagnostic per type statement is enough
             return;
@@ -483,6 +487,7 @@ pub(super) fn check_type_stmt_in_function(
                          module or class scope"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
             }
             return;
@@ -547,6 +552,7 @@ pub(super) fn check_type_stmt_circular(
             path: path.to_owned(),
             help: Some("A type alias cannot reference itself without type parameters".to_owned()),
             note: None,
+        provenance: None,
         });
         return;
     }
@@ -605,6 +611,7 @@ pub(super) fn check_type_stmt_circular(
                                 .to_owned(),
                         ),
                         note: None,
+            provenance: None,
                     });
                 }
             }
@@ -691,6 +698,7 @@ pub(super) fn check_method_redefines_class_type_param(
                          a scoping violation"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
             }
         }

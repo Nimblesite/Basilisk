@@ -79,5 +79,6 @@ fn make_diagnostic(var: &VariableInfo, path: &str) -> Diagnostic {
         note: Some(
             "In Basilisk, all module-level variables require explicit type annotations".to_owned(),
         ),
+        provenance: None,
     }
 }

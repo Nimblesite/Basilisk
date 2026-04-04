@@ -59,9 +59,14 @@ pub struct WorkspaceIndex {
     /// Built during workspace initialisation and rebuilt when `uv.lock`
     /// changes. Used for import classification and dependency diagnostics.
     pub registry: Option<Arc<PackageRegistry>>,
-    /// Project-level checker configuration loaded from `pyproject.toml` or
-    /// `basilisk.json`. Applied to every analysis pass so that rule severity
-    /// overrides, per-module, and per-path settings match the CLI.
+    /// Per-root project-level checker configuration.
+    ///
+    /// Each workspace root can have its own `pyproject.toml` or `basilisk.json`
+    /// with different rule severity overrides, per-module, and per-path settings.
+    /// Files are matched to their owning root to apply the correct config.
+    pub root_configs: std::collections::HashMap<PathBuf, BasiliskConfig>,
+    /// Fallback checker configuration used when a file doesn't belong to any
+    /// known root, or for single-root backwards compatibility.
     pub checker_config: BasiliskConfig,
 }
 
@@ -77,16 +82,52 @@ impl std::fmt::Debug for WorkspaceIndex {
 
 impl WorkspaceIndex {
     /// Create an empty index for the given roots, mode, and project config.
+    ///
+    /// Each root is checked for its own `pyproject.toml` / `basilisk.json`.
+    /// If a root has no config file, the provided `checker_config` is used as
+    /// the fallback for that root.
     #[must_use]
     pub fn new(roots: Vec<PathBuf>, mode: AnalysisMode, checker_config: BasiliskConfig) -> Self {
+        // Load per-root configs. Each root may have its own pyproject.toml.
+        // If a root has no config file, fall back to the provided checker_config.
+        let root_configs: std::collections::HashMap<PathBuf, BasiliskConfig> = roots
+            .iter()
+            .map(|root| {
+                let has_config = root.join("pyproject.toml").is_file()
+                    || root.join("basilisk.json").is_file();
+                let cfg = if has_config {
+                    basilisk_config::load_basilisk_config(root)
+                } else {
+                    checker_config.clone()
+                };
+                (root.clone(), cfg)
+            })
+            .collect();
+
         Self {
             roots,
             files: DashMap::new(),
             mode,
             import_graph: std::sync::Mutex::new(ImportGraph::new()),
             registry: None,
+            root_configs,
             checker_config,
         }
+    }
+
+    /// Get the checker config for a file, looking up the owning root.
+    ///
+    /// Finds the root that is a prefix of the file path, and returns
+    /// that root's config. Falls back to the default `checker_config`.
+    #[must_use]
+    pub fn config_for_file(&self, file_path: &std::path::Path) -> &BasiliskConfig {
+        // Find the longest matching root (most specific).
+        self.roots
+            .iter()
+            .filter(|root| file_path.starts_with(root))
+            .max_by_key(|root| root.components().count())
+            .and_then(|root| self.root_configs.get(root))
+            .unwrap_or(&self.checker_config)
     }
 
     /// Return the `FileEntry` for a URI, if present.
@@ -159,7 +200,7 @@ impl WorkspaceIndex {
             })
         });
 
-        let (entry, lsp_diags) = analyse_with_config(text, &path, &self.checker_config);
+        let (entry, lsp_diags) = analyse_with_config(text, &path, self.config_for_file(&path));
         let mut entry = entry;
         entry.is_open = true;
         entry.version = version;
@@ -216,7 +257,7 @@ impl WorkspaceIndex {
             return None;
         }
 
-        let (entry, lsp_diags) = analyse_with_config(&text, &path, &self.checker_config);
+        let (entry, lsp_diags) = analyse_with_config(&text, &path, self.config_for_file(&path));
         let _ = self.files.insert(path, entry);
         Some((uri.clone(), lsp_diags))
     }
@@ -239,7 +280,7 @@ impl WorkspaceIndex {
             let _ = self.files.remove(&path);
             return (uri.clone(), vec![]);
         };
-        let (entry, lsp_diags) = analyse_with_config(&text, &path, &self.checker_config);
+        let (entry, lsp_diags) = analyse_with_config(&text, &path, self.config_for_file(&path));
         let _ = self.files.insert(path, entry);
         (uri.clone(), lsp_diags)
     }
@@ -276,7 +317,7 @@ impl WorkspaceIndex {
                 }
                 let text = std::fs::read_to_string(&path).ok()?;
                 let uri = path_to_uri(&path)?;
-                let (entry, lsp_diags) = analyse_with_config(&text, &path, &self.checker_config);
+                let (entry, lsp_diags) = analyse_with_config(&text, &path, self.config_for_file(&path));
                 let _ = self.files.insert(path, entry);
                 Some((uri, lsp_diags))
             })
@@ -349,7 +390,7 @@ impl WorkspaceIndex {
                 entry.text.clone()
             };
 
-            let (new_entry, lsp_diags) = analyse_with_config(&text, &importer_path, &self.checker_config);
+            let (new_entry, lsp_diags) = analyse_with_config(&text, &importer_path, self.config_for_file(&importer_path));
             let version = self.files.get(&importer_path).map_or(0, |e| e.version);
             let is_open = self.files.get(&importer_path).is_some_and(|e| e.is_open);
             let mut entry = new_entry;
@@ -1620,6 +1661,70 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    // ── Multi-root workspace ───────────────────────────────────────────────
+
+    #[test]
+    fn multi_root_per_root_config() {
+        let root_a = unique_tmp("bsk_multiroot_a");
+        let root_b = unique_tmp("bsk_multiroot_b");
+        std::fs::create_dir_all(&root_a).unwrap();
+        std::fs::create_dir_all(&root_b).unwrap();
+
+        // Root A: disable E0001 via pyproject.toml
+        std::fs::write(
+            root_a.join("pyproject.toml"),
+            "[tool.basilisk.rules]\n\"BSK-E0001\" = \"disabled\"\n",
+        )
+        .unwrap();
+        std::fs::write(root_a.join("a.py"), SRC_MISSING_ANNOTATION).unwrap();
+
+        // Root B: no config file (default rules apply)
+        std::fs::write(root_b.join("b.py"), SRC_MISSING_ANNOTATION).unwrap();
+
+        let idx = WorkspaceIndex::new(
+            vec![root_a.clone(), root_b.clone()],
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
+
+        // Check that root A's config disables E0001
+        let cfg_a = idx.config_for_file(&root_a.join("a.py"));
+        assert_eq!(
+            cfg_a.rule_severity("BSK-E0001"),
+            Some(basilisk_config::RuleSeverity::Disabled),
+            "root A should have E0001 disabled"
+        );
+
+        // Check that root B uses default config (E0001 not overridden)
+        let cfg_b = idx.config_for_file(&root_b.join("b.py"));
+        assert_eq!(
+            cfg_b.rule_severity("BSK-E0001"),
+            None,
+            "root B should have default config (no E0001 override)"
+        );
+
+        let _ = std::fs::remove_dir_all(&root_a);
+        let _ = std::fs::remove_dir_all(&root_b);
+    }
+
+    #[test]
+    fn config_for_file_falls_back_to_default() {
+        let root = unique_tmp("bsk_cfgfallback");
+        std::fs::create_dir_all(&root).unwrap();
+
+        let idx = WorkspaceIndex::new(
+            vec![root.clone()],
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
+
+        // File outside any root should fall back to default config.
+        let cfg = idx.config_for_file(std::path::Path::new("/nonexistent/foo.py"));
+        assert!(cfg.rules.is_empty(), "fallback config should have no rule overrides");
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     // ── Multiple overrides in one config ────────────────────────────────────
 
     #[test]
@@ -1710,6 +1815,7 @@ mod tests {
             path: "test.py".to_owned(),
             help: None,
             note: None,
+            provenance: None,
         };
         let lsp_diag = crate::workspace_analysis::bsk_to_lsp(&diag, "x\n");
 
@@ -1738,6 +1844,7 @@ mod tests {
             path: "test.py".to_owned(),
             help: None,
             note: None,
+            provenance: None,
         };
         let lsp_diag = crate::workspace_analysis::bsk_to_lsp(&diag, "x\n");
 
@@ -1761,6 +1868,7 @@ mod tests {
             path: "test.py".to_owned(),
             help: None,
             note: None,
+            provenance: None,
         };
         let lsp_diag = crate::workspace_analysis::bsk_to_lsp(&diag, "x\n");
 

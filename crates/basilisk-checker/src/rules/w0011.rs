@@ -50,6 +50,7 @@ impl Rule for UndeclaredDependencyImport {
                         "Transitive dependencies can disappear when direct dependencies change"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
             });
     }

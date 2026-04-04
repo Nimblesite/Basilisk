@@ -199,6 +199,7 @@ impl Rule for ProtocolVarianceMismatch {
                          declared variance"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
             }
         }

@@ -299,6 +299,7 @@ pub(super) fn check_frozen_inheritance(
                          cannot be mixed in the same hierarchy"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
             }
         }
@@ -339,6 +340,7 @@ pub(super) fn check_frozen_instance_assignment(
                  after construction"
                     .to_owned(),
             ),
+            provenance: None,
         });
     }
 }
@@ -461,6 +463,7 @@ pub(super) fn check_kw_only_positional_args(
                      constructor parameters keyword-only"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }
@@ -535,6 +538,7 @@ pub(super) fn check_no_order_comparison(
                  __lt__, __le__, __gt__, __ge__ methods"
                     .to_owned(),
             ),
+            provenance: None,
         });
     }
 }

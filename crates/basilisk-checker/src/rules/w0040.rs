@@ -42,6 +42,7 @@ impl Rule for LambdaMissingAnnotations {
                             .to_owned(),
                     ),
                     note: None,
+            provenance: None,
                 });
             }
         }
@@ -64,6 +65,7 @@ impl Rule for LambdaMissingAnnotations {
                                 .to_owned(),
                         ),
                         note: None,
+            provenance: None,
                     });
                 }
             }

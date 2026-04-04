@@ -94,6 +94,7 @@ fn check_inheritance(
                         "PEP 557: mixing frozen and non-frozen dataclasses is not allowed"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
             } else if !cls.is_dataclass_frozen && base_is_frozen {
                 diagnostics.push(Diagnostic {
@@ -113,6 +114,7 @@ fn check_inheritance(
                         "PEP 557: mixing frozen and non-frozen dataclasses is not allowed"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
             }
         }
@@ -178,6 +180,7 @@ fn check_frozen_instance_assigns(module: &ResolvedModule, diagnostics: &mut Vec<
             note: Some(
                 "PEP 557: `@dataclass(frozen=True)` prohibits attribute assignment".to_owned(),
             ),
+            provenance: None,
         });
     }
 }

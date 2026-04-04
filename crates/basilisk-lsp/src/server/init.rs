@@ -533,7 +533,8 @@ fn recheck_with_cross_module_symbols(
             continue;
         };
 
-        let checker_diags = basilisk_checker::check_with_config(resolved, &index.checker_config);
+        let file_config = index.config_for_file(entry.key());
+        let checker_diags = basilisk_checker::check_with_config(resolved, file_config);
         let lsp_diags: Vec<tower_lsp::lsp_types::Diagnostic> = checker_diags
             .iter()
             .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &entry.text))
@@ -656,7 +657,8 @@ pub(super) async fn rebuild_registry_and_resolve(server: &LspServer) {
         .iter_mut()
         .filter_map(|mut entry| {
             let resolved = entry.resolved.as_ref()?;
-            let checker_diags = basilisk_checker::check_with_config(resolved, &index.checker_config);
+            let file_config = index.config_for_file(entry.key());
+            let checker_diags = basilisk_checker::check_with_config(resolved, file_config);
             let lsp_diags: Vec<tower_lsp::lsp_types::Diagnostic> = checker_diags
                 .iter()
                 .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &entry.text))

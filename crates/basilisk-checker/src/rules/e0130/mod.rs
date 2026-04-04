@@ -144,6 +144,7 @@ impl Rule for TypeVarScopeViolation {
                                              outer class doesn't cover the inner one"
                                                 .to_owned(),
                                         ),
+                                        provenance: None,
                                     });
                                 }
                             }
@@ -227,6 +228,7 @@ impl Rule for TypeVarScopeViolation {
                                          outer class doesn't cover the inner one"
                                             .to_owned(),
                                     ),
+                                    provenance: None,
                                 });
                             }
                         }
@@ -277,6 +279,7 @@ impl Rule for TypeVarScopeViolation {
                                      appear in function or class bodies"
                                         .to_owned(),
                                 ),
+                                provenance: None,
                             });
                         }
                     }
@@ -319,6 +322,7 @@ impl Rule for TypeVarScopeViolation {
                                          cannot capture class-level TypeVars"
                                             .to_owned(),
                                     ),
+                                    provenance: None,
                                 });
                             }
                         }
@@ -373,6 +377,7 @@ impl Rule for TypeVarScopeViolation {
                                          appear at module scope"
                                             .to_owned(),
                                     ),
+                                    provenance: None,
                                 });
                             }
                         }

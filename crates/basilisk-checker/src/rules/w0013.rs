@@ -51,6 +51,7 @@ impl StaleLockFile {
                 "Stale lock files can cause incorrect import resolution and missing packages"
                     .to_owned(),
             ),
+            provenance: None,
         }
     }
 }

@@ -106,6 +106,7 @@ impl Rule for GeneratorReturnTypeViolation {
                 path: module.path.clone(),
                 help,
                 note,
+                provenance: None,
             });
         }
 
@@ -193,6 +194,7 @@ fn check_yield_types(func: &FunctionInfo, module: &ResolvedModule, out: &mut Vec
                      the generator annotation"
                 )),
                 note: None,
+            provenance: None,
             });
         }
     }
@@ -256,6 +258,7 @@ fn check_return_in_generator(
                  the function must return `R` on every code path"
                     .to_owned(),
             ),
+            provenance: None,
         });
     }
 
@@ -293,6 +296,7 @@ fn check_return_in_generator(
                     "In `Generator[Y, S, R]`, the third parameter `R` is the return type"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }

@@ -67,6 +67,7 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
              it cannot be used at module scope, in staticmethods, or in metaclass methods"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }
 

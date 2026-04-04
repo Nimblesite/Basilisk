@@ -295,6 +295,7 @@ fn check_function_def(
             path: path.to_owned(),
             help: Some("Use a concrete TypedDict type with Unpack".to_owned()),
             note: None,
+        provenance: None,
         });
         return;
     }
@@ -325,6 +326,7 @@ fn check_param_overlap(
                 path: path.to_owned(),
                 help: Some(format!("Make `{pname}` positional-only (add `/`)")),
                 note: None,
+            provenance: None,
             });
         }
     }
@@ -373,6 +375,7 @@ fn check_positional_args(
             path: path.to_owned(),
             help: Some("Pass keyword arguments instead".to_owned()),
             note: None,
+        provenance: None,
         });
     }
 }
@@ -406,6 +409,7 @@ fn check_missing_required(
                 path: path.to_owned(),
                 help: None,
                 note: None,
+            provenance: None,
             });
         }
     }
@@ -434,6 +438,7 @@ fn check_extra_keywords(
                     path: path.to_owned(),
                     help: None,
                     note: None,
+            provenance: None,
                 });
                 return;
             }
@@ -472,6 +477,7 @@ fn check_dict_spread(
                     path: path.to_owned(),
                     help: Some("Use a TypedDict instead of a plain dict".to_owned()),
                     note: None,
+            provenance: None,
                 });
             }
         }
@@ -516,6 +522,7 @@ fn check_duplicate_keywords(
                     path: path.to_owned(),
                     help: None,
                     note: None,
+            provenance: None,
                 });
                 return;
             }

@@ -53,6 +53,7 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
             "PEP 613: `x: TypeAlias = T` requires T to be a type, not a literal or expression"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }
 
@@ -650,6 +651,7 @@ fn check_single_annotation(
                 note: Some(format!(
                     "`{base}` does not use any TypeVar parameters in its definition"
                 )),
+                provenance: None,
             });
         } else if arg_count > info.typevar_count {
             diagnostics.push(Diagnostic {
@@ -666,6 +668,7 @@ fn check_single_annotation(
                     info.typevar_count
                 )),
                 note: None,
+            provenance: None,
             });
         } else if info.has_paramspec && arg_count == info.typevar_count {
             // Check if a simple type is used where a ParamSpec expects a
@@ -697,6 +700,7 @@ fn check_single_annotation(
                                 .to_owned(),
                         ),
                         note: None,
+            provenance: None,
                     });
                 }
             }
@@ -726,6 +730,7 @@ fn check_single_annotation(
                                      subtype of `{bound}`"
                                 )),
                                 note: None,
+            provenance: None,
                             });
                         }
                     }
@@ -779,6 +784,7 @@ fn check_union_alias_instantiation(
                     call.callee
                 )),
                 note: None,
+            provenance: None,
             });
         }
     }
@@ -828,6 +834,7 @@ fn check_runtime_name_annotations(
                          are valid annotations"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
             }
         }

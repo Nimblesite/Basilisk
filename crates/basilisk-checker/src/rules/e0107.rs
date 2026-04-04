@@ -167,6 +167,7 @@ impl Rule for VarianceIncompatibleBase {
                             .to_owned(),
                     ),
                     note: None,
+            provenance: None,
                 });
             }
         }

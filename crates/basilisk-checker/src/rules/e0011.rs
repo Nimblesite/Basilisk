@@ -100,6 +100,7 @@ fn make_return_any_diagnostic(func: &FunctionInfo, path: &str) -> Diagnostic {
             "`Any` disables type checking for this return value; use only when unavoidable"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }
 
@@ -120,6 +121,7 @@ fn make_param_any_diagnostic(param: &ParameterInfo, path: &str) -> Diagnostic {
         note: Some(
             "`Any` disables type checking for this parameter; use only when unavoidable".to_owned(),
         ),
+        provenance: None,
     }
 }
 
@@ -184,6 +186,7 @@ fn check_return_type_mismatch(
                 path: module.path.clone(),
                 help: Some("Check the return type annotation and return statements".to_owned()),
                 note: None,
+            provenance: None,
             });
         }
     }

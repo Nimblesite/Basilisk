@@ -206,6 +206,7 @@ fn check_type_alias_misuse(module: &ResolvedModule, diagnostics: &mut Vec<Diagno
                 path: path.to_owned(),
                 help: Some("Type aliases created with `type` cannot be instantiated".to_owned()),
                 note: None,
+            provenance: None,
             });
         }
 
@@ -229,6 +230,7 @@ fn check_type_alias_misuse(module: &ResolvedModule, diagnostics: &mut Vec<Diagno
                                 call.callee
                             )),
                             note: None,
+            provenance: None,
                         });
                     }
                 }
@@ -249,6 +251,7 @@ fn check_type_alias_misuse(module: &ResolvedModule, diagnostics: &mut Vec<Diagno
                     path: path.to_owned(),
                     help: Some("Type aliases created with `type` cannot be subclassed".to_owned()),
                     note: None,
+            provenance: None,
                 });
             }
         }
@@ -544,6 +547,7 @@ fn check_annotation_bounds(
                 note: Some(format!(
                     "PEP 695: `{arg_trimmed}` is not a subtype of `{bound}`"
                 )),
+                provenance: None,
             });
         }
     }
@@ -593,6 +597,7 @@ fn check_alias_attribute_access(
                                 .to_string(),
                         ),
                         note: None,
+            provenance: None,
                     });
                 }
             }

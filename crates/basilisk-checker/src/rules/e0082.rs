@@ -221,6 +221,7 @@ fn check_stmt_for_tvt_mismatch(
                      parameter types in order"
                         .to_owned(),
                 ),
+                provenance: None,
             });
             return; // One diagnostic per call is enough.
         }

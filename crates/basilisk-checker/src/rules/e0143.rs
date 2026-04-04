@@ -298,6 +298,7 @@ fn check_tuple_unpack(
                 "NamedTuple is a fixed-length tuple; unpack must match the field count exactly"
                     .to_owned(),
             ),
+            provenance: None,
         });
     }
 }
@@ -324,6 +325,7 @@ fn check_delete_target(target: &Expr, ctx: &ModuleContext, path: &str, diag: &mu
                                 .to_owned(),
                         ),
                         note: None,
+            provenance: None,
                     });
                 }
             }
@@ -360,6 +362,7 @@ fn check_delete_target(target: &Expr, ctx: &ModuleContext, path: &str, diag: &mu
                                 .to_owned(),
                         ),
                         note: None,
+            provenance: None,
                     });
                 }
             }
@@ -396,6 +399,7 @@ fn check_assignment_target(
                                 .to_owned(),
                         ),
                         note: None,
+            provenance: None,
                     });
                 }
             }
@@ -431,6 +435,7 @@ fn check_assignment_target(
                                 .to_owned(),
                         ),
                         note: None,
+            provenance: None,
                     });
                 }
             }
@@ -517,5 +522,6 @@ fn out_of_bounds_diag(
         note: Some(
             "NamedTuple is a subtype of tuple; index access obeys the same bounds".to_owned(),
         ),
+        provenance: None,
     }
 }

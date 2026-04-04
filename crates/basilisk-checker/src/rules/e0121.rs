@@ -178,6 +178,7 @@ impl Rule for ProtocolAssignmentConformance {
                                  that cannot be used with structural subtyping"
                                     .to_owned(),
                             ),
+                            provenance: None,
                         });
                     }
                 }
@@ -339,6 +340,7 @@ fn check_protocol_conformance(
                  implement all methods declared by the protocol"
                     .to_owned(),
             ),
+            provenance: None,
         });
     }
 }

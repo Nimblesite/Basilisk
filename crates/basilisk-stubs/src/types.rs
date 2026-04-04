@@ -50,6 +50,47 @@ pub enum StubTier {
     Tier3,
 }
 
+/// Where a type's information originated, from the perspective of the type
+/// checker.  Used for cascade suppression (suppress downstream errors from
+/// untyped imports) and hover annotations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TypeProvenance {
+    /// From source code annotations or inference.
+    Source,
+    /// From typeshed or hand-written, verified stubs.
+    StubTier1,
+    /// From auto-generated, community-reviewed stubs.
+    StubTier2,
+    /// From best-effort auto-generated stubs (`basilisk stubs generate`).
+    StubTier3,
+    /// No type information available — import is unresolved.
+    Untyped,
+}
+
+impl From<(&StubSource, &StubTier)> for TypeProvenance {
+    fn from((source, tier): (&StubSource, &StubTier)) -> Self {
+        match (source, tier) {
+            (_, &StubTier::Tier1) => Self::StubTier1,
+            (_, &StubTier::Tier2) => Self::StubTier2,
+            (_, &StubTier::Tier3) => Self::StubTier3,
+        }
+    }
+}
+
+impl TypeProvenance {
+    /// Human-readable label for hover tooltips.
+    #[must_use]
+    pub fn hover_label(self) -> Option<&'static str> {
+        match self {
+            Self::Source => None,
+            Self::StubTier1 => Some("(typeshed)"),
+            Self::StubTier2 => Some("(community stub)"),
+            Self::StubTier3 => Some("(best-effort stub, may be inaccurate)"),
+            Self::Untyped => Some("(no type stubs available)"),
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Parsed stub types — extracted from `.pyi` files
 // ---------------------------------------------------------------------------

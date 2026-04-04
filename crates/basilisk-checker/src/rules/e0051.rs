@@ -47,6 +47,7 @@ fn make_diag(message: String, span: basilisk_resolver::Span, path: &str) -> Diag
             "PEP 586: expressions, floats, type objects, ellipsis, and variables are forbidden"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }
 

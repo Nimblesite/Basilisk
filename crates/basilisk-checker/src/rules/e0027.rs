@@ -40,6 +40,7 @@ impl Rule for DuplicateTypeVarInGeneric {
                             "PEP 484: duplicate TypeVar parameters in Generic are invalid"
                                 .to_owned(),
                         ),
+                        provenance: None,
                     });
                 } else {
                     seen.push(&param.name);

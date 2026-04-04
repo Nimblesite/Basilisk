@@ -7,6 +7,7 @@
 //! generic fallback message is used.
 
 use basilisk_resolver::{ImportInfo, ImportResolution, ResolvedModule, UnresolvedReason};
+use basilisk_stubs::TypeProvenance;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
@@ -57,6 +58,7 @@ fn make_diagnostic(import: &ImportInfo, path: &str) -> Diagnostic {
         note: Some(
             "Basilisk requires complete type information for all imported modules".to_owned(),
         ),
+        provenance: Some(TypeProvenance::Untyped),
     }
 }
 

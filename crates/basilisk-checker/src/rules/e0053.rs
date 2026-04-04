@@ -53,6 +53,7 @@ impl Rule for AssertTypeMismatch {
                     "assert_type(expr, T) requires the inferred type of expr to be exactly T"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }

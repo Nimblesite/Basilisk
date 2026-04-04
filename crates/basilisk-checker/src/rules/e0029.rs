@@ -48,6 +48,7 @@ impl Rule for TypedDictMethodNotAllowed {
                         note: Some(
                             "PEP 589: TypedDict does not support method definitions".to_owned(),
                         ),
+                        provenance: None,
                     });
                 }
             }

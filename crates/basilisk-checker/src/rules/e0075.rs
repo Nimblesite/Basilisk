@@ -255,6 +255,7 @@ fn check_stmt_for_violations(
                                      concrete subclass, not the parent class"
                                         .to_owned(),
                                 ),
+                                provenance: None,
                             });
                         }
                     }
@@ -358,6 +359,7 @@ fn check_attr_assignment(
                  not the parent class"
                     .to_owned(),
             ),
+            provenance: None,
         });
     }
 }

@@ -54,6 +54,7 @@ impl Rule for InvalidCastCall {
                             "PEP 484: the first argument to `cast()` must be a type expression"
                                 .to_owned(),
                         ),
+                        provenance: None,
                     });
                 }
             } else {
@@ -70,6 +71,7 @@ impl Rule for InvalidCastCall {
                         "PEP 484: `cast(typ, val)` takes exactly two positional arguments"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
             }
         }

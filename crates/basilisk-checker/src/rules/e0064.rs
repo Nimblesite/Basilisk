@@ -42,6 +42,7 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
         path: path.to_owned(),
         help: None,
         note: Some("PEP 544/NamedTuple: keyword arguments must match declared fields".to_owned()),
+        provenance: None,
     }
 }
 

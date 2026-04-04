@@ -51,7 +51,8 @@ pub fn check(module: &basilisk_resolver::ResolvedModule) -> Vec<Diagnostic> {
 /// 2. Per-path overrides (`per-path-overrides."vendor/**"`)
 /// 3. Per-module overrides (`per-module-overrides."fastmcp"`)
 /// 4. Global rule severity overrides (`rules."BSK-E0010" = "warning"`)
-/// 5. Default rule severity
+/// 5. Cascade suppression (suppress downstream errors from untyped imports)
+/// 6. Default rule severity
 #[must_use]
 pub fn check_with_config(
     module: &basilisk_resolver::ResolvedModule,
@@ -61,6 +62,16 @@ pub fn check_with_config(
     let source = &module.source;
     let file_path = std::path::Path::new(&module.path);
     let raw = rules::run_all(module);
+
+    // Build the set of symbol names imported from unresolved modules.
+    // Used for cascade suppression: downstream errors referencing these names
+    // are suppressed since the root cause is the missing import (BSK-E0010).
+    let untyped_names: std::collections::HashSet<String> = module
+        .imports
+        .iter()
+        .filter(|i| i.resolution == basilisk_resolver::scope::ImportResolution::Unresolved)
+        .flat_map(|i| i.names.iter().cloned())
+        .collect();
 
     raw.into_iter()
         .filter_map(|mut diag| {
@@ -86,7 +97,23 @@ pub fn check_with_config(
                 return None;
             }
 
-            // 3. Global rule severity override from config.
+            // 3. Cascade suppression: suppress downstream errors that reference
+            //    symbols from unresolved imports. BSK-E0010 itself is never
+            //    suppressed — it is the root-cause diagnostic.
+            if code != "BSK-E0010"
+                && code != "BSK-W0010"
+                && should_suppress_cascade(&diag, &untyped_names, source)
+            {
+                return None;
+            }
+
+            // 4. Tier-based severity adjustment: Tier3 (best-effort) stubs
+            //    produce info-level diagnostics, not errors.
+            if diag.provenance == Some(basilisk_stubs::TypeProvenance::StubTier3) {
+                diag.severity = Severity::Info;
+            }
+
+            // 5. Global rule severity override from config.
             if let Some(severity) = config.rule_severity(code) {
                 match severity {
                     basilisk_config::RuleSeverity::Disabled => return None,
@@ -96,7 +123,7 @@ pub fn check_with_config(
                 }
             }
 
-            // 4. Per-path rule severity override.
+            // 6. Per-path rule severity override.
             if let Some(path_severity) =
                 find_path_rule_severity(code, file_path, &config.per_path_overrides)
             {
@@ -108,11 +135,78 @@ pub fn check_with_config(
                 }
             }
 
-            // 5. Inline source overrides (highest priority).
+            // 7. Inline source overrides (highest priority).
             let diag_line = suppression::byte_offset_to_line_in_source(source, diag.span.start);
             suppression::apply_overrides_at_line(diag, diag_line, &inline_overrides)
         })
         .collect()
+}
+
+/// Check whether a diagnostic should be suppressed because it references a
+/// symbol from an unresolved import.
+///
+/// Extracts the source text covered by the diagnostic's span and checks if
+/// any of the `untyped_names` appear as whole identifiers within it. This
+/// avoids cascading errors from untyped imports — the root cause is already
+/// reported by BSK-E0010.
+fn should_suppress_cascade(
+    diag: &Diagnostic,
+    untyped_names: &std::collections::HashSet<String>,
+    source: &str,
+) -> bool {
+    if untyped_names.is_empty() {
+        return false;
+    }
+
+    // Extract the source text at the diagnostic's span.
+    let start = diag.span.start_usize();
+    let end = diag.span.end_usize();
+    if start >= source.len() || end > source.len() || start >= end {
+        return false;
+    }
+    let span_text = &source[start..end];
+
+    // Also check the message — rules often include the symbol name.
+    for name in untyped_names {
+        if contains_identifier(span_text, name) || contains_identifier(&diag.message, name) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Check if `text` contains `ident` as a whole identifier (not a substring
+/// of a longer identifier).
+fn contains_identifier(text: &str, ident: &str) -> bool {
+    let bytes = text.as_bytes();
+    let ident_bytes = ident.as_bytes();
+    let ident_len = ident_bytes.len();
+
+    if ident_len == 0 || ident_len > bytes.len() {
+        return false;
+    }
+
+    for start in 0..=(bytes.len() - ident_len) {
+        if &bytes[start..start + ident_len] != ident_bytes {
+            continue;
+        }
+        // Check that the character before (if any) is not an identifier char.
+        let before_ok =
+            start == 0 || !is_identifier_char(bytes[start - 1]);
+        // Check that the character after (if any) is not an identifier char.
+        let after_ok =
+            start + ident_len == bytes.len() || !is_identifier_char(bytes[start + ident_len]);
+        if before_ok && after_ok {
+            return true;
+        }
+    }
+    false
+}
+
+/// ASCII-only identifier character check (sufficient for Python identifiers
+/// in diagnostic messages).
+const fn is_identifier_char(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_'
 }
 
 /// Check whether BSK-E0010 should be suppressed based on per-module overrides.
@@ -137,4 +231,83 @@ fn find_path_rule_severity(
 ) -> Option<basilisk_config::RuleSeverity> {
     basilisk_config::overrides::find_path_override(file_path, overrides)
         .and_then(|o| o.rule_overrides.get(rule_code).copied())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn contains_identifier_exact_match() {
+        assert!(contains_identifier("Foo", "Foo"));
+    }
+
+    #[test]
+    fn contains_identifier_within_text() {
+        assert!(contains_identifier("x = Foo()", "Foo"));
+        assert!(contains_identifier("bar.Foo.baz", "Foo"));
+    }
+
+    #[test]
+    fn contains_identifier_rejects_substring() {
+        assert!(!contains_identifier("FooBar", "Foo"));
+        assert!(!contains_identifier("aFoo", "Foo"));
+        assert!(!contains_identifier("Foo_bar", "Foo"));
+    }
+
+    #[test]
+    fn contains_identifier_empty_ident() {
+        assert!(!contains_identifier("abc", ""));
+    }
+
+    #[test]
+    fn cascade_suppression_suppresses_downstream() {
+        let source = "from requests import get\nx = get('url')\n";
+        let parsed =
+            basilisk_parser::parse_source(source.to_owned(), "test.py".to_owned()).unwrap();
+        let mut module = basilisk_resolver::resolve(&parsed).unwrap();
+        // Mark the import as unresolved.
+        if let Some(import) = module.imports.first_mut() {
+            import.resolution = basilisk_resolver::scope::ImportResolution::Unresolved;
+        }
+
+        let config = basilisk_config::BasiliskConfig::default();
+        let diagnostics = check_with_config(&module, &config);
+
+        // Should have BSK-E0010 for the unresolved import.
+        let e0010_count = diagnostics
+            .iter()
+            .filter(|d| d.code.code == "BSK-E0010")
+            .count();
+        assert!(e0010_count >= 1, "BSK-E0010 should fire for unresolved import");
+
+        // Should NOT have any downstream errors referencing `get`.
+        let downstream = diagnostics
+            .iter()
+            .filter(|d| d.code.code != "BSK-E0010" && d.code.code != "BSK-W0010")
+            .filter(|d| d.message.contains("get"))
+            .count();
+        assert_eq!(
+            downstream, 0,
+            "downstream errors referencing 'get' should be suppressed"
+        );
+    }
+
+    #[test]
+    fn cascade_suppression_does_not_suppress_resolved_imports() {
+        let source = "from os import path\nx = path.join('a', 'b')\n";
+        let parsed =
+            basilisk_parser::parse_source(source.to_owned(), "test.py".to_owned()).unwrap();
+        let module = basilisk_resolver::resolve(&parsed).unwrap();
+
+        let config = basilisk_config::BasiliskConfig::default();
+        let diagnostics = check_with_config(&module, &config);
+
+        // os is stdlib — no BSK-E0010 should fire.
+        let e0010_count = diagnostics
+            .iter()
+            .filter(|d| d.code.code == "BSK-E0010")
+            .count();
+        assert_eq!(e0010_count, 0, "stdlib imports should not fire BSK-E0010");
+    }
 }

@@ -66,6 +66,7 @@ impl Rule for TypeVarTupleInvalidParams {
                         "`TypeVarTuple` does not support variance, bounds, or constraints"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
             }
         }

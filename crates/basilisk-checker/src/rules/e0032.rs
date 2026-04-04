@@ -44,6 +44,7 @@ impl Rule for InvalidTypedDictBase {
                             "PEP 589: unrecognised keyword arguments in TypedDict are invalid"
                                 .to_owned(),
                         ),
+                        provenance: None,
                     });
                 }
             }

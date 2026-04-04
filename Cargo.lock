@@ -347,6 +347,7 @@ name = "basilisk-resolver"
 version = "0.1.0"
 dependencies = [
  "basilisk-parser",
+ "basilisk-stubs",
  "basilisk-test-utils",
  "ruff_python_ast",
  "ruff_text_size",

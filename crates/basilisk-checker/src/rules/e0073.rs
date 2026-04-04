@@ -169,6 +169,7 @@ fn check_variable(
                 "A `NamedTuple` is a subtype of a tuple with matching element count and types"
                     .to_owned(),
             ),
+            provenance: None,
         });
         return;
     }
@@ -278,6 +279,7 @@ fn check_element_types(
                     "`{rhs_name}` is a `{nt_class_name}` instance; named tuples are \
                      covariant in their field types",
                 )),
+                provenance: None,
             });
         }
     }

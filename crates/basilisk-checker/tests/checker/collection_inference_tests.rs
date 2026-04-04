@@ -203,4 +203,3 @@ def f() -> None:
     assert!(diags.is_empty(), "augmented assignment should be clean");
     Ok(())
 }
-

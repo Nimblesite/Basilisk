@@ -363,5 +363,6 @@ fn make_diagnostic(
         path: path.to_owned(),
         help,
         note,
+        provenance: None,
     }
 }

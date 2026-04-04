@@ -154,6 +154,7 @@ fn check_ordering(
                          appears earlier in the same Generic parameter list"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
             }
         }
@@ -250,6 +251,7 @@ fn check_outer_scope(
                                      as a default is not supported"
                                         .to_owned(),
                                 ),
+                                provenance: None,
                             });
                         }
                     }
@@ -322,6 +324,7 @@ fn check_one_bound_compat(
                         "PEP 696: T1's bound must be a subtype of T2's bound when T2 defaults to T1"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
             }
         }
@@ -365,6 +368,7 @@ fn check_constraint_compat(
                     "PEP 696: the upper bound of the default TypeVar must be compatible with the constrained TypeVar's constraint types"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }
@@ -399,6 +403,7 @@ fn check_constraint_compat(
                 "PEP 696: the constraints of T2 must be a superset of the constraints of T1 when T2 defaults to T1"
                     .to_owned(),
             ),
+            provenance: None,
         });
     }
 }
@@ -540,6 +545,7 @@ fn check_subscripted_class_on_line(
                     "PEP 696: TypeVar defaults are resolved when the class is subscripted with fewer type arguments"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }

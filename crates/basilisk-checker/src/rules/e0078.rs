@@ -161,6 +161,7 @@ fn check_return_stmt_for_concrete_class(
                         "`Self` resolves to the concrete subclass type, not the parent class"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
             }
         }
@@ -255,5 +256,6 @@ fn check_expr_for_self_subscript(
              parameters; subscripting it is invalid"
                 .to_owned(),
         ),
+        provenance: None,
     });
 }

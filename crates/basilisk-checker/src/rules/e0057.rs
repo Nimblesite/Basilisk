@@ -34,6 +34,7 @@ fn make_diag(name: &str, span: Span, path: &str) -> Diagnostic {
         note: Some(
             "PEP 695: `type X = T` requires T to be a type, not a literal or expression".to_owned(),
         ),
+        provenance: None,
     }
 }
 
