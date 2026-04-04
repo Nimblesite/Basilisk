@@ -362,8 +362,11 @@ dependencies = [
  "phf_codegen",
  "ruff_python_ast",
  "ruff_python_parser",
+ "ruff_text_size",
+ "serde_json",
  "tempfile",
  "thiserror 2.0.18",
+ "tracing",
 ]
 
 [[package]]

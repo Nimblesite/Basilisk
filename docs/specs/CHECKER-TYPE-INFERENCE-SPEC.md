@@ -12,7 +12,7 @@ Basilisk's type inference towers above the other systems like Pyrefly and PyRigh
 
 ---
 
-## 0. Design Philosophy
+## Design Philosophy {#TYPEINF-PHILOSOPHY}
 
 Basilisk's type inference is **strict by default and bidirectional throughout**. Where Pyright makes inference optional or limits it to avoid false positives, Basilisk demands more from both the programmer and itself. Where Pyright falls back to `Unknown` or `Any`, Basilisk either produces a precise type or emits a diagnostic.
 
@@ -29,7 +29,7 @@ Key design decisions that make Basilisk **more advanced than Pyright**:
 | Unannotated functions | Checked via call-site inference | **Error** — every public function must be annotated |
 | Redundant annotations | Silently accepted | **Warning** — redundant explicit annotations must be removed |
 
-### 0.1 The Redundant Annotation Principle
+### Redundant Annotation Principle {#TYPEINF-REDUNDANT}
 
 > **This is a critical, non-negotiable design goal.**
 
@@ -78,7 +78,7 @@ This rule applies to:
 
 ---
 
-## 1. Governing PEPs
+## Governing PEPs {#TYPEINF-PEPS}
 
 The following PEPs define the ground truth for Basilisk's inference rules. All are required reading for implementors.
 
@@ -106,9 +106,9 @@ The following PEPs define the ground truth for Basilisk's inference rules. All a
 
 ---
 
-## 2. Type Inference Overview
+## Type Inference Overview {#TYPEINF-OVERVIEW}
 
-### 2.1 What Is Inferred
+### What Is Inferred {#TYPEINF-INFERRED}
 
 Basilisk infers types for:
 
@@ -121,7 +121,7 @@ Basilisk infers types for:
 - **Generic instantiation** — `list[int]()` → `list[int]`; `Foo(x)` → `Foo[T]` solved from `x` (see §8)
 - **Narrowed types** — after guards (see §9)
 
-### 2.2 What Is Never Inferred (Must Be Annotated)
+### What Is Never Inferred {#TYPEINF-REQUIRED}
 
 Basilisk **requires explicit annotations** for:
 
@@ -132,7 +132,7 @@ Basilisk **requires explicit annotations** for:
 
 This is the fundamental difference from Pyright: Basilisk does not silently fall back to `Unknown`. A missing annotation is a **diagnostic**, not an inference opportunity.
 
-### 2.3 Inference Algorithm
+### Inference Algorithm {#TYPEINF-ALGO}
 
 Basilisk uses a **bidirectional type inference** algorithm:
 
@@ -146,9 +146,9 @@ This is the same approach as described in the [bidirectional typing literature](
 
 ---
 
-## 3. Variable Type Inference
+## Variable Type Inference {#TYPEINF-VARS}
 
-### 3.1 Simple Assignment
+### Simple Assignment {#TYPEINF-VARS-SIMPLE}
 
 ```python
 x = 42          # int
@@ -173,7 +173,7 @@ def f() -> None:
 
 This is stricter than Pyright, which applies literal inference uniformly and sometimes infers `Literal` in local scopes. Basilisk reserves `Literal` inference for module/class constants.
 
-### 3.2 Multiple Assignment (Flow Union)
+### Multiple Assignment {#TYPEINF-VARS-FLOW}
 
 When a variable is assigned in multiple branches, the inferred type is the **union** of all assigned types:
 
@@ -188,7 +188,7 @@ def f(cond: bool) -> None:
 
 This follows [PEP 484 §Union types](https://peps.python.org/pep-0484/#union-types) and the Python typing spec on [variable type narrowing](https://typing.readthedocs.io/en/latest/spec/narrowing.html).
 
-### 3.3 Annotated Variable
+### Annotated Variable {#TYPEINF-VARS-ANNOTATED}
 
 When an annotation is present, the annotation **is** the declared type. The inferred RHS type must be assignable to it:
 
@@ -201,7 +201,7 @@ z: str = 42         # BSK-E0010: int is not assignable to str
 > **Authority**: [PEP 526 §Annotated assignment statements](https://peps.python.org/pep-0526/#annotated-assignment-statements):
 > "If a variable has been annotated, all assignments to that variable will be type-checked."
 
-### 3.4 Augmented Assignment
+### Augmented Assignment {#TYPEINF-VARS-AUGMENTED}
 
 ```python
 x = 1
@@ -210,7 +210,7 @@ x += 2   # still int — calls __iadd__ or __add__, return type drives x's new t
 
 The type of `x` after `x op= rhs` is the return type of `type(x).__iadd__(rhs)` (or `__add__` if `__iadd__` is absent). If the return type differs from `x`'s current type, the narrowed type applies.
 
-### 3.5 Walrus Operator (PEP 572)
+### Walrus Operator {#TYPEINF-VARS-WALRUS}
 
 ```python
 if (n := len(a)) > 10:
@@ -223,9 +223,9 @@ The walrus operator `:=` assigns the value and the **expression type equals the 
 
 ---
 
-## 4. Function Type Inference
+## Function Type Inference {#TYPEINF-FUNC}
 
-### 4.1 Parameters
+### Parameters {#TYPEINF-FUNC-PARAMS}
 
 **All parameters must be explicitly annotated.** There are no exceptions for public API functions. This fires `BSK-E0001`.
 
@@ -246,7 +246,7 @@ The **only parameters that are inferred rather than annotated** are:
 > **Authority**: [PEP 673 (Self type)](https://peps.python.org/pep-0673/) for `Self` semantics.
 > Pyright docs: "The `self` parameter in instance methods is inferred as the containing class type using the `Self` type."
 
-### 4.2 Default Parameters
+### Default Parameters {#TYPEINF-FUNC-DEFAULTS}
 
 When a parameter has no annotation but has a default, Basilisk **does not** infer the type from the default. The annotation is still required. This is stricter than Pyright, which infers `param: type(default)` for unannotated defaulted parameters.
 
@@ -258,7 +258,7 @@ def connect(timeout: int = 30): # ✓
     pass
 ```
 
-### 4.3 Return Types
+### Return Types {#TYPEINF-FUNC-RETURN}
 
 Return types are **inferred from the function body** but an annotation is required for all non-trivial public functions (those that are not `-> None` trivially).
 
@@ -287,7 +287,7 @@ def sometimes_returns(x: int) -> int | None:
 
 > **Authority**: [PEP 484 §The `NoReturn` type](https://peps.python.org/pep-0484/#the-noreturn-type).
 
-### 4.4 `self` and `cls` Inference
+### `self` and `cls` Inference {#TYPEINF-FUNC-SELFCLS}
 
 | Parameter | Context | Inferred type |
 |---|---|---|
@@ -313,7 +313,7 @@ reveal_type(b)  # AdvancedBuilder — not Builder
 
 > **Authority**: [PEP 673](https://peps.python.org/pep-0673/).
 
-### 4.5 Lambda Inference
+### Lambda Inference {#TYPEINF-FUNC-LAMBDA}
 
 Lambdas cannot have annotated parameters. Basilisk infers lambda parameter types exclusively from **bidirectional context** (the expected type pushed from the outer expression).
 
@@ -328,7 +328,7 @@ f = lambda x: x + 1   # warning: x is unknown
 
 Without an expected type, unannotated lambda parameters are `Unknown`. Unlike Pyright, Basilisk emits a **warning** (not silence) when a lambda's parameters cannot be inferred.
 
-### 4.6 Overloads
+### Overloads {#TYPEINF-FUNC-OVERLOADS}
 
 Overloaded functions require full annotation on every `@overload` variant. The implementation signature (without `@overload`) must be compatible with all variants.
 
@@ -347,9 +347,9 @@ A single `@overload` without an implementation is only valid in stub files (`.py
 
 ---
 
-## 5. Collection Type Inference
+## Collection Type Inference {#TYPEINF-COLLECTIONS}
 
-### 5.1 Lists
+### Lists {#TYPEINF-COLLECTIONS-LISTS}
 
 Without bidirectional context:
 
@@ -368,7 +368,7 @@ x: list[float] = [1, 2, 3]   # list[float] — ints widen to float via expected 
 
 > **Difference from Pyright**: Pyright's loose mode uses `list[Unknown]` for heterogeneous lists. Basilisk always uses union types. Pyright's `strictListInference` is always-on in Basilisk.
 
-### 5.2 Dicts
+### Dicts {#TYPEINF-COLLECTIONS-DICTS}
 
 ```python
 {}                  # dict[Never, Never]
@@ -377,7 +377,7 @@ x: list[float] = [1, 2, 3]   # list[float] — ints widen to float via expected 
 {1: "a", "b": 2}   # dict[int | str, str | int]
 ```
 
-### 5.3 Sets
+### Sets {#TYPEINF-COLLECTIONS-SETS}
 
 ```python
 set()           # set[Never]
@@ -385,7 +385,7 @@ set()           # set[Never]
 {1, "hi"}       # set[int | str]
 ```
 
-### 5.4 Tuples
+### Tuples {#TYPEINF-COLLECTIONS-TUPLES}
 
 Tuples are **fixed-length by default**. Each element is typed independently:
 
@@ -404,7 +404,7 @@ def variadic(*args: int) -> None:
 
 > **Authority**: [Typing spec — Tuple types](https://typing.readthedocs.io/en/latest/spec/special-forms.html#tuple).
 
-### 5.5 Comprehensions
+### Comprehensions {#TYPEINF-COLLECTIONS-COMPREHENSIONS}
 
 ```python
 [x * 2 for x in range(10)]         # list[int]
@@ -415,9 +415,9 @@ def variadic(*args: int) -> None:
 
 ---
 
-## 6. Generic Type Inference
+## Generic Type Inference {#TYPEINF-GENERICS}
 
-### 6.1 TypeVar Solving
+### TypeVar Solving {#TYPEINF-GENERICS-TYPEVAR}
 
 When a generic function is called, Basilisk solves TypeVars using **bidirectional constraint propagation**:
 
@@ -438,7 +438,7 @@ z: float = first([1, 2, 3])  # T solved to int; int assignable to float ✓
 
 > **Authority**: [PEP 484 §Generics](https://peps.python.org/pep-0484/#generics).
 
-### 6.2 Constrained TypeVars
+### Constrained TypeVars {#TYPEINF-GENERICS-CONSTRAINED}
 
 ```python
 AnyStr = TypeVar("AnyStr", str, bytes)
@@ -462,7 +462,7 @@ reveal_type(result)            # str
 > **Authority**: [Typing spec — Constrained TypeVars](https://typing.readthedocs.io/en/latest/spec/generics.html#constrained-type-variables).
 > [Pyright docs](https://github.com/microsoft/pyright/blob/main/docs/type-inference.md): "When a subtype is passed to a constrained TypeVar, the inferred type is the matching constraint, not the subtype."
 
-### 6.3 Bound TypeVars
+### Bound TypeVars {#TYPEINF-GENERICS-BOUND}
 
 ```python
 C = TypeVar("C", bound="Comparable")

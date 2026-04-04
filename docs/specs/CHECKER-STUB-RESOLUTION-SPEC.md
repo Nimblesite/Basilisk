@@ -5,7 +5,7 @@
 
 ---
 
-## 1. PEP 561 Resolution Order
+## PEP 561 Resolution Order {#STUBRES-PEP561}
 
 Following [PEP 561](https://peps.python.org/pep-0561/), matching Pyright's behaviour:
 
@@ -20,7 +20,7 @@ Following [PEP 561](https://peps.python.org/pep-0561/), matching Pyright's behav
 
 ---
 
-## 2. Stub Discovery Engine
+## Stub Discovery Engine {#STUBRES-ENGINE}
 
 The `basilisk-stubs` crate provides stub resolution:
 
@@ -46,14 +46,14 @@ pub enum StubTier {
 }
 ```
 
-### typeshed Bundling
+### typeshed Bundling {#STUBRES-TYPESHED}
 
 - `build.rs` in `basilisk-stubs` reads typeshed `.pyi` files at compile time
 - Produces a `phf` hash map for O(1) module lookup
 - `lookup_builtin()` queries this index
 - The stdlib whitelist becomes derived data, not a maintained list
 
-### `.pyi` File Parsing
+### .pyi File Parsing {#STUBRES-PYI}
 
 Since Basilisk uses `ruff_python_parser`, the same parser handles `.pyi` files:
 
@@ -64,7 +64,7 @@ Since Basilisk uses `ruff_python_parser`, the same parser handles `.pyi` files:
 
 ---
 
-## 3. Type Provenance
+## Type Provenance {#STUBRES-PROVENANCE}
 
 Types carry metadata about where their type information came from:
 
@@ -83,7 +83,7 @@ pub struct TrackedType {
 }
 ```
 
-### Diagnostic Behaviour by Provenance
+### Diagnostic Behaviour by Provenance {#STUBRES-PROVENANCE-DIAG}
 
 | Provenance | BSK-E0010 | Downstream type errors | LSP hover |
 |------------|-----------|----------------------|-----------|
@@ -100,7 +100,7 @@ One diagnostic at the import site is worth more than fifty cascading errors at u
 3. Downstream rules check provenance — if one operand is `Untyped`, the cascade is suppressed
 4. The developer fixes the root cause (add stubs, suppress, or configure) rather than fighting noise
 
-### Provenance in Hover
+### Provenance in Hover {#STUBRES-PROVENANCE-HOVER}
 
 | Cursor on | Hover display |
 |-----------|---------------|
@@ -113,7 +113,7 @@ One diagnostic at the import site is worth more than fifty cascading errors at u
 
 ---
 
-## 4. Suppression System
+## Suppression System {#STUBRES-SUPPRESSION}
 
 Four-mode severity for every rule: `error`, `warning`, `info`, `disabled`. Configurable at every scope:
 
@@ -141,7 +141,7 @@ from result import Result, Ok, Err
 
 ---
 
-## 5. Configuration
+## Configuration {#STUBRES-CONFIG}
 
 | Setting Key | Type | Default | Description |
 |------------|------|---------|-------------|
@@ -168,7 +168,7 @@ rules.disabled = ["BSK-E0010"]
 
 ---
 
-## 6. Auto-Stub Generation (CLI)
+## Auto-Stub Generation {#STUBRES-AUTOGEN}
 
 ```bash
 basilisk stubs generate requests      # generate stubs for one package
@@ -178,7 +178,7 @@ basilisk stubs status                 # show stub coverage report
 
 Generated stubs go into `.basilisk/stubs/`, tagged as Tier 3. The provenance system ensures these produce warnings, not false confidence.
 
-### Generation Modes
+### Generation Modes {#STUBRES-AUTOGEN-MODES}
 
 | Mode | Source | Accuracy |
 |------|--------|----------|
@@ -188,7 +188,7 @@ Generated stubs go into `.basilisk/stubs/`, tagged as Tier 3. The provenance sys
 
 ---
 
-## 7. Risks and Mitigations
+## Risks and Mitigations {#STUBRES-RISKS}
 
 | Risk | Mitigation |
 |------|------------|

@@ -5,6 +5,7 @@
 //! - Built-in type lookup for Python primitives
 //! - Stub resolution data model ([`StubResolution`], [`StubSource`], [`StubTier`])
 
+pub mod generate;
 pub mod pyi_parser;
 pub mod types;
 

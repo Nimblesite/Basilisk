@@ -1,10 +1,8 @@
 # Basilisk Activity Panel
 
-## Goal
+## Goal {#ACTPANEL-GOAL}
 
 The Basilisk activity icon opens a sidebar that is **genuinely useful** — not a branding placeholder. It gives Python developers immediate, actionable insight into their codebase: module structure, type coverage, diagnostics, adoption progress, and what Basilisk actually does for them.
-
-Every panel must pass the bar: **"Would I leave this open while coding?"** If not, cut it.
 
 **Cross-editor spec.** The LSP commands and data model are shared. The rendering differs per editor. This spec defines the shared protocol first, then per-editor implementation notes. Only **differences** are documented per-editor — if it's the same, it's in the shared section.
 
@@ -19,139 +17,57 @@ Every panel must pass the bar: **"Would I leave this open while coding?"** If no
 
 ---
 
-## Architecture
+## Architecture {#ACTPANEL-ARCH}
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│  Editor (VS Code / Zed / Neovim)                             │
-│                                                              │
-│  ┌── Activity Sidebar ────────────────────────────────────┐  │
-│  │                                                        │  │
-│  │  ┌── Module Explorer ──────────────────────────────┐   │  │
-│  │  │  Semantic tree of workspace Python modules      │   │  │
-│  │  │  with classes, functions, variables, types       │   │  │
-│  │  └─────────────────────────────────────────────────┘   │  │
-│  │                                                        │  │
-│  │  ┌── Type Health ──────────────────────────────────┐   │  │
-│  │  │  Coverage %, adoption status, diagnostics       │   │  │
-│  │  │  per-file and per-module rollup                 │   │  │
-│  │  └─────────────────────────────────────────────────┘   │  │
-│  │                                                        │  │
-│  │  ┌── Basilisk ─────────────────────────────────────┐   │  │
-│  │  │  What is this? Feature status. Quick actions.   │   │  │
-│  │  │  Getting started. Toggle features.              │   │  │
-│  │  └─────────────────────────────────────────────────┘   │  │
-│  └────────────────────────────────────────────────────────┘  │
-│                                                              │
-│       ▲ all data via LSP custom commands ▼                   │
-│                                                              │
-│  ┌── basilisk lsp (Rust) ─────────────────────────────────┐  │
-│  │  basilisk/workspaceModules                             │  │
-│  │  basilisk/moduleChanged                                │  │
-│  │  basilisk/typeHealth                                   │  │
-│  └────────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph "Editor (VS Code / Zed / Neovim)"
+        subgraph "Activity Sidebar"
+            ME[Module Explorer<br/>Semantic tree of workspace Python modules]
+            TH[Type Health<br/>Coverage %, adoption status, diagnostics]
+            BI[Basilisk Info<br/>Feature status, quick actions, getting started]
+        end
+    end
+
+    subgraph "basilisk lsp (Rust)"
+        WM["basilisk/workspaceModules"]
+        MC["basilisk/moduleChanged"]
+        THC["basilisk/typeHealth"]
+    end
+
+    ME <-->|"custom LSP commands"| WM
+    TH <-->|"custom LSP commands"| THC
+    ME <-->|"notification"| MC
 ```
 
 All data flows from the LSP server via custom commands. The editor extension is a **thin rendering layer**.
 
 ---
 
-## Custom LSP Commands (Shared)
+## Custom LSP Commands {#ACTPANEL-CMDS}
 
-These commands are the shared backbone. Every editor uses the same request/response types.
-
-### `basilisk/workspaceModules`
-
-Returns the semantic module tree for the workspace.
-
-- **Direction**: Client -> Server (request)
-- **Params**: `{ scope?: string }` — optional module name prefix filter (e.g. `"myapp.api"`)
-- **Returns**: `WorkspaceModulesResponse`
-- **Trigger**: On panel open, refresh, or after `basilisk/moduleChanged` notification
-
-### `basilisk/moduleChanged`
-
-Server pushes updated module data after re-analysis.
-
-- **Direction**: Server -> Client (notification)
-- **Params**: `{ module: ModuleNode }` — the changed module's updated tree
-- **Trigger**: After file save triggers re-analysis
-
-### `basilisk/typeHealth`
-
-Returns type coverage and diagnostic health for the workspace.
-
-- **Direction**: Client -> Server (request)
-- **Params**: `{}` (whole workspace) or `{ module?: string }` (specific module)
-- **Returns**: `TypeHealthResponse`
-- **Trigger**: On panel open, refresh, diagnostic changes
+> See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CMDS](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDS) for command definitions (`basilisk/workspaceModules`, `basilisk/moduleChanged`, `basilisk/typeHealth`).
 
 ---
 
-## Shared Data Model
+## Data Model {#ACTPANEL-MODEL}
+
+> Canonical types (`ModuleNode`, `SymbolNode`, `WorkspaceModulesResponse`, `HealthStats`, `ModuleHealth`, `TypeHealthResponse`) are defined in [LSP-ARCHITECTURE-SPEC.md §LSPARCH-TYPES](LSP-ARCHITECTURE-SPEC.md#LSPARCH-TYPES).
+
+The activity panel extends the canonical types with these additional fields for UI rendering:
 
 ```typescript
-// --- Module Explorer ---
-
-interface WorkspaceModulesResponse {
-    modules: ModuleNode[];
-}
-
-interface ModuleNode {
-    /** Fully qualified module name: "myapp.api.auth" */
-    name: string;
-    /** Absolute file path */
-    path: string;
-    /** Package (directory) or module (file) */
-    kind: "package" | "module";
-    /** Child modules (packages only) */
-    children: ModuleNode[];
-    /** Top-level symbols exported by this module */
-    symbols: SymbolNode[];
-}
-
-interface SymbolNode {
-    name: string;
-    kind: "class" | "function" | "variable" | "constant" | "typeAlias";
-    /** Human-readable type string: "(x: int, y: int) -> Point" */
-    type: string;
-    /** Line number in source */
-    line: number;
-    /** Children (methods for classes, nested classes) */
-    children: SymbolNode[];
+/** Extended SymbolNode fields for activity panel rendering. */
+interface SymbolNodeExtensions {
     /** Exported via __all__? */
     exported: boolean;
     /** Has type annotation? */
     annotated: boolean;
 }
 
-// --- Type Health ---
-
-interface TypeHealthResponse {
-    /** Overall workspace stats */
-    workspace: HealthStats;
-    /** Per-module breakdown */
-    modules: ModuleHealth[];
-}
-
-interface HealthStats {
-    totalSymbols: number;
-    annotatedSymbols: number;
-    /** annotatedSymbols / totalSymbols * 100 */
-    coveragePercent: number;
-    errors: number;
-    warnings: number;
-    adoptedFiles: number;
-    totalFiles: number;
-}
-
-interface ModuleHealth {
-    name: string;
+/** Extended ModuleHealth fields for activity panel rendering. */
+interface ModuleHealthExtensions {
     path: string;
-    coveragePercent: number;
-    errors: number;
-    warnings: number;
     /** true if file is in adopted (errors-as-warnings) mode */
     adopted: boolean;
     /** Unannotated symbol names (for quick-fix suggestions) */
@@ -161,11 +77,11 @@ interface ModuleHealth {
 
 ---
 
-## Panel 1: Module Explorer
+## Panel 1: Module Explorer {#ACTPANEL-MODULES}
 
 The killer panel. Shows the **semantic** structure of the workspace — not a file tree, a *module* tree. Every Python developer needs to understand their module graph, and the built-in Explorer doesn't show it.
 
-### Tree Structure
+### Tree Structure {#ACTPANEL-MODULES-TREE}
 
 ```
 myapp/
@@ -195,7 +111,7 @@ myapp/
       +-- def now() -> datetime
 ```
 
-### Tree Item Properties
+### Tree Item Properties {#ACTPANEL-MODULES-ITEMS}
 
 | Property | Value |
 |----------|-------|
@@ -205,14 +121,14 @@ myapp/
 | Tooltip | Full signature + docstring first line (if available) |
 | Click action | Open file at the symbol's line |
 
-### Decorations
+### Decorations {#ACTPANEL-MODULES-DECOR}
 
 - **Unannotated symbols**: italic label, warning suffix — visual nudge to add types
 - **Private symbols** (`_prefixed`): dimmed
 - **`__all__` exported**: export icon overlay
 - **Classes with errors**: red dot decoration
 
-### Context Menu Actions
+### Context Menu Actions {#ACTPANEL-MODULES-CTX}
 
 | Action | Scope |
 |--------|-------|
@@ -224,7 +140,7 @@ myapp/
 | Organize Imports | Module |
 | Fix All | Module |
 
-### Toolbar Actions
+### Toolbar Actions {#ACTPANEL-MODULES-TOOLBAR}
 
 | Action | Description |
 |--------|-------------|
@@ -233,7 +149,7 @@ myapp/
 | Filter | Toggle filter input to search modules/symbols by name |
 | Toggle View | Switch between tree (grouped by module) and flat (all symbols alphabetically) |
 
-### Refresh Strategy
+### Refresh Strategy {#ACTPANEL-MODULES-REFRESH}
 
 - **On workspace open**: full fetch
 - **On file save**: incremental update via `basilisk/moduleChanged` notification
@@ -242,7 +158,7 @@ myapp/
 
 ---
 
-## Panel 2: Type Health
+## Panel 2: Type Health {#ACTPANEL-HEALTH}
 
 At-a-glance view of how well-typed the codebase is. Answers: "How much of my code does Basilisk actually understand?"
 
@@ -304,7 +220,7 @@ The top-level item is a summary row showing workspace-wide stats:
 
 ---
 
-## Panel 3: Basilisk
+## Panel 3: Basilisk {#ACTPANEL-INFO}
 
 Helps users understand what Basilisk **is** and what it **does**. Not a static about page — a living dashboard of feature status and quick actions.
 
@@ -392,9 +308,9 @@ Read-only information fetched from:
 
 ---
 
-## Editor-Specific Implementation
+## Editor-Specific Implementation {#ACTPANEL-EDITORS}
 
-### VS Code
+### VS Code {#ACTPANEL-VSCODE}
 
 Full native support via TreeView API. This is the reference implementation.
 
@@ -535,7 +451,7 @@ Full native support via TreeView API. This is the reference implementation.
 
 **Filter**: Built-in VS Code tree filter plus `basilisk.moduleExplorer.filter` command for glob-style module filtering. Filter state persists in `workspaceState`.
 
-### Zed
+### Zed {#ACTPANEL-ZED}
 
 Zed does **not** currently support custom sidebar panels (open issue #21208). Until it does, the same data is surfaced through available Zed mechanisms:
 
@@ -568,7 +484,7 @@ Calls `basilisk/typeHealth` and formats as markdown.
 
 **Activity bar icon**: Zed uses the extension icon from `extension.toml`. Same SVG, rendered per Zed's theme.
 
-### Neovim
+### Neovim {#ACTPANEL-NEOVIM}
 
 Neovim has no built-in sidebar framework, but the Lua ecosystem has mature tree plugins. `basilisk.nvim` implements the panels as Lua-rendered floating/split windows.
 
@@ -595,7 +511,7 @@ Opened via `:BasiliskHealth` command or keymap (default: `<leader>bh`).
 
 ---
 
-## Accessibility
+## Accessibility {#ACTPANEL-A11Y}
 
 - All tree items have descriptive accessibility labels
 - Icon + text for all status indicators (never color alone)
@@ -604,7 +520,7 @@ Opened via `:BasiliskHealth` command or keymap (default: `<leader>bh`).
 
 ---
 
-## Performance
+## Performance {#ACTPANEL-PERF}
 
 - **Lazy loading**: Module Explorer fetches children on expand, not upfront. Top-level modules loaded first, symbols loaded when a module is expanded.
 - **Debounced updates**: `basilisk/moduleChanged` notifications are debounced (300ms) to avoid flicker during rapid saves.

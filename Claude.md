@@ -31,6 +31,9 @@ OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK MESSAGES AND COMPLY
 
 `docs/specs/LSP-ARCHITECTURE-SPEC.md` is the **single source of truth** for all shared LSP/DAP/config/commands. Editor-specific specs point back to it.
 
+- Specs MUST have non-numeric, hierarchically structured IDs
+- Code and tests MUST reference the spec ids
+
 # Critical Docs
 
 - [Python type system spec](https://typing.python.org/en/latest/spec/index.html)

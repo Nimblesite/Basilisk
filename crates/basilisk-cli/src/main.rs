@@ -89,6 +89,41 @@ enum Command {
         #[arg(long, default_value_t = 8765)]
         port: u16,
     },
+    /// Manage type stubs for untyped packages.
+    Stubs {
+        #[command(subcommand)]
+        action: StubAction,
+    },
+}
+
+/// Stub management sub-commands.
+#[derive(Subcommand)]
+enum StubAction {
+    /// Generate best-effort `.pyi` stubs for untyped packages.
+    Generate {
+        /// Package names to generate stubs for.
+        /// Use `--all` to generate for all untyped imports.
+        packages: Vec<String>,
+        /// Generate stubs for all untyped imports in the project.
+        #[arg(long)]
+        all: bool,
+        /// Generation mode: runtime (inspect.signature), ast (parse .py), or hybrid (default).
+        #[arg(long, default_value = "hybrid")]
+        mode: StubGenModeArg,
+        /// Path to the Python interpreter.
+        #[arg(long, default_value = "python3")]
+        python: String,
+    },
+    /// Show stub coverage status for the project.
+    Status,
+}
+
+/// CLI-friendly stub generation mode.
+#[derive(Clone, Debug, clap::ValueEnum)]
+enum StubGenModeArg {
+    Runtime,
+    Ast,
+    Hybrid,
 }
 
 fn main() -> ExitCode {
@@ -142,9 +177,210 @@ fn main() -> ExitCode {
                 }
             },
         },
+        Command::Stubs { action } => run_stubs(action),
     };
 
     ExitCode::from(exit_code)
+}
+
+/// Run the stubs subcommand.
+fn run_stubs(action: StubAction) -> u8 {
+    match action {
+        StubAction::Generate {
+            packages,
+            all,
+            mode,
+            python,
+        } => run_stubs_generate(&packages, all, mode, &python),
+        StubAction::Status => run_stubs_status(),
+    }
+}
+
+/// Generate stubs for specified packages.
+fn run_stubs_generate(packages: &[String], all: bool, mode: StubGenModeArg, python: &str) -> u8 {
+    use basilisk_stubs::generate::{self, StubGenMode};
+
+    let gen_mode = match mode {
+        StubGenModeArg::Runtime => StubGenMode::Runtime,
+        StubGenModeArg::Ast => StubGenMode::Ast,
+        StubGenModeArg::Hybrid => StubGenMode::Hybrid,
+    };
+
+    let python_path = std::path::Path::new(python);
+    let cache_dir = std::path::Path::new(generate::cache::DEFAULT_CACHE_DIR);
+
+    if all {
+        // TODO: scan workspace for untyped imports and generate for all.
+        warn!("--all not yet implemented; specify package names explicitly");
+        return 1;
+    }
+
+    if packages.is_empty() {
+        eprintln!("{}: specify package names or use --all", "error".red());
+        return 1;
+    }
+
+    let mut errors = 0u8;
+    for package in packages {
+        // For AST mode, we need the source path. Try to find it in site-packages.
+        let source_path = find_package_source(package, python_path);
+
+        match source_path {
+            Some(ref src) => {
+                info!(package, source = %src.display(), "generating stubs");
+                match generate::generate_stubs(package, src, python_path, gen_mode) {
+                    Ok(stub) => {
+                        let source_hash =
+                            generate::cache::hash_source(&stub.pyi_content);
+                        match generate::cache::write_cache(
+                            cache_dir,
+                            package,
+                            &stub.pyi_content,
+                            source_hash,
+                        ) {
+                            Ok(path) => {
+                                println!(
+                                    "{} Generated stub for `{}` → {}",
+                                    "✓".green(),
+                                    package,
+                                    path.display()
+                                );
+                            }
+                            Err(err) => {
+                                eprintln!(
+                                    "{} Failed to write stub for `{}`: {err}",
+                                    "✗".red(),
+                                    package
+                                );
+                                errors = errors.saturating_add(1);
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        eprintln!(
+                            "{} Failed to generate stub for `{}`: {err}",
+                            "✗".red(),
+                            package
+                        );
+                        errors = errors.saturating_add(1);
+                    }
+                }
+            }
+            None => {
+                // No source path found — try runtime-only if mode allows.
+                if gen_mode == StubGenMode::Ast {
+                    eprintln!(
+                        "{} Cannot find source for `{package}` — AST mode requires source files",
+                        "✗".red()
+                    );
+                    errors = errors.saturating_add(1);
+                } else {
+                    match generate::runtime::generate_runtime_stubs(package, python_path) {
+                        Ok(stub) => {
+                            let source_hash =
+                                generate::cache::hash_source(&stub.pyi_content);
+                            match generate::cache::write_cache(
+                                cache_dir,
+                                package,
+                                &stub.pyi_content,
+                                source_hash,
+                            ) {
+                                Ok(path) => {
+                                    println!(
+                                        "{} Generated stub for `{}` → {}",
+                                        "✓".green(),
+                                        package,
+                                        path.display()
+                                    );
+                                }
+                                Err(err) => {
+                                    eprintln!(
+                                        "{} Failed to write stub for `{}`: {err}",
+                                        "✗".red(),
+                                        package
+                                    );
+                                    errors = errors.saturating_add(1);
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            eprintln!(
+                                "{} Failed to generate stub for `{package}`: {err}",
+                                "✗".red()
+                            );
+                            errors = errors.saturating_add(1);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    errors.min(1)
+}
+
+/// Find the source path for an installed package by querying Python.
+fn find_package_source(package: &str, python_path: &std::path::Path) -> Option<std::path::PathBuf> {
+    let output = std::process::Command::new(python_path)
+        .args([
+            "-c",
+            &format!(
+                "import {package}; import os; print(os.path.dirname({package}.__file__))"
+            ),
+        ])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let dir = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    let init = std::path::PathBuf::from(&dir).join("__init__.py");
+    if init.exists() {
+        Some(init)
+    } else {
+        // Single-file module.
+        let single = std::path::PathBuf::from(format!("{dir}.py"));
+        if single.exists() {
+            Some(single)
+        } else {
+            None
+        }
+    }
+}
+
+/// Show stub coverage status.
+fn run_stubs_status() -> u8 {
+    let cache_dir = std::path::Path::new(basilisk_stubs::generate::cache::DEFAULT_CACHE_DIR);
+
+    if !cache_dir.exists() {
+        println!("No generated stubs found ({})", cache_dir.display());
+        return 0;
+    }
+
+    let mut count = 0u32;
+    if let Ok(entries) = std::fs::read_dir(cache_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().is_some_and(|ext| ext == "pyi") {
+                let module = path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("?");
+                println!("  {} {module}", "✓".green());
+                count = count.saturating_add(1);
+            }
+        }
+    }
+
+    if count == 0 {
+        println!("No generated stubs found");
+    } else {
+        println!("\n{count} generated stub(s) in {}", cache_dir.display());
+    }
+
+    0
 }
 
 /// Run the check subcommand.

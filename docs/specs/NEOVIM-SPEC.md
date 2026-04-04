@@ -1,6 +1,6 @@
 # Basilisk Neovim Extension (`basilisk.nvim`)
 
-## Goal
+## Goal {#NEOVIM-GOAL}
 
 A first-class Neovim plugin that connects to the same `basilisk lsp` binary as the VS Code and Zed extensions. One LSP, three editors. Feature parity across all of them.
 
@@ -35,31 +35,28 @@ All LSP features, DAP integration, custom commands, configuration settings, and 
 
 ---
 
-## Architecture
+## Architecture {#NEOVIM-ARCH}
 
-```
-┌──────────────────────────┐         ┌──────────────────────────┐
-│   Neovim                 │         │  basilisk binary (Rust)  │
-│                          │         │                          │
-│  vim.lsp (built-in)      │◄───────►│  basilisk lsp            │
-│  ─────────────────────   │  stdio  │  (JSON-RPC)              │
-│  All 21 LSP features     │  JSON   │                          │
-│  native in Neovim 0.10+  │  RPC    │  See LSP-ARCHITECTURE-SPEC.md   │
-│                          │         │  for all features        │
-│  nvim-dap (optional)     │◄───────►│                          │
-│  ─────────────────────   │  TCP    │  debugpy (spawned by     │
-│  DAP via DapTcpProxy     │  DAP    │  basilisk/startDebug)    │
-│                          │         │                          │
-│  basilisk.nvim (Lua)     │         │                          │
-│  ─────────────────────   │         │                          │
-│  Config, keymaps, UI,    │         │                          │
-│  commands, status line   │         │                          │
-└──────────────────────────┘         └──────────────────────────┘
+```mermaid
+graph LR
+    subgraph "Neovim"
+        VLSP["vim.lsp (built-in)<br/>All 21 LSP features"]
+        VDAP["nvim-dap (optional)<br/>DAP via DapTcpProxy"]
+        PLUG["basilisk.nvim (Lua)<br/>Config, keymaps, UI, commands"]
+    end
+
+    subgraph "basilisk binary (Rust)"
+        LSP["basilisk lsp<br/>(JSON-RPC)"]
+        DBG["debugpy<br/>(spawned by basilisk/startDebug)"]
+    end
+
+    VLSP <-->|"stdio JSON-RPC"| LSP
+    VDAP <-->|"TCP DAP"| DBG
 ```
 
 ---
 
-## Plugin Structure
+## Plugin Structure {#NEOVIM-STRUCTURE}
 
 ```
 basilisk.nvim/
@@ -96,7 +93,7 @@ basilisk.nvim/
 
 ---
 
-## LSP Client Configuration
+## LSP Client Configuration {#NEOVIM-LSP}
 
 Uses modern Neovim 0.10+ API (NOT nvim-lspconfig as a hard dependency):
 
@@ -126,7 +123,7 @@ vim.lsp.config('basilisk', {
 vim.lsp.enable('basilisk')
 ```
 
-### Neovim API Mappings for LSP Features
+### Neovim API Mappings {#NEOVIM-LSP-MAP}
 
 All 21 core LSP features (defined in LSP-ARCHITECTURE-SPEC.md) are native in Neovim 0.10+ — zero custom implementation needed:
 
@@ -149,7 +146,7 @@ All 21 core LSP features (defined in LSP-ARCHITECTURE-SPEC.md) are native in Neo
 | Document Highlight | `vim.lsp.buf.document_highlight()` |
 | Folding/Selection Ranges | Automatic via LSP client |
 
-### Custom LSP Command Registration
+### Custom LSP Command Registration {#NEOVIM-LSP-CMDS}
 
 > **Command Registration Rule**: See `LSP-ARCHITECTURE-SPEC.md` § Command Registration Rule. The plugin MUST NOT register commands that the LSP server advertises via `executeCommandProvider`. The server is the single source of truth.
 
@@ -161,7 +158,7 @@ vim.lsp.commands['basilisk.organizeImports'] = function(cmd, ctx)
 end
 ```
 
-### Error Recovery
+### Error Recovery {#NEOVIM-RECOVERY}
 
 - Track restart count, auto-restart up to 3 times
 - Exponential backoff: 1s, 2s, 4s
@@ -170,13 +167,13 @@ end
 
 ---
 
-## DAP Integration
+## DAP Integration {#NEOVIM-DAP}
 
 > See LSP-ARCHITECTURE-SPEC.md for DAP features, launch configurations, and DapTcpProxy specification.
 
 Detects `nvim-dap` at runtime via `pcall(require, 'dap')`. Degrades gracefully if absent.
 
-### Adapter Registration
+### Adapter Registration {#NEOVIM-DAP-ADAPTER}
 
 ```lua
 dap.adapters.basilisk = function(callback, config)
@@ -188,7 +185,7 @@ dap.adapters.basilisk = function(callback, config)
 end
 ```
 
-### DapTcpProxy (Lua/libuv)
+### DapTcpProxy {#NEOVIM-DAP-PROXY}
 
 Port of VS Code's `dap-proxy.ts` using `vim.uv` (libuv bindings). See LSP-ARCHITECTURE-SPEC.md for the full proxy specification. Implementation uses:
 
@@ -196,7 +193,7 @@ Port of VS Code's `dap-proxy.ts` using `vim.uv` (libuv bindings). See LSP-ARCHIT
 - Content-Length header framing for DAP messages
 - All interception rules from LSP-ARCHITECTURE-SPEC.md
 
-### Default Configurations
+### Default Configurations {#NEOVIM-DAP-CONFIG}
 
 ```lua
 dap.configurations.python = {
@@ -218,14 +215,14 @@ dap.configurations.python = {
 }
 ```
 
-### Optional Integrations
+### Optional Integrations {#NEOVIM-DAP-OPT}
 
 - **nvim-dap-ui**: auto-open on `event_initialized`, auto-close on `event_terminated`
 - **nvim-dap-virtual-text**: enable for type-aware inline variable display
 
 ---
 
-## Neovim User Commands
+## User Commands {#NEOVIM-CMDS}
 
 All profiling/memory/test LSP commands (defined in LSP-ARCHITECTURE-SPEC.md) surface as Neovim user commands:
 
@@ -260,14 +257,14 @@ All profiling/memory/test LSP commands (defined in LSP-ARCHITECTURE-SPEC.md) sur
 
 ---
 
-## Test Explorer
+## Test Explorer {#NEOVIM-TESTS}
 
 > See `LSP-TEST-INTEGRATION-SPEC.md` for full test explorer architecture, data model, configuration, and features.
 > Neovim-specific wiring (tree UI, keymaps, nvim-dap integration) is documented in the Neovim section of that spec.
 
 ---
 
-## Status Line
+## Status Line {#NEOVIM-STATUSLINE}
 
 Provides a component for any status line plugin (lualine, heirline, etc.):
 
@@ -290,7 +287,7 @@ States (matching VS Code/Zed behavior):
 
 ---
 
-## Default Keymaps
+## Default Keymaps {#NEOVIM-KEYMAPS}
 
 Set via `LspAttach` autocmd in `ftplugin/python.lua`. All configurable, can be disabled.
 
@@ -324,7 +321,7 @@ Set via `LspAttach` autocmd in `ftplugin/python.lua`. All configurable, can be d
 
 ---
 
-## Neovim-Only Configuration
+## Neovim-Only Configuration {#NEOVIM-CONFIG}
 
 These settings are Neovim-specific (not in LSP-ARCHITECTURE-SPEC.md):
 
@@ -341,7 +338,7 @@ All shared settings are defined in LSP-ARCHITECTURE-SPEC.md and passed through t
 
 ---
 
-## Health Check
+## Health Check {#NEOVIM-HEALTH}
 
 `:checkhealth basilisk` reports:
 
@@ -355,7 +352,7 @@ All shared settings are defined in LSP-ARCHITECTURE-SPEC.md and passed through t
 
 ---
 
-## Distribution
+## Distribution {#NEOVIM-DIST}
 
 ### Primary: Standalone Plugin
 
