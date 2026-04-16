@@ -283,7 +283,10 @@ pub fn load_from_pyproject(path: &Path) -> Option<BasiliskConfig> {
     }
 
     // per-path-overrides
-    if let Some(table) = basilisk.get("per-path-overrides").and_then(|v| v.as_table()) {
+    if let Some(table) = basilisk
+        .get("per-path-overrides")
+        .and_then(|v| v.as_table())
+    {
         parse_toml_path_overrides(table, &mut cfg.per_path_overrides);
     }
 
@@ -301,10 +304,7 @@ pub fn load_from_pyproject(path: &Path) -> Option<BasiliskConfig> {
 }
 
 /// Parse `[tool.basilisk.per-path-overrides]` into the config map.
-fn parse_toml_path_overrides(
-    table: &toml::Table,
-    overrides: &mut HashMap<String, PathOverride>,
-) {
+fn parse_toml_path_overrides(table: &toml::Table, overrides: &mut HashMap<String, PathOverride>) {
     for (pattern, override_val) in table {
         if let Some(override_table) = override_val.as_table() {
             let disabled_rules = override_table

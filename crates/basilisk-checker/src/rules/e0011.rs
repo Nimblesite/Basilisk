@@ -186,7 +186,7 @@ fn check_return_type_mismatch(
                 path: module.path.clone(),
                 help: Some("Check the return type annotation and return statements".to_owned()),
                 note: None,
-            provenance: None,
+                provenance: None,
             });
         }
     }

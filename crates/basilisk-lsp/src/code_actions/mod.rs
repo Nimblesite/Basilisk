@@ -389,10 +389,7 @@ mod tests {
     #[test]
     fn test_extract_module_from_diagnostic_backticks() {
         let msg = "Cannot resolve import `six` \u{2014} no type information available";
-        assert_eq!(
-            extract_module_from_diagnostic(msg),
-            Some("six".to_owned())
-        );
+        assert_eq!(extract_module_from_diagnostic(msg), Some("six".to_owned()));
     }
 
     #[test]

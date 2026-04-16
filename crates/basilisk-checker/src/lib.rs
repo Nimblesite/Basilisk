@@ -210,15 +210,20 @@ fn contains_identifier(text: &str, ident: &str) -> bool {
     }
 
     for start in 0..=(bytes.len() - ident_len) {
-        if &bytes[start..start + ident_len] != ident_bytes {
+        let Some(slice) = bytes.get(start..start + ident_len) else {
+            continue;
+        };
+        if slice != ident_bytes {
             continue;
         }
         // Check that the character before (if any) is not an identifier char.
         let before_ok =
-            start == 0 || !is_identifier_char(bytes[start - 1]);
+            start == 0 || bytes.get(start - 1).is_none_or(|b| !is_identifier_char(*b));
         // Check that the character after (if any) is not an identifier char.
-        let after_ok =
-            start + ident_len == bytes.len() || !is_identifier_char(bytes[start + ident_len]);
+        let after_ok = start + ident_len == bytes.len()
+            || bytes
+                .get(start + ident_len)
+                .is_none_or(|b| !is_identifier_char(*b));
         if before_ok && after_ok {
             return true;
         }
@@ -257,6 +262,10 @@ fn find_path_rule_severity(
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::unwrap_used,
+    reason = "test-only: unwrap acceptable in unit tests"
+)]
 mod tests {
     use super::*;
 
@@ -302,7 +311,10 @@ mod tests {
             .iter()
             .filter(|d| d.code.code == "BSK-E0010")
             .count();
-        assert!(e0010_count >= 1, "BSK-E0010 should fire for unresolved import");
+        assert!(
+            e0010_count >= 1,
+            "BSK-E0010 should fire for unresolved import"
+        );
 
         // Should NOT have any downstream errors referencing `get`.
         let downstream = diagnostics

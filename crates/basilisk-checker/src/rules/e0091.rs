@@ -83,7 +83,7 @@ impl Rule for TypeVarDefaultIncompatible {
                                  `{default_name}` is not a subtype of `{bound_name}`"
                             )),
                             note: None,
-            provenance: None,
+                            provenance: None,
                         });
                     }
                 }
@@ -115,7 +115,7 @@ impl Rule for TypeVarDefaultIncompatible {
                          constraints; choose one of {constraint_list}"
                     )),
                     note: None,
-            provenance: None,
+                    provenance: None,
                 });
             }
         }

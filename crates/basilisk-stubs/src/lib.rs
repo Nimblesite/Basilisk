@@ -57,6 +57,10 @@ pub fn lookup_builtin(name: &str) -> Option<&'static str> {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::unwrap_used,
+    reason = "test-only: unwrap acceptable in unit tests"
+)]
 mod tests {
     use super::*;
 

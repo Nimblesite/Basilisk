@@ -552,7 +552,7 @@ pub(super) fn check_type_stmt_circular(
             path: path.to_owned(),
             help: Some("A type alias cannot reference itself without type parameters".to_owned()),
             note: None,
-        provenance: None,
+            provenance: None,
         });
         return;
     }
@@ -611,7 +611,7 @@ pub(super) fn check_type_stmt_circular(
                                 .to_owned(),
                         ),
                         note: None,
-            provenance: None,
+                        provenance: None,
                     });
                 }
             }

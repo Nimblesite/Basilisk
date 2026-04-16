@@ -175,7 +175,10 @@ fn format_function_def(func: &ast::StmtFunctionDef, source: &str) -> String {
         .and_then(|r| slice_expr(r, source))
         .unwrap_or_else(|| "Any".to_owned());
 
-    format!("{async_prefix}def {name}({}) -> {ret}: ...", params.join(", "))
+    format!(
+        "{async_prefix}def {name}({}) -> {ret}: ...",
+        params.join(", ")
+    )
 }
 
 /// Format a class definition as a `.pyi` stub.
@@ -235,6 +238,10 @@ fn slice_expr(expr: &ast::Expr, source: &str) -> Option<String> {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::unwrap_used,
+    reason = "test-only: unwrap acceptable in unit tests"
+)]
 mod tests {
     use super::*;
 
@@ -253,7 +260,9 @@ VERSION: str = "1.0.0"
 "#;
 
         let result = generate_ast_stubs_from_source("mymodule", source).unwrap();
-        assert!(result.pyi_content.contains("def greet(name: str) -> str: ..."));
+        assert!(result
+            .pyi_content
+            .contains("def greet(name: str) -> str: ..."));
         assert!(result.pyi_content.contains("class Dog: ..."));
         assert!(result.pyi_content.contains("VERSION: str"));
         assert_eq!(result.mode, StubGenMode::Ast);
@@ -261,11 +270,11 @@ VERSION: str = "1.0.0"
 
     #[test]
     fn generate_skips_private_names() {
-        let source = r#"
+        let source = r"
 def _private(): pass
 def public(): pass
 class _Internal: pass
-"#;
+";
 
         let result = generate_ast_stubs_from_source("mymodule", source).unwrap();
         assert!(!result.pyi_content.contains("_private"));
@@ -298,6 +307,8 @@ def not_exported(): pass
     fn generate_async_function() {
         let source = "async def fetch(url: str) -> bytes: ...\n";
         let result = generate_ast_stubs_from_source("mymodule", source).unwrap();
-        assert!(result.pyi_content.contains("async def fetch(url: str) -> bytes: ..."));
+        assert!(result
+            .pyi_content
+            .contains("async def fetch(url: str) -> bytes: ..."));
     }
 }

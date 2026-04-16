@@ -108,9 +108,7 @@ fn format_reason(import: &ImportInfo, root_module: &str) -> (String, String) {
                 "Cannot resolve import `{}` \u{2014} no type information available",
                 import.module
             ),
-            format!(
-                "`{root_module}` is not installed or has no type stubs"
-            ),
+            format!("`{root_module}` is not installed or has no type stubs"),
         ),
     }
 }

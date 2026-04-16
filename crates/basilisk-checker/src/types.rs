@@ -209,20 +209,27 @@ impl InferredType {
             (a, b) if a == b => true,
             // Int→float widening, Literal assignable to base type,
             // string types assignable to LiteralString, LiteralString to str
-            (InferredType::Int, InferredType::Float)
+            (
+                InferredType::Int | InferredType::Literal(LiteralValue::Float(_)),
+                InferredType::Float,
+            )
             | (
                 InferredType::Literal(LiteralValue::Int(_)),
                 InferredType::Int | InferredType::Float,
             )
-            | (InferredType::Literal(LiteralValue::Str(_)), InferredType::Str)
-            | (InferredType::Literal(LiteralValue::Float(_)), InferredType::Float)
-            | (InferredType::Literal(LiteralValue::Bool(_)), InferredType::Bool | InferredType::Int)
+            | (
+                InferredType::Literal(LiteralValue::Str(_)) | InferredType::LiteralString,
+                InferredType::Str,
+            )
+            | (
+                InferredType::Literal(LiteralValue::Bool(_)),
+                InferredType::Bool | InferredType::Int,
+            )
             | (InferredType::Literal(LiteralValue::Bytes(_)), InferredType::Bytes)
             | (
                 InferredType::Str | InferredType::Literal(LiteralValue::Str(_)),
                 InferredType::LiteralString,
             )
-            | (InferredType::LiteralString, InferredType::Str)
             // None is always assignable to Optional[T]
             | (InferredType::None_, InferredType::Optional(_)) => true,
             // Optional types are assignable to their non-optional counterparts

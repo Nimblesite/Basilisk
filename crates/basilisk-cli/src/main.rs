@@ -13,7 +13,9 @@ use clap::{Parser, Subcommand};
 use colored::Colorize as _;
 use tracing::{error, info, warn};
 
-use crate::output::{render_diagnostics, render_diagnostics_json, ColorMode, FileSource, OutputFormat};
+use crate::output::{
+    render_diagnostics, render_diagnostics_json, ColorMode, FileSource, OutputFormat,
+};
 
 mod adopt;
 mod fix;
@@ -119,7 +121,7 @@ enum StubAction {
 }
 
 /// CLI-friendly stub generation mode.
-#[derive(Clone, Debug, clap::ValueEnum)]
+#[derive(Clone, Copy, Debug, clap::ValueEnum)]
 enum StubGenModeArg {
     Runtime,
     Ast,
@@ -196,6 +198,27 @@ fn run_stubs(action: StubAction) -> u8 {
     }
 }
 
+/// Cache a generated stub and print the result. Returns `true` on success.
+fn cache_stub(
+    cache_dir: &std::path::Path,
+    package: &str,
+    stub: &basilisk_stubs::generate::StubResult,
+) -> bool {
+    use basilisk_stubs::generate::cache;
+
+    let source_hash = cache::hash_source(&stub.pyi_content);
+    match cache::write_cache(cache_dir, package, &stub.pyi_content, source_hash) {
+        Ok(path) => {
+            println!("{} Generated stub for `{package}` → {}", "✓".green(), path.display());
+            true
+        }
+        Err(err) => {
+            eprintln!("{} Failed to write stub for `{package}`: {err}", "✗".red());
+            false
+        }
+    }
+}
+
 /// Generate stubs for specified packages.
 fn run_stubs_generate(packages: &[String], all: bool, mode: StubGenModeArg, python: &str) -> u8 {
     use basilisk_stubs::generate::{self, StubGenMode};
@@ -210,7 +233,6 @@ fn run_stubs_generate(packages: &[String], all: bool, mode: StubGenModeArg, pyth
     let cache_dir = std::path::Path::new(generate::cache::DEFAULT_CACHE_DIR);
 
     if all {
-        // TODO: scan workspace for untyped imports and generate for all.
         warn!("--all not yet implemented; specify package names explicitly");
         return 1;
     }
@@ -222,97 +244,36 @@ fn run_stubs_generate(packages: &[String], all: bool, mode: StubGenModeArg, pyth
 
     let mut errors = 0u8;
     for package in packages {
-        // For AST mode, we need the source path. Try to find it in site-packages.
         let source_path = find_package_source(package, python_path);
 
-        match source_path {
+        let ok = match source_path {
             Some(ref src) => {
                 info!(package, source = %src.display(), "generating stubs");
                 match generate::generate_stubs(package, src, python_path, gen_mode) {
-                    Ok(stub) => {
-                        let source_hash =
-                            generate::cache::hash_source(&stub.pyi_content);
-                        match generate::cache::write_cache(
-                            cache_dir,
-                            package,
-                            &stub.pyi_content,
-                            source_hash,
-                        ) {
-                            Ok(path) => {
-                                println!(
-                                    "{} Generated stub for `{}` → {}",
-                                    "✓".green(),
-                                    package,
-                                    path.display()
-                                );
-                            }
-                            Err(err) => {
-                                eprintln!(
-                                    "{} Failed to write stub for `{}`: {err}",
-                                    "✗".red(),
-                                    package
-                                );
-                                errors = errors.saturating_add(1);
-                            }
-                        }
-                    }
+                    Ok(stub) => cache_stub(cache_dir, package, &stub),
                     Err(err) => {
-                        eprintln!(
-                            "{} Failed to generate stub for `{}`: {err}",
-                            "✗".red(),
-                            package
-                        );
-                        errors = errors.saturating_add(1);
+                        eprintln!("{} Failed to generate stub for `{package}`: {err}", "✗".red());
+                        false
                     }
                 }
             }
-            None => {
-                // No source path found — try runtime-only if mode allows.
-                if gen_mode == StubGenMode::Ast {
-                    eprintln!(
-                        "{} Cannot find source for `{package}` — AST mode requires source files",
-                        "✗".red()
-                    );
-                    errors = errors.saturating_add(1);
-                } else {
-                    match generate::runtime::generate_runtime_stubs(package, python_path) {
-                        Ok(stub) => {
-                            let source_hash =
-                                generate::cache::hash_source(&stub.pyi_content);
-                            match generate::cache::write_cache(
-                                cache_dir,
-                                package,
-                                &stub.pyi_content,
-                                source_hash,
-                            ) {
-                                Ok(path) => {
-                                    println!(
-                                        "{} Generated stub for `{}` → {}",
-                                        "✓".green(),
-                                        package,
-                                        path.display()
-                                    );
-                                }
-                                Err(err) => {
-                                    eprintln!(
-                                        "{} Failed to write stub for `{}`: {err}",
-                                        "✗".red(),
-                                        package
-                                    );
-                                    errors = errors.saturating_add(1);
-                                }
-                            }
-                        }
-                        Err(err) => {
-                            eprintln!(
-                                "{} Failed to generate stub for `{package}`: {err}",
-                                "✗".red()
-                            );
-                            errors = errors.saturating_add(1);
-                        }
-                    }
-                }
+            None if gen_mode == StubGenMode::Ast => {
+                eprintln!(
+                    "{} Cannot find source for `{package}` — AST mode requires source files",
+                    "✗".red()
+                );
+                false
             }
+            None => match generate::runtime::generate_runtime_stubs(package, python_path) {
+                Ok(stub) => cache_stub(cache_dir, package, &stub),
+                Err(err) => {
+                    eprintln!("{} Failed to generate stub for `{package}`: {err}", "✗".red());
+                    false
+                }
+            },
+        };
+        if !ok {
+            errors = errors.saturating_add(1);
         }
     }
 
@@ -324,9 +285,7 @@ fn find_package_source(package: &str, python_path: &std::path::Path) -> Option<s
     let output = std::process::Command::new(python_path)
         .args([
             "-c",
-            &format!(
-                "import {package}; import os; print(os.path.dirname({package}.__file__))"
-            ),
+            &format!("import {package}; import os; print(os.path.dirname({package}.__file__))"),
         ])
         .output()
         .ok()?;
@@ -364,10 +323,7 @@ fn run_stubs_status() -> u8 {
         for entry in entries.flatten() {
             let path = entry.path();
             if path.extension().is_some_and(|ext| ext == "pyi") {
-                let module = path
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("?");
+                let module = path.file_stem().and_then(|s| s.to_str()).unwrap_or("?");
                 println!("  {} {module}", "✓".green());
                 count = count.saturating_add(1);
             }
@@ -466,7 +422,11 @@ fn collect_and_check(
     // Add checked directories as search roots for sibling imports.
     for path_str in paths {
         let p = std::path::Path::new(path_str);
-        let dir = if p.is_dir() { p } else { p.parent().unwrap_or(p) };
+        let dir = if p.is_dir() {
+            p
+        } else {
+            p.parent().unwrap_or(p)
+        };
         if let Ok(abs) = std::fs::canonicalize(dir) {
             if !roots.contains(&abs) {
                 roots.push(abs);
@@ -477,8 +437,11 @@ fn collect_and_check(
     // Add include paths from WorkspaceConfig as search roots.
     let lsp_config = basilisk_lsp::config::load_config(&project_root);
     let registry = build_uv_registry(&roots);
-    let mut search_paths =
-        basilisk_lsp::import_resolver::ImportSearchPaths::from_config(&roots, &lsp_config, registry);
+    let mut search_paths = basilisk_lsp::import_resolver::ImportSearchPaths::from_config(
+        &roots,
+        &lsp_config,
+        registry,
+    );
     // Ensure all roots are also in extra_paths for module resolution.
     search_paths.roots = roots;
     info!(
@@ -567,20 +530,15 @@ fn resolve_file_imports(
     search_paths: &basilisk_lsp::import_resolver::ImportSearchPaths,
 ) {
     for import in &mut resolved.imports {
-        let result = basilisk_lsp::import_resolver::resolve_module(
-            &import.module,
-            search_paths,
-        );
+        let result = basilisk_lsp::import_resolver::resolve_module(&import.module, search_paths);
         if let Some(r) = result {
             import.resolution = r.resolution;
             import.resolved_path = Some(r.path);
         } else if !basilisk_stubs::is_stdlib_module(&import.module) {
-            import.unresolved_reason = Some(
-                basilisk_lsp::import_resolver::classify_unresolved(
-                    &import.module,
-                    search_paths,
-                ),
-            );
+            import.unresolved_reason = Some(basilisk_lsp::import_resolver::classify_unresolved(
+                &import.module,
+                search_paths,
+            ));
         }
     }
 }

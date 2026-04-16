@@ -326,7 +326,7 @@ fn check_param_overlap(
                 path: path.to_owned(),
                 help: Some(format!("Make `{pname}` positional-only (add `/`)")),
                 note: None,
-            provenance: None,
+                provenance: None,
             });
         }
     }
@@ -375,7 +375,7 @@ fn check_positional_args(
             path: path.to_owned(),
             help: Some("Pass keyword arguments instead".to_owned()),
             note: None,
-        provenance: None,
+            provenance: None,
         });
     }
 }
@@ -409,7 +409,7 @@ fn check_missing_required(
                 path: path.to_owned(),
                 help: None,
                 note: None,
-            provenance: None,
+                provenance: None,
             });
         }
     }
@@ -522,7 +522,7 @@ fn check_duplicate_keywords(
                     path: path.to_owned(),
                     help: None,
                     note: None,
-            provenance: None,
+                    provenance: None,
                 });
                 return;
             }

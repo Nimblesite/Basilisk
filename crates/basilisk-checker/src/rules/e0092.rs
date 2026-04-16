@@ -197,7 +197,7 @@ impl Rule for TooFewTypeArguments {
                         path: module.path.clone(),
                         help: Some("`type` takes exactly one type argument: `type[T]`".to_string()),
                         note: None,
-            provenance: None,
+                        provenance: None,
                     });
                 }
             }
@@ -224,7 +224,7 @@ impl Rule for TooFewTypeArguments {
                             site.base_name
                         )),
                         note: None,
-            provenance: None,
+                        provenance: None,
                     });
                 }
             }
@@ -263,7 +263,7 @@ impl Rule for TooFewTypeArguments {
                         path: module.path.clone(),
                         help: Some(help),
                         note: None,
-            provenance: None,
+                        provenance: None,
                     });
                 }
             }

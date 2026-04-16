@@ -28,7 +28,7 @@ pub struct LockFile {
 
     /// Catch-all for unknown top-level fields (e.g. `revision`).
     #[serde(flatten)]
-    pub _extra: std::collections::HashMap<String, toml::Value>,
+    pub extra: std::collections::HashMap<String, toml::Value>,
 }
 
 /// A single resolved package entry.
@@ -63,7 +63,7 @@ pub struct LockPackage {
 
     /// Catch-all for unknown fields (`sdist`, `wheels`, `metadata`, etc.).
     #[serde(flatten)]
-    pub _extra: std::collections::HashMap<String, toml::Value>,
+    pub extra: std::collections::HashMap<String, toml::Value>,
 }
 
 /// Source metadata for a locked package.
@@ -98,7 +98,7 @@ pub struct LockDependency {
 
     /// Catch-all for unknown fields (e.g. `specifier`).
     #[serde(flatten)]
-    pub _extra: std::collections::HashMap<String, toml::Value>,
+    pub extra: std::collections::HashMap<String, toml::Value>,
 }
 
 /// Parse a `uv.lock` file at the given path.

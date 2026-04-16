@@ -478,7 +478,7 @@ pub(super) fn check_class_def(cls: &ast::StmtClassDef, path: &str, diag: &mut Ve
                     "Generic metaclasses are not supported by the Python type system".to_owned(),
                 ),
                 note: Some("PEP 484: generic metaclass instances are not supported".to_owned()),
-            provenance: None,
+                provenance: None,
             });
         }
     }

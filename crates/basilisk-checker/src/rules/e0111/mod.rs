@@ -610,7 +610,7 @@ fn check_nt_arg_count(
                     .join(", "),
             )),
             note: None,
-        provenance: None,
+            provenance: None,
         });
         return true;
     }
@@ -642,7 +642,7 @@ fn check_nt_arg_count(
                     .join(", "),
             )),
             note: None,
-        provenance: None,
+            provenance: None,
         });
         return true;
     }
@@ -684,7 +684,7 @@ fn check_nt_unknown_kwargs(
                             .join(", "),
                     )),
                     note: None,
-            provenance: None,
+                    provenance: None,
                 });
             }
         }
@@ -730,7 +730,7 @@ fn check_nt_arg_types(
                 path: path.to_owned(),
                 help: None,
                 note: None,
-            provenance: None,
+                provenance: None,
             });
         }
     }
@@ -777,7 +777,7 @@ fn check_nt_kwarg_types(
                 path: path.to_owned(),
                 help: None,
                 note: None,
-            provenance: None,
+                provenance: None,
             });
         }
     }
@@ -831,7 +831,7 @@ fn check_dataclass_unknown_kwargs(
                     known_fields.iter().copied().collect::<Vec<_>>().join(", ")
                 )),
                 note: None,
-            provenance: None,
+                provenance: None,
             });
         }
     }
@@ -913,7 +913,7 @@ fn check_generic_nt_arg_types(
                 path: path.to_owned(),
                 help: None,
                 note: None,
-            provenance: None,
+                provenance: None,
             });
         }
     }

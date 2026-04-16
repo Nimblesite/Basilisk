@@ -194,7 +194,7 @@ fn check_yield_types(func: &FunctionInfo, module: &ResolvedModule, out: &mut Vec
                      the generator annotation"
                 )),
                 note: None,
-            provenance: None,
+                provenance: None,
             });
         }
     }

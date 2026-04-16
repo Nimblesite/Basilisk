@@ -668,7 +668,7 @@ fn check_single_annotation(
                     info.typevar_count
                 )),
                 note: None,
-            provenance: None,
+                provenance: None,
             });
         } else if info.has_paramspec && arg_count == info.typevar_count {
             // Check if a simple type is used where a ParamSpec expects a
@@ -700,7 +700,7 @@ fn check_single_annotation(
                                 .to_owned(),
                         ),
                         note: None,
-            provenance: None,
+                        provenance: None,
                     });
                 }
             }
@@ -730,7 +730,7 @@ fn check_single_annotation(
                                      subtype of `{bound}`"
                                 )),
                                 note: None,
-            provenance: None,
+                                provenance: None,
                             });
                         }
                     }
@@ -784,7 +784,7 @@ fn check_union_alias_instantiation(
                     call.callee
                 )),
                 note: None,
-            provenance: None,
+                provenance: None,
             });
         }
     }

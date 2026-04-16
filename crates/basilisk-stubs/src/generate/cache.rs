@@ -77,6 +77,10 @@ pub fn hash_source(source: &str) -> u64 {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::unwrap_used,
+    reason = "test-only: unwrap acceptable in unit tests"
+)]
 mod tests {
     use super::*;
 

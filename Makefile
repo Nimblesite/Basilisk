@@ -70,6 +70,9 @@ setup:
 # Repo-Specific Targets
 # =============================================================================
 
+conformance: ## Run PEP conformance test suite (--fetch to re-download)
+	@bash scripts/conformance.sh $(if $(FETCH),--fetch,)
+
 benchmark: _build_rust ## Run benchmarks (RULE=e0034 to filter)
 	@RULE='$(RULE)' bash scripts/benchmark.sh
 

@@ -135,7 +135,7 @@ fn check_plain_function_calls(module: &ResolvedModule, diagnostics: &mut Vec<Dia
                     path: module.path.clone(),
                     help: None,
                     note: None,
-            provenance: None,
+                    provenance: None,
                 });
             }
         }
@@ -302,7 +302,7 @@ fn check_dataclass_arg_types(
                 path: path.to_owned(),
                 help: None,
                 note: None,
-            provenance: None,
+                provenance: None,
             });
         }
     }
@@ -387,7 +387,7 @@ fn check_constructor_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagno
                     path: module.path.clone(),
                     help: None,
                     note: None,
-            provenance: None,
+                    provenance: None,
                 });
             }
         } else if class_info.is_dataclass {
@@ -439,7 +439,7 @@ fn check_dataclass_no_explicit_constructor(
                         .to_owned(),
                 ),
                 note: None,
-            provenance: None,
+                provenance: None,
             });
         }
         return;
@@ -463,7 +463,7 @@ fn check_dataclass_no_explicit_constructor(
             path: path.to_owned(),
             help: None,
             note: None,
-        provenance: None,
+            provenance: None,
         });
     }
 
@@ -552,7 +552,7 @@ fn check_namedtuple_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagnos
                 path: module.path.clone(),
                 help: None,
                 note: None,
-            provenance: None,
+                provenance: None,
             });
         } else if positional_count > total_fields {
             let extra = positional_count - total_fields;
@@ -569,7 +569,7 @@ fn check_namedtuple_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagnos
                 path: module.path.clone(),
                 help: None,
                 note: None,
-            provenance: None,
+                provenance: None,
             });
         }
     }

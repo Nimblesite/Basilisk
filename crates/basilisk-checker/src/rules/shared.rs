@@ -147,8 +147,6 @@ pub(crate) fn is_type_compatible(actual: &str, expected: &str) -> bool {
 // Identifier / typevar matching
 // ---------------------------------------------------------------------------
 
-/// Check whether `text` contains `name` as a whole word (not as a substring
-/// of a longer identifier).
 // ---------------------------------------------------------------------------
 // Literal helpers
 // ---------------------------------------------------------------------------

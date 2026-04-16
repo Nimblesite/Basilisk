@@ -151,7 +151,7 @@ mod tests {
             name: name.to_owned(),
             version: version.map(str::to_owned),
             marker: None,
-            _extra: HashMap::new(),
+            extra: HashMap::new(),
         }
     }
 
@@ -168,15 +168,12 @@ mod tests {
             source,
             dependencies: deps,
             dev_dependencies: dev_deps,
-            _extra: HashMap::new(),
+            extra: HashMap::new(),
         }
     }
 
     fn make_lock_file() -> LockFile {
-        let dev_map = HashMap::from([(
-            "dev".to_owned(),
-            vec![make_dep("pytest", Some("8.0.0"))],
-        )]);
+        let dev_map = HashMap::from([("dev".to_owned(), vec![make_dep("pytest", Some("8.0.0"))])]);
 
         LockFile {
             version: 1,
@@ -238,7 +235,7 @@ mod tests {
                     HashMap::new(),
                 ),
             ],
-            _extra: HashMap::new(),
+            extra: HashMap::new(),
         }
     }
 
@@ -341,15 +338,9 @@ mod tests {
             requires_python: None,
             packages: vec![
                 make_pkg("requests", "2.31.0", None, vec![], HashMap::new()),
-                make_pkg(
-                    "types-requests",
-                    "2.31.0.0",
-                    None,
-                    vec![],
-                    HashMap::new(),
-                ),
+                make_pkg("types-requests", "2.31.0.0", None, vec![], HashMap::new()),
             ],
-            _extra: HashMap::new(),
+            extra: HashMap::new(),
         };
 
         let registry = PackageRegistry::from_lock_file(&lock, &[]);
@@ -373,7 +364,7 @@ mod tests {
             version: 1,
             requires_python: None,
             packages: vec![],
-            _extra: HashMap::new(),
+            extra: HashMap::new(),
         };
 
         let registry = PackageRegistry::from_lock_file(&lock, &[]);

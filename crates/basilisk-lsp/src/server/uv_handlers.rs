@@ -49,7 +49,12 @@ async fn get_workspace_root(server: &LspServer) -> LspResult<std::path::PathBuf>
     }
 
     // Fall back to the first workspace root even without pyproject.toml.
-    Ok(roots[0].clone())
+    // `roots.is_empty()` is checked above with early return, so `first()` always succeeds.
+    roots.first().cloned().ok_or_else(|| tower_lsp::jsonrpc::Error {
+        code: tower_lsp::jsonrpc::ErrorCode::ServerError(-32010),
+        message: "No workspace root available".into(),
+        data: None,
+    })
 }
 
 /// Convert a [`crate::uv_commands::UvCommandResult`] into a JSON response value.

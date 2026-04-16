@@ -192,7 +192,11 @@ mod tests {
     use crate::workspace::WorkspaceIndex;
 
     fn make_index_with_roots(roots: Vec<PathBuf>) -> WorkspaceIndex {
-        WorkspaceIndex::new(roots, AnalysisMode::WholeModule, basilisk_config::BasiliskConfig::default())
+        WorkspaceIndex::new(
+            roots,
+            AnalysisMode::WholeModule,
+            basilisk_config::BasiliskConfig::default(),
+        )
     }
 
     fn make_uri(path: &str) -> tower_lsp::lsp_types::Url {

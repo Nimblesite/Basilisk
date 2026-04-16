@@ -139,7 +139,7 @@ fn check_concatenate_prefix(
             path: path.to_owned(),
             help: None,
             note: None,
-        provenance: None,
+            provenance: None,
         });
         return;
     }

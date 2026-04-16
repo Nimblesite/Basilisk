@@ -191,9 +191,7 @@ mod tests {
         let diag = make_diag(None, None);
         let out = format_one(&diag, Some("def foo(x): pass"));
         assert!(
-            out.contains(&format!(
-                "{BOLD}missing annotation for `x`{RESET}"
-            )),
+            out.contains(&format!("{BOLD}missing annotation for `x`{RESET}")),
             "message must be bold, got:\n{out}"
         );
     }
@@ -331,20 +329,11 @@ mod tests {
         force_colors();
         let diag = make_diag(None, None);
         let out = format_one(&diag, Some("def foo(x): pass"));
-        assert!(
-            !out.contains("help"),
-            "must omit help when None"
-        );
-        assert!(
-            !out.contains("note"),
-            "must omit note when None"
-        );
+        assert!(!out.contains("help"), "must omit help when None");
+        assert!(!out.contains("note"), "must omit note when None");
         // Still must contain the see URL.
         assert!(out.contains("BSK-E0001"), "must contain error code");
-        assert!(
-            out.contains("basilisk-python.dev"),
-            "must contain docs URL"
-        );
+        assert!(out.contains("basilisk-python.dev"), "must contain docs URL");
     }
 
     // ── format_snippet: colour assertions ────────────────────────────────────

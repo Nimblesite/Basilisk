@@ -309,7 +309,7 @@ impl Rule for TypeGuardCallableReturnMismatch {
                     path: module.path.clone(),
                     help: Some(help_text),
                     note: Some(note_text),
-            provenance: None,
+                    provenance: None,
                 });
             }
         }

@@ -369,7 +369,7 @@ fn check_unbound_typevar_call(
                 "Add a `bound=` constraint to TypeVar `{inner_type}` if arguments are required"
             )),
             note: None,
-        provenance: None,
+            provenance: None,
         });
     }
 }
@@ -404,7 +404,7 @@ fn check_constructor_call(
                     path: path.to_owned(),
                     help: Some(format!("Call `{class_name}()` with no arguments")),
                     note: None,
-            provenance: None,
+                    provenance: None,
                 });
             }
         }

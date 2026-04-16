@@ -168,10 +168,7 @@ fn format_function_stub(name: &str, entry: &serde_json::Value) -> String {
     let mut params = Vec::new();
     if let Some(param_list) = entry.get("params").and_then(|v| v.as_array()) {
         for param in param_list {
-            let pname = param
-                .get("name")
-                .and_then(|v| v.as_str())
-                .unwrap_or("arg");
+            let pname = param.get("name").and_then(|v| v.as_str()).unwrap_or("arg");
             let ann = param.get("annotation").and_then(|v| v.as_str());
             let kind = param.get("kind").and_then(|v| v.as_str());
 
@@ -205,6 +202,10 @@ pub const fn default_timeout() -> Duration {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::unwrap_used,
+    reason = "test-only: unwrap acceptable in unit tests"
+)]
 mod tests {
     use super::*;
 

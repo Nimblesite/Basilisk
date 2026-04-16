@@ -77,7 +77,7 @@ fn check_typevar_constraints(
             path: module.path.clone(),
             help: Some("Add a second constraint or remove the single constraint".to_owned()),
             note: Some("PEP 484: a TypeVar with one constraint is invalid".to_owned()),
-        provenance: None,
+            provenance: None,
         });
     }
     // Cannot specify both constraints and a bound.
@@ -95,7 +95,7 @@ fn check_typevar_constraints(
                 "Use either constraints (positional type args) or `bound=`, not both".to_owned(),
             ),
             note: Some("PEP 484: `TypeVar` cannot have both constraints and a `bound`".to_owned()),
-        provenance: None,
+            provenance: None,
         });
     }
     // Constraint must not itself be parameterized by a TypeVar (e.g. `list[T]`).

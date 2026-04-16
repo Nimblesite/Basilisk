@@ -483,7 +483,7 @@ fn check_newtype_call_arg_types(
                     call.callee
                 )),
                 note: Some("NewType constructors accept only values of the base type".to_owned()),
-            provenance: None,
+                provenance: None,
             });
         }
     }

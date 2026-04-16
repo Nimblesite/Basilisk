@@ -76,8 +76,7 @@ async fn wait_for_file_diagnostics(
         let Some(msg) = fixture.recv().await else {
             break;
         };
-        if msg.contains("\"method\":\"textDocument/publishDiagnostics\"")
-            && msg.contains(file_name)
+        if msg.contains("\"method\":\"textDocument/publishDiagnostics\"") && msg.contains(file_name)
         {
             return Some(msg);
         }
@@ -124,10 +123,7 @@ async fn test_uv_add_dispatches_and_returns_success() -> TestResult<()> {
     );
 
     let result = &parsed["result"];
-    assert_eq!(
-        result["success"], true,
-        "uv add should succeed: {resp}"
-    );
+    assert_eq!(result["success"], true, "uv add should succeed: {resp}");
 
     // Verify the package was actually added to pyproject.toml.
     let toml = std::fs::read_to_string(dir.join("pyproject.toml"))?;
@@ -278,7 +274,9 @@ async fn test_uv_add_triggers_registry_rebuild_and_clears_diagnostics() -> TestR
     let mut final_diag_for_app: Option<String> = None;
 
     for _ in 0..30 {
-        let Some(msg) = fixture.recv().await else { break };
+        let Some(msg) = fixture.recv().await else {
+            break;
+        };
 
         // Check for command response.
         if msg.contains("\"id\":200") {
@@ -291,8 +289,7 @@ async fn test_uv_add_triggers_registry_rebuild_and_clears_diagnostics() -> TestR
         }
 
         // Capture the latest diagnostics for app.py (may arrive multiple times).
-        if msg.contains("\"method\":\"textDocument/publishDiagnostics\"")
-            && msg.contains("app.py")
+        if msg.contains("\"method\":\"textDocument/publishDiagnostics\"") && msg.contains("app.py")
         {
             final_diag_for_app = Some(msg);
         }
@@ -305,7 +302,8 @@ async fn test_uv_add_triggers_registry_rebuild_and_clears_diagnostics() -> TestR
 
     assert!(command_succeeded, "uv add six should succeed");
 
-    let updated_msg = final_diag_for_app.ok_or("should receive updated diagnostics after uv add")?;
+    let updated_msg =
+        final_diag_for_app.ok_or("should receive updated diagnostics after uv add")?;
 
     // Parse the diagnostics array to check E0010 is gone for `six`.
     let updated_json: serde_json::Value = serde_json::from_str(&updated_msg)?;
@@ -315,9 +313,7 @@ async fn test_uv_add_triggers_registry_rebuild_and_clears_diagnostics() -> TestR
 
     let has_e0010_for_six = diags.iter().any(|d| {
         d["code"].as_str() == Some("BSK-E0010")
-            && d["message"]
-                .as_str()
-                .is_some_and(|m| m.contains("six"))
+            && d["message"].as_str().is_some_and(|m| m.contains("six"))
     });
 
     assert!(
@@ -601,7 +597,9 @@ async fn test_e0010_code_action_to_execute_command_full_flow() -> TestResult<()>
     let mut final_diag: Option<String> = None;
 
     for _ in 0..30 {
-        let Some(msg) = fixture.recv().await else { break };
+        let Some(msg) = fixture.recv().await else {
+            break;
+        };
         if msg.contains("\"id\":301") {
             let parsed: serde_json::Value = serde_json::from_str(&msg)?;
             assert!(
@@ -610,8 +608,7 @@ async fn test_e0010_code_action_to_execute_command_full_flow() -> TestResult<()>
             );
             command_succeeded = parsed["result"]["success"] == true;
         }
-        if msg.contains("\"method\":\"textDocument/publishDiagnostics\"")
-            && msg.contains("main.py")
+        if msg.contains("\"method\":\"textDocument/publishDiagnostics\"") && msg.contains("main.py")
         {
             final_diag = Some(msg);
         }

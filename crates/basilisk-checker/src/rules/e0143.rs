@@ -325,7 +325,7 @@ fn check_delete_target(target: &Expr, ctx: &ModuleContext, path: &str, diag: &mu
                                 .to_owned(),
                         ),
                         note: None,
-            provenance: None,
+                        provenance: None,
                     });
                 }
             }
@@ -362,7 +362,7 @@ fn check_delete_target(target: &Expr, ctx: &ModuleContext, path: &str, diag: &mu
                                 .to_owned(),
                         ),
                         note: None,
-            provenance: None,
+                        provenance: None,
                     });
                 }
             }
@@ -399,7 +399,7 @@ fn check_assignment_target(
                                 .to_owned(),
                         ),
                         note: None,
-            provenance: None,
+                        provenance: None,
                     });
                 }
             }
@@ -435,7 +435,7 @@ fn check_assignment_target(
                                 .to_owned(),
                         ),
                         note: None,
-            provenance: None,
+                        provenance: None,
                     });
                 }
             }

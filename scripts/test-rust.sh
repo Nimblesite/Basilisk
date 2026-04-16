@@ -28,7 +28,7 @@ rustup component add llvm-tools-preview 2>/dev/null || true
 CONFORMANCE_DIR="$REPO_ROOT/crates/basilisk-cli/tests/conformance"
 if [[ ! -d "$CONFORMANCE_DIR" ]] || [[ -z "$(ls -A "$CONFORMANCE_DIR" 2>/dev/null)" ]]; then
     header "Fetching PEP conformance suite"
-    bash "$REPO_ROOT/conformance/fetch-conformance.sh"
+    bash "$REPO_ROOT/scripts/conformance.sh" --fetch-only
 else
     COUNT=$(find "$CONFORMANCE_DIR" -name "*.py" | wc -l | tr -d ' ')
     ok "Conformance suite already present ($COUNT files)"

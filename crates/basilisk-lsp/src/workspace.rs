@@ -93,8 +93,8 @@ impl WorkspaceIndex {
         let root_configs: std::collections::HashMap<PathBuf, BasiliskConfig> = roots
             .iter()
             .map(|root| {
-                let has_config = root.join("pyproject.toml").is_file()
-                    || root.join("basilisk.json").is_file();
+                let has_config =
+                    root.join("pyproject.toml").is_file() || root.join("basilisk.json").is_file();
                 let cfg = if has_config {
                     basilisk_config::load_basilisk_config(root)
                 } else {
@@ -317,7 +317,8 @@ impl WorkspaceIndex {
                 }
                 let text = std::fs::read_to_string(&path).ok()?;
                 let uri = path_to_uri(&path)?;
-                let (entry, lsp_diags) = analyse_with_config(&text, &path, self.config_for_file(&path));
+                let (entry, lsp_diags) =
+                    analyse_with_config(&text, &path, self.config_for_file(&path));
                 let _ = self.files.insert(path, entry);
                 Some((uri, lsp_diags))
             })
@@ -390,7 +391,8 @@ impl WorkspaceIndex {
                 entry.text.clone()
             };
 
-            let (new_entry, lsp_diags) = analyse_with_config(&text, &importer_path, self.config_for_file(&importer_path));
+            let (new_entry, lsp_diags) =
+                analyse_with_config(&text, &importer_path, self.config_for_file(&importer_path));
             let version = self.files.get(&importer_path).map_or(0, |e| e.version);
             let is_open = self.files.get(&importer_path).is_some_and(|e| e.is_open);
             let mut entry = new_entry;
@@ -752,7 +754,11 @@ mod tests {
         std::fs::write(dir.join("a.py"), "x: int = 1\n").unwrap();
         std::fs::write(dir.join("b.py"), "y: str = 'hi'\n").unwrap();
 
-        let idx = WorkspaceIndex::new(vec![dir.clone()], AnalysisMode::WholeModule, BasiliskConfig::default());
+        let idx = WorkspaceIndex::new(
+            vec![dir.clone()],
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
         let (results, file_count, _) = idx.scan();
         assert_eq!(file_count, 2, "expected 2 files scanned");
         assert_eq!(results.len(), 2);
@@ -767,7 +773,11 @@ mod tests {
         let file_path = dir.join("open.py");
         std::fs::write(&file_path, "x: int = 1\n").unwrap();
 
-        let idx = WorkspaceIndex::new(vec![dir.clone()], AnalysisMode::WholeModule, BasiliskConfig::default());
+        let idx = WorkspaceIndex::new(
+            vec![dir.clone()],
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
         let uri = Url::from_file_path(&file_path).unwrap();
         let _ = idx.set_open(&uri, "x: int = 1\n", 1);
 
@@ -878,7 +888,11 @@ mod tests {
         let config = crate::config::load_config(&dir);
 
         // Build workspace index with a file that imports `flask`.
-        let idx = WorkspaceIndex::new(roots.clone(), AnalysisMode::WholeModule, BasiliskConfig::default());
+        let idx = WorkspaceIndex::new(
+            roots.clone(),
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
         let uri = make_uri(&format!("{}/app.py", dir.display()));
         let _ = idx.set_open(&uri, "import flask\n", 1);
 
@@ -935,7 +949,11 @@ mod tests {
         let roots = vec![dir.clone()];
         let config = crate::config::load_config(&dir);
 
-        let idx = WorkspaceIndex::new(roots.clone(), AnalysisMode::WholeModule, BasiliskConfig::default());
+        let idx = WorkspaceIndex::new(
+            roots.clone(),
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
         let uri = make_uri(&format!("{}/app.py", dir.display()));
         let _ = idx.set_open(&uri, "import flask\n", 1);
 
@@ -1019,7 +1037,11 @@ mod tests {
         let pyproject = "[tool.uv.workspace]\nmembers = [\"packages/*\"]\n";
         std::fs::write(dir.join("pyproject.toml"), pyproject).unwrap();
 
-        let idx = WorkspaceIndex::new(vec![dir.clone()], AnalysisMode::WholeModule, BasiliskConfig::default());
+        let idx = WorkspaceIndex::new(
+            vec![dir.clone()],
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
         let folders = idx.workspace_member_folders();
 
         assert_eq!(
@@ -1049,7 +1071,11 @@ mod tests {
         let dir = unique_tmp("bsk_uv_ws_none");
         std::fs::create_dir_all(&dir).unwrap();
 
-        let idx = WorkspaceIndex::new(vec![dir.clone()], AnalysisMode::WholeModule, BasiliskConfig::default());
+        let idx = WorkspaceIndex::new(
+            vec![dir.clone()],
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
         let folders = idx.workspace_member_folders();
 
         assert!(
@@ -1074,7 +1100,11 @@ mod tests {
         let pyproject = "[tool.uv.workspace]\nmembers = [\"libs/*\"]\nexclude = [\"libs/core\"]\n";
         std::fs::write(dir.join("pyproject.toml"), pyproject).unwrap();
 
-        let idx = WorkspaceIndex::new(vec![dir.clone()], AnalysisMode::WholeModule, BasiliskConfig::default());
+        let idx = WorkspaceIndex::new(
+            vec![dir.clone()],
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
         let folders = idx.workspace_member_folders();
 
         // The folder mapping reports what's physically present; the caller
@@ -1162,8 +1192,14 @@ mod tests {
         let _ = idx.set_open(&uri, SRC_REDUNDANT_ANNOTATION, 1);
 
         let diags = get_diagnostics(&idx, &uri);
-        let w0050: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-W0050").collect();
-        assert!(!w0050.is_empty(), "expected BSK-W0050 for redundant annotation");
+        let w0050: Vec<_> = diags
+            .iter()
+            .filter(|d| d.code.code == "BSK-W0050")
+            .collect();
+        assert!(
+            !w0050.is_empty(),
+            "expected BSK-W0050 for redundant annotation"
+        );
         for d in &w0050 {
             assert_eq!(
                 d.severity,
@@ -1207,7 +1243,10 @@ mod tests {
         let _ = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
 
         let diags = get_diagnostics(&idx, &uri);
-        let e0001: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-E0001").collect();
+        let e0001: Vec<_> = diags
+            .iter()
+            .filter(|d| d.code.code == "BSK-E0001")
+            .collect();
         assert!(
             !e0001.is_empty(),
             "expected BSK-E0001 for missing annotation"
@@ -1264,7 +1303,10 @@ mod tests {
         let _ = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
 
         let diags = get_diagnostics(&idx, &uri);
-        let e0001: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-E0001").collect();
+        let e0001: Vec<_> = diags
+            .iter()
+            .filter(|d| d.code.code == "BSK-E0001")
+            .collect();
         assert!(
             !e0001.is_empty(),
             "BSK-E0001 should still fire (demoted, not disabled)"
@@ -1338,7 +1380,10 @@ mod tests {
         let _ = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
 
         let diags = get_diagnostics(&idx, &uri);
-        let e0001: Vec<_> = diags.iter().filter(|d| d.code.code == "BSK-E0001").collect();
+        let e0001: Vec<_> = diags
+            .iter()
+            .filter(|d| d.code.code == "BSK-E0001")
+            .collect();
         assert!(
             !e0001.is_empty(),
             "BSK-E0001 should still fire at Info severity"
@@ -1588,10 +1633,17 @@ mod tests {
         idx.files.get_mut(&file_path).unwrap().is_open = false;
 
         // Modify the content on disk (different hash) so reload_from_disk runs.
-        std::fs::write(&file_path, "def greet(name):\n    return name\n\n# changed\n").unwrap();
+        std::fs::write(
+            &file_path,
+            "def greet(name):\n    return name\n\n# changed\n",
+        )
+        .unwrap();
 
         let result = idx.reload_from_disk(&uri);
-        assert!(result.is_some(), "reload_from_disk should return diagnostics");
+        assert!(
+            result.is_some(),
+            "reload_from_disk should return diagnostics"
+        );
 
         let (_, lsp_diags) = result.unwrap();
         let codes = lsp_codes(&lsp_diags);
@@ -1720,7 +1772,10 @@ mod tests {
 
         // File outside any root should fall back to default config.
         let cfg = idx.config_for_file(std::path::Path::new("/nonexistent/foo.py"));
-        assert!(cfg.rules.is_empty(), "fallback config should have no rule overrides");
+        assert!(
+            cfg.rules.is_empty(),
+            "fallback config should have no rule overrides"
+        );
 
         let _ = std::fs::remove_dir_all(&root);
     }

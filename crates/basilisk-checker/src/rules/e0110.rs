@@ -247,7 +247,7 @@ impl VarianceContext<'_> {
                             .to_owned(),
                     ),
                     note: None,
-            provenance: None,
+                    provenance: None,
                 });
             }
             Variance::Contravariant if in_output => {
@@ -267,7 +267,7 @@ impl VarianceContext<'_> {
                             .to_owned(),
                     ),
                     note: None,
-            provenance: None,
+                    provenance: None,
                 });
             }
             _ => {}
@@ -295,7 +295,7 @@ impl VarianceContext<'_> {
                 path: self.path.to_owned(),
                 help: Some(format!("Declare `{tv_name}` with `covariant=True`")),
                 note: None,
-            provenance: None,
+                provenance: None,
             });
         }
         if in_input && !in_output {
@@ -311,7 +311,7 @@ impl VarianceContext<'_> {
                 path: self.path.to_owned(),
                 help: Some(format!("Declare `{tv_name}` with `contravariant=True`")),
                 note: None,
-            provenance: None,
+                provenance: None,
             });
         }
         // All methods are exempt (e.g. only __init__): TypeVar is effectively covariant.
@@ -333,7 +333,7 @@ impl VarianceContext<'_> {
                     path: self.path.to_owned(),
                     help: Some(format!("Declare `{tv_name}` with `covariant=True`")),
                     note: None,
-            provenance: None,
+                    provenance: None,
                 });
             }
         }

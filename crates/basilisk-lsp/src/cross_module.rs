@@ -187,7 +187,11 @@ mod tests {
 
     #[test]
     fn cross_module_symbol_population() {
-        let index = WorkspaceIndex::new(vec![], AnalysisMode::CrossModule, basilisk_config::BasiliskConfig::default());
+        let index = WorkspaceIndex::new(
+            vec![],
+            AnalysisMode::CrossModule,
+            basilisk_config::BasiliskConfig::default(),
+        );
 
         // File A: defines a function
         let uri_a = make_uri("/tmp/cross_a.py");
@@ -236,7 +240,11 @@ mod tests {
 
     #[test]
     fn cross_module_class_symbol() {
-        let index = WorkspaceIndex::new(vec![], AnalysisMode::CrossModule, basilisk_config::BasiliskConfig::default());
+        let index = WorkspaceIndex::new(
+            vec![],
+            AnalysisMode::CrossModule,
+            basilisk_config::BasiliskConfig::default(),
+        );
 
         let uri_a = make_uri("/tmp/cross_cls_a.py");
         let src_a =
