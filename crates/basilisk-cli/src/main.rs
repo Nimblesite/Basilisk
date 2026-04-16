@@ -202,14 +202,18 @@ fn run_stubs(action: StubAction) -> u8 {
 fn cache_stub(
     cache_dir: &std::path::Path,
     package: &str,
-    stub: &basilisk_stubs::generate::StubResult,
+    stub: &basilisk_stubs::generate::GeneratedStub,
 ) -> bool {
     use basilisk_stubs::generate::cache;
 
     let source_hash = cache::hash_source(&stub.pyi_content);
     match cache::write_cache(cache_dir, package, &stub.pyi_content, source_hash) {
         Ok(path) => {
-            println!("{} Generated stub for `{package}` → {}", "✓".green(), path.display());
+            println!(
+                "{} Generated stub for `{package}` → {}",
+                "✓".green(),
+                path.display()
+            );
             true
         }
         Err(err) => {
@@ -252,7 +256,10 @@ fn run_stubs_generate(packages: &[String], all: bool, mode: StubGenModeArg, pyth
                 match generate::generate_stubs(package, src, python_path, gen_mode) {
                     Ok(stub) => cache_stub(cache_dir, package, &stub),
                     Err(err) => {
-                        eprintln!("{} Failed to generate stub for `{package}`: {err}", "✗".red());
+                        eprintln!(
+                            "{} Failed to generate stub for `{package}`: {err}",
+                            "✗".red()
+                        );
                         false
                     }
                 }
@@ -267,7 +274,10 @@ fn run_stubs_generate(packages: &[String], all: bool, mode: StubGenModeArg, pyth
             None => match generate::runtime::generate_runtime_stubs(package, python_path) {
                 Ok(stub) => cache_stub(cache_dir, package, &stub),
                 Err(err) => {
-                    eprintln!("{} Failed to generate stub for `{package}`: {err}", "✗".red());
+                    eprintln!(
+                        "{} Failed to generate stub for `{package}`: {err}",
+                        "✗".red()
+                    );
                     false
                 }
             },

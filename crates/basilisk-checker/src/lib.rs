@@ -217,8 +217,7 @@ fn contains_identifier(text: &str, ident: &str) -> bool {
             continue;
         }
         // Check that the character before (if any) is not an identifier char.
-        let before_ok =
-            start == 0 || bytes.get(start - 1).is_none_or(|b| !is_identifier_char(*b));
+        let before_ok = start == 0 || bytes.get(start - 1).is_none_or(|b| !is_identifier_char(*b));
         // Check that the character after (if any) is not an identifier char.
         let after_ok = start + ident_len == bytes.len()
             || bytes

@@ -503,6 +503,52 @@ async fn test_uv_lock_dispatches_and_returns_success() -> TestResult<()> {
     Ok(())
 }
 
+/// Execute a command and wait for both its response and updated diagnostics.
+async fn execute_and_wait_for_diags(
+    fixture: &mut WsTestFixture,
+    request_id: i64,
+    command: &str,
+    args: &[&str],
+) -> TestResult<(bool, Option<String>)> {
+    fixture
+        .send_json(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": "workspace/executeCommand",
+            "params": {
+                "command": command,
+                "arguments": args
+            }
+        }))
+        .await?;
+
+    let mut command_succeeded = false;
+    let mut final_diag: Option<String> = None;
+    let id_str = format!("\"id\":{request_id}");
+
+    for _ in 0..30 {
+        let Some(msg) = fixture.recv().await else {
+            break;
+        };
+        if msg.contains(&id_str) {
+            let parsed: serde_json::Value = serde_json::from_str(&msg)?;
+            assert!(
+                parsed.get("error").is_none(),
+                "command should not error: {msg}"
+            );
+            command_succeeded = parsed["result"]["success"] == true;
+        }
+        if msg.contains("\"method\":\"textDocument/publishDiagnostics\"") && msg.contains("main.py")
+        {
+            final_diag = Some(msg);
+        }
+        if command_succeeded && final_diag.is_some() {
+            break;
+        }
+    }
+    Ok((command_succeeded, final_diag))
+}
+
 #[tokio::test]
 async fn test_e0010_code_action_to_execute_command_full_flow() -> TestResult<()> {
     if !uv_available() {
@@ -511,7 +557,6 @@ async fn test_e0010_code_action_to_execute_command_full_flow() -> TestResult<()>
 
     let dir = create_uv_project("bsk_uv_e0010_full_flow");
 
-    // Write a file that imports an uninstalled package.
     let py_path = dir.join("main.py");
     std::fs::write(&py_path, "import six\n")?;
 
@@ -560,8 +605,7 @@ async fn test_e0010_code_action_to_execute_command_full_flow() -> TestResult<()>
         .as_array()
         .ok_or("expected code actions array")?;
 
-    // Step 3: Find the uv add code action. The command may be nested in
-    // the action's `command` field or at the top level.
+    // Step 3: Find the uv add code action.
     let uv_add_action = actions
         .iter()
         .find(|a| {
@@ -572,54 +616,18 @@ async fn test_e0010_code_action_to_execute_command_full_flow() -> TestResult<()>
             "no basilisk.uv.add code action offered for BSK-E0010. Actions: {actions:?}"
         ))?;
 
-    // Verify the action references the package.
     assert!(
         uv_add_action.to_string().contains("six"),
         "uv add action should reference 'six': {uv_add_action}"
     );
 
-    // Step 4: Execute the command (simulates user clicking the quick fix).
-    // Use send + collect pattern to capture both command response and
-    // republished diagnostics.
-    fixture
-        .send_json(&serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 301,
-            "method": "workspace/executeCommand",
-            "params": {
-                "command": "basilisk.uv.add",
-                "arguments": ["six"]
-            }
-        }))
-        .await?;
-
-    let mut command_succeeded = false;
-    let mut final_diag: Option<String> = None;
-
-    for _ in 0..30 {
-        let Some(msg) = fixture.recv().await else {
-            break;
-        };
-        if msg.contains("\"id\":301") {
-            let parsed: serde_json::Value = serde_json::from_str(&msg)?;
-            assert!(
-                parsed.get("error").is_none(),
-                "uv add should not error: {msg}"
-            );
-            command_succeeded = parsed["result"]["success"] == true;
-        }
-        if msg.contains("\"method\":\"textDocument/publishDiagnostics\"") && msg.contains("main.py")
-        {
-            final_diag = Some(msg);
-        }
-        if command_succeeded && final_diag.is_some() {
-            break;
-        }
-    }
+    // Step 4: Execute the command and wait for diagnostics.
+    let (command_succeeded, final_diag) =
+        execute_and_wait_for_diags(&mut fixture, 301, "basilisk.uv.add", &["six"]).await?;
 
     assert!(command_succeeded, "uv add six should succeed");
 
-    // Step 5: Verify diagnostics are republished without BSK-E0010 for `six`.
+    // Step 5: Verify BSK-E0010 for 'six' is cleared.
     let updated_msg = final_diag.ok_or("should receive updated diagnostics after uv add")?;
     let updated_json: serde_json::Value = serde_json::from_str(&updated_msg)?;
     let updated_diags = updated_json["params"]["diagnostics"]

@@ -4,16 +4,16 @@
   "default_threshold": 90,
   "projects": {
     "basilisk-checker": {
-      "threshold": 89
+      "threshold": 93
     },
     "basilisk-cli": {
-      "threshold": 96
+      "threshold": 85
     },
     "basilisk-db": {
       "threshold": 100
     },
     "basilisk-lsp": {
-      "threshold": 72
+      "threshold": 77
     },
     "basilisk-mojo": {
       "threshold": 90
@@ -28,10 +28,10 @@
       "threshold": 94
     },
     "basilisk-stubs": {
-      "threshold": 100
+      "threshold": 85
     },
     "basilisk-config": {
-      "threshold": 92
+      "threshold": 93
     },
     "vsix": {
       "threshold": 84

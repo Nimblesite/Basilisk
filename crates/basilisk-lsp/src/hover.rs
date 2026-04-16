@@ -61,7 +61,10 @@ pub fn hover_at(
         };
         if let Some(name) = hit_name {
             if let Some(ext_sym) = resolved.imported_symbols.get(name) {
-                if let Some(label) = ext_sym.provenance.and_then(basilisk_stubs::TypeProvenance::hover_label) {
+                if let Some(label) = ext_sym
+                    .provenance
+                    .and_then(basilisk_stubs::TypeProvenance::hover_label)
+                {
                     sections.push(format!("*{label}*"));
                 }
             }

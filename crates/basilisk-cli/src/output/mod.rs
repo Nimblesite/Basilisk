@@ -800,8 +800,8 @@ mod tests {
     }
 
     /// `col_end = (end - line_start).min(len)`. The span 12..14 extends past
-    /// the end of "ghijkl" (6 chars at line_start=7), so col_end is clamped
-    /// to line length. underline_len = 6 - 5 = 1.
+    /// the end of "ghijkl" (6 chars at `line_start=7`), so `col_end` is clamped
+    /// to line length. `underline_len` = 6 - 5 = 1.
     #[test]
     fn format_snippet_col_end_no_overflow() {
         force_colors();
