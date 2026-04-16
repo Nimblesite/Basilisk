@@ -263,7 +263,9 @@ async function executeCommandMiddleware(
   }
 
   const pkgCmd = PACKAGE_COMMANDS[command];
-  if (pkgCmd !== undefined) {
+  if (pkgCmd !== undefined && (args.length === 0 || args[0] === undefined)) {
+    // Only prompt if the LSP didn't already provide the package name
+    // (e.g. when invoked from the command palette, not from a code action).
     const packageName = await vscode.window.showInputBox({
       prompt: pkgCmd.prompt,
       placeHolder: pkgCmd.placeholder,

@@ -470,7 +470,7 @@ fn scan_resolve_and_check_with_roots(
     index: &WorkspaceIndex,
     roots: &[std::path::PathBuf],
 ) -> ScanResult {
-    let (results, file_count, error_count) = index.scan();
+    let (_results, file_count, _initial_error_count) = index.scan();
 
     // Resolve imports for all scanned files.
     let config = roots
@@ -485,20 +485,36 @@ fn scan_resolve_and_check_with_roots(
     search_paths.workspace_members = discover_workspace_members(roots);
     crate::import_resolver::resolve_workspace_imports(index, &search_paths);
 
-    // Cross-module: populate imported symbols and rebuild import graph, then re-check.
+    // Re-check all files now that imports are resolved. The initial scan()
+    // generates diagnostics before workspace members are known, so BSK-E0010
+    // fires for imports that are actually resolvable via workspace members.
     let diagnostics = if matches!(index.mode, AnalysisMode::CrossModule) {
         crate::cross_module::populate_cross_module_symbols(index);
         index.build_import_graph();
         info!("cross-module symbol population complete");
         recheck_with_cross_module_symbols(index)
     } else {
-        results
+        recheck_with_cross_module_symbols(index)
     };
+
+    // Recount errors after re-check (resolved imports reduce false E0010s).
+    let final_error_count: usize = diagnostics
+        .iter()
+        .map(|(_, diags)| {
+            diags
+                .iter()
+                .filter(|d| {
+                    d.severity
+                        .is_none_or(|s| s == tower_lsp::lsp_types::DiagnosticSeverity::ERROR)
+                })
+                .count()
+        })
+        .sum();
 
     ScanResult {
         diagnostics,
         file_count,
-        error_count,
+        error_count: final_error_count,
     }
 }
 
@@ -557,35 +573,81 @@ fn recheck_with_cross_module_symbols(
 /// a `src/` subdirectory (common Python project layout) and adds it; otherwise
 /// adds the member directory itself.
 ///
-/// Returns an empty vec if this is not a uv workspace or parsing fails.
+/// In monorepo layouts (e.g. `ai_cms/agent-backend/`), `pyproject.toml` may
+/// not be at the workspace root itself. If no uv workspace is found at a root,
+/// we search one level of subdirectories for `pyproject.toml` with `src/`
+/// layouts and add those as source roots.
+///
+/// Returns an empty vec if no workspace members are found.
 fn discover_workspace_members(roots: &[std::path::PathBuf]) -> Vec<std::path::PathBuf> {
     let mut members = Vec::new();
 
     for root in roots {
-        let Ok(Some(workspace)) = basilisk_uv::parse_uv_workspace(root) else {
-            continue;
-        };
+        // Try uv workspace at this root first.
+        if let Ok(Some(workspace)) = basilisk_uv::parse_uv_workspace(root) {
+            for member_dir in &workspace.members {
+                add_source_root(&mut members, member_dir);
+            }
 
-        for member_dir in &workspace.members {
-            // Prefer src/ layout if it exists.
-            let src_dir = member_dir.join("src");
-            if src_dir.is_dir() {
-                members.push(src_dir);
-            } else {
-                members.push(member_dir.clone());
+            if !workspace.members.is_empty() {
+                info!(
+                    root = %root.display(),
+                    member_count = workspace.members.len(),
+                    "discovered uv workspace members"
+                );
+                continue;
             }
         }
 
-        if !workspace.members.is_empty() {
+        // No uv workspace at root — search subdirectories for projects.
+        // This handles monorepos where the IDE root (e.g. `ai_cms/`) is a
+        // parent of the actual Python project (e.g. `ai_cms/agent-backend/`).
+        let Ok(entries) = std::fs::read_dir(root) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_dir() || !path.join("pyproject.toml").is_file() {
+                continue;
+            }
+
+            // Try uv workspace in the subdirectory.
+            if let Ok(Some(workspace)) = basilisk_uv::parse_uv_workspace(&path) {
+                for member_dir in &workspace.members {
+                    add_source_root(&mut members, member_dir);
+                }
+                if !workspace.members.is_empty() {
+                    info!(
+                        root = %path.display(),
+                        member_count = workspace.members.len(),
+                        "discovered uv workspace members in subdirectory"
+                    );
+                    continue;
+                }
+            }
+
+            // No uv workspace, but has pyproject.toml — treat as a project.
+            add_source_root(&mut members, &path);
             info!(
-                root = %root.display(),
-                member_count = workspace.members.len(),
-                "discovered uv workspace members"
+                path = %path.display(),
+                "discovered project subdirectory"
             );
         }
     }
 
     members
+}
+
+/// Add a project directory's source root to the member list.
+///
+/// Prefers `src/` layout if it exists, otherwise adds the directory itself.
+fn add_source_root(members: &mut Vec<std::path::PathBuf>, project_dir: &std::path::Path) {
+    let src_dir = project_dir.join("src");
+    if src_dir.is_dir() {
+        members.push(src_dir);
+    } else {
+        members.push(project_dir.to_path_buf());
+    }
 }
 
 /// Detect a uv project and build a [`PackageRegistry`] from its lock file.
