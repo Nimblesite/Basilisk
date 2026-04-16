@@ -24,6 +24,16 @@ HTML_DIR="$REPO_ROOT/target/llvm-cov/html"
 # Ensure llvm-tools-preview is installed so cargo-llvm-cov never prompts.
 rustup component add llvm-tools-preview 2>/dev/null || true
 
+# ── Fetch conformance suite if missing ────────────────────────────────────────
+CONFORMANCE_DIR="$REPO_ROOT/crates/basilisk-cli/tests/conformance"
+if [[ ! -d "$CONFORMANCE_DIR" ]] || [[ -z "$(ls -A "$CONFORMANCE_DIR" 2>/dev/null)" ]]; then
+    header "Fetching PEP conformance suite"
+    bash "$REPO_ROOT/conformance/fetch-conformance.sh"
+else
+    COUNT=$(find "$CONFORMANCE_DIR" -name "*.py" | wc -l | tr -d ' ')
+    ok "Conformance suite already present ($COUNT files)"
+fi
+
 # ── Rust tests with coverage ─────────────────────────────────────────────────
 # cargo-llvm-cov uses target/llvm-cov-target/ as its target directory,
 # so the basilisk binary lands there — not in target/release/.

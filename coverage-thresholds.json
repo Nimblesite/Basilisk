@@ -1,0 +1,47 @@
+{
+  "_agent_pmo": "2efd847",
+  "_doc": "Single source of truth for code coverage thresholds. See REPO-STANDARDS-SPEC [COVERAGE-THRESHOLDS-JSON]. NO GitHub repo variables. NO env vars. This file is read by the internal _coverage_check recipe inside make test. make test exits non-zero if measured < threshold. Thresholds ratchet UP only.",
+  "default_threshold": 90,
+  "projects": {
+    "basilisk-checker": {
+      "threshold": 89
+    },
+    "basilisk-cli": {
+      "threshold": 96
+    },
+    "basilisk-db": {
+      "threshold": 100
+    },
+    "basilisk-lsp": {
+      "threshold": 72
+    },
+    "basilisk-mojo": {
+      "threshold": 90
+    },
+    "basilisk-parser": {
+      "threshold": 100
+    },
+    "basilisk-plugin": {
+      "threshold": 100
+    },
+    "basilisk-resolver": {
+      "threshold": 94
+    },
+    "basilisk-stubs": {
+      "threshold": 100
+    },
+    "basilisk-config": {
+      "threshold": 92
+    },
+    "vsix": {
+      "threshold": 84
+    },
+    "nvim": {
+      "threshold": 39
+    }
+  },
+  "conformance": {
+    "_doc": "Minimum PEP conformance pass percentage (files passing / total files). Ratchet UP only. Current: 135/146 = 92.4%",
+    "threshold": 92
+  }
+}

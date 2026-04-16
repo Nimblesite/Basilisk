@@ -1,3 +1,4 @@
+<!-- agent-pmo:2efd847 -->
 # CLAUDE.md
 
 ⚠️ CRITICAL: WE TREAT THIS CODEBASE WITH RESPECT. THIS CODE WOULD PASS REVIEW AT Google, Meta and Microsoft. WE DON'T ALLOW BAD CODE. NOT EVEN FOR ONE LINE. THIS CODEBASE RECEIVES A GRADE OF A+. ANYTHING LESS IS ⛔️ILLEGAL AND YOU MUST FIX IT IMMEDIATELY.
@@ -31,8 +32,8 @@ OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK MESSAGES AND COMPLY
 
 `docs/specs/LSP-ARCHITECTURE-SPEC.md` is the **single source of truth** for all shared LSP/DAP/config/commands. Editor-specific specs point back to it.
 
-- Specs MUST have non-numeric, hierarchically structured IDs
-- Code and tests MUST reference the spec ids
+- Specs MUST have non-numeric, hierarchically structured IDs (`[GROUP-TOPIC]` / `[GROUP-TOPIC-DETAIL]`)
+- Code and tests MUST reference the spec IDs in comments (e.g. `// Implements [LSP-HOVER]`) so `grep [LSP-` finds spec -> code -> tests in one shot
 
 # Critical Docs
 
@@ -41,6 +42,24 @@ OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK MESSAGES AND COMPLY
 - [Pyrefly](https://pyrefly.org/en/docs/) | [Pyright](https://microsoft.github.io/pyright/#/) (competitors)
 - [Python Type System Conformance Test Results](https://github.com/python/typing/blob/main/conformance/results/results.html) <- We are going to get listed here (interesting article: https://sinon.github.io/future-python-type-checkers/#zuban-from-david-halter)
 
+
+# Build Commands
+
+Cross-platform GNU Make. On Windows: `choco install make` or use the one in Git for Windows.
+
+```bash
+make build   # compile everything
+make test    # FAIL-FAST tests + coverage + threshold (ONLY test entry point)
+make lint    # all linters/analyzers (no formatting)
+make fmt     # format in place
+make clean   # remove build artifacts
+make ci      # lint + test + build (full CI simulation)
+make setup   # post-create dev environment setup
+```
+
+**There are exactly 7 standard targets. No others.** `make test` runs the test runner with its fail-fast flag, collects coverage, asserts measured >= threshold from `coverage-thresholds.json`, and exits non-zero on any failure. To debug a single test, invoke the runner directly — that is not a Makefile target.
+
+**`make fmt`** formats code in-place. **`make lint`** runs linters/analyzers (read-only, no formatting). **`make test`** runs tests with coverage. Three separate targets — no overlap.
 
 # Rules
 
@@ -67,6 +86,8 @@ Testing is absolutely critical. We aim for 100% test coverage and a high mutatio
 - ADD more failing tests for broken/missing functionality — NEVER remove them
 - REDUCING TEST ASSERTIVENESS = DATA CENTER DISMANTLED
 - Ignoring tests = ILLEGAL
+- `make test` is FAIL-FAST — stops at first failure. Never `--no-fail-fast`. Saves CI minutes.
+- `make test` ALWAYS computes coverage AND enforces it. Threshold lives in `coverage-thresholds.json` at the repo root — NOT env vars, NOT GH repo variables, NOT CI YAML. Below threshold = pipeline fails. Ratchet only.
 
 ## IDE Extension Testing
 
@@ -78,6 +99,14 @@ Testing is absolutely critical. We aim for 100% test coverage and a high mutatio
 - DRY, DRY, DRY
 - 100% test coverage is only the start
 - No unit tests. Only COARSE e2e tests
+
+## Logging Standards
+
+- **Structured logging only.** Never `println!`/`eprintln!` for diagnostics. Use `tracing` + `tracing-subscriber`.
+- **Log at entry/exit of significant operations.** Levels: `error|warn|info|debug|trace`.
+- **Structured fields, not string interpolation.** `tracing::info!(user_id = 42, action = "checkout")` — never format strings.
+- **VS Code extension:** detailed logs to a file in the extension's state folder AND to the VS Code Output Channel.
+- **NEVER log PII** (names, emails, phone, IPs) or secrets. Log `"key: present"` or a truncated hash, never the value.
 
 ## Rust Quality Standards
 

@@ -21,7 +21,11 @@ DEST="$(dirname "$0")/../crates/basilisk-cli/tests/conformance"
 mkdir -p "$DEST"
 
 echo "Fetching file list from ${REPO} conformance/tests (ref: ${COMMIT})..."
-FILE_LIST=$(curl -fsSL "$API_URL")
+CURL_ARGS=(-fsSL)
+if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+    CURL_ARGS+=(-H "Authorization: token ${GITHUB_TOKEN}")
+fi
+FILE_LIST=$(curl "${CURL_ARGS[@]}" "$API_URL")
 
 COUNT=$(echo "$FILE_LIST" | python3 -c "
 import json, sys
