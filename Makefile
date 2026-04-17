@@ -5,7 +5,7 @@
 # Exactly 7 public targets: build, test, lint, fmt, clean, ci, setup
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup
+.PHONY: build test lint fmt clean ci setup conformance
 
 # ---------------------------------------------------------------------------
 # OS Detection
