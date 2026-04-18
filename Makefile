@@ -5,7 +5,7 @@
 # Exactly 7 public targets: build, test, lint, fmt, clean, ci, setup
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup conformance
+.PHONY: build test lint fmt clean ci setup conformance package-vsix install-binaries
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -103,7 +103,18 @@ test-lsp: ## Run LSP integration tests (slow, not in main suite)
 
 package: _package_vsix _package_zed ## Package all extensions
 
-install: _install_rust _install_vsix ## Build and install everything
+package-vsix: _package_vsix ## Package the VS Code extension into a .vsix
+
+install-binaries: ## Install all Basilisk binaries (basilisk, basilisk-profiler-helper, debugpy) to PATH
+	@echo -e '\033[1m\033[0;36m▶ Installing basilisk binaries\033[0m' && \
+	cargo install --path crates/basilisk-cli --force && \
+	cargo install --path crates/basilisk-profiler-helper --force && \
+	echo -e '\033[1m\033[0;36m▶ Installing debugpy\033[0m' && \
+	python3 -m pip install --user --upgrade --break-system-packages debugpy && \
+	echo -e "\033[0;32m✓ basilisk                 → $$(command -v basilisk)\033[0m" && \
+	echo -e "\033[0;32m✓ basilisk-profiler-helper → $$(command -v basilisk-profiler-helper)\033[0m" && \
+	echo -e "\033[0;32m✓ debugpy                  → $$(python3 -c 'import debugpy, os; print(os.path.dirname(debugpy.__file__))')\033[0m" && \
+	basilisk --version
 
 # =============================================================================
 # Internal Recipes (private — not in .PHONY)
@@ -175,15 +186,3 @@ _package_zed:
 	echo "  Cmd+Shift+P -> 'zed: install dev extension'" && \
 	echo "  Select: $(ZED_DIR)"
 
-_install_rust: _build_rust
-	@echo -e '\033[1m\033[0;36m▶ Installing basilisk\033[0m' && \
-	cargo install --path crates/basilisk-cli --force && \
-	echo -e "\033[0;32m✓ $$(which basilisk)\033[0m" && \
-	basilisk --version
-
-_install_vsix: _package_vsix
-	@echo -e '\033[1m\033[0;36m▶ Installing VSIX into VS Code\033[0m' && \
-	VSIX=$$(ls $(EXTENSION_DIR)/*.vsix | head -1) && \
-	code --install-extension "$$VSIX" --force && \
-	echo -e "\033[0;32m✓ $$VSIX\033[0m" && \
-	echo "Reload VS Code (Cmd+Shift+P → Developer: Reload Window) to activate."

@@ -599,9 +599,20 @@ fn discover_workspace_members(roots: &[std::path::PathBuf]) -> Vec<std::path::Pa
             }
         }
 
-        // No uv workspace at root — search subdirectories for projects.
-        // This handles monorepos where the IDE root (e.g. `ai_cms/`) is a
-        // parent of the actual Python project (e.g. `ai_cms/agent-backend/`).
+        // Root itself is a Python project (pyproject.toml at the workspace
+        // root, not inside a uv workspace). Add its source root so first-party
+        // imports resolve under a `src/` layout.
+        if root.join("pyproject.toml").is_file() {
+            add_source_root(&mut members, root);
+            info!(
+                root = %root.display(),
+                "discovered project at workspace root"
+            );
+        }
+
+        // Also search subdirectories for projects. This handles monorepos
+        // where the IDE root (e.g. `ai_cms/`) is a parent of the actual
+        // Python project (e.g. `ai_cms/agent-backend/`).
         let Ok(entries) = std::fs::read_dir(root) else {
             continue;
         };
