@@ -138,7 +138,7 @@ _lint_rust:
 
 _lint_vsix:
 	@echo -e '\033[1m\033[0;36m▶ Linting VS Code extension\033[0m' && \
-	cd $(EXTENSION_DIR) && npm run lint && \
+	cd $(EXTENSION_DIR) && npm ci --silent && npm run lint && \
 	echo -e '\033[0;32m✓ VS Code lint passed\033[0m'
 
 _fmt_rust:
