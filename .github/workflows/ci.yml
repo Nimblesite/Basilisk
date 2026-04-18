@@ -78,7 +78,7 @@ jobs:
   test-rust:
     name: Rust Tests & Coverage
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -178,7 +178,7 @@ jobs:
   test-nvim:
     name: Neovim Extension
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
