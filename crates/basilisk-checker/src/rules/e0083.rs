@@ -85,7 +85,7 @@ fn check_tuple_subscript_unpack(
         let element = element.trim();
         if tvt_names.contains(element) {
             return Some(make_diag(
-                format!("`TypeVarTuple` `{element}` must be unpacked with `*` inside `tuple[...]`",),
+                format!("`TypeVarTuple` `{element}` must be unpacked with `*` inside `tuple[...]`"),
                 span,
                 path,
             ));

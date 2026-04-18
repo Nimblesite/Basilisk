@@ -191,13 +191,13 @@ fn has_top_level_if(s: &str) -> bool {
         match bytes.get(i).copied() {
             Some(b'[' | b'(' | b'{') => depth += 1,
             Some(b']' | b')' | b'}') => depth -= 1,
-            Some(b'i') if depth == 0 => {
+            Some(b'i')
+                if depth == 0
                 // Check for ` if ` at this position
-                if bytes.get(i..i + 4) == Some(b" if ")
-                    || (i > 0 && bytes.get(i - 1..i + 3) == Some(b" if"))
-                {
-                    return true;
-                }
+                && (bytes.get(i..i + 4) == Some(b" if ")
+                    || (i > 0 && bytes.get(i - 1..i + 3) == Some(b" if"))) =>
+            {
+                return true;
             }
             _ => {}
         }

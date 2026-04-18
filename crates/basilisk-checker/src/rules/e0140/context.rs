@@ -187,13 +187,11 @@ pub(super) fn extract_protocol_info(cls: &ast::StmtClassDef) -> ProtocolInfo {
     let mut attrs = Vec::new();
     for body_stmt in &cls.body {
         match body_stmt {
-            Stmt::FunctionDef(func) => {
-                if func.name.as_str() == "__call__" {
-                    if is_overload_decorated(func) {
-                        overload_sigs.push(extract_func_sig(func, true));
-                    } else {
-                        call_sig = Some(extract_func_sig(func, true));
-                    }
+            Stmt::FunctionDef(func) if func.name.as_str() == "__call__" => {
+                if is_overload_decorated(func) {
+                    overload_sigs.push(extract_func_sig(func, true));
+                } else {
+                    call_sig = Some(extract_func_sig(func, true));
                 }
             }
             Stmt::AnnAssign(ann) => {

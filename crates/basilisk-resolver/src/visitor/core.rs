@@ -178,26 +178,18 @@ pub(super) fn collect_from_stmt(
                 false,
             );
         }
-        Stmt::Import(node) => {
-            if is_module_level {
-                imports.extend(import_infos_from(node));
-            }
+        Stmt::Import(node) if is_module_level => {
+            imports.extend(import_infos_from(node));
         }
-        Stmt::ImportFrom(node) => {
-            if is_module_level {
-                imports.extend(import_from_infos_from(node));
-            }
+        Stmt::ImportFrom(node) if is_module_level => {
+            imports.extend(import_from_infos_from(node));
         }
-        Stmt::Assign(node) => {
-            if is_module_level {
-                module_vars.extend(assign_infos_from(node));
-            }
+        Stmt::Assign(node) if is_module_level => {
+            module_vars.extend(assign_infos_from(node));
         }
-        Stmt::AnnAssign(node) => {
-            if is_module_level {
-                if let Some(var) = ann_assign_info_from(node) {
-                    module_vars.push(var);
-                }
+        Stmt::AnnAssign(node) if is_module_level => {
+            if let Some(var) = ann_assign_info_from(node) {
+                module_vars.push(var);
             }
         }
         Stmt::Match(node) => {

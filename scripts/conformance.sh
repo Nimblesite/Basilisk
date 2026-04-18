@@ -19,12 +19,18 @@ CONFORMANCE_DIR="crates/basilisk-cli/tests/conformance"
 
 # ── Fetch configuration ──────────────────────────────────────────────────────
 TYPING_REPO="python/typing"
-TYPING_REF="main"   # pin to a tag/SHA for reproducibility
+# Pinned upstream SHA. Bump deliberately, then re-run tests and update
+# the conformance threshold in coverage-thresholds.json. Leaving this on
+# `main` makes CI non-deterministic — upstream suite changes break us.
+TYPING_REF="268d0c4e"
 API_URL="https://api.github.com/repos/${TYPING_REPO}/contents/conformance/tests?ref=${TYPING_REF}"
 
 # ── Fetch if missing or forced ───────────────────────────────────────────────
+REF_STAMP_FILE="$CONFORMANCE_DIR/.ref-sha"
+
 fetch_conformance() {
     header "Fetching conformance suite from ${TYPING_REPO} (ref: ${TYPING_REF})"
+    rm -rf "$CONFORMANCE_DIR"
     mkdir -p "$CONFORMANCE_DIR"
 
     CURL_ARGS=(-fsSL)
@@ -54,7 +60,8 @@ for i, f in enumerate(files, 1):
         print(f'  {i}/{len(files)}')
 " "$CONFORMANCE_DIR"
 
-    ok "${COUNT} conformance files written to ${CONFORMANCE_DIR}/"
+    echo "$TYPING_REF" > "$REF_STAMP_FILE"
+    ok "${COUNT} conformance files written to ${CONFORMANCE_DIR}/ (ref: ${TYPING_REF})"
 }
 
 FETCH_ONLY=0
@@ -64,14 +71,22 @@ for arg in "$@"; do
     esac
 done
 
+CURRENT_REF=""
+if [[ -f "$REF_STAMP_FILE" ]]; then
+    CURRENT_REF=$(cat "$REF_STAMP_FILE")
+fi
+
 if [[ "${1:-}" == "--fetch" ]] || [[ "${1:-}" == "--fetch-only" ]] || \
    [[ ! -d "$CONFORMANCE_DIR" ]] || \
-   [[ -z "$(ls -A "$CONFORMANCE_DIR" 2>/dev/null)" ]]; then
+   [[ -z "$(ls -A "$CONFORMANCE_DIR" 2>/dev/null)" ]] || \
+   [[ "$CURRENT_REF" != "$TYPING_REF" ]]; then
+    if [[ -n "$CURRENT_REF" ]] && [[ "$CURRENT_REF" != "$TYPING_REF" ]]; then
+        warn "Cached conformance ref ($CURRENT_REF) != pinned ($TYPING_REF) — refetching"
+    fi
     fetch_conformance
 else
     COUNT=$(find "$CONFORMANCE_DIR" -name "*.py" | wc -l | tr -d ' ')
-    ok "Conformance suite already present ($COUNT files) — skipping download"
-    warn "Use --fetch to force a re-download"
+    ok "Conformance suite present ($COUNT files, ref ${TYPING_REF}) — skipping download"
 fi
 
 if [[ "$FETCH_ONLY" -eq 1 ]]; then

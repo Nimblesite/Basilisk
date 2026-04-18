@@ -52,7 +52,7 @@ pub fn preset_config(preset: ProfilingPreset, pid: u32) -> SamplerConfig {
             sample_rate: 200,
             include_native: false,
             include_idle: false,
-            duration: Some(Duration::from_secs(60)),
+            duration: Some(Duration::from_mins(1)),
         },
         ProfilingPreset::LongRunning => SamplerConfig {
             pid,
@@ -86,7 +86,7 @@ mod tests {
         let config = preset_config(ProfilingPreset::Detailed, 5678);
         assert_eq!(config.pid, 5678);
         assert_eq!(config.sample_rate, 200);
-        assert_eq!(config.duration, Some(Duration::from_secs(60)));
+        assert_eq!(config.duration, Some(Duration::from_mins(1)));
     }
 
     #[test]

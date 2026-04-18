@@ -304,9 +304,9 @@ fn check_stmts(stmts: &[Stmt], ctx: &ModuleCtx, path: &str, diag: &mut Vec<Diagn
                     check_ann_assign(&ann.annotation, value, ctx, path, diag, span);
                 }
             }
-            Stmt::Assign(assign) => {
+            Stmt::Assign(assign)
                 // Check plain assignment `var = Proto` where `var: type[Proto]` was declared.
-                if assign.targets.len() == 1 {
+                if assign.targets.len() == 1 => {
                     if let Some(target_name) = assign.targets.first().and_then(expr_name) {
                         if let Some((_, proto_name)) =
                             type_proto_vars.iter().find(|(n, _)| n == target_name)
@@ -324,7 +324,6 @@ fn check_stmts(stmts: &[Stmt], ctx: &ModuleCtx, path: &str, diag: &mut Vec<Diagn
                         }
                     }
                 }
-            }
             _ => {}
         }
     }

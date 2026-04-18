@@ -24,15 +24,11 @@ HTML_DIR="$REPO_ROOT/target/llvm-cov/html"
 # Ensure llvm-tools-preview is installed so cargo-llvm-cov never prompts.
 rustup component add llvm-tools-preview 2>/dev/null || true
 
-# ── Fetch conformance suite if missing ────────────────────────────────────────
-CONFORMANCE_DIR="$REPO_ROOT/crates/basilisk-cli/tests/conformance"
-if [[ ! -d "$CONFORMANCE_DIR" ]] || [[ -z "$(ls -A "$CONFORMANCE_DIR" 2>/dev/null)" ]]; then
-    header "Fetching PEP conformance suite"
-    bash "$REPO_ROOT/scripts/conformance.sh" --fetch-only
-else
-    COUNT=$(find "$CONFORMANCE_DIR" -name "*.py" | wc -l | tr -d ' ')
-    ok "Conformance suite already present ($COUNT files)"
-fi
+# ── Fetch conformance suite if missing or stale ──────────────────────────────
+# `conformance.sh` is the single source of truth — it pins TYPING_REF and
+# re-fetches when the cached ref differs. Do not duplicate that logic here.
+header "Ensuring PEP conformance suite is current"
+bash "$REPO_ROOT/scripts/conformance.sh" --fetch-only
 
 # ── Rust tests with coverage ─────────────────────────────────────────────────
 # cargo-llvm-cov uses target/llvm-cov-target/ as its target directory,

@@ -463,15 +463,14 @@ fn find_top_level_eq(text: &str) -> Option<usize> {
         match byte {
             b'[' | b'(' | b'{' => depth += 1,
             b']' | b')' | b'}' => depth -= 1,
-            b'=' if depth == 0 => {
+            b'=' if depth == 0
                 // Make sure it's not `==`.
-                if text.as_bytes().get(idx + 1) != Some(&b'=')
+                && text.as_bytes().get(idx + 1) != Some(&b'=')
                     && (idx == 0 || text.as_bytes().get(idx.wrapping_sub(1)) != Some(&b'='))
                     // Also not `!=`, `<=`, `>=`
-                    && (idx == 0 || !matches!(text.as_bytes().get(idx.wrapping_sub(1)), Some(b'!' | b'<' | b'>')))
-                {
-                    return Some(idx);
-                }
+                    && (idx == 0 || !matches!(text.as_bytes().get(idx.wrapping_sub(1)), Some(b'!' | b'<' | b'>'))) =>
+            {
+                return Some(idx);
             }
             _ => {}
         }

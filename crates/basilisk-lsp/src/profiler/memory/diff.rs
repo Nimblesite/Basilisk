@@ -82,8 +82,8 @@ pub fn parse_diff_output(json_str: &str) -> Result<MemoryDiff, String> {
         }
     }
 
-    grown.sort_by(|a, b| b.size_diff.cmp(&a.size_diff));
-    freed.sort_by(|a, b| a.size_diff.cmp(&b.size_diff));
+    grown.sort_by_key(|a| std::cmp::Reverse(a.size_diff));
+    freed.sort_by_key(|a| a.size_diff);
 
     Ok(MemoryDiff {
         total_growth,

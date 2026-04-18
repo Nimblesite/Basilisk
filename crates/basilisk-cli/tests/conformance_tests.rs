@@ -459,11 +459,7 @@ fn conformance_score() {
     // Enforce minimum conformance percentage from coverage-thresholds.json.
     // This prevents regressions — the threshold ratchets UP only.
     let threshold = read_conformance_threshold();
-    let pct = if totals.files > 0 {
-        (totals.pass * 100) / totals.files
-    } else {
-        0
-    };
+    let pct = (totals.pass * 100).checked_div(totals.files).unwrap_or(0);
     assert!(
         pct >= threshold,
         "PEP conformance regression: {pct}% ({}/{}) < {threshold}% threshold. \

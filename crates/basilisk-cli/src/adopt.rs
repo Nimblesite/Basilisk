@@ -43,7 +43,7 @@ pub(crate) fn run_adopt(paths: &[String]) -> u8 {
 pub(crate) fn run_unadopt(paths: &[String]) -> u8 {
     match unadopt_files(paths) {
         Ok(count) => {
-            println!("Un-adopted {} file{}.", count, pluralise(count),);
+            println!("Un-adopted {} file{}.", count, pluralise(count));
             0
         }
         Err(err) => {

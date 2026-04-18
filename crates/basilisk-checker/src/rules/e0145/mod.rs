@@ -84,12 +84,10 @@ impl ModuleCtx {
                 Stmt::ClassDef(cls) => {
                     class_names.push(cls.name.to_string());
                 }
-                Stmt::Assign(assign) => {
-                    if assign.targets.len() == 1 {
-                        if let Some(name) = assign.targets.first().and_then(expr_simple_name) {
-                            if is_typevar_call(&assign.value) {
-                                typevar_names.push(name.to_owned());
-                            }
+                Stmt::Assign(assign) if assign.targets.len() == 1 => {
+                    if let Some(name) = assign.targets.first().and_then(expr_simple_name) {
+                        if is_typevar_call(&assign.value) {
+                            typevar_names.push(name.to_owned());
                         }
                     }
                 }
