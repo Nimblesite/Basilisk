@@ -889,3 +889,48 @@ pub(super) async fn shutdown(server: &LspServer) -> LspResult<()> {
     server.profiler_manager.stop_all().await;
     Ok(())
 }
+
+#[cfg(test)]
+#[expect(
+    clippy::unwrap_used,
+    reason = "test-only code: unwrap acceptable in unit tests"
+)]
+mod tests {
+    use super::discover_workspace_members;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static TEST_CTR: AtomicU64 = AtomicU64::new(0);
+
+    fn unique_tmp(prefix: &str) -> std::path::PathBuf {
+        let n = TEST_CTR.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir().join(format!("{prefix}_{n}_{}", std::process::id()))
+    }
+
+    /// Regression: when the workspace root itself is a Python project with a
+    /// `src/` layout (no uv workspace, no subdirectory projects), the `src/`
+    /// directory must be added to workspace members so first-party imports
+    /// like `from agent_backend.config import settings` resolve.
+    #[test]
+    fn root_src_layout_project_is_discovered() {
+        let root = unique_tmp("bsk_init_root_src");
+        let src = root.join("src");
+        let pkg = src.join("mypkg");
+        std::fs::create_dir_all(&pkg).unwrap();
+        std::fs::write(pkg.join("__init__.py"), "").unwrap();
+        std::fs::write(pkg.join("config.py"), "settings = 1\n").unwrap();
+        std::fs::write(
+            root.join("pyproject.toml"),
+            "[project]\nname = \"mypkg\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+
+        let members = discover_workspace_members(std::slice::from_ref(&root));
+
+        assert!(
+            members.iter().any(|m| m == &src),
+            "expected src/ to be in workspace_members, got: {members:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}
