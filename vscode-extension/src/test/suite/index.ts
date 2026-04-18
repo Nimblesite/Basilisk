@@ -8,6 +8,7 @@ import {
     EXTENSION_ID,
     SERVER_START_WAIT_MS,
     SUITE_SETUP_TIMEOUT_MS,
+    isLspReady,
     markLspReady,
 } from './test-helpers';
 
@@ -23,6 +24,14 @@ async function prewarmLsp(): Promise<void> {
     const ext = vscode.extensions.getExtension(EXTENSION_ID);
     if (ext && !ext.isActive) {
         await ext.activate();
+    }
+
+    // rootHooks.beforeAll runs before EVERY root suite in Mocha. Once the
+    // first beforeAll has confirmed the server is ready, subsequent calls
+    // must short-circuit — otherwise each of the ~20 suites would eat the
+    // full 60-second poll and turn a 2-minute test run into 20+ minutes.
+    if (isLspReady()) {
+        return;
     }
 
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'basilisk-prewarm-'));

@@ -51,6 +51,11 @@ export function markLspReady(): void {
     lspReadyConfirmed = true;
 }
 
+/** Returns true if the LSP server has been confirmed ready in this test run. */
+export function isLspReady(): boolean {
+    return lspReadyConfirmed;
+}
+
 
 /**
  * Resolves the absolute path to the basilisk binary built from Cargo.
