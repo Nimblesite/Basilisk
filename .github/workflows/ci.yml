@@ -172,7 +172,7 @@ jobs:
           sudo apt-get install -y libasound2 2>/dev/null || sudo apt-get install -y libasound2t64
 
       - name: Run VS Code extension tests
-        run: ./scripts/test-vscode.sh
+        run: make _test_vsix
 
   # ── Neovim extension (runs in parallel) ────────────────────────────────────
   test-nvim:

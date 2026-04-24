@@ -163,8 +163,47 @@ _audit:
 _test_rust:
 	@OPEN=$(OPEN) bash scripts/test-rust.sh
 
+## test-vsix: Compile, lint, E2E-test, and coverage-gate the VS Code extension.
 _test_vsix:
-	@bash scripts/test-vscode.sh
+	@set -e; \
+	REPO_ROOT="$$(pwd)"; \
+	BASILISK_BIN=""; \
+	for c in "$$REPO_ROOT/target/llvm-cov-target/ci/basilisk" \
+	         "$$REPO_ROOT/target/ci/basilisk" \
+	         "$$REPO_ROOT/target/llvm-cov-target/release/basilisk" \
+	         "$$REPO_ROOT/target/release/basilisk" \
+	         "$$REPO_ROOT/target/debug/basilisk"; do \
+	    if [ -x "$$c" ]; then BASILISK_BIN="$$c"; break; fi; \
+	done; \
+	if [ -z "$$BASILISK_BIN" ]; then \
+	    echo -e '\033[1m\033[0;36m▶ Building basilisk binary\033[0m'; \
+	    cargo build --profile ci; \
+	    BASILISK_BIN="$$REPO_ROOT/target/ci/basilisk"; \
+	fi; \
+	[ -x "$$BASILISK_BIN" ] || { echo -e '\033[0;31m✗ basilisk binary not found\033[0m'; exit 1; }; \
+	echo -e "\033[0;32m✓ basilisk binary: $$BASILISK_BIN\033[0m"; \
+	echo -e '\033[1m\033[0;36m▶ VS Code extension — compile\033[0m'; \
+	cd $(EXTENSION_DIR) && npm ci && npm run compile; \
+	echo -e '\033[1m\033[0;36m▶ VS Code extension — ESLint\033[0m'; \
+	npm run lint; \
+	echo -e '\033[1m\033[0;36m▶ VS Code E2E tests\033[0m'; \
+	VSCODE_TEST_CMD="npm test -- --coverage"; \
+	if [ -z "$${DISPLAY:-}" ] && command -v xvfb-run >/dev/null 2>&1; then \
+	    VSCODE_TEST_CMD="xvfb-run -a $$VSCODE_TEST_CMD"; \
+	fi; \
+	BASILISK_EXECUTABLE_PATH="$$BASILISK_BIN" $$VSCODE_TEST_CMD; \
+	echo -e '\033[1m\033[0;36m▶ VS Code extension — coverage threshold\033[0m'; \
+	VSIX_LCOV="$$REPO_ROOT/$(EXTENSION_DIR)/coverage/lcov.info"; \
+	VSIX_THRESHOLD=$$(python3 -c 'import json; print(json.load(open("'"$$REPO_ROOT"'/$(COVERAGE_THRESHOLDS_FILE)"))["projects"]["vsix"]["threshold"])'); \
+	if [ ! -f "$$VSIX_LCOV" ]; then echo -e '\033[0;31m✗ vscode-extension: no LCOV data — coverage collection broken\033[0m'; exit 1; fi; \
+	VSIX_TOTAL=$$(grep -c '^DA:' "$$VSIX_LCOV" || true); \
+	if [ "$$VSIX_TOTAL" -eq 0 ]; then echo -e '\033[0;31m✗ vscode-extension: no LCOV data\033[0m'; exit 1; fi; \
+	VSIX_COVERED=$$(grep -c '^DA:[^,]*,[^0]' "$$VSIX_LCOV" || true); \
+	VSIX_PCT=$$(( VSIX_COVERED * 100 / VSIX_TOTAL )); \
+	if [ "$$VSIX_PCT" -lt "$$VSIX_THRESHOLD" ]; then \
+	    echo -e "\033[0;31m✗ vscode-extension: $$VSIX_PCT%% < $$VSIX_THRESHOLD%% threshold — FAIL\033[0m"; exit 1; \
+	fi; \
+	echo -e "\033[0;32m✓ vscode-extension: $$VSIX_PCT%% ≥ $$VSIX_THRESHOLD%% threshold\033[0m"
 
 _test_nvim:
 	@bash scripts/test-nvim.sh

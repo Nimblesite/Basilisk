@@ -17,12 +17,11 @@ import * as vscode from 'vscode';
 import { getStore } from '../../extension';
 import {
     EXTENSION_ID,
-    SUITE_SETUP_TIMEOUT_MS,
     setupLspTestSuite,
     teardownLspTestSuite,
     closeAllEditors,
     openPythonFile,
-} from './test-helpers';
+} from "./test-helpers";
 
 import type { ProfileResult } from '../../profiler-decorations';
 import {
@@ -57,7 +56,6 @@ let tmpDir = '';
 
 suite('Profiler — Start/Stop Lifecycle', () => {
     suiteSetup(async function () {
-        this.timeout(SUITE_SETUP_TIMEOUT_MS);
         const result = await setupLspTestSuite('basilisk-profiler-lc-');
         tmpDir = result.tmpDir;
     });
@@ -188,7 +186,6 @@ suite('Profiler — Start/Stop Lifecycle', () => {
 
 suite('Memory Profiler — Command Registration', () => {
     suiteSetup(async function () {
-        this.timeout(SUITE_SETUP_TIMEOUT_MS);
         const result = await setupLspTestSuite('basilisk-memory-cmd-');
         tmpDir = result.tmpDir;
     });
@@ -282,7 +279,6 @@ suite('Memory Profiler — Command Registration', () => {
 
 suite('Profiler — Lifecycle Interaction', () => {
     suiteSetup(async function () {
-        this.timeout(SUITE_SETUP_TIMEOUT_MS);
         const result = await setupLspTestSuite('basilisk-profiler-lifecycle-');
         tmpDir = result.tmpDir;
     });
@@ -401,7 +397,6 @@ suite('Profiler — Lifecycle Interaction', () => {
 
 suite('Profiler — Lifecycle Interaction (Continued)', () => {
     suiteSetup(async function () {
-        this.timeout(SUITE_SETUP_TIMEOUT_MS);
         const result = await setupLspTestSuite('basilisk-profiler-lifecycle2-');
         tmpDir = result.tmpDir;
     });
@@ -453,7 +448,6 @@ suite('Profiler — Lifecycle Interaction (Continued)', () => {
 
 suite('Profiler — Status Bar Behavior', () => {
     suiteSetup(async function () {
-        this.timeout(SUITE_SETUP_TIMEOUT_MS);
         const result = await setupLspTestSuite('basilisk-profiler-sb2-');
         tmpDir = result.tmpDir;
     });
@@ -506,7 +500,6 @@ suite('Profiler — Status Bar Behavior', () => {
 
 suite('Profiler — Configuration Interaction', () => {
     suiteSetup(async function () {
-        this.timeout(SUITE_SETUP_TIMEOUT_MS);
         const result = await setupLspTestSuite('basilisk-profiler-cfgi-');
         tmpDir = result.tmpDir;
     });
@@ -601,7 +594,6 @@ suite('Profiler — Configuration Interaction', () => {
 
 suite('Memory Profiler — Extended', () => {
     suiteSetup(async function () {
-        this.timeout(SUITE_SETUP_TIMEOUT_MS);
         const result = await setupLspTestSuite('basilisk-memory-ext-');
         tmpDir = result.tmpDir;
     });
@@ -716,7 +708,6 @@ suite('Memory Profiler — Extended', () => {
 
 suite('Memory Profiler — Types and Decorations', () => {
     suiteSetup(async function () {
-        this.timeout(SUITE_SETUP_TIMEOUT_MS);
         const result = await setupLspTestSuite('basilisk-memory-ext2-');
         tmpDir = result.tmpDir;
     });
@@ -817,7 +808,6 @@ suite('Memory Profiler — Types and Decorations', () => {
 
 suite('Profiler — Error Handling', () => {
     suiteSetup(async function () {
-        this.timeout(SUITE_SETUP_TIMEOUT_MS);
         const result = await setupLspTestSuite('basilisk-profiler-err-');
         tmpDir = result.tmpDir;
     });
@@ -937,7 +927,6 @@ suite('Profiler — Error Handling', () => {
 
 suite('Profiler — Cross-Feature Integration', () => {
     suiteSetup(async function () {
-        this.timeout(SUITE_SETUP_TIMEOUT_MS);
         const result = await setupLspTestSuite('basilisk-profiler-xfeat-');
         tmpDir = result.tmpDir;
     });
@@ -1019,7 +1008,6 @@ suite('Profiler — Cross-Feature Integration', () => {
 
 suite('Profiler — Coexistence and Disposal', () => {
     suiteSetup(async function () {
-        this.timeout(SUITE_SETUP_TIMEOUT_MS);
         const result = await setupLspTestSuite('basilisk-profiler-xfeat2-');
         tmpDir = result.tmpDir;
     });

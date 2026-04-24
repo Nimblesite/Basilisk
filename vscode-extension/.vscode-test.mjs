@@ -17,8 +17,16 @@ export default defineConfig({
         // include patterns like 'out/**/*.js' resolve against src/ and
         // find nothing.
         srcDir: __dirname,
+        // Mocha config — @vscode/test-cli creates its own Mocha instance and
+        // ignores src/test/suite/index.ts's Mocha config. This is the ONLY
+        // place Mocha config is honoured when running `npm test`.
+        // Timeout MUST match DEFAULT_TEST_TIMEOUT_MS in test-helpers.ts.
+        // `require` runs once per test process — used to pre-warm the LSP.
         mocha: {
-            timeout: 60000,
+            bail: true,
+            reporter: 'list',
+            timeout: 10_000,
+            require: 'out/test/suite/index.js',
         },
     }],
     coverage: {

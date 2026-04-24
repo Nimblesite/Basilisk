@@ -16,11 +16,10 @@ import * as vscode from 'vscode';
 import { getStore } from '../../extension';
 import {
     EXTENSION_ID,
-    SUITE_SETUP_TIMEOUT_MS,
     setupLspTestSuite,
     teardownLspTestSuite,
     closeAllEditors,
-} from './test-helpers';
+} from "./test-helpers";
 
 import {
     PROFILER_CLIENT_COMMANDS,
@@ -36,7 +35,6 @@ let tmpDir = '';
 
 suite('Profiler — Command Registration', () => {
     suiteSetup(async function () {
-        this.timeout(SUITE_SETUP_TIMEOUT_MS);
         const result = await setupLspTestSuite('basilisk-profiler-test-');
         tmpDir = result.tmpDir;
     });
@@ -129,7 +127,6 @@ suite('Profiler — Command Registration', () => {
 
 suite('Profiler — Configuration', () => {
     suiteSetup(async function () {
-        this.timeout(SUITE_SETUP_TIMEOUT_MS);
         const result = await setupLspTestSuite('basilisk-profiler-cfg-');
         tmpDir = result.tmpDir;
     });
@@ -257,7 +254,6 @@ suite('Profiler — Configuration', () => {
 
 suite('Profiler — Status Bar', () => {
     suiteSetup(async function () {
-        this.timeout(SUITE_SETUP_TIMEOUT_MS);
         const result = await setupLspTestSuite('basilisk-profiler-sb-');
         tmpDir = result.tmpDir;
     });
@@ -288,7 +284,6 @@ suite('Profiler — Status Bar', () => {
 
 suite('Profiler — Keybindings', () => {
     suiteSetup(async function () {
-        this.timeout(SUITE_SETUP_TIMEOUT_MS);
         const result = await setupLspTestSuite('basilisk-profiler-kb-');
         tmpDir = result.tmpDir;
     });

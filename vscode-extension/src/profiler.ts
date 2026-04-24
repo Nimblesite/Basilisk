@@ -14,6 +14,7 @@
 import * as vscode from "vscode";
 import { Logger } from "./logger";
 import type { Store } from "./store";
+import { POLL_INTERVAL_MS, STARTUP_TIMEOUT_MS } from "./timeouts";
 import {
   applyProfileDecorations,
   disposeProfileDecorations,
@@ -362,11 +363,6 @@ function updateProfilerProgress(sampleCount: number, duration: number, topFuncti
 
 // ── Progress listener ─────────────────────────────────────────────────────
 
-/** Polling interval (ms) for checking if the LSP client is ready. */
-const CLIENT_POLL_INTERVAL_MS = 500;
-/** Maximum wait time (ms) before giving up on the LSP client. */
-const CLIENT_POLL_TIMEOUT_MS = 30_000;
-
 function registerProgressListener(store: Store): void {
   // Check periodically if the client is available and register the handler.
   const interval = setInterval(() => {
@@ -384,10 +380,10 @@ function registerProgressListener(store: Store): void {
         }
       });
     }
-  }, CLIENT_POLL_INTERVAL_MS);
+  }, POLL_INTERVAL_MS);
 
   // Clean up interval if client never starts.
-  setTimeout(() => { clearInterval(interval); }, CLIENT_POLL_TIMEOUT_MS);
+  setTimeout(() => { clearInterval(interval); }, STARTUP_TIMEOUT_MS);
 }
 
 // ── Session cleanup ───────────────────────────────────────────────────────

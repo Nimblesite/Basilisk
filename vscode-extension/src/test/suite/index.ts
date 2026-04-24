@@ -1,13 +1,20 @@
+/**
+ * NOTE: This file is NOT used when running `npm test` (i.e. `@vscode/test-cli`).
+ * The CLI creates its own Mocha instance from `.vscode-test.mjs`'s `mocha` block.
+ * All Mocha config (timeout, bail, reporter) lives in `.vscode-test.mjs`.
+ *
+ * This module only exists as a `mocha.require` global-setup hook: it pre-warms
+ * the LSP server ONCE before the test run so we don't pay cold-start on every
+ * root suite.
+ */
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import Mocha from 'mocha';
-import { glob } from 'glob';
 import * as vscode from 'vscode';
 import {
     EXTENSION_ID,
-    SERVER_START_WAIT_MS,
-    SUITE_SETUP_TIMEOUT_MS,
+    POLL_INTERVAL_MS,
+    WAIT_MS,
     isLspReady,
     markLspReady,
 } from './test-helpers';
@@ -15,10 +22,8 @@ import {
 /**
  * Pre-warm the LSP server before any test suite runs.
  *
- * Individual suiteSetup hooks have short (30 s) timeouts that are fine once the
- * server is already responsive, but too short for a cold CI start (cargo build +
- * LSP init can exceed 60 s).  By waiting here — with the generous 90 s timeout —
- * we guarantee the server is ready before any suite begins.
+ * Runs exactly ONCE — `isLspReady()` short-circuits subsequent invocations
+ * so we don't pay the cold-start cost for each of ~20 root suites.
  */
 async function prewarmLsp(): Promise<void> {
     const ext = vscode.extensions.getExtension(EXTENSION_ID);
@@ -26,10 +31,6 @@ async function prewarmLsp(): Promise<void> {
         await ext.activate();
     }
 
-    // rootHooks.beforeAll runs before EVERY root suite in Mocha. Once the
-    // first beforeAll has confirmed the server is ready, subsequent calls
-    // must short-circuit — otherwise each of the ~20 suites would eat the
-    // full 60-second poll and turn a 2-minute test run into 20+ minutes.
     if (isLspReady()) {
         return;
     }
@@ -41,8 +42,7 @@ async function prewarmLsp(): Promise<void> {
     const dummyDoc = await vscode.workspace.openTextDocument(dummyUri);
     await vscode.window.showTextDocument(dummyDoc);
 
-    const pollIntervalMs = 200;
-    const deadline = Date.now() + SERVER_START_WAIT_MS;
+    const deadline = Date.now() + WAIT_MS;
     while (Date.now() < deadline) {
         try {
             const syms = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
@@ -53,36 +53,14 @@ async function prewarmLsp(): Promise<void> {
                 break;
             }
         } catch { /* server not ready yet */ }
-        await new Promise<void>((r) => setTimeout(r, pollIntervalMs));
+        await new Promise<void>((r) => setTimeout(r, POLL_INTERVAL_MS));
     }
 
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     fs.rmSync(tmpDir, { recursive: true, force: true });
 }
 
-export async function run(): Promise<void> {
-    const timeout = parseInt(process.env.MOCHA_TIMEOUT ?? '60000', 10);
-    const mocha = new Mocha({
-        ui: 'tdd',
-        color: true,
-        timeout,
-        rootHooks: {
-            beforeAll(this: Mocha.Context, done: Mocha.Done) {
-                this.timeout(SUITE_SETUP_TIMEOUT_MS);
-                prewarmLsp().then(() => done(), done);
-            },
-        },
-    });
-    const testsRoot = path.resolve(__dirname);
-    const files = await glob('**/**.test.js', { cwd: testsRoot });
-    files.forEach(f => mocha.addFile(path.resolve(testsRoot, f)));
-    return new Promise<void>((resolve, reject) => {
-        mocha.run(failures => {
-            if (failures > 0) {
-                reject(new Error(`${failures} tests failed.`));
-            } else {
-                resolve();
-            }
-        });
-    });
+/** @vscode/test-cli calls this via `mocha.require` before any test file loads. */
+export async function mochaGlobalSetup(): Promise<void> {
+    await prewarmLsp();
 }
