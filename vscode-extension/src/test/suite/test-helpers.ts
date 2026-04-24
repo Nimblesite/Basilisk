@@ -25,6 +25,11 @@ export const POLL_INTERVAL_MS = 10;
  *  If a wait exceeds this, the operation is broken. No retries, no excuses. */
 export const WAIT_MS = 1_000;
 
+/** Max time to wait for an external process bootstrap (debugpy launch,
+ *  socket handshake, debug session start). These steps involve spawning
+ *  a subprocess and negotiating a protocol, so a tight WAIT_MS is wrong. */
+export const SESSION_START_WAIT_MS = 15_000;
+
 // Mocha default per-test timeout lives in .vscode-test.mjs (the only place
 // @vscode/test-cli honours it). Do NOT re-declare here — one source of truth.
 

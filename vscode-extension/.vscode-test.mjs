@@ -20,12 +20,13 @@ export default defineConfig({
         // Mocha config — @vscode/test-cli creates its own Mocha instance and
         // ignores src/test/suite/index.ts's Mocha config. This is the ONLY
         // place Mocha config is honoured when running `npm test`.
-        // Timeout MUST match DEFAULT_TEST_TIMEOUT_MS in test-helpers.ts.
         // `require` runs once per test process — used to pre-warm the LSP.
+        // Timeout sized for slow debug-integration tests that spawn debugpy
+        // and step through real Python code on CI runners.
         mocha: {
             bail: true,
             reporter: 'list',
-            timeout: 10_000,
+            timeout: 60_000,
             require: './out/test/suite/index.js',
         },
     }],

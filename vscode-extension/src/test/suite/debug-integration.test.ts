@@ -22,7 +22,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as net from 'net';
 import { execFileSync } from 'child_process';
-import { POLL_INTERVAL_MS, WAIT_MS } from "./test-helpers";
+import { POLL_INTERVAL_MS, WAIT_MS, SESSION_START_WAIT_MS } from "./test-helpers";
 
 const EXTENSION_ID = 'basilisk-lang.basilisk';
 
@@ -237,7 +237,7 @@ async function stopDebugSession(sessionId: string): Promise<{ stopped: boolean }
 /**
  * Wait for the debug session to be fully started.
  */
-async function waitForDebugSessionStart(timeoutMs: number = WAIT_MS): Promise<vscode.DebugSession> {
+async function waitForDebugSessionStart(timeoutMs: number = SESSION_START_WAIT_MS): Promise<vscode.DebugSession> {
     return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
             disposable.dispose();
@@ -255,7 +255,7 @@ async function waitForDebugSessionStart(timeoutMs: number = WAIT_MS): Promise<vs
 /**
  * Wait for the debug session to terminate.
  */
-async function waitForDebugSessionEnd(timeoutMs: number = WAIT_MS): Promise<void> {
+async function waitForDebugSessionEnd(timeoutMs: number = SESSION_START_WAIT_MS): Promise<void> {
     return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
             disposable.dispose();
@@ -399,7 +399,7 @@ async function continueExecution(session: vscode.DebugSession, threadId: number)
  * Wait for the debugger to stop (after a step or continue), returning the thread ID.
  * Uses polling on the active session's stack trace availability.
  */
-async function waitForStop(timeoutMs: number = WAIT_MS): Promise<number> {
+async function waitForStop(timeoutMs: number = SESSION_START_WAIT_MS): Promise<number> {
     return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
             clearInterval(poll);
