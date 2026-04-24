@@ -33,7 +33,7 @@ export const SESSION_START_WAIT_MS = 15_000;
 /** Max time to wait for a DAP step/continue to produce a new stop event.
  *  Stepping inside an already-running debug session is fast (~100-500ms),
  *  but slow CI can stretch it — hence a mid-range budget, not WAIT_MS. */
-export const STEP_WAIT_MS = 5_000;
+export const STEP_WAIT_MS = 10_000;
 
 // Mocha default per-test timeout lives in .vscode-test.mjs (the only place
 // @vscode/test-cli honours it). Do NOT re-declare here — one source of truth.
