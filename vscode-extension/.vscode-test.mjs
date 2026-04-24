@@ -26,7 +26,7 @@ export default defineConfig({
             bail: true,
             reporter: 'list',
             timeout: 10_000,
-            require: 'out/test/suite/index.js',
+            require: './out/test/suite/index.js',
         },
     }],
     coverage: {
