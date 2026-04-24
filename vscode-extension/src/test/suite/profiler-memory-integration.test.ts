@@ -639,8 +639,18 @@ suite('Memory Profiler — Extended', () => {
         assert.ok(store, 'Store should be initialized');
         assert.ok(store.client.value !== undefined, 'LSP client should exist');
 
+        const INPUT_BOX_DISMISS_DELAY_MS = 200;
+        const dismiss = new Promise<void>((resolve) => {
+            setTimeout(() => {
+                void vscode.commands.executeCommand('workbench.action.closeQuickOpen').then(() => { resolve(); });
+            }, INPUT_BOX_DISMISS_DELAY_MS);
+        });
+
         try {
-            await vscode.commands.executeCommand('basilisk.memoryReferences');
+            await Promise.all([
+                vscode.commands.executeCommand('basilisk.memoryReferences'),
+                dismiss,
+            ]);
         } catch (err: unknown) {
             const message = (err as Error).message ?? String(err);
             assert.ok(typeof message === 'string', 'Error should be a string');
