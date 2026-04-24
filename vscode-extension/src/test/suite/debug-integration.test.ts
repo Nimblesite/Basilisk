@@ -22,7 +22,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as net from 'net';
 import { execFileSync } from 'child_process';
-import { POLL_INTERVAL_MS, WAIT_MS, SESSION_START_WAIT_MS } from "./test-helpers";
+import { POLL_INTERVAL_MS, WAIT_MS, SESSION_START_WAIT_MS, STEP_WAIT_MS } from "./test-helpers";
 
 const EXTENSION_ID = 'basilisk-lang.basilisk';
 
@@ -399,7 +399,7 @@ async function continueExecution(session: vscode.DebugSession, threadId: number)
  * Wait for the debugger to stop (after a step or continue), returning the thread ID.
  * Uses polling on the active session's stack trace availability.
  */
-async function waitForStop(timeoutMs: number = SESSION_START_WAIT_MS): Promise<number> {
+async function waitForStop(timeoutMs: number = STEP_WAIT_MS): Promise<number> {
     return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
             clearInterval(poll);
@@ -578,7 +578,7 @@ async function launchAndWaitForBreakpoint(
     setBreakpoints(STEPPING_FIXTURE, breakpointLines);
 
     const sessionPromise = waitForDebugSessionStart();
-    const stoppedPromise = waitForStop();
+    const stoppedPromise = waitForStop(SESSION_START_WAIT_MS);
 
     const started = await vscode.debug.startDebugging(undefined, {
         name: 'Basilisk Debug Test',
