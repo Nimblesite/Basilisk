@@ -37,7 +37,8 @@
       "Bash(npm run:*)",
       "Bash(gh api:*)",
       "Bash(RUSTFLAGS=\"-D warnings\" cargo clippy --release --all-targets)",
-      "Bash(rustc --version)"
+      "Bash(rustc --version)",
+      "Bash(awk '{print $NF}')"
     ]
   },
   "autoMemoryEnabled": false
