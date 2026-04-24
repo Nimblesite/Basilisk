@@ -1,0 +1,140 @@
+# VSIX Debug Integration — `loop_and_accumulate` Timeout Investigation
+
+## Status
+
+- Test: [debug-integration.test.ts:1117](vscode-extension/src/test/suite/debug-integration.test.ts#L1117) — `loop_and_accumulate: step through loop, verify accumulator`
+- CI state: consistently times out (observed 90s, 120s budgets both exhausted)
+- Impact: blocks the `VS Code Extension` CI job; remaining 234 VSIX tests pass
+- Not reproduced locally yet (requires Linux CI runner OR local headless VS Code)
+
+## The Failure
+
+The test launches debugpy against [debug_stepping.py:63-69](vscode-extension/src/test/fixtures/debug_stepping.py#L63-L69):
+
+```python
+def loop_and_accumulate():
+    """Loop stepping — verify accumulator at each iteration."""
+    total = 0                  # line 65
+    for i in range(5):         # line 66
+        total += i             # line 67
+    # After loop: total = 0+1+2+3+4 = 10
+    return total               # line 69
+```
+
+It sets a breakpoint on line 65, then issues ~11 `stepOver` + `waitForStop` pairs to walk every iteration and assert `total` at each step.
+
+Five structurally identical tests pass (arithmetic, string_ops, list_ops, dict_ops, nested_call) in 17–26 seconds. This one exceeds 120s.
+
+### Observed CI timings
+
+| Test | Duration |
+|---|---|
+| arithmetic | 21-26s |
+| string_ops | 22-23s |
+| list_ops | 21-22s |
+| dict_ops | 21-22s |
+| nested_call | 17s |
+| **loop_and_accumulate** | **>120s** (timeout) |
+
+Same fixture, same helpers, same step count class. Something specific to the `for`/loop-back flow.
+
+## Leading Hypothesis: `waitForStop` Race on Loop Iterations
+
+[waitForStop](vscode-extension/src/test/suite/debug-integration.test.ts#L402) polls `session.customRequest('threads')` + `getStackTrace()` every 10ms and resolves as soon as it sees any stackframe.
+
+`stepOver` ([line 373](vscode-extension/src/test/suite/debug-integration.test.ts#L373)) is fire-and-forget — the DAP `next` request returns once accepted, not once the step has physically moved the PC.
+
+**The race:** after sending `next`, debugpy goes `running → stopped` again. Between those two states, `waitForStop` can be polling. If it catches the session still reporting the *previous* stack frame (step hasn't cleared it yet), it returns immediately with the wrong threadId — tests think they've stepped but haven't.
+
+**Why only the loop test?** On straight-line code, this race is invisible because the next assertion is always satisfied by either the old or new frame. On a `for` iteration, stepping over the `for i in range(5):` header puts debugpy in an unusual state (iterator advance, conditional branch). If the race returns prematurely, subsequent steps get confused and waitForStop then waits the full `STEP_WAIT_MS` (10s) multiple times. 10s × several bad iterations ≈ the 120s blowout we see.
+
+## Investigation Plan
+
+### Step 1: Reproduce locally
+
+```bash
+cd vscode-extension
+npm run compile
+DISPLAY=:99 xvfb-run -a npm test -- --coverage
+```
+
+Or run only this test file via the VS Code Extension Tests launch config with `--grep "loop_and_accumulate"`.
+
+If it passes locally but fails on CI, we're dealing with CI-runner jitter that amplifies a race. If it fails locally too, it's a real behavioural bug.
+
+### Step 2: Add DAP event tracing around `waitForStop`
+
+Temporarily instrument [waitForStop](vscode-extension/src/test/suite/debug-integration.test.ts#L402) to log every poll tick's `threadId`, stackframe top `line`, and the elapsed ms. Run the loop test and capture logs. We should see one of:
+
+- Multiple returns with the **same** stackframe → confirms the race (waitForStop returning before the step moves).
+- One return per step but at increasing elapsed times → debugpy itself is slow on the `for` branch.
+- waitForStop never returns for one specific step → debugpy isn't emitting a stop at all.
+
+### Step 3: Replace polling with event-driven waiting
+
+Polling is the root cause of the race. Replace [waitForStop](vscode-extension/src/test/suite/debug-integration.test.ts#L402) with a proper DAP event listener:
+
+```ts
+async function waitForStop(timeoutMs = STEP_WAIT_MS): Promise<number> {
+    return new Promise((resolve, reject) => {
+        const tracker = vscode.debug.registerDebugAdapterTrackerFactory('basilisk-debug', {
+            createDebugAdapterTracker() {
+                return {
+                    onDidSendMessage(msg: DebugProtocol.ProtocolMessage) {
+                        if (msg.type === 'event' && (msg as DebugProtocol.StoppedEvent).event === 'stopped') {
+                            tracker.dispose();
+                            clearTimeout(timer);
+                            resolve((msg as DebugProtocol.StoppedEvent).body.threadId ?? 0);
+                        }
+                    },
+                };
+            },
+        });
+        const timer = setTimeout(() => {
+            tracker.dispose();
+            reject(new Error(`Timed out waiting for 'stopped' event after ${timeoutMs}ms`));
+        }, timeoutMs);
+    });
+}
+```
+
+This waits for the actual DAP `stopped` event rather than racing the polling loop against debugpy's state transitions. Every stepping test benefits; none of them should need tuning.
+
+**Watch out for:** the tracker must be registered *before* calling `stepOver`, otherwise events that arrive first are missed. The current async chain — `stepOver` then `waitForStop()` — already orders the poll-registration after the `next` request, so re-creating this order with trackers is fine. Alternatively, use a persistent tracker per-session set up in `launchAndWaitForBreakpoint` that queues events, and `waitForStop` drains the next unseen one.
+
+### Step 4: If event-driven waiting still fails on the loop test
+
+Then it's genuinely a product/debugpy issue, not a test race. Options:
+
+1. Capture the DAP JSON-RPC transcript between VS Code and debugpy for the loop test using `basilisk.trace.server` + debugpy's `--log-dir`. Compare with the passing tests to spot the divergence.
+2. Check if debugpy is emitting `continued` but not a subsequent `stopped` for the `for` iteration — would indicate a debugpy bug or a bad step-granularity request (we should probably request `line` granularity explicitly).
+3. Consider whether the test design is wrong — stepping over `for i in range(5):` is ambiguous; the DAP spec doesn't mandate one stop per iteration for a step-over of the loop header. Rework the test to set breakpoints on the body (line 67) and `continue`-hit-`continue`-hit instead of stepping. This matches how a user would actually debug a loop.
+
+### Step 5: Clean up timeout tuning once the root cause is fixed
+
+Once the flake is gone, revert the conservative timeout inflation:
+
+- [.vscode-test.mjs](vscode-extension/.vscode-test.mjs) Mocha `timeout: 120_000` → back down to 30-45s.
+- [test-helpers.ts](vscode-extension/src/test/suite/test-helpers.ts) `STEP_WAIT_MS = 10_000` → down to 2-3s, which is all a healthy step should ever need.
+- Keep `SESSION_START_WAIT_MS = 15_000` — that budget is for real subprocess bootstrap and is correctly sized.
+
+## What NOT To Do
+
+- Do not `.skip` the test. It exercises a real user workflow (stepping through a loop). Skipping hides the bug.
+- Do not further inflate timeouts without fixing the race. 300s of polling is not a solution.
+- Do not lower the assertion count in the test to dodge the problem. The assertions are what make the test valuable.
+
+## Related Files
+
+- [vscode-extension/src/test/suite/debug-integration.test.ts](vscode-extension/src/test/suite/debug-integration.test.ts)
+- [vscode-extension/src/test/suite/test-helpers.ts](vscode-extension/src/test/suite/test-helpers.ts)
+- [vscode-extension/src/test/fixtures/debug_stepping.py](vscode-extension/src/test/fixtures/debug_stepping.py)
+- [vscode-extension/.vscode-test.mjs](vscode-extension/.vscode-test.mjs)
+
+## CI Evidence
+
+Runs where this test timed out after all other tuning was applied:
+- https://github.com/MelbourneDeveloper/Basilisk/actions/runs/24908239822/job/72943021595 (60s Mocha)
+- https://github.com/MelbourneDeveloper/Basilisk/actions/runs/24908584364/job/72944198484 (90s Mocha)
+- https://github.com/MelbourneDeveloper/Basilisk/actions/runs/24909010178/job/72945623985 (5s step-wait — fail-fast exposed the underlying stall)
+- https://github.com/MelbourneDeveloper/Basilisk/actions/runs/24909344311/job/72946745902 (120s Mocha, 10s step-wait)
