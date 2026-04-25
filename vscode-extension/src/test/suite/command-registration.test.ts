@@ -113,6 +113,12 @@ const SERVER_COMMANDS = [
     'basilisk.profiler.stop',
     'basilisk.profiler.snapshot',
     'basilisk.profiler.list',
+    'basilisk.memory.start',
+    'basilisk.memory.snapshot',
+    'basilisk.memory.diff',
+    'basilisk.memory.references',
+    'basilisk.memory.objectsByType',
+    'basilisk.memory.gcCollect',
 ] as const;
 
 /** Assert that registering a command succeeds (it was NOT already registered). */

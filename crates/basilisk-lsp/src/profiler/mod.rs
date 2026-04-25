@@ -202,6 +202,10 @@ impl ProfileSessionManager {
         include_native: Option<bool>,
         duration: Option<std::time::Duration>,
     ) -> Result<StartResult, ProfileError> {
+        if pid == 0 {
+            return Err(ProfileError::Sampler(SamplerError::ProcessNotFound(pid)));
+        }
+
         let mut sessions = self.sessions.lock().await;
 
         // Reject duplicate PID.

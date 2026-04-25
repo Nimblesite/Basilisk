@@ -60,6 +60,14 @@ end
 ---@param config BasiliskConfig
 ---@return boolean success
 function M.start(config)
+  if config.binary_path and config.binary_path ~= "" and not binary.is_executable(config.binary_path) then
+    vim.notify(
+      "[basilisk] binary not found: " .. config.binary_path,
+      vim.log.levels.ERROR
+    )
+    return false
+  end
+
   local bin = binary.resolve(config.binary_path)
   if not bin then
     vim.notify(
