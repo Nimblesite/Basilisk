@@ -54,6 +54,125 @@ interface PackageJSON {
     };
 }
 
+interface DapStoppedMessage {
+    type?: string;
+    event?: string;
+    body?: {
+        threadId?: unknown;
+    };
+}
+
+interface QueuedStoppedEvent {
+    session: vscode.DebugSession;
+    threadId?: number;
+}
+
+interface StopWaiter {
+    accept: (event: QueuedStoppedEvent) => void;
+    reject: (reason: Error) => void;
+    timer: ReturnType<typeof setTimeout>;
+}
+
+/**
+ * Event-driven DAP stop queue for debug stepping tests.
+ *
+ * The previous polling helper could observe the old stack frame immediately
+ * after a `next` request. This queue listens to real DAP `stopped` events and
+ * keeps them until the test asks for the next stop, so fast loop-iteration
+ * stops cannot be missed.
+ */
+class DebugStopEventQueue implements vscode.DebugAdapterTrackerFactory {
+    private stoppedEvents: QueuedStoppedEvent[] = [];
+    private waiters: StopWaiter[] = [];
+
+    public createDebugAdapterTracker(
+        session: vscode.DebugSession
+    ): vscode.ProviderResult<vscode.DebugAdapterTracker> {
+        return {
+            onDidSendMessage: (message: unknown): void => {
+                this.recordStoppedEvent(session, message);
+            },
+        };
+    }
+
+    public reset(): void {
+        this.stoppedEvents = [];
+        for (const waiter of this.waiters) {
+            clearTimeout(waiter.timer);
+            waiter.reject(new Error("Reset DAP stopped-event queue before a 'stopped' event arrived"));
+        }
+        this.waiters = [];
+    }
+
+    public async waitForStop(timeoutMs: number = STEP_WAIT_MS): Promise<number> {
+        const queuedEvent = this.stoppedEvents.shift();
+        if (queuedEvent !== undefined) {
+            return DebugStopEventQueue.resolveThreadId(queuedEvent);
+        }
+
+        return new Promise<number>((resolve, reject) => {
+            const timer = setTimeout(() => {
+                this.removeWaiter(timer);
+                reject(new Error(`Timed out waiting for DAP 'stopped' event after ${timeoutMs}ms`));
+            }, timeoutMs);
+
+            this.waiters.push({
+                timer: timer,
+                reject: reject,
+                accept: (event: QueuedStoppedEvent): void => {
+                    clearTimeout(timer);
+                    void DebugStopEventQueue.resolveThreadId(event).then(resolve, reject);
+                },
+            });
+        });
+    }
+
+    private recordStoppedEvent(session: vscode.DebugSession, message: unknown): void {
+        const stoppedMessage = message as DapStoppedMessage;
+        if (stoppedMessage.type !== 'event' || stoppedMessage.event !== 'stopped') {
+            return;
+        }
+
+        const rawThreadId = stoppedMessage.body?.threadId;
+        const threadId = typeof rawThreadId === 'number' ? rawThreadId : undefined;
+        const stoppedEvent: QueuedStoppedEvent = { session: session, threadId: threadId };
+        const waiter = this.waiters.shift();
+        if (waiter !== undefined) {
+            waiter.accept(stoppedEvent);
+            return;
+        }
+
+        this.stoppedEvents.push(stoppedEvent);
+    }
+
+    private removeWaiter(timer: ReturnType<typeof setTimeout>): void {
+        const waiterIndex = this.waiters.findIndex((waiter) => waiter.timer === timer);
+        if (waiterIndex >= 0) {
+            this.waiters.splice(waiterIndex, 1);
+        }
+    }
+
+    private static async resolveThreadId(stoppedEvent: QueuedStoppedEvent): Promise<number> {
+        if (stoppedEvent.threadId !== undefined && stoppedEvent.threadId > 0) {
+            return stoppedEvent.threadId;
+        }
+
+        const threadsResponse = (await stoppedEvent.session.customRequest('threads')) as {
+            threads?: { id?: unknown }[];
+        };
+        const thread = threadsResponse.threads?.find(
+            (candidate) => typeof candidate.id === 'number' && candidate.id > 0
+        );
+        if (thread !== undefined && typeof thread.id === 'number') {
+            return thread.id;
+        }
+
+        throw new Error("DAP 'stopped' event did not include a usable threadId");
+    }
+}
+
+const debugStopEvents = new DebugStopEventQueue();
+
 /** Timeout (ms) for subprocess commands (binary/python detection). */
 
 /** Timeout (ms) for TCP port checks. */
@@ -397,45 +516,10 @@ async function continueExecution(session: vscode.DebugSession, threadId: number)
 
 /**
  * Wait for the debugger to stop (after a step or continue), returning the thread ID.
- * Uses polling on the active session's stack trace availability.
+ * Uses queued DAP `stopped` events from the suite-level debug adapter tracker.
  */
 async function waitForStop(timeoutMs: number = STEP_WAIT_MS): Promise<number> {
-    return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-            clearInterval(poll);
-            reject(new Error(`Timed out waiting for debugger to stop after ${timeoutMs}ms`));
-        }, timeoutMs);
-
-        const poll = setInterval(() => {
-            void (async () => {
-            const session = vscode.debug.activeDebugSession;
-            if (session === undefined) {
-                return;
-            }
-            try {
-                const threadsResponse = (await session.customRequest('threads')) as {
-                    threads?: { id: number }[];
-                };
-                const threads = threadsResponse.threads;
-                if (threads !== undefined && threads.length > 0) {
-                    const threadId: number = threads[0].id;
-                    try {
-                        const stack = await getStackTrace(session, threadId);
-                        if (stack.stackFrames.length > 0) {
-                            clearInterval(poll);
-                            clearTimeout(timer);
-                            resolve(threadId);
-                        }
-                    } catch {
-                        // Thread is running, not stopped yet.
-                    }
-                }
-            } catch {
-                // Session not ready yet.
-            }
-            })();
-        }, POLL_INTERVAL_MS);
-    });
+    return debugStopEvents.waitForStop(timeoutMs);
 }
 
 /**
@@ -574,6 +658,7 @@ async function launchAndWaitForBreakpoint(
     breakpointLines: number[],
     pythonPath?: string
 ): Promise<{ session: vscode.DebugSession; threadId: number }> {
+    debugStopEvents.reset();
     clearAllBreakpoints();
     setBreakpoints(STEPPING_FIXTURE, breakpointLines);
 
@@ -609,6 +694,7 @@ suite('Debug Integration E2E Tests', () => {
     let debugpyAvailable: boolean;
     let pythonPath: string | undefined;
     let tmpDir: string;
+    let debugStopTrackerRegistration: vscode.Disposable | undefined;
 
     suiteSetup(async function () {
 
@@ -644,6 +730,11 @@ suite('Debug Integration E2E Tests', () => {
             await ext.activate();
         }
 
+        debugStopTrackerRegistration = vscode.debug.registerDebugAdapterTrackerFactory(
+            'basilisk-debug',
+            debugStopEvents
+        );
+
         // Give the LSP server time to fully initialize.
         await new Promise<void>((resolve) => setTimeout(resolve, WAIT_MS));
     });
@@ -656,6 +747,9 @@ suite('Debug Integration E2E Tests', () => {
         if (tmpDir !== undefined && tmpDir !== '' && fs.existsSync(tmpDir)) {
             fs.rmSync(tmpDir, { recursive: true, force: true });
         }
+        debugStopTrackerRegistration?.dispose();
+        debugStopTrackerRegistration = undefined;
+        debugStopEvents.reset();
     });
 
     teardown(async () => {
@@ -664,6 +758,7 @@ suite('Debug Integration E2E Tests', () => {
             await vscode.debug.stopDebugging();
             await new Promise<void>((resolve) => setTimeout(resolve, SESSION_SETTLE_MS));
         }
+        debugStopEvents.reset();
     });
 
     // ────────────────────────────────────────────────────────────────────────

@@ -26,7 +26,7 @@ export default defineConfig({
         mocha: {
             bail: true,
             reporter: 'list',
-            timeout: 120_000,
+            timeout: 45_000,
             require: './out/test/suite/index.js',
         },
     }],

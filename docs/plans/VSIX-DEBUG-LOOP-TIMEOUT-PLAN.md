@@ -7,6 +7,44 @@
 - Impact: blocks the `VS Code Extension` CI job; remaining 234 VSIX tests pass
 - Not reproduced locally yet (requires Linux CI runner OR local headless VS Code)
 
+## TODOs
+
+- [x] Read repo instructions and coordinate file locks before edits.
+- [x] Run a local targeted VSIX debug test baseline where the local environment supports it.
+- [x] Replace polling-based `waitForStop` with event-driven DAP stopped-event waiting.
+- [x] Update callers so step/continue waits cannot miss fast stop events.
+- [x] Restore inflated VSIX timeouts after the race fix is in place.
+- [x] Run compile/lint and targeted VSIX debug validation.
+- [x] Record the final implementation and validation outcome here.
+
+Local baseline before code changes: `npm run compile` passed, then
+`npm test -- --grep "loop_and_accumulate"` passed locally in 1.209s on
+macOS. The failure remains CI-specific, consistent with runner jitter
+amplifying the polling race.
+
+Implementation update: `waitForStop` now drains a suite-level DAP stopped-event
+queue populated by `vscode.debug.registerDebugAdapterTrackerFactory`. The queue
+stores stop events that arrive before the next `waitForStop` call, so existing
+`stepOver`/`stepIn`/`stepOut`/`continue` call sites no longer depend on polling
+or exact await ordering. Timeout cleanup applied: `STEP_WAIT_MS` is 3s and
+Mocha timeout is 45s.
+
+Final validation:
+
+- `npm run compile` passed.
+- `npm run lint` passed.
+- `npm test -- --grep "loop_and_accumulate"` passed with the reduced budgets;
+  the loop test completed in 749ms.
+- `npm test -- --grep "Debug Integration E2E Tests"` passed twice after the
+  event queue change; final run: 27 passing in 24s, with
+  `loop_and_accumulate` completing in 530ms.
+- Full `make test` was attempted after targeted validation. It reached the Rust
+  profiler e2e suite, then blocked unattended in
+  `profiler_e2e_pyspy::e2e_profile_nonexistent_pid_returns_error` because the
+  test spawned `osascript ... with administrator privileges` for
+  `basilisk-profiler-helper`. The command was interrupted there; no VS Code
+  process was killed.
+
 ## The Failure
 
 The test launches debugpy against [debug_stepping.py:63-69](vscode-extension/src/test/fixtures/debug_stepping.py#L63-L69):
