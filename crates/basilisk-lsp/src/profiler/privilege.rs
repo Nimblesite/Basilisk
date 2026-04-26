@@ -489,22 +489,24 @@ mod tests {
 
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     #[test]
-    fn nonexistent_pid_is_denied_before_elevation() {
-        let status = check_profiling_permissions(999_999_999).expect("permission check");
+    fn nonexistent_pid_is_denied_before_elevation() -> Result<(), String> {
+        let status = check_profiling_permissions(999_999_999)?;
         assert!(
             matches!(status, PermissionStatus::Denied(ref reason) if reason.contains("not found")),
             "nonexistent PID should be denied before elevation, got: {status:?}"
         );
+        Ok(())
     }
 
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     #[test]
-    fn pid_zero_is_denied_before_elevation() {
-        let status = check_profiling_permissions(0).expect("permission check");
+    fn pid_zero_is_denied_before_elevation() -> Result<(), String> {
+        let status = check_profiling_permissions(0)?;
         assert!(
             matches!(status, PermissionStatus::Denied(ref reason) if reason.contains("not found")),
             "PID 0 should be denied before elevation, got: {status:?}"
         );
+        Ok(())
     }
 
     #[test]
