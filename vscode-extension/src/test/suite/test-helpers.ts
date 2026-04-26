@@ -11,6 +11,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { execFileSync } from 'child_process';
 
+export { POLL_INTERVAL_MS, WAIT_MS } from '../../timeouts';
+
 export const EXTENSION_ID = 'basilisk-lang.basilisk';
 
 /** Maximum time (ms) to wait for diagnostics from the LSP server. */
@@ -133,9 +135,7 @@ export async function waitForDiagnosticsCleared(
                 resolve([]);
             } else {
                 reject(new Error(
-                    `waitForDiagnosticsCleared timed out after ${timeoutMs}ms — ` +
-                    `${remaining.length} diagnostic(s) still present for ${uri.fsPath}: ` +
-                    remaining.map((d) => d.message).join('; ')
+                    `waitForDiagnosticsCleared timed out after ${timeoutMs}ms — ${remaining.length} diagnostic(s) still present for ${uri.fsPath}: ${remaining.map((d) => d.message).join('; ')}`
                 ));
             }
         }, timeoutMs);

@@ -97,10 +97,7 @@ async fn test_ws_did_change_updates_diagnostics() -> TestResult<()> {
         }))
         .await?;
 
-    let diag = fixture
-        .wait_for_diagnostics()
-        .await
-        ?;
+    let diag = fixture.wait_for_diagnostics().await?;
 
     assert!(diag.contains("\"diagnostics\":[]"));
     Ok(())
@@ -117,10 +114,7 @@ async fn test_ws_did_close_clears_diagnostics() -> TestResult<()> {
 
     fixture.did_close("file:///test.py").await?;
 
-    let diag = fixture
-        .wait_for_diagnostics()
-        .await
-        ?;
+    let diag = fixture.wait_for_diagnostics().await?;
 
     assert!(diag.contains("\"diagnostics\":[]"));
     Ok(())
@@ -244,10 +238,7 @@ async fn test_ws_large_file_handling() -> TestResult<()> {
 
     fixture.did_open("file:///large.py", &large_code).await?;
 
-    let diag = fixture
-        .wait_for_diagnostics()
-        .await
-        ?;
+    let diag = fixture.wait_for_diagnostics().await?;
 
     assert!(diag.contains("\"method\":\"textDocument/publishDiagnostics\""));
     assert!(diag.matches("BSK-E0001").count() >= 50);
