@@ -1,7 +1,10 @@
+# ruff: noqa: E402, E731
 # Redundant type annotations — Basilisk infers these automatically.
 #
 # W0050 fires when the annotation adds no information beyond what inference provides.
 # E0005 does NOT fire when a subclass overrides a parent's annotated attribute.
+# E402/E731 are suppressed: imports are placed per-section intentionally, and
+# lambda assignments are part of the test fixtures for annotation inference.
 
 # ---------------------------------------------------------------------------
 # Module-level: scalar literals are always inferrable
