@@ -1,6 +1,7 @@
 # These all pass Basilisk cleanly.
 # Run: cargo run -- check examples/good.py
 
+
 def greet(name: str) -> str:
     return "Hello " + name
 

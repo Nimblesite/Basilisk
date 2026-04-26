@@ -416,5 +416,6 @@ pub(super) fn check_call_expr(
              all fields are keyword-only unless explicitly overridden"
                 .to_owned(),
         ),
+        provenance: None,
     });
 }

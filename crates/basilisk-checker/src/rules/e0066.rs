@@ -74,6 +74,7 @@ impl Rule for EnumValueTypeMismatch {
                      all member values must be compatible with `T`"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }

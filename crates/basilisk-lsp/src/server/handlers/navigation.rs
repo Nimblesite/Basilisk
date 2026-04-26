@@ -134,14 +134,16 @@ pub(in crate::server) async fn document_symbol(
 ) -> LspResult<Option<DocumentSymbolResponse>> {
     let uri = params.text_document.uri;
     let Some((text, resolved, _)) = server.get_document_data(&uri).await else {
-        return Ok(None);
+        // Return an empty array instead of null.  Per the LSP spec, null
+        // means "not supported" while [] means "supported but no symbols
+        // found."  Since document symbols ARE advertised in capabilities,
+        // returning null for a file that hasn't been indexed yet (e.g.
+        // before didOpen is processed) is incorrect and causes VS Code's
+        // executeDocumentSymbolProvider to report "no provider".
+        return Ok(Some(DocumentSymbolResponse::Nested(Vec::new())));
     };
     let syms = symbols::document_symbols(&resolved, &text);
-    if syms.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(DocumentSymbolResponse::Nested(syms)))
-    }
+    Ok(Some(DocumentSymbolResponse::Nested(syms)))
 }
 
 /// Handle `workspace/symbol`.

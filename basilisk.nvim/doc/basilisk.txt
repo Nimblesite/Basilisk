@@ -16,9 +16,10 @@ CONTENTS                                                    *basilisk-contents*
   9. Profiling .......................................... |basilisk-profiling|
   10. Memory Tracking ................................... |basilisk-memory|
   11. uv Integration .................................... |basilisk-uv|
-  12. Status Line ....................................... |basilisk-statusline|
-  13. Health Check ...................................... |basilisk-health|
-  14. Troubleshooting ................................... |basilisk-troubleshooting|
+  12. Activity Panels ................................... |basilisk-panels|
+  13. Status Line ....................................... |basilisk-statusline|
+  14. Health Check ...................................... |basilisk-health|
+  15. Troubleshooting ................................... |basilisk-troubleshooting|
 
 ==============================================================================
 1. INTRODUCTION                                         *basilisk-introduction*
@@ -279,7 +280,59 @@ Workflow:
 Package management via uv. Commands map to uv CLI operations.
 
 ==============================================================================
-12. STATUS LINE                                           *basilisk-statusline*
+12. ACTIVITY PANELS                                         *basilisk-panels*
+
+Basilisk provides three workspace panels for browsing modules, type coverage,
+and server info.
+
+Module Explorer: ~
+                                                        *:BasiliskModules*
+:BasiliskModules
+  Toggle the Module Explorer side panel. Shows every Python module in
+  your workspace with its top-level symbols (functions, classes, variables).
+
+  Keybindings (in the panel buffer):
+    `<CR>`  Open file at symbol
+    `o`     Toggle fold (expand/collapse a module)
+    `r`     Refresh the module tree from the LSP server
+    `y`     Copy import path to clipboard (e.g. `from pkg import func`)
+    `q`     Close the panel
+
+  Default keymap: `<leader>bm`
+
+Type Health: ~
+                                                         *:BasiliskHealth*
+:BasiliskHealth
+  Toggle the Type Health panel. Displays per-module type annotation
+  coverage with color-coded progress bars:
+    Green    90%+ coverage
+    Yellow   50-89% coverage
+    Red      <50% coverage
+
+  Shows workspace summary (total symbols, annotated count, errors,
+  warnings, adopted files) and per-module breakdown sorted by coverage.
+
+  Keybindings (in the panel buffer):
+    `<CR>`  Open module file
+    `r`     Refresh health data
+    `q`     Close the panel
+
+  Default keymap: `<leader>bh`
+
+Server Info: ~
+                                                           *:BasiliskInfo*
+:BasiliskInfo
+  Show server status in a floating window. Displays binary path,
+  version, Python interpreter, analysis mode, and feature status.
+
+  Default keymap: `<leader>bi`
+
+Live Updates: ~
+  All panels refresh automatically when files change via the
+  `basilisk/moduleChanged` LSP notification (debounced 300ms).
+
+==============================================================================
+13. STATUS LINE                                           *basilisk-statusline*
 
 Lualine integration: >lua
   sections = {
@@ -299,12 +352,12 @@ States:
   Stopped       ⊘ Basilisk         (grey)
 
 ==============================================================================
-13. HEALTH CHECK                                             *basilisk-health*
+14. HEALTH CHECK                                             *basilisk-health*
 
 Run `:checkhealth basilisk` to verify your setup.
 
 ==============================================================================
-14. TROUBLESHOOTING                                   *basilisk-troubleshooting*
+15. TROUBLESHOOTING                                   *basilisk-troubleshooting*
 
 Binary not found: ~
   Install: `cargo install basilisk-cli`

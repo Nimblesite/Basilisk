@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use basilisk_resolver::scope::{ExternalSymbol, ExternalSymbolKind};
+use basilisk_stubs::TypeProvenance;
 
 use crate::workspace::WorkspaceIndex;
 
@@ -38,6 +39,7 @@ fn extract_exports(
                 source_path: source_path.to_path_buf(),
                 source_span: func.name_span,
                 signature: Some(signature),
+                provenance: Some(TypeProvenance::Source),
             },
         ));
     }
@@ -53,6 +55,7 @@ fn extract_exports(
                 source_path: source_path.to_path_buf(),
                 source_span: class.name_span,
                 signature: Some(format!("class {}", class.name)),
+                provenance: Some(TypeProvenance::Source),
             },
         ));
     }
@@ -73,6 +76,7 @@ fn extract_exports(
                 source_path: source_path.to_path_buf(),
                 source_span: var.name_span,
                 signature: None,
+                provenance: Some(TypeProvenance::Source),
             },
         ));
     }
@@ -183,7 +187,11 @@ mod tests {
 
     #[test]
     fn cross_module_symbol_population() {
-        let index = WorkspaceIndex::new(vec![], AnalysisMode::CrossModule);
+        let index = WorkspaceIndex::new(
+            vec![],
+            AnalysisMode::CrossModule,
+            basilisk_config::BasiliskConfig::default(),
+        );
 
         // File A: defines a function
         let uri_a = make_uri("/tmp/cross_a.py");
@@ -232,7 +240,11 @@ mod tests {
 
     #[test]
     fn cross_module_class_symbol() {
-        let index = WorkspaceIndex::new(vec![], AnalysisMode::CrossModule);
+        let index = WorkspaceIndex::new(
+            vec![],
+            AnalysisMode::CrossModule,
+            basilisk_config::BasiliskConfig::default(),
+        );
 
         let uri_a = make_uri("/tmp/cross_cls_a.py");
         let src_a =

@@ -36,6 +36,7 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
         note: Some(
             "PEP 589: TypedDict subclassing has strict field-compatibility requirements".to_owned(),
         ),
+        provenance: None,
     }
 }
 

@@ -48,6 +48,7 @@ impl Rule for TypedDictRuntimeViolation {
                     "PEP 589: TypedDict classes exist only at type-checking time;                      they are plain dicts at runtime"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }

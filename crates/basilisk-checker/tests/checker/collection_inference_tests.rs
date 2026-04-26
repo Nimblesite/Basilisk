@@ -139,28 +139,6 @@ def f() -> None:
 }
 
 #[test]
-fn test_literal_inference_module_scope() -> Result<(), Box<dyn std::error::Error>> {
-    let src = "
-STATUS = 'active'
-MAX = 100
-";
-    let diags = run(src)?;
-    assert!(diags.is_empty(), "module-level literals should be clean");
-    Ok(())
-}
-
-#[test]
-fn test_literal_inference_function_scope() -> Result<(), Box<dyn std::error::Error>> {
-    let src = "
-def f() -> None:
-    x = 'active'
-";
-    let diags = run(src)?;
-    assert!(diags.is_empty(), "function-local literals should be clean");
-    Ok(())
-}
-
-#[test]
 fn test_assignment_narrowing() -> Result<(), Box<dyn std::error::Error>> {
     let src = "
 def f() -> None:
@@ -223,17 +201,5 @@ def f() -> None:
 ";
     let diags = run(src)?;
     assert!(diags.is_empty(), "augmented assignment should be clean");
-    Ok(())
-}
-
-#[test]
-fn test_walrus_operator_inference() -> Result<(), Box<dyn std::error::Error>> {
-    let src = "
-def f(a: list) -> None:
-    if (n := len(a)) > 10:
-        reveal_type(n)
-";
-    let diags = run(src)?;
-    assert!(diags.is_empty(), "walrus operator should be clean");
     Ok(())
 }

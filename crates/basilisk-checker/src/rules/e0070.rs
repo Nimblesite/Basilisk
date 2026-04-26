@@ -328,6 +328,7 @@ fn make_assignment_diagnostic(
              except in covariant contexts or when the target is `Any`"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }
 
@@ -354,5 +355,6 @@ fn make_return_diagnostic(
              type parameters"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }

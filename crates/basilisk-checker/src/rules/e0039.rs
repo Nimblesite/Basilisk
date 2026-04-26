@@ -38,6 +38,7 @@ impl Rule for InvalidAssertTypeCall {
                      and its expected type"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }

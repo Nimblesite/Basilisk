@@ -17,5 +17,70 @@ languages = ["Python"]
 [language_servers.basilisk.language_ids]
 "Python" = "python"
 
+[[slash_commands]]
+name = "modules"
+description = "Show workspace module tree"
+requires_argument = false
+
+[[slash_commands]]
+name = "symbols"
+description = "Show symbols in a module"
+requires_argument = true
+
+[[slash_commands]]
+name = "health"
+description = "Type health statistics"
+requires_argument = false
+
+[[slash_commands]]
+name = "basilisk"
+description = "Basilisk server info and commands"
+requires_argument = false
+
+[[slash_commands]]
+name = "profile"
+description = "Start CPU profiling (optional: PID)"
+requires_argument = false
+
+[[slash_commands]]
+name = "profstop"
+description = "Stop CPU profiling and export results"
+requires_argument = false
+
+[[slash_commands]]
+name = "profsnapshot"
+description = "Take a profiling snapshot without stopping"
+requires_argument = false
+
+[[slash_commands]]
+name = "memleak"
+description = "Start memory leak tracking via tracemalloc"
+requires_argument = false
+
+[[slash_commands]]
+name = "memstop"
+description = "Stop memory tracking and generate leak report"
+requires_argument = false
+
+[[slash_commands]]
+name = "memrefs"
+description = "Walk the reference graph for a Python type"
+requires_argument = false
+
+[[slash_commands]]
+name = "tests"
+description = "Discover pytest/unittest tests in workspace"
+requires_argument = false
+
+[[slash_commands]]
+name = "runtests"
+description = "Run tests by node ID or file"
+requires_argument = false
+
+[[slash_commands]]
+name = "testfile"
+description = "Run all tests in the current file"
+requires_argument = false
+
 [debug_adapters.basilisk-debug]
 schema_path = "debug_adapter_schemas/basilisk-debug.json"

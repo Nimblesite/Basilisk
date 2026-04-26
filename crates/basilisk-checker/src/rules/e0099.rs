@@ -57,6 +57,7 @@ impl Rule for ProtocolInstantiation {
                      and cannot be instantiated directly"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }

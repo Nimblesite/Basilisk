@@ -164,24 +164,13 @@
       </ul>
 
       <div class="nav-actions">
-        {% if techdocOptions.features.i18n and (supportedLanguages | length) > 1 %}
         <div class="language-switcher">
-          <button class="language-btn" aria-label="Select language" aria-expanded="false">
-            <span>{% if languages and languages[lang | default('en')] %}{{ languages[lang | default('en')].nativeName }}{% else %}{{ lang | default('en') | upper }}{% endif %}</span>
-          </button>
-          <ul class="language-dropdown" role="menu">
-            {% for langCode in supportedLanguages %}
-            <li role="menuitem">
-              <a href="{{ page.url | altLangUrl(lang | default('en'), langCode) }}"
-                 class="{% if (lang | default('en')) == langCode %}active{% endif %}"
-                 lang="{{ langCode }}">
-                {% if languages and languages[langCode] %}{{ languages[langCode].nativeName }}{% else %}{{ langCode | upper }}{% endif %}
-              </a>
-            </li>
-            {% endfor %}
-          </ul>
+          {% if lang == 'zh' %}
+          <a href="{{ page.url | replace('/zh/', '/') }}" lang="en" class="lang-link" aria-label="Switch to English">English</a>
+          {% else %}
+          <a href="/zh{{ page.url }}" lang="zh" class="lang-link" aria-label="切换到中文">中文</a>
+          {% endif %}
         </div>
-        {% endif %}
 
         {% if techdocOptions.features.darkMode %}
         <button id="theme-toggle" class="theme-toggle" aria-label="Toggle dark mode">

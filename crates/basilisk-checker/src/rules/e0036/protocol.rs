@@ -161,6 +161,7 @@ fn emit_protocol_violations(
                      in the implementation, not instance variables"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }

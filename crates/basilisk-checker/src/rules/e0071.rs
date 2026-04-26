@@ -60,6 +60,7 @@ impl Rule for HistoricalPositionalViolation {
                          by the historical convention (pre-PEP 570)"
                             .to_owned(),
                     ),
+                    provenance: None,
                 },
                 HistoricalPositionalViolationKind::PositionalOnlyAfterKeyword => Diagnostic {
                     code: CODE.clone(),
@@ -81,6 +82,7 @@ impl Rule for HistoricalPositionalViolation {
                          positional-or-keyword parameters"
                             .to_owned(),
                     ),
+                    provenance: None,
                 },
             };
             diagnostics.push(diagnostic);

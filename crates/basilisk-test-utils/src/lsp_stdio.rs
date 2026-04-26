@@ -31,6 +31,14 @@ pub struct LspStdioFixture {
     pub next_id: i64,
 }
 
+impl std::fmt::Debug for LspStdioFixture {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LspStdioFixture")
+            .field("next_id", &self.next_id)
+            .finish_non_exhaustive()
+    }
+}
+
 impl LspStdioFixture {
     /// Spawn the LSP server and start background reader threads.
     ///

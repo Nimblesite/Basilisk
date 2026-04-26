@@ -154,6 +154,7 @@ fn emit_td_error(
         path: path.to_owned(),
         help: Some(help.to_owned()),
         note: Some("PEP 589: TypedDict type consistency rules".to_owned()),
+        provenance: None,
     });
 }
 

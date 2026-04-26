@@ -14,18 +14,17 @@ use super::*;
 #[test]
 fn profile_without_pid() {
     let (label, text) = slash_command_output("profile", &[]).expect("should succeed");
-    assert_eq!(label, "Profile Started");
-    assert!(text.contains("Profiling Started"));
+    assert_eq!(label, "CPU Profiling");
     assert!(text.contains("active Python process"));
     assert!(text.contains("py-spy"));
-    assert!(text.contains("/profstop"));
+    assert!(text.contains("basilisk.profiler.start"));
 }
 
 #[test]
 fn profile_with_pid() {
     let args = vec!["1234".to_string()];
     let (label, text) = slash_command_output("profile", &args).expect("should succeed");
-    assert_eq!(label, "Profile Started");
+    assert_eq!(label, "CPU Profiling");
     assert!(text.contains("PID `1234`"));
     assert!(text.contains("Speedscope"));
 }
@@ -33,8 +32,8 @@ fn profile_with_pid() {
 #[test]
 fn profstop_output() {
     let (label, text) = slash_command_output("profstop", &[]).expect("should succeed");
-    assert_eq!(label, "Profile Results");
-    assert!(text.contains("Profiling stopped"));
+    assert_eq!(label, "Stop Profiling");
+    assert!(text.contains("basilisk.profiler.stop"));
     assert!(text.contains("flamegraph"));
 }
 
@@ -42,7 +41,7 @@ fn profstop_output() {
 fn profsnapshot_output() {
     let (label, text) = slash_command_output("profsnapshot", &[]).expect("should succeed");
     assert_eq!(label, "Profile Snapshot");
-    assert!(text.contains("Snapshot captured"));
+    assert!(text.contains("basilisk.profiler.snapshot"));
     assert!(text.contains("continues"));
 }
 
@@ -50,15 +49,15 @@ fn profsnapshot_output() {
 fn memleak_output() {
     let (label, text) = slash_command_output("memleak", &[]).expect("should succeed");
     assert_eq!(label, "Memory Tracking");
-    assert!(text.contains("Tracking"));
-    assert!(text.contains("/memstop"));
+    assert!(text.contains("tracemalloc"));
+    assert!(text.contains("basilisk.memory.start"));
 }
 
 #[test]
 fn memstop_output() {
     let (label, text) = slash_command_output("memstop", &[]).expect("should succeed");
     assert_eq!(label, "Memory Report");
-    assert!(text.contains("stopped"));
+    assert!(text.contains("Stops"));
     assert!(text.contains("/memrefs"));
 }
 
@@ -68,7 +67,7 @@ fn memrefs_with_type() {
     let (label, text) = slash_command_output("memrefs", &args).expect("should succeed");
     assert_eq!(label, "Reference Graph");
     assert!(text.contains("DataFrame"));
-    assert!(text.contains("retention paths"));
+    assert!(text.contains("gc.get_referrers"));
 }
 
 #[test]
@@ -85,7 +84,7 @@ fn unknown_command_errors() {
     assert!(err.contains("nonexistent"));
 }
 
-// ── All six slash commands produce non-empty markdown ────────────────────
+// ── All slash commands produce non-empty markdown ────────────────────
 
 #[test]
 fn all_slash_commands_produce_output() {
@@ -96,6 +95,13 @@ fn all_slash_commands_produce_output() {
         slash_commands::MEMLEAK,
         slash_commands::MEMSTOP,
         slash_commands::MEMREFS,
+        slash_commands::MODULES,
+        slash_commands::SYMBOLS,
+        slash_commands::HEALTH,
+        slash_commands::BASILISK,
+        slash_commands::TESTS,
+        slash_commands::RUNTESTS,
+        slash_commands::TESTFILE,
     ];
     for cmd in commands {
         let (label, text) = slash_command_output(cmd, &[]).expect(cmd);
@@ -113,6 +119,13 @@ fn slash_output_is_markdown() {
         slash_commands::MEMLEAK,
         slash_commands::MEMSTOP,
         slash_commands::MEMREFS,
+        slash_commands::MODULES,
+        slash_commands::SYMBOLS,
+        slash_commands::HEALTH,
+        slash_commands::BASILISK,
+        slash_commands::TESTS,
+        slash_commands::RUNTESTS,
+        slash_commands::TESTFILE,
     ];
     for cmd in commands {
         let (_, text) = slash_command_output(cmd, &[]).expect(cmd);
@@ -123,7 +136,7 @@ fn slash_output_is_markdown() {
     }
 }
 
-// ── Slash command completions ────────────────────────────────────────────
+// ── Slash command completions ────────────────────────────────────────
 
 #[test]
 fn profile_completions() {
@@ -151,7 +164,191 @@ fn unknown_command_has_no_completions() {
     assert!(slash_completions("unknown").is_empty());
 }
 
-// ── DAP config building ─────────────────────────────────────────────────
+// ── Profiler slash command content quality ───────────────────────────
+
+#[test]
+fn profile_output_documents_all_four_commands() {
+    let (_, text) = slash_command_output("profile", &[]).expect("should succeed");
+    assert!(
+        text.contains("basilisk.profiler.start"),
+        "must document start command"
+    );
+    assert!(
+        text.contains("basilisk.profiler.stop"),
+        "must document stop command"
+    );
+    assert!(
+        text.contains("basilisk.profiler.snapshot"),
+        "must document snapshot command"
+    );
+    assert!(
+        text.contains("basilisk.profiler.list"),
+        "must document list command"
+    );
+}
+
+#[test]
+fn profile_output_documents_output_formats() {
+    let (_, text) = slash_command_output("profile", &[]).expect("should succeed");
+    assert!(
+        text.contains("Speedscope"),
+        "must mention speedscope format"
+    );
+    assert!(
+        text.contains("Flamegraph") || text.contains("flamegraph"),
+        "must mention flamegraph"
+    );
+    assert!(
+        text.contains("BSK-PROF") || text.contains("diagnostics"),
+        "must mention diagnostics output"
+    );
+}
+
+#[test]
+fn profstop_output_documents_output_format_options() {
+    let (_, text) = slash_command_output("profstop", &[]).expect("should succeed");
+    assert!(
+        text.contains("speedscope"),
+        "must mention speedscope format option"
+    );
+    assert!(
+        text.contains("flamegraph"),
+        "must mention flamegraph format option"
+    );
+    assert!(
+        text.contains("summary"),
+        "must mention summary format option"
+    );
+}
+
+#[test]
+fn profstop_output_documents_diagnostic_delivery() {
+    let (_, text) = slash_command_output("profstop", &[]).expect("should succeed");
+    assert!(
+        text.contains("publishDiagnostics")
+            || text.contains("diagnostics")
+            || text.contains("hints"),
+        "must explain how diagnostics are delivered"
+    );
+    assert!(
+        text.contains("threshold") || text.contains("1%") || text.contains("2%"),
+        "should mention threshold behavior"
+    );
+}
+
+#[test]
+fn memleak_output_documents_tracemalloc_and_commands() {
+    let (_, text) = slash_command_output("memleak", &[]).expect("should succeed");
+    assert!(
+        text.contains("tracemalloc"),
+        "must mention tracemalloc engine"
+    );
+    assert!(
+        text.contains("basilisk.memory.start"),
+        "must document start command"
+    );
+    assert!(
+        text.contains("debug session") || text.contains("debugpy"),
+        "must mention debug session requirement"
+    );
+}
+
+#[test]
+fn memleak_output_documents_diagnostic_codes() {
+    let (_, text) = slash_command_output("memleak", &[]).expect("should succeed");
+    assert!(
+        text.contains("BSK-MEM") || text.contains("memory diagnostics"),
+        "must mention memory diagnostic codes or diagnostics"
+    );
+}
+
+#[test]
+fn memstop_output_documents_leak_detection() {
+    let (_, text) = slash_command_output("memstop", &[]).expect("should succeed");
+    assert!(
+        text.contains("leak") || text.contains("Leak"),
+        "must mention leak detection"
+    );
+    assert!(
+        text.contains("confidence") || text.contains("snapshot"),
+        "should mention confidence scoring or snapshots"
+    );
+}
+
+#[test]
+fn memrefs_output_documents_reference_graph() {
+    let args = vec!["DataFrame".to_string()];
+    let (_, text) = slash_command_output("memrefs", &args).expect("should succeed");
+    assert!(text.contains("DataFrame"), "must include the target type");
+    assert!(
+        text.contains("gc.get_referrers")
+            || text.contains("reference")
+            || text.contains("retention"),
+        "must explain reference graph walking"
+    );
+    assert!(
+        text.contains("Cycle")
+            || text.contains("cycle")
+            || text.contains("Retention")
+            || text.contains("retention"),
+        "should explain what the graph reveals"
+    );
+}
+
+#[test]
+fn profile_with_pid_includes_pid_in_output() {
+    for pid in ["1234", "99999", "1"] {
+        let args = vec![pid.to_string()];
+        let (_, text) = slash_command_output("profile", &args).expect("should succeed");
+        assert!(
+            text.contains(pid),
+            "output must include PID {pid} when provided"
+        );
+    }
+}
+
+#[test]
+fn all_profiler_commands_have_markdown_tables_or_lists() {
+    let profiler_cmds = [
+        slash_commands::PROFILE,
+        slash_commands::PROFSTOP,
+        slash_commands::MEMLEAK,
+    ];
+    for cmd in profiler_cmds {
+        let (_, text) = slash_command_output(cmd, &[]).expect(cmd);
+        let has_table = text.contains('|');
+        let has_list = text.contains("- ") || text.contains("1.");
+        assert!(
+            has_table || has_list,
+            "slash command {cmd} should have structured content (table or list)"
+        );
+    }
+}
+
+#[test]
+fn profiler_slash_commands_dont_contain_raw_code_paths() {
+    let cmds = [
+        slash_commands::PROFILE,
+        slash_commands::PROFSTOP,
+        slash_commands::PROFSNAPSHOT,
+        slash_commands::MEMLEAK,
+        slash_commands::MEMSTOP,
+        slash_commands::MEMREFS,
+    ];
+    for cmd in cmds {
+        let (_, text) = slash_command_output(cmd, &[]).expect(cmd);
+        assert!(
+            !text.contains("crates/"),
+            "slash command {cmd} should not expose internal code paths"
+        );
+        assert!(
+            !text.contains(".rs"),
+            "slash command {cmd} should not reference Rust source files"
+        );
+    }
+}
+
+// ── DAP config building ─────────────────────────────────────────────
 
 #[test]
 fn build_dap_config_defaults() {
@@ -185,7 +382,7 @@ fn build_dap_config_with_values() {
     assert_eq!(config["cwd"], "/home/user/project");
 }
 
-// ── DAP request kind ────────────────────────────────────────────────────
+// ── DAP request kind ────────────────────────────────────────────────
 
 #[test]
 fn launch_by_default() {
@@ -225,7 +422,7 @@ fn unknown_request_kind_errors() {
     assert!(is_attach_request(&config).is_err());
 }
 
-// ── DAP scenario builders ───────────────────────────────────────────────
+// ── DAP scenario builders ───────────────────────────────────────────
 
 #[test]
 fn launch_scenario_fields() {
@@ -260,7 +457,7 @@ fn attach_scenario_no_pid() {
     assert_eq!(scenario["request"], "attach");
 }
 
-// ── Workspace configuration ─────────────────────────────────────────────
+// ── Workspace configuration ─────────────────────────────────────────
 
 #[test]
 fn default_config_has_inlay_hints() {
@@ -314,7 +511,7 @@ fn wrap_config_nests_under_basilisk() {
     assert_eq!(wrapped["basilisk"]["foo"], "bar");
 }
 
-// ── Binary resolution helpers ───────────────────────────────────────────
+// ── Binary resolution helpers ───────────────────────────────────────
 
 #[test]
 fn find_env_var_present() {
@@ -353,7 +550,7 @@ fn cargo_bin_path_trailing_slash() {
     );
 }
 
-// ── Version check ───────────────────────────────────────────────────────
+// ── Version check ───────────────────────────────────────────────────
 
 #[test]
 fn newer_major() {
@@ -390,4 +587,464 @@ fn v_prefix_stripped() {
 #[test]
 fn v_prefix_same() {
     assert!(!is_newer_version("v0.1.0", "v0.1.0"));
+}
+
+// ── Test slash commands ─────────────────────────────────────────────
+
+#[test]
+fn tests_discovery_workspace() {
+    let (label, text) = slash_command_output("tests", &[]).expect("should succeed");
+    assert_eq!(label, "Test Discovery");
+    assert!(text.contains("workspace"));
+    assert!(text.contains("pytest"));
+    assert!(text.contains("unittest"));
+    assert!(text.contains("def test_*"));
+}
+
+#[test]
+fn tests_discovery_file() {
+    let args = vec!["test_api.py".to_string()];
+    let (label, text) = slash_command_output("tests", &args).expect("should succeed");
+    assert_eq!(label, "Test Discovery");
+    assert!(text.contains("test_api.py"));
+}
+
+#[test]
+fn runtests_all() {
+    let (label, text) = slash_command_output("runtests", &[]).expect("should succeed");
+    assert_eq!(label, "Running Tests");
+    assert!(text.contains("all tests"));
+    assert!(text.contains("pytest"));
+    assert!(text.contains("uv run pytest"));
+}
+
+#[test]
+fn runtests_specific() {
+    let args = vec!["tests/test_api.py::test_login".to_string()];
+    let (label, text) = slash_command_output("runtests", &args).expect("should succeed");
+    assert_eq!(label, "Running Tests");
+    assert!(text.contains("test_login"));
+}
+
+#[test]
+fn testfile_default() {
+    let (label, text) = slash_command_output("testfile", &[]).expect("should succeed");
+    assert_eq!(label, "File Tests");
+    assert!(text.contains("current file"));
+    assert!(text.contains("uv run pytest"));
+}
+
+#[test]
+fn testfile_specific() {
+    let args = vec!["test_models.py".to_string()];
+    let (label, text) = slash_command_output("testfile", &args).expect("should succeed");
+    assert_eq!(label, "File Tests");
+    assert!(text.contains("test_models.py"));
+}
+
+#[test]
+fn runtests_completions() {
+    let completions = slash_completions("runtests");
+    assert_eq!(completions.len(), 1);
+    assert_eq!(completions[0].0, "<test_id>");
+    assert!(!completions[0].2, "run_command should be false");
+}
+
+#[test]
+fn testfile_completions() {
+    let completions = slash_completions("testfile");
+    assert_eq!(completions.len(), 1);
+    assert_eq!(completions[0].0, "<file.py>");
+}
+
+#[test]
+fn tests_no_completions() {
+    let completions = slash_completions("tests");
+    assert!(completions.is_empty());
+}
+
+// ── Test explorer workspace config ──────────────────────────────────
+
+#[test]
+fn default_config_has_test_explorer() {
+    let config = default_workspace_config();
+    assert_eq!(config["testExplorer"]["enabled"], true);
+    assert_eq!(config["testExplorer"]["framework"], "auto");
+    assert_eq!(config["testExplorer"]["pytestPath"], "pytest");
+    assert!(config["testExplorer"]["args"].is_array());
+    assert_eq!(config["testExplorer"]["autoDiscoverOnSave"], true);
+    assert_eq!(config["testExplorer"]["useUvRun"], true);
+}
+
+#[test]
+fn wrap_config_preserves_test_explorer() {
+    let inner = serde_json::json!({
+        "testExplorer": {
+            "enabled": false,
+            "framework": "unittest",
+            "pytestPath": "/usr/bin/pytest",
+            "useUvRun": false
+        }
+    });
+    let wrapped = wrap_config(&inner);
+    assert_eq!(wrapped["basilisk"]["testExplorer"]["enabled"], false);
+    assert_eq!(wrapped["basilisk"]["testExplorer"]["framework"], "unittest");
+    assert_eq!(
+        wrapped["basilisk"]["testExplorer"]["pytestPath"],
+        "/usr/bin/pytest"
+    );
+    assert_eq!(wrapped["basilisk"]["testExplorer"]["useUvRun"], false);
+}
+
+// ── Activity panel slash command tests ────────────────────────────
+
+#[test]
+fn modules_workspace_scope() {
+    let (label, text) = slash_command_output(slash_commands::MODULES, &[]).expect("should succeed");
+    assert_eq!(label, "Workspace Modules");
+    assert!(text.contains("entire workspace"));
+    assert!(text.contains("basilisk.workspaceModules"));
+}
+
+#[test]
+fn modules_prefix_scope() {
+    let args = vec!["myapp.api".to_string()];
+    let (label, text) =
+        slash_command_output(slash_commands::MODULES, &args).expect("should succeed");
+    assert_eq!(label, "Workspace Modules");
+    assert!(text.contains("prefix `myapp.api`"));
+}
+
+#[test]
+fn symbols_output() {
+    let args = vec!["myapp.models".to_string()];
+    let (label, text) =
+        slash_command_output(slash_commands::SYMBOLS, &args).expect("should succeed");
+    assert_eq!(label, "Module Symbols");
+    assert!(text.contains("myapp.models"));
+    assert!(text.contains("basilisk.workspaceModules"));
+}
+
+#[test]
+fn symbols_default() {
+    let (label, text) = slash_command_output(slash_commands::SYMBOLS, &[]).expect("should succeed");
+    assert_eq!(label, "Module Symbols");
+    assert!(text.contains("all modules"));
+}
+
+#[test]
+fn health_output() {
+    let (label, text) = slash_command_output(slash_commands::HEALTH, &[]).expect("should succeed");
+    assert_eq!(label, "Type Health");
+    assert!(text.contains("basilisk.typeHealth"));
+    assert!(text.contains("Coverage"));
+    assert!(text.contains("Module"));
+}
+
+#[test]
+fn basilisk_info_output() {
+    let (label, text) =
+        slash_command_output(slash_commands::BASILISK, &[]).expect("should succeed");
+    assert_eq!(label, "Basilisk Info");
+    assert!(text.contains("strict-by-default"));
+    assert!(text.contains("/modules"));
+    assert!(text.contains("/health"));
+    assert!(text.contains("basilisk-python.dev"));
+}
+
+#[test]
+fn modules_completions() {
+    let completions = slash_completions(slash_commands::MODULES);
+    assert_eq!(completions.len(), 1);
+    assert_eq!(completions[0].0, "<module_prefix>");
+}
+
+#[test]
+fn symbols_completions() {
+    let completions = slash_completions(slash_commands::SYMBOLS);
+    assert_eq!(completions.len(), 1);
+    assert_eq!(completions[0].0, "<module_name>");
+}
+
+#[test]
+fn health_no_completions() {
+    let completions = slash_completions(slash_commands::HEALTH);
+    assert!(completions.is_empty());
+}
+
+#[test]
+fn basilisk_no_completions() {
+    let completions = slash_completions(slash_commands::BASILISK);
+    assert!(completions.is_empty());
+}
+
+// ── Profiler workspace config defaults ──────────────────────────────
+
+#[test]
+fn default_config_has_profiler_section() {
+    let config = default_workspace_config();
+    assert!(
+        !config["profiler"].is_null(),
+        "profiler section must be present in default config"
+    );
+}
+
+#[test]
+fn default_config_profiler_enabled_by_default() {
+    let config = default_workspace_config();
+    assert_eq!(
+        config["profiler"]["enabled"], true,
+        "profiler must be enabled by default"
+    );
+}
+
+#[test]
+fn default_config_profiler_sample_rate() {
+    let config = default_workspace_config();
+    assert_eq!(
+        config["profiler"]["sampleRate"], 100,
+        "default sample rate must be 100 Hz"
+    );
+}
+
+#[test]
+fn default_config_profiler_native_frames_disabled() {
+    let config = default_workspace_config();
+    assert_eq!(
+        config["profiler"]["includeNative"], false,
+        "native frames must be off by default (low overhead)"
+    );
+}
+
+#[test]
+fn default_config_profiler_thresholds() {
+    let config = default_workspace_config();
+    let line = config["profiler"]["lineThreshold"]
+        .as_f64()
+        .expect("lineThreshold must be a number");
+    let func = config["profiler"]["funcThreshold"]
+        .as_f64()
+        .expect("funcThreshold must be a number");
+    assert!(
+        (line - 0.01).abs() < f64::EPSILON,
+        "line threshold must be 1%"
+    );
+    assert!(
+        (func - 0.02).abs() < f64::EPSILON,
+        "function threshold must be 2%"
+    );
+}
+
+#[test]
+fn default_config_profiler_max_diagnostics() {
+    let config = default_workspace_config();
+    assert_eq!(
+        config["profiler"]["maxDiagnostics"], 20,
+        "max diagnostics per file must be 20"
+    );
+}
+
+#[test]
+fn default_config_profiler_auto_on_launch_disabled() {
+    let config = default_workspace_config();
+    assert_eq!(
+        config["profiler"]["autoOnLaunch"], false,
+        "auto-profile on launch must be opt-in"
+    );
+}
+
+#[test]
+fn default_config_profiler_default_format_is_speedscope() {
+    let config = default_workspace_config();
+    assert_eq!(
+        config["profiler"]["defaultFormat"], "speedscope",
+        "default export format must be speedscope"
+    );
+}
+
+#[test]
+fn default_config_has_memory_section() {
+    let config = default_workspace_config();
+    assert!(
+        !config["memory"].is_null(),
+        "memory section must be present in default config"
+    );
+}
+
+#[test]
+fn default_config_memory_traceback_depth() {
+    let config = default_workspace_config();
+    assert_eq!(
+        config["memory"]["tracebackDepth"], 25,
+        "traceback depth must default to 25 frames"
+    );
+}
+
+#[test]
+fn default_config_memory_auto_snapshot_disabled() {
+    let config = default_workspace_config();
+    assert_eq!(
+        config["memory"]["autoSnapshotInterval"], 0,
+        "auto-snapshot must be disabled by default"
+    );
+}
+
+#[test]
+fn default_config_memory_max_diagnostics() {
+    let config = default_workspace_config();
+    assert_eq!(
+        config["memory"]["maxDiagnostics"], 10,
+        "max memory diagnostics per file must be 10"
+    );
+}
+
+#[test]
+fn wrap_config_preserves_profiler_settings() {
+    let inner = serde_json::json!({
+        "profiler": {
+            "enabled": false,
+            "sampleRate": 200,
+            "includeNative": true,
+            "autoOnLaunch": true,
+            "defaultFormat": "flamegraph"
+        }
+    });
+    let wrapped = wrap_config(&inner);
+    assert_eq!(wrapped["basilisk"]["profiler"]["enabled"], false);
+    assert_eq!(wrapped["basilisk"]["profiler"]["sampleRate"], 200);
+    assert_eq!(wrapped["basilisk"]["profiler"]["includeNative"], true);
+    assert_eq!(wrapped["basilisk"]["profiler"]["autoOnLaunch"], true);
+    assert_eq!(
+        wrapped["basilisk"]["profiler"]["defaultFormat"],
+        "flamegraph"
+    );
+}
+
+#[test]
+fn wrap_config_preserves_memory_settings() {
+    let inner = serde_json::json!({
+        "memory": {
+            "tracebackDepth": 10,
+            "autoSnapshotInterval": 30,
+            "maxDiagnostics": 5
+        }
+    });
+    let wrapped = wrap_config(&inner);
+    assert_eq!(wrapped["basilisk"]["memory"]["tracebackDepth"], 10);
+    assert_eq!(wrapped["basilisk"]["memory"]["autoSnapshotInterval"], 30);
+    assert_eq!(wrapped["basilisk"]["memory"]["maxDiagnostics"], 5);
+}
+
+// ── Profile command uses shared format constants ─────────────────────
+
+#[test]
+fn profstop_output_uses_canonical_format_names() {
+    let (_, text) = slash_command_output("profstop", &[]).expect("should succeed");
+    assert!(
+        text.contains(basilisk_common::profiler_formats::SPEEDSCOPE),
+        "must use canonical speedscope format name"
+    );
+    assert!(
+        text.contains(basilisk_common::profiler_formats::FLAMEGRAPH),
+        "must use canonical flamegraph format name"
+    );
+    assert!(
+        text.contains(basilisk_common::profiler_formats::SUMMARY),
+        "must use canonical summary format name"
+    );
+}
+
+#[test]
+fn profile_output_documents_presets() {
+    let (_, text) = slash_command_output("profile", &[]).expect("should succeed");
+    assert!(
+        text.contains(basilisk_common::profiler_presets::LIGHTWEIGHT),
+        "must document lightweight preset"
+    );
+    assert!(
+        text.contains(basilisk_common::profiler_presets::DETAILED),
+        "must document detailed preset"
+    );
+    assert!(
+        text.contains(basilisk_common::profiler_presets::MEMORY),
+        "must document memory preset"
+    );
+}
+
+#[test]
+fn memleak_output_uses_canonical_command_names() {
+    let (_, text) = slash_command_output("memleak", &[]).expect("should succeed");
+    assert!(
+        text.contains(basilisk_common::commands::MEMORY_START),
+        "must use canonical memory start command"
+    );
+    assert!(
+        text.contains(basilisk_common::commands::MEMORY_SNAPSHOT),
+        "must use canonical memory snapshot command"
+    );
+    assert!(
+        text.contains(basilisk_common::commands::MEMORY_DIFF),
+        "must use canonical memory diff command"
+    );
+    assert!(
+        text.contains(basilisk_common::commands::MEMORY_REFERENCES),
+        "must use canonical memory references command"
+    );
+    assert!(
+        text.contains(basilisk_common::commands::MEMORY_GC_COLLECT),
+        "must use canonical gc collect command"
+    );
+}
+
+#[test]
+fn memleak_output_uses_canonical_diagnostic_codes() {
+    let (_, text) = slash_command_output("memleak", &[]).expect("should succeed");
+    assert!(
+        text.contains(basilisk_common::memory_diagnostics::ALLOC),
+        "must use canonical BSK-MEM-ALLOC code"
+    );
+    assert!(
+        text.contains(basilisk_common::memory_diagnostics::GROWTH),
+        "must use canonical BSK-MEM-GROWTH code"
+    );
+    assert!(
+        text.contains(basilisk_common::memory_diagnostics::LEAK),
+        "must use canonical BSK-MEM-LEAK code"
+    );
+    assert!(
+        text.contains(basilisk_common::memory_diagnostics::CYCLE),
+        "must use canonical BSK-MEM-CYCLE code"
+    );
+}
+
+#[test]
+fn profile_output_uses_canonical_notification_name() {
+    let (_, text) = slash_command_output("profile", &[]).expect("should succeed");
+    assert!(
+        text.contains(basilisk_common::notifications::PROFILER_PROGRESS),
+        "must reference canonical profiler progress notification"
+    );
+}
+
+#[test]
+fn memleak_output_uses_canonical_timeline_notification() {
+    let (_, text) = slash_command_output("memleak", &[]).expect("should succeed");
+    assert!(
+        text.contains(basilisk_common::notifications::MEMORY_TIMELINE),
+        "must reference canonical memory timeline notification"
+    );
+}
+
+#[test]
+fn memrefs_output_uses_canonical_command_and_diagnostic() {
+    let args = vec!["MyModel".to_string()];
+    let (_, text) = slash_command_output("memrefs", &args).expect("should succeed");
+    assert!(
+        text.contains(basilisk_common::commands::MEMORY_REFERENCES),
+        "must use canonical memory references command"
+    );
+    assert!(
+        text.contains(basilisk_common::memory_diagnostics::CYCLE),
+        "must use canonical BSK-MEM-CYCLE diagnostic code"
+    );
 }

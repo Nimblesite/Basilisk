@@ -124,6 +124,7 @@ pub(super) fn check_dataclass_attr_assignments(
                         "Basilisk requires attribute assignments to be compatible with the declared field type"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
             }
         }

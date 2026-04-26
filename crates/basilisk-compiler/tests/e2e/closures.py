@@ -4,6 +4,7 @@ from typing import Callable
 def make_adder(n: int) -> Callable[[int], int]:
     def adder(x: int) -> int:
         return x + n
+
     return adder
 
 
@@ -14,6 +15,7 @@ def apply_twice(f: Callable[[int], int], x: int) -> int:
 def compose(f: Callable[[int], int], g: Callable[[int], int]) -> Callable[[int], int]:
     def composed(x: int) -> int:
         return f(g(x))
+
     return composed
 
 

@@ -120,5 +120,6 @@ fn make_diagnostic(attr: &AttributeInfo, class_name: &str, path: &str) -> Diagno
         note: Some(
             "In Basilisk, all class attributes require explicit type annotations".to_owned(),
         ),
+        provenance: None,
     }
 }

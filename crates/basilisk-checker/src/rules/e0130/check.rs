@@ -169,6 +169,7 @@ pub(super) fn check_generic_instance_method_calls(
                              are bound to the class's type arguments"
                                 .to_owned(),
                         ),
+                        provenance: None,
                     });
                 }
             }
@@ -383,6 +384,7 @@ fn check_constructor_args(ctx: &ConstructorCheckCtx<'_>, diagnostics: &mut Vec<D
                      arguments are provided than type parameters"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }

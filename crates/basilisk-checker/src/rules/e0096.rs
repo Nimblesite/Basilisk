@@ -81,6 +81,7 @@ impl Rule for DataclassFieldDefaultFactoryMismatch {
                              compatible with the field's declared type"
                                 .to_owned(),
                         ),
+                        provenance: None,
                     });
                 }
             }

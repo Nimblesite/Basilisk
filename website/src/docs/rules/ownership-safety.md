@@ -1,8 +1,11 @@
 ---
 layout: layouts/docs.njk
 title: Ownership Safety — E0030–E0035
-description: Mojo-inspired ownership analysis rules.
+description: "Mojo-inspired ownership analysis rules in Basilisk — mutation of Borrowed parameters, use-after-move, implicit copies, and missing ownership annotations. BSK-E0030 through E0035."
 keywords: basilisk, ownership, borrowed, owned, inout, BSK-E0030, BSK-E0031
+date: 2026-02-28
+dateModified: 2026-03-31
+author: The Basilisk Project
 eleventyNavigation:
   key: Ownership Safety
   parent: Rules

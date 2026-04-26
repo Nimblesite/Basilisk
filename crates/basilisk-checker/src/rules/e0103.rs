@@ -59,6 +59,7 @@ impl Rule for TupleIndexOutOfBounds {
                      the range [-length, length)"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }

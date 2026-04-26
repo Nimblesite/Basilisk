@@ -30,7 +30,7 @@ function M.start(pid)
   end
 
   client:request("workspace/executeCommand", {
-    command = "basilisk/profiler/start",
+    command = "basilisk.profiler.start",
     arguments = args,
   }, function(err, result)
     if err then
@@ -58,7 +58,7 @@ function M.stop()
   end
 
   client:request("workspace/executeCommand", {
-    command = "basilisk/profiler/stop",
+    command = "basilisk.profiler.stop",
     arguments = args,
   }, function(err, result)
     if err then
@@ -86,7 +86,7 @@ function M.snapshot()
   end
 
   client:request("workspace/executeCommand", {
-    command = "basilisk/profiler/snapshot",
+    command = "basilisk.profiler.snapshot",
     arguments = args,
   }, function(err, result)
     if err then

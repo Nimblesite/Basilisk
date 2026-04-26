@@ -24,43 +24,6 @@ local function execute_command(command, args, callback)
   }, callback, 0)
 end
 
---- Open a floating window showing server info.
----@param config BasiliskConfig
-local function show_info_float(config)
-  local client = ui.get_client()
-  local binary_mod = require("basilisk.binary")
-  local lsp_mod = require("basilisk.lsp")
-
-  local bin = binary_mod.resolve(config.binary_path)
-  local version = bin and binary_mod.version(bin) or "unknown"
-
-  local lines = {
-    "Basilisk LSP Server Info",
-    "",
-  }
-
-  if client then
-    lines[#lines + 1] = "  Status:     active"
-    lines[#lines + 1] = "  Client ID:  " .. tostring(client.id)
-    lines[#lines + 1] = "  Root:       " .. (client.root_dir or "nil")
-  else
-    lines[#lines + 1] = "  Status:     stopped"
-  end
-
-  lines[#lines + 1] = ""
-  lines[#lines + 1] = "  Binary:     " .. (bin or "not found")
-  lines[#lines + 1] = "  Version:    " .. version
-  lines[#lines + 1] = "  Python:     " .. (config.python or "auto-detect")
-  lines[#lines + 1] = "  Mode:       " .. config.analysis_mode
-  lines[#lines + 1] = "  Restarts:   " .. tostring(lsp_mod.get_restart_count())
-  lines[#lines + 1] = ""
-  lines[#lines + 1] = "  Ruff:       " .. (config.ruff.enabled and "enabled" or "disabled")
-  lines[#lines + 1] = "  Debugger:   " .. (config.debugger.enabled and "enabled" or "disabled")
-  lines[#lines + 1] = "  Tests:      " .. (config.test_explorer.enabled and "enabled" or "disabled")
-  lines[#lines + 1] = "  uv:         " .. (config.uv.enabled and "enabled" or "disabled")
-
-  ui.open_float("Basilisk Info", lines)
-end
 
 --- Register all :Basilisk* commands.
 ---@param config BasiliskConfig
@@ -78,8 +41,10 @@ function M.register(config)
     log.info("restarting server...")
   end, { desc = "Restart the Basilisk LSP server" })
 
+  local info_panel = require("basilisk.info")
+
   vim.api.nvim_create_user_command("BasiliskInfo", function()
-    show_info_float(config)
+    info_panel.show(config)
   end, { desc = "Show Basilisk LSP server info" })
 
   vim.api.nvim_create_user_command("BasiliskOrganizeImports", function()
@@ -276,6 +241,19 @@ function M.register(config)
   vim.api.nvim_create_user_command("BasiliskTestToggle", function()
     testing.toggle(config)
   end, { desc = "Toggle test explorer panel" })
+
+  -- Activity panel commands.
+
+  local modules_panel = require("basilisk.modules")
+  local type_health_panel = require("basilisk.type_health")
+
+  vim.api.nvim_create_user_command("BasiliskModules", function()
+    modules_panel.toggle()
+  end, { desc = "Toggle module explorer panel" })
+
+  vim.api.nvim_create_user_command("BasiliskHealth", function()
+    type_health_panel.toggle()
+  end, { desc = "Toggle type health panel" })
 
   -- uv commands.
 

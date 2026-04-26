@@ -1,8 +1,11 @@
 ---
 layout: layouts/docs.njk
 title: Structural Discipline — E0050–E0054
-description: Rules that enforce class structure, slots, and sealed classes.
+description: "Basilisk structural discipline rules — dynamic attribute access, missing __init__, sealed class violations, __slots__ enforcement, and star-import restrictions. BSK-E0050 through E0054."
 keywords: basilisk, structural discipline, slots, final, BSK-E0050, BSK-E0054
+date: 2026-02-28
+dateModified: 2026-03-31
+author: The Basilisk Project
 eleventyNavigation:
   key: Structural Discipline
   parent: Rules

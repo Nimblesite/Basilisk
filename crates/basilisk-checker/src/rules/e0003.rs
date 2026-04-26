@@ -1,8 +1,8 @@
-//! BSK-E0003: Missing variable type (unresolvable inference).
+//! BSK-E0003: Missing variable type annotation.
 //!
-//! Fires when a module-level variable has no type annotation AND the RHS is an
-//! empty collection or `None` — cases where the element/value type cannot be
-//! inferred from the literal alone.
+//! Fires when a module-level variable has no type annotation.  In strict mode
+//! every module-level binding must carry an explicit annotation so that
+//! Basilisk can verify downstream usage and generate accurate stubs.
 
 use basilisk_resolver::{ResolvedModule, RhsKind, VariableInfo};
 
@@ -15,8 +15,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/BSK-E0003",
 };
 
-/// Emits BSK-E0003 for unannotated module-level variables whose RHS cannot
-/// have its type inferred (empty collections or `None`).
+/// Emits BSK-E0003 for every unannotated module-level variable.
 pub(crate) struct MissingVariableType;
 
 impl Rule for MissingVariableType {
@@ -39,31 +38,47 @@ fn is_unresolvable(rhs: &RhsKind) -> bool {
 }
 
 fn make_diagnostic(var: &VariableInfo, path: &str) -> Diagnostic {
-    let (rhs_desc, example) = match &var.rhs_kind {
+    let (message, help) = match &var.rhs_kind {
         RhsKind::EmptyList => (
-            "empty list `[]`",
+            format!(
+                "Missing type annotation for `{}` — cannot infer element type from empty list `[]`",
+                var.name
+            ),
             format!("{}: list[<type>] = []", var.name),
         ),
         RhsKind::EmptyDict => (
-            "empty dict `{}`",
+            format!(
+                "Missing type annotation for `{}` — cannot infer key/value types from empty dict `{{}}`",
+                var.name
+            ),
             format!("{}: dict[<key>, <value>] = {{}}", var.name),
         ),
-        RhsKind::NoneValue => ("None", format!("{}: <type> | None = None", var.name)),
-        _ => unreachable!("make_diagnostic only called for is_unresolvable rhs kinds"),
+        RhsKind::NoneValue => (
+            format!(
+                "Missing type annotation for `{}` — cannot infer type from `None`",
+                var.name
+            ),
+            format!("{}: <type> | None = None", var.name),
+        ),
+        _ => (
+            format!(
+                "Missing type annotation for module-level variable `{}`",
+                var.name
+            ),
+            format!("{}: <type> = ...", var.name),
+        ),
     };
 
     Diagnostic {
         code: CODE.clone(),
         severity: Severity::Error,
-        message: format!(
-            "Cannot infer type of `{}` from {} — add an explicit annotation",
-            var.name, rhs_desc
-        ),
+        message,
         span: var.name_span,
         path: path.to_owned(),
-        help: Some(format!("Add a type annotation: `{example}`")),
+        help: Some(format!("Add a type annotation: `{help}`")),
         note: Some(
-            "Basilisk cannot infer element types from empty collections or `None`".to_owned(),
+            "In Basilisk, all module-level variables require explicit type annotations".to_owned(),
         ),
+        provenance: None,
     }
 }

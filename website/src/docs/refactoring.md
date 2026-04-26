@@ -1,8 +1,11 @@
 ---
 layout: layouts/docs.njk
-title: Refactoring
-description: All 16 refactoring code actions available in Basilisk — extract, inline, move, rename, convert, and change signature.
+title: "Python Refactoring — 17 Code Actions in Basilisk"
+description: All 17 refactoring code actions available in Basilisk — extract, inline, move, rename, convert, and change signature.
 keywords: basilisk, refactoring, extract variable, extract function, inline, move symbol, rename, code actions, pylance
+date: 2026-02-28
+dateModified: 2026-03-31
+author: The Basilisk Project
 eleventyNavigation:
   key: Refactoring
   parent: Introduction
@@ -11,7 +14,7 @@ eleventyNavigation:
 
 # Refactoring
 
-Basilisk provides **16 refactoring code actions** via the LSP protocol. They appear in the lightbulb menu in VS Code, Zed, and Neovim automatically — no additional extensions or configuration required.
+Basilisk provides **17 refactoring code actions** via the LSP protocol. They appear in the lightbulb menu in VS Code, Zed, and Neovim automatically — no additional extensions or configuration required.
 
 Every refactoring produces a `WorkspaceEdit` that the editor applies atomically. Multi-file refactorings (move symbol, module rename) use `DocumentChanges` with `CreateFile` operations.
 

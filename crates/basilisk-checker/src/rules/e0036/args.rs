@@ -205,7 +205,7 @@ pub(super) fn check_classvar_args(
             TypeParamKind::TypeVarTuple => "TypeVarTuple",
         };
         diagnostics.push(make_diagnostic(
-            format!("`ClassVar` parameter for `{attr_name}` cannot contain {kind_name}",),
+            format!("`ClassVar` parameter for `{attr_name}` cannot contain {kind_name}"),
             name_span,
             path,
         ));

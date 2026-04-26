@@ -118,10 +118,7 @@ impl ScopeTree {
     pub fn scope_at(&self, offset: usize) -> usize {
         let off = u32::try_from(offset).unwrap_or(u32::MAX);
         let mut current = 0; // module scope
-        'outer: loop {
-            let Some(scope) = self.scopes.get(current) else {
-                break;
-            };
+        'outer: while let Some(scope) = self.scopes.get(current) {
             for &child_idx in &scope.children {
                 let Some(child) = self.scopes.get(child_idx) else {
                     continue;

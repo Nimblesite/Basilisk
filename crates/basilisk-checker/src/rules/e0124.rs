@@ -186,6 +186,7 @@ fn check_class(
                              elements must match the declared types",
                             protocol_base.name
                         )),
+                        provenance: None,
                     });
                 }
             }

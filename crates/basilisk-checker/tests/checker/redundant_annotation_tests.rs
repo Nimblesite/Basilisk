@@ -246,6 +246,9 @@ class Child(Base):
 ";
     let diags = run(source)?;
     let e0005s = e0005_messages(&diags);
+    // x and y are exempt (parent has annotation).
+    // z = 99 and w = "new" are scalar literals — suppressed (type is inferrable).
+    // Only q = compute() should fire (non-inferrable RHS).
     assert_eq!(
         e0005s.len(),
         1,

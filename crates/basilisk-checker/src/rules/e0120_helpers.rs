@@ -140,6 +140,7 @@ fn check_yield_from_list(
                         .to_owned(),
                 ),
                 note: None,
+                provenance: None,
             });
             return; // One diagnostic per yield-from is enough.
         }
@@ -197,6 +198,7 @@ fn check_yield_from_call(
                     .to_owned(),
             ),
             note: None,
+            provenance: None,
         });
     }
 
@@ -279,6 +281,7 @@ pub(super) fn check_send_type_compat(
                     .to_owned(),
             ),
             note: None,
+            provenance: None,
         });
     }
 }

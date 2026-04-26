@@ -80,6 +80,7 @@ impl Rule for ProtocolRuntimeCheckableViolation {
                 path: module.path.clone(),
                 help,
                 note,
+                provenance: None,
             });
         }
     }

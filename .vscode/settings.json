@@ -2,29 +2,40 @@
     // ── Coverage Gutters ─────────────────────────────────────────────────────
     // Reads lcov.info produced by scripts/test.sh and lights up line gutters.
     // Install extension: ryanluker.vscode-coverage-gutters
-    "coverage-gutters.coverageFileNames": ["lcov.info"],
+    "coverage-gutters.coverageFileNames": [
+        "lcov.info"
+    ],
     "coverage-gutters.coverageBaseDir": ".",
     "coverage-gutters.showLineCoverage": true,
     "coverage-gutters.showRulerCoverage": true,
     "coverage-gutters.showGutterCoverage": true,
-
     // ── Rust Analyzer ────────────────────────────────────────────────────────
     "rust-analyzer.cargo.features": "all",
     "rust-analyzer.check.command": "clippy",
-    "rust-analyzer.check.extraArgs": ["--", "-D", "warnings"],
+    "rust-analyzer.check.extraArgs": [
+        "--",
+        "-D",
+        "warnings"
+    ],
     // Analyse all targets (lib, bin, tests/) so integration tests are indexed.
     "rust-analyzer.check.allTargets": true,
     "rust-analyzer.cargo.allTargets": true,
-
     // ── Test Explorer ────────────────────────────────────────────────────────
     // Tests appear in the Testing sidebar (beaker icon).
     // allTargets above is required — without it rust-analyzer only indexes src/
     // and never sees the #[test] functions in tests/*.rs.
     "rust-analyzer.testExplorer": true,
-
     // ── Editor ───────────────────────────────────────────────────────────────
     "editor.formatOnSave": true,
     "[rust]": {
         "editor.defaultFormatter": "rust-lang.rust-analyzer"
+    },
+    // ── Basilisk LSP Trace ────────────────────────────────────────────────
+    "basilisk.trace.server": "verbose",
+    "workbench.colorCustomizations": {
+        "titleBar.activeBackground": "#e8500a",
+        "titleBar.activeForeground": "#f0f2f7",
+        "titleBar.inactiveBackground": "#c43f07",
+        "titleBar.inactiveForeground": "#f0f2f7cc"
     }
 }

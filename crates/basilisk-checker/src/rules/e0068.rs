@@ -56,6 +56,7 @@ impl Rule for LiteralStringEnumMismatch {
                      These are distinct and incompatible types."
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }

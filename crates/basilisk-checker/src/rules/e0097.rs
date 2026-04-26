@@ -258,6 +258,7 @@ fn check_self_attr_target(
                  self-attributes in `__init__`/`__new__` is not allowed"
                     .to_owned(),
             ),
+            provenance: None,
         });
     }
 }

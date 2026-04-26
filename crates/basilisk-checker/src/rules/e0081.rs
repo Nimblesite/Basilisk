@@ -260,6 +260,7 @@ fn check_body_stmt(
                         if vparam.min_type_args == 1 { "" } else { "s" }
                     )),
                     note: Some("A `TypeVarTuple` unpack like `*tuple[Any, ...]` absorbs zero or more type arguments, but the fixed parts must be present".to_owned()),
+            provenance: None,
                 });
             }
         }

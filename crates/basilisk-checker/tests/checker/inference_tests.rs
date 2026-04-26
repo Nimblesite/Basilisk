@@ -241,9 +241,15 @@ STATUS = "active"
 reveal_type(STATUS)  # should be Literal["active"]
 "#;
     let diags = run(src)?;
+    // E0003 fires for unannotated module vars (strict mode) — exclude it here.
+    let non_e0003: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code != "BSK-E0003")
+        .collect();
     assert!(
-        diags.is_empty(),
-        "module-level literal inference should be clean"
+        non_e0003.is_empty(),
+        "module-level literal inference should be clean (excluding E0003), got: {:?}",
+        non_e0003.iter().map(|d| &d.message).collect::<Vec<_>>()
     );
     Ok(())
 }

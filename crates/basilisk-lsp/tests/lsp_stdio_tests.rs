@@ -18,6 +18,8 @@ mod lsp_e2e_common;
 mod lsp_e2e_advanced;
 #[path = "lsp/lsp_e2e_basics.rs"]
 mod lsp_e2e_basics;
+#[path = "lsp/lsp_e2e_change_signature.rs"]
+mod lsp_e2e_change_signature;
 #[path = "lsp/lsp_e2e_code_actions.rs"]
 mod lsp_e2e_code_actions;
 #[path = "lsp/lsp_e2e_completion.rs"]

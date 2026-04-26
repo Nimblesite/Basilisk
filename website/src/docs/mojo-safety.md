@@ -1,8 +1,11 @@
 ---
 layout: layouts/docs.njk
-title: Mojo-Style Safety Annotations
-description: Basilisk's ownership, immutability, and coercion safety analysis — Mojo concepts in standard Python.
+title: "Mojo-Style Ownership and Immutability for Python"
+description: "Add Borrowed, InOut, and Owned annotations to Python functions. Basilisk statically verifies ownership semantics, immutability, and coercion safety — no Mojo compiler needed."
 keywords: basilisk ownership, borrowed, inout, owned, mojo, python ownership analysis
+date: 2026-02-28
+dateModified: 2026-03-31
+author: The Basilisk Project
 eleventyNavigation:
   key: Mojo Safety
   order: 8

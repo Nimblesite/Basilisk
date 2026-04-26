@@ -121,7 +121,24 @@ const masterRules = {
 
 /** @type {Record<string, import('eslint').Linter.RuleEntry>} */
 const testOverrides = {
-
+  // Tests use literal line/column numbers for assertions — unavoidable
+  '@typescript-eslint/no-magic-numbers': 'off',
+  // Test helpers may be defined for future use or conditionally used
+  '@typescript-eslint/no-unused-vars': ['error', {
+    argsIgnorePattern: '^_',
+    varsIgnorePattern: '^_|^pollUntilResult|^activate',
+  }],
+  // Test files can be longer — each test suite is a cohesive unit
+  'max-lines': ['error', { max: 1000, skipBlankLines: true, skipComments: true }],
+  // Test functions often need async for the framework even without await
+  '@typescript-eslint/require-await': 'off',
+  // Tests may await setup/teardown helpers that return void
+  '@typescript-eslint/await-thenable': 'off',
+  '@typescript-eslint/no-confusing-void-expression': 'off',
+  // Tests use truthy checks on dynamic/unknown values from LSP responses
+  '@typescript-eslint/strict-boolean-expressions': 'off',
+  // Test setup/teardown functions can be longer
+  'max-lines-per-function': ['error', { max: 120, skipBlankLines: true, skipComments: true }],
 };
 
 module.exports = { masterRules, testOverrides };

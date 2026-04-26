@@ -1,78 +1,39 @@
 ---
 name: submit-pr
-description: Submit a pull request following DataProvider project standards
+description: Creates a pull request with a well-structured description after verifying CI passes. Use when the user asks to submit, create, or open a pull request.
+disable-model-invocation: true
 ---
+<!-- agent-pmo:2efd847 -->
 
-# Submit Pull Request
+# Submit PR
 
-Create a pull request following project requirements.
+Create a pull request for the current branch with a well-structured description.
 
-## Ensure All Files Are Pushed
+## Steps
 
-If there are files that have not been committed or pushed, stop and tell the user you cannot continue. List the files/commmits that have not been committed/pushed.
+*NOTE: if you already ran make ci in this session and it passed, you can skip step 1.*
 
-## Format
+1. Run `make ci` — must pass completely before creating PR
+2. **Generate the diff against main.** Run `git diff main...HEAD > /tmp/pr-diff.txt` to capture the full diff between the current branch and the head of main. This is the ONLY source of truth for what the PR contains. **Warning:** the diff can be very large. If the diff file exceeds context limits, process it in chunks (e.g., read sections with `head`/`tail` or split by file) rather than trying to load it all at once.
+3. **Derive the PR title and description SOLELY from the diff.** Read the diff output and summarize what changed. Ignore commit messages, branch names, and any other metadata — only the actual code/content diff matters.
+4. Write PR body using the template in `.github/pull_request_template.md`
+5. Fill in (based on the diff analysis from step 3):
+   - TLDR: one sentence
+   - What Was Added: new files, features, deps
+   - What Was Changed/Deleted: modified behaviour
+   - How Tests Prove It Works: specific test names or output
+   - Spec/Doc Changes: if any
+   - Breaking Changes: yes/no + description
+6. Use `gh pr create` with the filled template
 
-Run fmt for all Rust crates, and any other formatters across the workspace. If there are resulting changes, commmit and push these changes before continuing
+## Rules
 
-## Run Lints
+- Never create a PR if `make ci` fails
+- PR description must be specific and tight — no vague placeholders
+- Link to the relevant GitHub issue if one exists
 
-Run clippy on the entire workspace. If there are any failures, crash out and tell the user you cannot continue. List the failures.
+## Success criteria
 
-## Get Context
-
-Get the diff between main and current branch:
-
-```bash
-git diff main...HEAD
-```
-
-DO NOT include commit messages or branch names in analysis.
-
-Read the PR template:
-
-```bash
-cat .github/PULL_REQUEST_TEMPLATE.md
-```
-
-## CI Check
-
-Make sure the CI gh action and test.sh is including all tests from all crates/projects
-
-## Sanity Check
-
-Make sure nothing seems obviously wrong
-
-## Website Check
-
-Make sure the website is up to date with the latest changes
-
-## Write PR Description
-
-The template has three sections (gh will auto-populate structure):
-
-### TLDR
-- Few lines maximum
-- Bullet points if many changes
-- For people who won't read details
-
-### Brief Details
-- Keep BRIEF
-- May reference code/files
-- What changed and why
-
-### How Do The Tests Prove This Works? (CRITICAL)
-- Point to specific test files/methods
-- Explain WHAT each test verifies
-- Show HOW tests prove correctness, not just "tests added"
-
-## Requirements
-
-- TIGHT - no fluff
-- ACCURATE - based on actual diff
-
-## Submit
-
-```bash
-gh pr create
-```
+- `make ci` passed
+- PR created with `gh pr create`
+- PR URL returned to user

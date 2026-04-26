@@ -101,4 +101,28 @@ function M.set_state(new_state)
   state_pinned = (new_state == "starting" or new_state == "error")
 end
 
+--- Active profiler progress data (nil when not profiling).
+---@type {pid: integer, elapsedSeconds: number, totalSamples: integer}?
+local profiler_progress = nil
+
+--- Update profiler progress from a basilisk/profiler/progress notification.
+---@param progress {pid: integer, elapsedSeconds: number, totalSamples: integer}?
+function M.set_profiler_status(progress)
+  profiler_progress = progress
+end
+
+--- Get the profiler portion of the status line (empty when not profiling).
+---@return string
+function M.get_profiler()
+  if not profiler_progress then
+    return ""
+  end
+  return string.format(
+    " [Profiling PID %d  %ds  %d samples]",
+    profiler_progress.pid or 0,
+    profiler_progress.elapsedSeconds or 0,
+    profiler_progress.totalSamples or 0
+  )
+end
+
 return M

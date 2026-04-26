@@ -1,8 +1,11 @@
 ---
 layout: layouts/docs.njk
 title: Coercion Safety — E0060–E0063
-description: Rules that prevent implicit numeric and type coercions.
+description: "Basilisk coercion safety rules — implicit int-to-float, bool-to-int, bytes-to-str, and unsafe type coercions that silently change data. BSK-E0060 through E0063."
 keywords: basilisk, coercion, int, float, bool, bytes, BSK-E0060, BSK-E0063
+date: 2026-02-28
+dateModified: 2026-03-31
+author: The Basilisk Project
 eleventyNavigation:
   key: Coercion Safety
   parent: Rules

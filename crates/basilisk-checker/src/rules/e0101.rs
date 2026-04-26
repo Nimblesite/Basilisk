@@ -87,6 +87,7 @@ impl Rule for TypeGuardNoNarrowingParam {
                      parameter to narrow; `self` and `cls` do not count"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }

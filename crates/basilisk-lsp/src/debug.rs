@@ -59,6 +59,13 @@ pub struct DebugSessionManager {
     sessions: Mutex<HashMap<String, Child>>,
 }
 
+impl fmt::Debug for DebugSessionManager {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DebugSessionManager")
+            .finish_non_exhaustive()
+    }
+}
+
 impl Default for DebugSessionManager {
     fn default() -> Self {
         Self::new()

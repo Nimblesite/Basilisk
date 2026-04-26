@@ -72,20 +72,20 @@ NAMES=()
 RC_FILES=()
 
 run_parallel() {
-    local name="$1" script="$2"
+    local name="$1" cmd="$2"
     local rc_file
     rc_file=$(mktemp)
     NAMES+=("$name")
     RC_FILES+=("$rc_file")
     (
         set +e
-        "$script" 2>&1 | sed -u "s/^/[${name}] /"
+        bash -c "$cmd" 2>&1 | sed -u "s/^/[${name}] /"
         echo "${PIPESTATUS[0]}" > "$rc_file"
     ) &
     PIDS+=($!)
 }
 
-run_parallel "vscode" "$SCRIPTS/test-vscode.sh"
+run_parallel "vscode" "make -C $SCRIPTS/.. --no-print-directory _test_vsix"
 run_parallel "nvim"   "$SCRIPTS/test-nvim.sh"
 run_parallel "zed"    "$SCRIPTS/test-zed.sh"
 

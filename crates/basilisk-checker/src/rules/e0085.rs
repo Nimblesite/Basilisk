@@ -261,6 +261,7 @@ fn check_expr_for_tvt_call(
                  the number of type arguments in the specialization"
                     .to_owned(),
             ),
+            provenance: None,
         });
     }
 }

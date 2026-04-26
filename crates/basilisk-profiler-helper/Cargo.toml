@@ -1,0 +1,22 @@
+[package]
+name = "basilisk-profiler-helper"
+version = "0.1.0"
+edition = "2021"
+description = "Elevated helper binary for py-spy memory reading on macOS"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[[bin]]
+name = "basilisk-profiler-helper"
+path = "src/main.rs"
+
+[dependencies]
+py-spy = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["net", "io-util", "rt", "macros", "sync", "time"] }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+
+[lints]
+workspace = true

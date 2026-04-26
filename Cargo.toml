@@ -15,6 +15,7 @@ members = [
     "crates/basilisk-common",
     "crates/basilisk-test-utils",
     "crates/basilisk-uv",
+    "crates/basilisk-profiler-helper",
     "basilisk-zed",
 ]
 exclude = []
@@ -45,6 +46,7 @@ serde     = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml      = "0.8"
 phf       = "0.11"
+colored   = "3.0"
 
 # Workspace crates
 basilisk-db       = { path = "crates/basilisk-db" }
@@ -62,14 +64,21 @@ basilisk-test-utils = { path = "crates/basilisk-test-utils" }
 [workspace.lints.rust]
 unsafe_code  = "deny"
 missing_docs = "deny"
+missing_debug_implementations = "deny"
 unused_imports = "deny"
 dead_code = "deny"
 unused_variables = "deny"
 unused_mut = "deny"
 unused_assignments = "deny"
 unused_results = "deny"
+trivial_casts = "deny"
+trivial_numeric_casts = "deny"
+elided_lifetimes_in_paths = "deny"
 # Stale #[expect] attributes must be errors, not warnings — no dead suppressions
 unfulfilled_lint_expectations = "deny"
+future_incompatible = { level = "deny", priority = -1 }
+nonstandard_style = { level = "deny", priority = -1 }
+rust_2018_idioms = { level = "deny", priority = -1 }
 
 [workspace.lints.clippy]
 # all + pedantic at maximum — restriction & nursery cherry-picked (contain contradictions)

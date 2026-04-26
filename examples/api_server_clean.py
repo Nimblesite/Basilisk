@@ -32,13 +32,15 @@ def handle_post(
 
 
 # Any is justified here — JSON can be any valid JSON type
-def serialize(value: object) -> str:  # basilisk: allow[BSK-E0011] -- JSON is inherently untyped
+def serialize(
+    value: object,
+) -> str:  # basilisk: allow[BSK-E0011] -- JSON is inherently untyped
     return json.dumps(value)
 
 
 # Properly typed constants
-MAX_RETRIES= 3
-TIMEOUT_MS= 30_000
+MAX_RETRIES = 3
+TIMEOUT_MS = 30_000
 
 
 # Consistent attribute types in the hierarchy
@@ -49,7 +51,7 @@ class BaseRoute:
 
 
 class AdminRoute(BaseRoute):
-    priority= 100               # same type as the base class
+    priority = 100  # same type as the base class
 
 
 # Non-overlapping overloads
@@ -67,7 +69,7 @@ def parse_id(raw: str | bytes) -> int:
 
 # Hashable key
 def register_handler(path: str, method: str) -> None:
-    _route_table[path] = method       # str is hashable
+    _route_table[path] = method  # str is hashable
 
 
 # @override present

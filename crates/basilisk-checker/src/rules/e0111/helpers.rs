@@ -303,6 +303,7 @@ pub(super) fn check_self_type_incompatibility(
                         "`Self` in `__init__` of `{class_name}` refers to `{class_name}`, \
                          not the base class `{arg_class_name}`"
                     )),
+                    provenance: None,
                 });
             }
         }
@@ -415,6 +416,7 @@ pub(super) fn check_init_method_args(
                     type_args.join(", "),
                     ann_trimmed
                 )),
+                provenance: None,
             });
         }
     }
@@ -504,6 +506,7 @@ pub(super) fn check_self_param_init_mismatch(
             note: Some(format!(
                 "The `__init__` method constrains `self` to `{self_annotation}`"
             )),
+            provenance: None,
         });
     }
 }

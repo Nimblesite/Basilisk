@@ -10,9 +10,12 @@ use std::collections::HashSet;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
+use colored::Colorize as _;
 use tracing::{error, info, warn};
 
-use crate::output::{render_diagnostics, render_diagnostics_json, FileSource, OutputFormat};
+use crate::output::{
+    render_diagnostics, render_diagnostics_json, ColorMode, FileSource, OutputFormat,
+};
 
 mod adopt;
 mod fix;
@@ -47,6 +50,9 @@ enum Command {
         /// Output format: text (default, human-readable) or json (machine-readable).
         #[arg(long, default_value = "text")]
         output: OutputFormat,
+        /// When to use terminal colours: auto (default), always, or never.
+        #[arg(long, default_value = "auto")]
+        color: ColorMode,
     },
     /// Apply autofixes to one or more files or directories.
     Fix {
@@ -85,6 +91,41 @@ enum Command {
         #[arg(long, default_value_t = 8765)]
         port: u16,
     },
+    /// Manage type stubs for untyped packages.
+    Stubs {
+        #[command(subcommand)]
+        action: StubAction,
+    },
+}
+
+/// Stub management sub-commands.
+#[derive(Subcommand)]
+enum StubAction {
+    /// Generate best-effort `.pyi` stubs for untyped packages.
+    Generate {
+        /// Package names to generate stubs for.
+        /// Use `--all` to generate for all untyped imports.
+        packages: Vec<String>,
+        /// Generate stubs for all untyped imports in the project.
+        #[arg(long)]
+        all: bool,
+        /// Generation mode: runtime (inspect.signature), ast (parse .py), or hybrid (default).
+        #[arg(long, default_value = "hybrid")]
+        mode: StubGenModeArg,
+        /// Path to the Python interpreter.
+        #[arg(long, default_value = "python3")]
+        python: String,
+    },
+    /// Show stub coverage status for the project.
+    Status,
+}
+
+/// CLI-friendly stub generation mode.
+#[derive(Clone, Copy, Debug, clap::ValueEnum)]
+enum StubGenModeArg {
+    Runtime,
+    Ast,
+    Hybrid,
 }
 
 fn main() -> ExitCode {
@@ -101,7 +142,14 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
 
     let exit_code: u8 = match cli.command {
-        Command::Check { paths, output } => run_check(&paths, output),
+        Command::Check {
+            paths,
+            output,
+            color,
+        } => {
+            color.apply();
+            run_check(&paths, output)
+        }
         Command::Fix {
             paths,
             r#unsafe: include_unsafe,
@@ -131,9 +179,174 @@ fn main() -> ExitCode {
                 }
             },
         },
+        Command::Stubs { action } => run_stubs(action),
     };
 
     ExitCode::from(exit_code)
+}
+
+/// Run the stubs subcommand.
+fn run_stubs(action: StubAction) -> u8 {
+    match action {
+        StubAction::Generate {
+            packages,
+            all,
+            mode,
+            python,
+        } => run_stubs_generate(&packages, all, mode, &python),
+        StubAction::Status => run_stubs_status(),
+    }
+}
+
+/// Cache a generated stub and print the result. Returns `true` on success.
+fn cache_stub(
+    cache_dir: &std::path::Path,
+    package: &str,
+    stub: &basilisk_stubs::generate::GeneratedStub,
+) -> bool {
+    use basilisk_stubs::generate::cache;
+
+    let source_hash = cache::hash_source(&stub.pyi_content);
+    match cache::write_cache(cache_dir, package, &stub.pyi_content, source_hash) {
+        Ok(path) => {
+            println!(
+                "{} Generated stub for `{package}` → {}",
+                "✓".green(),
+                path.display()
+            );
+            true
+        }
+        Err(err) => {
+            eprintln!("{} Failed to write stub for `{package}`: {err}", "✗".red());
+            false
+        }
+    }
+}
+
+/// Generate stubs for specified packages.
+fn run_stubs_generate(packages: &[String], all: bool, mode: StubGenModeArg, python: &str) -> u8 {
+    use basilisk_stubs::generate::{self, StubGenMode};
+
+    let gen_mode = match mode {
+        StubGenModeArg::Runtime => StubGenMode::Runtime,
+        StubGenModeArg::Ast => StubGenMode::Ast,
+        StubGenModeArg::Hybrid => StubGenMode::Hybrid,
+    };
+
+    let python_path = std::path::Path::new(python);
+    let cache_dir = std::path::Path::new(generate::cache::DEFAULT_CACHE_DIR);
+
+    if all {
+        warn!("--all not yet implemented; specify package names explicitly");
+        return 1;
+    }
+
+    if packages.is_empty() {
+        eprintln!("{}: specify package names or use --all", "error".red());
+        return 1;
+    }
+
+    let mut errors = 0u8;
+    for package in packages {
+        let source_path = find_package_source(package, python_path);
+
+        let ok = match source_path {
+            Some(ref src) => {
+                info!(package, source = %src.display(), "generating stubs");
+                match generate::generate_stubs(package, src, python_path, gen_mode) {
+                    Ok(stub) => cache_stub(cache_dir, package, &stub),
+                    Err(err) => {
+                        eprintln!(
+                            "{} Failed to generate stub for `{package}`: {err}",
+                            "✗".red()
+                        );
+                        false
+                    }
+                }
+            }
+            None if gen_mode == StubGenMode::Ast => {
+                eprintln!(
+                    "{} Cannot find source for `{package}` — AST mode requires source files",
+                    "✗".red()
+                );
+                false
+            }
+            None => match generate::runtime::generate_runtime_stubs(package, python_path) {
+                Ok(stub) => cache_stub(cache_dir, package, &stub),
+                Err(err) => {
+                    eprintln!(
+                        "{} Failed to generate stub for `{package}`: {err}",
+                        "✗".red()
+                    );
+                    false
+                }
+            },
+        };
+        if !ok {
+            errors = errors.saturating_add(1);
+        }
+    }
+
+    errors.min(1)
+}
+
+/// Find the source path for an installed package by querying Python.
+fn find_package_source(package: &str, python_path: &std::path::Path) -> Option<std::path::PathBuf> {
+    let output = std::process::Command::new(python_path)
+        .args([
+            "-c",
+            &format!("import {package}; import os; print(os.path.dirname({package}.__file__))"),
+        ])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let dir = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    let init = std::path::PathBuf::from(&dir).join("__init__.py");
+    if init.exists() {
+        Some(init)
+    } else {
+        // Single-file module.
+        let single = std::path::PathBuf::from(format!("{dir}.py"));
+        if single.exists() {
+            Some(single)
+        } else {
+            None
+        }
+    }
+}
+
+/// Show stub coverage status.
+fn run_stubs_status() -> u8 {
+    let cache_dir = std::path::Path::new(basilisk_stubs::generate::cache::DEFAULT_CACHE_DIR);
+
+    if !cache_dir.exists() {
+        println!("No generated stubs found ({})", cache_dir.display());
+        return 0;
+    }
+
+    let mut count = 0u32;
+    if let Ok(entries) = std::fs::read_dir(cache_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().is_some_and(|ext| ext == "pyi") {
+                let module = path.file_stem().and_then(|s| s.to_str()).unwrap_or("?");
+                println!("  {} {module}", "✓".green());
+                count = count.saturating_add(1);
+            }
+        }
+    }
+
+    if count == 0 {
+        println!("No generated stubs found");
+    } else {
+        println!("\n{count} generated stub(s) in {}", cache_dir.display());
+    }
+
+    0
 }
 
 /// Run the check subcommand.
@@ -157,16 +370,21 @@ fn run_check(paths: &[String], format: OutputFormat) -> u8 {
                 let error_count = render_diagnostics(&diagnostics, &sources);
                 let total = diagnostics.len();
                 if total == 0 {
-                    println!("All checked. No issues found.");
+                    println!("{}", "All checked. No issues found.".green().bold());
                     0
                 } else {
-                    println!(
+                    let summary = format!(
                         "Found {} diagnostic{} ({} error{}).",
                         total,
-                        if total == 1 { "" } else { "s" },
+                        pluralise(total),
                         error_count,
-                        if error_count == 1 { "" } else { "s" },
+                        pluralise(error_count),
                     );
+                    if error_count > 0 {
+                        println!("{}", summary.red().bold());
+                    } else {
+                        println!("{}", summary.yellow().bold());
+                    }
                     u8::from(error_count > 0)
                 }
             }
@@ -204,11 +422,49 @@ fn collect_and_check(
 
     let python_files = collect_python_files(paths, &excluded)?;
 
+    // Build import search paths (venv, uv registry, workspace members).
+    // Use cwd as the project root — pyproject.toml, uv.lock, and .venv
+    // live at the project root, not necessarily in the checked path.
+    let project_root = find_project_root(&config_root);
+    let canonical_root = std::fs::canonicalize(&project_root).unwrap_or(project_root.clone());
+    let mut roots = vec![canonical_root.clone()];
+
+    // Add checked directories as search roots for sibling imports.
+    for path_str in paths {
+        let p = std::path::Path::new(path_str);
+        let dir = if p.is_dir() {
+            p
+        } else {
+            p.parent().unwrap_or(p)
+        };
+        if let Ok(abs) = std::fs::canonicalize(dir) {
+            if !roots.contains(&abs) {
+                roots.push(abs);
+            }
+        }
+    }
+
+    // Add include paths from WorkspaceConfig as search roots.
+    let lsp_config = basilisk_lsp::config::load_config(&project_root);
+    let registry = build_uv_registry(&roots);
+    let mut search_paths = basilisk_lsp::import_resolver::ImportSearchPaths::from_config(
+        &roots,
+        &lsp_config,
+        registry,
+    );
+    // Ensure all roots are also in extra_paths for module resolution.
+    search_paths.roots = roots;
+    info!(
+        site_packages = ?search_paths.site_packages,
+        has_registry = search_paths.registry.is_some(),
+        "built import search paths"
+    );
+
     let mut all_diagnostics = Vec::new();
     let mut sources = Vec::new();
 
     for path in python_files {
-        match process_file(&path) {
+        match process_file(&path, &search_paths) {
             Ok((diags, source)) => {
                 all_diagnostics.extend(diags);
                 sources.push(FileSource { path, text: source });
@@ -222,12 +478,106 @@ fn collect_and_check(
     Ok((all_diagnostics, sources))
 }
 
-fn process_file(path: &str) -> Result<(Vec<basilisk_checker::Diagnostic>, String), String> {
+/// Build a uv package registry from workspace roots, if this is a uv project.
+fn build_uv_registry(
+    roots: &[std::path::PathBuf],
+) -> Option<std::sync::Arc<basilisk_uv::PackageRegistry>> {
+    let uv_info = basilisk_uv::detect_uv_project(roots)?;
+
+    if !uv_info.has_lockfile {
+        info!(
+            root = %uv_info.root.display(),
+            "uv project detected but no uv.lock — skipping registry"
+        );
+        return None;
+    }
+
+    let lock_path = uv_info.root.join("uv.lock");
+    let lock_file = match basilisk_uv::parse_lock_file(&lock_path) {
+        Ok(lock) => lock,
+        Err(err) => {
+            warn!(
+                path = %lock_path.display(),
+                %err,
+                "failed to parse uv.lock — package registry unavailable"
+            );
+            return None;
+        }
+    };
+
+    let deps = basilisk_uv::extract_pyproject_deps(&uv_info.root);
+    let registry = basilisk_uv::PackageRegistry::from_lock_file(&lock_file, &deps);
+
+    let pkg_count = registry.all_packages().count();
+    info!(
+        root = %uv_info.root.display(),
+        packages = pkg_count,
+        direct_deps = deps.len(),
+        "built uv package registry"
+    );
+
+    Some(std::sync::Arc::new(registry))
+}
+
+fn process_file(
+    path: &str,
+    search_paths: &basilisk_lsp::import_resolver::ImportSearchPaths,
+) -> Result<(Vec<basilisk_checker::Diagnostic>, String), String> {
     let parsed = basilisk_parser::parse_file(path).map_err(|e| e.to_string())?;
     let source = parsed.source.clone();
-    let resolved = basilisk_resolver::resolve(&parsed).map_err(|e| e.to_string())?;
+    let mut resolved = basilisk_resolver::resolve(&parsed).map_err(|e| e.to_string())?;
+
+    // Resolve imports against venv/site-packages and uv registry.
+    resolve_file_imports(&mut resolved, search_paths);
+
     let diags = basilisk_checker::check(&resolved);
     Ok((diags, source))
+}
+
+/// Resolve imports for a single file using the search paths.
+fn resolve_file_imports(
+    resolved: &mut basilisk_resolver::ResolvedModule,
+    search_paths: &basilisk_lsp::import_resolver::ImportSearchPaths,
+) {
+    for import in &mut resolved.imports {
+        let result = basilisk_lsp::import_resolver::resolve_module(&import.module, search_paths);
+        if let Some(r) = result {
+            import.resolution = r.resolution;
+            import.resolved_path = Some(r.path);
+        } else if !basilisk_stubs::is_stdlib_module(&import.module) {
+            import.unresolved_reason = Some(basilisk_lsp::import_resolver::classify_unresolved(
+                &import.module,
+                search_paths,
+            ));
+        }
+    }
+}
+
+/// Walk up from `start` to find the project root (directory containing
+/// `pyproject.toml` or `uv.lock`). Falls back to cwd, then `start`.
+fn find_project_root(start: &std::path::Path) -> std::path::PathBuf {
+    let abs = std::fs::canonicalize(start).unwrap_or_else(|_| start.to_path_buf());
+    let mut current = abs.as_path();
+    loop {
+        if current.join("pyproject.toml").is_file() || current.join("uv.lock").is_file() {
+            return current.to_path_buf();
+        }
+        match current.parent() {
+            Some(parent) => current = parent,
+            None => break,
+        }
+    }
+    // Fallback: cwd, then the original start path.
+    std::env::current_dir().unwrap_or_else(|_| start.to_path_buf())
+}
+
+/// Return `"s"` for counts != 1, empty string otherwise.
+pub(crate) fn pluralise(count: usize) -> &'static str {
+    if count == 1 {
+        ""
+    } else {
+        "s"
+    }
 }
 
 pub(crate) fn collect_python_files(

@@ -1,11 +1,11 @@
 # Stub Resolution & Type Provenance — Specification
 
 > **Crate**: `basilisk-stubs` (resolution, typeshed bundling), `basilisk-config` (overrides)
-> **Related**: [LSP-UV-INTEGRATION-SPEC.md](LSP-UV-INTEGRATION-SPEC.md) — `PackageRegistry` accelerates stub discovery
+> **Related**: [LSP-UV-INTEGRATION-SPEC.md §LSPUV-LOCK-REGISTRY](LSP-UV-INTEGRATION-SPEC.md#LSPUV-LOCK-REGISTRY) — `PackageRegistry` accelerates stub discovery
 
 ---
 
-## 1. PEP 561 Resolution Order
+## PEP 561 Resolution Order {#STUBRES-PEP561}
 
 Following [PEP 561](https://peps.python.org/pep-0561/), matching Pyright's behaviour:
 
@@ -16,11 +16,11 @@ Following [PEP 561](https://peps.python.org/pep-0561/), matching Pyright's behav
 5. **Bundled typeshed** — stdlib stubs compiled into the binary from `basilisk-stubs`
 6. **No stubs found** — type resolves to `Unknown`, BSK-E0010 fires
 
-> **uv fast path**: In uv projects, steps 3–4 are accelerated by the `PackageRegistry` parsed from `uv.lock`. The registry knows every installed package and whether a companion stub package exists — no site-packages directory walk needed. See `LSP-UV-INTEGRATION-SPEC.md` section 3.
+> **uv fast path**: In uv projects, steps 3–4 are accelerated by the `PackageRegistry` parsed from `uv.lock`. The registry knows every installed package and whether a companion stub package exists — no site-packages directory walk needed. See [LSP-UV-INTEGRATION-SPEC.md §LSPUV-LOCK-REGISTRY](LSP-UV-INTEGRATION-SPEC.md#LSPUV-LOCK-REGISTRY).
 
 ---
 
-## 2. Stub Discovery Engine
+## Stub Discovery Engine {#STUBRES-ENGINE}
 
 The `basilisk-stubs` crate provides stub resolution:
 
@@ -46,14 +46,14 @@ pub enum StubTier {
 }
 ```
 
-### typeshed Bundling
+### typeshed Bundling {#STUBRES-TYPESHED}
 
 - `build.rs` in `basilisk-stubs` reads typeshed `.pyi` files at compile time
 - Produces a `phf` hash map for O(1) module lookup
 - `lookup_builtin()` queries this index
 - The stdlib whitelist becomes derived data, not a maintained list
 
-### `.pyi` File Parsing
+### .pyi File Parsing {#STUBRES-PYI}
 
 Since Basilisk uses `ruff_python_parser`, the same parser handles `.pyi` files:
 
@@ -64,7 +64,7 @@ Since Basilisk uses `ruff_python_parser`, the same parser handles `.pyi` files:
 
 ---
 
-## 3. Type Provenance
+## Type Provenance {#STUBRES-PROVENANCE}
 
 Types carry metadata about where their type information came from:
 
@@ -83,24 +83,41 @@ pub struct TrackedType {
 }
 ```
 
-### Diagnostic Behaviour by Provenance
+### Diagnostic Behaviour by Provenance {#STUBRES-PROVENANCE-DIAG}
 
-| Provenance | BSK-E0010 | Downstream type errors | LSP hover |
-|------------|-----------|----------------------|-----------|
-| Source | not fired | normal errors | shows inferred type |
-| StubTier1 | not fired | normal errors | shows stub type |
-| StubTier2 | not fired | normal errors | shows type + "(auto-generated stub)" |
-| StubTier3 | downgraded to info | warnings only | shows type + "(best-effort, may be inaccurate)" |
-| Untyped | error (default) | **suppressed** | shows "Unknown (no stubs)" |
+| Provenance | BSK-E0010 | Downstream type errors | LSP hover | Code Action |
+|------------|-----------|----------------------|-----------|-------------|
+| Source | not fired | normal errors | shows inferred type | — |
+| StubTier1 | not fired | normal errors | shows stub type | — |
+| StubTier2 | not fired | normal errors | shows type + "(auto-generated stub)" | — |
+| StubTier3 | downgraded to info | warnings only | shows type + "(best-effort, may be inaccurate)" | — |
+| Untyped | error (default) | **suppressed** | shows "Unknown (no stubs)" | one-click install via LSP |
 
 One diagnostic at the import site is worth more than fifty cascading errors at use sites. When provenance is `Untyped`:
 
 1. BSK-E0010 fires once at the import
 2. The imported symbol becomes `Unknown` with `Untyped` provenance
 3. Downstream rules check provenance — if one operand is `Untyped`, the cascade is suppressed
-4. The developer fixes the root cause (add stubs, suppress, or configure) rather than fighting noise
+4. The developer fixes it **with a single click** — the LSP provides code actions (quick fixes) that execute the appropriate `uv` command automatically
 
-### Provenance in Hover
+### Code Actions for Unresolved Imports {#STUBRES-CODEACTIONS}
+
+**Principle**: Diagnostics MUST NOT tell users to run CLI commands. The LSP provides one-click code actions that do the work. The user should never leave the editor to fix a missing import.
+
+Every BSK-E0010 and BSK-W0010 diagnostic MUST have an associated code action:
+
+| Diagnostic | Scenario | Code Action | LSP Command |
+|------------|----------|-------------|-------------|
+| BSK-E0010 | Package not installed | "Add dependency: `{pkg}`" | `basilisk.uv.add` |
+| BSK-E0010 | Package not in deps (transitive only) | "Add dependency: `{pkg}`" | `basilisk.uv.add` |
+| BSK-E0010 | Package declared but not synced | "Sync environment" | `basilisk.uv.sync` |
+| BSK-W0010 | Package installed but no type stubs | "Install type stubs: `types-{pkg}`" | `basilisk.uv.addDev` |
+
+The code action executes via `workspace/executeCommand`. The LSP spawns `uv` as a subprocess, reports progress via `window/logMessage`, and triggers a full re-resolve on completion — the diagnostic clears automatically.
+
+Diagnostic help text should describe **what's wrong**, not what CLI command to run. The code action is the fix. See [LSP-UV-INTEGRATION-SPEC.md §LSPUV-ACTIONS](LSP-UV-INTEGRATION-SPEC.md#LSPUV-ACTIONS) for the full code action specification.
+
+### Provenance in Hover {#STUBRES-PROVENANCE-HOVER}
 
 | Cursor on | Hover display |
 |-----------|---------------|
@@ -109,11 +126,11 @@ One diagnostic at the import site is worth more than fifty cascading errors at u
 | typeshed symbol | `os.path.join (typeshed)` |
 | Tier 1 stub symbol | `requests.get(...) -> Response` (no annotation — trusted) |
 
-> **uv enrichment** (future): In uv projects, import hovers additionally show package version, direct/transitive classification, and stub package status from the `PackageRegistry`. See `LSP-UV-INTEGRATION-SPEC.md` section 8.
+> **uv enrichment** (future): In uv projects, import hovers additionally show package version, direct/transitive classification, and stub package status from the `PackageRegistry`. See [LSP-UV-INTEGRATION-SPEC.md §LSPUV-HOVER](LSP-UV-INTEGRATION-SPEC.md#LSPUV-HOVER).
 
 ---
 
-## 4. Suppression System
+## Suppression System {#STUBRES-SUPPRESSION}
 
 Four-mode severity for every rule: `error`, `warning`, `info`, `disabled`. Configurable at every scope:
 
@@ -141,7 +158,7 @@ from result import Result, Ok, Err
 
 ---
 
-## 5. Configuration
+## Configuration {#STUBRES-CONFIG}
 
 | Setting Key | Type | Default | Description |
 |------------|------|---------|-------------|
@@ -168,7 +185,7 @@ rules.disabled = ["BSK-E0010"]
 
 ---
 
-## 6. Auto-Stub Generation (CLI)
+## Auto-Stub Generation {#STUBRES-AUTOGEN}
 
 ```bash
 basilisk stubs generate requests      # generate stubs for one package
@@ -178,7 +195,7 @@ basilisk stubs status                 # show stub coverage report
 
 Generated stubs go into `.basilisk/stubs/`, tagged as Tier 3. The provenance system ensures these produce warnings, not false confidence.
 
-### Generation Modes
+### Generation Modes {#STUBRES-AUTOGEN-MODES}
 
 | Mode | Source | Accuracy |
 |------|--------|----------|
@@ -188,7 +205,7 @@ Generated stubs go into `.basilisk/stubs/`, tagged as Tier 3. The provenance sys
 
 ---
 
-## 7. Risks and Mitigations
+## Risks and Mitigations {#STUBRES-RISKS}
 
 | Risk | Mitigation |
 |------|------------|

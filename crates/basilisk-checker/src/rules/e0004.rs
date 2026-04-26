@@ -55,6 +55,7 @@ fn make_vararg_diagnostic(param: &ParameterInfo, path: &str) -> Diagnostic {
         path: path.to_owned(),
         help: Some(format!("Add a type annotation: `*{}: <type>`", param.name)),
         note: Some("In Basilisk, `*args` parameters require an explicit element type".to_owned()),
+        provenance: None,
     }
 }
 
@@ -70,5 +71,6 @@ fn make_kwarg_diagnostic(param: &ParameterInfo, path: &str) -> Diagnostic {
         path: path.to_owned(),
         help: Some(format!("Add a type annotation: `**{}: <type>`", param.name)),
         note: Some("In Basilisk, `**kwargs` parameters require an explicit value type".to_owned()),
+        provenance: None,
     }
 }

@@ -11,8 +11,8 @@ def fetch_user(user_id: int) -> Optional[str]:
     return None
 
 
-def save_record(data):          # BSK-E0001: data untyped
-    pass                        # BSK-E0002: no return type
+def save_record(data):  # BSK-E0001: data untyped
+    pass  # BSK-E0002: no return type
 
 
 class Config:
@@ -23,7 +23,7 @@ class Config:
         self.debug = debug
         self.timeout = timeout
 
-    def reset(self):            # BSK-E0002: no return type
+    def reset(self):  # BSK-E0002: no return type
         self.debug = False
         self.timeout = 30
 

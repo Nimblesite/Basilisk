@@ -18,10 +18,9 @@ import { signal, computed, type ReadonlySignal, type Signal } from "@preact/sign
 import { type LanguageClient, State } from "vscode-languageclient/node";
 import * as vscode from "vscode";
 import { Logger, type LogSink } from "./logger";
+import { createServerCommandHandler } from "./lsp-client";
 import type { Result } from "./result";
-
-/** Default timeout (ms) for waiting on the LSP client to become ready. */
-export const DEFAULT_LSP_READY_TIMEOUT_MS = 1_000;
+import { POLL_INTERVAL_MS, WAIT_MS } from "./timeouts";
 
 /** LSP lifecycle states exposed to consumers. */
 export type LspState = "idle" | "starting" | "running" | "stopped";
@@ -67,27 +66,55 @@ interface StoreSignals {
   logSink: Signal<LogSink | undefined>;
   lspState: Signal<LspState>;
   readyHandle: Signal<ReadyHandle | undefined>;
+  /** Disposables for client-registered commands — disposed on LSP stop/restart. */
+  commandDisposables: vscode.Disposable[];
+  /** Disposables for server-advertised command registrations — disposed on LSP stop/restart. */
+  serverCommandDisposables: vscode.Disposable[];
 }
 
 // ── Private helpers operating on StoreSignals ─────────────────────────────
 
-/** Extract commands from the client's initializeResult. */
+/** Dispose all server-advertised command registrations. */
+function disposeServerCommands(signals: StoreSignals): void {
+  for (const d of signals.serverCommandDisposables) {
+    d.dispose();
+  }
+  signals.serverCommandDisposables = [];
+}
+
+/**
+ * Extract commands from the client's initializeResult and register them
+ * with VS Code so they appear in getCommands() and the command palette.
+ *
+ * Each command handler executes the command through the LSP client via
+ * workspace/executeCommand. This replaces the vscode-languageclient
+ * ExecuteCommandFeature which was removed to prevent double-registration.
+ */
 function syncServerCommands(signals: StoreSignals): void {
-  const commands = signals.client.value?.initializeResult?.capabilities?.executeCommandProvider?.commands;
-  if (!Array.isArray(commands)) {
+  disposeServerCommands(signals);
+
+  const client = signals.client.value;
+  const commands = client?.initializeResult?.capabilities?.executeCommandProvider?.commands;
+  if (!Array.isArray(commands) || client === undefined) {
     signals.serverCommands.value = new Set();
     return;
   }
+
   const next = new Set<string>();
   for (const cmd of commands) {
     if (typeof cmd === "string") {
       next.add(cmd);
+      const handler = createServerCommandHandler(client, cmd);
+      const disposable = vscode.commands.registerCommand(cmd, handler);
+      signals.serverCommandDisposables.push(disposable);
     }
   }
   signals.serverCommands.value = next;
 }
 
-/** Resolve the ready handle and clear it. */
+/** Resolve the ready handle and clear it.
+ *  Resolution MUST be async (next tick) so callers' .then() handlers
+ *  are attached before the promise settles. */
 function resolveLspReady(signals: StoreSignals): void {
   const handle = signals.readyHandle.value;
   if (handle !== undefined) {
@@ -111,22 +138,40 @@ interface CommandRegistration {
   commandId: string;
 }
 
-/** Register a client command with VS Code and track it. */
+/**
+ * Register a client command with VS Code and track it.
+ *
+ * The disposable is stored ONLY in commandDisposables — NOT in
+ * context.subscriptions. Rationale: disposeClientCommands() calls
+ * dispose() on every entry when the LSP restarts or stops. If the
+ * same disposable also lived in context.subscriptions, deactivate()
+ * would dispose it a second time (double-dispose). Per the VS Code
+ * API, registerCommand returns a Disposable whose dispose() method
+ * unregisters the command — calling it twice is undefined behaviour.
+ */
 function registerCommand(
   reg: CommandRegistration,
   handler: (...args: unknown[]) => unknown
 ): void {
-  if (reg.signals.clientCommands.value.has(reg.commandId)) {
-    return;
-  }
   const disposable = vscode.commands.registerCommand(reg.commandId, handler);
-  reg.context.subscriptions.push(disposable);
+  reg.signals.commandDisposables.push(disposable);
   const next = new Set(reg.signals.clientCommands.value);
   next.add(reg.commandId);
   reg.signals.clientCommands.value = next;
 }
 
-/** Register all client-only commands. Called once when LSP reaches Running. */
+/** Dispose all registered commands (client AND server) so they can be re-registered fresh. */
+function disposeAllCommands(signals: StoreSignals): void {
+  for (const d of signals.commandDisposables) {
+    d.dispose();
+  }
+  signals.commandDisposables = [];
+  signals.clientCommands.value = new Set();
+  disposeServerCommands(signals);
+  signals.serverCommands.value = new Set();
+}
+
+/** Register all client-only commands. Called when LSP reaches Running. */
 function registerClientCommands(signals: StoreSignals, context: vscode.ExtensionContext): void {
   registerCommand({ signals, context, commandId: "basilisk.restartServer" }, async () => {
     const lspClient = signals.client.value;
@@ -165,6 +210,7 @@ function bindClientStateListener(
 
     if (newState === State.Running) {
       signals.lspState.value = "running";
+      disposeAllCommands(signals);
       syncServerCommands(signals);
       registerClientCommands(signals, context);
       resolveLspReady(signals);
@@ -172,6 +218,7 @@ function bindClientStateListener(
     }
 
     if (newState === State.Stopped) {
+      disposeAllCommands(signals);
       signals.lspState.value = "stopped";
       return;
     }
@@ -187,20 +234,47 @@ function bindClientStateListener(
 
 /** Wait for the LSP ready handle with a timeout, returning Result. */
 async function awaitLspReady(signals: StoreSignals, timeoutMs: number): Promise<Result<LanguageClient>> {
+  // Fast path: client already running.
+  const client = signals.client.value;
+  if (client?.isRunning() === true) {
+    return { ok: true, value: client };
+  }
+  // Also check our own state signal (catches post-restart where isRunning()
+  // lags behind the onDidChangeState callback that set lspState = "running").
+  if (signals.lspState.value === "running" && client !== undefined) {
+    return { ok: true, value: client };
+  }
+
   const existing = signals.readyHandle.value;
   const ready = existing !== undefined ? existing.promise : createReadyHandle(signals).promise;
+
+  // Poll for the client becoming ready via both isRunning() and our own
+  // lspState signal. The double check catches cases where the readyHandle
+  // was resolved before this function was called (e.g. after a deactivate/
+  // activate cycle where the state listener already fired).
+  const poll = new Promise<"poll">((resolve) => {
+    const interval = setInterval(() => {
+      const c = signals.client.value;
+      if (c?.isRunning() === true || (signals.lspState.value === "running" && c !== undefined)) {
+        clearInterval(interval);
+        resolve("poll");
+      }
+    }, POLL_INTERVAL_MS);
+    setTimeout(() => { clearInterval(interval); }, timeoutMs);
+  });
+
   const timeout = new Promise<"timeout">((resolve) => {
     setTimeout(() => { resolve("timeout"); }, timeoutMs);
   });
-  const outcome = await Promise.race([ready.then(() => "ready" as const), timeout]);
+  const outcome = await Promise.race([ready.then(() => "ready" as const), poll, timeout]);
   if (outcome === "timeout") {
     return { ok: false, error: new Error(`LSP client did not reach Running state within ${timeoutMs}ms`) };
   }
-  const client = signals.client.value;
-  if (client === undefined) {
+  const resolved = signals.client.value;
+  if (resolved === undefined) {
     return { ok: false, error: new Error("LSP client resolved but is undefined") };
   }
-  return { ok: true, value: client };
+  return { ok: true, value: resolved };
 }
 
 /** Reset all signals to their initial values. */
@@ -217,7 +291,7 @@ function resetSignals(signals: StoreSignals): void {
 
 // ── Factory ───────────────────────────────────────────────────────────────
 
-export function createStore(): Store {
+export function createStore(onReset?: () => void): Store {
   const signals: StoreSignals = {
     client: signal<LanguageClient | undefined>(undefined),
     serverCommands: signal<ReadonlySet<string>>(new Set()),
@@ -227,6 +301,8 @@ export function createStore(): Store {
     logSink: signal<LogSink | undefined>(undefined),
     lspState: signal<LspState>("idle"),
     readyHandle: signal<ReadyHandle | undefined>(undefined),
+    commandDisposables: [],
+    serverCommandDisposables: [],
   };
 
   const isServerReady = computed(() => signals.client.value?.isRunning() === true);
@@ -262,11 +338,13 @@ export function createStore(): Store {
     isServerCommandAdvertised(id: string): boolean {
       return signals.serverCommands.value.has(id);
     },
-    async ensureLspReadyPromise(timeoutMs = DEFAULT_LSP_READY_TIMEOUT_MS): Promise<Result<LanguageClient>> {
+    async ensureLspReadyPromise(timeoutMs = WAIT_MS): Promise<Result<LanguageClient>> {
       return awaitLspReady(signals, timeoutMs);
     },
     reset(): void {
+      disposeAllCommands(signals);
       resetSignals(signals);
+      onReset?.();
     },
   };
 }

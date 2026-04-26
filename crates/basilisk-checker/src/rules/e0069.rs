@@ -68,6 +68,7 @@ impl Rule for DataclassKwOnlyViolation {
                              `field(kw_only=True)`, or `@dataclass(kw_only=True)`"
                                 .to_owned(),
                         ),
+                        provenance: None,
                     });
                 }
             }
@@ -95,6 +96,7 @@ impl Rule for DataclassKwOnlyViolation {
                                  implicitly set `init=False`) are excluded from `__init__`"
                                     .to_owned(),
                             ),
+                            provenance: None,
                         });
                     }
                 }

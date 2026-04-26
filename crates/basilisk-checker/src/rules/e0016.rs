@@ -164,5 +164,6 @@ fn make_diagnostic(
             "An `@override` method must be type-compatible with its base-class counterpart"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }

@@ -1,8 +1,11 @@
 ---
 layout: layouts/docs.njk
 title: Optional Safety — E0070–E0073
-description: Rules that prevent unsafe access on Optional values.
+description: "Basilisk optional safety rules — attribute access on Optional without None check, unsafe method calls, missing guard clauses, and None propagation errors. BSK-E0070 through E0073."
 keywords: basilisk, optional, none, nullable, BSK-E0070, BSK-E0073
+date: 2026-02-28
+dateModified: 2026-03-31
+author: The Basilisk Project
 eleventyNavigation:
   key: Optional Safety
   parent: Rules

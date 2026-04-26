@@ -200,6 +200,7 @@ fn check_attr_assignment(
             path: path.to_owned(),
             help: None,
             note: None,
+            provenance: None,
         });
         return;
     };
@@ -218,6 +219,7 @@ fn check_attr_assignment(
                 path: path.to_owned(),
                 help: None,
                 note: None,
+                provenance: None,
             });
         }
     }
@@ -282,6 +284,7 @@ fn check_attr_access_in_expr(
                                 path: path.to_owned(),
                                 help: None,
                                 note: None,
+                                provenance: None,
                             });
                         }
                     }
@@ -341,6 +344,7 @@ fn check_assignment(
                     path: path.to_owned(),
                     help: None,
                     note: None,
+                    provenance: None,
                 });
             }
         }

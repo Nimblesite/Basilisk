@@ -53,6 +53,7 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
             "PEP 591: `Final` cannot be nested, used in parameters, or combined with `ClassVar`"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }
 

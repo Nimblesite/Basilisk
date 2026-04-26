@@ -39,6 +39,7 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
         note: Some(
             "PEP 484: `NewType` accepts only proper concrete classes as the base type".to_owned(),
         ),
+        provenance: None,
     }
 }
 
@@ -482,6 +483,7 @@ fn check_newtype_call_arg_types(
                     call.callee
                 )),
                 note: Some("NewType constructors accept only values of the base type".to_owned()),
+                provenance: None,
             });
         }
     }
@@ -549,6 +551,7 @@ fn check_newtype_var_literal_assignments(
                     "NewType creates a distinct type; only the constructor call is valid"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }

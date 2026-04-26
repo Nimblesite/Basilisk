@@ -4,7 +4,6 @@
 import json
 import sys
 from pathlib import Path
-from datetime import datetime, timezone
 
 
 def load_diff(mutants_out: Path, diff_path: str | None) -> str:
@@ -86,11 +85,12 @@ def render_mutant_row(outcome: dict, mutants_out: Path, idx: int) -> str:
 
 
 def _esc(s: str) -> str:
-    return (s
-        .replace("&", "&amp;")
+    return (
+        s.replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
-        .replace('"', "&quot;"))
+        .replace('"', "&quot;")
+    )
 
 
 def generate(outcomes_path: Path, output_path: Path) -> None:
@@ -132,7 +132,7 @@ def generate(outcomes_path: Path, output_path: Path) -> None:
             <th>Status</th><th>Location</th><th>Function</th>
             <th>Replacement</th><th>Time</th>
           </tr></thead>
-          <tbody>{''.join(rows)}</tbody>
+          <tbody>{"".join(rows)}</tbody>
         </table>"""
 
     html = f"""<!DOCTYPE html>
@@ -237,14 +237,14 @@ def generate(outcomes_path: Path, output_path: Path) -> None:
 
 <div id="tab-missed" class="tab-content active">
   <div class="filter"><input type="text" placeholder="Filter by file, function, replacement…" oninput="filterTable('tab-missed-table', this.value)"></div>
-  {table(rows_missed, 'tab-missed-table')}
+  {table(rows_missed, "tab-missed-table")}
 </div>
 <div id="tab-caught" class="tab-content">
   <div class="filter"><input type="text" placeholder="Filter by file, function, replacement…" oninput="filterTable('tab-caught-table', this.value)"></div>
-  {table(rows_caught, 'tab-caught-table')}
+  {table(rows_caught, "tab-caught-table")}
 </div>
 <div id="tab-other" class="tab-content">
-  {table(rows_other, 'tab-other-table')}
+  {table(rows_other, "tab-other-table")}
 </div>
 
 <script>
@@ -279,6 +279,8 @@ function filterTable(tableId, query) {{
 
 
 if __name__ == "__main__":
-    outcomes = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("mutants.out/outcomes.json")
+    outcomes = (
+        Path(sys.argv[1]) if len(sys.argv) > 1 else Path("mutants.out/outcomes.json")
+    )
     output = Path(sys.argv[2]) if len(sys.argv) > 2 else Path("mutants_report.html")
     generate(outcomes, output)

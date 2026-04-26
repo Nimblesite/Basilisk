@@ -92,6 +92,37 @@ vim.env.BASILISK_PATH = orig_env
 -- version: nonexistent, valid
 binary_mod.version("/nonexistent")
 if ls_path ~= "" then binary_mod.version(ls_path) end
+-- is_newer_version: all comparison paths
+assert(binary_mod.is_newer_version("0.1.0", "0.2.0"))
+assert(binary_mod.is_newer_version("0.2.0", "1.0.0"))
+assert(binary_mod.is_newer_version("0.2.1", "0.2.2"))
+assert(not binary_mod.is_newer_version("0.2.1", "0.2.1"))
+assert(not binary_mod.is_newer_version("1.0.0", "0.9.9"))
+assert(binary_mod.is_newer_version("v0.1.0", "v0.2.0"))
+assert(binary_mod.is_newer_version("basilisk 0.1.0", "v0.2.0"))
+-- platform_asset_name: detect current platform
+local asset_name, is_windows = binary_mod.platform_asset_name()
+if asset_name then
+  assert(asset_name:match("^basilisk%-"))
+  assert(type(is_windows) == "boolean")
+end
+-- fetch_latest_release: real GitHub API call
+local release = binary_mod.fetch_latest_release()
+if release then
+  assert(type(release.tag_name) == "string")
+  assert(type(release.assets) == "table")
+end
+-- download: real download from GitHub
+local dl_path, dl_version = binary_mod.download()
+if dl_path then
+  assert(vim.fn.executable(dl_path) == 1)
+  -- Clean up.
+  local dl_dir = vim.fn.stdpath("data") .. "/basilisk/" .. dl_version
+  vim.fn.delete(dl_dir, "rf")
+end
+-- check_for_updates: async, non-blocking
+binary_mod.check_for_updates("/nonexistent")
+if ls_path ~= "" then binary_mod.check_for_updates(ls_path) end
 
 -- ============================================================
 -- 3. log.lua — every level, file logging, edge cases
@@ -315,6 +346,65 @@ testing.apply_coverage("/nonexistent/coverage.xml")
 vim.fn.delete(test_tmpdir, "rf")
 
 -- ============================================================
+-- 8b. modules.lua — panel lifecycle, render, keybindings
+-- ============================================================
+print("--- modules.lua ---")
+local modules = require("basilisk.modules")
+-- open/close/toggle lifecycle
+modules.open()
+wait()
+modules.refresh()
+wait()
+modules.close()
+modules.close()  -- double close
+modules.toggle()
+wait()
+modules.toggle()
+-- Re-open to exercise window re-focus path
+modules.open()
+modules.open()  -- re-open focuses existing
+modules.close()
+
+-- ============================================================
+-- 8c. type_health.lua — panel lifecycle, render
+-- ============================================================
+print("--- type_health.lua ---")
+local type_health = require("basilisk.type_health")
+-- open/close/toggle lifecycle
+type_health.open()
+wait()
+type_health.refresh()
+wait()
+type_health.close()
+type_health.close()  -- double close
+type_health.toggle()
+wait()
+type_health.toggle()
+-- Re-open to exercise window re-focus path
+type_health.open()
+type_health.open()  -- re-open focuses existing
+type_health.close()
+
+-- ============================================================
+-- 8d. info.lua — additional paths
+-- ============================================================
+print("--- info.lua (extra) ---")
+local info = require("basilisk.info")
+-- show with different configs
+info.show(config_mod.resolve({ python = "python3.12" }))
+wait()
+info.refresh(config_mod.resolve({ python = "python3.12" }))
+info.close()
+-- show → show (replaces existing float)
+info.show(config_mod.resolve())
+info.show(config_mod.resolve())
+info.close()
+-- refresh when not open
+info.refresh(config_mod.resolve())
+-- close when not open
+info.close()
+
+-- ============================================================
 -- 9. tab_tracking.lua — all modes, real buffer lifecycle
 -- ============================================================
 print("--- tab_tracking.lua ---")
@@ -497,6 +587,20 @@ if lsp_binary then
     pcall(vim.cmd, "BasiliskInfo")
     wait(200)
     close_floats()
+
+    -- Module explorer with real data.
+    modules.open()
+    wait(1000)
+    modules.refresh()
+    wait(500)
+    modules.close()
+
+    -- Type health with real data.
+    type_health.open()
+    wait(1000)
+    type_health.refresh()
+    wait(500)
+    type_health.close()
 
     -- Restart via command.
     pcall(vim.cmd, "BasiliskRestart")

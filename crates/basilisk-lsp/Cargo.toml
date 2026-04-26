@@ -22,6 +22,8 @@ serde             = { version = "1", features = ["derive"] }
 serde_json        = "1"
 dashmap           = "6"
 tracing.workspace = true
+py-spy            = "0.4"
+inferno           = { version = "0.12", default-features = false }
 
 [dev-dependencies]
 tokio-tungstenite   = "0.24"
