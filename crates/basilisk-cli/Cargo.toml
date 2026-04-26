@@ -1,0 +1,22 @@
+[package]
+name        = "basilisk-cli"
+description = "Command-line interface for Basilisk"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+
+[[bin]]
+name = "basilisk"
+path = "src/main.rs"
+
+[dependencies]
+basilisk-parser.workspace   = true
+basilisk-resolver.workspace = true
+basilisk-checker.workspace  = true
+clap.workspace              = true
+walkdir                     = "2.5"
+serde.workspace             = true
+serde_json.workspace        = true
+
+[lints]
+workspace = true

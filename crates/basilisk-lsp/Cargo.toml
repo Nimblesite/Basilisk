@@ -1,0 +1,14 @@
+[package]
+name        = "basilisk-lsp"
+description = "Language Server Protocol implementation for Basilisk (Phase 2+)"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+
+[dependencies]
+basilisk-parser.workspace   = true
+basilisk-resolver.workspace = true
+basilisk-checker.workspace  = true
+
+[lints]
+workspace = true

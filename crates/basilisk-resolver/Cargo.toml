@@ -1,0 +1,15 @@
+[package]
+name        = "basilisk-resolver"
+description = "Name resolution and scope analysis for Basilisk"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+
+[dependencies]
+basilisk-parser.workspace = true
+ruff_python_ast.workspace = true
+ruff_text_size.workspace  = true
+thiserror                 = "2.0"
+
+[lints]
+workspace = true

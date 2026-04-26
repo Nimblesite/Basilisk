@@ -1,0 +1,28 @@
+{
+  "en": {
+    "nav": {
+      "docs": "Docs",
+      "rules": "Rules",
+      "blog": "Blog",
+      "github": "GitHub",
+      "getStarted": "Get Started"
+    },
+    "blog": {
+      "title": "Blog",
+      "description": "Updates, announcements, and deep-dives from the Basilisk project.",
+      "readMore": "Read more",
+      "publishedOn": "Published on"
+    },
+    "docs": {
+      "onThisPage": "On this page",
+      "editOnGithub": "Edit on GitHub",
+      "nextPage": "Next",
+      "prevPage": "Previous"
+    },
+    "footer": {
+      "madeWith": "Built with",
+      "license": "MIT / Apache-2.0 License",
+      "copyright": "The Basilisk Project"
+    }
+  }
+}

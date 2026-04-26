@@ -1,0 +1,25 @@
+.commandtree/
+.too_many_cooks/
+target/
+
+lcov.info
+
+mutants.out/
+
+mutants.out.old/
+
+.playwright-mcp/
+
+*.png
+
+
+node_modules/
+
+# Downloaded conformance test suite (python/typing) — fetch with scripts/fetch-conformance.sh
+crates/basilisk-cli/tests/conformance/
+.venv/
+
+mutants.out.backup-2026-02-28/
+
+benchmarks/results/
+.aider*

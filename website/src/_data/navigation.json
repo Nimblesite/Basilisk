@@ -1,0 +1,78 @@
+{
+  "main": [
+    { "text": "Docs", "url": "/docs/" },
+    { "text": "Rules", "url": "/docs/rules/" },
+    { "text": "Blog", "url": "/blog/" },
+    { "text": "GitHub", "url": "https://github.com/basilisk-lang/basilisk", "external": true }
+  ],
+  "docs": [
+    {
+      "title": "Getting Started",
+      "items": [
+        { "title": "Introduction", "url": "/docs/" },
+        { "title": "Installation", "url": "/docs/installation/" },
+        { "title": "Quick Start", "url": "/docs/quick-start/" }
+      ]
+    },
+    {
+      "title": "Configuration",
+      "items": [
+        { "title": "pyproject.toml Reference", "url": "/docs/configuration/" },
+        { "title": "Migration from Pyright", "url": "/docs/migration/#from-pyright" },
+        { "title": "Migration from mypy", "url": "/docs/migration/#from-mypy" }
+      ]
+    },
+    {
+      "title": "Diagnostics",
+      "items": [
+        { "title": "Rules Overview", "url": "/docs/rules/" },
+        { "title": "Missing Annotations (E0001–E0009)", "url": "/docs/rules/missing-annotations/" },
+        { "title": "Type Safety (E0010–E0025)", "url": "/docs/rules/type-safety/" },
+        { "title": "Ownership Safety (E0030–E0035)", "url": "/docs/rules/ownership-safety/" },
+        { "title": "Immutability (E0040–E0043)", "url": "/docs/rules/immutability/" },
+        { "title": "Structural Discipline (E0050–E0054)", "url": "/docs/rules/structural-discipline/" },
+        { "title": "Coercion Safety (E0060–E0063)", "url": "/docs/rules/coercion-safety/" },
+        { "title": "Optional Safety (E0070–E0073)", "url": "/docs/rules/optional-safety/" },
+        { "title": "Unused Code (W0080–W0089)", "url": "/docs/rules/unused-code/" },
+        { "title": "Code Quality (W0090–W0099)", "url": "/docs/rules/code-quality/" }
+      ]
+    },
+    {
+      "title": "Safety Analysis",
+      "items": [
+        { "title": "Mojo-Style Ownership", "url": "/docs/mojo-safety/" }
+      ]
+    },
+    {
+      "title": "Reference",
+      "items": [
+        { "title": "Comparison: Basilisk vs Others", "url": "/docs/comparison/" },
+        { "title": "Migration Guide", "url": "/docs/migration/" }
+      ]
+    }
+  ],
+  "footer": [
+    {
+      "title": "Product",
+      "items": [
+        { "text": "Documentation", "url": "/docs/" },
+        { "text": "Rules Reference", "url": "/docs/rules/" },
+        { "text": "Blog", "url": "/blog/" }
+      ]
+    },
+    {
+      "title": "Community",
+      "items": [
+        { "text": "GitHub", "url": "https://github.com/basilisk-lang/basilisk" },
+        { "text": "Issues", "url": "https://github.com/basilisk-lang/basilisk/issues" },
+        { "text": "Discussions", "url": "https://github.com/basilisk-lang/basilisk/discussions" }
+      ]
+    },
+    {
+      "title": "Legal",
+      "items": [
+        { "text": "MIT / Apache-2.0", "url": "https://github.com/basilisk-lang/basilisk/blob/main/LICENSE" }
+      ]
+    }
+  ]
+}

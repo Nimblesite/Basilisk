@@ -1,0 +1,6 @@
+# Mutation testing configuration.
+#
+# basilisk-db is a Phase 2 stub with an intentionally failing test
+# (incremental DB not yet implemented).  Exclude it so the baseline
+# is green and mutations can be tested on the live crates.
+exclude_globs = ["crates/basilisk-db/**"]

@@ -1,0 +1,388 @@
+//! Basilisk CLI entry point.
+//!
+//! Usage:
+//! ```
+//! basilisk check [paths...]
+//! basilisk check [paths...] --output json
+//! ```
+
+use std::process;
+
+use clap::{Parser, Subcommand};
+
+use crate::output::{render_diagnostics, render_diagnostics_json, FileSource, OutputFormat};
+
+mod output;
+
+/// Basilisk — strict-by-default Python type analyzer.
+///
+/// TypeScript for Python. Every parameter typed. Every return declared.
+#[derive(Parser)]
+#[command(name = "basilisk", version, about, long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Type check one or more files or directories.
+    Check {
+        /// Paths to check. Directories are traversed recursively for `.py` files.
+        #[arg(default_value = ".")]
+        paths: Vec<String>,
+        /// Output format: text (default, human-readable) or json (machine-readable).
+        #[arg(long, default_value = "text")]
+        output: OutputFormat,
+    },
+}
+
+fn main() {
+    let cli = Cli::parse();
+
+    let exit_code = match cli.command {
+        Command::Check { paths, output } => run_check(&paths, output),
+    };
+
+    process::exit(exit_code);
+}
+
+/// Run the check subcommand.
+///
+/// Exit codes:
+/// - `0` — clean, no errors
+/// - `1` — type errors found
+/// - `3` — internal error
+fn run_check(paths: &[String], format: OutputFormat) -> i32 {
+    match collect_and_check(paths) {
+        Ok((diagnostics, sources)) => match format {
+            OutputFormat::Json => {
+                render_diagnostics_json(&diagnostics, &sources);
+                let error_count = diagnostics
+                    .iter()
+                    .filter(|d| d.severity == basilisk_checker::Severity::Error)
+                    .count();
+                i32::from(error_count > 0)
+            }
+            OutputFormat::Text => {
+                let error_count = render_diagnostics(&diagnostics, &sources);
+                let total = diagnostics.len();
+                if total == 0 {
+                    println!("All checked. No issues found.");
+                    0
+                } else {
+                    println!(
+                        "Found {} diagnostic{} ({} error{}).",
+                        total,
+                        if total == 1 { "" } else { "s" },
+                        error_count,
+                        if error_count == 1 { "" } else { "s" },
+                    );
+                    i32::from(error_count > 0)
+                }
+            }
+        },
+        Err(err) => {
+            eprintln!("basilisk: internal error: {err}");
+            3
+        }
+    }
+}
+
+fn collect_and_check(
+    paths: &[String],
+) -> Result<(Vec<basilisk_checker::Diagnostic>, Vec<FileSource>), String> {
+    let python_files = collect_python_files(paths)?;
+
+    let mut all_diagnostics = Vec::new();
+    let mut sources = Vec::new();
+
+    for path in python_files {
+        match process_file(&path) {
+            Ok((diags, source)) => {
+                all_diagnostics.extend(diags);
+                sources.push(FileSource { path, text: source });
+            }
+            Err(err) => {
+                eprintln!("basilisk: error processing {path}: {err}");
+            }
+        }
+    }
+
+    Ok((all_diagnostics, sources))
+}
+
+fn process_file(path: &str) -> Result<(Vec<basilisk_checker::Diagnostic>, String), String> {
+    let parsed = basilisk_parser::parse_file(path).map_err(|e| e.to_string())?;
+    let source = parsed.source.clone();
+    let resolved = basilisk_resolver::resolve(&parsed).map_err(|e| e.to_string())?;
+    let diags = basilisk_checker::check(&resolved);
+    Ok((diags, source))
+}
+
+fn collect_python_files(paths: &[String]) -> Result<Vec<String>, String> {
+    let mut files = Vec::new();
+
+    for root in paths {
+        let meta = match std::fs::metadata(root) {
+            Ok(m) => m,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return Err(format!("cannot access {root}: {e}"));
+            }
+            Err(e) => {
+                eprintln!("basilisk: cannot access {root}: {e}");
+                continue;
+            }
+        };
+
+        if meta.is_file() {
+            if std::path::Path::new(root)
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("py"))
+            {
+                files.push(root.clone());
+            }
+        } else {
+            for entry in walkdir::WalkDir::new(root)
+                .follow_links(false)
+                .into_iter()
+                .filter_map(Result::ok)
+                .filter(|e| e.file_type().is_file())
+                .filter(|e| {
+                    e.path()
+                        .extension()
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("py"))
+                })
+            {
+                files.push(entry.path().to_string_lossy().into_owned());
+            }
+        }
+    }
+
+    Ok(files)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── collect_python_files ──────────────────────────────────────────────────
+
+    #[test]
+    fn collect_python_files_returns_err_for_nonexistent_path() {
+        let result = collect_python_files(&["/no/such/path/ever.py".to_owned()]);
+        assert!(result.is_err(), "nonexistent path must return Err");
+    }
+
+    #[test]
+    fn collect_python_files_skips_non_py_file() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = std::env::temp_dir();
+        let txt = dir.join("basilisk_test_skip.txt");
+        std::fs::write(&txt, b"hello")?;
+        let path = txt.to_string_lossy().into_owned();
+        let files = collect_python_files(&[path])?;
+        assert!(files.is_empty(), "non-.py file must be skipped");
+        let _ = std::fs::remove_file(&txt);
+        Ok(())
+    }
+
+    // ── collect_and_check: process_file error branch ─────────────────────────
+
+    #[test]
+    #[cfg(unix)]
+    fn collect_and_check_handles_unreadable_py_file() -> Result<(), Box<dyn std::error::Error>> {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = std::env::temp_dir();
+        let py = dir.join("basilisk_test_locked.py");
+        std::fs::write(&py, b"def foo(): pass")?;
+        std::fs::set_permissions(&py, std::fs::Permissions::from_mode(0o000))?;
+
+        let path = py.to_string_lossy().into_owned();
+        let result = collect_and_check(&[path]);
+        std::fs::set_permissions(&py, std::fs::Permissions::from_mode(0o644))?;
+        let _ = std::fs::remove_file(&py);
+
+        let (diags, _) = result?;
+        assert!(
+            diags.is_empty(),
+            "unreadable file produces no diagnostics, got: {diags:#?}"
+        );
+        Ok(())
+    }
+
+    // ── collect_python_files: .py file is included ────────────────────────────
+
+    #[test]
+    fn collect_python_files_includes_py_file() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = std::env::temp_dir();
+        let py = dir.join("basilisk_test_include.py");
+        std::fs::write(&py, b"x = 1")?;
+        let path = py.to_string_lossy().into_owned();
+        let files = collect_python_files(&[path])?;
+        let _ = std::fs::remove_file(&py);
+        assert_eq!(files.len(), 1, ".py file must be included");
+        Ok(())
+    }
+
+    // ── collect_python_files: directory traversal ─────────────────────────────
+
+    #[test]
+    fn collect_python_files_walks_directory() -> Result<(), Box<dyn std::error::Error>> {
+        let base = std::env::temp_dir().join("basilisk_test_walk_dir");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base)?;
+        std::fs::write(base.join("a.py"), b"x = 1")?;
+        std::fs::write(base.join("b.txt"), b"ignored")?;
+        let path = base.to_string_lossy().into_owned();
+        let files = collect_python_files(&[path])?;
+        let _ = std::fs::remove_dir_all(&base);
+        assert_eq!(
+            files.len(),
+            1,
+            "directory walk must find exactly one .py file"
+        );
+        Ok(())
+    }
+
+    // ── collect_and_check: produces diagnostics for bad code ──────────────────
+
+    #[test]
+    fn collect_and_check_returns_diagnostics_for_bad_code() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let dir = std::env::temp_dir();
+        let py = dir.join("basilisk_test_bad_code.py");
+        std::fs::write(&py, b"def foo(x):\n    pass\n")?;
+        let path = py.to_string_lossy().into_owned();
+        let (diags, _) = collect_and_check(&[path])?;
+        let _ = std::fs::remove_file(&py);
+        assert!(
+            !diags.is_empty(),
+            "unannotated function must produce diagnostics"
+        );
+        Ok(())
+    }
+
+    // ── collect_and_check: clean code produces no diagnostics ─────────────────
+
+    #[test]
+    fn collect_and_check_returns_no_diagnostics_for_clean_code(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let dir = std::env::temp_dir();
+        let py = dir.join("basilisk_test_clean_code.py");
+        std::fs::write(&py, b"def greet(name: str) -> str:\n    return name\n")?;
+        let path = py.to_string_lossy().into_owned();
+        let (diags, _) = collect_and_check(&[path])?;
+        let _ = std::fs::remove_file(&py);
+        assert!(
+            diags.is_empty(),
+            "fully annotated code must produce no diagnostics"
+        );
+        Ok(())
+    }
+
+    // ── run_check: return value tests (lines 63, 65, 81) ────────────────────
+    //
+    // run_check returns:
+    //   0  — no errors (Json: error_count == 0; Text: total == 0 OR error_count == 0)
+    //   1  — errors found
+    //   3  — internal error
+    //
+    // Mutants:
+    //   line 63  == → !=  : Json path, error filter
+    //   line 65  > → ==/</>= : Json path, i32::from(error_count > 0)
+    //   line 81  > → >=   : Text path, i32::from(error_count > 0)
+
+    /// `run_check` Json path: bad code must return 1.
+    /// Kills `!=` at line 63 (which would invert the severity filter)
+    /// and `== / < / >=` at line 65 (which would change the return value).
+    #[test]
+    fn run_check_json_bad_code_returns_one() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = std::env::temp_dir();
+        let py = dir.join("basilisk_test_rc_json_bad.py");
+        std::fs::write(&py, b"def foo(x) -> None:\n    pass\n")?;
+        let path = py.to_string_lossy().into_owned();
+        let code = run_check(&[path], OutputFormat::Json);
+        let _ = std::fs::remove_file(&py);
+        assert_eq!(code, 1, "bad code must make run_check return 1 (Json)");
+        Ok(())
+    }
+
+    /// `run_check` Json path: clean code must return 0.
+    /// Kills `==` mutant at line 65 (which would return 1 for clean code).
+    #[test]
+    fn run_check_json_clean_code_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = std::env::temp_dir();
+        let py = dir.join("basilisk_test_rc_json_clean.py");
+        std::fs::write(&py, b"def greet(name: str) -> str:\n    return name\n")?;
+        let path = py.to_string_lossy().into_owned();
+        let code = run_check(&[path], OutputFormat::Json);
+        let _ = std::fs::remove_file(&py);
+        assert_eq!(code, 0, "clean code must make run_check return 0 (Json)");
+        Ok(())
+    }
+
+    /// `run_check` Text path: bad code must return 1.
+    /// Kills `>=` mutant at line 81 (which always returns 1 since usize >= 0).
+    #[test]
+    fn run_check_text_bad_code_returns_one() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = std::env::temp_dir();
+        let py = dir.join("basilisk_test_rc_text_bad.py");
+        std::fs::write(&py, b"def foo(x) -> None:\n    pass\n")?;
+        let path = py.to_string_lossy().into_owned();
+        let code = run_check(&[path], OutputFormat::Text);
+        let _ = std::fs::remove_file(&py);
+        assert_eq!(code, 1, "bad code must make run_check return 1 (Text)");
+        Ok(())
+    }
+
+    /// `run_check` Text path: clean code must return 0.
+    /// Kills `>=` mutant at line 81: if `> 0` became `>= 0`, clean code (count=0) would return 1.
+    #[test]
+    fn run_check_text_clean_code_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = std::env::temp_dir();
+        let py = dir.join("basilisk_test_rc_text_clean.py");
+        std::fs::write(&py, b"def greet(name: str) -> str:\n    return name\n")?;
+        let path = py.to_string_lossy().into_owned();
+        let code = run_check(&[path], OutputFormat::Text);
+        let _ = std::fs::remove_file(&py);
+        assert_eq!(code, 0, "clean code must make run_check return 0 (Text)");
+        Ok(())
+    }
+
+    /// `run_check` internal error path: nonexistent path must return 3.
+    #[test]
+    fn run_check_nonexistent_path_returns_three() {
+        let code = run_check(&["/no/such/path.py".to_owned()], OutputFormat::Text);
+        assert_eq!(code, 3, "nonexistent path must make run_check return 3");
+    }
+
+    // ── collect_python_files: MatchArmGuard mutant at main.rs:129 ────────────
+
+    /// `collect_python_files` — `MatchArmGuard → true` at line 129.
+    /// The guard `e.kind() == ErrorKind::NotFound` distinguishes "not found" from
+    /// other I/O errors. If the guard is replaced with `true`, ALL I/O errors
+    /// would return Err instead of continuing. We test that the `NotFound` path
+    /// specifically returns Err (not Ok with empty list).
+    #[test]
+    fn collect_python_files_not_found_returns_err() {
+        let result = collect_python_files(&["/absolutely/does/not/exist/file.py".to_owned()]);
+        assert!(result.is_err(), "NotFound path must return Err, not Ok");
+    }
+
+    /// Complement: a path that exists but is not .py returns Ok with empty list.
+    /// This kills the `true` guard mutant: if all errors → Err, this would fail.
+    #[test]
+    fn collect_python_files_non_py_existing_file_returns_ok_empty(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let dir = std::env::temp_dir();
+        let txt = dir.join("basilisk_test_guard_complement.txt");
+        std::fs::write(&txt, b"hello")?;
+        let path = txt.to_string_lossy().into_owned();
+        let result = collect_python_files(&[path]);
+        let _ = std::fs::remove_file(&txt);
+        assert!(result.is_ok(), "existing non-py file must return Ok");
+        assert!(result?.is_empty(), "non-py file must produce empty list");
+        Ok(())
+    }
+}

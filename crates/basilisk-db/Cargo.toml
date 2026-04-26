@@ -1,0 +1,9 @@
+[package]
+name        = "basilisk-db"
+description = "Incremental computation database for Basilisk (Salsa-based, Phase 2+)"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+
+[lints]
+workspace = true

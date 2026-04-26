@@ -1,0 +1,4 @@
+# cargo-mutants configuration
+# https://mutants.rs/configuration.html
+# NOTE: cargo-mutants reads .cargo/mutants.toml by default.
+# This root file is kept for documentation only — the active config is .cargo/mutants.toml.

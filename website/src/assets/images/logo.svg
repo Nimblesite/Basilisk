@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 48" fill="none">
+  <!-- Snake mark: stylised B + serpent silhouette -->
+  <g>
+    <!-- Geometric snake / B mark -->
+    <path d="M8 8 L8 40 L22 40 C30 40 36 35 36 28 C36 23 33 19 28 18 C32 17 35 13 35 9 C35 3 30 8 22 8 Z"
+          fill="#e8500a"/>
+    <!-- Fangs / strike marks -->
+    <path d="M36 20 L44 16 L40 22 L48 18 L42 26"
+          stroke="#e8500a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- Inner B cutouts (simplified) -->
+    <path d="M14 13 L14 22 L21 22 C25 22 27 20 27 18 C27 15 25 13 21 13 Z"
+          fill="#0a0c12"/>
+    <path d="M14 25 L14 35 L22 35 C26 35 29 33 29 30 C29 27 26 25 22 25 Z"
+          fill="#0a0c12"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="58" y="32"
+        font-family="'Inter', system-ui, sans-serif"
+        font-weight="800"
+        font-size="22"
+        letter-spacing="-0.5"
+        fill="#f0f2f7">basilisk</text>
+</svg>

@@ -1,0 +1,17 @@
+{
+  "name": "basilisk-website",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Documentation website for Basilisk — strict-by-default Python type checker",
+  "scripts": {
+    "prebuild": "node scripts/copy-readme.js",
+    "build": "eleventy",
+    "start": "node scripts/copy-readme.js && eleventy --serve --watch",
+    "clean": "rm -rf _site"
+  },
+  "devDependencies": {
+    "@11ty/eleventy": "^3.1.2",
+    "eleventy-plugin-techdoc": "^0.1.0"
+  }
+}

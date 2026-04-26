@@ -1,0 +1,61 @@
+{
+  "name": "basilisk",
+  "displayName": "Basilisk",
+  "description": "Strict-by-default Python type checker. Every parameter typed. Every return declared.",
+  "version": "0.1.0",
+  "publisher": "basilisk-lang",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/basilisk-lang/basilisk"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Linters",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "python",
+    "type checker",
+    "static analysis",
+    "basilisk"
+  ],
+  "activationEvents": [
+    "onLanguage:python"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Basilisk",
+      "properties": {
+        "basilisk.executablePath": {
+          "type": "string",
+          "default": "basilisk",
+          "description": "Path to the basilisk binary. Defaults to 'basilisk' (must be on PATH)."
+        },
+        "basilisk.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable or disable the Basilisk type checker."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "npm run compile",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
+    "@typescript-eslint/parser": "^8.56.1",
+    "@vscode/vsce": "^3.0.0",
+    "eslint": "^10.0.2",
+    "typescript": "^5.3.0"
+  }
+}

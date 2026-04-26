@@ -1,0 +1,13 @@
+[package]
+name        = "basilisk-checker"
+description = "Type checking rules and diagnostic emission for Basilisk"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+
+[dependencies]
+basilisk-parser.workspace   = true
+basilisk-resolver.workspace = true
+
+[lints]
+workspace = true
