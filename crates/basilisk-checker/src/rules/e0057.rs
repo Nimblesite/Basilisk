@@ -34,6 +34,7 @@ fn make_diag(name: &str, span: Span, path: &str) -> Diagnostic {
         note: Some(
             "PEP 695: `type X = T` requires T to be a type, not a literal or expression".to_owned(),
         ),
+        provenance: None,
     }
 }
 
@@ -95,10 +96,8 @@ fn has_top_level_token(s: &str, token: &str) -> bool {
         match bytes.get(i).copied() {
             Some(b'[' | b'(' | b'{') => depth += 1,
             Some(b']' | b')' | b'}') => depth -= 1,
-            Some(_) if depth == 0 => {
-                if bytes.get(i..i + tok_len) == Some(tok) {
-                    return true;
-                }
+            Some(_) if depth == 0 && bytes.get(i..i + tok_len) == Some(tok) => {
+                return true;
             }
             _ => {}
         }

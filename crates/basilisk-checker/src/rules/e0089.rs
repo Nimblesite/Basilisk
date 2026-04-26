@@ -81,6 +81,7 @@ impl Rule for Pep695InvalidBound {
                 path: module.path.clone(),
                 help: None,
                 note: None,
+                provenance: None,
             });
         }
     }

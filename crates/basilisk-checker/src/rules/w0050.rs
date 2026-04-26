@@ -245,6 +245,7 @@ fn make_diagnostic_for_var(
         note: Some(
             "Basilisk warns about redundant annotations to encourage cleaner code".to_owned(),
         ),
+        provenance: None,
     }
 }
 

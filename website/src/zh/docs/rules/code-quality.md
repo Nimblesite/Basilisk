@@ -4,10 +4,6 @@ title: 代码质量 — W0090–W0099
 description: 对合法但有问题的模式的警告。
 keywords: basilisk, 代码质量, 弃用, 可变默认值, BSK-W0090, BSK-W0099
 lang: zh
-eleventyNavigation:
-  key: Code Quality
-  parent: Rules
-  order: 9
 ---
 
 # 代码质量 — W0090–W0099

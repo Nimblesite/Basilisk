@@ -14,12 +14,11 @@
 
 import * as assert from 'assert';
 import {
-    SUITE_SETUP_TIMEOUT_MS,
     setupLspTestSuite,
     teardownLspTestSuite,
     closeAllEditors,
     openPythonFile,
-} from './test-helpers';
+} from "./test-helpers";
 
 // Import profiler decoration types for structural assertions.
 import type {
@@ -46,7 +45,6 @@ let tmpDir = '';
 
 suite('Profiler — Decoration Modules', () => {
     suiteSetup(async function () {
-        this.timeout(SUITE_SETUP_TIMEOUT_MS);
         const result = await setupLspTestSuite('basilisk-profiler-dec-');
         tmpDir = result.tmpDir;
     });
@@ -175,7 +173,6 @@ suite('Profiler — Decoration Modules', () => {
 
 suite('Profiler — Decoration Apply/Clear', () => {
     suiteSetup(async function () {
-        this.timeout(SUITE_SETUP_TIMEOUT_MS);
         const result = await setupLspTestSuite('basilisk-profiler-dec2-');
         tmpDir = result.tmpDir;
     });
@@ -270,7 +267,6 @@ suite('Profiler — Decoration Apply/Clear', () => {
 
 suite('Profiler — Heat Level Classification', () => {
     suiteSetup(async function () {
-        this.timeout(SUITE_SETUP_TIMEOUT_MS);
         const result = await setupLspTestSuite('basilisk-profiler-heat-');
         tmpDir = result.tmpDir;
     });
@@ -372,7 +368,6 @@ suite('Profiler — Heat Level Classification', () => {
 
 suite('Profiler — Decoration Contracts', () => {
     suiteSetup(async function () {
-        this.timeout(SUITE_SETUP_TIMEOUT_MS);
         const result = await setupLspTestSuite('basilisk-profiler-deco-');
         tmpDir = result.tmpDir;
     });
@@ -474,7 +469,6 @@ suite('Profiler — Decoration Contracts', () => {
 
 suite('Profiler — Decoration Lifecycle', () => {
     suiteSetup(async function () {
-        this.timeout(SUITE_SETUP_TIMEOUT_MS);
         const result = await setupLspTestSuite('basilisk-profiler-deco2-');
         tmpDir = result.tmpDir;
     });

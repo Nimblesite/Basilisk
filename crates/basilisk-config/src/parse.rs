@@ -53,6 +53,18 @@ pub struct BasiliskConfig {
     /// declared dependencies, and stale lock files. Disabled by default.
     /// Maps to `basilisk.uv.dependencyDiagnostics` in the LSP config.
     pub uv_dependency_diagnostics: bool,
+
+    /// Auto-stub generation mode: `"runtime"`, `"ast"`, `"hybrid"`, or `"disabled"`.
+    ///
+    /// Controls how `basilisk stubs generate` creates `.pyi` files for
+    /// untyped packages. Defaults to `"hybrid"`.
+    pub auto_stub_mode: String,
+
+    /// Directory for auto-generated stubs.
+    ///
+    /// Generated `.pyi` files are placed here and automatically included
+    /// in the stub search path. Defaults to `".basilisk/stubs"`.
+    pub auto_stub_path: PathBuf,
 }
 
 impl Default for BasiliskConfig {
@@ -68,6 +80,8 @@ impl Default for BasiliskConfig {
             per_path_overrides: HashMap::new(),
             uv_stub_suggestions: true,
             uv_dependency_diagnostics: false,
+            auto_stub_mode: "hybrid".to_owned(),
+            auto_stub_path: PathBuf::from(".basilisk/stubs"),
         }
     }
 }
@@ -173,6 +187,24 @@ pub fn load_from_json(path: &Path) -> Option<BasiliskConfig> {
         }
     }
 
+    // auto-stub-mode / autoStubMode
+    if let Some(val) = obj
+        .get("autoStubMode")
+        .or_else(|| obj.get("auto-stub-mode"))
+        .and_then(|v| v.as_str())
+    {
+        val.clone_into(&mut cfg.auto_stub_mode);
+    }
+
+    // auto-stub-path / autoStubPath
+    if let Some(val) = obj
+        .get("autoStubPath")
+        .or_else(|| obj.get("auto-stub-path"))
+        .and_then(|v| v.as_str())
+    {
+        cfg.auto_stub_path = PathBuf::from(val);
+    }
+
     Some(cfg)
 }
 
@@ -251,43 +283,58 @@ pub fn load_from_pyproject(path: &Path) -> Option<BasiliskConfig> {
     }
 
     // per-path-overrides
-    if let Some(path_overrides_table) = basilisk
+    if let Some(table) = basilisk
         .get("per-path-overrides")
         .and_then(|v| v.as_table())
     {
-        for (pattern, override_val) in path_overrides_table {
-            if let Some(override_table) = override_val.as_table() {
-                let disabled_rules = override_table
-                    .get("disabled")
-                    .and_then(|v| v.as_array())
-                    .map(|arr| {
-                        arr.iter()
-                            .filter_map(|v| v.as_str().map(String::from))
-                            .collect()
-                    })
-                    .unwrap_or_default();
+        parse_toml_path_overrides(table, &mut cfg.per_path_overrides);
+    }
 
-                let mut rule_overrides = HashMap::new();
-                if let Some(rules_table) = override_table.get("rules").and_then(|v| v.as_table()) {
-                    for (code, severity_val) in rules_table {
-                        if let Some(severity_str) = severity_val.as_str() {
-                            if let Some(severity) = RuleSeverity::parse(severity_str) {
-                                let _ = rule_overrides.insert(code.clone(), severity);
-                            }
-                        }
-                    }
-                }
+    // auto-stub-mode
+    if let Some(val) = basilisk.get("auto-stub-mode").and_then(|v| v.as_str()) {
+        val.clone_into(&mut cfg.auto_stub_mode);
+    }
 
-                let _ = cfg.per_path_overrides.insert(
-                    pattern.clone(),
-                    PathOverride {
-                        disabled_rules,
-                        rule_overrides,
-                    },
-                );
-            }
-        }
+    // auto-stub-path
+    if let Some(val) = basilisk.get("auto-stub-path").and_then(|v| v.as_str()) {
+        cfg.auto_stub_path = PathBuf::from(val);
     }
 
     Some(cfg)
+}
+
+/// Parse `[tool.basilisk.per-path-overrides]` into the config map.
+fn parse_toml_path_overrides(table: &toml::Table, overrides: &mut HashMap<String, PathOverride>) {
+    for (pattern, override_val) in table {
+        if let Some(override_table) = override_val.as_table() {
+            let disabled_rules = override_table
+                .get("disabled")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            let mut rule_overrides = HashMap::new();
+            if let Some(rules_table) = override_table.get("rules").and_then(|v| v.as_table()) {
+                for (code, severity_val) in rules_table {
+                    if let Some(severity_str) = severity_val.as_str() {
+                        if let Some(severity) = RuleSeverity::parse(severity_str) {
+                            let _ = rule_overrides.insert(code.clone(), severity);
+                        }
+                    }
+                }
+            }
+
+            let _ = overrides.insert(
+                pattern.clone(),
+                PathOverride {
+                    disabled_rules,
+                    rule_overrides,
+                },
+            );
+        }
+    }
 }

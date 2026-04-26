@@ -233,6 +233,7 @@ fn check_func_body(
                          (PEP 484)"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
                 // Report at most one violation per assignment.
                 continue;
@@ -260,6 +261,7 @@ fn check_func_body(
                          types (PEP 484)"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
             }
         }

@@ -4,10 +4,6 @@ title: 强制转换安全 — E0060–E0063
 description: 防止隐式数字和类型强制转换的规则。
 keywords: basilisk, 强制转换, int, float, bool, bytes, BSK-E0060, BSK-E0063
 lang: zh
-eleventyNavigation:
-  key: Coercion Safety
-  parent: Rules
-  order: 6
 ---
 
 # 强制转换安全 — E0060–E0063

@@ -223,11 +223,11 @@ impl ProfileData {
                     }
                 })
                 .collect();
-            file_lines.sort_by(|a, b| b.samples.cmp(&a.samples));
+            file_lines.sort_by_key(|line| std::cmp::Reverse(line.samples));
             file_lines.truncate(config.max_diagnostics_per_file);
             result.extend(file_lines);
         }
-        result.sort_by(|a, b| b.samples.cmp(&a.samples));
+        result.sort_by_key(|line| std::cmp::Reverse(line.samples));
         result
     }
 
@@ -272,7 +272,7 @@ impl ProfileData {
                 }
             }
         }
-        result.sort_by(|a, b| b.samples.cmp(&a.samples));
+        result.sort_by_key(|func| std::cmp::Reverse(func.samples));
         result
     }
 }

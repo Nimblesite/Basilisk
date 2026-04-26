@@ -38,18 +38,7 @@
       "Bash(gh api:*)",
       "Bash(RUSTFLAGS=\"-D warnings\" cargo clippy --release --all-targets)",
       "Bash(rustc --version)",
-      "Bash(git checkout:*)",
-      "Bash(RUSTFLAGS=\"-D warnings\" cargo clippy --release --all-targets --manifest-path basilisk-zed/Cargo.toml)",
-      "Bash(cargo build:*)",
-      "Bash(npm ci:*)",
-      "Bash(bash scripts/test-vscode.sh)",
-      "Bash(make lint:*)",
-      "Bash(make fmt-check:*)",
-      "Bash(ruff check:*)",
-      "Bash(black .)",
-      "Bash(find /Users/christianfindlay/Documents/Code/Basilisk -maxdepth 3 \\\\\\(-name *.md -path */plan* -o -name *.md -path */docs/* -o -name PLAN.md \\\\\\))",
-      "Bash(echo \"exit: $?\")",
-      "Bash(gh pr:*)"
+      "Bash(awk '{print $NF}')"
     ]
   },
   "autoMemoryEnabled": false

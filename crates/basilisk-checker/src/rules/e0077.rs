@@ -59,6 +59,7 @@ impl Rule for ProtocolSelfViolation {
                      return `Self` or the concrete class type, not an unrelated type"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }

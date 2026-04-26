@@ -184,6 +184,7 @@ pub(super) fn check_instance_classvar_assignments(
                      not through instances"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }

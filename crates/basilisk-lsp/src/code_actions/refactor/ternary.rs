@@ -53,18 +53,16 @@ fn find_bare_keyword(text: &str, keyword: &str) -> Option<usize> {
             b'"' => in_double_quote = true,
             b'(' | b'[' | b'{' => depth += 1,
             b')' | b']' | b'}' => depth = depth.saturating_sub(1),
-            _ if depth == 0 => {
-                if text.get(idx..).is_some_and(|s| s.starts_with(keyword)) {
-                    let before_ok = idx == 0
-                        || bytes
-                            .get(idx - 1)
-                            .is_some_and(|b| !b.is_ascii_alphanumeric() && *b != b'_');
-                    let after_ok = bytes
-                        .get(idx + keyword.len())
+            _ if depth == 0 && text.get(idx..).is_some_and(|s| s.starts_with(keyword)) => {
+                let before_ok = idx == 0
+                    || bytes
+                        .get(idx - 1)
                         .is_some_and(|b| !b.is_ascii_alphanumeric() && *b != b'_');
-                    if before_ok && after_ok {
-                        return Some(idx);
-                    }
+                let after_ok = bytes
+                    .get(idx + keyword.len())
+                    .is_some_and(|b| !b.is_ascii_alphanumeric() && *b != b'_');
+                if before_ok && after_ok {
+                    return Some(idx);
                 }
             }
             _ => {}

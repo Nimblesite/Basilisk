@@ -50,10 +50,8 @@ fn find_call_context(source: &str, offset: usize) -> Option<(String, u32)> {
                 }
                 depth -= 1;
             }
-            '[' | '{' => {
-                if depth > 0 {
-                    depth -= 1;
-                }
+            '[' | '{' if depth > 0 => {
+                depth -= 1;
             }
             ',' if depth == 0 => commas += 1,
             _ => {}

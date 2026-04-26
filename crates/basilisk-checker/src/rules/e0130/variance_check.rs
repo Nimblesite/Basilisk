@@ -244,6 +244,7 @@ fn emit_violations(ctx: &ViolationCtx<'_>, diagnostics: &mut Vec<Diagnostic>) {
             note: Some(
                 "PEP 695: variance is inferred from type parameter usage positions".to_owned(),
             ),
+            provenance: None,
         });
     }
 }

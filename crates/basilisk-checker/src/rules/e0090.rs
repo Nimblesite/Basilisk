@@ -64,6 +64,7 @@ impl Rule for InvalidTupleTypeSyntax {
                         "Tuple types must follow the pattern `tuple[T, ...]` with exactly one type before the ellipsis"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
             }
         }
@@ -88,6 +89,7 @@ impl Rule for InvalidTupleTypeSyntax {
                             "Tuple types must follow the pattern `tuple[T, ...]` with exactly one type before the ellipsis"
                                 .to_owned(),
                         ),
+                        provenance: None,
                     });
                 }
             }

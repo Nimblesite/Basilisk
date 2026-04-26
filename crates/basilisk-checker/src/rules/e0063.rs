@@ -174,6 +174,7 @@ fn make_diagnostic(
              unless the class is frozen or uses `unsafe_hash=True`"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }
 
@@ -200,5 +201,6 @@ fn make_hash_call_diagnostic(
              unless the class is frozen or uses `unsafe_hash=True`"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }

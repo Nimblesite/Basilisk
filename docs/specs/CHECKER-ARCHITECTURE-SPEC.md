@@ -6,9 +6,9 @@
 
 ---
 
-## 1. Vision and Philosophy
+## Vision and Philosophy {#CHKARCH-VISION}
 
-### 1.1 The Problem
+### The Problem {#CHKARCH-PROBLEM}
 
 Python has a type system. Nobody uses it properly.
 
@@ -18,7 +18,7 @@ The Python ecosystem has no equivalent of TypeScript. No tool exists that says: 
 
 Basilisk is that tool.
 
-### 1.2 Design Thesis
+### Design Thesis {#CHKARCH-THESIS}
 
 Basilisk treats Python as a statically typed language. It is to Python what TypeScript is to JavaScript -- a strict, typed superset that enforces contracts at analysis time.
 
@@ -31,37 +31,11 @@ There is no "basic" mode. There is no "standard" mode. There is no `--permissive
 
 Rust does not have a flag that disables the borrow checker. TypeScript's `strict: true` is the expected default. Basilisk takes the same stance for Python.
 
-### 1.3 Mojo: The North Star
+### Mojo: The North Star {#CHKARCH-MOJO}
 
-Mojo demonstrated that Python-family syntax can support ownership semantics, immutability by default, and zero implicit coercion -- concepts previously associated only with systems languages like Rust and C++.
+Mojo demonstrated that Python-family syntax can support ownership semantics, immutability by default, and zero implicit coercion. Basilisk adapts these concepts as static analysis rules over standard Python -- no Mojo dependency required.
 
-Basilisk draws direct inspiration from Mojo's type discipline:
-
-- **Mojo's `fn` vs `def`**: In Basilisk, all `def` functions are strict by default. No keyword distinction needed because there is no permissive mode.
-- **Mojo's ownership model**: Basilisk adapts `borrowed`, `owned`, and `inout` as static analysis annotations over standard Python.
-- **Mojo's structural immutability**: Basilisk enforces immutability by default for function parameters and typed structures.
-
-Basilisk serves as a bridge. Until the Mojo compiler can do everything CPython does, Basilisk brings Mojo's type discipline to every Python codebase today -- without requiring a new compiler, a new runtime, or any dependency on Mojo itself. Code that passes Basilisk's checks should be compatible with Mojo's type expectations.
-
-### 1.4 What Basilisk Is
-
-- A statically typed Python dialect (like TypeScript is to JavaScript)
-- A static analyzer, language server, and CI tool
-- Strongly typed by default -- you opt OUT of strictness, not in
-- Compatible with standard CPython
-- Compatible with Mojo's type discipline (no dependency on Mojo tooling)
-- Built on existing open-source tools wherever possible
-- 100% open source with open governance
-
-### 1.5 What Basilisk Is Not
-
-- Not a Python compiler or runtime
-- Not a fork of any existing tool
-- Not dependent on any Microsoft proprietary technology
-- Not a Mojo dependency -- it references Mojo's concepts, not its code
-- Not a gradual type checker -- gradual typing is what we're replacing
-
-### 1.6 Project Principles
+### Project Principles {#CHKARCH-PRINCIPLES}
 
 1. **Strict by default, escape hatches by choice** -- The safe path is the default path
 2. **Every error must teach** -- Diagnostics explain why, not just what
@@ -73,119 +47,11 @@ Basilisk serves as a bridge. Until the Mojo compiler can do everything CPython d
 
 ---
 
-## 2. Ecosystem Gap Analysis
+## Ecosystem Gap Analysis {#CHKARCH-GAP}
 
-### 2.1 Current Landscape (2025-2026)
+See the project README for competitive analysis.
 
-The Python type checking landscape is in a generational shift. Three Rust-based type checkers launched in 2025 (ty, Pyrefly, Zuban), challenging the TypeScript incumbent (Pyright) and the aging Python-based tools (mypy, Pytype). Google has deprecated Pytype. Meta is replacing Pyre with Pyrefly.
-
-Yet every single tool -- new and old -- defaults to gradual typing. None enforce complete type safety. None adopt Mojo-inspired ownership semantics. The ecosystem has fast tools, but no tool that treats Python as a typed language.
-
-### 2.2 Tool-by-Tool Assessment
-
-#### 2.2.1 Pyright
-
-| Attribute | Value |
-|---|---|
-| Language | TypeScript |
-| License | MIT |
-| Strictness | Gradual (4 modes: off/basic/standard/strict) |
-| PEP Conformance | ~95% (best in class) |
-| LSP | Yes |
-| Incremental | Yes (lazy evaluation) |
-| Plugin System | No |
-
-**Strengths**: Best PEP conformance. Fast incremental analysis. Powers Pylance (the de facto VS Code experience). 81 diagnostic rules. Excellent type narrowing and flow analysis.
-
-**Weaknesses**: Strict mode is opt-in, not default. Pylance's IDE features (semantic highlighting, IntelliCode, refactoring code actions, auto-import) are proprietary and locked to Microsoft's VS Code. Requires Node.js runtime. No ownership analysis. No plugin system (Microsoft explicitly rejected this). Configuration cannot decrease severity below mode defaults.
-
-**What we reuse**: Nothing directly. Pyright is TypeScript -- we can't link to it. But its diagnostic rule catalog (81 rules) is the benchmark for our own rule set.
-
-#### 2.2.2 mypy
-
-| Attribute | Value |
-|---|---|
-| Language | Python/C |
-| License | MIT |
-| Strictness | Gradual |
-| PEP Conformance | ~85% |
-| LSP | No (third-party pylsp, unrecommended) |
-| Incremental | Daemon mode (fragile) |
-| Plugin System | Yes (Python hooks) |
-
-**Strengths**: Original type checker. Plugin system enables framework support (Django, SQLAlchemy). Large user base. Mature.
-
-**Weaknesses**: Slow -- 10-100x slower than Rust-based tools. No first-class LSP. Daemon mode is fragile. Declining relevance as Rust-based tools emerge. PEP adoption velocity is low.
-
-**What we reuse**: mypy's plugin API design is a reference for our own extension system. The mypy stubs ecosystem (`types-*` packages) feeds into typeshed which we consume.
-
-#### 2.2.3 ty (Astral)
-
-| Attribute | Value |
-|---|---|
-| Language | Rust |
-| License | MIT |
-| Strictness | Gradual |
-| PEP Conformance | ~15% (beta, Dec 2025) |
-| LSP | Yes |
-| Incremental | Salsa-based (500x faster than Pyright) |
-| Plugin System | Planned |
-
-**Strengths**: 500x faster incremental updates than Pyright (4.7ms vs 2.38s on PyTorch). Built by the Ruff team (Astral). Salsa-based incremental architecture is production-proven (rust-analyzer). rustc-quality diagnostics. MIT license.
-
-**Weaknesses**: Only ~15% PEP conformance (early beta). Years from full coverage. No ownership analysis. Plugin system not yet designed.
-
-**What we reuse**: ty's Salsa-based architecture is the model for our incremental computation. Astral also maintains `ruff_python_parser` (MIT) which we should evaluate as our parser. The Ruff linter itself handles formatting and linting -- we should depend on it rather than recreating those features.
-
-#### 2.2.4 Pyrefly (Meta)
-
-| Attribute | Value |
-|---|---|
-| Language | Rust |
-| License | MIT |
-| Strictness | Gradual |
-| PEP Conformance | ~58% (alpha, May 2025) |
-| LSP | Yes |
-| Incremental | Yes (module-level) |
-| Plugin System | No |
-
-**Strengths**: 1.8 million LOC/sec throughput. Auto-infers types for unannotated code. Built and battle-tested on Instagram's codebase. Good documentation.
-
-**Weaknesses**: ~58% conformance. Single-org focus (Meta's internal needs drive priorities). No strict-by-default mode. No ownership analysis. No plugin system.
-
-**What we reuse**: Pyrefly's type inference engine design is a reference. Their approach to inferring return types and local variable types from unannotated code is relevant for our inference engine (which must infer locals even in strict mode).
-
-#### 2.2.5 Zuban
-
-| Attribute | Value |
-|---|---|
-| Language | Rust |
-| License | AGPL (commercial license available) |
-| Strictness | Gradual |
-| PEP Conformance | ~69% (best among Rust tools) |
-| LSP | Yes |
-| Incremental | No (single-threaded) |
-| Plugin System | No |
-
-**Strengths**: Best PEP conformance of any Rust-based checker (69%). Dual-mode support (Pyright-compatible and mypy-compatible). Built by the author of Jedi. Uses ~50% less memory/CPU than competitors.
-
-**Weaknesses**: AGPL license may deter corporate adoption. Single-threaded. No plugin system. No ownership analysis.
-
-**What we reuse**: Zuban's conformance test results are a benchmark. Its dual-mode configuration approach (supporting both mypy and Pyright config formats) informs our migration tooling.
-
-#### 2.2.6 Ruff (Astral)
-
-| Attribute | Value |
-|---|---|
-| Language | Rust |
-| License | MIT |
-| Scope | Linting + Formatting (NOT type checking) |
-
-**Strengths**: Lightning-fast Rust-based linter and formatter. 700+ lint rules. Drop-in replacement for flake8, isort, Black. Massive adoption.
-
-**What we reuse**: Ruff is a direct dependency. Basilisk does NOT recreate linting or formatting. We delegate to Ruff for all lint rules and code formatting. We also evaluate `ruff_python_parser` as our Python parser crate.
-
-### 2.3 Capability Matrix
+### Capability Matrix {#CHKARCH-MATRIX}
 
 | Capability | Pyright | mypy | ty | Pyrefly | Zuban | Ruff | **Basilisk** |
 |---|---|---|---|---|---|---|---|
@@ -208,28 +74,13 @@ Yet every single tool -- new and old -- defaults to gradual typing. None enforce
 | VS Code extension | Pylance (proprietary) | No | Yes | Yes | Yes | Yes | **Yes (open source)** |
 | No Microsoft dependency | No (Node.js) | Yes | Yes | Yes | Yes | Yes | **Yes** |
 
-### 2.4 Structural Gaps No Existing Tool Addresses
-
-1. **Strict-by-default with no permissive mode** -- Every tool treats strictness as opt-in. No tool treats untyped code as an error by default.
-2. **Ownership/borrowing as static analysis** -- No Python type checker tracks value ownership or flags use-after-move.
-3. **Immutability-by-default for parameters** -- No tool flags mutation of function parameters without explicit annotation.
-4. **Implicit copy detection** -- No tool warns when large structures are implicitly copied.
-5. **No implicit type coercion** -- No tool flags `int`-to-`float` promotion or `bool`-as-`int` usage.
-6. **First-class open-source VS Code experience** -- The best Python IDE experience (Pylance) is proprietary. The open-source alternatives are fragmented.
-7. **Unified toolchain** -- No single tool provides type checking + linting + formatting + LSP + VSIX as one coherent experience. (Basilisk achieves this by integrating with Ruff, not by reimplementing.)
-8. **Mojo compatibility** -- No tool validates code against Mojo's type discipline.
-
-### 2.5 Opportunity
-
-The technology is ready (Rust-based type checkers are proven). The philosophy is unoccupied (no tool is strict-by-default). The ecosystem needs it (Python is the world's most popular language with the weakest type enforcement). Mojo proved the concepts are sound. Basilisk brings them to every Python codebase today.
-
 ---
 
-## 3. Dependency Strategy: Standing on Shoulders
+## Dependency Strategy {#CHKARCH-DEPS}
 
 Basilisk does not reinvent wheels. We depend on quality open-source tools for everything we can.
 
-### 3.1 Direct Dependencies
+### Direct Dependencies {#CHKARCH-DEPS-DIRECT}
 
 | Dependency | Purpose | License | Rationale |
 |---|---|---|---|
@@ -239,7 +90,7 @@ Basilisk does not reinvent wheels. We depend on quality open-source tools for ev
 | **Salsa** | Incremental computation framework | Apache-2.0/MIT | Powers rust-analyzer. Proven at scale. |
 | **`lsp-server`** / **`tower-lsp`** | LSP implementation | MIT | Standard Rust LSP crates. |
 
-### 3.2 Tools We Do NOT Depend On
+### Tools We Do NOT Depend On {#CHKARCH-DEPS-EXCLUDED}
 
 | Tool | Why Not |
 |---|---|
@@ -249,7 +100,7 @@ Basilisk does not reinvent wheels. We depend on quality open-source tools for ev
 | Pyrefly | MIT Rust, same reasoning as ty. Different design goals. |
 | Node.js | No JavaScript runtime dependency anywhere in the stack. |
 
-### 3.3 Interoperability
+### Interoperability {#CHKARCH-DEPS-INTEROP}
 
 | Tool | Interop Strategy |
 |---|---|
@@ -261,11 +112,11 @@ Basilisk does not reinvent wheels. We depend on quality open-source tools for ev
 
 ---
 
-## 4. Core Type System
+## Core Type System {#CHKARCH-TYPESYS}
 
-### 4.1 Strictness Model
+### Strictness Model {#CHKARCH-STRICTNESS}
 
-#### 4.1.1 Strict Is the Only Mode
+#### Strict Is the Only Mode {#CHKARCH-STRICTNESS-ONLY}
 
 Basilisk has one mode. It is strict.
 
@@ -285,7 +136,7 @@ def greet(name: str) -> str:
 
 There is no `--basic`, `--standard`, or `--permissive` flag. Every function parameter must be annotated. Every function must declare its return type. Every variable assigned from an untyped source must have an explicit annotation.
 
-#### 4.1.2 `Any` Is Explicit, Never Implicit
+#### `Any` Is Explicit, Never Implicit {#CHKARCH-STRICTNESS-ANY}
 
 ```python
 from typing import Any
@@ -301,7 +152,7 @@ def process(data: Any) -> Any:  # BSK-W0011: Explicit Any requires reason commen
     pass
 ```
 
-#### 4.1.3 Diagnostic Severity Modes
+#### Diagnostic Severity Modes {#CHKARCH-STRICTNESS-SEVERITY}
 
 Every rule has four severity modes:
 
@@ -314,7 +165,7 @@ Every rule has four severity modes:
 
 The default mode for each rule is determined by its code prefix (`E` = error, `W` = warning). All modes can be overridden at every level: per-line, per-block, per-file, and per-project.
 
-#### 4.1.4 Inline Suppression and Mode Override
+#### Inline Suppression and Mode Override {#CHKARCH-STRICTNESS-SUPPRESSION}
 
 Basilisk supports both standard `# type: ignore` (for compatibility with mypy/Pyright) and its own ergonomic comment directives.
 
@@ -408,7 +259,7 @@ started = "2025-06-01"
 enforce_after = "2025-12-01"  # all errors become warnings until this date
 ```
 
-#### 4.1.5 Suppression Precedence
+#### Suppression Precedence {#CHKARCH-STRICTNESS-PRECEDENCE}
 
 When multiple overrides apply, the most specific wins:
 
@@ -420,7 +271,7 @@ When multiple overrides apply, the most specific wins:
 6. **Global rule override** in pyproject.toml
 7. **Rule default** (lowest priority)
 
-#### 4.1.6 Compatibility
+#### Compatibility {#CHKARCH-STRICTNESS-COMPAT}
 
 Basilisk recognizes these comment formats for maximum interop:
 
@@ -440,7 +291,7 @@ Basilisk recognizes these comment formats for maximum interop:
 
 The `# type:` prefix ensures compatibility with editors and tools that already recognize `# type: ignore`. Other type checkers will treat `# type: warning` as an unknown directive and ignore it gracefully.
 
-### 4.2 Python Typing PEP Coverage
+### Python Typing PEP Coverage {#CHKARCH-PEPS}
 
 Basilisk targets **100% conformance** with the Python typing specification. We run the official conformance test suite (`python/typing` repository) in CI.
 
@@ -476,7 +327,7 @@ Basilisk targets **100% conformance** with the Python typing specification. We r
 | 702 | Deprecated Decorator | Required |
 | 742 | TypeIs (Exhaustive Narrowing) | Required |
 
-### 4.3 Type Inference Engine
+### Type Inference Engine {#CHKARCH-INFERENCE}
 
 Basilisk enforces annotations on public APIs but infers types for local variables:
 
@@ -493,7 +344,7 @@ def process(items: list[str]) -> int:
 - **Local variables**: types inferred from assignments, comprehensions, and control flow
 - **Cross-module inference**: does NOT cross module boundaries for public symbols. Imports from typed modules resolve to declared types. Imports from untyped modules produce `BSK-E0010`.
 
-### 4.4 Type Narrowing and Flow Analysis
+### Type Narrowing and Flow Analysis {#CHKARCH-NARROWING}
 
 Full support for:
 - `isinstance()` / `issubclass()` guards with bidirectional narrowing
@@ -504,7 +355,7 @@ Full support for:
 - Negative narrowing in `else` branches
 - Assignment-based narrowing
 
-### 4.5 Reachability Analysis
+### Reachability Analysis {#CHKARCH-REACHABILITY}
 
 - Dead code detection after narrowing
 - Unreachable branch elimination
@@ -514,31 +365,11 @@ Full support for:
 
 ---
 
-## 5. Mojo-Inspired Safety Analysis
+## Mojo-Inspired Safety Analysis {#CHKARCH-MOJO-SAFETY}
 
-### 5.1 Design Philosophy
+Basilisk adapts Mojo's ownership, immutability, and coercion concepts as static analysis rules over standard Python using `typing.Annotated`, decorators, and `dataclass(frozen=True)`. No Mojo code or runtime is required.
 
-Mojo proved that Python-family syntax can enforce ownership, immutability, and coercion safety. Basilisk adapts these concepts as static analysis rules over standard Python using existing annotation mechanisms (`typing.Annotated`, decorators, `dataclass(frozen=True)`).
-
-No Mojo code is used. No Mojo runtime is required. The analysis is additive -- it runs as additional passes alongside standard type checking.
-
-Code that passes Basilisk's Mojo-safety checks should be structurally compatible with Mojo's type expectations when Mojo achieves full Python compatibility.
-
-### 5.2 Function Strictness
-
-All functions require complete type annotations. This is not a separate mode -- it is the default behavior (Section 4.1).
-
-```python
-# In Mojo, `fn` enforces strict typing. In Basilisk, all `def` is strict.
-# No new keyword needed.
-
-def add(a: int, b: int) -> int:  # OK in both Basilisk and Mojo
-    return a + b
-```
-
-**Difference from Mojo**: Mojo has `fn` (strict) vs `def` (dynamic). Basilisk has only `def`, and it is always strict. There is no dynamic mode to escape to.
-
-### 5.3 Ownership and Lifetime Tracking
+### Ownership and Lifetime Tracking {#CHKARCH-MOJO-OWNERSHIP}
 
 Basilisk introduces optional ownership annotations using Python's existing `typing.Annotated` mechanism:
 
@@ -570,9 +401,7 @@ print(buf)   # OK: InOut reference still valid
 - `BSK-E0032`: Implicit copy of large structure (suggest explicit `.copy()`)
 - `BSK-W0033`: Missing ownership annotation on mutable parameter (suggestion)
 
-**Difference from Mojo**: Mojo enforces ownership at the compiler level with the `^` transfer operator. Basilisk enforces it via static analysis of annotation-decorated parameters. The `^` operator does not exist in Python -- Basilisk uses `Owned` annotation + use-after-move tracking instead.
-
-### 5.4 Immutability by Default
+### Immutability by Default {#CHKARCH-MOJO-IMMUTABLE}
 
 Function parameters are treated as immutable by default. Mutation of a parameter produces a diagnostic unless annotated with `InOut`:
 
@@ -600,9 +429,7 @@ class Point:
     y: float
 ```
 
-**Difference from Mojo**: Mojo's `borrowed` is the default parameter convention. Basilisk mirrors this -- parameters are immutable by default in both systems.
-
-### 5.5 Structural Discipline
+### Structural Discipline {#CHKARCH-MOJO-STRUCTURAL}
 
 ```python
 class Config:
@@ -623,9 +450,7 @@ c.timeout = 30  # ERROR: dynamic attribute on typed structure [BSK-E0050]
 - `BSK-E0052`: Missing `__del__` on class managing resources (when detectable)
 - `BSK-W0053`: Class should use `__slots__` for performance (suggestion)
 
-**Difference from Mojo**: Mojo's `struct` is static by definition -- no dynamic attributes. Basilisk enforces this via analysis of classes with type annotations.
-
-### 5.6 No Implicit Type Coercion
+### No Implicit Type Coercion {#CHKARCH-MOJO-COERCION}
 
 ```python
 x: float = 1        # ERROR: implicit int-to-float coercion [BSK-E0060]
@@ -637,9 +462,7 @@ y: int = int(True)   # OK: explicit conversion
 z: str = b"hello"    # ERROR: implicit bytes-to-str [BSK-E0062]
 ```
 
-**Difference from Mojo**: Mojo forbids implicit conversions entirely. Basilisk mirrors this philosophy -- all type conversions must be explicit.
-
-### 5.7 Mojo Compatibility Matrix
+### Mojo Compatibility Matrix {#CHKARCH-MOJO-COMPAT}
 
 | Mojo Concept | Basilisk Equivalent | Syntax | Enforceable via Static Analysis? |
 |---|---|---|---|
@@ -658,9 +481,9 @@ z: str = b"hello"    # ERROR: implicit bytes-to-str [BSK-E0062]
 
 ---
 
-## 6. Diagnostic Rules
+## Diagnostic Rules {#CHKARCH-DIAG}
 
-### 6.1 Design Philosophy
+### Design Philosophy {#CHKARCH-DIAG-PHILOSOPHY}
 
 Every diagnostic must be:
 1. **Precise** -- exact location (file, line, column, span)
@@ -670,7 +493,7 @@ Every diagnostic must be:
 
 Inspired by `rustc`'s diagnostic system and ty's approach.
 
-### 6.2 Error Code System
+### Error Code System {#CHKARCH-DIAG-CODES}
 
 Format: `BSK-Xnnnn` where X = default severity class:
 - `E` = Error (blocks CI by default)
@@ -679,7 +502,7 @@ Format: `BSK-Xnnnn` where X = default severity class:
 
 The prefix determines the **default** severity. Every rule can be overridden to any of the four modes (`error`, `warning`, `info`, `disabled`) at every scope level (line, block, file, path, global). See Section 4.1.3 for the mode system and Section 4.1.4 for override syntax.
 
-### 6.3 Rule Categories
+### Rule Categories {#CHKARCH-DIAG-CATEGORIES}
 
 #### Missing Annotations (BSK-E0001 -- BSK-E0009)
 
@@ -784,9 +607,9 @@ The prefix determines the **default** severity. Every rule can be overridden to 
 
 ---
 
-## 7. Architecture
+## Architecture {#CHKARCH-ARCH}
 
-### 7.1 High-Level Pipeline
+### High-Level Pipeline {#CHKARCH-ARCH-PIPELINE}
 
 ```
 Source Files (.py)
@@ -829,7 +652,7 @@ All stages are backed by:
 +------------------+
 ```
 
-### 7.2 Rust Crate Structure
+### Rust Crate Structure {#CHKARCH-ARCH-CRATES}
 
 ```
 basilisk/
@@ -850,7 +673,7 @@ basilisk/
     helix/                 # Helix language config
 ```
 
-### 7.3 Crate Dependencies (Acyclic)
+### Crate Dependencies {#CHKARCH-ARCH-DEPGRAPH}
 
 ```
 basilisk-db (foundation)
@@ -865,7 +688,7 @@ basilisk-stubs (standalone, used by basilisk-resolver)
 basilisk-plugin (standalone, used by basilisk-checker)
 ```
 
-### 7.4 Build System
+### Build System {#CHKARCH-ARCH-BUILD}
 
 - **Cargo workspace** with all crates
 - Cross-compilation targets: `x86_64-linux`, `aarch64-linux`, `x86_64-darwin`, `aarch64-darwin`, `x86_64-windows`
@@ -874,9 +697,9 @@ basilisk-plugin (standalone, used by basilisk-checker)
 
 ---
 
-## 8. Incremental Computation
+## Incremental Computation {#CHKARCH-INCREMENTAL}
 
-### 8.1 Salsa Architecture
+### Salsa Architecture {#CHKARCH-INCREMENTAL-SALSA}
 
 Basilisk uses the Salsa incremental computation framework (the same system powering rust-analyzer).
 
@@ -885,15 +708,15 @@ Basilisk uses the Salsa incremental computation framework (the same system power
 
 When a source file changes, only queries that depend on the changed input are recomputed. The dependency graph is tracked automatically by Salsa.
 
-### 8.2 Cancellation
+### Cancellation {#CHKARCH-INCREMENTAL-CANCEL}
 
 When a new keystroke arrives while a check is in progress, the current computation is cancelled and restarted with the new input. This is critical for responsive IDE experience.
 
-### 8.3 Persistent Cache
+### Persistent Cache {#CHKARCH-INCREMENTAL-CACHE}
 
 Disk-backed cache between sessions. On startup, Basilisk loads the cache and only recomputes files that changed since last run. This eliminates cold-start latency for repeat sessions.
 
-### 8.4 Performance Targets
+### Performance Targets {#CHKARCH-INCREMENTAL-PERF}
 
 | Scenario | Target |
 |---|---|
@@ -904,17 +727,17 @@ Disk-backed cache between sessions. On startup, Basilisk loads the cache and onl
 
 ---
 
-## 9. Language Server Protocol (LSP)
+## Language Server Protocol {#CHKARCH-LSP}
 
-### 9.1 LSP-First Design
+### LSP-First Design {#CHKARCH-LSP-FIRST}
 
 Basilisk is an LSP server first, CLI tool second. The LSP server is the primary product. The CLI is a batch-mode wrapper around the same engine. This ensures interactive and CI experiences are always consistent.
 
-> For the complete LSP specification — all 21 features, custom commands, configuration settings, binary resolution, DAP integration, and DapTcpProxy — see **`LSP-ARCHITECTURE-SPEC.md`**.
+> For the complete LSP specification — all 21 features, custom commands, configuration settings, binary resolution, DAP integration, and DapTcpProxy — see **[LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md)**.
 
-### 9.2 Supported LSP Methods
+### Supported LSP Methods {#CHKARCH-LSP-METHODS}
 
-See `LSP-ARCHITECTURE-SPEC.md` § LSP Features for the complete specification. Summary:
+See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-FEATURES](LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES) for the complete specification. Summary:
 
 | Method | Description |
 |---|---|
@@ -932,13 +755,13 @@ See `LSP-ARCHITECTURE-SPEC.md` § LSP Features for the complete specification. S
 | `callHierarchy/outgoingCalls` | Outgoing call hierarchy |
 | `typeHierarchy` | Type inheritance navigation |
 
-### 9.3 Custom LSP Commands
+### Custom LSP Commands {#CHKARCH-LSP-COMMANDS}
 
-See `LSP-ARCHITECTURE-SPEC.md` § Custom LSP Commands for the complete specification.
+See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CMDS](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDS) for the complete specification.
 
 ---
 
-## 10. Editor Integrations
+## Editor Integrations {#CHKARCH-EDITORS}
 
 Each editor has a dedicated specification document:
 
@@ -954,9 +777,9 @@ All editors connect to the same `basilisk lsp` binary via stdio. The LSP server 
 
 ---
 
-## 11. Command-Line Interface
+## Command-Line Interface {#CHKARCH-CLI}
 
-### 11.1 Core Commands
+### Core Commands {#CHKARCH-CLI-COMMANDS}
 
 ```bash
 basilisk check [paths...]         # Type check files/directories
@@ -968,7 +791,7 @@ basilisk migrate --from pyright   # Import pyright configuration
 basilisk init                     # Generate starter pyproject.toml config
 ```
 
-### 11.2 Output Formats
+### Output Formats {#CHKARCH-CLI-OUTPUT}
 
 | Format | Flag | Use Case |
 |---|---|---|
@@ -977,7 +800,7 @@ basilisk init                     # Generate starter pyproject.toml config
 | SARIF | `--output-format sarif` | GitHub Code Scanning, Azure DevOps |
 | JUnit XML | `--output-format junit` | CI test result dashboards |
 
-### 11.3 Exit Codes
+### Exit Codes {#CHKARCH-CLI-EXITCODES}
 
 | Code | Meaning |
 |---|---|
@@ -986,7 +809,7 @@ basilisk init                     # Generate starter pyproject.toml config
 | 2 | Configuration error |
 | 3 | Internal error |
 
-### 11.4 CI Integration
+### CI Integration {#CHKARCH-CLI-CI}
 
 **GitHub Actions**:
 ```yaml
@@ -1007,13 +830,9 @@ basilisk init                     # Generate starter pyproject.toml config
 
 ---
 
-## 12. Stub System
+## Stub System {#CHKARCH-STUBS}
 
-### 12.1 Problem
-
-typeshed is a centralized repository of stubs maintained by volunteers. It does not scale. Only ~70% of popular packages have any type coverage. Average coverage per package is ~35%. Maintaining stubs for thousands of packages is unsustainable.
-
-### 12.2 Auto-Stub Generation
+### Auto-Stub Generation {#CHKARCH-STUBS-AUTOGEN}
 
 Basilisk includes a stub generation engine with three modes:
 
@@ -1021,7 +840,7 @@ Basilisk includes a stub generation engine with three modes:
 2. **AST-based inference**: Parse package source, infer signatures without importing
 3. **Hybrid**: Combine both, preferring runtime data with AST fallback
 
-### 12.3 Stub Quality Tiers
+### Stub Quality Tiers {#CHKARCH-STUBS-TIERS}
 
 | Tier | Source | Trust Level | Diagnostic Behavior |
 |---|---|---|---|
@@ -1029,19 +848,15 @@ Basilisk includes a stub generation engine with three modes:
 | Tier 2 | Auto-generated, community reviewed | Medium | Info notes on potential inaccuracies |
 | Tier 3 | Best-effort inference | Low | Warnings that types may be incomplete |
 
-### 12.4 typeshed Compatibility
+### typeshed Compatibility {#CHKARCH-STUBS-TYPESHED}
 
 Basilisk bundles a copy of typeshed and uses it as the Tier 1 baseline for standard library stubs. Users can override with custom stubs via `stubPaths` configuration.
 
 ---
 
-## 13. Plugin and Extension System
+## Plugin and Extension System {#CHKARCH-PLUGINS}
 
-### 13.1 Motivation
-
-Framework-specific type checking (Django ORM, SQLAlchemy, Pydantic, FastAPI) cannot be built into the core. A plugin system allows community extensions without forking.
-
-### 13.2 Architecture
+### Architecture {#CHKARCH-PLUGINS-ARCH}
 
 **WASM-based** for security and portability:
 - Plugins compiled to WebAssembly
@@ -1049,7 +864,7 @@ Framework-specific type checking (Django ORM, SQLAlchemy, Pydantic, FastAPI) can
 - Receive AST nodes and type information
 - Return diagnostics and code actions
 
-### 13.3 Extension Points
+### Extension Points {#CHKARCH-PLUGINS-EXTENSIONS}
 
 | Extension Point | Example |
 |---|---|
@@ -1058,7 +873,7 @@ Framework-specific type checking (Django ORM, SQLAlchemy, Pydantic, FastAPI) can
 | Custom code actions | Generate Pydantic validator stubs |
 | Custom type narrowing | Django `get_object_or_404` narrows to model type |
 
-### 13.4 Distribution
+### Distribution {#CHKARCH-PLUGINS-DIST}
 
 Plugins declared in `pyproject.toml`:
 ```toml
@@ -1069,9 +884,9 @@ pydantic = "basilisk-plugin-pydantic >= 0.1"
 
 ---
 
-## 14. Configuration
+## Configuration {#CHKARCH-CONFIG}
 
-### 14.1 Configuration File
+### Configuration File {#CHKARCH-CONFIG-FILE}
 
 All configuration lives in `pyproject.toml`:
 
@@ -1097,7 +912,7 @@ enabled = false
 enforce_after = "2026-01-01"
 ```
 
-### 14.2 Migration from Existing Tools
+### Migration from Existing Tools {#CHKARCH-CONFIG-MIGRATION}
 
 ```bash
 basilisk migrate --from pyright   # Reads pyrightconfig.json -> pyproject.toml
@@ -1111,9 +926,9 @@ Semantic mapping:
 
 ---
 
-## 15. Diagnostics Experience
+## Diagnostics Experience {#CHKARCH-DIAGEXP}
 
-### 15.1 Quality Standard
+### Quality Standard {#CHKARCH-DIAGEXP-QUALITY}
 
 Every diagnostic follows the rustc standard:
 
@@ -1129,7 +944,7 @@ error[BSK-E0001]: Missing parameter type annotation
    = see: https://www.basilisk-python.dev/errors/BSK-E0001
 ```
 
-### 15.2 Quick Fixes
+### Quick Fixes {#CHKARCH-DIAGEXP-QUICKFIXES}
 
 Every error has at least one associated code action:
 
@@ -1142,21 +957,21 @@ Every error has at least one associated code action:
 
 ---
 
-## 16. Performance Engineering
+## Performance Engineering {#CHKARCH-PERF}
 
-### 16.1 Parallelism
+### Parallelism {#CHKARCH-PERF-PARALLEL}
 
 - File-level parallelism using Rayon (work-stealing)
 - Module dependency graph partitioned into independent subgraphs
 - Cross-module dependencies resolved first in dependency-ordered pass
 
-### 16.2 Memory
+### Memory {#CHKARCH-PERF-MEMORY}
 
 - Arena allocation for AST nodes
 - Interned strings for identifiers and paths
 - Memory-mapped file I/O
 
-### 16.3 Benchmarks
+### Benchmarks {#CHKARCH-PERF-BENCHMARKS}
 
 Benchmark suite against real-world codebases:
 - **PyTorch** (~600K LOC)
@@ -1168,7 +983,7 @@ Comparison baselines: Pyright, ty, Pyrefly, Zuban.
 
 ---
 
-## 17. Testing Strategy
+## Testing Strategy {#CHKARCH-TESTING}
 
 | Layer | Method | Purpose |
 |---|---|---|
@@ -1182,21 +997,21 @@ Comparison baselines: Pyright, ty, Pyrefly, Zuban.
 
 ---
 
-## 18. Migration and Adoption
+## Migration and Adoption {#CHKARCH-MIGRATION}
 
-### 18.1 From mypy
+### From mypy {#CHKARCH-MIGRATION-MYPY}
 
 1. Run `basilisk migrate --from mypy`
 2. Fix BSK-E0001/E0002 errors (missing annotations) -- these are the primary diff
 3. Address BSK-E0040+ (Mojo safety) or disable with `mojo-safety = false`
 
-### 18.2 From Pyright
+### From Pyright {#CHKARCH-MIGRATION-PYRIGHT}
 
 1. Run `basilisk migrate --from pyright`
 2. If using strict mode: minimal changes needed for core type checking
 3. Enable Mojo safety incrementally
 
-### 18.3 Gradual Adoption
+### Gradual Adoption {#CHKARCH-MIGRATION-GRADUAL}
 
 1. **Start**: Enable Basilisk in migration mode (errors -> warnings)
 2. **Adopt per-directory**: Mark `src/` as strict, leave `legacy/` relaxed
@@ -1206,25 +1021,25 @@ Comparison baselines: Pyright, ty, Pyrefly, Zuban.
 
 ---
 
-## 19. Governance
+## Governance {#CHKARCH-GOVERNANCE}
 
-### 19.1 License
+### License {#CHKARCH-GOVERNANCE-LICENSE}
 
 MIT License. Copyright (c) 2026 NIMBLESITE PTY LTD. No CLA required. No proprietary layers.
 
-### 19.2 Contribution Model
+### Contribution Model {#CHKARCH-GOVERNANCE-CONTRIB}
 
 - Issues and PRs on GitHub
 - RFC process for significant type system changes
 - Monthly minor releases, quarterly major releases (semver)
 
-### 19.3 Relationship to Python Typing Council
+### Relationship to Python Typing Council {#CHKARCH-GOVERNANCE-TYPING}
 
 Basilisk follows the Python Typing Council's governance (PEP 729). We implement the typing spec as defined by the council. We participate in conformance testing. We do not extend the type system in ways that contradict the spec.
 
 ---
 
-## 20. Roadmap
+## Roadmap {#CHKARCH-ROADMAP}
 
 ### Phase 1: Foundation
 - Parser (evaluate `ruff_python_parser` vs custom)

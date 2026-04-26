@@ -4,9 +4,6 @@ title: 类型检查器对比
 description: Basilisk 与 Pyright、mypy、ty 和 Pyrefly 在严格性、性能和功能方面的比较。
 keywords: basilisk vs pyright, python类型检查器比较, mypy vs basilisk, ty, pyrefly
 lang: zh
-eleventyNavigation:
-  key: Comparison
-  order: 6
 ---
 
 # 类型检查器对比

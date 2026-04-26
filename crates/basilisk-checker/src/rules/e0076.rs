@@ -295,6 +295,7 @@ fn check_expr_for_overload_call(
                          each member of the union must match at least one overload"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
                 // Only report once per call (not per member).
                 return;

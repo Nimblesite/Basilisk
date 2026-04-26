@@ -220,24 +220,24 @@ class StagingDB(DatabaseConfig):
 
 
 # ---------------------------------------------------------------------------
-# Cases where E0005 SHOULD still fire
+# Scalar literals in standalone classes — type is inferrable, NO E0005
 # ---------------------------------------------------------------------------
 
 
 class Standalone:
-    value = 42  # E0005 — no parent, no annotation
+    value = 42  # NO E0005 — scalar literal, type is trivially `int`
 
 
 class UnannotatedParent:
-    raw = 99  # E0005 — no annotation
+    raw = 99  # NO E0005 — scalar literal, type is trivially `int`
 
 
 class ChildOfUnannotated(UnannotatedParent):
-    raw = 100  # E0005 — parent's `raw` has no annotation either
+    raw = 100  # NO E0005 — scalar literal, type is trivially `int`
 
 
 class UnrelatedToBaseRoute:
-    path = "/unrelated"  # E0005 — doesn't inherit from BaseRoute
+    path = "/unrelated"  # NO E0005 — scalar literal, type is trivially `str`
 
 
 # ---------------------------------------------------------------------------

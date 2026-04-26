@@ -114,6 +114,10 @@ fn check_permissions_for_platform(_pid: u32) -> Result<PermissionStatus, String>
 /// processes, root privileges are required for `task_for_pid` / `vm_read`.
 #[cfg(target_os = "macos")]
 fn check_macos_permissions(pid: u32) -> PermissionStatus {
+    if !process_exists(pid) {
+        return PermissionStatus::Denied(format!("Process {pid} not found"));
+    }
+
     if is_child_process(pid) {
         debug!(pid, "target is a child process, no elevation needed");
         return PermissionStatus::Allowed;
@@ -138,6 +142,10 @@ fn check_macos_permissions(pid: u32) -> PermissionStatus {
 /// - `ptrace_scope` = 3: no ptrace at all.
 #[cfg(target_os = "linux")]
 fn check_linux_permissions(pid: u32) -> PermissionStatus {
+    if !process_exists(pid) {
+        return PermissionStatus::Denied(format!("Process {pid} not found"));
+    }
+
     if is_child_process(pid) {
         debug!(pid, "target is a child process, no elevation needed");
         return PermissionStatus::Allowed;
@@ -207,6 +215,12 @@ fn check_windows_permissions() -> Result<PermissionStatus, String> {
 fn is_child_process(pid: u32) -> bool {
     let our_pid = std::process::id();
     parent_pid_of(pid).is_some_and(|ppid| ppid == our_pid)
+}
+
+/// Check whether the target PID exists.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn process_exists(pid: u32) -> bool {
+    pid != 0 && parent_pid_of(pid).is_some()
 }
 
 /// Get the parent PID of a process (platform-specific).
@@ -471,6 +485,28 @@ mod tests {
     fn child_process_check_returns_false_for_random_pid() {
         // Very unlikely to be our child.
         assert!(!is_child_process(999_999));
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn nonexistent_pid_is_denied_before_elevation() -> Result<(), String> {
+        let status = check_profiling_permissions(999_999_999)?;
+        assert!(
+            matches!(status, PermissionStatus::Denied(ref reason) if reason.contains("not found")),
+            "nonexistent PID should be denied before elevation, got: {status:?}"
+        );
+        Ok(())
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn pid_zero_is_denied_before_elevation() -> Result<(), String> {
+        let status = check_profiling_permissions(0)?;
+        assert!(
+            matches!(status, PermissionStatus::Denied(ref reason) if reason.contains("not found")),
+            "PID 0 should be denied before elevation, got: {status:?}"
+        );
+        Ok(())
     }
 
     #[test]

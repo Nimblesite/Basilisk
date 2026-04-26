@@ -178,6 +178,7 @@ impl MetaTransformCtx {
                              dataclass_transform classes is not allowed"
                                 .to_owned(),
                         ),
+                        provenance: None,
                     });
                     break;
                 }
@@ -247,6 +248,7 @@ impl MetaTransformCtx {
                          attribute assignment"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
             }
         }
@@ -373,6 +375,7 @@ impl MetaTransformCtx {
                      is passed to the dataclass_transform class"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }

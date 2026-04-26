@@ -532,10 +532,10 @@ pub(super) fn class_has_manual_slots(class: &StmtClassDef) -> bool {
                     }
                 }
             }
-            Stmt::AnnAssign(ann) => {
-                if expr_simple_name(&ann.target).as_deref() == Some("__slots__") {
-                    return true;
-                }
+            Stmt::AnnAssign(ann)
+                if expr_simple_name(&ann.target).as_deref() == Some("__slots__") =>
+            {
+                return true;
             }
             _ => {}
         }

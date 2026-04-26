@@ -203,6 +203,7 @@ fn check_function_call(
                     "TypeVar bound `{bound_text}` requires the argument type to \
                      be a subtype of `{bound_text}`"
                 )),
+                provenance: None,
             });
             // Only one diagnostic per call.
             break;

@@ -8,7 +8,7 @@
 //! metaclass-synthesised `Literal[...]` types, and Protocol attributes are
 //! interface specifications rather than concrete class variables.
 
-use basilisk_resolver::{AttributeInfo, ClassInfo, ResolvedModule};
+use basilisk_resolver::{AttributeInfo, ClassInfo, ResolvedModule, RhsKind};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
@@ -66,9 +66,24 @@ fn check_class(
         .filter(|attr| {
             !attr.has_annotation
                 && !typevar_names.contains(attr.name.as_str())
+                && !is_scalar_literal(&attr.rhs_kind)
                 && !parent_has_annotated_attr(&attr.name, class, all_classes)
         })
         .for_each(|attr| out.push(make_diagnostic(attr, &class.name, path)));
+}
+
+/// Returns `true` when the RHS is a scalar literal whose type is trivially
+/// inferrable (int, float, str, bool, bytes, None).
+fn is_scalar_literal(rhs: &RhsKind) -> bool {
+    matches!(
+        rhs,
+        RhsKind::IntLiteral
+            | RhsKind::FloatLiteral
+            | RhsKind::StrLiteral
+            | RhsKind::BoolLiteral
+            | RhsKind::BytesLiteral
+            | RhsKind::NoneValue
+    )
 }
 
 /// Returns `true` when any ancestor class declares an attribute with the same
@@ -105,5 +120,6 @@ fn make_diagnostic(attr: &AttributeInfo, class_name: &str, path: &str) -> Diagno
         note: Some(
             "In Basilisk, all class attributes require explicit type annotations".to_owned(),
         ),
+        provenance: None,
     }
 }

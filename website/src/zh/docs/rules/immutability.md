@@ -4,10 +4,6 @@ title: 不可变性 — E0040–E0043
 description: 强制执行参数和 Final 变量不可变性的规则。
 keywords: basilisk, 不可变性, final, inout, BSK-E0040, BSK-E0043
 lang: zh
-eleventyNavigation:
-  key: Immutability
-  parent: Rules
-  order: 4
 ---
 
 # 不可变性 — E0040–E0043

@@ -4,6 +4,7 @@ description: Prepare the Basilisk codebase for CI. Reads the CI workflow, builds
 argument-hint: "[optional focus area]"
 allowed-tools: Read, Grep, Glob, Edit, Write, Bash
 ---
+<!-- agent-pmo:2efd847 -->
 
 # CI Prep — Get Basilisk PR-Ready
 
@@ -36,9 +37,9 @@ For local CI prep, focus on checks 1–3 (lint, zed, rust tests). VS Code and Ne
 ## Step 2: The Checklist
 
 - Run the checklist in order
-- Coverage thresholds: get the thresholds from the gh variables
+- Coverage thresholds: read from `coverage-thresholds.json` at the repo root (single source of truth)
 - If you can't run any step, TANK HARD
-- If the gh variables are surpassed, bump them to a higher number
+- If coverage exceeds the threshold, bump it in `coverage-thresholds.json` (ratchet UP only, subtract 1% buffer)
 - If the coverage threshold is not met, TANK HARD
 
 ## Step 3: The Fix Loop
@@ -65,6 +66,7 @@ Once all checks pass cleanly, report:
 
 ## Rules
 
+- Running all the tests that the CI runs is critical. They must all pass.
 - NEVER stop with failing checks. Loop until everything is green.
 - NEVER suppress lint warnings with `#[allow(...)]` — fix the code.
 - NEVER remove test assertions or delete tests to make them pass.

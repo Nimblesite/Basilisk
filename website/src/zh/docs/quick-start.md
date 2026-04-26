@@ -4,9 +4,6 @@ title: 快速开始
 description: 5 分钟内替换 Pylance。安装 Basilisk 的 VS Code 扩展并获得完整的 Python 语言支持——开源。
 keywords: basilisk, 快速开始, pylance替代, python语言服务器, 类型检查, 教程, vs code
 lang: zh
-eleventyNavigation:
-  key: Quick Start
-  order: 3
 ---
 
 # 快速开始

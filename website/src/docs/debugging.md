@@ -1,16 +1,17 @@
 ---
 layout: layouts/docs.njk
-title: Debugging
+title: "Python Debugging with Basilisk — VS Code and Zed"
 description: Integrated Python debugging with Basilisk — set breakpoints, step through code, inspect variables, and evaluate expressions. No separate debug extension needed.
 keywords: basilisk, debugging, python, debugpy, breakpoints, step through, variables, watch, debug console, vs code, zed, dap
+date: 2026-02-28
+dateModified: 2026-03-31
+author: The Basilisk Project
 eleventyNavigation:
   key: Debugging
   order: 4
 ---
 
 # Debugging
-
-![PLACEHOLDER: VS Code debug session showing breakpoint hit with Basilisk — Variables pane, call stack, and debug toolbar visible](debugging-vscode-overview.png)
 
 Basilisk includes a fully integrated Python debugger. Set breakpoints, step through code, inspect variables, and evaluate expressions — all without installing a separate debug extension. The Basilisk LSP server manages the debug session end to end.
 

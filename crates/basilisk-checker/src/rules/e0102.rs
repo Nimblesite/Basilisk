@@ -99,6 +99,7 @@ fn check_ordering(
                      the referenced TypeVar must appear earlier in the parameter list"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }
@@ -137,6 +138,7 @@ fn check_bound_compatibility(
                 note: Some(
                     "When T2 has default=T1, T1's bound must be a subtype of T2's bound".to_owned(),
                 ),
+                provenance: None,
             });
         }
     }
@@ -177,6 +179,7 @@ fn check_constraint_compatibility(
                  T1's constraints must be a subset of T2's constraints"
                     .to_owned(),
             ),
+            provenance: None,
         });
     }
 
@@ -229,6 +232,7 @@ fn check_default_bound_vs_constraints(
                  T1's bound must be compatible with at least one constraint of T2"
                     .to_owned(),
             ),
+            provenance: None,
         });
     }
 }
@@ -271,6 +275,7 @@ fn check_default_constraints_vs_bound(
                  all of T1's constraints must be subtypes of T2's bound"
                     .to_owned(),
             ),
+            provenance: None,
         });
     }
 }

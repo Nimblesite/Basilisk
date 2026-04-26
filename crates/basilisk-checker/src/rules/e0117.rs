@@ -167,6 +167,7 @@ fn check_module_vars(
                         "A TypeVar must be bound by a Generic class or function signature"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
             }
         }
@@ -264,6 +265,7 @@ fn check_function_locals(
                             "Unbound type variables should not appear in function bodies"
                                 .to_owned(),
                         ),
+                        provenance: None,
                     });
                 }
             }
@@ -321,6 +323,7 @@ fn check_class_attributes(
                              annotations outside method definitions"
                                 .to_owned(),
                         ),
+                        provenance: None,
                     });
                 }
             }
@@ -404,6 +407,7 @@ fn check_inner_class_typevars(
                                          and cannot capture class-scoped type variables"
                                             .to_owned(),
                                     ),
+                                    provenance: None,
                                 });
                             }
                         }

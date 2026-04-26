@@ -205,10 +205,8 @@ pub(super) fn collect_multi_unbounded_from_stmts(stmts: &[Stmt], out: &mut Vec<S
 
 pub(super) fn collect_multi_unbounded_from_stmt(stmt: &Stmt, out: &mut Vec<Span>) {
     match stmt {
-        Stmt::AnnAssign(ann) => {
-            if annotation_has_multiple_unbounded(&ann.annotation) {
-                out.push(text_range_to_span(ann.annotation.range()));
-            }
+        Stmt::AnnAssign(ann) if annotation_has_multiple_unbounded(&ann.annotation) => {
+            out.push(text_range_to_span(ann.annotation.range()));
         }
         Stmt::FunctionDef(func) => {
             // Check parameter annotations

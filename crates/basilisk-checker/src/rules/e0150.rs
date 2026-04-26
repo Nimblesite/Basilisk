@@ -350,6 +350,7 @@ fn check_expr_for_dead_var_usage(
                          and treat unreachable branches as dead code"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
             }
         }

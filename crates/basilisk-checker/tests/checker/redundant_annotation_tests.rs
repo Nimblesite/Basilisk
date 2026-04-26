@@ -246,15 +246,14 @@ class Child(Base):
 ";
     let diags = run(source)?;
     let e0005s = e0005_messages(&diags);
-    // x and y are exempt (parent has annotation), but z, w, and q should all fire
-    // in strict mode — all unannotated attrs require annotation regardless of RHS.
+    // x and y are exempt (parent has annotation).
+    // z = 99 and w = "new" are scalar literals — suppressed (type is inferrable).
+    // Only q = compute() should fire (non-inferrable RHS).
     assert_eq!(
         e0005s.len(),
-        3,
-        "z, w, and q should fire E0005 (x and y exempt via parent annotation), got: {e0005s:?}",
+        1,
+        "only q (non-inferrable) should fire E0005; z and w are scalar literals, got: {e0005s:?}",
     );
-    assert!(e0005s.iter().any(|m| m.contains('z')), "should fire for z");
-    assert!(e0005s.iter().any(|m| m.contains('w')), "should fire for w");
     assert!(e0005s.iter().any(|m| m.contains('q')), "should fire for q");
     Ok(())
 }

@@ -1,8 +1,8 @@
 # Type Narrowing and Full Inference — Plan
 
-> **Spec**: [CHECKER-TYPE-INFERENCE-SPEC.md](../specs/CHECKER-TYPE-INFERENCE-SPEC.md)
+> **Spec**: [CHECKER-TYPE-INFERENCE-SPEC.md §TYPEINF-OVERVIEW](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-OVERVIEW)
 > **Motivation**: [CHECK-ELIMINATE-FALSE-POSITIVES.md](CHECK-ELIMINATE-FALSE-POSITIVES.md) — ~125 FPs blocked on this work
-> **Architecture**: [CHECKER-ARCHITECTURE-SPEC.md](../specs/CHECKER-ARCHITECTURE-SPEC.md)
+> **Architecture**: [CHECKER-ARCHITECTURE-SPEC.md §CHKARCH-INFERENCE](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INFERENCE)
 
 ---
 
@@ -10,20 +10,20 @@
 
 The checker currently uses text-based annotation parsing and literal-only RHS inference. It has no control-flow graph, no type narrowing, and no TypeVar constraint solving. ~125 of the remaining ~196 false positives in the conformance suite cannot be fixed without this fundamental engine work.
 
-The spec (`CHECKER-TYPE-INFERENCE-SPEC.md`) defines the full target state. This plan is the implementation roadmap to get there.
+The spec ([CHECKER-TYPE-INFERENCE-SPEC.md §TYPEINF-OVERVIEW](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-OVERVIEW)) defines the full target state. This plan is the implementation roadmap to get there.
 
 ### Current State
 
 | Component | Spec Reference | Status |
 |-----------|---------------|--------|
-| `InferredType` enum (47 variants) | §2.1 | Implemented |
-| `is_assignable_to()` | §2.3 | Implemented (covariance, contravariance, numeric widening) |
-| `from_annotation()` text parser | §3.3 | Implemented — falls back to `Named(String)` for complex types |
-| `infer_rhs()` | §3.1 | Literal-only — skips function calls, attribute access, subscripts |
-| `FlowUnionTracker` | §3.2 | Basic implementation, unused by any rule |
-| `NarrowingEngine` | §7 | **Stub** — `narrowing.rs` is 2 lines |
-| `ConstraintSolver` | §6.1 | **Not implemented** |
-| `OverloadResolver` | §4.6 | **Not implemented** |
+| `InferredType` enum (47 variants) | [§TYPEINF-INFERRED](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-INFERRED) | Implemented |
+| `is_assignable_to()` | [§TYPEINF-SUBTYPING](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING) | Implemented (covariance, contravariance, numeric widening) |
+| `from_annotation()` text parser | [§TYPEINF-VARS-ANNOTATED](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-VARS-ANNOTATED) | Implemented — falls back to `Named(String)` for complex types |
+| `infer_rhs()` | [§TYPEINF-VARS-SIMPLE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-VARS-SIMPLE) | Literal-only — skips function calls, attribute access, subscripts |
+| `FlowUnionTracker` | [§TYPEINF-VARS-FLOW](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-VARS-FLOW) | Basic implementation, unused by any rule |
+| `NarrowingEngine` | [§TYPEINF-NARROWING](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING) | **Stub** — `narrowing.rs` is 2 lines |
+| `ConstraintSolver` | [§TYPEINF-GENERICS-TYPEVAR](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-GENERICS-TYPEVAR) | **Not implemented** |
+| `OverloadResolver` | [§TYPEINF-FUNC-OVERLOADS](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-FUNC-OVERLOADS) | **Not implemented** |
 
 ### What This Unblocks
 
@@ -38,7 +38,7 @@ The spec (`CHECKER-TYPE-INFERENCE-SPEC.md`) defines the full target state. This 
 ## Phase 1: NarrowingEngine
 
 **File**: `crates/basilisk-checker/src/narrowing.rs` (expand stub)
-**Spec**: §7.1–7.10
+**Spec**: [§TYPEINF-NARROWING-ISINSTANCE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-ISINSTANCE) through [§TYPEINF-NARROWING-SCOPE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-SCOPE)
 
 Build a per-function narrowing engine that tracks type state through control flow.
 
@@ -66,20 +66,20 @@ impl NarrowingContext {
 
 ### 1b. Narrowing Patterns (in priority order)
 
-1. **isinstance narrowing** (§7.1) — `isinstance(x, T)` narrows `x` to `T` in `if`, complement in `else`
-2. **None narrowing** (§7.2) — `x is None` / `x is not None`
-3. **Truthiness narrowing** (§7.3) — `if x:` removes falsy types (`None`, `Literal[0]`, `Literal[""]`, `Literal[False]`)
-4. **Assignment narrowing** (§7.4) — `x = 42` narrows `x: int | str` to `int`
-5. **Assert narrowing** (§7.8) — `assert x is not None` narrows for all subsequent code
-6. **TypeGuard narrowing** (§7.6) — positive branch only (per PEP 647)
-7. **TypeIs narrowing** (§7.7) — bidirectional, both branches (per PEP 742)
-8. **Pattern match narrowing** (§7.5) — exhaustiveness checking
+1. **isinstance narrowing** ([§TYPEINF-NARROWING-ISINSTANCE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-ISINSTANCE)) — `isinstance(x, T)` narrows `x` to `T` in `if`, complement in `else`
+2. **None narrowing** ([§TYPEINF-NARROWING-NONE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-NONE)) — `x is None` / `x is not None`
+3. **Truthiness narrowing** ([§TYPEINF-NARROWING-TRUTHY](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-TRUTHY)) — `if x:` removes falsy types (`None`, `Literal[0]`, `Literal[""]`, `Literal[False]`)
+4. **Assignment narrowing** ([§TYPEINF-NARROWING-ASSIGN](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-ASSIGN)) — `x = 42` narrows `x: int | str` to `int`
+5. **Assert narrowing** ([§TYPEINF-NARROWING-ASSERT](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-ASSERT)) — `assert x is not None` narrows for all subsequent code
+6. **TypeGuard narrowing** ([§TYPEINF-NARROWING-TYPEGUARD](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-TYPEGUARD)) — positive branch only (per PEP 647)
+7. **TypeIs narrowing** ([§TYPEINF-NARROWING-TYPEIS](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-TYPEIS)) — bidirectional, both branches (per PEP 742)
+8. **Pattern match narrowing** ([§TYPEINF-NARROWING-MATCH](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-MATCH)) — exhaustiveness checking
 
 ### 1c. Approach
 
 Walk the function body as a sequence of narrowing events. At branch points (`if`/`else`, `match`/`case`), fork the type state. At join points, union the states. This does not require a full CFG — a structured walk of the AST is sufficient for Python's block-scoped control flow.
 
-### 1d. Scope Limitations (§7.10)
+### 1d. Scope Limitations ([§TYPEINF-NARROWING-SCOPE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-SCOPE))
 
 Narrowing does NOT persist across:
 - Function boundaries (inner functions capture the unnarrowed type)
@@ -97,7 +97,7 @@ Narrowing does NOT persist across:
 ## Phase 2: Expression Type Inference
 
 **File**: `crates/basilisk-checker/src/inference.rs` (expand existing)
-**Spec**: §2.3, §8
+**Spec**: [§TYPEINF-SUBTYPING](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING), [§TYPEINF-BIDIR](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-BIDIR)
 
 Extend `infer_rhs()` from literal-only to full expression inference.
 
@@ -138,7 +138,7 @@ This is the single highest-value target — it unblocks the majority of E0014 FP
 
 ### 2f. Walrus Operator
 
-`(x := expr)` has the type of `expr` (§3.5)
+`(x := expr)` has the type of `expr` ([§TYPEINF-VARS-WALRUS](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-VARS-WALRUS))
 
 ### 2g. Verification
 
@@ -151,16 +151,16 @@ This is the single highest-value target — it unblocks the majority of E0014 FP
 ## Phase 3: ConstraintSolver — TypeVar Resolution
 
 **File**: `crates/basilisk-checker/src/constraint_solver.rs` (new)
-**Spec**: §6.1–6.5
+**Spec**: [§TYPEINF-GENERICS-TYPEVAR](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-GENERICS-TYPEVAR) through [§TYPEINF-GENERICS-DEFAULTS](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-GENERICS-DEFAULTS)
 
 ### 3a. Algorithm
 
 1. Collect constraints from argument types against TypeVar-bearing parameter types
 2. Compute the join (union) of lower-bound constraints
 3. Use expected return type as additional bidirectional constraint
-4. Solve constrained TypeVars by matching against constraint set (§6.2)
-5. Handle bound TypeVars — upper bound check (§6.3)
-6. Handle TypeVar defaults (§6.5, PEP 696)
+4. Solve constrained TypeVars by matching against constraint set ([§TYPEINF-GENERICS-CONSTRAINED](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-GENERICS-CONSTRAINED))
+5. Handle bound TypeVars — upper bound check ([§TYPEINF-GENERICS-BOUND](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-GENERICS-BOUND))
+6. Handle TypeVar defaults ([§TYPEINF-GENERICS-DEFAULTS](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-GENERICS-DEFAULTS), PEP 696)
 
 ### 3b. Key Interface
 
@@ -186,7 +186,7 @@ impl ConstraintSolver {
 
 ### 3c. Deferred
 
-- ParamSpec solving (§6.6) — address in follow-up
+- ParamSpec solving ([§TYPEINF-GENERICS-PARAMSPEC](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-GENERICS-PARAMSPEC)) — address in follow-up
 - TypeVarTuple solving — address in follow-up
 
 ### 3d. Verification
@@ -200,7 +200,7 @@ impl ConstraintSolver {
 ## Phase 4: Class Hierarchy and Structural Subtyping
 
 **File**: `crates/basilisk-checker/src/subtyping.rs` (new)
-**Spec**: `CHECKER-TYPE-INFERENCE-SPEC.md` §9
+**Spec**: [CHECKER-TYPE-INFERENCE-SPEC.md §TYPEINF-SUBTYPING](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING)
 
 This is the **single largest FP blocker** (~80 of the remaining 177 FPs). The current `is_assignable_to()` in `types.rs` compares `Named` types by string name — it cannot determine that `Dog` is a subtype of `Animal` or that a class with `def draw(self)` satisfies a `Drawable` Protocol.
 
@@ -252,7 +252,7 @@ struct ProtocolMember<'a> {
    - `attr: T` → `ProtocolMember { kind: Attribute, type_sig: T }`
 
 2. **For each protocol member**, search `S` for a matching member:
-   - Check `S.methods` (name match → compare signatures with §9.6 callable subtyping)
+   - Check `S.methods` (name match → compare signatures with [§TYPEINF-SUBTYPING-CALLABLE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-CALLABLE) callable subtyping)
    - Check `S.attributes` (name match → check type compatibility)
    - Check dataclass fields, `NamedTuple` fields (name match → attribute equivalent)
    - Walk `S`'s MRO for inherited members
@@ -286,7 +286,7 @@ struct ProtocolMember<'a> {
 4. If `T` does NOT have `extra_items`:
    - `S` must not have fields that `T` doesn't declare (closed schema)
 
-### 4f. Callable Subtyping (§9.6)
+### 4f. Callable Subtyping ([§TYPEINF-SUBTYPING-CALLABLE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-CALLABLE))
 
 Already partially implemented in `is_assignable_to()`. Needs extension for:
 - `*args`/`**kwargs` parameter compatibility
@@ -375,15 +375,15 @@ Phases 1 and 2 are independent and can be parallelized. Phase 3 depends on Phase
 
 - [ ] **Phase 1: NarrowingEngine** (~15 FPs)
   - [ ] 1a. `NarrowingContext` data structure with push/pop/join — `crates/basilisk-checker/src/narrowing.rs`
-  - [ ] 1b. isinstance narrowing (§7.1) — positive + complement branches
-  - [ ] 1c. None narrowing (§7.2) — `is None` / `is not None` with `remove_none()`
-  - [ ] 1d. Truthiness narrowing (§7.3) — `remove_falsy()` / `keep_falsy()`
-  - [ ] 1e. Assignment narrowing (§7.4) — narrows to assigned type
-  - [ ] 1f. Assert narrowing (§7.8) — unwraps inner guard, applies unconditionally
-  - [ ] 1g. TypeGuard narrowing — positive branch only (§7.6)
-  - [ ] 1h. TypeIs narrowing — bidirectional (§7.7) — positive + complement
-  - [ ] 1i. Pattern match narrowing + exhaustiveness (§7.5) — per-case + wildcard detection
-  - [ ] 1j. Scope limitations (§7.10) — `in_loop` flag, no recursion into nested functions
+  - [ ] 1b. isinstance narrowing ([§TYPEINF-NARROWING-ISINSTANCE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-ISINSTANCE)) — positive + complement branches
+  - [ ] 1c. None narrowing ([§TYPEINF-NARROWING-NONE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-NONE)) — `is None` / `is not None` with `remove_none()`
+  - [ ] 1d. Truthiness narrowing ([§TYPEINF-NARROWING-TRUTHY](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-TRUTHY)) — `remove_falsy()` / `keep_falsy()`
+  - [ ] 1e. Assignment narrowing ([§TYPEINF-NARROWING-ASSIGN](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-ASSIGN)) — narrows to assigned type
+  - [ ] 1f. Assert narrowing ([§TYPEINF-NARROWING-ASSERT](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-ASSERT)) — unwraps inner guard, applies unconditionally
+  - [ ] 1g. TypeGuard narrowing — positive branch only ([§TYPEINF-NARROWING-TYPEGUARD](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-TYPEGUARD))
+  - [ ] 1h. TypeIs narrowing — bidirectional ([§TYPEINF-NARROWING-TYPEIS](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-TYPEIS)) — positive + complement
+  - [ ] 1i. Pattern match narrowing + exhaustiveness ([§TYPEINF-NARROWING-MATCH](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-MATCH)) — per-case + wildcard detection
+  - [ ] 1j. Scope limitations ([§TYPEINF-NARROWING-SCOPE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-SCOPE)) — `in_loop` flag, no recursion into nested functions
   - [x] Resolver guard collection — `crates/basilisk-resolver/src/visitor/narrowing.rs` + `narrowing_types.rs`
   - [x] `FunctionInfo.narrowing_guards` field wired into `function_info_from()`
 - [ ] **Phase 2: Expression Type Inference** (~40 FPs) — `crates/basilisk-checker/src/expr_inference.rs`
@@ -402,16 +402,16 @@ Phases 1 and 2 are independent and can be parallelized. Phase 3 depends on Phase
   - [ ] 3a. Constraint collection — `add_lower_bound()`, `add_upper_bound()`, `add_one_of()`
   - [ ] 3b. Lower-bound join / upper-bound meet solving — `solve()` + `solve_one()`
   - [ ] 3c. Bidirectional constraint from expected return type — `add_return_constraint()`
-  - [ ] 3d. Constrained TypeVar matching (§6.2) — `solve_constrained()` with widening
-  - [ ] 3e. Bound TypeVar upper-bound check (§6.3) — validates `is_assignable_to(bound)`
-  - [ ] 3f. TypeVar defaults (PEP 696, §6.5) — `set_default()` + fallback in `solve()`
+  - [ ] 3d. Constrained TypeVar matching ([§TYPEINF-GENERICS-CONSTRAINED](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-GENERICS-CONSTRAINED)) — `solve_constrained()` with widening
+  - [ ] 3e. Bound TypeVar upper-bound check ([§TYPEINF-GENERICS-BOUND](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-GENERICS-BOUND)) — validates `is_assignable_to(bound)`
+  - [ ] 3f. TypeVar defaults (PEP 696, [§TYPEINF-GENERICS-DEFAULTS](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-GENERICS-DEFAULTS)) — `set_default()` + fallback in `solve()`
 - [x] **Phase 4: Class Hierarchy and Structural Subtyping** (~50 FPs) — DONE — `crates/basilisk-checker/src/subtyping.rs`
   - [x] 4a. `SubtypeContext` data structure with MRO cache, protocol member tables — `SubtypeContext::from_module()`
-  - [x] 4b. Nominal subtyping via C3 MRO resolution (§9.1) + builtin MRO hardcoding — `compute_mro()` + `builtin_mro()`
-  - [x] 4c. Protocol structural subtyping: member collection, method/attribute/property matching (§9.2) — `is_protocol_subtype()` + `source_has_member()`
-  - [x] 4d. Generic subtyping with variance-aware TypeVar position checking (§9.4) — `is_subtype_with_context()` Callable contravariance
-  - [x] 4e. TypedDict structural subtyping: Required/NotRequired/ReadOnly/extra_items (§9.3) — `is_typeddict_subtype()` + `parse_typeddict_field_flags()`
-  - [x] 4f. Callable subtyping: contravariant params, covariant return, ellipsis (§9.6) — `is_subtype_with_context()` Callable arm
+  - [x] 4b. Nominal subtyping via C3 MRO resolution ([§TYPEINF-SUBTYPING-NOMINAL](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-NOMINAL)) + builtin MRO hardcoding — `compute_mro()` + `builtin_mro()`
+  - [x] 4c. Protocol structural subtyping: member collection, method/attribute/property matching ([§TYPEINF-SUBTYPING-PROTOCOL](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-PROTOCOL)) — `is_protocol_subtype()` + `source_has_member()`
+  - [x] 4d. Generic subtyping with variance-aware TypeVar position checking ([§TYPEINF-SUBTYPING-GENERIC](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-GENERIC)) — `is_subtype_with_context()` Callable contravariance
+  - [x] 4e. TypedDict structural subtyping: Required/NotRequired/ReadOnly/extra_items ([§TYPEINF-SUBTYPING-TYPEDDICT](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-TYPEDDICT)) — `is_typeddict_subtype()` + `parse_typeddict_field_flags()`
+  - [x] 4f. Callable subtyping: contravariant params, covariant return, ellipsis ([§TYPEINF-SUBTYPING-CALLABLE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-CALLABLE)) — `is_subtype_with_context()` Callable arm
   - [x] 4g. Wire `is_subtype_of()` to replace Named-to-Named string comparison — `is_subtype_with_context()` dispatches Named→SubtypeContext
   - [x] 4h. Conformance verification — 57 FPs (under 71 target), 0 regressions
 - [x] **Phase 5: Wire Into Rules** (~10 FPs) — DONE

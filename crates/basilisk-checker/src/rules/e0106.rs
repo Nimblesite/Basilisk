@@ -59,6 +59,7 @@ impl Rule for ProtocolClassObject {
                      concrete (non-protocol) subtypes of Proto"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }

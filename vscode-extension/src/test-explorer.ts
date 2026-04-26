@@ -17,6 +17,7 @@ import { type LanguageClient } from "vscode-languageclient/node";
 import { applyCoverageDecorations, type LspCoverageResult } from "./coverage-decorations";
 import { Logger } from "./logger";
 import type { Store } from "./store";
+import { POLL_INTERVAL_MS } from "./timeouts";
 
 /** Test item kind — mirrors the Rust `TestItemKind` enum. */
 type TestItemKind = "file" | "function" | "class" | "method";
@@ -49,9 +50,6 @@ interface LspTestRunResult {
   passed: boolean;
   perTest: LspPerTestResult[];
 }
-
-/** Polling interval (ms) for checking LSP client changes. */
-const CLIENT_POLL_INTERVAL_MS = 1000;
 
 /**
  * Register the Basilisk test explorer.
@@ -154,7 +152,7 @@ function wireNotificationListener(
   checkClient();
   // Poll on a short interval since store.client is a signal but we can't
   // subscribe to it directly from here. The effect runs in lsp-client.ts.
-  const interval = setInterval(checkClient, CLIENT_POLL_INTERVAL_MS);
+  const interval = setInterval(checkClient, POLL_INTERVAL_MS);
   const disposable = new vscode.Disposable(() => { clearInterval(interval); });
   const originalDispose = controller.dispose.bind(controller);
   controller.dispose = () => {

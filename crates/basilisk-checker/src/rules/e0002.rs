@@ -46,5 +46,6 @@ fn make_diagnostic(func: &FunctionInfo, path: &str) -> Diagnostic {
             func.name
         )),
         note: Some("In Basilisk, all functions require an explicit return type".to_owned()),
+        provenance: None,
     }
 }

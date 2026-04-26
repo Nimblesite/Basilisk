@@ -171,6 +171,7 @@ fn check_protocol_generic_combined(
                      Combining the two is redundant and invalid."
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }
@@ -296,6 +297,7 @@ fn check_generic_protocol_assignments(
                      are compatible with the substituted type arguments"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }
@@ -468,6 +470,7 @@ fn check_self_typed_methods(ctx: &SelfTypedCtx<'_>, diagnostics: &mut Vec<Diagno
                      other methods must be satisfied by the implementing class"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }
@@ -499,5 +502,6 @@ fn emit_self_typed_diagnostic(
              that implementing classes use compatible self-typed or `Self` signatures"
                 .to_owned(),
         ),
+        provenance: None,
     });
 }

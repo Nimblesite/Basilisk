@@ -28,6 +28,7 @@
 import * as net from "net";
 import * as fs from "fs";
 import { Logger } from "./logger";
+import { WAIT_MS } from "./timeouts";
 
 /** Minimal shape of a DAP message for type narrowing. */
 interface DapMessage {
@@ -49,9 +50,6 @@ interface DapMessage {
  */
 /** Length of the `\r\n\r\n` separator between DAP header and body. */
 const DAP_HEADER_SEPARATOR_LEN = 4;
-
-/** Timeout (ms) before injecting a synthetic attach response. */
-const ATTACH_RESPONSE_TIMEOUT_MS = 3000;
 
 const STRUCTURAL_LINE_RE = /^\s*(try\s*:)\s*(#.*)?$/;
 
@@ -302,7 +300,7 @@ export class DapTcpProxy {
           });
           this.pendingAttachSeq = undefined;
         }
-      }, ATTACH_RESPONSE_TIMEOUT_MS);
+      }, WAIT_MS);
     }
 
     this.sendToDebugpy(msg);

@@ -276,9 +276,9 @@ pub(super) fn collect_instance_final_violations(
 ) {
     use crate::scope::{FinalViolationInfo, FinalViolationKind};
     match stmt {
-        Stmt::AnnAssign(ann) => {
+        Stmt::AnnAssign(ann)
             // self.x: Final = ... outside __init__
-            if !is_init {
+            if !is_init => {
                 if let Expr::Attribute(attr) = ann.target.as_ref() {
                     let Some(ann_text) = source_slice_range(source, ann.annotation.range()) else {
                         return;
@@ -296,7 +296,6 @@ pub(super) fn collect_instance_final_violations(
                     }
                 }
             }
-        }
         Stmt::Assign(assign) => {
             for target in &assign.targets {
                 let Expr::Attribute(attr) = target else {

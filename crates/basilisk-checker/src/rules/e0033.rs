@@ -36,6 +36,7 @@ impl Rule for InvalidRevealTypeCall {
                     "reveal_type() is a static-analysis directive that takes exactly one expression"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }

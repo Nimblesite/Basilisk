@@ -1,8 +1,11 @@
 ---
 layout: layouts/docs.njk
-title: Profiler
+title: "Python Profiler — CPU Heatmaps and Memory Leak Detection"
 description: Integrated Python profiling with Basilisk — CPU heatmaps, flamegraphs, memory leak detection, and reference graph visualization, all inside your editor.
 keywords: basilisk, profiling, python, py-spy, flamegraph, heatmap, memory leak, tracemalloc, cpu profiler, vs code, zed, neovim
+date: 2026-02-28
+dateModified: 2026-03-31
+author: The Basilisk Project
 eleventyNavigation:
   key: Profiler
   order: 5
@@ -12,7 +15,6 @@ eleventyNavigation:
 
 Basilisk includes a fully integrated Python profiler. CPU hotspot heatmaps appear inline on every line of your code, memory leaks are flagged as diagnostics, and flamegraphs open directly in your editor — without leaving your workspace.
 
-![PLACEHOLDER: Basilisk profiler showing CPU heatmap overlays on Python source code in VS Code](profiler-heatmap-vscode.png)
 
 ## Overview
 
@@ -23,7 +25,6 @@ The Basilisk profiler combines two complementary engines:
 
 Both engines are orchestrated through the Basilisk LSP server (Rust). The IDE extensions listen for LSP notifications and render results — no standalone CLI needed.
 
-![PLACEHOLDER: Profiler dashboard in VS Code showing flamegraph, top functions table, and summary cards](profiler-dashboard-overview.png)
 
 ---
 
@@ -52,7 +53,6 @@ Use the slash command in the AI panel:
 :BasiliskProfileStart
 ```
 
-![PLACEHOLDER: VS Code command palette showing "Basilisk: Start Profiling" command](profiler-start-command.png)
 
 ### Inline heatmap annotations
 
@@ -67,7 +67,6 @@ As samples accumulate, Basilisk annotates every hot line directly in the editor 
 
 Lines below 1% receive no annotation.
 
-![PLACEHOLDER: Python source code with inline profiler heat annotations showing critical, hot, warm, and cool levels in the gutter](profiler-inline-heatmap.png)
 
 ### Taking a snapshot
 
@@ -85,13 +84,11 @@ Snapshots are saved to the `basilisk-profiles/` directory in your workspace as S
 - **Zed:** `/profstop`
 - **Neovim:** `:BasiliskProfileStop`
 
-![PLACEHOLDER: VS Code status bar showing active profiling session with elapsed time and stop button](profiler-status-bar.png)
 
 ### Flamegraph viewer
 
 When you stop a session (or take a snapshot), Basilisk opens a flamegraph webview directly in VS Code.
 
-![PLACEHOLDER: Basilisk flamegraph webview showing call stack visualization with orange colour palette](profiler-flamegraph.png)
 
 The flamegraph viewer includes:
 
@@ -119,7 +116,6 @@ To compare two profiling sessions:
 
 The diff view highlights functions that got faster (green) or slower (red) between the two sessions.
 
-![PLACEHOLDER: Profile diff view comparing two sessions, with improved functions shown in green and regressions in red](profiler-diff.png)
 
 ---
 
@@ -133,7 +129,6 @@ Memory tracking injects Python's `tracemalloc` module into the running process t
 - **Zed:** `/memleak`
 - **Neovim:** `:BasiliskMemoryStart`
 
-![PLACEHOLDER: VS Code command palette showing "Basilisk: Start Memory Tracking" command](memory-start-command.png)
 
 ### Taking memory snapshots
 
@@ -153,7 +148,6 @@ Diff two snapshots to identify allocations that grew between them:
 
 Basilisk compares the snapshots and emits LSP diagnostics on the lines that allocated memory that was not freed. Diagnostics use the `BSK-PROF-MEM` code and appear as warnings in the Problems panel.
 
-![PLACEHOLDER: VS Code Problems panel showing memory leak diagnostics with allocation sizes and confidence scores](memory-leak-diagnostics.png)
 
 Leak confidence scoring:
 
@@ -171,7 +165,6 @@ The reference graph walks the Python object graph from a suspected leak root to 
 - **VS Code:** Command Palette → **Basilisk: Show Reference Graph**
 - **Zed:** `/memrefs`
 
-![PLACEHOLDER: Basilisk reference graph visualization showing force-directed graph with object nodes sized by memory, cycles highlighted in red](memory-reference-graph.png)
 
 The graph is rendered as an interactive force-directed layout:
 
@@ -186,7 +179,6 @@ Click any node to inspect its type, `repr()`, size, and outgoing references.
 
 The memory dashboard shows allocation growth over time as a stacked area chart, broken down by object type.
 
-![PLACEHOLDER: Memory timeline chart showing heap growth over time with different object types stacked by colour](memory-timeline.png)
 
 ### Stopping memory tracking
 
@@ -200,7 +192,6 @@ The memory dashboard shows allocation growth over time as a stacked area chart, 
 
 The memory dashboard aggregates all memory profiling views into a single panel:
 
-![PLACEHOLDER: Full memory dashboard in VS Code with timeline chart, top allocators table, leak confidence badges, and reference graph panel](memory-dashboard.png)
 
 Panels in the dashboard:
 
@@ -278,7 +269,6 @@ Basilisk ships a privileged helper binary (`basilisk-profiler-helper`) that hand
 
 To profile your own process (e.g. a script you launched from Basilisk), no elevation is required.
 
-![PLACEHOLDER: macOS privilege escalation dialog asking for administrator password to attach profiler](profiler-macos-elevation.png)
 
 ### Linux
 
@@ -335,7 +325,6 @@ The Zed extension surfaces profiling via slash commands in the AI assistant pane
 | `/memstop` | Stop memory tracking |
 | `/memrefs` | Show reference graph for top leak |
 
-![PLACEHOLDER: Zed editor with inline profiler diagnostic annotations on hot lines and slash command in the AI panel](profiler-zed.png)
 
 ---
 
@@ -353,7 +342,6 @@ The Neovim plugin exposes profiling via user commands:
 
 Inline heatmap annotations appear as virtual text in the sign column.
 
-![PLACEHOLDER: Neovim with inline profiler heat annotations shown as virtual text in the sign column](profiler-neovim.png)
 
 ---
 

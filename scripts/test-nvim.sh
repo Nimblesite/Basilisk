@@ -65,7 +65,9 @@ if command -v nvim &>/dev/null; then
         -c "PlenaryBustedDirectory tests/lsp {minimal_init = 'tests/minimal_init.lua', sequential = true}" 2>&1
     ok "Neovim LSP e2e tests passed"
 
-    LUACOV=1 nvim --headless -u tests/minimal_init.lua \
+    # Screenshot tests are visual regressions, not coverage inputs. Running
+    # them with LUACOV can replace LSP coverage stats with screenshot-only data.
+    nvim --headless -u tests/minimal_init.lua \
         -l tests/ui/run_screenshots.lua 2>&1
     ok "Neovim screenshot regression tests passed"
 else
@@ -81,6 +83,10 @@ if [[ -n "${CI:-}" ]]; then
 else
     header "Neovim extension — coverage threshold"
     TEST_COVERAGE_NVIM="${TEST_COVERAGE_NVIM:-30}"
+
+    LUACOV=1 nvim --headless -u tests/minimal_init.lua \
+        -l tests/run_coverage.lua 2>&1
+    ok "Neovim coverage exerciser passed"
 
     if [[ ! -f luacov.stats.out ]]; then
         echo -e "  ${RED}${BOLD}✗ neovim: no luacov stats — coverage collection is broken. FAIL${RESET}"

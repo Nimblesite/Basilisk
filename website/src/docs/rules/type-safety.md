@@ -1,8 +1,11 @@
 ---
 layout: layouts/docs.njk
 title: Type Safety — E0010–E0025
-description: Rules that catch type mismatches, incorrect annotations, and unsound type usage.
+description: "Basilisk rules for type safety — argument mismatches, return type errors, incompatible overrides, unhashable dict keys, and non-exhaustive match statements. BSK-E0010 through E0025."
 keywords: basilisk, type safety, type mismatch, BSK-E0012, BSK-E0013, BSK-E0016
+date: 2026-02-28
+dateModified: 2026-03-31
+author: The Basilisk Project
 eleventyNavigation:
   key: Type Safety
   parent: Rules

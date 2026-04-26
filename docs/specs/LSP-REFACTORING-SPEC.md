@@ -1,21 +1,21 @@
 # LSP Refactoring Spec
 
 **Status**: Draft
-**Depends on**: [LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md), [LSP-ANALYSIS-MODES-SPEC.md](LSP-ANALYSIS-MODES-SPEC.md)
+**Depends on**: [LSP-ARCHITECTURE-SPEC.md §LSPARCH-FEATURES](LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES), [LSP-ANALYSIS-MODES-SPEC.md §ANALYSIS-CROSSLSP](LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-CROSSLSP)
 
-## Overview
+## Overview {#REFACTOR-OVERVIEW}
 
 Deterministic, type-aware refactoring tools that bring Basilisk to feature parity with Pylance and beyond. Every refactoring is a structured code transformation — no regex, no string hacking. All operations use the resolved AST and type information from the checker.
 
-## Design Principles
+## Design Principles {#REFACTOR-PRINCIPLES}
 
-1. **Deterministic first** — every refactoring produces a single, predictable result. AI-assisted variants live in [LSP-AI-SPEC.md](LSP-AI-SPEC.md), never here.
+1. **Deterministic first** — every refactoring produces a single, predictable result. AI-assisted variants live in [LSP-AI-SPEC.md §LSPAI-FEATURE-REFACTOR](LSP-AI-SPEC.md#LSPAI-FEATURE-REFACTOR), never here.
 2. **Type-aware** — refactorings use full type information (resolved types, import graph, call sites) to produce correct transformations.
 3. **Cross-file** — all refactorings that affect imports or references operate across the workspace via the import graph.
 4. **Atomic undo** — each refactoring returns a single `WorkspaceEdit` so the user can undo in one step.
 5. **Safe by default** — refactorings that could change runtime behavior are clearly marked and require confirmation.
 
-## LSP Code Action Kinds
+## Code Action Kinds {#REFACTOR-KINDS}
 
 All refactorings are exposed as LSP code actions with hierarchical kinds:
 
@@ -33,13 +33,13 @@ Additionally, `textDocument/rename` and `textDocument/prepareRename` handle symb
 
 ---
 
-## Feature 1: Rename Symbol (Existing — Enhance)
+## Rename Symbol {#REFACTOR-RENAME}
 
 **LSP methods**: `textDocument/rename`, `textDocument/prepareRename`
 
 Current implementation renames identifiers across files using the import graph. Enhancements needed:
 
-### 1.1 Scope-Aware Rename
+### Scope-Aware Rename {#REFACTOR-RENAME-SCOPE}
 
 The current rename uses whole-word text matching. It must become scope-aware:
 
@@ -49,7 +49,7 @@ The current rename uses whole-word text matching. It must become scope-aware:
 - **Module-level symbols**: rename across all importing modules (current behavior, keep).
 - **Type aliases / `TypeVar` names**: rename the alias and all usages.
 
-### 1.2 Rename Validation
+### Rename Validation {#REFACTOR-RENAME-VALIDATE}
 
 Before applying a rename, validate:
 
@@ -58,13 +58,13 @@ Before applying a rename, validate:
 - New name does not conflict with builtins unless the user confirms.
 - If renaming a public symbol (`__all__`), update `__all__` entries.
 
-### 1.3 Docstring & Comment Updates
+### Docstring Updates {#REFACTOR-RENAME-DOCS}
 
 When renaming a parameter, offer to update references in docstrings (`:param old_name:` → `:param new_name:`). This is opt-in, not automatic.
 
 ---
 
-## Feature 2: Rename Module / File
+## Rename Module {#REFACTOR-RENAMEMOD}
 
 **LSP method**: `workspace/willRenameFiles`
 
@@ -78,13 +78,13 @@ When a user renames a `.py` file in their editor:
 
 ---
 
-## Feature 3: Extract Function / Method
+## Extract Function {#REFACTOR-EXTRACT-FUNC}
 
 **Code action kind**: `refactor.extract.function`
 
 **Trigger**: User selects one or more complete statements.
 
-### Algorithm
+### Algorithm {#REFACTOR-EXTRACT-FUNC-ALGO}
 
 1. **Parse selection** — expand to enclosing complete statements. Reject if the selection splits a statement.
 2. **Analyze data flow**:
@@ -103,7 +103,7 @@ When a user renames a `.py` file in their editor:
 5. **Replace selection** with a call to the new function, with appropriate unpacking.
 6. **Place function** immediately before the enclosing function/class (module-level) or after the last method in the class (class method).
 
-### Edge Cases
+### Edge Cases {#REFACTOR-EXTRACT-FUNC-EDGE}
 
 - Selection contains `yield` → reject (cannot extract generator mid-stream).
 - Selection contains `return` → reject unless it is the only return path (extract the entire branch).
@@ -112,7 +112,7 @@ When a user renames a `.py` file in their editor:
 
 ---
 
-## Feature 4: Extract Variable
+## Extract Variable {#REFACTOR-EXTRACT-VAR}
 
 **Code action kind**: `refactor.extract.variable`
 
@@ -129,7 +129,7 @@ When a user renames a `.py` file in their editor:
 
 ---
 
-## Feature 5: Inline Variable
+## Inline Variable {#REFACTOR-INLINE-VAR}
 
 **Code action kind**: `refactor.inline.variable`
 
@@ -143,14 +143,14 @@ When a user renames a `.py` file in their editor:
 4. **Replace** each reference with the expression. Parenthesize if the expression has lower precedence than the surrounding context.
 5. **Delete** the original assignment.
 
-### Safety
+### Safety {#REFACTOR-INLINE-VAR-SAFETY}
 
 - If the expression has side effects (function call, I/O), warn the user — inlining may change evaluation count.
 - If the variable is used in a loop, inlining a function call would change from evaluate-once to evaluate-per-iteration.
 
 ---
 
-## Feature 6: Inline Function
+## Inline Function {#REFACTOR-INLINE-FUNC}
 
 **Code action kind**: `refactor.inline.function`
 
@@ -168,7 +168,7 @@ This is a complex refactoring. Initial implementation should support only single
 
 ---
 
-## Feature 7: Move Symbol
+## Move Symbol {#REFACTOR-MOVE}
 
 **Code action kind**: `refactor.move`
 
@@ -185,13 +185,13 @@ This is a complex refactoring. Initial implementation should support only single
 4. **Update all importers** — rewrite `from old_module import symbol` to `from new_module import symbol` across the workspace.
 5. **Clean up** — remove now-unused imports from both source and destination.
 
-### Variant: Move to New File
+### Move to New File {#REFACTOR-MOVE-NEW}
 
 Same as above, but the destination is a new file named after the symbol (e.g., `my_func` → `my_func.py` in the same directory).
 
 ---
 
-## Feature 8: Change Signature
+## Change Signature {#REFACTOR-SIGNATURE}
 
 **Code action kind**: `refactor.rewrite.signature`
 
@@ -208,7 +208,7 @@ Each operation produces a `WorkspaceEdit` covering the definition and all call s
 
 ---
 
-## Feature 9: Convert Between Constructs
+## Convert Constructs {#REFACTOR-CONVERT}
 
 **Code action kind**: `refactor.rewrite.convert`
 
@@ -229,7 +229,7 @@ These are offered as code actions only when applicable and safe. Each conversion
 
 ---
 
-## Feature 10: Implement Abstract Methods
+## Implement Abstract Methods {#REFACTOR-ABSTRACT}
 
 **Code action kind**: `refactor.rewrite.implement`
 
@@ -247,17 +247,17 @@ These are offered as code actions only when applicable and safe. Each conversion
 
 ---
 
-## Cross-Cutting Concerns
+## Cross-Cutting Concerns {#REFACTOR-CROSS}
 
-### Conflict with Formatter
+### Formatter Conflict {#REFACTOR-FORMATTER}
 
 All generated code must match the project's formatting settings. After generating a `WorkspaceEdit`, run the formatter (ruff) on the affected ranges to normalize style. This prevents the refactoring from triggering a format-on-save diff.
 
-### Undo Granularity
+### Undo Granularity {#REFACTOR-UNDO}
 
 Every refactoring returns exactly one `WorkspaceEdit`. The editor treats this as one undo step. Never split a refactoring into multiple sequential edits.
 
-### Telemetry
+### Telemetry {#REFACTOR-TELEMETRY}
 
 Each refactoring records:
 - Which refactoring was invoked.
@@ -266,7 +266,7 @@ Each refactoring records:
 
 No code content is ever recorded.
 
-### Configuration
+### Configuration {#REFACTOR-CONFIG}
 
 ```toml
 [tool.basilisk.refactoring]
@@ -282,7 +282,7 @@ abstract_method_body = "raise"
 
 ---
 
-## Priority Order
+## Priority Order {#REFACTOR-PRIORITY}
 
 For reaching feature parity with Pylance, implement in this order:
 

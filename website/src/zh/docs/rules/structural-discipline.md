@@ -4,10 +4,6 @@ title: 结构纪律 — E0050–E0054
 description: 强制执行类结构、slots 和密封类的规则。
 keywords: basilisk, 结构纪律, slots, final, BSK-E0050, BSK-E0054
 lang: zh
-eleventyNavigation:
-  key: Structural Discipline
-  parent: Rules
-  order: 5
 ---
 
 # 结构纪律 — E0050–E0054

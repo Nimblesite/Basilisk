@@ -13,12 +13,11 @@ import * as assert from "assert";
 import * as vscode from "vscode";
 import { getStore } from "../../extension";
 import {
-  EXTENSION_ID,
-  SERVER_START_WAIT_MS,
-  SUITE_SETUP_TIMEOUT_MS,
-  setupLspTestSuite,
-  teardownLspTestSuite,
-  closeAllEditors,
+    EXTENSION_ID,
+    WAIT_MS,
+    setupLspTestSuite,
+    teardownLspTestSuite,
+    closeAllEditors,
 } from "./test-helpers";
 
 // ── Package.json types ───────────────────────────────────────────────────���
@@ -245,22 +244,19 @@ function assertDataPanelsRequireWorkspace(): void {
 // ── Test Suite ────────────────────────────────────────────────────────────
 
 suite("Basilisk Activity Panel Accessibility Audit", function () {
-  this.timeout(SUITE_SETUP_TIMEOUT_MS);
 
   let suiteContext: { tmpDir: string; basiliskBinary: string };
 
   suiteSetup(async function () {
-    this.timeout(SUITE_SETUP_TIMEOUT_MS);
     suiteContext = await setupLspTestSuite("a11y-panel");
 
     const store = getStore();
     assert.ok(store, "Store should exist after activation");
-    const result = await store.ensureLspReadyPromise(SERVER_START_WAIT_MS);
+    const result = await store.ensureLspReadyPromise(WAIT_MS);
     assert.ok(result.ok, "LSP should be running");
   });
 
   suiteTeardown(function () {
-    this.timeout(SUITE_SETUP_TIMEOUT_MS);
     teardownLspTestSuite(suiteContext?.tmpDir);
   });
 

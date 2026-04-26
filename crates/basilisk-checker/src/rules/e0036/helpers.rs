@@ -60,6 +60,7 @@ pub(super) fn make_diagnostic(message: String, span: Span, path: &str) -> Diagno
              or module-level annotations, and cannot be nested inside another type"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }
 

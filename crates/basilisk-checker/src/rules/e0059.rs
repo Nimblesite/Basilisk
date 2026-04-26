@@ -72,6 +72,7 @@ impl Rule for MatchArgsFalseAccess {
                          (the default)"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
             }
         }

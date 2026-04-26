@@ -4,9 +4,6 @@ title: 简介
 description: Basilisk 是什么，为什么存在，以及它如何作为完全开源的 Python 语言服务器替代 Pylance 和 Pyright。
 keywords: basilisk, python, 语言服务器, pylance替代, pyright, 类型检查器, lsp, vs code, 严格, rust
 lang: zh
-eleventyNavigation:
-  key: Introduction
-  order: 1
 ---
 
 # 简介

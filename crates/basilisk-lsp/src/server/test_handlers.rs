@@ -370,7 +370,7 @@ pub(super) fn make_pytest_not_found_diagnostic() -> Diagnostic {
         code: Some(NumberOrString::String(PYTEST_NOT_FOUND_CODE.to_owned())),
         code_description: None,
         source: Some("basilisk".to_owned()),
-        message: "pytest not found in uv.lock — run `uv add --dev pytest` to install it".to_owned(),
+        message: "pytest not found in uv.lock — use quick fix to install".to_owned(),
         tags: None,
         related_information: None,
         data: None,
@@ -403,7 +403,7 @@ pub(super) async fn check_pytest_cov_availability(server: &LspServer) {
             .client
             .log_message(
                 MessageType::INFO,
-                "Basilisk: pytest-cov not found in uv.lock. Run `uv add --dev pytest-cov` for coverage support."
+                "Basilisk: pytest-cov not found in uv.lock — install it for coverage support"
                     .to_owned(),
             )
             .await;

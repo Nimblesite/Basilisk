@@ -4,10 +4,6 @@ title: 未使用代码 — W0080–W0089
 description: 对已定义但从未使用的代码的警告。
 keywords: basilisk, 未使用, 死代码, 不可达, BSK-W0080, BSK-W0089
 lang: zh
-eleventyNavigation:
-  key: Unused Code
-  parent: Rules
-  order: 8
 ---
 
 # 未使用代码 — W0080–W0089

@@ -42,5 +42,6 @@ fn make_diagnostic(stmt: &MatchStmtInfo, path: &str) -> Diagnostic {
              a wildcard branch makes exhaustiveness explicit"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }

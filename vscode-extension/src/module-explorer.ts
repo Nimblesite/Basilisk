@@ -10,6 +10,7 @@
 import * as vscode from "vscode";
 import { type Store } from "./store";
 import { Logger } from "./logger";
+import { POLL_INTERVAL_MS } from "./timeouts";
 
 // ── LSP response types ───────────────────────────────────────────────────
 
@@ -233,9 +234,6 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
 
 // ── Registration ─────────────────────────────────────────────────────────
 
-/** Interval (ms) for polling client readiness to wire notification listeners. */
-const CLIENT_POLL_INTERVAL_MS = 1000;
-
 /**
  * Register clipboard and action commands for the module explorer.
  *
@@ -336,7 +334,7 @@ function wireModuleChangedListener(store: Store, provider: ModuleExplorerProvide
     client.onNotification("basilisk/moduleChanged", () => {
       provider.refresh();
     });
-  }, CLIENT_POLL_INTERVAL_MS);
+  }, POLL_INTERVAL_MS);
 
   provider.disposables.push({ dispose: () => { clearInterval(interval); } });
 }

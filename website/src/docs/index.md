@@ -1,8 +1,11 @@
 ---
 layout: layouts/docs.njk
-title: Introduction
-description: What Basilisk is, why it exists, and how it replaces Pylance and Pyright as a fully open-source Python language server.
+title: "Basilisk: Open-Source Pylance Replacement for Python"
+description: "Basilisk is a strict-by-default Python language server that replaces Pylance and Pyright. Autocomplete, go-to-definition, debugging, profiling — fully open source, built in Rust."
 keywords: basilisk, python, language server, pylance replacement, pyright, type checker, lsp, vs code, strict, rust
+date: 2026-02-28
+dateModified: 2026-03-31
+author: The Basilisk Project
 eleventyNavigation:
   key: Introduction
   order: 1
@@ -10,15 +13,13 @@ eleventyNavigation:
 
 # Introduction
 
-![PLACEHOLDER: Basilisk VS Code extension showing diagnostics, autocomplete, and type checking in a Python file](intro-vscode-overview.png)
-
 Basilisk is a **complete Python language server** that replaces Pylance and Pyright. Everything Pylance does — autocomplete, go-to-definition, hover information, refactoring, diagnostics, integrated debugging, profiling — Basilisk does too, fully open source and strict by default.
 
 It is not just a type checker. It is a feature-complete LSP with first-class extensions for **VS Code**, **Neovim**, and **Zed** — plus any other editor that speaks the Language Server Protocol. No proprietary extensions. No Node.js. A single Rust binary.
 
 ## The problem Basilisk solves
 
-Pylance is the most-used Python extension in VS Code. It is also **proprietary** — you cannot inspect, modify, or redistribute it. Pyright, the open-source type checker underneath, is powerful but is *only* a type checker — it does not provide completions, hover, go-to-definition, or refactoring without the proprietary Pylance wrapper.
+[Pylance](https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance) is the default Python language extension in VS Code. It is also **proprietary** — you cannot inspect, modify, or redistribute it. Pyright, the open-source type checker underneath, is powerful but is *only* a type checker — it does not provide completions, hover, go-to-definition, or refactoring without the proprietary Pylance wrapper.
 
 Every other Python type checker (mypy, ty, Pyrefly) defaults to *gradual typing*. Untyped code passes silently. `Any` spreads through type inference without warning. Strictness is something you must deliberately opt into, configure, remember to enforce in CI, and re-explain to every new team member.
 
@@ -26,9 +27,7 @@ Basilisk takes a different position. **It replaces the entire Pylance stack** �
 
 ## What Basilisk is
 
-![PLACEHOLDER: Split view showing Basilisk running in VS Code, Neovim, and Zed side by side](intro-editor-support.png)
-
-- A **full-featured language server** (LSP) — autocomplete, go-to-definition, hover, find references, rename, [16 refactoring actions](/docs/refactoring/), code actions, inlay hints
+- A **full-featured language server** (LSP) — autocomplete, go-to-definition, hover, find references, rename, [17 refactoring actions](/docs/refactoring/), code actions, inlay hints
 - **Editor extensions** for VS Code, Neovim (0.10+), and Zed — install it, disable Pylance, and everything works
 - An **integrated debugger** — press F5 to debug Python with breakpoints, stepping, variable inspection, and watch expressions, all brokered through the Basilisk LSP
 - An **integrated profiler** — CPU profiling via py-spy with inline heatmap annotations, flamegraphs, memory leak detection, and reference graph visualization, all inside your editor
@@ -62,7 +61,7 @@ This acknowledges that large codebases cannot be fully typed overnight, while en
 
 ## Mojo-inspired safety
 
-Basilisk adds Mojo-inspired ownership semantics as static analysis annotations over standard Python syntax. Using `Annotated` from the `typing` module, you can declare that a parameter is:
+Basilisk adds [Mojo-inspired](https://docs.modular.com/mojo/manual/values/ownership/) ownership semantics as static analysis annotations over standard Python syntax. Using `Annotated` from the `typing` module, you can declare that a parameter is:
 
 - **`Borrowed`** — a read-only reference; mutation is a type error
 - **`InOut`** — a mutable reference; must be explicitly declared
@@ -71,8 +70,6 @@ Basilisk adds Mojo-inspired ownership semantics as static analysis annotations o
 These are not runtime constructs. They are statically checked annotations. Code that passes Basilisk's ownership checks is structurally compatible with Mojo's type expectations.
 
 ## Project status
-
-![PLACEHOLDER: Basilisk project status dashboard showing phase completion and feature checklist](intro-project-status.png)
 
 Basilisk is currently at **v0.1.0** — the core checker, LSP server, and VS Code extension are all working. Autocomplete, go-to-definition, hover, diagnostics, and inlay hints are shipping today.
 
@@ -88,12 +85,12 @@ Basilisk is currently at **v0.1.0** — the core checker, LSP server, and VS Cod
 
 ## Architecture
 
-Basilisk is a Cargo workspace with 14 Rust crates, each owning one layer of the system:
+Basilisk is a Cargo workspace with 16 Rust crates, each owning one layer of the system:
 
 | Layer | Crates |
 |-------|--------|
 | **Analysis pipeline** | `basilisk-parser` &rarr; `basilisk-resolver` &rarr; `basilisk-checker` &rarr; `basilisk-cli` |
-| **LSP & infrastructure** | `basilisk-lsp`, `basilisk-db`, `basilisk-config`, `basilisk-stubs`, `basilisk-uv`, `basilisk-common` |
+| **LSP & infrastructure** | `basilisk-lsp`, `basilisk-db`, `basilisk-config`, `basilisk-stubs`, `basilisk-uv`, `basilisk-common`, `basilisk-test-utils`, `basilisk-profiler-helper` |
 | **Editor extensions** | VS Code (`vscode-extension`), Neovim (`basilisk.nvim`), Zed (`basilisk-zed`) |
 | **Future** | `basilisk-mojo` (ownership), `basilisk-compiler` (native), `basilisk-plugin` (WASM plugins) |
 

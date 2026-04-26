@@ -23,7 +23,7 @@
 use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
-use crate::rules::shared::split_top_level_commas;
+use crate::rules::shared::{extract_literal_inner, split_top_level_commas};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -212,6 +212,7 @@ fn check_annotated_assignment(
             note: Some(
                 "int and bool Literal values are distinct even when numerically equal".to_owned(),
             ),
+            provenance: None,
         });
     }
 }
@@ -287,6 +288,7 @@ fn check_augmented_assignment(
              compatible with the declared Literal type"
                 .to_owned(),
         ),
+        provenance: None,
     });
 }
 
@@ -310,36 +312,6 @@ fn extract_literal_values(ann: &str) -> Option<Vec<String>> {
             .map(|v| v.trim().to_owned())
             .collect(),
     )
-}
-
-/// Extract the content between `Literal[` and the matching `]`.
-fn extract_literal_inner(ann: &str) -> Option<&str> {
-    // Support both `Literal[` and `L[`.
-    let start_bracket = if let Some(pos) = ann.find("Literal[") {
-        pos + "Literal[".len()
-    } else if ann.starts_with("L[") {
-        2
-    } else {
-        return None;
-    };
-
-    let mut depth = 1i32;
-    let bytes = ann.as_bytes();
-    let mut idx = start_bracket;
-    while idx < bytes.len() {
-        match bytes.get(idx) {
-            Some(b'[') => depth += 1,
-            Some(b']') => {
-                depth -= 1;
-                if depth == 0 {
-                    return ann.get(start_bracket..idx);
-                }
-            }
-            Some(_) | None => {}
-        }
-        idx += 1;
-    }
-    None
 }
 
 /// Check if source Literal values are all assignable to target Literal values.
@@ -491,15 +463,14 @@ fn find_top_level_eq(text: &str) -> Option<usize> {
         match byte {
             b'[' | b'(' | b'{' => depth += 1,
             b']' | b')' | b'}' => depth -= 1,
-            b'=' if depth == 0 => {
+            b'=' if depth == 0
                 // Make sure it's not `==`.
-                if text.as_bytes().get(idx + 1) != Some(&b'=')
+                && text.as_bytes().get(idx + 1) != Some(&b'=')
                     && (idx == 0 || text.as_bytes().get(idx.wrapping_sub(1)) != Some(&b'='))
                     // Also not `!=`, `<=`, `>=`
-                    && (idx == 0 || !matches!(text.as_bytes().get(idx.wrapping_sub(1)), Some(b'!' | b'<' | b'>')))
-                {
-                    return Some(idx);
-                }
+                    && (idx == 0 || !matches!(text.as_bytes().get(idx.wrapping_sub(1)), Some(b'!' | b'<' | b'>'))) =>
+            {
+                return Some(idx);
             }
             _ => {}
         }

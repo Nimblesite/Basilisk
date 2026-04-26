@@ -167,6 +167,7 @@ impl Rule for CyclicalTypeAliasReference {
                      through another alias) produces an infinite type that cannot be resolved"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }

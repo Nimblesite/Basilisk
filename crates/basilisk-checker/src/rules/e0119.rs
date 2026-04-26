@@ -245,6 +245,7 @@ fn check_single_protocol(
                  isinstance() or issubclass() if it has the @runtime_checkable decorator"
                     .to_owned(),
             ),
+            provenance: None,
         });
         return true;
     }
@@ -266,6 +267,7 @@ fn check_single_protocol(
                  (protocols that define only methods, not data attributes)"
                     .to_owned(),
             ),
+            provenance: None,
         });
         return true;
     }
@@ -294,6 +296,7 @@ fn check_single_protocol(
                          argument's type and the protocol"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
                 return true;
             }

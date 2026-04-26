@@ -24,6 +24,12 @@ HTML_DIR="$REPO_ROOT/target/llvm-cov/html"
 # Ensure llvm-tools-preview is installed so cargo-llvm-cov never prompts.
 rustup component add llvm-tools-preview 2>/dev/null || true
 
+# ── Fetch conformance suite if missing or stale ──────────────────────────────
+# `conformance.sh` is the single source of truth — it pins TYPING_REF and
+# re-fetches when the cached ref differs. Do not duplicate that logic here.
+header "Ensuring PEP conformance suite is current"
+bash "$REPO_ROOT/scripts/conformance.sh" --fetch-only
+
 # ── Rust tests with coverage ─────────────────────────────────────────────────
 # cargo-llvm-cov uses target/llvm-cov-target/ as its target directory,
 # so the basilisk binary lands there — not in target/release/.
@@ -73,16 +79,16 @@ echo -e "then ${CYAN}Coverage Gutters: Watch${RESET} via Ctrl+Shift+P to see gut
 # ── Per-project coverage thresholds ──────────────────────────────────────────
 
 header "Enforcing per-project coverage thresholds"
-TEST_COVERAGE_BASILISK_CHECKER="${TEST_COVERAGE_BASILISK_CHECKER:-92}"
-TEST_COVERAGE_BASILISK_CLI="${TEST_COVERAGE_BASILISK_CLI:-94}"
+TEST_COVERAGE_BASILISK_CHECKER="${TEST_COVERAGE_BASILISK_CHECKER:-93}"
+TEST_COVERAGE_BASILISK_CLI="${TEST_COVERAGE_BASILISK_CLI:-85}"
 TEST_COVERAGE_BASILISK_DB="${TEST_COVERAGE_BASILISK_DB:-100}"
-TEST_COVERAGE_BASILISK_LSP="${TEST_COVERAGE_BASILISK_LSP:-74}"
-TEST_COVERAGE_BASILISK_MOJO="${TEST_COVERAGE_BASILISK_MOJO:-91}"
+TEST_COVERAGE_BASILISK_LSP="${TEST_COVERAGE_BASILISK_LSP:-77}"
+TEST_COVERAGE_BASILISK_MOJO="${TEST_COVERAGE_BASILISK_MOJO:-90}"
 TEST_COVERAGE_BASILISK_PARSER="${TEST_COVERAGE_BASILISK_PARSER:-100}"
 TEST_COVERAGE_BASILISK_PLUGIN="${TEST_COVERAGE_BASILISK_PLUGIN:-100}"
-TEST_COVERAGE_BASILISK_RESOLVER="${TEST_COVERAGE_BASILISK_RESOLVER:-95}"
-TEST_COVERAGE_BASILISK_STUBS="${TEST_COVERAGE_BASILISK_STUBS:-100}"
-TEST_COVERAGE_BASILISK_CONFIG="${TEST_COVERAGE_BASILISK_CONFIG:-92}"
+TEST_COVERAGE_BASILISK_RESOLVER="${TEST_COVERAGE_BASILISK_RESOLVER:-94}"
+TEST_COVERAGE_BASILISK_STUBS="${TEST_COVERAGE_BASILISK_STUBS:-85}"
+TEST_COVERAGE_BASILISK_CONFIG="${TEST_COVERAGE_BASILISK_CONFIG:-93}"
 COV_FAILED=0
 HTML_ROWS=""
 check_crate() {

@@ -51,6 +51,24 @@ pub fn hover_at(
         if let Some(ds) = docstring {
             sections.push(ds.to_owned());
         }
+
+        // Show provenance annotation for imported symbols.
+        let hit_name = match hit {
+            SymbolHit::Function(f) => Some(f.name.as_str()),
+            SymbolHit::Class(c) => Some(c.name.as_str()),
+            SymbolHit::Variable(v) => Some(v.name.as_str()),
+            _ => None,
+        };
+        if let Some(name) = hit_name {
+            if let Some(ext_sym) = resolved.imported_symbols.get(name) {
+                if let Some(label) = ext_sym
+                    .provenance
+                    .and_then(basilisk_stubs::TypeProvenance::hover_label)
+                {
+                    sections.push(format!("*{label}*"));
+                }
+            }
+        }
     }
 
     // 3. Import resolution details when the cursor is on an import statement.
@@ -106,10 +124,10 @@ fn format_import_hover(import_info: &ImportInfo) -> String {
             parts.push("**Type stubs**: Available (.pyi)".to_owned());
         }
         ImportResolution::SourcePy => {
-            parts.push("**Source**: .py (no type stubs)".to_owned());
+            parts.push("**Source**: .py *(no type stubs available)*".to_owned());
         }
         ImportResolution::Unresolved => {
-            parts.push("**Status**: Unresolved".to_owned());
+            parts.push("**Status**: Unresolved *(no type stubs available)*".to_owned());
         }
     }
 
@@ -318,6 +336,46 @@ mod tests {
         assert!(
             !markup.value.contains("**Dependency**"),
             "stdlib should not show dependency kind: {}",
+            markup.value
+        );
+    }
+
+    #[test]
+    fn test_hover_on_unresolved_import_shows_provenance_annotation() {
+        let source = "import nonexistent\n";
+        let resolved = resolve_with_patched_import(source, ImportResolution::Unresolved, None);
+
+        let hover = hover_at(&resolved, source, 10, &[]);
+        let hover = hover.expect("hover should be Some for unresolved import");
+        let HoverContents::Markup(markup) = hover.contents else {
+            panic!("expected Markup hover contents");
+        };
+
+        assert!(
+            markup.value.contains("no type stubs available"),
+            "unresolved import should show 'no type stubs available': {}",
+            markup.value
+        );
+    }
+
+    #[test]
+    fn test_hover_on_source_py_import_shows_no_stubs_annotation() {
+        let source = "import mymodule\n";
+        let resolved = resolve_with_patched_import(
+            source,
+            ImportResolution::SourcePy,
+            Some(std::path::PathBuf::from("/project/mymodule.py")),
+        );
+
+        let hover = hover_at(&resolved, source, 10, &[]);
+        let hover = hover.expect("hover should be Some for source import");
+        let HoverContents::Markup(markup) = hover.contents else {
+            panic!("expected Markup hover contents");
+        };
+
+        assert!(
+            markup.value.contains("no type stubs"),
+            "source .py import should show 'no type stubs': {}",
             markup.value
         );
     }

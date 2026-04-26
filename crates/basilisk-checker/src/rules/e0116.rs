@@ -82,6 +82,7 @@ fn check_underscore_fields(class: &ClassInfo, path: &str, diagnostics: &mut Vec<
                      starting with `_`"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }
@@ -134,6 +135,7 @@ fn check_default_ordering(
                      fields without defaults"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }
@@ -169,6 +171,7 @@ fn check_multiple_inheritance(class: &ClassInfo, path: &str, diagnostics: &mut V
             note: Some(
                 "Only `Generic[...]` is allowed alongside `NamedTuple` as a base class".to_owned(),
             ),
+            provenance: None,
         });
     }
 }
@@ -216,6 +219,7 @@ fn check_subclass_field_conflict(
                      fields in the base class"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }

@@ -37,7 +37,11 @@ mod tests {
     /// tree builder and the type health scanner.
     fn build_large_workspace(file_count: usize) -> (WorkspaceIndex, PathBuf) {
         let root = PathBuf::from("/tmp/bench-workspace");
-        let idx = WorkspaceIndex::new(vec![root.clone()], AnalysisMode::WholeModule);
+        let idx = WorkspaceIndex::new(
+            vec![root.clone()],
+            AnalysisMode::WholeModule,
+            basilisk_config::BasiliskConfig::default(),
+        );
 
         for file_idx in 0..file_count {
             let package = format!("pkg_{:03}", file_idx / 10);
@@ -149,7 +153,11 @@ mod tests {
     #[test]
     fn bench_module_changed_data_under_20ms_per_file() {
         let root = PathBuf::from("/tmp/bench-workspace-changed");
-        let idx = WorkspaceIndex::new(vec![root.clone()], AnalysisMode::WholeModule);
+        let idx = WorkspaceIndex::new(
+            vec![root.clone()],
+            AnalysisMode::WholeModule,
+            basilisk_config::BasiliskConfig::default(),
+        );
 
         // Pre-populate a workspace with 100 files so the index is non-trivial.
         for file_idx in 0..100_usize {

@@ -384,5 +384,6 @@ fn make_diagnostic(object_name: &str, attr_name: &str, span: Span, path: &str) -
              Use an instance to access them, e.g. `Node[int]().label`"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }

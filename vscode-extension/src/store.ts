@@ -20,12 +20,7 @@ import * as vscode from "vscode";
 import { Logger, type LogSink } from "./logger";
 import { createServerCommandHandler } from "./lsp-client";
 import type { Result } from "./result";
-
-/** Default timeout (ms) for waiting on the LSP client to become ready. */
-export const DEFAULT_LSP_READY_TIMEOUT_MS = 1_000;
-
-/** Interval (ms) for polling the LSP client state in the ready fallback. */
-const LSP_READY_POLL_INTERVAL_MS = 250;
+import { POLL_INTERVAL_MS, WAIT_MS } from "./timeouts";
 
 /** LSP lifecycle states exposed to consumers. */
 export type LspState = "idle" | "starting" | "running" | "stopped";
@@ -264,7 +259,7 @@ async function awaitLspReady(signals: StoreSignals, timeoutMs: number): Promise<
         clearInterval(interval);
         resolve("poll");
       }
-    }, LSP_READY_POLL_INTERVAL_MS);
+    }, POLL_INTERVAL_MS);
     setTimeout(() => { clearInterval(interval); }, timeoutMs);
   });
 
@@ -343,7 +338,7 @@ export function createStore(onReset?: () => void): Store {
     isServerCommandAdvertised(id: string): boolean {
       return signals.serverCommands.value.has(id);
     },
-    async ensureLspReadyPromise(timeoutMs = DEFAULT_LSP_READY_TIMEOUT_MS): Promise<Result<LanguageClient>> {
+    async ensureLspReadyPromise(timeoutMs = WAIT_MS): Promise<Result<LanguageClient>> {
       return awaitLspReady(signals, timeoutMs);
     },
     reset(): void {

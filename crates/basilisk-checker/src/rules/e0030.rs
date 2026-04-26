@@ -88,6 +88,7 @@ impl Rule for NonDefaultAfterDefault {
                              a `TypeVarTuple`"
                                 .to_owned(),
                         ),
+                        provenance: None,
                     });
                     continue;
                 }
@@ -114,6 +115,7 @@ impl Rule for NonDefaultAfterDefault {
                             "PEP 696: non-default TypeVars must not follow default TypeVars"
                                 .to_owned(),
                         ),
+                        provenance: None,
                     });
                 }
             }

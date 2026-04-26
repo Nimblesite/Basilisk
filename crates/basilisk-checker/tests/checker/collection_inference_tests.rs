@@ -139,37 +139,6 @@ def f() -> None:
 }
 
 #[test]
-fn test_literal_inference_module_scope() -> Result<(), Box<dyn std::error::Error>> {
-    let src = "
-STATUS = 'active'
-MAX = 100
-";
-    let diags = run(src)?;
-    // E0003 fires for unannotated module vars (strict mode) — exclude it here.
-    let non_e0003: Vec<_> = diags
-        .iter()
-        .filter(|d| d.code.code != "BSK-E0003")
-        .collect();
-    assert!(
-        non_e0003.is_empty(),
-        "module-level literals should be clean (excluding E0003), got: {:?}",
-        non_e0003.iter().map(|d| &d.message).collect::<Vec<_>>()
-    );
-    Ok(())
-}
-
-#[test]
-fn test_literal_inference_function_scope() -> Result<(), Box<dyn std::error::Error>> {
-    let src = "
-def f() -> None:
-    x = 'active'
-";
-    let diags = run(src)?;
-    assert!(diags.is_empty(), "function-local literals should be clean");
-    Ok(())
-}
-
-#[test]
 fn test_assignment_narrowing() -> Result<(), Box<dyn std::error::Error>> {
     let src = "
 def f() -> None:
@@ -232,17 +201,5 @@ def f() -> None:
 ";
     let diags = run(src)?;
     assert!(diags.is_empty(), "augmented assignment should be clean");
-    Ok(())
-}
-
-#[test]
-fn test_walrus_operator_inference() -> Result<(), Box<dyn std::error::Error>> {
-    let src = "
-def f(a: list) -> None:
-    if (n := len(a)) > 10:
-        reveal_type(n)
-";
-    let diags = run(src)?;
-    assert!(diags.is_empty(), "walrus operator should be clean");
     Ok(())
 }

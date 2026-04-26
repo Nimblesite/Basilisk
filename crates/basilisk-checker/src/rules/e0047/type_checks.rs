@@ -183,10 +183,8 @@ pub(super) fn has_top_level_token(s: &str, token: &str) -> bool {
         match bytes.get(i).copied() {
             Some(b'[' | b'(' | b'{') => depth += 1,
             Some(b']' | b')' | b'}') => depth -= 1,
-            Some(_) if depth == 0 => {
-                if bytes.get(i..i + tok_len) == Some(tok) {
-                    return true;
-                }
+            Some(_) if depth == 0 && bytes.get(i..i + tok_len) == Some(tok) => {
+                return true;
             }
             _ => {}
         }

@@ -93,7 +93,7 @@ mutants.out.backup-*/
 benchmarks/results/
 
 # =============================================================================
-# Conformance test suite (fetched via conformance/fetch-conformance.sh)
+# Conformance test suite (fetched via make conformance / scripts/conformance.sh)
 # =============================================================================
 crates/basilisk-cli/tests/conformance/
 

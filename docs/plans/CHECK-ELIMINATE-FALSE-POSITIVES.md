@@ -134,7 +134,7 @@ These require per-rule investigation after Step 0 gives us exact FP-to-rule mapp
 ## Step 7: Type Narrowing and Full Inference Engine (est. ~125 FP eliminated)
 
 > **Full plan**: [CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md](CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md)
-> **Spec**: [CHECKER-TYPE-INFERENCE-SPEC.md](../specs/CHECKER-TYPE-INFERENCE-SPEC.md)
+> **Spec**: [CHECKER-TYPE-INFERENCE-SPEC.md §TYPEINF-NARROWING](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING)
 
 The remaining ~125 FPs cannot be fixed without fundamental engine work. The checker currently uses text-based annotation parsing and literal-only RHS inference. It has no narrowing engine, no TypeVar constraint solver, and no class hierarchy resolution. See the dedicated plan for full details.
 

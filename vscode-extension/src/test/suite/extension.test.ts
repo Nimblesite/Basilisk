@@ -2,10 +2,9 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { getStore } from '../../extension';
+import { POLL_INTERVAL_MS, WAIT_MS } from "./test-helpers";
 
 const EXTENSION_ID = 'basilisk-lang.basilisk';
-const ACTIVATION_TIMEOUT_MS = 5_000;
-const POLL_INTERVAL_MS = 100;
 
 interface PackageJSON {
     displayName: string;
@@ -31,7 +30,7 @@ suite('Basilisk Extension E2E Tests', () => {
         if (ext && !ext.isActive) {
             await ext.activate();
         }
-        const deadline = Date.now() + ACTIVATION_TIMEOUT_MS;
+        const deadline = Date.now() + WAIT_MS;
         while (Date.now() < deadline) {
             if (ext?.isActive) {break;}
             await new Promise<void>(r => setTimeout(r, POLL_INTERVAL_MS));

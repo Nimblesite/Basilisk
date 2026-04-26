@@ -3,16 +3,14 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { getStore } from '../../extension';
 import {
-    SUITE_SETUP_TIMEOUT_MS,
     setupLspTestSuite,
     teardownLspTestSuite,
-} from './test-helpers';
+} from "./test-helpers";
 
 suite('Basilisk uv Integration Tests', () => {
     let tmpDir: string;
 
     suiteSetup(async function () {
-        this.timeout(SUITE_SETUP_TIMEOUT_MS);
         const result = await setupLspTestSuite('basilisk-uv-test-');
         tmpDir = result.tmpDir;
     });

@@ -1,126 +1,80 @@
-SHELL := /bin/bash
-.SHELLFLAGS := -euo pipefail -c
-.DEFAULT_GOAL := help
+# agent-pmo:2efd847
+# =============================================================================
+# Standard Makefile — Basilisk
+# Cross-platform: Linux, macOS, Windows (via GNU Make)
+# Exactly 7 public targets: build, test, lint, fmt, clean, ci, setup
+# =============================================================================
 
-# ── Configuration ─────────────────────────────────────────────────────────────
+.PHONY: build test lint fmt clean ci setup conformance package-vsix install-binaries
 
+# ---------------------------------------------------------------------------
+# OS Detection
+# ---------------------------------------------------------------------------
+ifeq ($(OS),Windows_NT)
+  SHELL := powershell.exe
+  .SHELLFLAGS := -NoProfile -Command
+  RM = Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+  MKDIR = New-Item -ItemType Directory -Force
+  HOME ?= $(USERPROFILE)
+else
+  RM = rm -rf
+  MKDIR = mkdir -p
+endif
+
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
 EXTENSION_DIR := vscode-extension
 ZED_DIR       := basilisk-zed
 NVIM_DIR      := basilisk.nvim
 OPEN          ?= 0
 RULE          ?=
+COVERAGE_THRESHOLDS_FILE := coverage-thresholds.json
 
-# Coverage thresholds (override via environment)
-TEST_COVERAGE_BASILISK_CHECKER  ?= 92
-TEST_COVERAGE_BASILISK_CLI      ?= 94
-TEST_COVERAGE_BASILISK_DB       ?= 100
-TEST_COVERAGE_BASILISK_LSP      ?= 74
-TEST_COVERAGE_BASILISK_MOJO     ?= 91
-TEST_COVERAGE_BASILISK_PARSER   ?= 100
-TEST_COVERAGE_BASILISK_PLUGIN   ?= 100
-TEST_COVERAGE_BASILISK_RESOLVER ?= 95
-TEST_COVERAGE_BASILISK_STUBS    ?= 100
-TEST_COVERAGE_BASILISK_CONFIG   ?= 92
-TEST_COVERAGE_VSIX              ?= 60
-TEST_COVERAGE_NVIM              ?= 30
+# =============================================================================
+# Standard Targets
+# =============================================================================
 
-# ── Build ─────────────────────────────────────────────────────────────────────
+## build: Compile/assemble all artifacts
+build: _build_rust _build_vsix
 
-.PHONY: build build-rust build-vsix
-
-build: build-rust build-vsix ## Build all artifacts
-
-build-rust: ## Build Rust workspace (release)
-	@echo -e '\033[1m\033[0;36m▶ Building Rust (release)\033[0m' && \
-	cargo build --release && \
-	echo -e '\033[0;32m✓ Rust build complete\033[0m'
-
-build-vsix: ## Build VS Code extension
-	@echo -e '\033[1m\033[0;36m▶ Building VS Code extension\033[0m' && \
-	cd $(EXTENSION_DIR) && npm ci && npm run compile && \
-	echo -e '\033[0;32m✓ VS Code extension compiled\033[0m'
-
-# ── Lint ──────────────────────────────────────────────────────────────────────
-
-.PHONY: lint lint-rust lint-vsix
-
-lint: lint-rust lint-vsix ## Lint all languages
-
-lint-rust: ## Lint Rust (clippy + fmt)
-	@echo -e '\033[1m\033[0;36m▶ Linting Rust\033[0m' && \
-	cargo clippy --workspace --all-targets -- -D warnings && \
-	cargo fmt --all -- --check && \
-	echo -e '\033[0;32m✓ Rust lint passed\033[0m'
-
-lint-vsix: ## Lint VS Code extension (ESLint)
-	@echo -e '\033[1m\033[0;36m▶ Linting VS Code extension\033[0m' && \
-	cd $(EXTENSION_DIR) && npm run lint && \
-	echo -e '\033[0;32m✓ VS Code lint passed\033[0m'
-
-# ── Format ───────────────────────────────────────────────────────────────────
-
-.PHONY: fmt fmt-check format format-rust format-python format-vsix
-
-fmt: format ## Format all code (standard alias)
-
-fmt-check: ## Check formatting without modifying (used in CI)
-	@echo -e '\033[1m\033[0;36m▶ Checking formatting\033[0m' && \
-	cargo fmt --all -- --check && \
-	ruff format --check --exclude '*/fixtures/*' . && \
-	echo -e '\033[0;32m✓ Format check passed\033[0m'
-
-format: format-rust format-python format-vsix ## Format all code
-
-format-rust: ## Format Rust code
-	@echo -e '\033[1m\033[0;36m▶ Formatting Rust\033[0m' && \
-	cargo fmt --all && \
-	echo -e '\033[0;32m✓ Rust formatted\033[0m'
-
-format-python: ## Format Python code (ruff)
-	@echo -e '\033[1m\033[0;36m▶ Formatting Python\033[0m' && \
-	ruff format --exclude '*/fixtures/*' . && \
-	ruff check --fix --exclude '*/fixtures/*' . && \
-	echo -e '\033[0;32m✓ Python formatted\033[0m'
-
-format-vsix: ## Format VS Code extension (ESLint --fix)
-	@echo -e '\033[1m\033[0;36m▶ Formatting VS Code extension\033[0m' && \
-	cd $(EXTENSION_DIR) && npm run lint:fix && \
-	echo -e '\033[0;32m✓ VS Code extension formatted\033[0m'
-
-# ── Test ──────────────────────────────────────────────────────────────────────
-
-.PHONY: test test-rust test-vsix test-nvim test-zed test-compiler test-lsp audit
-
-test: audit ## Run full test suite (Rust first, then extensions in parallel)
-	@$(MAKE) --no-print-directory test-rust && \
-	$(MAKE) --no-print-directory -j3 test-vsix test-nvim test-zed && \
+## test: Fail-fast tests + coverage + threshold enforcement.
+##       See REPO-STANDARDS-SPEC [TEST-RULES] and [COVERAGE-THRESHOLDS-JSON].
+test: _audit
+	@$(MAKE) --no-print-directory _test_rust && \
+	$(MAKE) --no-print-directory -j3 _test_vsix _test_nvim _test_zed && \
 	echo -e '\n\033[0;32m✓ All tests passed.\033[0m'
 
-audit: ## Check all required build/test dependencies
-	@bash scripts/audit.sh
+## lint: Run all linters/analyzers (read-only). Does NOT format.
+lint: _lint_rust _lint_vsix
 
-test-rust: ## Run Rust tests with coverage + thresholds (OPEN=1 for report)
-	@OPEN=$(OPEN) \
-	TEST_COVERAGE_BASILISK_CHECKER=$(TEST_COVERAGE_BASILISK_CHECKER) \
-	TEST_COVERAGE_BASILISK_CLI=$(TEST_COVERAGE_BASILISK_CLI) \
-	TEST_COVERAGE_BASILISK_DB=$(TEST_COVERAGE_BASILISK_DB) \
-	TEST_COVERAGE_BASILISK_LSP=$(TEST_COVERAGE_BASILISK_LSP) \
-	TEST_COVERAGE_BASILISK_MOJO=$(TEST_COVERAGE_BASILISK_MOJO) \
-	TEST_COVERAGE_BASILISK_PARSER=$(TEST_COVERAGE_BASILISK_PARSER) \
-	TEST_COVERAGE_BASILISK_PLUGIN=$(TEST_COVERAGE_BASILISK_PLUGIN) \
-	TEST_COVERAGE_BASILISK_RESOLVER=$(TEST_COVERAGE_BASILISK_RESOLVER) \
-	TEST_COVERAGE_BASILISK_STUBS=$(TEST_COVERAGE_BASILISK_STUBS) \
-	TEST_COVERAGE_BASILISK_CONFIG=$(TEST_COVERAGE_BASILISK_CONFIG) \
-	bash scripts/test-rust.sh
+## fmt: Format all code in-place
+fmt: _fmt_rust _fmt_python _fmt_vsix
 
-test-vsix: ## Run VS Code extension tests + coverage threshold
-	@TEST_COVERAGE_VSIX=$(TEST_COVERAGE_VSIX) bash scripts/test-vscode.sh
+## clean: Remove all build artifacts
+clean:
+	@echo -e '\033[1m\033[0;36m▶ Cleaning build artifacts\033[0m' && \
+	cargo clean && \
+	$(RM) $(EXTENSION_DIR)/out $(EXTENSION_DIR)/*.vsix && \
+	$(RM) lcov.info && \
+	echo -e '\033[0;32m✓ Clean complete\033[0m'
 
-test-nvim: ## Run Neovim extension e2e + screenshot tests
-	@TEST_COVERAGE_NVIM=$(TEST_COVERAGE_NVIM) bash scripts/test-nvim.sh
+## ci: lint + test + build (full CI simulation)
+ci: lint test build
 
-test-zed: ## Run Zed extension tests
-	@bash scripts/test-zed.sh
+## setup: Post-create dev environment setup
+setup:
+	@bash scripts/setup.sh
+
+# =============================================================================
+# Repo-Specific Targets
+# =============================================================================
+
+conformance: ## Run PEP conformance test suite (--fetch to re-download)
+	@bash scripts/conformance.sh $(if $(FETCH),--fetch,)
+
+benchmark: _build_rust ## Run benchmarks (RULE=e0034 to filter)
+	@RULE='$(RULE)' bash scripts/benchmark.sh
 
 test-compiler: ## Run compiler E2E tests
 	@echo -e '\033[1m\033[0;36m▶ Running Basilisk compiler E2E tests\033[0m' && \
@@ -147,18 +101,122 @@ test-lsp: ## Run LSP integration tests (slow, not in main suite)
 	cargo test --profile ci -p basilisk-lsp --test zed_tests && \
 	echo -e '\033[0;32m✓ zed_tests done\033[0m'
 
-# ── Package ───────────────────────────────────────────────────────────────────
+package: _package_vsix _package_zed ## Package all extensions
 
-.PHONY: package package-vsix package-zed
+package-vsix: _package_vsix ## Package the VS Code extension into a .vsix
 
-package: package-vsix package-zed ## Package all extensions
+install-binaries: ## Install all Basilisk binaries (basilisk, basilisk-profiler-helper, debugpy) to PATH
+	@echo -e '\033[1m\033[0;36m▶ Installing basilisk binaries\033[0m' && \
+	cargo install --path crates/basilisk-cli --force && \
+	cargo install --path crates/basilisk-profiler-helper --force && \
+	echo -e '\033[1m\033[0;36m▶ Installing debugpy\033[0m' && \
+	python3 -m pip install --user --upgrade --break-system-packages debugpy && \
+	echo -e "\033[0;32m✓ basilisk                 → $$(command -v basilisk)\033[0m" && \
+	echo -e "\033[0;32m✓ basilisk-profiler-helper → $$(command -v basilisk-profiler-helper)\033[0m" && \
+	echo -e "\033[0;32m✓ debugpy                  → $$(python3 -c 'import debugpy, os; print(os.path.dirname(debugpy.__file__))')\033[0m" && \
+	basilisk --version
 
-package-vsix: ## Package VS Code extension as VSIX
+# =============================================================================
+# Internal Recipes (private — not in .PHONY)
+# =============================================================================
+
+_build_rust:
+	@echo -e '\033[1m\033[0;36m▶ Building Rust (release)\033[0m' && \
+	cargo build --release && \
+	echo -e '\033[0;32m✓ Rust build complete\033[0m'
+
+_build_vsix:
+	@echo -e '\033[1m\033[0;36m▶ Building VS Code extension\033[0m' && \
+	cd $(EXTENSION_DIR) && npm ci && npm run compile && \
+	echo -e '\033[0;32m✓ VS Code extension compiled\033[0m'
+
+_lint_rust:
+	@echo -e '\033[1m\033[0;36m▶ Linting Rust\033[0m' && \
+	cargo check --workspace --all-targets && \
+	cargo clippy --workspace --all-targets -- -D warnings && \
+	echo -e '\033[0;32m✓ Rust lint passed\033[0m'
+
+_lint_vsix:
+	@echo -e '\033[1m\033[0;36m▶ Linting VS Code extension\033[0m' && \
+	cd $(EXTENSION_DIR) && npm ci --silent && npm run lint && \
+	echo -e '\033[0;32m✓ VS Code lint passed\033[0m'
+
+_fmt_rust:
+	@echo -e '\033[1m\033[0;36m▶ Formatting Rust\033[0m' && \
+	cargo fmt --all && \
+	echo -e '\033[0;32m✓ Rust formatted\033[0m'
+
+_fmt_python:
+	@echo -e '\033[1m\033[0;36m▶ Formatting Python\033[0m' && \
+	ruff format --exclude '*/fixtures/*' . && \
+	ruff check --fix --exclude '*/fixtures/*' . && \
+	echo -e '\033[0;32m✓ Python formatted\033[0m'
+
+_fmt_vsix:
+	@echo -e '\033[1m\033[0;36m▶ Formatting VS Code extension\033[0m' && \
+	cd $(EXTENSION_DIR) && npm run lint:fix && \
+	echo -e '\033[0;32m✓ VS Code extension formatted\033[0m'
+
+_audit:
+	@bash scripts/audit.sh
+
+_test_rust:
+	@OPEN=$(OPEN) bash scripts/test-rust.sh
+
+## test-vsix: Compile, lint, E2E-test, and coverage-gate the VS Code extension.
+_test_vsix:
+	@set -e; \
+	REPO_ROOT="$$(pwd)"; \
+	BASILISK_BIN=""; \
+	for c in "$$REPO_ROOT/target/llvm-cov-target/ci/basilisk" \
+	         "$$REPO_ROOT/target/ci/basilisk" \
+	         "$$REPO_ROOT/target/llvm-cov-target/release/basilisk" \
+	         "$$REPO_ROOT/target/release/basilisk" \
+	         "$$REPO_ROOT/target/debug/basilisk"; do \
+	    if [ -x "$$c" ]; then BASILISK_BIN="$$c"; break; fi; \
+	done; \
+	if [ -z "$$BASILISK_BIN" ]; then \
+	    echo -e '\033[1m\033[0;36m▶ Building basilisk binary\033[0m'; \
+	    cargo build --profile ci; \
+	    BASILISK_BIN="$$REPO_ROOT/target/ci/basilisk"; \
+	fi; \
+	[ -x "$$BASILISK_BIN" ] || { echo -e '\033[0;31m✗ basilisk binary not found\033[0m'; exit 1; }; \
+	echo -e "\033[0;32m✓ basilisk binary: $$BASILISK_BIN\033[0m"; \
+	echo -e '\033[1m\033[0;36m▶ VS Code extension — compile\033[0m'; \
+	cd $(EXTENSION_DIR) && npm ci && npm run compile; \
+	echo -e '\033[1m\033[0;36m▶ VS Code extension — ESLint\033[0m'; \
+	npm run lint; \
+	echo -e '\033[1m\033[0;36m▶ VS Code E2E tests\033[0m'; \
+	VSCODE_TEST_CMD="npm test -- --coverage"; \
+	if [ -z "$${DISPLAY:-}" ] && command -v xvfb-run >/dev/null 2>&1; then \
+	    VSCODE_TEST_CMD="xvfb-run -a $$VSCODE_TEST_CMD"; \
+	fi; \
+	BASILISK_EXECUTABLE_PATH="$$BASILISK_BIN" $$VSCODE_TEST_CMD; \
+	echo -e '\033[1m\033[0;36m▶ VS Code extension — coverage threshold\033[0m'; \
+	VSIX_LCOV="$$REPO_ROOT/$(EXTENSION_DIR)/coverage/lcov.info"; \
+	VSIX_THRESHOLD=$$(python3 -c 'import json; print(json.load(open("'"$$REPO_ROOT"'/$(COVERAGE_THRESHOLDS_FILE)"))["projects"]["vsix"]["threshold"])'); \
+	if [ ! -f "$$VSIX_LCOV" ]; then echo -e '\033[0;31m✗ vscode-extension: no LCOV data — coverage collection broken\033[0m'; exit 1; fi; \
+	VSIX_TOTAL=$$(grep -c '^DA:' "$$VSIX_LCOV" || true); \
+	if [ "$$VSIX_TOTAL" -eq 0 ]; then echo -e '\033[0;31m✗ vscode-extension: no LCOV data\033[0m'; exit 1; fi; \
+	VSIX_COVERED=$$(grep -c '^DA:[^,]*,[^0]' "$$VSIX_LCOV" || true); \
+	VSIX_PCT=$$(( VSIX_COVERED * 100 / VSIX_TOTAL )); \
+	if [ "$$VSIX_PCT" -lt "$$VSIX_THRESHOLD" ]; then \
+	    echo -e "\033[0;31m✗ vscode-extension: $$VSIX_PCT%% < $$VSIX_THRESHOLD%% threshold — FAIL\033[0m"; exit 1; \
+	fi; \
+	echo -e "\033[0;32m✓ vscode-extension: $$VSIX_PCT%% ≥ $$VSIX_THRESHOLD%% threshold\033[0m"
+
+_test_nvim:
+	@bash scripts/test-nvim.sh
+
+_test_zed:
+	@bash scripts/test-zed.sh
+
+_package_vsix:
 	@echo -e '\033[1m\033[0;36m▶ Packaging VSIX\033[0m' && \
 	cd $(EXTENSION_DIR) && npm ci && npm run package && \
 	echo -e '\033[0;32m✓ VSIX built\033[0m'
 
-package-zed: ## Build CLI binary for Zed extension
+_package_zed:
 	@echo -e '\033[1m\033[0;36m▶ Building basilisk CLI for Zed\033[0m' && \
 	cargo install --path crates/basilisk-cli --force && \
 	echo "$$(which basilisk) installed" && \
@@ -167,83 +225,3 @@ package-zed: ## Build CLI binary for Zed extension
 	echo "  Cmd+Shift+P -> 'zed: install dev extension'" && \
 	echo "  Select: $(ZED_DIR)"
 
-# ── Install ───────────────────────────────────────────────────────────────────
-
-.PHONY: install install-rust install-vsix
-
-install: install-rust install-vsix ## Build and install everything
-
-install-rust: build-rust ## Install basilisk binary to ~/.cargo/bin
-	@echo -e '\033[1m\033[0;36m▶ Installing basilisk\033[0m' && \
-	cargo install --path crates/basilisk-cli --force && \
-	echo -e "\033[0;32m✓ $$(which basilisk)\033[0m" && \
-	basilisk --version
-
-install-vsix: package-vsix ## Install VSIX into VS Code
-	@echo -e '\033[1m\033[0;36m▶ Installing VSIX into VS Code\033[0m' && \
-	VSIX=$$(ls $(EXTENSION_DIR)/*.vsix | head -1) && \
-	code --install-extension "$$VSIX" --force && \
-	echo -e "\033[0;32m✓ $$VSIX\033[0m" && \
-	echo "Reload VS Code (Cmd+Shift+P → Developer: Reload Window) to activate."
-
-# ── Setup ─────────────────────────────────────────────────────────────────────
-
-.PHONY: setup
-
-setup: ## Install all build/test dependencies
-	@bash scripts/setup.sh
-
-# ── Benchmark ─────────────────────────────────────────────────────────────────
-
-.PHONY: benchmark
-
-benchmark: build-rust ## Run benchmarks (RULE=e0034 to filter)
-	@RULE='$(RULE)' bash scripts/benchmark.sh
-
-# ── Examples ──────────────────────────────────────────────────────────────────
-
-.PHONY: example-all example-good example-bad example-mixed
-
-example-all: ## Check all example files
-	@cargo run -- check examples/
-
-example-good: ## Check examples/good.py (expects clean pass)
-	@cargo run -- check examples/good.py
-
-example-bad: ## Check examples/bad.py (expects errors)
-	@cargo run -- check examples/bad.py
-
-example-mixed: ## Check examples/mixed.py (expects some errors)
-	@cargo run -- check examples/mixed.py
-
-# ── Standard Aliases ─────────────────────────────────────────────────────────
-
-.PHONY: check ci coverage coverage-check
-
-check: lint test ## lint + test (pre-commit validation)
-
-ci: lint test build ## lint + test + build (full CI simulation)
-
-coverage: test-rust ## Generate coverage report (OPEN=1 to view)
-	@OPEN=1 bash scripts/test-rust.sh
-
-coverage-check: test-rust ## Assert per-crate coverage thresholds
-
-# ── Clean ─────────────────────────────────────────────────────────────────────
-
-.PHONY: clean
-
-clean: ## Remove build artifacts
-	@echo -e '\033[1m\033[0;36m▶ Cleaning build artifacts\033[0m' && \
-	cargo clean && \
-	rm -rf $(EXTENSION_DIR)/out $(EXTENSION_DIR)/*.vsix && \
-	rm -f lcov.info && \
-	echo -e '\033[0;32m✓ Clean complete\033[0m'
-
-# ── Help ──────────────────────────────────────────────────────────────────────
-
-.PHONY: help
-
-help: ## Show available targets
-	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | sort | \
-		awk 'BEGIN {FS = ":.*## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'

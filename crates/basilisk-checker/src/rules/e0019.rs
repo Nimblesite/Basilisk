@@ -73,5 +73,6 @@ fn make_diagnostic(func: &FunctionInfo, name: &str, span: Span, path: &str) -> D
              (if/while/try) and may not be defined on every execution path"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }

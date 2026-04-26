@@ -1,6 +1,6 @@
 # Basilisk Zed Extension
 
-## Goal
+## Goal {#ZED-GOAL}
 
 A first-class Zed extension that connects to the same `basilisk lsp` binary as the VS Code and Neovim extensions. One LSP, three editors. The Zed extension provides language intelligence, debugging, and profiling — reusing 100% of the Rust backend.
 
@@ -9,7 +9,7 @@ Share code between the Zed extension and the other crates AMAP - even if just sh
 
 **CRITICAL: AIMING FOR FEATURE PARITY BETWEEN ZED, VS CODE, AND NEOVIM EXTENSIONS**
 
-All LSP features, DAP integration, custom commands, configuration settings, and binary resolution are defined in **`LSP-ARCHITECTURE-SPEC.md`** — the single source of truth. This spec only documents **Zed-specific implementation details**.
+All LSP features, DAP integration, custom commands, configuration settings, and binary resolution are defined in **[LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md)** — the single source of truth. This spec only documents **Zed-specific implementation details**.
 
 CRITICAL: We only target Wasm 64 bit. We don't need to support 32 bit wasm for now
 
@@ -18,7 +18,7 @@ CRITICAL: We only target Wasm 64 bit. We don't need to support 32 bit wasm for n
 - [Zed Extension Development](https://zed.dev/docs/extensions/developing-extensions)
 - [Zed Python Language Support](https://zed.dev/docs/languages/python)
 
-## What Zed Extensions Can Do
+## Zed Extension Capabilities {#ZED-CAPS}
 
 Zed extensions are Rust compiled to WASM. The API surface is deliberately narrow:
 
@@ -38,9 +38,9 @@ Zed extensions are Rust compiled to WASM. The API surface is deliberately narrow
 | File watchers | **No** | Not available |
 | Terminal control | **No** | Not available |
 
-This means: **all intelligence flows through LSP and DAP.** No client-side tricks. The LSP must be the source of everything. See `LSP-ARCHITECTURE-SPEC.md` § Command Registration Rule — the server advertises all commands, clients never pre-register them.
+This means: **all intelligence flows through LSP and DAP.** No client-side tricks. The LSP must be the source of everything. See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CMDRULE](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDRULE) — the server advertises all commands, clients never pre-register them.
 
-## Architecture
+## Architecture {#ZED-ARCH}
 
 ```mermaid
 graph TB
@@ -72,7 +72,7 @@ graph TB
     SLASH -->|"Triggers LSP commands"| LSP_CLIENT
 ```
 
-## Extension Structure
+## Extension Structure {#ZED-STRUCTURE}
 
 ```
 basilisk-zed/
@@ -223,17 +223,17 @@ impl zed::Extension for BasiliskExtension {
 zed::register_extension!(BasiliskExtension);
 ```
 
-## Features
+## Features {#ZED-FEATURES}
 
-### Language Intelligence (via LSP)
+### Language Intelligence {#ZED-LSP}
 
-> All 21 LSP features are defined in `LSP-ARCHITECTURE-SPEC.md` § LSP Features. Zed supports all of them natively via its built-in LSP client. Zero work needed in the Zed extension — the LSP protocol handles everything.
+> All 21 LSP features are defined in [LSP-ARCHITECTURE-SPEC.md §LSPARCH-FEATURES](LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES). Zed supports all of them natively via its built-in LSP client. Zero work needed in the Zed extension — the LSP protocol handles everything.
 
 **Zed-specific note**: Semantic tokens require `"semantic_tokens": "combined"` in Zed settings.
 
-### Debugging (via DAP)
+### Debugging {#ZED-DAP}
 
-> See `LSP-ARCHITECTURE-SPEC.md` § Custom LSP Commands for `basilisk/startDebugSession` and § DapTcpProxy for the shared proxy specification.
+> See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CMDS](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDS) for `basilisk/startDebugSession` and [§LSPARCH-DAPPROXY](LSP-ARCHITECTURE-SPEC.md#LSPARCH-DAPPROXY) for the shared proxy specification.
 
 Zed has native DAP support. The debug flow:
 
@@ -266,9 +266,9 @@ The `debug_adapter_schemas/basilisk-debug.json` schema defines the Zed-specific 
 }
 ```
 
-### Profiling
+### Profiling {#ZED-PROFILE}
 
-> See `LSP-ARCHITECTURE-SPEC.md` § Custom LSP Commands for the profiling and memory command specifications shared across all editors.
+> See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CMDS](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDS) for the profiling and memory command specifications shared across all editors.
 
 Zed has no webview support, so profiling visualization works differently than VS Code:
 
@@ -285,7 +285,7 @@ Zed has no webview support, so profiling visualization works differently than VS
 2. **Slash Commands** — `/profile` and `/profstop` trigger profiling via the AI assistant panel.
 3. **External Viewer** — The LSP generates a speedscope JSON file and opens it in the browser.
 
-### Tree-sitter Queries
+### Tree-sitter Queries {#ZED-TREESITTER}
 
 The extension ships tree-sitter-python queries for:
 
@@ -299,7 +299,7 @@ The extension ships tree-sitter-python queries for:
 
 Note: Zed already has built-in Python support via tree-sitter-python. The Basilisk extension can either augment the built-in queries or rely on them entirely, only providing the LSP and DAP integration.
 
-## Binary Distribution
+## Binary Distribution {#ZED-DIST}
 
 The extension downloads the `basilisk` binary from GitHub Releases on first activation:
 
@@ -328,9 +328,9 @@ Target assets:
 - `basilisk-aarch64-unknown-linux-gnu.tar.gz`
 - `basilisk-x86_64-pc-windows-msvc.zip`
 
-## Zed Settings
+## Zed Settings {#ZED-CONFIG}
 
-> Shared configuration settings are defined in `LSP-ARCHITECTURE-SPEC.md` § Shared Configuration Settings. Below shows how to map them into Zed's `settings.json` structure.
+> Shared configuration settings are defined in [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG). Below shows how to map them into Zed's `settings.json` structure.
 
 ```json
 {
@@ -343,7 +343,7 @@ Target assets:
         "python": "/path/to/python3"
       },
       "settings": {
-        // All keys from LSP-ARCHITECTURE-SPEC.md "Shared Configuration Settings"
+        // All keys from LSP-ARCHITECTURE-SPEC.md §LSPARCH-CONFIG
         // nested under the "basilisk" key
         "inlayHints": {
           "parameterNames": true,
@@ -365,7 +365,7 @@ Target assets:
 }
 ```
 
-## What We Cannot Do in Zed (Yet)
+## Limitations {#ZED-LIMITS}
 
 These features exist in the VS Code extension but have no Zed equivalent:
 
@@ -380,7 +380,7 @@ These features exist in the VS Code extension but have no Zed equivalent:
 
 As Zed's extension API matures (webviews are in discussion), these gaps will close. The LSP already produces all the data — it's only the visualization that differs.
 
-## Shared Code Budget
+## Shared Code Budget {#ZED-SHARED}
 
 | Component | Shared? | Where It Lives |
 |---|---|---|
@@ -398,7 +398,7 @@ The entire backend is shared. Only thin editor-specific glue differs.
 
 ---
 
-## TODO List
+## Status {#ZED-STATUS}
 
 See [ZED-PLAN.md](../plans/ZED-PLAN.md) for the full implementation plan with phasing.
 

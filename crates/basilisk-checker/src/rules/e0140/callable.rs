@@ -139,6 +139,7 @@ fn check_concatenate_prefix(
             path: path.to_owned(),
             help: None,
             note: None,
+            provenance: None,
         });
         return;
     }
@@ -154,6 +155,7 @@ fn check_concatenate_prefix(
             path: path.to_owned(),
             help: None,
             note: None,
+        provenance: None,
         });
         return;
     }
@@ -173,6 +175,7 @@ fn check_concatenate_prefix(
                     path: path.to_owned(),
                     help: None,
                     note: None,
+            provenance: None,
                 });
             }
         }
@@ -208,6 +211,7 @@ fn check_param_count_compat(
             path: path.to_owned(),
             help: None,
             note: None,
+        provenance: None,
         });
     } else if exp > max && !func.has_varargs {
         diag.push(Diagnostic {
@@ -221,6 +225,7 @@ fn check_param_count_compat(
             path: path.to_owned(),
             help: None,
             note: None,
+        provenance: None,
         });
     }
 }

@@ -226,6 +226,7 @@ impl Rule for TypeIsInconsistentNarrowing {
                          consistent with the input type"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
             }
         }

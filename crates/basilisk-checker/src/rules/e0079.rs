@@ -255,6 +255,7 @@ fn check_annotated_assign(
                  public interface is compatible with the protocol"
                     .to_owned(),
             ),
+            provenance: None,
         });
         return;
     };
@@ -287,6 +288,7 @@ fn check_annotated_assign(
                  public interface is compatible with the protocol"
                     .to_owned(),
             ),
+            provenance: None,
         });
     }
 }

@@ -41,6 +41,9 @@ pub struct ImportSearchPaths {
 
 impl ImportSearchPaths {
     /// Build search paths from workspace config.
+    ///
+    /// Automatically includes `.basilisk/stubs/` in each root as a stub
+    /// search path for auto-generated Tier 3 stubs.
     #[must_use]
     pub fn from_config(
         roots: &[PathBuf],
@@ -48,10 +51,20 @@ impl ImportSearchPaths {
         registry: Option<Arc<PackageRegistry>>,
     ) -> Self {
         let site_packages = resolve_site_packages(roots, config);
+
+        // Include user-configured stub paths + auto-generated stub cache dirs.
+        let mut stub_paths = config.stub_paths.clone();
+        for root in roots {
+            let generated_stubs = root.join(basilisk_stubs::generate::cache::DEFAULT_CACHE_DIR);
+            if generated_stubs.is_dir() {
+                stub_paths.push(generated_stubs);
+            }
+        }
+
         Self {
             roots: roots.to_vec(),
             extra_paths: config.extra_paths.clone(),
-            stub_paths: config.stub_paths.clone(),
+            stub_paths,
             workspace_members: Vec::new(),
             site_packages,
             registry,

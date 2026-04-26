@@ -155,5 +155,6 @@ fn make_diagnostic(span: Span, class_name: &str, member_name: &str, path: &str) 
              is redundant and indicates a misunderstanding of enum typing semantics"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }

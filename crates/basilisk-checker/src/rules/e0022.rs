@@ -48,5 +48,6 @@ fn make_diagnostic(span: Span, key_type: &str, path: &str) -> Diagnostic {
             "Dictionary keys must be hashable; `list`, `set`, and `dict` are not hashable"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }

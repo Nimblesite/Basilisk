@@ -68,6 +68,7 @@ impl Rule for FinalViolation {
                                 base_cls.name, child.name
                             )),
                             note: Some("`@final` (PEP 591) prohibits subclassing".to_owned()),
+                            provenance: None,
                         });
                     }
                 }
@@ -90,6 +91,7 @@ impl Rule for FinalViolation {
                         "`@final` may only be applied to methods inside a class body".to_owned(),
                     ),
                     note: Some("PEP 591: `@final` on a non-method function is an error".to_owned()),
+                    provenance: None,
                 });
             }
         }
@@ -138,6 +140,7 @@ impl Rule for FinalViolation {
                         note: Some(
                             "`@final` (PEP 591) prohibits overriding this method".to_owned(),
                         ),
+                        provenance: None,
                     });
                 }
             }

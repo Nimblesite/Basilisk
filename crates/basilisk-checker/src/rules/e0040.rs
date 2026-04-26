@@ -93,6 +93,7 @@ impl Rule for EnumWithMembersFinal {
                         "PEP 435: An Enum class with one or more members cannot be subclassed"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
             }
         }

@@ -4,10 +4,6 @@ title: 所有权安全 — E0030–E0035
 description: Mojo 启发的所有权分析规则。
 keywords: basilisk, 所有权, borrowed, owned, inout, BSK-E0030, BSK-E0031
 lang: zh
-eleventyNavigation:
-  key: Ownership Safety
-  parent: Rules
-  order: 3
 ---
 
 # 所有权安全 — E0030–E0035

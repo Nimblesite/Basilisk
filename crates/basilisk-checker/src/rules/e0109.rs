@@ -122,6 +122,7 @@ impl Rule for TypeVarBoundCallViolation {
                             note: Some(format!(
                                 "TypeVar `{ann_trimmed}` requires its argument to be a subtype of `{bound_type}`"
                             )),
+                            provenance: None,
                         });
                     }
                 }

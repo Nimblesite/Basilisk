@@ -60,6 +60,7 @@ fn check_typevar_constraints(
                 note: Some(
                     "PEP 484: the variable name and the string argument must match".to_owned(),
                 ),
+                provenance: None,
             });
         }
     }
@@ -76,6 +77,7 @@ fn check_typevar_constraints(
             path: module.path.clone(),
             help: Some("Add a second constraint or remove the single constraint".to_owned()),
             note: Some("PEP 484: a TypeVar with one constraint is invalid".to_owned()),
+            provenance: None,
         });
     }
     // Cannot specify both constraints and a bound.
@@ -93,6 +95,7 @@ fn check_typevar_constraints(
                 "Use either constraints (positional type args) or `bound=`, not both".to_owned(),
             ),
             note: Some("PEP 484: `TypeVar` cannot have both constraints and a `bound`".to_owned()),
+            provenance: None,
         });
     }
     // Constraint must not itself be parameterized by a TypeVar (e.g. `list[T]`).
@@ -111,6 +114,7 @@ fn check_typevar_constraints(
                 "PEP 484: TypeVar constraints cannot themselves be parameterized by type variables"
                     .to_owned(),
             ),
+            provenance: None,
         });
     }
     // Bound must not be parameterized by a TypeVar (e.g. `bound=list[T]`).
@@ -129,6 +133,7 @@ fn check_typevar_constraints(
                 "PEP 484: TypeVar bound cannot itself be parameterized by a type variable"
                     .to_owned(),
             ),
+            provenance: None,
         });
     }
 }

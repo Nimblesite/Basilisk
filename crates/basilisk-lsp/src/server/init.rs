@@ -61,8 +61,16 @@ pub(super) async fn initialize(
     // Store workspace roots for later use by import resolution.
     (*server.workspace_roots.write().await).clone_from(&roots);
 
+    // Load project-level checker config (pyproject.toml / basilisk.json) so
+    // that rule severity overrides, per-module, and per-path settings match
+    // the CLI.
+    let checker_config = roots
+        .first()
+        .map(|r| basilisk_config::load_basilisk_config(r))
+        .unwrap_or_default();
+
     // Build the workspace index now so `initialized()` can scan immediately.
-    let index = WorkspaceIndex::new(roots, mode);
+    let index = WorkspaceIndex::new(roots, mode, checker_config);
     *server.index.write().await = Some(index);
 
     Ok(InitializeResult {
@@ -356,7 +364,11 @@ pub(super) async fn did_change_workspace_folders(
             .map_or(AnalysisMode::OpenFilesOnly, |idx| idx.mode)
     };
 
-    let index = WorkspaceIndex::new(updated_roots, mode);
+    let checker_config = updated_roots
+        .first()
+        .map(|r| basilisk_config::load_basilisk_config(r))
+        .unwrap_or_default();
+    let index = WorkspaceIndex::new(updated_roots, mode, checker_config);
     *server.index.write().await = Some(index);
 
     // Re-scan if in a whole-workspace analysis mode.
@@ -458,7 +470,7 @@ fn scan_resolve_and_check_with_roots(
     index: &WorkspaceIndex,
     roots: &[std::path::PathBuf],
 ) -> ScanResult {
-    let (results, file_count, error_count) = index.scan();
+    let (_results, file_count, _initial_error_count) = index.scan();
 
     // Resolve imports for all scanned files.
     let config = roots
@@ -473,20 +485,36 @@ fn scan_resolve_and_check_with_roots(
     search_paths.workspace_members = discover_workspace_members(roots);
     crate::import_resolver::resolve_workspace_imports(index, &search_paths);
 
-    // Cross-module: populate imported symbols and rebuild import graph, then re-check.
+    // Re-check all files now that imports are resolved. The initial scan()
+    // generates diagnostics before workspace members are known, so BSK-E0010
+    // fires for imports that are actually resolvable via workspace members.
     let diagnostics = if matches!(index.mode, AnalysisMode::CrossModule) {
         crate::cross_module::populate_cross_module_symbols(index);
         index.build_import_graph();
         info!("cross-module symbol population complete");
         recheck_with_cross_module_symbols(index)
     } else {
-        results
+        recheck_with_cross_module_symbols(index)
     };
+
+    // Recount errors after re-check (resolved imports reduce false E0010s).
+    let final_error_count: usize = diagnostics
+        .iter()
+        .map(|(_, diags)| {
+            diags
+                .iter()
+                .filter(|d| {
+                    d.severity
+                        .is_none_or(|s| s == tower_lsp::lsp_types::DiagnosticSeverity::ERROR)
+                })
+                .count()
+        })
+        .sum();
 
     ScanResult {
         diagnostics,
         file_count,
-        error_count,
+        error_count: final_error_count,
     }
 }
 
@@ -521,7 +549,8 @@ fn recheck_with_cross_module_symbols(
             continue;
         };
 
-        let checker_diags = basilisk_checker::check(resolved);
+        let file_config = index.config_for_file(entry.key());
+        let checker_diags = basilisk_checker::check_with_config(resolved, file_config);
         let lsp_diags: Vec<tower_lsp::lsp_types::Diagnostic> = checker_diags
             .iter()
             .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &entry.text))
@@ -544,35 +573,92 @@ fn recheck_with_cross_module_symbols(
 /// a `src/` subdirectory (common Python project layout) and adds it; otherwise
 /// adds the member directory itself.
 ///
-/// Returns an empty vec if this is not a uv workspace or parsing fails.
+/// In monorepo layouts (e.g. `ai_cms/agent-backend/`), `pyproject.toml` may
+/// not be at the workspace root itself. If no uv workspace is found at a root,
+/// we search one level of subdirectories for `pyproject.toml` with `src/`
+/// layouts and add those as source roots.
+///
+/// Returns an empty vec if no workspace members are found.
 fn discover_workspace_members(roots: &[std::path::PathBuf]) -> Vec<std::path::PathBuf> {
     let mut members = Vec::new();
 
     for root in roots {
-        let Ok(Some(workspace)) = basilisk_uv::parse_uv_workspace(root) else {
-            continue;
-        };
+        // Try uv workspace at this root first.
+        if let Ok(Some(workspace)) = basilisk_uv::parse_uv_workspace(root) {
+            for member_dir in &workspace.members {
+                add_source_root(&mut members, member_dir);
+            }
 
-        for member_dir in &workspace.members {
-            // Prefer src/ layout if it exists.
-            let src_dir = member_dir.join("src");
-            if src_dir.is_dir() {
-                members.push(src_dir);
-            } else {
-                members.push(member_dir.clone());
+            if !workspace.members.is_empty() {
+                info!(
+                    root = %root.display(),
+                    member_count = workspace.members.len(),
+                    "discovered uv workspace members"
+                );
+                continue;
             }
         }
 
-        if !workspace.members.is_empty() {
+        // Root itself is a Python project (pyproject.toml at the workspace
+        // root, not inside a uv workspace). Add its source root so first-party
+        // imports resolve under a `src/` layout.
+        if root.join("pyproject.toml").is_file() {
+            add_source_root(&mut members, root);
             info!(
                 root = %root.display(),
-                member_count = workspace.members.len(),
-                "discovered uv workspace members"
+                "discovered project at workspace root"
+            );
+        }
+
+        // Also search subdirectories for projects. This handles monorepos
+        // where the IDE root (e.g. `ai_cms/`) is a parent of the actual
+        // Python project (e.g. `ai_cms/agent-backend/`).
+        let Ok(entries) = std::fs::read_dir(root) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_dir() || !path.join("pyproject.toml").is_file() {
+                continue;
+            }
+
+            // Try uv workspace in the subdirectory.
+            if let Ok(Some(workspace)) = basilisk_uv::parse_uv_workspace(&path) {
+                for member_dir in &workspace.members {
+                    add_source_root(&mut members, member_dir);
+                }
+                if !workspace.members.is_empty() {
+                    info!(
+                        root = %path.display(),
+                        member_count = workspace.members.len(),
+                        "discovered uv workspace members in subdirectory"
+                    );
+                    continue;
+                }
+            }
+
+            // No uv workspace, but has pyproject.toml — treat as a project.
+            add_source_root(&mut members, &path);
+            info!(
+                path = %path.display(),
+                "discovered project subdirectory"
             );
         }
     }
 
     members
+}
+
+/// Add a project directory's source root to the member list.
+///
+/// Prefers `src/` layout if it exists, otherwise adds the directory itself.
+fn add_source_root(members: &mut Vec<std::path::PathBuf>, project_dir: &std::path::Path) {
+    let src_dir = project_dir.join("src");
+    if src_dir.is_dir() {
+        members.push(src_dir);
+    } else {
+        members.push(project_dir.to_path_buf());
+    }
 }
 
 /// Detect a uv project and build a [`PackageRegistry`] from its lock file.
@@ -644,7 +730,8 @@ pub(super) async fn rebuild_registry_and_resolve(server: &LspServer) {
         .iter_mut()
         .filter_map(|mut entry| {
             let resolved = entry.resolved.as_ref()?;
-            let checker_diags = basilisk_checker::check(resolved);
+            let file_config = index.config_for_file(entry.key());
+            let checker_diags = basilisk_checker::check_with_config(resolved, file_config);
             let lsp_diags: Vec<tower_lsp::lsp_types::Diagnostic> = checker_diags
                 .iter()
                 .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &entry.text))
@@ -772,7 +859,7 @@ async fn check_pytest_from_index(
         client
             .log_message(
                 MessageType::WARNING,
-                "Basilisk: pytest not found in uv.lock. Run `uv add --dev pytest` to install it."
+                "Basilisk: pytest not found in uv.lock — use the quick fix to install it"
                     .to_owned(),
             )
             .await;
@@ -800,7 +887,7 @@ async fn check_pytest_from_index(
         client
             .log_message(
                 MessageType::INFO,
-                "Basilisk: pytest-cov not found in uv.lock. Run `uv add --dev pytest-cov` for coverage support."
+                "Basilisk: pytest-cov not found in uv.lock — install it for coverage support"
                     .to_owned(),
             )
             .await;
@@ -812,4 +899,49 @@ pub(super) async fn shutdown(server: &LspServer) -> LspResult<()> {
     server.debug_manager.stop_all().await;
     server.profiler_manager.stop_all().await;
     Ok(())
+}
+
+#[cfg(test)]
+#[expect(
+    clippy::unwrap_used,
+    reason = "test-only code: unwrap acceptable in unit tests"
+)]
+mod tests {
+    use super::discover_workspace_members;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static TEST_CTR: AtomicU64 = AtomicU64::new(0);
+
+    fn unique_tmp(prefix: &str) -> std::path::PathBuf {
+        let n = TEST_CTR.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir().join(format!("{prefix}_{n}_{}", std::process::id()))
+    }
+
+    /// Regression: when the workspace root itself is a Python project with a
+    /// `src/` layout (no uv workspace, no subdirectory projects), the `src/`
+    /// directory must be added to workspace members so first-party imports
+    /// like `from agent_backend.config import settings` resolve.
+    #[test]
+    fn root_src_layout_project_is_discovered() {
+        let root = unique_tmp("bsk_init_root_src");
+        let src = root.join("src");
+        let pkg = src.join("mypkg");
+        std::fs::create_dir_all(&pkg).unwrap();
+        std::fs::write(pkg.join("__init__.py"), "").unwrap();
+        std::fs::write(pkg.join("config.py"), "settings = 1\n").unwrap();
+        std::fs::write(
+            root.join("pyproject.toml"),
+            "[project]\nname = \"mypkg\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+
+        let members = discover_workspace_members(std::slice::from_ref(&root));
+
+        assert!(
+            members.iter().any(|m| m == &src),
+            "expected src/ to be in workspace_members, got: {members:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }

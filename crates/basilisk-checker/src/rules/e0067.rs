@@ -187,5 +187,6 @@ fn make_diagnostic(span: Span, class_name: &str, member_name: &str, path: &str) 
              and cannot be used in `Literal[EnumClass.X]` type expressions"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }

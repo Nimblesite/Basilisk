@@ -243,6 +243,17 @@ const TOAST_MESSAGES: Record<string, string> = {
 
 type NextFn = (command: string, args: unknown[]) => Thenable<unknown>;
 
+function activeOrVisibleFileEditor(): vscode.TextEditor | undefined {
+  const active = vscode.window.activeTextEditor;
+  if (active?.document.uri.scheme === "file") {
+    return active;
+  }
+
+  return vscode.window.visibleTextEditors.find(
+    (editor) => editor.document.uri.scheme === "file" && editor.document.languageId === "python"
+  ) ?? vscode.window.visibleTextEditors.find((editor) => editor.document.uri.scheme === "file");
+}
+
 /**
  * Middleware for `workspace/executeCommand`. Injects client-side UI (editor
  * URI resolution, input prompts, toast notifications) around server-advertised
@@ -257,13 +268,15 @@ async function executeCommandMiddleware(
   next: NextFn
 ): Promise<unknown> {
   if (EDITOR_URI_COMMANDS.has(command)) {
-    const editor = vscode.window.activeTextEditor;
-    if (editor?.document.uri.scheme !== "file") { return undefined; }
+    const editor = activeOrVisibleFileEditor();
+    if (editor === undefined) { return undefined; }
     args = [editor.document.uri.toString()];
   }
 
   const pkgCmd = PACKAGE_COMMANDS[command];
-  if (pkgCmd !== undefined) {
+  if (pkgCmd !== undefined && (args.length === 0 || args[0] === undefined)) {
+    // Only prompt if the LSP didn't already provide the package name
+    // (e.g. when invoked from the command palette, not from a code action).
     const packageName = await vscode.window.showInputBox({
       prompt: pkgCmd.prompt,
       placeHolder: pkgCmd.placeholder,

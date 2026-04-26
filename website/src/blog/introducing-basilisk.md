@@ -3,6 +3,7 @@ layout: layouts/blog.njk
 title: "Introducing Basilisk: Python's Type System, Actually Enforced"
 description: "Python has had type annotations for ten years. It's time someone enforced them by default."
 date: 2026-02-28
+dateModified: 2026-03-31
 author: The Basilisk Project
 tags: posts
 category: announcements
@@ -97,10 +98,13 @@ Basilisk v0.1.0 implements Phase 1 of a seven-phase roadmap.
 - Exit code 1 on errors for CI integration
 - Recursive directory checking
 
-**In active development:**
-- Language Server Protocol (LSP) server
-- VS Code extension
-- Neovim configuration
+**Working today:**
+- Language Server Protocol (LSP) server — autocomplete, go-to-definition, hover, diagnostics, inlay hints, 17 refactoring actions
+- VS Code extension — auto-downloads the correct binary per platform
+- Neovim extension (0.10+)
+- Zed extension
+- Integrated debugger (debugpy, press F5)
+- Integrated profiler (py-spy, flamegraphs, memory leak detection)
 
 **On the roadmap:**
 - Phase 3: 80% PEP coverage, `basilisk migrate`, migration mode

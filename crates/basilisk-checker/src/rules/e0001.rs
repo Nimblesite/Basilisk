@@ -43,5 +43,6 @@ fn make_diagnostic(param: &ParameterInfo, path: &str) -> Diagnostic {
         path: path.to_owned(),
         help: Some(format!("Add a type annotation: `{}: <type>`", param.name)),
         note: Some("In Basilisk, all function parameters require explicit types".to_owned()),
+        provenance: None,
     }
 }

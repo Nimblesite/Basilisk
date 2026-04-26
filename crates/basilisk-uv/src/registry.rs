@@ -112,7 +112,7 @@ impl PackageRegistry {
 fn collect_dev_dep_names(packages: &[LockPackage]) -> Vec<String> {
     packages
         .iter()
-        .flat_map(|pkg| pkg.dev_dependencies.iter())
+        .flat_map(|pkg| pkg.dev_dependencies.values().flatten())
         .map(|dep| dep.name.to_lowercase())
         .collect()
 }
@@ -146,79 +146,96 @@ mod tests {
     use super::*;
     use crate::lockfile::{LockDependency, LockSource};
 
+    fn make_dep(name: &str, version: Option<&str>) -> LockDependency {
+        LockDependency {
+            name: name.to_owned(),
+            version: version.map(str::to_owned),
+            marker: None,
+            extra: HashMap::new(),
+        }
+    }
+
+    fn make_pkg(
+        name: &str,
+        version: &str,
+        source: Option<LockSource>,
+        deps: Vec<LockDependency>,
+        dev_deps: HashMap<String, Vec<LockDependency>>,
+    ) -> LockPackage {
+        LockPackage {
+            name: name.to_owned(),
+            version: version.to_owned(),
+            source,
+            dependencies: deps,
+            dev_dependencies: dev_deps,
+            extra: HashMap::new(),
+        }
+    }
+
     fn make_lock_file() -> LockFile {
+        let dev_map = HashMap::from([("dev".to_owned(), vec![make_dep("pytest", Some("8.0.0"))])]);
+
         LockFile {
             version: 1,
             requires_python: Some(">=3.12".to_owned()),
             packages: vec![
-                LockPackage {
-                    name: "my-project".to_owned(),
-                    version: "0.1.0".to_owned(),
-                    source: Some(LockSource {
+                make_pkg(
+                    "my-project",
+                    "0.1.0",
+                    Some(LockSource {
                         registry: None,
                         editable: None,
                         virtual_field: Some(".".to_owned()),
                     }),
-                    dependencies: vec![LockDependency {
-                        name: "requests".to_owned(),
-                        version: Some("2.31.0".to_owned()),
-                        marker: None,
-                    }],
-                    dev_dependencies: vec![LockDependency {
-                        name: "pytest".to_owned(),
-                        version: Some("8.0.0".to_owned()),
-                        marker: None,
-                    }],
-                },
-                LockPackage {
-                    name: "requests".to_owned(),
-                    version: "2.31.0".to_owned(),
-                    source: Some(LockSource {
+                    vec![make_dep("requests", Some("2.31.0"))],
+                    dev_map,
+                ),
+                make_pkg(
+                    "requests",
+                    "2.31.0",
+                    Some(LockSource {
                         registry: Some("https://pypi.org/simple".to_owned()),
                         editable: None,
                         virtual_field: None,
                     }),
-                    dependencies: vec![LockDependency {
-                        name: "urllib3".to_owned(),
-                        version: Some("2.1.0".to_owned()),
-                        marker: None,
-                    }],
-                    dev_dependencies: vec![],
-                },
-                LockPackage {
-                    name: "urllib3".to_owned(),
-                    version: "2.1.0".to_owned(),
-                    source: Some(LockSource {
+                    vec![make_dep("urllib3", Some("2.1.0"))],
+                    HashMap::new(),
+                ),
+                make_pkg(
+                    "urllib3",
+                    "2.1.0",
+                    Some(LockSource {
                         registry: Some("https://pypi.org/simple".to_owned()),
                         editable: None,
                         virtual_field: None,
                     }),
-                    dependencies: vec![],
-                    dev_dependencies: vec![],
-                },
-                LockPackage {
-                    name: "pytest".to_owned(),
-                    version: "8.0.0".to_owned(),
-                    source: Some(LockSource {
+                    vec![],
+                    HashMap::new(),
+                ),
+                make_pkg(
+                    "pytest",
+                    "8.0.0",
+                    Some(LockSource {
                         registry: Some("https://pypi.org/simple".to_owned()),
                         editable: None,
                         virtual_field: None,
                     }),
-                    dependencies: vec![],
-                    dev_dependencies: vec![],
-                },
-                LockPackage {
-                    name: "my-editable".to_owned(),
-                    version: "0.2.0".to_owned(),
-                    source: Some(LockSource {
+                    vec![],
+                    HashMap::new(),
+                ),
+                make_pkg(
+                    "my-editable",
+                    "0.2.0",
+                    Some(LockSource {
                         registry: None,
                         editable: Some("../my-editable".to_owned()),
                         virtual_field: None,
                     }),
-                    dependencies: vec![],
-                    dev_dependencies: vec![],
-                },
+                    vec![],
+                    HashMap::new(),
+                ),
             ],
+            extra: HashMap::new(),
         }
     }
 
@@ -320,21 +337,10 @@ mod tests {
             version: 1,
             requires_python: None,
             packages: vec![
-                LockPackage {
-                    name: "requests".to_owned(),
-                    version: "2.31.0".to_owned(),
-                    source: None,
-                    dependencies: vec![],
-                    dev_dependencies: vec![],
-                },
-                LockPackage {
-                    name: "types-requests".to_owned(),
-                    version: "2.31.0.0".to_owned(),
-                    source: None,
-                    dependencies: vec![],
-                    dev_dependencies: vec![],
-                },
+                make_pkg("requests", "2.31.0", None, vec![], HashMap::new()),
+                make_pkg("types-requests", "2.31.0.0", None, vec![], HashMap::new()),
             ],
+            extra: HashMap::new(),
         };
 
         let registry = PackageRegistry::from_lock_file(&lock, &[]);
@@ -358,6 +364,7 @@ mod tests {
             version: 1,
             requires_python: None,
             packages: vec![],
+            extra: HashMap::new(),
         };
 
         let registry = PackageRegistry::from_lock_file(&lock, &[]);

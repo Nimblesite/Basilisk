@@ -4,9 +4,6 @@ title: 诊断规则
 description: 所有 BSK-E（错误）和 BSK-W（警告）诊断代码的完整参考。
 keywords: basilisk规则, 类型错误, BSK-E, BSK-W, 诊断代码
 lang: zh
-eleventyNavigation:
-  key: Rules
-  order: 5
 ---
 
 # 诊断规则

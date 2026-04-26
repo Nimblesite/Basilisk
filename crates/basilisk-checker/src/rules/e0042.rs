@@ -45,6 +45,7 @@ fn make_diagnostic(message: String, span: basilisk_resolver::Span, path: &str) -
              classes/functions that use the new type parameter syntax."
                 .to_owned(),
         ),
+        provenance: None,
     }
 }
 

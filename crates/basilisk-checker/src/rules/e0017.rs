@@ -203,5 +203,6 @@ fn make_diagnostic(
              with any same-name attributes in base classes"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }

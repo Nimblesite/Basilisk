@@ -30,6 +30,13 @@ local function is_executable(path)
   return vim.fn.executable(path) == 1
 end
 
+--- Check whether a configured binary path is usable.
+---@param path? string
+---@return boolean
+function M.is_executable(path)
+  return type(path) == "string" and path ~= "" and is_executable(path)
+end
+
 --- Parse a semver-ish string into (major, minor, patch).
 --- Strips leading "v" and "basilisk " prefix.
 ---@param version_str string

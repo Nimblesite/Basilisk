@@ -1,8 +1,11 @@
 ---
 layout: layouts/docs.njk
 title: Missing Annotations — E0001–E0009
-description: Rules that flag code where type information is absent.
+description: "Basilisk rules that flag missing type annotations — unannotated parameters, return types, variables, *args/**kwargs, and class attributes. BSK-E0001 through E0009."
 keywords: basilisk, missing annotations, type annotations, BSK-E0001, BSK-E0002
+date: 2026-02-28
+dateModified: 2026-03-31
+author: The Basilisk Project
 eleventyNavigation:
   key: Missing Annotations
   parent: Rules

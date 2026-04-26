@@ -247,7 +247,9 @@ dependencies = [
  "basilisk-resolver",
  "basilisk-stubs",
  "basilisk-test-utils",
+ "basilisk-uv",
  "clap 4.5.60",
+ "colored",
  "serde",
  "serde_json",
  "tokio",
@@ -345,6 +347,7 @@ name = "basilisk-resolver"
 version = "0.1.0"
 dependencies = [
  "basilisk-parser",
+ "basilisk-stubs",
  "basilisk-test-utils",
  "ruff_python_ast",
  "ruff_text_size",
@@ -359,8 +362,11 @@ dependencies = [
  "phf_codegen",
  "ruff_python_ast",
  "ruff_python_parser",
+ "ruff_text_size",
+ "serde_json",
  "tempfile",
  "thiserror 2.0.18",
+ "tracing",
 ]
 
 [[package]]
@@ -661,6 +667,15 @@ name = "colorchoice"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b05b61dc5112cbb17e4b6cd61790d9845d13888356391624cbe7e41efeac1e75"
+
+[[package]]
+name = "colored"
+version = "3.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "faf9468729b8cbcea668e36183cb69d317348c2e08e994829fb56ebfdfbaac34"
+dependencies = [
+ "windows-sys 0.61.2",
+]
 
 [[package]]
 name = "compact_str"
