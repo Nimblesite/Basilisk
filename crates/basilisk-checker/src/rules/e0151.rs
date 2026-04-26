@@ -106,6 +106,7 @@ impl Rule for TypeAliasTypeViolation {
                 path: module.path.clone(),
                 help: Some(help),
                 note: None,
+                provenance: None,
             });
         }
     }
