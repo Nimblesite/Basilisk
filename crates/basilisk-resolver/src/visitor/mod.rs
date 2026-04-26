@@ -184,10 +184,8 @@ fn build_resolved_module(
 ) -> ResolvedModule {
     let stmts = &module.ast.body;
     let type_alias_type_violations = {
-        let tv_names: std::collections::HashSet<String> = typevar_calls
-            .iter()
-            .map(|tv| tv.name.clone())
-            .collect();
+        let tv_names: std::collections::HashSet<String> =
+            typevar_calls.iter().map(|tv| tv.name.clone()).collect();
         type_alias::collect_type_alias_type_violations(stmts, &tv_names)
     };
     ResolvedModule {

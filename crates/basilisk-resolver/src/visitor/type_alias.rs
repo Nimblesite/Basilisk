@@ -525,9 +525,7 @@ fn is_valid_type_expression(expr: &Expr, top_level: bool) -> bool {
         }
         // Tuple: only valid inside subscripts (e.g. `dict[str, int]`), never
         // at the top level of a TypeAliasType value.
-        Expr::Tuple(t) => {
-            !top_level && t.elts.iter().all(|e| is_valid_type_expression(e, false))
-        }
+        Expr::Tuple(t) => !top_level && t.elts.iter().all(|e| is_valid_type_expression(e, false)),
         // Everything else is invalid: list, dict, set, call, lambda,
         // comprehension, conditional, boolean op, f-string, int/bool literals.
         _ => false,
@@ -596,10 +594,31 @@ fn collect_type_names_in_scope(
     }
     // Add builtins.
     for builtin in &[
-        "int", "str", "float", "bool", "bytes", "complex", "list", "dict",
-        "set", "frozenset", "tuple", "type", "object", "None", "True",
-        "False", "Ellipsis", "memoryview", "bytearray", "range", "slice",
-        "property", "classmethod", "staticmethod", "super",
+        "int",
+        "str",
+        "float",
+        "bool",
+        "bytes",
+        "complex",
+        "list",
+        "dict",
+        "set",
+        "frozenset",
+        "tuple",
+        "type",
+        "object",
+        "None",
+        "True",
+        "False",
+        "Ellipsis",
+        "memoryview",
+        "bytearray",
+        "range",
+        "slice",
+        "property",
+        "classmethod",
+        "staticmethod",
+        "super",
     ] {
         let _ = names.insert((*builtin).to_owned());
     }
@@ -614,7 +633,13 @@ pub(super) fn collect_type_alias_type_violations(
     let mut out = Vec::new();
     let class_scope_tvs = std::collections::HashSet::new();
     let type_names = collect_type_names_in_scope(stmts, typevar_names);
-    collect_tat_violations_inner(stmts, typevar_names, &class_scope_tvs, &type_names, &mut out);
+    collect_tat_violations_inner(
+        stmts,
+        typevar_names,
+        &class_scope_tvs,
+        &type_names,
+        &mut out,
+    );
 
     // Post-pass: detect cross-reference circular dependencies between aliases.
     // Build a map from alias name to string refs in value, then find cycles.
@@ -870,10 +895,7 @@ fn collect_tat_string_refs(
             let mut name_refs = Vec::new();
             collect_name_refs_from_expr(rhs_expr, &mut name_refs);
             string_refs.extend(name_refs);
-            let _ = map.insert(
-                lhs_name,
-                (string_refs, text_range_to_span(call.range)),
-            );
+            let _ = map.insert(lhs_name, (string_refs, text_range_to_span(call.range)));
         }
     }
     map
@@ -947,10 +969,22 @@ fn collect_tat_violations_inner(
                         let _ = inner_scope.insert(type_param_name(param));
                     }
                 }
-                collect_tat_violations_inner(&cls.body, typevar_names, &inner_scope, type_names, out);
+                collect_tat_violations_inner(
+                    &cls.body,
+                    typevar_names,
+                    &inner_scope,
+                    type_names,
+                    out,
+                );
             }
             Stmt::FunctionDef(func) => {
-                collect_tat_violations_inner(&func.body, typevar_names, class_scope_tvs, type_names, out);
+                collect_tat_violations_inner(
+                    &func.body,
+                    typevar_names,
+                    class_scope_tvs,
+                    type_names,
+                    out,
+                );
             }
             _ => {}
         }
@@ -968,7 +1002,14 @@ fn check_tat_call(
     let Some(lhs_name) = targets.first().and_then(expr_simple_name) else {
         return;
     };
-    check_tat_call_with_name(value, &lhs_name, typevar_names, class_scope_tvs, type_names, out);
+    check_tat_call_with_name(
+        value,
+        &lhs_name,
+        typevar_names,
+        class_scope_tvs,
+        type_names,
+        out,
+    );
 }
 
 fn check_tat_call_with_name(
@@ -1117,9 +1158,7 @@ fn expr_has_circular_self_ref(
                         let inner = &rest[1..rest.len().saturating_sub(1)];
                         let args: Vec<&str> = inner.split(',').map(str::trim).collect();
                         // If ALL args are type param names, it's a valid recursive ref.
-                        let all_type_params = args
-                            .iter()
-                            .all(|a| tp_names.contains(*a));
+                        let all_type_params = args.iter().all(|a| tp_names.contains(*a));
                         // Only flag if NOT all type params (i.e. uses concrete types).
                         return !all_type_params;
                     }
@@ -1155,11 +1194,8 @@ fn extract_type_params_names(
             let Expr::Tuple(tuple) = &kw.value else {
                 return None;
             };
-            let names: std::collections::HashSet<String> = tuple
-                .elts
-                .iter()
-                .filter_map(expr_simple_name)
-                .collect();
+            let names: std::collections::HashSet<String> =
+                tuple.elts.iter().filter_map(expr_simple_name).collect();
             return Some(names);
         }
     }

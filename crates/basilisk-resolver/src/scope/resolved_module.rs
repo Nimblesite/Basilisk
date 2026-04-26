@@ -20,8 +20,8 @@ use super::{
         GeneratorViolation, HistoricalPositionalViolation, InvalidStringAnnotation,
         LiteralAugmentedAssignViolation, LocalClassVarViolation, Pep695BoundViolation,
         ProtocolClassObjectViolation, ProtocolInstantiationViolation, ProtocolRtcViolation,
-        ProtocolSelfViolation, ReadOnlyViolationInfo, TupleIndexViolation,
-        TypeAliasTypeViolation, UnboundTypeVarUsage,
+        ProtocolSelfViolation, ReadOnlyViolationInfo, TupleIndexViolation, TypeAliasTypeViolation,
+        UnboundTypeVarUsage,
     },
 };
 
