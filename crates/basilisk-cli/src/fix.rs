@@ -10,6 +10,8 @@ use basilisk_lsp::code_actions::mass_fix::{ALL_FIXABLE_RULES, SAFE_FIXABLE_RULES
 use tower_lsp::lsp_types::{TextEdit, Url};
 use tracing::{info, warn};
 
+use crate::pluralise;
+
 /// Run the fix subcommand.
 ///
 /// Exit codes:
@@ -191,15 +193,6 @@ fn apply_text_edits(source: &str, edits: &[TextEdit]) -> String {
     }
 
     result
-}
-
-/// Return `"s"` for counts != 1, empty string otherwise.
-fn pluralise(count: usize) -> &'static str {
-    if count == 1 {
-        ""
-    } else {
-        "s"
-    }
 }
 
 #[cfg(test)]

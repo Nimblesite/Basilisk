@@ -358,6 +358,7 @@ fn emit_diagnostic(
              are invariant in their type parameters."
                 .to_owned(),
         ),
+        provenance: None,
     });
 }
 

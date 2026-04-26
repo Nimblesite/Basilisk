@@ -64,6 +64,7 @@ impl Rule for EnumMemberAnnotated {
                          use an annotation-only field (no value) for non-member attributes"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
             }
         }

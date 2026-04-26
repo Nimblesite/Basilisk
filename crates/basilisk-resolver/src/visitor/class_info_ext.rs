@@ -354,6 +354,9 @@ pub(super) fn import_infos_from(node: &StmtImport) -> Vec<ImportInfo> {
             resolution: ImportResolution::Unresolved,
             resolved_path: None,
             package_dep_kind: None,
+            package_version: None,
+            package_name: None,
+            unresolved_reason: None,
         })
         .collect()
 }
@@ -376,6 +379,9 @@ pub(super) fn import_from_infos_from(node: &StmtImportFrom) -> Vec<ImportInfo> {
             resolution: ImportResolution::Unresolved,
             resolved_path: None,
             package_dep_kind: None,
+            package_version: None,
+            package_name: None,
+            unresolved_reason: None,
         }];
     }
 
@@ -388,6 +394,9 @@ pub(super) fn import_from_infos_from(node: &StmtImportFrom) -> Vec<ImportInfo> {
         resolution: ImportResolution::Unresolved,
         resolved_path: None,
         package_dep_kind: None,
+        package_version: None,
+        package_name: None,
+        unresolved_reason: None,
     }]
 }
 
@@ -523,10 +532,10 @@ pub(super) fn class_has_manual_slots(class: &StmtClassDef) -> bool {
                     }
                 }
             }
-            Stmt::AnnAssign(ann) => {
-                if expr_simple_name(&ann.target).as_deref() == Some("__slots__") {
-                    return true;
-                }
+            Stmt::AnnAssign(ann)
+                if expr_simple_name(&ann.target).as_deref() == Some("__slots__") =>
+            {
+                return true;
             }
             _ => {}
         }

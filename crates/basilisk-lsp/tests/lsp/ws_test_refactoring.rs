@@ -297,6 +297,66 @@ async fn test_ws_implement_abstract_methods_offered() -> TestResult<()> {
     Ok(())
 }
 
+// ── Change Signature: Remove Parameter ───────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_change_signature_remove_param_offered() -> TestResult<()> {
+    let uri = "file:///refactor_remove_param.py";
+    let code = "def greet(name: str, greeting: str) -> str:\n    return f\"{greeting}, {name}\"\n\nresult: str = greet(\"world\", \"Hello\")\n";
+
+    let (mut fixture, _) = open_and_diagnose(uri, code).await?;
+
+    // Cursor on `greeting` parameter (line 0, char 21).
+    let resp = code_actions_at(&mut fixture, uri, 0, 21, 0, 29, 613).await?;
+
+    assert!(
+        has_action(&resp, "Remove parameter"),
+        "should offer remove parameter: {resp}"
+    );
+
+    Ok(())
+}
+
+// ── Change Signature: Add Parameter ─────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_change_signature_add_param_offered() -> TestResult<()> {
+    let uri = "file:///refactor_add_param.py";
+    let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}\"\n";
+
+    let (mut fixture, _) = open_and_diagnose(uri, code).await?;
+
+    // Cursor on the function name (line 0, char 4).
+    let resp = code_actions_at(&mut fixture, uri, 0, 4, 0, 4, 614).await?;
+
+    assert!(
+        has_action(&resp, "Add parameter"),
+        "should offer add parameter: {resp}"
+    );
+
+    Ok(())
+}
+
+// ── Change Signature: Reorder Parameters ────────────────────────────────────
+
+#[tokio::test]
+async fn test_ws_change_signature_reorder_offered() -> TestResult<()> {
+    let uri = "file:///refactor_reorder_params.py";
+    let code = "def process(zebra: int, apple: int, mango: int) -> int:\n    return zebra + apple + mango\n";
+
+    let (mut fixture, _) = open_and_diagnose(uri, code).await?;
+
+    // Cursor on the function name (line 0, char 4).
+    let resp = code_actions_at(&mut fixture, uri, 0, 4, 0, 4, 615).await?;
+
+    assert!(
+        has_action(&resp, "Sort parameters"),
+        "should offer sort parameters: {resp}"
+    );
+
+    Ok(())
+}
+
 // ── All refactoring kinds are registered ─────────────────────────────────────
 
 #[tokio::test]

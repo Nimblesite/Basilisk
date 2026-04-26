@@ -147,8 +147,60 @@ pub(crate) fn is_type_compatible(actual: &str, expected: &str) -> bool {
 // Identifier / typevar matching
 // ---------------------------------------------------------------------------
 
-/// Check whether `text` contains `name` as a whole word (not as a substring
-/// of a longer identifier).
+// ---------------------------------------------------------------------------
+// Literal helpers
+// ---------------------------------------------------------------------------
+
+/// Extract the content between `Literal[` (or `L[`) and the matching `]`.
+pub(crate) fn extract_literal_inner(ann: &str) -> Option<&str> {
+    // Support both `Literal[` and `L[`.
+    let start_bracket = if let Some(pos) = ann.find("Literal[") {
+        pos + "Literal[".len()
+    } else if ann.starts_with("L[") {
+        2
+    } else {
+        return None;
+    };
+
+    let mut depth = 1i32;
+    let bytes = ann.as_bytes();
+    let mut idx = start_bracket;
+    while idx < bytes.len() {
+        match bytes.get(idx) {
+            Some(b'[') => depth += 1,
+            Some(b']') => {
+                depth -= 1;
+                if depth == 0 {
+                    return ann.get(start_bracket..idx);
+                }
+            }
+            Some(_) | None => {}
+        }
+        idx += 1;
+    }
+    None
+}
+
+/// Extract the callee name from a RHS text like `ClassName(...)` or `ClassName[T](...)`.
+pub(crate) fn extract_callee_name(rhs_text: &str) -> Option<&str> {
+    // Handle `ClassName[T](...)` by stripping everything from `[` onwards first.
+    let before_bracket = rhs_text.split('[').next()?;
+    let before_paren = before_bracket.split('(').next()?;
+    let name = before_paren.trim();
+    if name.is_empty() {
+        return None;
+    }
+    // Class names start with uppercase (heuristic).
+    if !name.starts_with(|c: char| c.is_ascii_uppercase()) {
+        return None;
+    }
+    Some(name)
+}
+
+// ---------------------------------------------------------------------------
+// Identifier / typevar matching
+// ---------------------------------------------------------------------------
+
 pub(crate) fn contains_typevar_reference(text: &str, name: &str) -> bool {
     let name_bytes = name.as_bytes();
     let text_bytes = text.as_bytes();

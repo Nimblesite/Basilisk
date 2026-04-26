@@ -45,6 +45,7 @@ impl Rule for MultipleUnboundedTupleTypes {
                 note: Some(
                     "PEP 646: a tuple type may contain at most one unbounded unpack".to_owned(),
                 ),
+                provenance: None,
             });
         }
     }

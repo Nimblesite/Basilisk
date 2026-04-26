@@ -10,7 +10,7 @@ BSK-E0048,aliases_explicit.py,aliases,PASS,21,0,0
 BSK-E0047|BSK-E0048|BSK-E0092,aliases_implicit.py,aliases,PASS,22,0,1
 BSK-E0014|BSK-E0050,aliases_newtype.py,aliases,PASS,14,0,0
 BSK-E0014|BSK-E0104,aliases_recursive.py,aliases,PASS,11,0,18
-BSK-E0014|BSK-E0057|BSK-E0149,aliases_type_statement.py,aliases,FAIL,23,2,2
+BSK-E0057|BSK-E0149,aliases_type_statement.py,aliases,PASS,24,0,0
 BSK-E0014|BSK-E0130,aliases_typealiastype.py,aliases,FAIL,0,22,3
 BSK-E0107,aliases_variance.py,aliases,PASS,4,0,0
 ,annotations_coroutines.py,annotations,PASS,0,0,0
@@ -67,7 +67,7 @@ BSK-E0027|BSK-E0047|BSK-E0092|BSK-E0132|BSK-E0134,generics_base_class.py,generic
 BSK-E0026|BSK-E0027|BSK-E0043|BSK-E0148,generics_basic.py,generics,PASS,13,0,0
 BSK-E0030|BSK-E0091|BSK-E0092|BSK-E0130,generics_defaults.py,generics,PASS,5,0,2
 BSK-E0102|BSK-E0128|BSK-E0130,generics_defaults_referential.py,generics,PASS,7,0,0
-BSK-E0092,generics_defaults_specialization.py,generics,PASS,2,0,0
+BSK-E0092,generics_defaults_specialization.py,generics,FAIL,2,1,0
 BSK-E0026|BSK-E0047,generics_paramspec_basic.py,generics,PASS,7,0,0
 ,generics_paramspec_components.py,generics,FAIL,0,16,0
 ,generics_paramspec_semantics.py,generics,FAIL,0,9,0
@@ -83,8 +83,8 @@ BSK-E0043|BSK-E0089|BSK-E0105,generics_syntax_declarations.py,generics,PASS,10,0
 BSK-E0055|BSK-E0130,generics_syntax_infer_variance.py,generics,PASS,18,0,0
 BSK-E0149,generics_syntax_scoping.py,generics,PASS,7,0,1
 BSK-E0111|BSK-E0125,generics_type_erasure.py,generics,PASS,7,0,2
-,generics_typevartuple_args.py,generics,FAIL,0,9,0
-BSK-E0055|BSK-E0083|BSK-E0084|BSK-E0086,generics_typevartuple_basic.py,generics,FAIL,8,6,0
+,generics_typevartuple_args.py,generics,FAIL,0,7,0
+BSK-E0055|BSK-E0083|BSK-E0084|BSK-E0086,generics_typevartuple_basic.py,generics,FAIL,8,5,0
 BSK-E0082,generics_typevartuple_callable.py,generics,PASS,1,0,0
 ,generics_typevartuple_concat.py,generics,PASS,0,0,0
 ,generics_typevartuple_overloads.py,generics,PASS,0,0,0
@@ -103,7 +103,7 @@ BSK-E0041|BSK-E0064,namedtuples_define_functional.py,namedtuples,PASS,9,0,0
 BSK-E0073,namedtuples_type_compat.py,namedtuples,PASS,2,0,0
 BSK-E0111|BSK-E0143,namedtuples_usage.py,namedtuples,PASS,8,0,2
 BSK-E0053|BSK-E0101|BSK-E0112,narrowing_typeguard.py,narrowing,PASS,4,0,3
-BSK-E0053|BSK-E0101|BSK-E0112|BSK-E0113,narrowing_typeis.py,narrowing,PASS,9,0,2
+BSK-E0053|BSK-E0101|BSK-E0112|BSK-E0113,narrowing_typeis.py,narrowing,PASS,9,0,1
 BSK-E0072,overloads_basic.py,overloads,PASS,1,0,0
 ,overloads_consistency.py,overloads,PASS,0,0,0
 BSK-E0020|BSK-E0034,overloads_definitions.py,overloads,PASS,0,0,0

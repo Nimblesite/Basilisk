@@ -11,11 +11,8 @@ use tracing::{debug, error, info, warn};
 
 use super::LspServer;
 
-/// Dispatch `workspace/executeCommand` to the appropriate handler.
-pub(super) async fn dispatch_execute_command(
-    server: &LspServer,
-    params: ExecuteCommandParams,
-) -> LspResult<Option<serde_json::Value>> {
+/// Log the incoming command for debugging.
+async fn log_command(server: &LspServer, params: &ExecuteCommandParams) {
     server
         .client
         .log_message(
@@ -27,6 +24,14 @@ pub(super) async fn dispatch_execute_command(
             ),
         )
         .await;
+}
+
+/// Dispatch `workspace/executeCommand` to the appropriate handler.
+pub(super) async fn dispatch_execute_command(
+    server: &LspServer,
+    params: ExecuteCommandParams,
+) -> LspResult<Option<serde_json::Value>> {
+    log_command(server, &params).await;
 
     match params.command.as_str() {
         basilisk_common::commands::ORGANIZE_IMPORTS => {
@@ -75,6 +80,39 @@ pub(super) async fn dispatch_execute_command(
         basilisk_common::commands::MOVE_SYMBOL => {
             super::refactor_commands::execute_move_symbol(server, &params.arguments).await
         }
+        basilisk_common::commands::DISCOVER_TESTS => {
+            super::test_handlers::execute_discover_tests(server, &params.arguments).await
+        }
+        basilisk_common::commands::RUN_TESTS => {
+            super::test_handlers::execute_run_tests(server, &params.arguments).await
+        }
+        basilisk_common::commands::RUN_TEST_FILE => {
+            super::test_handlers::execute_run_test_file(server, &params.arguments).await
+        }
+        basilisk_common::commands::DEBUG_TEST => {
+            super::test_handlers::execute_debug_test(server, &params.arguments).await
+        }
+        basilisk_common::commands::RUN_TESTS_COVERAGE => {
+            super::test_handlers::execute_run_tests_coverage(server, &params.arguments).await
+        }
+        basilisk_common::commands::WORKSPACE_MODULES => {
+            super::activity_panel::execute_workspace_modules(server, &params.arguments).await
+        }
+        basilisk_common::commands::TYPE_HEALTH => {
+            super::activity_panel::execute_type_health(server, &params.arguments).await
+        }
+        basilisk_common::commands::PROFILER_START
+        | basilisk_common::commands::PROFILER_STOP
+        | basilisk_common::commands::PROFILER_SNAPSHOT
+        | basilisk_common::commands::PROFILER_LIST
+        | basilisk_common::commands::MEMORY_START
+        | basilisk_common::commands::MEMORY_SNAPSHOT
+        | basilisk_common::commands::MEMORY_DIFF
+        | basilisk_common::commands::MEMORY_REFERENCES
+        | basilisk_common::commands::MEMORY_OBJECTS_BY_TYPE
+        | basilisk_common::commands::MEMORY_GC_COLLECT => {
+            dispatch_profiler_or_memory(server, &params.command, &params.arguments).await
+        }
         unknown => {
             server
                 .client
@@ -85,6 +123,47 @@ pub(super) async fn dispatch_execute_command(
                 .await;
             Ok(None)
         }
+    }
+}
+
+/// Dispatch profiler and memory commands to their respective handlers.
+async fn dispatch_profiler_or_memory(
+    server: &LspServer,
+    command: &str,
+    args: &[serde_json::Value],
+) -> LspResult<Option<serde_json::Value>> {
+    match command {
+        basilisk_common::commands::PROFILER_START => {
+            super::profiler_handlers::execute_profiler_start(server, args).await
+        }
+        basilisk_common::commands::PROFILER_STOP => {
+            super::profiler_handlers::execute_profiler_stop(server, args).await
+        }
+        basilisk_common::commands::PROFILER_SNAPSHOT => {
+            super::profiler_handlers::execute_profiler_snapshot(server, args).await
+        }
+        basilisk_common::commands::PROFILER_LIST => {
+            super::profiler_handlers::execute_profiler_list(server, args).await
+        }
+        basilisk_common::commands::MEMORY_START => {
+            super::memory_handlers::execute_memory_start(server, args).await
+        }
+        basilisk_common::commands::MEMORY_SNAPSHOT => {
+            super::memory_handlers::execute_memory_snapshot(server, args).await
+        }
+        basilisk_common::commands::MEMORY_DIFF => {
+            super::memory_handlers::execute_memory_diff(server, args).await
+        }
+        basilisk_common::commands::MEMORY_REFERENCES => {
+            super::memory_handlers::execute_memory_references(server, args).await
+        }
+        basilisk_common::commands::MEMORY_OBJECTS_BY_TYPE => {
+            super::memory_handlers::execute_memory_objects_by_type(server, args).await
+        }
+        basilisk_common::commands::MEMORY_GC_COLLECT => {
+            super::memory_handlers::execute_memory_gc_collect(server, args).await
+        }
+        _ => Ok(None),
     }
 }
 
@@ -162,6 +241,16 @@ pub(super) async fn execute_start_debug_session(
         });
     }
 
+    let arg = args
+        .first()
+        .cloned()
+        .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+
+    let profile_on_launch = arg
+        .get("profileOnLaunch")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+
     // Spawn debugpy and wait for it to accept connections.
     match server.debug_manager.start_session(&python).await {
         Ok((host, port, session_id)) => {
@@ -173,10 +262,20 @@ pub(super) async fn execute_start_debug_session(
                     format!("Basilisk: debug session {session_id} started on {host}:{port}"),
                 )
                 .await;
+
+            // If a debuggee PID is already known (attach mode), auto-profile.
+            let profiler_session_id = if let Some(debuggee_pid) = extract_debuggee_pid(&arg) {
+                super::profiler_handlers::maybe_profile_on_launch(server, &arg, debuggee_pid).await
+            } else {
+                None
+            };
+
             Ok(Some(serde_json::json!({
                 "host": host,
                 "port": port,
-                "sessionId": session_id
+                "sessionId": session_id,
+                "profileOnLaunch": profile_on_launch,
+                "profilerSessionId": profiler_session_id,
             })))
         }
         Err(err) => {
@@ -192,6 +291,13 @@ pub(super) async fn execute_start_debug_session(
             })
         }
     }
+}
+
+/// Extract a debuggee PID from the debug session args (attach mode).
+fn extract_debuggee_pid(arg: &serde_json::Value) -> Option<u32> {
+    arg.get("pid")
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|p| u32::try_from(p).ok())
 }
 
 /// Handle `basilisk.stopDebugSession`.
@@ -296,36 +402,16 @@ async fn execute_fix_file(
     server: &LspServer,
     args: &[serde_json::Value],
 ) -> LspResult<Option<serde_json::Value>> {
-    // Debug: write to a file so we can trace what happens during E2E tests.
-    let dbg = |msg: &str| {
-        use std::io::Write;
-        if let Ok(mut file) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open("/tmp/basilisk-fixfile-debug.log")
-        {
-            let _ = writeln!(file, "[fixFile] {msg}");
-        }
-    };
-
     let Some(uri_str) = args.first().and_then(|v| v.as_str()) else {
-        dbg("BAIL: no URI argument");
         return Ok(None);
     };
-    dbg(&format!("URI: {uri_str}"));
     let Ok(uri) = tower_lsp::lsp_types::Url::parse(uri_str) else {
-        dbg("BAIL: could not parse URI");
         return Ok(None);
     };
 
     let action: Option<tower_lsp::lsp_types::CodeAction> = server
         .with_index(|idx| {
             let (text, _, checker_diags) = idx.get_by_uri(&uri)?;
-            dbg(&format!(
-                "index lookup OK: {} diagnostics, text={:?}",
-                checker_diags.len(),
-                &text[..text.len().min(60)]
-            ));
             let lsp_diags: Vec<_> = checker_diags
                 .iter()
                 .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &text))
@@ -335,11 +421,9 @@ async fn execute_fix_file(
         .await;
 
     let Some(action) = action else {
-        dbg("BAIL: no fixable diagnostics (with_index or fix_all returned None)");
-        warn!(uri = %uri, "fixFile: no fixable diagnostics (index lookup or fix generation returned None)");
+        warn!(uri = %uri, "fixFile: no fixable diagnostics");
         return Ok(Some(serde_json::json!({ "fixed": 0 })));
     };
-    dbg(&format!("action generated: {}", action.title));
 
     let edit_count: usize = action
         .edit
@@ -348,13 +432,8 @@ async fn execute_fix_file(
         .map_or(0, |changes| changes.values().map(Vec::len).sum::<usize>());
 
     if let Some(edit) = action.edit {
-        dbg(&format!("applying edit with {edit_count} text edits"));
         match server.client.apply_edit(edit).await {
             Ok(response) => {
-                dbg(&format!(
-                    "apply_edit response: applied={}, failure_reason={:?}",
-                    response.applied, response.failure_reason
-                ));
                 if response.applied {
                     info!(uri = %uri, edit_count, "fixFile: edits applied successfully");
                     // Clear stale diagnostics immediately — the client confirmed
@@ -364,7 +443,6 @@ async fn execute_fix_file(
                         .client
                         .publish_diagnostics(uri.clone(), vec![], None)
                         .await;
-                    dbg("published empty diagnostics");
                 } else {
                     error!(
                         uri = %uri,
@@ -375,12 +453,9 @@ async fn execute_fix_file(
                 }
             }
             Err(err) => {
-                dbg(&format!("apply_edit ERROR: {err}"));
                 error!(uri = %uri, error = %err, "fixFile: apply_edit request failed");
             }
         }
-    } else {
-        dbg("action had no edit!");
     }
 
     info!(uri = %uri, edit_count, "fixFile: completed");

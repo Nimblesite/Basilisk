@@ -9,6 +9,8 @@ use std::path::Path;
 
 use tracing::{error, info, warn};
 
+use crate::pluralise;
+
 /// Run the adopt subcommand.
 ///
 /// Exit codes:
@@ -41,7 +43,7 @@ pub(crate) fn run_adopt(paths: &[String]) -> u8 {
 pub(crate) fn run_unadopt(paths: &[String]) -> u8 {
     match unadopt_files(paths) {
         Ok(count) => {
-            println!("Un-adopted {} file{}.", count, pluralise(count),);
+            println!("Un-adopted {} file{}.", count, pluralise(count));
             0
         }
         Err(err) => {
@@ -202,15 +204,6 @@ fn resolve_config_root(paths: &[String]) -> std::path::PathBuf {
             }
         })
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-}
-
-/// Return `"s"` for counts != 1, empty string otherwise.
-fn pluralise(count: usize) -> &'static str {
-    if count == 1 {
-        ""
-    } else {
-        "s"
-    }
 }
 
 #[cfg(test)]

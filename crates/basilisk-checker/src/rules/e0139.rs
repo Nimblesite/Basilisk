@@ -378,6 +378,7 @@ fn check_unpack_in_plain_generic(
                          specialise a generic that contains a `TypeVarTuple` parameter"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
                 return;
             }
@@ -400,6 +401,7 @@ fn check_unpack_in_plain_generic(
                          of a generic that contains a `TypeVarTuple` parameter"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
                 return;
             }
@@ -450,6 +452,7 @@ fn check_too_few_args_for_tvt_alias(
                  many arguments as there are regular `TypeVar`s"
                     .to_owned(),
             ),
+            provenance: None,
         });
     }
 }

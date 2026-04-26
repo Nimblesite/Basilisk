@@ -1,8 +1,11 @@
 ---
 layout: layouts/docs.njk
 title: Immutability — E0040–E0043
-description: Rules that enforce immutability of parameters and Final variables.
+description: "Basilisk immutability rules — mutation of non-InOut parameters, reassignment of Final variables, frozen dataclass field modification, and immutable collection operations. BSK-E0040 through E0043."
 keywords: basilisk, immutability, final, inout, BSK-E0040, BSK-E0043
+date: 2026-02-28
+dateModified: 2026-03-31
+author: The Basilisk Project
 eleventyNavigation:
   key: Immutability
   parent: Rules

@@ -121,6 +121,7 @@ fn check_module_expr(expr: &Expr, ctx: &ModuleCtx, path: &str, diag: &mut Vec<Di
                              does not expose arbitrary attributes."
                                 .to_owned(),
                         ),
+                        provenance: None,
                     });
                 }
             }
@@ -228,6 +229,7 @@ fn check_func_expr(
                                  only exposes attributes defined on X."
                                     .to_owned(),
                             ),
+                            provenance: None,
                         });
                     }
                 }
@@ -288,6 +290,7 @@ pub(super) fn check_type_arg(
                      special forms like `Callable` are not class objects."
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
         return;
@@ -333,6 +336,7 @@ pub(super) fn check_type_arg(
                  are subtypes of `A` or `B`."
                     .to_owned(),
             ),
+            provenance: None,
         });
     }
 }

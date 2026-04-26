@@ -50,6 +50,7 @@ fn make_diag(msg: &str, span: basilisk_resolver::Span, path: &str) -> Diagnostic
              PEP 695: infer_variance is incompatible with explicit variance flags"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }
 

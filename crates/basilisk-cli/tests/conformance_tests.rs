@@ -16,8 +16,8 @@
 //! The conformance files must be downloaded first:
 //!
 //! ```text
-//! ./conformance/fetch-conformance.sh
-//! cargo test --test conformance_tests -- --nocapture
+//! make conformance          # fetch if needed + run
+//! make conformance FETCH=1  # force re-download + run
 //! ```
 //!
 //! ## Annotation format (from the python/typing spec)
@@ -378,6 +378,43 @@ fn category(name: &str) -> &str {
 }
 
 // ---------------------------------------------------------------------------
+// Threshold from coverage-thresholds.json
+// ---------------------------------------------------------------------------
+
+/// Read the PEP conformance pass-percentage threshold from the repo-root
+/// `coverage-thresholds.json`.  Falls back to 0 if the file is missing or
+/// malformed so the test still runs (the coverage script enforces separately).
+fn read_conformance_threshold() -> usize {
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let Some(repo_root) = manifest
+        .ancestors()
+        .find(|p| p.join("Cargo.toml").exists() && p.join("crates").exists())
+    else {
+        return 0;
+    };
+    let path = repo_root.join("coverage-thresholds.json");
+    let Ok(content) = fs::read_to_string(&path) else {
+        return 0;
+    };
+    // Minimal JSON extraction — avoids adding a serde dependency to this test
+    // crate.  We look for `"conformance"` → `"threshold"` → number.
+    let Some(conformance_idx) = content.find("\"conformance\"") else {
+        return 0;
+    };
+    let rest = &content[conformance_idx..];
+    let Some(threshold_idx) = rest.find("\"threshold\"") else {
+        return 0;
+    };
+    let after = &rest[threshold_idx + "\"threshold\"".len()..];
+    // Skip `:` and whitespace, then parse the number.
+    let num_start = after.find(|c: char| c.is_ascii_digit()).unwrap_or(0);
+    let num_end = after[num_start..]
+        .find(|c: char| !c.is_ascii_digit())
+        .map_or(after.len(), |i| num_start + i);
+    after[num_start..num_end].parse().unwrap_or(0)
+}
+
+// ---------------------------------------------------------------------------
 // The single test entry point
 // ---------------------------------------------------------------------------
 
@@ -388,8 +425,8 @@ fn conformance_score() {
     if !conformance_dir.exists() {
         println!();
         println!("  ⚠  Conformance suite not downloaded.");
-        println!("  Run: ./conformance/fetch-conformance.sh");
-        println!("  Then rerun: cargo test --test conformance_tests -- --nocapture");
+        println!("  Run: make conformance");
+        println!("  Or: cargo test --test conformance_tests -- --nocapture");
         println!();
         return;
     }
@@ -406,7 +443,7 @@ fn conformance_score() {
 
     if files.is_empty() {
         println!("  Conformance directory exists but contains no .py files.");
-        println!("  Run: ./conformance/fetch-conformance.sh");
+        println!("  Run: make conformance");
         return;
     }
 
@@ -416,7 +453,23 @@ fn conformance_score() {
 
     assert!(
         totals.files > 0,
-        "No conformance files found. Run ./conformance/fetch-conformance.sh first."
+        "No conformance files found. Run make conformance first."
+    );
+
+    // Enforce minimum conformance percentage from coverage-thresholds.json.
+    // This prevents regressions — the threshold ratchets UP only.
+    let threshold = read_conformance_threshold();
+    let pct = (totals.pass * 100).checked_div(totals.files).unwrap_or(0);
+    assert!(
+        pct >= threshold,
+        "PEP conformance regression: {pct}% ({}/{}) < {threshold}% threshold. \
+         Fix the regression before merging.",
+        totals.pass,
+        totals.files
+    );
+    println!(
+        "  Conformance gate: {pct}% ({}/{}) >= {threshold}% threshold — PASS",
+        totals.pass, totals.files
     );
 }
 

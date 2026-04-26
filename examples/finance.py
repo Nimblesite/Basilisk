@@ -13,41 +13,42 @@ from typing import Any, overload
 
 
 # ── BSK-E0003: empty portfolio and ledger ────────────────────────────────────
-_open_positions = {}                      # BSK-E0003: empty dict, no annotation
-_trade_log = []                           # BSK-E0003: empty list, no annotation
+_open_positions = {}  # BSK-E0003: empty dict, no annotation
+_trade_log = []  # BSK-E0003: empty list, no annotation
 
 
 # ── BSK-E0001/E0002: core pricing functions missing all annotations ───────────
-def black_scholes(S, K, T, r, sigma):    # BSK-E0001: five untyped params
+def black_scholes(S, K, T, r, sigma):  # BSK-E0001: five untyped params
     """Call option price — classic formula."""
     import math
-    d1 = (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
+
+    d1 = (math.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * math.sqrt(T))
     d2 = d1 - sigma * math.sqrt(T)
     # omit N(d1)/N(d2) for brevity
-    return S - K * math.exp(-r * T)      # BSK-E0002: no return type
+    return S - K * math.exp(-r * T)  # BSK-E0002: no return type
 
 
 def present_value(cash_flows, discount_rate):  # BSK-E0001: untyped params
     total = 0.0
     for i, cf in enumerate(cash_flows):
         total += cf / (1 + discount_rate) ** i
-    return total                           # BSK-E0002: no return type
+    return total  # BSK-E0002: no return type
 
 
 def kelly_criterion(win_prob, win_amount, loss_amount):  # BSK-E0001
     edge = win_prob * win_amount - (1 - win_prob) * loss_amount
-    return edge / win_amount              # BSK-E0002: no return type
+    return edge / win_amount  # BSK-E0002: no return type
 
 
 # ── BSK-E0011: Any type with no justification ─────────────────────────────────
-def execute_order(order: Any) -> Any:    # BSK-E0011 ×2
+def execute_order(order: Any) -> Any:  # BSK-E0011 ×2
     return order
 
 
 # ── BSK-E0014: currency constant assigned wrong type ─────────────────────────
-BASE_CURRENCY: str = 42                  # BSK-E0014: int assigned to str
-RISK_FREE_RATE: float = "0.05"           # BSK-E0014: str assigned to float
-MAX_POSITION_SIZE: int = 1_000_000.0    # BSK-E0014: float assigned to int
+BASE_CURRENCY: str = 42  # BSK-E0014: int assigned to str
+RISK_FREE_RATE: float = "0.05"  # BSK-E0014: str assigned to float
+MAX_POSITION_SIZE: int = 1_000_000.0  # BSK-E0014: float assigned to int
 
 
 # ── BSK-E0017: subclass changes field type in class hierarchy ────────────────
@@ -58,16 +59,17 @@ class Instrument:
 
 
 class Future(Instrument):
-    notional: int = 0                    # BSK-E0017: int overrides float
+    notional: int = 0  # BSK-E0017: int overrides float
 
 
 class Option(Instrument):
-    is_derivative: str = "yes"           # BSK-E0017: str overrides bool
+    is_derivative: str = "yes"  # BSK-E0017: str overrides bool
 
 
 # ── BSK-E0018: forward reference to name assigned later ──────────────────────
 def get_benchmark() -> str:
-    return BENCHMARK_INDEX               # BSK-E0018: referenced before assignment
+    return BENCHMARK_INDEX  # BSK-E0018: referenced before assignment
+
 
 BENCHMARK_INDEX: str = "SP500"
 
@@ -80,7 +82,7 @@ def compute_portfolio_risk(
         sorted_returns = sorted(returns)
         cutoff = int(len(sorted_returns) * (1 - confidence))
         var = abs(sorted_returns[cutoff])
-    return var                            # BSK-E0019: var may be unbound
+    return var  # BSK-E0019: var may be unbound
 
 
 # ── BSK-E0021: unannotated params make overloads identical ───────────────────
@@ -98,7 +100,7 @@ def round_to_tick(price: float, tick: int) -> float:
 
 # ── BSK-E0022: list literal used as a dict key in a position record ───────────
 def empty_book() -> dict[list[str], float]:
-    return {["AAPL", "MSFT"]: 0.0}       # BSK-E0022: list literal as key
+    return {["AAPL", "MSFT"]: 0.0}  # BSK-E0022: list literal as key
 
 
 # ── BSK-E0023: non-exhaustive match on order side ────────────────────────────

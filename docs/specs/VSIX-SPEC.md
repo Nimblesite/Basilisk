@@ -1,12 +1,12 @@
 # Basilisk VS Code Extension
 
-## Goal
+## Goal {#VSIX-GOAL}
 
 A first-class VS Code extension that connects to the `basilisk lsp` binary. The primary integration. Open source. No Microsoft proprietary dependencies.
 
 **CRITICAL: AIMING FOR FEATURE PARITY BETWEEN VS CODE, ZED, AND NEOVIM EXTENSIONS**
 
-All LSP features, DAP integration, custom commands, configuration settings, and binary resolution are defined in **`LSP-ARCHITECTURE-SPEC.md`** — the single source of truth. This spec only documents **VS Code-specific implementation details**.
+All LSP features, DAP integration, custom commands, configuration settings, and binary resolution are defined in **[LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md)** — the single source of truth. This spec only documents **VS Code-specific implementation details**.
 
 ## Critical Docs
 
@@ -18,25 +18,25 @@ All LSP features, DAP integration, custom commands, configuration settings, and 
 
 ---
 
-## Architecture
+## Architecture {#VSIX-ARCH}
 
-```
-┌──────────────────────────┐         ┌──────────────────────────┐
-│   VS Code                │         │  basilisk binary (Rust)  │
-│                          │         │                          │
-│  LanguageClient          │◄───────►│  basilisk lsp            │
-│  (vscode-languageclient) │  stdio  │  (JSON-RPC)              │
-│                          │  JSON   │                          │
-│  All 21 LSP features     │  RPC    │  See LSP-ARCHITECTURE-SPEC.md   │
-│  via LanguageClient      │         │  for all features        │
-│                          │         │                          │
-│  DAP Proxy (TypeScript)  │◄───────►│  debugpy (spawned by     │
-│  DebugAdapterInline      │  TCP    │  basilisk/startDebug)    │
-│                          │         │                          │
-│  TestController          │         │                          │
-│  Status Bar Item         │         │                          │
-│  Output Channels         │         │                          │
-└──────────────────────────┘         └──────────────────────────┘
+```mermaid
+graph TB
+    subgraph "VS Code"
+        LC[LanguageClient<br/>vscode-languageclient]
+        DAP[DAP Proxy<br/>DebugAdapterInline]
+        TC[TestController]
+        SB[Status Bar Item]
+        OC[Output Channels]
+    end
+
+    subgraph "basilisk binary (Rust)"
+        LSP["basilisk lsp<br/>(JSON-RPC)"]
+        DBG["debugpy<br/>(spawned by basilisk/startDebug)"]
+    end
+
+    LC <-->|"stdio JSON-RPC"| LSP
+    DAP <-->|"TCP DAP"| DBG
 ```
 
 - VSIX bundles a pre-compiled LSP server binary per platform
@@ -45,7 +45,7 @@ All LSP features, DAP integration, custom commands, configuration settings, and 
 
 ---
 
-## Extension Structure
+## Extension Structure {#VSIX-STRUCTURE}
 
 ```
 vscode-extension/
@@ -59,13 +59,13 @@ vscode-extension/
 
 ---
 
-## LSP Client Configuration
+## LSP Client Configuration {#VSIX-LSP}
 
-> See `LSP-ARCHITECTURE-SPEC.md` for all LSP features, custom commands, and shared configuration settings.
+> See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-FEATURES](LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES) for all LSP features, [§LSPARCH-CMDS](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDS) for custom commands, and [§LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG) for shared configuration settings.
 
 ```typescript
 const serverOptions: ServerOptions = {
-  command: resolvedBinaryPath,  // resolved via binary resolution cascade (LSP-ARCHITECTURE-SPEC.md)
+  command: resolvedBinaryPath,  // resolved via binary resolution cascade (LSP-ARCHITECTURE-SPEC.md §LSPARCH-BINRES)
   args: ["lsp"],
 };
 
@@ -81,9 +81,9 @@ client.start();
 
 ---
 
-## Commands
+## Commands {#VSIX-CMDS}
 
-> **Command Registration Rule**: See `LSP-ARCHITECTURE-SPEC.md` § Command Registration Rule. The extension MUST NOT call `registerCommand()` for any command the LSP server advertises. Server commands are auto-registered by `vscode-languageclient` from the server's `executeCommandProvider` capabilities. Client-side UI (input prompts, toasts) belongs in the `executeCommand` middleware.
+> **Command Registration Rule**: See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CMDRULE](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDRULE). The extension MUST NOT call `registerCommand()` for any command the LSP server advertises. Server commands are auto-registered by `vscode-languageclient` from the server's `executeCommandProvider` capabilities. Client-side UI (input prompts, toasts) belongs in the `executeCommand` middleware.
 
 ### `package.json` contribution
 
@@ -102,107 +102,22 @@ client.start();
 
 ---
 
-## Configuration Settings (`package.json` contribution)
+## Configuration Settings {#VSIX-CONFIG}
 
-> Shared settings (sent to LSP server) are defined in `LSP-ARCHITECTURE-SPEC.md` § Shared Configuration Settings. Below is their `package.json` schema representation plus VS Code-only settings.
+> All shared settings are defined in [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG). The `package.json` schema mirrors those settings under the `basilisk.*` namespace. Only VS Code-specific additions are documented below.
 
-```json
-{
-    "basilisk.executablePath": {
-        "type": "string", "default": "",
-        "description": "Path to the basilisk binary. Leave empty to auto-detect."
-    },
-    "basilisk.python": {
-        "type": "string", "default": "",
-        "description": "Path to the Python interpreter. Leave empty to auto-detect."
-    },
-    "basilisk.enabled": {
-        "type": "boolean", "default": true,
-        "description": "Enable/disable the Basilisk type checker."
-    },
-    "basilisk.useLsp": {
-        "type": "boolean", "default": true,
-        "description": "Use LSP mode (true) or subprocess mode (false)."
-    },
-    "basilisk.analysisMode": {
-        "type": "string",
-        "enum": ["openFilesOnly", "wholeModule", "crossModule"],
-        "default": "wholeModule",
-        "description": "Analysis scope."
-    },
-    "basilisk.inlayHints.parameterNames": {
-        "type": "boolean", "default": true,
-        "description": "Show parameter name hints at call sites."
-    },
-    "basilisk.inlayHints.variableTypes": {
-        "type": "boolean", "default": true,
-        "description": "Show inferred type hints for unannotated variables."
-    },
-    "basilisk.ruff.enabled": {
-        "type": "boolean", "default": true,
-        "description": "Enable Ruff integration for formatting and import organization."
-    },
-    "basilisk.ruff.executablePath": {
-        "type": "string", "default": "ruff",
-        "description": "Path to the ruff binary."
-    },
-    "basilisk.trace.server": {
-        "type": "string",
-        "enum": ["off", "messages", "verbose"],
-        "default": "off",
-        "description": "Trace LSP communication."
-    },
-    "basilisk.testExplorer.enabled": {
-        "type": "boolean", "default": true,
-        "description": "Enable Python test discovery and execution in Test Explorer."
-    },
-    "basilisk.testExplorer.framework": {
-        "type": "string",
-        "enum": ["pytest", "unittest", "auto"],
-        "default": "auto",
-        "description": "Test framework to use. 'auto' detects from project config."
-    },
-    "basilisk.testExplorer.pytestPath": {
-        "type": "string", "default": "pytest",
-        "description": "Path to the pytest executable."
-    },
-    "basilisk.testExplorer.args": {
-        "type": "array",
-        "items": { "type": "string" },
-        "default": [],
-        "description": "Additional arguments passed to the test runner."
-    },
-    "basilisk.testExplorer.autoDiscoverOnSave": {
-        "type": "boolean", "default": true,
-        "description": "Re-discover tests when test files are saved."
-    },
-    "basilisk.debugger.enabled": {
-        "type": "boolean", "default": true,
-        "description": "Enable Basilisk Python debugger."
-    },
-    "basilisk.debugger.typeChecking": {
-        "type": "boolean", "default": false,
-        "description": "Enable type assertion breakpoints during debugging."
-    },
-    "basilisk.debugger.debugpyPath": {
-        "type": "string", "default": "debugpy",
-        "description": "Path to the debugpy module."
-    }
-}
-```
-
-### VS Code-Only Settings
+### VS Code-Only Settings {#VSIX-CONFIG-LOCAL}
 
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `basilisk.useLsp` | `true` | Use LSP mode vs subprocess fallback |
 | `basilisk.trace.server` | `"off"` | LSP communication trace level |
 
-All other settings are shared across editors (see `LSP-ARCHITECTURE-SPEC.md`).
+All other settings are shared across editors (see [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)).
 
 ---
 
-## Status Bar
+## Status Bar {#VSIX-STATUSBAR}
 
 Persistent item showing server state and diagnostic count:
 - `$(check) Basilisk` — green, server running, no errors
@@ -212,12 +127,12 @@ Persistent item showing server state and diagnostic count:
 
 Additional indicators (future):
 - Type completeness indicator: `"87% typed"`
-- Migration dashboard — see [EXTENSION-ACTIVITY-PANEL-SPEC.md](EXTENSION-ACTIVITY-PANEL-SPEC.md)
+- Migration dashboard — see [EXTENSION-ACTIVITY-PANEL-SPEC.md §ACTPANEL-HEALTH](EXTENSION-ACTIVITY-PANEL-SPEC.md#ACTPANEL-HEALTH)
 - Ownership visualization (gutter icons: borrowed/owned/inout)
 
 ---
 
-## Error Recovery
+## Error Recovery {#VSIX-RECOVERY}
 
 - `errorHandler` on `LanguageClient` for auto-restart (max 3 attempts, exponential backoff)
 - User-visible error message when server fails to start
@@ -226,59 +141,19 @@ Additional indicators (future):
 
 ---
 
-## Test Explorer Integration
+## Test Explorer Integration {#VSIX-TESTS}
 
-> See `LSP-ARCHITECTURE-SPEC.md` § Shared Configuration Settings for test explorer settings shared across all editors.
-
-Discover and run Python tests (pytest, unittest) directly from VS Code's Test Explorer.
-
-**Architecture**:
-- Implement `TestController` via VS Code's `vscode.tests` API
-- Parse Python test files to discover test functions, classes, and methods
-- Use the resolver to find `def test_*` functions, classes inheriting `unittest.TestCase`, and `@pytest.mark` decorated items
-- Execute tests via `pytest` subprocess (similar to how formatting delegates to `ruff`)
-- Stream results back to Test Explorer as pass/fail/skip/error
-
-**Test Discovery**:
-- Scan workspace for `test_*.py` and `*_test.py` files
-- Parse with `basilisk-parser` to extract test items without importing
-- Detect pytest fixtures, parametrize markers, and unittest setUp/tearDown
-- Auto-refresh on file save
-
-**Test Item Hierarchy**:
-```
-tests/
-    test_api.py
-        test_login
-        test_signup -- AssertionError: expected 200, got 401
-        TestUserEndpoints
-            test_get_user
-            test_delete_user
-            test_update_user
-    test_models.py
-        test_create_widget
-        test_slow_query (skipped)
-```
-
-**Features**:
-- **Auto-discovery**: finds pytest and unittest tests from AST (no import needed)
-- **Run/debug individual tests**: click play on any test function or class
-- **Run all**: run entire test suite from Test Explorer root
-- **Inline failure messages**: show assertion errors and tracebacks inline
-- **Go to test**: click any test item to navigate to its source
-- **Re-run failed**: quick action to re-run only failed tests
-- **pytest integration**: honours `pytest.ini`, `pyproject.toml [tool.pytest]`, conftest fixtures
-- **Type-checked tests**: Basilisk diagnostics run on test files too
-- **Coverage overlay**: integrate with `pytest-cov` to show coverage gutters
+> See [LSP-TEST-INTEGRATION-SPEC.md §TESTINT-ARCH](LSP-TEST-INTEGRATION-SPEC.md#TESTINT-ARCH) for full test explorer architecture, data model, configuration, and features.
+> VS Code-specific wiring (TestController API, TestRunProfile) is documented in [LSP-TEST-INTEGRATION-SPEC.md §TESTINT-VSCODE](LSP-TEST-INTEGRATION-SPEC.md#TESTINT-VSCODE).
 
 ---
 
-## Python Debugger (DAP)
+## Python Debugger (DAP) {#VSIX-DAP}
 
-> See `LSP-ARCHITECTURE-SPEC.md` § Custom LSP Commands for `basilisk/startDebugSession` and `basilisk/stopDebugSession`.
-> See `LSP-ARCHITECTURE-SPEC.md` § DapTcpProxy for the shared proxy specification that all editors implement.
+> See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CMDS](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDS) for `basilisk/startDebugSession` and `basilisk/stopDebugSession`.
+> See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-DAPPROXY](LSP-ARCHITECTURE-SPEC.md#LSPARCH-DAPPROXY) for the shared proxy specification that all editors implement.
 
-### VS Code-Specific DAP Architecture
+### VS Code-Specific DAP Architecture {#VSIX-DAP-ARCH}
 
 ```
 VS Code  <-->  DAP Proxy (TypeScript, in-process)  <-->  debugpy.adapter (TCP)
@@ -288,7 +163,7 @@ VS Code  <-->  DAP Proxy (TypeScript, in-process)  <-->  debugpy.adapter (TCP)
 
 The LSP server spawns `debugpy.adapter --port <free-port>` via `basilisk/startDebugSession`. The proxy connects to that port and relays DAP messages bidirectionally, intercepting specific message patterns.
 
-### Debug Adapter Proxy (VS Code Implementation)
+### Debug Adapter Proxy {#VSIX-DAP-PROXY}
 
 The proxy (`vscode-extension/src/dap-proxy.ts`) implements `vscode.DebugAdapter` via `DebugAdapterInlineImplementation`. It fixes four debugpy quirks:
 
@@ -304,9 +179,9 @@ debugpy stops on `try:` lines during `next` (stepOver). The proxy inspects each 
 **Quirk 4 -- Session termination timing**:
 VS Code's `activeDebugSession` may not be cleared when `onDidTerminateDebugSession` fires. The proxy ensures the `exited` event is sent before `terminated`, with a minimal delay.
 
-### DAP Features
+### DAP Features {#VSIX-DAP-FEATURES}
 
-> See `LSP-ARCHITECTURE-SPEC.md` § DapTcpProxy for the full shared feature list.
+> See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-DAPPROXY](LSP-ARCHITECTURE-SPEC.md#LSPARCH-DAPPROXY) for the full shared feature list.
 
 | Feature | Description |
 |---------|-------------|
@@ -325,7 +200,7 @@ VS Code's `activeDebugSession` may not be cleared when `onDidTerminateDebugSessi
 - **Type narrowing visualization**: show which branch of a union type is active at a breakpoint
 - **Parameter contract verification**: warn when a function receives a value that violates its annotation at runtime
 
-### Launch Configurations
+### Launch Configurations {#VSIX-DAP-LAUNCH}
 
 ```json
 {
@@ -353,9 +228,9 @@ VS Code's `activeDebugSession` may not be cleared when `onDidTerminateDebugSessi
 
 ---
 
-## Binary Resolution
+## Binary Resolution {#VSIX-BINRES}
 
-> See `LSP-ARCHITECTURE-SPEC.md` § Binary Resolution Order for the shared cascade.
+> See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-BINRES](LSP-ARCHITECTURE-SPEC.md#LSPARCH-BINRES) for the shared cascade.
 
 VS Code-specific resolution order:
 1. VS Code setting: `basilisk.executablePath`
@@ -365,7 +240,7 @@ VS Code-specific resolution order:
 
 ---
 
-## Output Channels
+## Output Channels {#VSIX-OUTPUT}
 
 - `"Basilisk"` — main output channel for server messages
 - `"Basilisk LSP Trace"` — LSP communication trace (when `basilisk.trace.server` is enabled)
@@ -373,7 +248,7 @@ VS Code-specific resolution order:
 
 ---
 
-## Binary Distribution
+## Binary Distribution {#VSIX-DIST}
 
 The VSIX bundles pre-compiled `basilisk` binaries per platform:
 - `basilisk-x86_64-apple-darwin`

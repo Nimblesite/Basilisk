@@ -128,8 +128,8 @@ fn e0003_annotated_empty_list_does_not_fire() -> Result<(), Box<dyn std::error::
 }
 
 #[test]
-fn e0003_unannotated_str_literal_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
-    // Unannotated but with an inferrable literal — E0003 must NOT fire
+fn e0003_unannotated_str_literal_suppressed() -> Result<(), Box<dyn std::error::Error>> {
+    // Unannotated str literal — E0003 must NOT fire (type is trivially `str`)
     let diags = run("name = \"hello\"\n")?;
     let e3: Vec<_> = diags
         .iter()
@@ -137,7 +137,8 @@ fn e0003_unannotated_str_literal_does_not_fire() -> Result<(), Box<dyn std::erro
         .collect();
     assert!(
         e3.is_empty(),
-        "unannotated str literal must not trigger E0003"
+        "str literal should not fire E0003 — type is trivially inferrable, got: {:?}",
+        e3.iter().map(|d| &d.message).collect::<Vec<_>>()
     );
     Ok(())
 }

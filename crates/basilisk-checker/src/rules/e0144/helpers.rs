@@ -230,6 +230,7 @@ pub(super) fn check_kwarg_types(
                     "Pass a `{expected_type}` value for keyword argument `{kw_name}`"
                 )),
                 note: None,
+                provenance: None,
             });
         }
     }
@@ -286,6 +287,7 @@ pub(super) fn check_positional_arg_types(
                     n = idx + 1
                 )),
                 note: None,
+                provenance: None,
             });
             // Use outer span to silence unreachable — not actually needed but
             // keeps the variable used.

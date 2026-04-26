@@ -35,6 +35,7 @@ fn make_diagnostic(message: String, span: basilisk_resolver::Span, path: &str) -
                 .to_owned(),
         ),
         note: Some("PEP 484: `Generic[int]` is invalid; use a TypeVar instead".to_owned()),
+        provenance: None,
     }
 }
 

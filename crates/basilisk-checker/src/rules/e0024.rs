@@ -73,6 +73,7 @@ fn make_param_diagnostic(param: &ParameterInfo, path: &str) -> Diagnostic {
             "A literal value used as a type annotation has no meaning to the type checker"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }
 
@@ -91,5 +92,6 @@ fn make_return_diagnostic(func: &FunctionInfo, path: &str) -> Diagnostic {
             "A literal value used as a type annotation has no meaning to the type checker"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }

@@ -26,7 +26,7 @@ pub use scope::{
     TupleIndexViolation, TypeAliasDefInfo, TypeAliasTypeCallInfo, TypeArg, TypeStatementInfo,
     TypeVarCallInfo, TypedDictCallInfo, TypedDictKeyViolation, TypedDictKeyViolationKind,
     TypedDictSecondArgKind, UnboundTypeVarUsage, UnhashableHashCallViolation, UnhashableKeyRef,
-    VariableInfo, YieldExprInfo,
+    UnresolvedReason, VariableInfo, YieldExprInfo,
 };
 
 use basilisk_parser::ParsedModule;

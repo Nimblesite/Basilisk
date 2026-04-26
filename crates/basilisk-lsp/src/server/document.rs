@@ -68,7 +68,42 @@ pub(super) async fn did_save(server: &LspServer, params: DidSaveTextDocumentPara
     };
     let diags = index.set_open(&uri, &text, 0);
     drop(guard);
-    server.client.publish_diagnostics(uri, diags, None).await;
+    server
+        .client
+        .publish_diagnostics(uri.clone(), diags, None)
+        .await;
+
+    // Notify activity panels that this module changed.
+    super::activity_panel::send_module_changed(server, &uri).await;
+
+    // Re-discover tests if this is a test file and auto-discover is enabled.
+    let test_config = server.test_config.read().await;
+    let should_discover = test_config.enabled && test_config.auto_discover_on_save;
+    drop(test_config);
+
+    if should_discover {
+        if let Ok(path) = uri.to_file_path() {
+            if is_test_file(&path) {
+                let source = server
+                    .with_index(|idx| idx.get_text(&uri))
+                    .await
+                    .unwrap_or_default();
+                if !source.is_empty() {
+                    let items = crate::test_discovery::discover_tests_in_file(&path, &source);
+                    super::test_handlers::send_test_discovery_notification(server, items).await;
+                }
+            }
+        }
+    }
+}
+
+/// Check if a path is a test file (`test_*.py` or `*_test.py`).
+fn is_test_file(path: &std::path::Path) -> bool {
+    path.extension().is_some_and(|ext| ext == "py")
+        && path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .is_some_and(|stem| stem.starts_with("test_") || stem.ends_with("_test"))
 }
 
 /// Handle `textDocument/didClose`: clear or re-publish diagnostics according to

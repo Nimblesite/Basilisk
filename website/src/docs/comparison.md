@@ -1,8 +1,11 @@
 ---
 layout: layouts/docs.njk
-title: Comparing Type Checkers
-description: How Basilisk compares to Pyright, mypy, ty, and Pyrefly across strictness, performance, and features.
+title: "Basilisk vs Pyright vs mypy vs ty vs Pyrefly"
+description: "Detailed comparison of Python type checkers: Basilisk, Pyright, mypy, ty, and Pyrefly. Strictness, PEP conformance, performance benchmarks, and feature differences."
 keywords: basilisk vs pyright, python type checker comparison, mypy vs basilisk, ty, pyrefly
+date: 2026-02-28
+dateModified: 2026-03-31
+author: The Basilisk Project
 eleventyNavigation:
   key: Comparison
   order: 6
@@ -44,7 +47,7 @@ Basilisk removes the choice. There is no permissive mode to fall back to.
 | Ownership analysis | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Immutability enforcement | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Coercion detection | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Plugin system | WASM | None | Python hooks | Planned | None |
+| Plugin system | WASM (planned) | None | Python hooks | Planned | None |
 | VS Code extension | Open source | Proprietary (Pylance) | None | Open source | Open source |
 | Mojo compatibility | ✅ | ❌ | ❌ | ❌ | ❌ |
 | SARIF output | ✅ (Phase 3) | ✅ | ❌ | ❌ | ✅ |
@@ -160,7 +163,7 @@ Basilisk is not a faster version of an existing tool. It occupies a different po
 2. Ownership analysis — `Borrowed`, `InOut`, `Owned` semantics, statically verified
 3. Immutability enforcement — parameters are read-only unless declared otherwise
 4. Coercion detection — implicit `int`→`float`, `bool`→`int`, `bytes`→`str` are type errors
-5. WASM plugin system — extensible without forking, secure by design
+5. WASM plugin system (planned) — extensible without forking, secure by design
 6. Mojo compatibility — code passing Basilisk is structurally ready for Mojo
 
 **Where Basilisk is not yet the best choice:**

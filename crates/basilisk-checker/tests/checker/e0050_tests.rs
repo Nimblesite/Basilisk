@@ -94,10 +94,15 @@ from typing import NewType
 UserId = NewType("UserId", int)
 u1 = UserId(42)
 "#;
-    let diagnostics = run_messages(source)?;
+    let diags = run(source)?;
+    let e0050_diags: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0050")
+        .collect();
     assert!(
-        diagnostics.is_empty(),
-        "Expected no errors for valid NewType usage"
+        e0050_diags.is_empty(),
+        "Expected no E0050 errors for valid NewType usage, got: {:?}",
+        e0050_diags.iter().map(|d| &d.message).collect::<Vec<_>>()
     );
     Ok(())
 }

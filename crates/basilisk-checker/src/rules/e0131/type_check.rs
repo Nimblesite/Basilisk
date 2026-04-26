@@ -164,6 +164,7 @@ pub(super) fn check_yield_value(
                 "The yield expression must produce a value compatible with the declared yield type"
                     .to_owned(),
             ),
+            provenance: None,
         });
     }
 }
@@ -206,6 +207,7 @@ pub(super) fn check_yield_from(
                             "The delegated generator must yield values compatible with the outer generator's yield type"
                                 .to_owned(),
                         ),
+                        provenance: None,
                     });
                 }
 
@@ -233,6 +235,7 @@ pub(super) fn check_yield_from(
                                  compatible with the inner generator's send type"
                                     .to_owned(),
                             ),
+                            provenance: None,
                         });
                     }
                 }
@@ -261,6 +264,7 @@ pub(super) fn check_yield_from(
                     "The iterable in `yield from` must produce values compatible with the generator's yield type"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }
@@ -335,6 +339,7 @@ pub(super) fn check_missing_generator_return(
                  producing a value of type R"
                     .to_owned(),
             ),
+            provenance: None,
         });
     }
 }

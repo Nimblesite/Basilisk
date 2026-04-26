@@ -370,6 +370,7 @@ fn check_new_method_args(
                     type_args.join(", "),
                     ann_trimmed
                 )),
+                provenance: None,
             });
         }
     }
@@ -476,6 +477,7 @@ fn check_cls_param_mismatch(
             note: Some(format!(
                 "The `__new__` method constrains `cls` to `{cls_annotation}`"
             )),
+            provenance: None,
         });
     }
 }

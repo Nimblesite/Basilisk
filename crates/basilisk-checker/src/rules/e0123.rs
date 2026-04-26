@@ -142,6 +142,7 @@ fn check_class(
                              have no default implementation to call via `super()`"
                                 .to_owned(),
                         ),
+                        provenance: None,
                     });
                 }
             }

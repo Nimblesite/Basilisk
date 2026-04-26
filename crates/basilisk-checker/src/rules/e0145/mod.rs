@@ -84,12 +84,10 @@ impl ModuleCtx {
                 Stmt::ClassDef(cls) => {
                     class_names.push(cls.name.to_string());
                 }
-                Stmt::Assign(assign) => {
-                    if assign.targets.len() == 1 {
-                        if let Some(name) = assign.targets.first().and_then(expr_simple_name) {
-                            if is_typevar_call(&assign.value) {
-                                typevar_names.push(name.to_owned());
-                            }
+                Stmt::Assign(assign) if assign.targets.len() == 1 => {
+                    if let Some(name) = assign.targets.first().and_then(expr_simple_name) {
+                        if is_typevar_call(&assign.value) {
+                            typevar_names.push(name.to_owned());
                         }
                     }
                 }
@@ -261,6 +259,7 @@ fn check_module_expr(expr: &Expr, ctx: &ModuleCtx, path: &str, diag: &mut Vec<Di
                              does not expose arbitrary attributes."
                                 .to_owned(),
                         ),
+                        provenance: None,
                     });
                 }
             }
@@ -360,6 +359,7 @@ fn check_func_expr(
                                  only exposes attributes defined on X."
                                     .to_owned(),
                             ),
+                            provenance: None,
                         });
                     }
                 }
@@ -409,6 +409,7 @@ fn check_type_arg(
                      special forms like `Callable` are not class objects."
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
         return;
@@ -445,6 +446,7 @@ fn check_type_arg(
                  are subtypes of `A` or `B`."
                     .to_owned(),
             ),
+            provenance: None,
         });
     }
 }

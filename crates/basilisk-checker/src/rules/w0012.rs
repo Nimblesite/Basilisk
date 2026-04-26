@@ -58,6 +58,7 @@ impl UnusedDependency {
             note: Some(
                 "Unused dependencies increase install size and lock file complexity".to_owned(),
             ),
+            provenance: None,
         }
     }
 }

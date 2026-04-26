@@ -1,8 +1,11 @@
 ---
 layout: layouts/docs.njk
-title: Migration Guide
-description: How to migrate to Basilisk from Pyright or mypy, including config import and per-path overrides.
+title: "Migrate to Basilisk from Pyright or mypy"
+description: "Step-by-step migration guide from Pyright or mypy to Basilisk. Automatic config import, per-path overrides with deadlines, and incremental adoption strategy."
 keywords: migrate to basilisk, from pyright, from mypy, python type checker migration
+date: 2026-02-28
+dateModified: 2026-03-31
+author: The Basilisk Project
 eleventyNavigation:
   key: Migration
   order: 7

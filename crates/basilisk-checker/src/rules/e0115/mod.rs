@@ -136,5 +136,6 @@ pub(super) fn make_diagnostic(
         path: path.to_owned(),
         help: message.map(|m| format!("Deprecated: {m}")),
         note: Some("Marked with `@deprecated` per PEP 702".to_owned()),
+        provenance: None,
     }
 }

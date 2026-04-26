@@ -189,6 +189,7 @@ fn check_class(
                         "PEP 484: type variable ordering must be consistent across base classes"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
                 return; // One diagnostic per class is enough.
             }

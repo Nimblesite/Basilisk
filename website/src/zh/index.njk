@@ -1,0 +1,468 @@
+---
+layout: layouts/base.njk
+title: "Basilisk — 开源的 Pylance 替代品"
+description: "完整的 Python 语言服务器和 VS Code 扩展，替代 Pylance 和 Pyright。Pylance 的所有功能——更多更好。默认严格模式。用 Rust 构建。"
+lang: zh
+permalink: /zh/
+---
+
+<script src="/assets/js/demo.js" defer></script>
+
+<!-- ═══════════════════════════════════════════════════════
+     HERO — left text / right code, no glows, no grid
+═══════════════════════════════════════════════════════ -->
+<section class="hero">
+  <div class="container">
+    <div class="hero__split">
+
+      <div class="hero__text">
+        <span class="hero__kicker">// basilisk — v0.1 alpha</span>
+
+        <h1 class="hero__headline">
+          开源的<br>
+          Pylance 替代品。
+        </h1>
+
+        <p class="hero__subheadline">
+          Basilisk 是一个完整的 Python 语言服务器，替代 Pylance 和 Pyright。
+          自动补全、跳转到定义、悬停信息、重构、诊断、集成调试——
+          您依赖的一切，完全开源。支持 VS Code、Neovim 和 Zed。
+          默认严格模式。用 Rust 构建。
+        </p>
+
+        <div class="hero__cta-group">
+          <a href="/zh/docs/installation/" class="btn btn--primary">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            立即开始
+          </a>
+          <button class="btn btn--mono" data-copy="cargo install basilisk" title="复制安装命令">
+            <span class="copy-text">cargo install basilisk</span>
+            <svg class="copy-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            <svg class="copy-check" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="display:none;color:var(--color-success)"><polyline points="20 6 9 17 4 12"/></svg>
+          </button>
+          <a href="https://github.com/MelbourneDeveloper/Basilisk" class="btn btn--secondary" target="_blank" rel="noopener">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.741 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+            GitHub
+          </a>
+        </div>
+
+        <div class="hero__meta">
+          <span>完整 <strong>LSP</strong></span>
+          <span>用 <strong>Rust</strong> 构建</span>
+          <span><strong>&lt;10ms</strong> 增量检查</span>
+          <span><strong>VS Code</strong> &bull; <strong>Neovim</strong> &bull; <strong>Zed</strong></span>
+          <span><strong>MIT</strong> 许可证</span>
+        </div>
+      </div>
+
+      <!-- Before / After code demo -->
+      <div class="hero__code hero__demo">
+        <div class="demo-tabs">
+          <button class="demo-tab active" data-tab="before">bad.py</button>
+          <button class="demo-tab" data-tab="after">good.py</button>
+        </div>
+        <div class="demo-wrapper">
+
+          <div class="demo-panel active" data-panel="before">
+            <div class="code-window">
+              <div class="code-window__chrome">
+                <span class="code-window__dot code-window__dot--close"></span>
+                <span class="code-window__dot code-window__dot--min"></span>
+                <span class="code-window__dot code-window__dot--expand"></span>
+                <span class="code-window__filename">bad.py</span>
+              </div>
+              <div class="code-window__body">
+<pre><span class="tok-kw">def</span> <span class="tok-fn">process</span>(data):
+<span class="code-error-line">    <span class="tok-kw">return</span> data.upper()
+</span>
+<span class="tok-kw">class</span> <span class="tok-fn">User</span>:
+    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, name, age):
+        <span class="tok-kw">self</span>.name <span class="tok-kw">=</span> name
+        <span class="tok-kw">self</span>.age  <span class="tok-kw">=</span> age
+
+    <span class="tok-kw">def</span> <span class="tok-fn">greet</span>(<span class="tok-kw">self</span>):
+<span class="code-error-line">        <span class="tok-kw">return</span> <span class="tok-str">f"Hello, {self.name}"</span>
+</span></pre>
+              </div>
+            </div>
+            <div class="diagnostic-block">
+<span class="diag-prefix">error</span><span class="diag-bar">[</span><span class="diag-code">BSK-E0001</span><span class="diag-bar">]: </span><span class="diag-msg">缺少参数类型注解</span>
+<span class="diag-bar">  --> </span><span class="diag-path">bad.py:1:12</span>
+<span class="diag-bar">   |</span>
+<span class="diag-bar"> 1 | </span><span class="diag-src">def process(data):</span>
+<span class="diag-bar">   |            </span><span class="diag-caret">^^^^</span> <span class="diag-note">参数 `data` 缺少类型注解</span>
+<span class="diag-bar">   = </span><span class="diag-help">帮助：添加类型注解：`data: str`</span>
+
+<span class="diag-note">在 1 个文件中发现 5 个错误。</span>
+            </div>
+          </div>
+
+          <div class="demo-panel" data-panel="after">
+            <div class="code-window">
+              <div class="code-window__chrome">
+                <span class="code-window__dot code-window__dot--close"></span>
+                <span class="code-window__dot code-window__dot--min"></span>
+                <span class="code-window__dot code-window__dot--expand"></span>
+                <span class="code-window__filename">good.py</span>
+              </div>
+              <div class="code-window__body">
+<pre><span class="tok-kw">def</span> <span class="tok-fn">process</span>(data<span class="tok-type">: str</span>) <span class="tok-kw">-></span> <span class="tok-type">str</span>:
+    <span class="tok-kw">return</span> data.upper()
+
+
+<span class="tok-kw">class</span> <span class="tok-fn">User</span>:
+    name<span class="tok-type">: str</span>
+    age<span class="tok-type">: int</span>
+
+    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, name<span class="tok-type">: str</span>, age<span class="tok-type">: int</span>) <span class="tok-kw">-></span> <span class="tok-type">None</span>:
+        <span class="tok-kw">self</span>.name <span class="tok-kw">=</span> name
+        <span class="tok-kw">self</span>.age  <span class="tok-kw">=</span> age
+
+    <span class="tok-kw">def</span> <span class="tok-fn">greet</span>(<span class="tok-kw">self</span>) <span class="tok-kw">-></span> <span class="tok-type">str</span>:
+        <span class="tok-kw">return</span> <span class="tok-str">f"Hello, {self.name}"</span></pre>
+              </div>
+            </div>
+            <div class="diagnostic-block diagnostic-block--success">
+<span class="diag-prefix" style="color:var(--color-success)">全部检查通过，未发现问题。</span>
+<span class="diag-note">已检查 1 个文件——0 个错误，0 个警告。</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     PROBLEM — blunt text, no cards
+═══════════════════════════════════════════════════════ -->
+<section class="problem">
+  <div class="container">
+    <p class="problem__label">问题所在</p>
+    <div class="problem__grid">
+
+      <div class="problem__statement">
+        Pylance 是专有软件。Pyright 只是一个类型检查器。Python 理应拥有一个完全开源的语言服务器，能做<em>所有的事</em>。
+      </div>
+
+      <ul class="problem__bullets">
+        <li>
+          <span class="problem__num">01</span>
+          <span><strong>Pylance 是闭源的。</strong>最广泛使用的 Python VS Code 扩展是专有软件。您无法检查、修改或重新发布它。Basilisk 采用 MIT/Apache-2.0 许可——完全开放。</span>
+        </li>
+        <li>
+          <span class="problem__num">02</span>
+          <span><strong>Pyright 只是一个类型检查器。</strong>没有自动补全、没有悬停、没有重构——不使用 Pylance 包装就没有这些功能。Basilisk 是完整的 LSP：诊断、补全、跳转到定义、内联提示等更多功能。</span>
+        </li>
+        <li>
+          <span class="problem__num">03</span>
+          <span><strong>每个类型检查器默认都是宽松模式。</strong>只有在添加 <code>--strict</code> 时才进行类型检查。Basilisk 默认是严格的——无需选择加入。</span>
+        </li>
+        <li>
+          <span class="problem__num">04</span>
+          <span><strong>Node.js 不是 Python 的依赖。</strong>Pyright 需要 Node.js。Basilisk 是单个 Rust 二进制文件——无需运行时、无需 npm、即时启动。</span>
+        </li>
+      </ul>
+
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     FEATURES — alternating split rows
+═══════════════════════════════════════════════════════════ -->
+<section class="features">
+
+  <div class="feature-row">
+    <div class="feature-row__text">
+      <p class="feature-row__num">01 &mdash; 默认严格模式</p>
+      <h2 class="feature-row__title">无 <code>--strict</code> 标志。<br>无渐进模式。<br>无需选择加入。</h2>
+      <p class="feature-row__body">
+        Basilisk 将每个未类型化的函数视为类型错误——因为它本来就是。
+        没有任何配置键可以让它变得宽松。安全路径是唯一路径。
+      </p>
+    </div>
+    <div class="feature-row__visual">
+      <div class="stat-block">
+        <span class="stat-block__number">0<span class="stat-block__unit">%</span></span>
+        <span class="stat-block__label">逃生舱口</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="feature-row">
+    <div class="feature-row__visual">
+      <div class="stat-block">
+        <span class="stat-block__number"><<span class="stat-block__unit">10</span></span>
+        <span class="stat-block__label">毫秒，增量检查</span>
+      </div>
+    </div>
+    <div class="feature-row__text">
+      <p class="feature-row__num">02 &mdash; 亚 10 毫秒增量检查</p>
+      <h2 class="feature-row__title">响应每次击键。<br>每次编辑。</h2>
+      <p class="feature-row__body">
+        由 Salsa 驱动——与 rust-analyzer 相同的增量计算框架。
+        Basilisk 只重新计算发生变化的部分。100K 行代码冷启动不到 5 秒。
+        之后每次编辑都响应击键。
+      </p>
+    </div>
+  </div>
+
+  <div class="feature-row">
+    <div class="feature-row__text">
+      <p class="feature-row__num">03 &mdash; 所有权语义</p>
+      <h2 class="feature-row__title">借用。变异。<br>移动。全部强制执行。</h2>
+      <p class="feature-row__body">
+        添加 <code>Borrowed</code>、<code>InOut</code> 和 <code>Owned</code> 注解来表达所有权。
+        标准 Python 语法——无需编译器。在它们到达生产环境之前捕获借用值的变异
+        和移动后使用。
+      </p>
+    </div>
+    <div class="feature-row__visual">
+      <div class="code-window" style="width:100%;max-width:400px">
+        <div class="code-window__chrome">
+          <span class="code-window__dot code-window__dot--close"></span>
+          <span class="code-window__dot code-window__dot--min"></span>
+          <span class="code-window__dot code-window__dot--expand"></span>
+          <span class="code-window__filename">ownership.py</span>
+        </div>
+        <div class="code-window__body">
+<pre><span class="tok-kw">from</span> <span class="tok-fn">basilisk</span> <span class="tok-kw">import</span> Borrowed
+
+<span class="tok-kw">def</span> <span class="tok-fn">summarise</span>(
+  items<span class="tok-type">: Annotated[
+    list[int], Borrowed]</span>,
+) <span class="tok-kw">-></span> <span class="tok-type">int</span>:
+<span class="code-error-line">  items.append(<span class="tok-num">99</span>)  <span class="tok-cmt"># E0030</span>
+</span>  <span class="tok-kw">return</span> sum(items)</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="feature-row">
+    <div class="feature-row__visual">
+      <div class="stat-block">
+        <span class="stat-block__number">91.8<span class="stat-block__unit">%</span></span>
+        <span class="stat-block__label">PEP 符合性得分</span>
+      </div>
+    </div>
+    <div class="feature-row__text">
+      <p class="feature-row__num">04 &mdash; PEP 符合性</p>
+      <h2 class="feature-row__title">146 个测试中 134 个通过。<br>目标：100%。</h2>
+      <p class="feature-row__body">
+        通过<a href="https://github.com/python/typing/blob/main/conformance/results/results.html" style="color:var(--color-accent)">官方 Python 类型符合性套件</a>测试——
+        与衡量 Pyright（约 99%）、mypy（约 58%）和 Pyrefly（约 86%）的套件相同。
+        22 个类别中的 18 个达到 100%。ParamSpec、TypeVarTuple 和 TypedDict 边界情况是下一步。
+      </p>
+    </div>
+  </div>
+
+  <div class="feature-row">
+    <div class="feature-row__visual">
+      <div class="code-window" style="width:100%;max-width:400px">
+        <div class="code-window__chrome">
+          <span class="code-window__dot code-window__dot--close"></span>
+          <span class="code-window__dot code-window__dot--min"></span>
+          <span class="code-window__dot code-window__dot--expand"></span>
+          <span class="code-window__filename">Basilisk 输出</span>
+        </div>
+        <div class="code-window__body">
+<pre><span class="tok-cmt">[Basilisk Debug]</span> createDebugAdapterDescriptor
+  type=<span class="tok-type">basilisk-debug</span>, request=<span class="tok-str">launch</span>
+
+<span class="tok-cmt">[Basilisk Debug]</span> 请求 LSP 启动
+  debugpy (python: <span class="tok-fn">auto-detect</span>)...
+
+<span class="tok-cmt">[Basilisk Debug]</span> LSP 启动了 debugpy &rarr;
+  正在连接 DAP 客户端到
+  <span class="tok-type">localhost</span>:<span class="tok-num">57356</span></pre>
+        </div>
+      </div>
+    </div>
+    <div class="feature-row__text">
+      <p class="feature-row__num">05 &mdash; 集成调试</p>
+      <h2 class="feature-row__title">按 F5 开始调试。<br>Basilisk 处理其余的。</h2>
+      <p class="feature-row__body">
+        设置断点、逐步执行代码、检查变量——全部通过 Basilisk LSP 代理。
+        Rust 服务器在空闲 TCP 端口上启动 debugpy 并自动连接 VS Code 的 DAP 客户端。
+        无需手动配置。无需单独的调试扩展。只需按 F5。
+      </p>
+    </div>
+  </div>
+
+  <div class="feature-row">
+    <div class="feature-row__text">
+      <p class="feature-row__num">06 &mdash; 单一二进制文件</p>
+      <h2 class="feature-row__title">放入 PATH。<br>这就是全部安装。</h2>
+      <p class="feature-row__body">
+        编译为独立的 Rust 二进制文件。无需 Node.js。无需 Python 解释器。
+        无需 <code>pip install</code>。无需 <code>npm install</code>。
+        从单次下载即可在 macOS、Linux 和 Windows 上运行。
+      </p>
+    </div>
+    <div class="feature-row__visual">
+      <div class="code-window" style="width:100%;max-width:400px">
+        <div class="code-window__chrome">
+          <span class="code-window__dot code-window__dot--close"></span>
+          <span class="code-window__dot code-window__dot--min"></span>
+          <span class="code-window__dot code-window__dot--expand"></span>
+          <span class="code-window__filename">终端</span>
+        </div>
+        <div class="code-window__body">
+<pre><span class="tok-cmt"># 一次性安装</span>
+<span class="tok-fn">cargo</span> install basilisk
+
+<span class="tok-cmt"># 或下载二进制文件</span>
+<span class="tok-fn">curl</span> -sSfL https://get.basilisk-python.dev | sh
+
+<span class="tok-cmt"># 然后直接运行</span>
+<span class="tok-fn">basilisk</span> check src/</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<!-- ═══════════════════════════════════════════════
+     COMPARISON TABLE
+═══════════════════════════════════════════════ -->
+<section class="comparison-section">
+  <div class="container">
+    <p class="section-label">对比情况</p>
+    <h2 class="section-heading">Pylance 的功能。<br>开源。</h2>
+    <p class="section-subhead">
+      功能完整的语言服务器，替代 Pylance——
+      更严格的类型检查，无专有锁定。
+    </p>
+
+    <div class="table-wrapper">
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>功能</th>
+            <th class="col-basilisk">Basilisk</th>
+            <th>Pyright</th>
+            <th>mypy</th>
+            <th>ty</th>
+            <th>Pyrefly</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>默认严格模式</td>
+            <td class="col-basilisk check-yes">&#10003;</td>
+            <td><span class="check-partial">需选择加入</span></td>
+            <td><span class="check-partial">需选择加入</span></td>
+            <td><span class="check-partial">需选择加入</span></td>
+            <td><span class="check-partial">需选择加入</span></td>
+          </tr>
+          <tr>
+            <td>PEP 符合性</td>
+            <td class="col-basilisk">91.8% <em style="font-size:0.75rem;color:var(--color-text-muted)">(134/146)</em></td>
+            <td>~99%</td>
+            <td>~58% 完全通过</td>
+            <td>alpha</td>
+            <td>~86%</td>
+          </tr>
+          <tr>
+            <td>实现语言</td>
+            <td class="col-basilisk">Rust</td>
+            <td><span class="cell-warn">TypeScript</span></td>
+            <td><span class="cell-warn">Python/C</span></td>
+            <td>Rust</td>
+            <td>Rust</td>
+          </tr>
+          <tr>
+            <td>需要运行时</td>
+            <td class="col-basilisk check-yes">无</td>
+            <td><span class="cell-warn">Node.js</span></td>
+            <td><span class="cell-warn">Python</span></td>
+            <td class="check-yes">无</td>
+            <td class="check-yes">无</td>
+          </tr>
+          <tr>
+            <td>增量速度</td>
+            <td class="col-basilisk">&lt;10ms</td>
+            <td>~386ms</td>
+            <td>更慢</td>
+            <td>4.7ms</td>
+            <td>&lt;10ms</td>
+          </tr>
+          <tr>
+            <td>所有权分析</td>
+            <td class="col-basilisk check-yes">&#10003;</td>
+            <td class="check-no">&mdash;</td>
+            <td class="check-no">&mdash;</td>
+            <td class="check-no">&mdash;</td>
+            <td class="check-no">&mdash;</td>
+          </tr>
+          <tr>
+            <td>不可变性强制执行</td>
+            <td class="col-basilisk check-yes">&#10003;</td>
+            <td class="check-no">&mdash;</td>
+            <td class="check-no">&mdash;</td>
+            <td class="check-no">&mdash;</td>
+          </tr>
+          <tr>
+            <td>插件系统</td>
+            <td class="col-basilisk">WASM</td>
+            <td class="check-no">&mdash;</td>
+            <td><span class="check-partial">Python 钩子</span></td>
+            <td><span class="check-partial">计划中</span></td>
+            <td class="check-no">&mdash;</td>
+          </tr>
+          <tr>
+            <td>完整 LSP（补全、悬停、跳转）</td>
+            <td class="col-basilisk check-yes">&#10003;</td>
+            <td><span class="cell-warn">仅 Pylance</span></td>
+            <td class="check-no">&mdash;</td>
+            <td><span class="check-partial">基础</span></td>
+            <td><span class="check-partial">基础</span></td>
+          </tr>
+          <tr>
+            <td>集成调试器</td>
+            <td class="col-basilisk check-yes">&#10003;</td>
+            <td class="check-no">&mdash;</td>
+            <td class="check-no">&mdash;</td>
+            <td class="check-no">&mdash;</td>
+            <td class="check-no">&mdash;</td>
+          </tr>
+          <tr>
+            <td>编辑器扩展</td>
+            <td class="col-basilisk">VS Code、Neovim、Zed</td>
+            <td><span class="cell-warn">专有 (Pylance)</span></td>
+            <td class="check-no">&mdash;</td>
+            <td>VS Code</td>
+            <td>VS Code</td>
+          </tr>
+          <tr>
+            <td>许可证</td>
+            <td class="col-basilisk">MIT</td>
+            <td>MIT</td>
+            <td>MIT</td>
+            <td>MIT</td>
+            <td>MIT</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════
+     CTA
+═══════════════════════════════════════════════ -->
+<section class="cta-section">
+  <div class="container">
+    <h2 class="cta-section__title">准备好替换 Pylance 了吗？</h2>
+    <p class="cta-section__body">安装 Basilisk VS Code 扩展，禁用 Pylance，获得完整的 Python 开发体验——完全开源。</p>
+    <div class="cta-section__actions">
+      <a href="/zh/docs/installation/" class="btn btn--primary btn--lg">安装指南</a>
+      <a href="/zh/docs/quick-start/" class="btn btn--secondary btn--lg">快速开始</a>
+    </div>
+  </div>
+</section>

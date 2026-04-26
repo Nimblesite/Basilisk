@@ -59,6 +59,7 @@ impl Rule for ReadOnlyTypedDictMutation {
                 note: Some(
                     "PEP 705: `ReadOnly` fields in a `TypedDict` may not be assigned after construction".to_owned(),
                 ),
+                provenance: None,
             });
         }
     }

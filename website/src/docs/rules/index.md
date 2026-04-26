@@ -1,8 +1,11 @@
 ---
 layout: layouts/docs.njk
-title: Diagnostic Rules
-description: Complete reference for all BSK-E (error) and BSK-W (warning) diagnostic codes.
+title: "Basilisk Diagnostic Rules — All BSK Error and Warning Codes"
+description: "Complete reference for all Basilisk diagnostic codes (BSK-E errors and BSK-W warnings). Missing annotations, type safety, ownership, immutability, and more."
 keywords: basilisk rules, type errors, BSK-E, BSK-W, diagnostic codes
+date: 2026-02-28
+dateModified: 2026-03-31
+author: The Basilisk Project
 eleventyNavigation:
   key: Rules
   order: 5

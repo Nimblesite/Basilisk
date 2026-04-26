@@ -118,6 +118,7 @@ fn make_none_diagnostic(stmt: &ReturnStmtInfo, func_name: &str, path: &str) -> D
             "A function annotated `-> None` must only use bare `return` or fall off the end"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }
 
@@ -142,5 +143,6 @@ fn make_diagnostic(
         note: Some(
             "Basilisk requires the inferred return type to be assignable to the declared type".to_owned(),
         ),
+        provenance: None,
     }
 }

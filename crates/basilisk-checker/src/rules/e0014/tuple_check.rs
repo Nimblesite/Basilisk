@@ -80,6 +80,7 @@ pub(super) fn check_tuple_reassignments(
                     "Basilisk checks that tuple literals are compatible with the declared tuple type"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }

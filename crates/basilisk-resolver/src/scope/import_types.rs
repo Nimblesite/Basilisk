@@ -39,6 +39,26 @@ pub enum PackageDepKind {
     Transitive,
 }
 
+/// Why an import could not be resolved.
+///
+/// Used by BSK-E0010 to produce context-aware diagnostic messages when uv
+/// package registry information is available.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UnresolvedReason {
+    /// Package not in `uv.lock` at all.
+    NotInstalled,
+    /// In lock as transitive, not in `pyproject.toml` dependencies.
+    NotInDeps,
+    /// In `pyproject.toml` but lock file is stale or venv not synced.
+    NeedsSync,
+    /// Installed but no `.pyi` stubs available.
+    NoStubs,
+    /// stdlib module not available in the target Python version.
+    WrongPythonVersion,
+    /// Non-uv project or cannot determine reason.
+    Unknown,
+}
+
 /// A single import statement.
 #[derive(Debug, Clone)]
 pub struct ImportInfo {
@@ -60,4 +80,20 @@ pub struct ImportInfo {
     /// `None` for non-uv projects, stdlib modules, or local imports.
     /// Set during workspace import resolution.
     pub package_dep_kind: Option<PackageDepKind>,
+    /// Package version from the lock file (e.g. `"2.31.0"`).
+    ///
+    /// Populated during workspace import resolution when a uv registry is
+    /// available. `None` for stdlib, local, or non-uv imports.
+    pub package_version: Option<String>,
+    /// Package name from the lock file (e.g. `"requests"`).
+    ///
+    /// Populated during workspace import resolution when a uv registry is
+    /// available. `None` for stdlib, local, or non-uv imports.
+    pub package_name: Option<String>,
+    /// Why the import could not be resolved, when known.
+    ///
+    /// Populated during workspace import resolution when a uv registry is
+    /// available and the import is unresolved. `None` when no uv context is
+    /// available or the import resolved successfully.
+    pub unresolved_reason: Option<UnresolvedReason>,
 }

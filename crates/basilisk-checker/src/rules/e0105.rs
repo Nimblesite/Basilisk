@@ -54,6 +54,7 @@ impl Rule for BoundedTypeVarAttrAccess {
                      defined on the bound type are accessible on the type variable."
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }

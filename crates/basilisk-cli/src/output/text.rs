@@ -1,6 +1,6 @@
-//! Rustc-style text rendering for diagnostics.
+//! Rustc-style text rendering for diagnostics with terminal colours.
 //!
-//! Example output:
+//! Example output (without ANSI codes):
 //! ```text
 //! error[BSK-E0001]: Missing parameter type annotation for `data`
 //!   --> src/utils.py:14:5
@@ -13,7 +13,10 @@
 //!    = see: https://www.basilisk-python.dev/errors/BSK-E0001
 //! ```
 
-use basilisk_checker::Diagnostic;
+use std::fmt::Write as _;
+
+use basilisk_checker::{Diagnostic, Severity};
+use colored::Colorize as _;
 
 use super::FileSource;
 
@@ -25,16 +28,30 @@ pub fn render_diagnostics(diagnostics: &[Diagnostic], sources: &[FileSource]) ->
         .iter()
         .inspect(|d| {
             let source = sources.iter().find(|s| s.path == d.path);
-            render_one(d, source.map(|s| s.text.as_str()));
+            print!("{}", format_one(d, source.map(|s| s.text.as_str())));
         })
-        .filter(|d| d.severity == basilisk_checker::Severity::Error)
+        .filter(|d| d.severity == Severity::Error)
         .count()
 }
 
-/// Render a single diagnostic to stdout in rustc style.
-pub(super) fn render_one(diag: &Diagnostic, source: Option<&str>) {
+/// Apply the appropriate colour to a severity label.
+fn color_severity(severity: Severity, text: &str) -> String {
+    match severity {
+        Severity::Error | Severity::SafetyViolation => text.red().bold().to_string(),
+        Severity::Warning => text.yellow().bold().to_string(),
+        Severity::Info => text.blue().bold().to_string(),
+    }
+}
+
+/// Format a single diagnostic as a rustc-style string with ANSI colours.
+pub(super) fn format_one(diag: &Diagnostic, source: Option<&str>) -> String {
+    let mut out = String::new();
+
     // Header: error[BSK-E0001]: Message
-    println!("{}[{}]: {}", diag.severity, diag.code.code, diag.message);
+    let severity_label = color_severity(diag.severity, &format!("{}", diag.severity));
+    let code = format!("[{}]", diag.code.code).bold();
+    let message = diag.message.bold();
+    let _ = writeln!(out, "{severity_label}{code}: {message}");
 
     // Location: --> path:line:col
     let location = source.map_or_else(
@@ -45,22 +62,44 @@ pub(super) fn render_one(diag: &Diagnostic, source: Option<&str>) {
         },
     );
 
-    println!("  --> {location}");
+    let _ = writeln!(out, "  {} {location}", "-->".blue().bold());
 
     // Source snippet with underline
     if let Some(src) = source {
-        render_snippet(src, diag.span.start_usize(), diag.span.end_usize());
+        out.push_str(&format_snippet(
+            src,
+            diag.span.start_usize(),
+            diag.span.end_usize(),
+            diag.severity,
+        ));
     }
 
     // Annotations
     if let Some(help) = &diag.help {
-        println!("   = help: {help}");
+        let _ = writeln!(
+            out,
+            "   {} {}: {help}",
+            "=".blue().bold(),
+            "help".cyan().bold(),
+        );
     }
     if let Some(note) = &diag.note {
-        println!("   = note: {note}");
+        let _ = writeln!(
+            out,
+            "   {} {}: {note}",
+            "=".blue().bold(),
+            "note".cyan().bold(),
+        );
     }
-    println!("   = see: {}", diag.code.docs_url);
-    println!();
+    let _ = writeln!(
+        out,
+        "   {} {}: {}",
+        "=".blue().bold(),
+        "see".cyan().bold(),
+        diag.code.docs_url,
+    );
+    out.push('\n');
+    out
 }
 
 /// Convert a byte offset into (1-based line number, 1-based column number).
@@ -72,8 +111,8 @@ pub(super) fn byte_offset_to_line_col(source: &str, offset: usize) -> (usize, us
     (line, col)
 }
 
-/// Render a source line with a `^^^^` underline for the highlighted span.
-pub(super) fn render_snippet(source: &str, start: usize, end: usize) {
+/// Format a source line with a `^^^^` underline for the highlighted span.
+pub(super) fn format_snippet(source: &str, start: usize, end: usize, severity: Severity) -> String {
     let (line_num, _) = byte_offset_to_line_col(source, start);
     let line_start = source[..start].rfind('\n').map_or(0, |p| p + 1);
     let line_text = source[line_start..].lines().next().unwrap_or("");
@@ -84,13 +123,18 @@ pub(super) fn render_snippet(source: &str, start: usize, end: usize) {
 
     let line_num_width = line_num.to_string().len();
     let pad = " ".repeat(line_num_width);
+    let pipe = "|".blue().bold();
+    let line_num_str = line_num.to_string().blue().bold();
+    let underline = color_severity(severity, &"^".repeat(underline_len));
 
-    println!("{pad}   |");
-    println!("{line_num} | {line_text}");
-    println!(
-        "{pad}   | {spaces}{underline}",
+    let mut out = String::new();
+    let _ = writeln!(out, "{pad}   {pipe}");
+    let _ = writeln!(out, "{line_num_str} {pipe} {line_text}");
+    let _ = writeln!(
+        out,
+        "{pad}   {pipe} {spaces}{underline}",
         spaces = " ".repeat(col_start),
-        underline = "^".repeat(underline_len),
     );
-    println!("{pad}   |");
+    let _ = writeln!(out, "{pad}   {pipe}");
+    out
 }

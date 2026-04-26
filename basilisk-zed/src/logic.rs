@@ -4,7 +4,10 @@
 //! only `serde_json::Value`, `String`, `&str`, or basic Rust types so the
 //! module compiles and tests on any native target — no WASM host required.
 
-use basilisk_common::{config_keys, slash_commands};
+use basilisk_common::{
+    commands, config_keys, memory_diagnostics, notifications, profiler_diagnostics,
+    profiler_formats, profiler_presets, slash_commands,
+};
 use serde_json::Value;
 
 // ── Slash commands ───────────────────────────────────────────────────────────
@@ -15,78 +18,315 @@ use serde_json::Value;
 /// Returns `Err` for unknown command names.
 pub fn slash_command_output(command: &str, args: &[String]) -> Result<(String, String), String> {
     match command {
-        slash_commands::PROFILE => {
-            let target = match args.first() {
-                Some(pid) => format!("PID `{pid}`"),
-                None => "active Python process".to_string(),
-            };
-            let text = format!(
-                "## Profiling Started\n\n\
-                 **Target:** {target}\n\n\
-                 Collecting CPU samples via `py-spy`. \
-                 Use `/profstop` to stop and view results, \
-                 or `/profsnapshot` for a snapshot without stopping.\n\n\
-                 Results will appear as:\n\
-                 - **LSP diagnostics** — per-line timing hints in the editor\n\
-                 - **Speedscope JSON** — opened in browser for flamegraph view"
-            );
-            Ok(("Profile Started".to_string(), text))
-        }
-        slash_commands::PROFSTOP => {
-            let text = "\
-                ## Profile Results\n\n\
-                Profiling stopped. Results sent via LSP diagnostics.\n\n\
-                | Metric | Value |\n\
-                |--------|-------|\n\
-                | Status | Stopped |\n\
-                | Output | LSP hint diagnostics + speedscope JSON |\n\n\
-                > Hot functions and per-line timing are visible as editor hints.\n\
-                > Open the speedscope file in your browser for a flamegraph."
-                .to_string();
-            Ok(("Profile Results".to_string(), text))
-        }
-        slash_commands::PROFSNAPSHOT => {
-            let text = "\
-                ## Profile Snapshot\n\n\
-                Snapshot captured. **Profiling continues.**\n\n\
-                Results sent via LSP diagnostics. \
-                Use `/profstop` to stop, or `/profsnapshot` again for another snapshot."
-                .to_string();
-            Ok(("Profile Snapshot".to_string(), text))
-        }
-        slash_commands::MEMLEAK => {
-            let text = "\
-                ## Memory Tracking Started\n\n\
-                Tracking object allocations via debug session.\n\n\
-                Use `/memstop` to stop and generate a leak report, \
-                or `/memrefs <TypeName>` to query retention paths for a specific type."
-                .to_string();
-            Ok(("Memory Tracking".to_string(), text))
-        }
-        slash_commands::MEMSTOP => {
-            let text = "\
-                ## Memory Leak Report\n\n\
-                Memory tracking stopped. Leak report sent via LSP diagnostics.\n\n\
-                | Metric | Value |\n\
-                |--------|-------|\n\
-                | Status | Stopped |\n\
-                | Output | LSP diagnostics with confidence scores |\n\n\
-                > Use `/memrefs <TypeName>` to inspect retention paths for specific types."
-                .to_string();
-            Ok(("Memory Report".to_string(), text))
-        }
-        slash_commands::MEMREFS => {
-            let type_name = args.first().map_or("(unknown)", String::as_str);
-            let text = format!(
-                "## Reference Graph: `{type_name}`\n\n\
-                 Querying retention paths for `{type_name}`...\n\n\
-                 Results will show the reference chain from GC roots \
-                 to instances of `{type_name}`, helping identify why objects are not collected."
-            );
-            Ok(("Reference Graph".to_string(), text))
-        }
+        slash_commands::PROFILE => Ok(slash_profile(args)),
+        slash_commands::PROFSTOP => Ok(slash_profstop()),
+        slash_commands::PROFSNAPSHOT => Ok(slash_profsnapshot()),
+        slash_commands::MEMLEAK => Ok(slash_memleak()),
+        slash_commands::MEMSTOP => Ok(slash_memstop()),
+        slash_commands::MEMREFS => Ok(slash_memrefs(args)),
+        slash_commands::MODULES => Ok(slash_modules(args)),
+        slash_commands::SYMBOLS => Ok(slash_symbols(args)),
+        slash_commands::HEALTH => Ok(slash_health()),
+        slash_commands::BASILISK => Ok(slash_basilisk()),
+        slash_commands::TESTS => Ok(slash_tests(args)),
+        slash_commands::RUNTESTS => Ok(slash_runtests(args)),
+        slash_commands::TESTFILE => Ok(slash_testfile(args)),
         _ => Err(format!("Unknown slash command: {command}")),
     }
+}
+
+fn slash_profile(args: &[String]) -> (String, String) {
+    let target = match args.first() {
+        Some(pid) => format!("PID `{pid}`"),
+        None => "active Python process".to_string(),
+    };
+    let start = commands::PROFILER_START;
+    let stop = commands::PROFILER_STOP;
+    let snapshot = commands::PROFILER_SNAPSHOT;
+    let list = commands::PROFILER_LIST;
+    let line_code = profiler_diagnostics::LINE;
+    let func_code = profiler_diagnostics::FUNC;
+    let progress = notifications::PROFILER_PROGRESS;
+    let lightweight = profiler_presets::LIGHTWEIGHT;
+    let detailed = profiler_presets::DETAILED;
+    let memory_preset = profiler_presets::MEMORY;
+    let text = format!(
+        "## CPU Profiling\n\n\
+         **Target:** {target}\n\n\
+         Basilisk profiles Python processes via `py-spy` (zero overhead, no instrumentation).\n\
+         Diagnostics appear inline as `{line_code}` / `{func_code}` hints on hot lines and functions.\n\
+         Live progress is delivered via `{progress}` notifications.\n\n\
+         ### How to start\n\
+         Open the command palette and run **`{start}`** with:\n\
+         ```json\n\
+         {{\"pid\": <PID>, \"sampleRate\": 100, \"includeNative\": false}}\n\
+         ```\n\
+         If a debug session is active, the PID is auto-detected — omit the `pid` field.\n\n\
+         ### Presets\n\
+         | Preset | Sample Rate | Native Frames | Best for |\n\
+         |--------|-------------|---------------|----------|\n\
+         | `{lightweight}` | 10 Hz | No | Long-running processes, minimal overhead |\n\
+         | `{detailed}` | 200 Hz | Yes | Short tasks, deep native call stacks |\n\
+         | `{memory_preset}` | 50 Hz | Yes | Memory-intensive workloads |\n\n\
+         ### Results\n\
+         - **Inline diagnostics** — `{line_code}` / `{func_code}` hints on hot lines (≥1% / ≥2% threshold)\n\
+         - **Speedscope JSON** — written to `/tmp/`, open at speedscope.app for interactive flamegraph\n\
+         - **Flamegraph SVG** — request `\"format\": \"flamegraph\"` on stop (inferno rendering)\n\n\
+         ### Commands\n\
+         | Command | Description |\n\
+         |---------|-------------|\n\
+         | `{start}` | Begin sampling (PID optional if debug session active) |\n\
+         | `{stop}` | Stop and export results (speedscope / flamegraph / summary) |\n\
+         | `{snapshot}` | Snapshot without stopping — diagnostics updated immediately |\n\
+         | `{list}` | List active profiling sessions with sample counts |"
+    );
+    ("CPU Profiling".to_string(), text)
+}
+
+fn slash_profstop() -> (String, String) {
+    let stop = commands::PROFILER_STOP;
+    let speedscope = profiler_formats::SPEEDSCOPE;
+    let flamegraph = profiler_formats::FLAMEGRAPH;
+    let summary = profiler_formats::SUMMARY;
+    let text = format!(
+        "## Stop Profiling\n\n\
+        Run **`{stop}`** from the command palette with:\n\
+        ```json\n\
+        {{\"sessionId\": \"<session-id>\", \"format\": \"{speedscope}\"}}\n\
+        ```\n\n\
+        ### Output formats\n\
+        | Format | Description |\n\
+        |--------|-------------|\n\
+        | `{speedscope}` | JSON for speedscope.app (default) |\n\
+        | `{flamegraph}` | SVG flamegraph via inferno |\n\
+        | `{summary}` | Text-only, no file export |\n\n\
+        ### What happens on stop\n\
+        1. Sampling thread stops, remaining samples drained\n\
+        2. Hot lines/functions computed (above 1%/2% threshold)\n\
+        3. `publishDiagnostics` sent for each profiled file — hints appear inline\n\
+        4. Export file written to temp directory\n\n\
+        > Open the speedscope JSON at speedscope.app for an interactive flamegraph."
+    );
+    ("Stop Profiling".to_string(), text)
+}
+
+fn slash_profsnapshot() -> (String, String) {
+    let snapshot = commands::PROFILER_SNAPSHOT;
+    let text = format!(
+        "## Profile Snapshot\n\n\
+        Run **`{snapshot}`** from the command palette.\n\
+        Takes a point-in-time snapshot without stopping the session.\n\n\
+        Diagnostics are published immediately for the snapshot data.\n\
+        Profiling continues — use `/profstop` to end the session.\n\n\
+        > Useful for checking hotspots during a long-running profiling session."
+    );
+    ("Profile Snapshot".to_string(), text)
+}
+
+fn slash_memleak() -> (String, String) {
+    let start = commands::MEMORY_START;
+    let snapshot = commands::MEMORY_SNAPSHOT;
+    let diff = commands::MEMORY_DIFF;
+    let refs = commands::MEMORY_REFERENCES;
+    let gc = commands::MEMORY_GC_COLLECT;
+    let alloc = memory_diagnostics::ALLOC;
+    let growth = memory_diagnostics::GROWTH;
+    let leak = memory_diagnostics::LEAK;
+    let cycle = memory_diagnostics::CYCLE;
+    let timeline = notifications::MEMORY_TIMELINE;
+    let text = format!(
+        "## Memory Leak Tracking\n\n\
+        Tracks object allocations via `tracemalloc` injection into an active debug session.\n\
+        Memory timeline data is delivered via `{timeline}` notifications.\n\n\
+        ### How to start\n\
+        Run **`{start}`** from the command palette.\n\
+        Requires an active debug session (debugpy) — the LSP injects Python code via DAP evaluate.\n\n\
+        ### Commands\n\
+        | Command | Description |\n\
+        |---------|-------------|\n\
+        | `{start}` | Begin tracking allocations |\n\
+        | `{snapshot}` | Capture allocation snapshot |\n\
+        | `{diff}` | Compare two snapshots for growth |\n\
+        | `{refs}` | Walk object reference graph |\n\
+        | `{gc}` | Force GC and report uncollectable |\n\n\
+        ### Diagnostics\n\
+        - `{alloc}` — top allocation sites (Hint)\n\
+        - `{growth}` — memory growth detected (Warning)\n\
+        - `{leak}` — suspected leak (Warning)\n\
+        - `{cycle}` — reference cycle with `__del__` (Error)"
+    );
+    ("Memory Tracking".to_string(), text)
+}
+
+fn slash_memstop() -> (String, String) {
+    let leak = memory_diagnostics::LEAK;
+    let cycle = memory_diagnostics::CYCLE;
+    let text = format!(
+        "## Stop Memory Tracking\n\n\
+        Stops `tracemalloc` injection and generates the final leak report.\n\n\
+        Diagnostics published for each file with significant allocations.\n\
+        Leak confidence: **Definite** > **High** > **Medium** > **Low**.\n\n\
+        - `{leak}` — suspected leak with confidence score (Warning)\n\
+        - `{cycle}` — reference cycle involving `__del__` finalizers (Error)\n\n\
+        > Use `/memrefs <TypeName>` to inspect retention paths for leaked types."
+    );
+    ("Memory Report".to_string(), text)
+}
+
+fn slash_memrefs(args: &[String]) -> (String, String) {
+    let type_name = args.first().map_or("(unknown)", String::as_str);
+    let refs_cmd = commands::MEMORY_REFERENCES;
+    let cycle_code = memory_diagnostics::CYCLE;
+    let text = format!(
+        "## Reference Graph: `{type_name}`\n\n\
+         Run **`{refs_cmd}`** from the command palette with:\n\
+         ```json\n\
+         {{\"targetType\": \"{type_name}\", \"maxDepth\": 5, \"maxNodes\": 200}}\n\
+         ```\n\n\
+         Walks `gc.get_referrers()` from GC roots to all live instances of `{type_name}`.\n\n\
+         ### Output\n\
+         - **Nodes** — objects with type, size, repr\n\
+         - **Edges** — reference relationships with labels (`.attr`, `[key]`)\n\
+         - **Cycles** — detected via DFS, flagged as `{cycle_code}`\n\
+         - **Retention path** — human-readable chain from GC root to target"
+    );
+    ("Reference Graph".to_string(), text)
+}
+
+fn slash_modules(args: &[String]) -> (String, String) {
+    let scope = match args.first() {
+        Some(prefix) => format!("prefix `{prefix}`"),
+        None => "entire workspace".to_string(),
+    };
+    let text = format!(
+        "## Workspace Modules\n\n\
+         **Scope:** {scope}\n\n\
+         Fetching module tree via `basilisk.workspaceModules`.\n\n\
+         The module tree shows:\n\
+         - **Packages** — directories with `__init__.py`\n\
+         - **Modules** — individual `.py` files\n\
+         - **Symbols** — classes, functions, variables, constants\n\n\
+         Each symbol includes:\n\
+         - Type annotation status (annotated/unannotated)\n\
+         - Export status (`__all__`)\n\
+         - Line number for navigation\n\n\
+         > Use `/symbols <module>` to drill into a specific module."
+    );
+    ("Workspace Modules".to_string(), text)
+}
+
+fn slash_symbols(args: &[String]) -> (String, String) {
+    let module = args.first().map_or("(all modules)", String::as_str);
+    let text = format!(
+        "## Module Symbols: `{module}`\n\n\
+         Fetching symbols via `basilisk.workspaceModules` with scope `{module}`.\n\n\
+         | Symbol | Kind | Annotated | Line |\n\
+         |--------|------|-----------|------|\n\
+         | *(loading...)* | | | |\n\n\
+         > Symbols are extracted from the resolved AST, not from imports."
+    );
+    ("Module Symbols".to_string(), text)
+}
+
+fn slash_health() -> (String, String) {
+    let text = "\
+        ## Type Health\n\n\
+        Fetching workspace health via `basilisk.typeHealth`.\n\n\
+        | Metric | Value |\n\
+        |--------|-------|\n\
+        | Coverage | *(loading...)* |\n\
+        | Errors | *(loading...)* |\n\
+        | Warnings | *(loading...)* |\n\
+        | Adopted Files | *(loading...)* |\n\n\
+        Per-module breakdown sorted by coverage (worst first):\n\n\
+        | Module | Coverage | Errors | Warnings | Status |\n\
+        |--------|----------|--------|----------|--------|\n\
+        | *(loading...)* | | | | |\n\n\
+        > Unannotated symbols are listed per module. Use `/symbols <module>` to see details."
+        .to_string();
+    ("Type Health".to_string(), text)
+}
+
+fn slash_basilisk() -> (String, String) {
+    let text = "\
+        ## Basilisk Server Info\n\n\
+        **Basilisk** — strict-by-default Python type checker and LSP built in Rust.\n\n\
+        ### Features\n\
+        - Type checking (strict-by-default, gradual adoption)\n\
+        - Inlay hints (parameter names, variable types)\n\
+        - Ruff integration (formatting, import organization)\n\
+        - Test explorer (pytest + unittest)\n\
+        - Debugger (debugpy integration)\n\
+        - uv package manager integration\n\
+        - Profiling and memory analysis\n\n\
+        ### Quick Commands\n\
+        | Command | Description |\n\
+        |---------|-------------|\n\
+        | `/modules` | Show workspace module tree |\n\
+        | `/symbols <mod>` | Show symbols in a module |\n\
+        | `/health` | Type health statistics |\n\
+        | `/tests` | Discover tests |\n\
+        | `/runtests` | Execute tests |\n\
+        | `/profile` | Start CPU profiling |\n\
+        | `/memleak` | Start memory tracking |\n\n\
+        > Visit [basilisk-python.dev](https://www.basilisk-python.dev) for documentation."
+        .to_string();
+    ("Basilisk Info".to_string(), text)
+}
+
+fn slash_tests(args: &[String]) -> (String, String) {
+    let scope = match args.first() {
+        Some(file) => format!("file `{file}`"),
+        None => "workspace".to_string(),
+    };
+    let text = format!(
+        "## Test Discovery\n\n\
+         **Scope:** {scope}\n\n\
+         Discovering pytest and unittest tests from AST (no import needed).\n\n\
+         Tests are sent to the LSP server via `basilisk.discoverTests` and \
+         appear as inline run buttons via tree-sitter runnables.\n\n\
+         **Detected patterns:**\n\
+         - `def test_*()` — pytest test functions\n\
+         - `class Test*` — pytest test classes\n\
+         - `unittest.TestCase` subclasses and `def test_*` methods\n\n\
+         > Use `/runtests` to execute tests, or click the inline run button."
+    );
+    ("Test Discovery".to_string(), text)
+}
+
+fn slash_runtests(args: &[String]) -> (String, String) {
+    let target = match args.first() {
+        Some(test_id) => format!("test `{test_id}`"),
+        None => "all tests".to_string(),
+    };
+    let text = format!(
+        "## Running Tests\n\n\
+         **Target:** {target}\n\n\
+         Executing via `pytest` subprocess (or `uv run pytest` in uv projects).\n\n\
+         | Setting | Value |\n\
+         |---------|-------|\n\
+         | Runner | pytest |\n\
+         | Output | `--tb=short -q` |\n\
+         | uv-aware | auto-detected |\n\n\
+         Results:\n\
+         - **Per-test status** — pass/fail/skip/error for each test\n\
+         - **Inline failures** — assertion errors and tracebacks\n\
+         - **Exit code** — overall pass/fail\n\n\
+         > Use `/testfile` to run tests in the current file only."
+    );
+    ("Running Tests".to_string(), text)
+}
+
+fn slash_testfile(args: &[String]) -> (String, String) {
+    let file = args.first().map_or("(current file)", String::as_str);
+    let text = format!(
+        "## Running File Tests\n\n\
+         **File:** `{file}`\n\n\
+         Running all tests in this file via `basilisk.runTestFile`.\n\n\
+         Uses `uv run pytest` when a uv project is detected, \
+         otherwise bare `pytest` with `VIRTUAL_ENV` set from the workspace venv."
+    );
+    ("File Tests".to_string(), text)
 }
 
 /// Return completion suggestions for a slash command as `(label, new_text, run_command)`.
@@ -99,6 +339,18 @@ pub fn slash_completions(command: &str) -> Vec<(String, String, bool)> {
             .iter()
             .map(|t| ((*t).to_string(), (*t).to_string(), true))
             .collect(),
+        slash_commands::MODULES => {
+            vec![("<module_prefix>".to_string(), String::new(), false)]
+        }
+        slash_commands::SYMBOLS => {
+            vec![("<module_name>".to_string(), String::new(), false)]
+        }
+        slash_commands::RUNTESTS => {
+            vec![("<test_id>".to_string(), String::new(), false)]
+        }
+        slash_commands::TESTFILE => {
+            vec![("<file.py>".to_string(), String::new(), false)]
+        }
         _ => vec![],
     }
 }
@@ -199,6 +451,29 @@ pub fn default_workspace_config() -> Value {
             config_keys::UV_AUTO_SYNC: false,
             config_keys::UV_STUB_SUGGESTIONS: true,
             config_keys::UV_DEPENDENCY_DIAGNOSTICS: true
+        },
+        config_keys::TEST_EXPLORER: {
+            config_keys::TEST_EXPLORER_ENABLED: true,
+            config_keys::TEST_EXPLORER_FRAMEWORK: "auto",
+            config_keys::TEST_EXPLORER_PYTEST_PATH: "pytest",
+            config_keys::TEST_EXPLORER_ARGS: [],
+            config_keys::TEST_EXPLORER_AUTO_DISCOVER_ON_SAVE: true,
+            config_keys::TEST_EXPLORER_USE_UV_RUN: true
+        },
+        config_keys::PROFILER: {
+            config_keys::PROFILER_ENABLED: true,
+            config_keys::PROFILER_SAMPLE_RATE: 100,
+            config_keys::PROFILER_INCLUDE_NATIVE: false,
+            config_keys::PROFILER_LINE_THRESHOLD: 0.01,
+            config_keys::PROFILER_FUNC_THRESHOLD: 0.02,
+            config_keys::PROFILER_MAX_DIAGNOSTICS: 20,
+            config_keys::PROFILER_AUTO_ON_LAUNCH: false,
+            config_keys::PROFILER_DEFAULT_FORMAT: "speedscope"
+        },
+        config_keys::MEMORY: {
+            config_keys::MEMORY_TRACEBACK_DEPTH: 25,
+            config_keys::MEMORY_AUTO_SNAPSHOT_INTERVAL: 0,
+            config_keys::MEMORY_MAX_DIAGNOSTICS: 10
         }
     })
 }

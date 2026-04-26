@@ -37,7 +37,7 @@ function M.start()
   end
 
   client:request("workspace/executeCommand", {
-    command = "basilisk/memory/start",
+    command = "basilisk.memory.start",
     arguments = {},
   }, function(err, result)
     if err then
@@ -65,7 +65,7 @@ function M.stop()
   end
 
   client:request("workspace/executeCommand", {
-    command = "basilisk/memory/stop",
+    command = "basilisk.memory.diff",
     arguments = args,
   }, function(err, result)
     if err then
@@ -89,7 +89,7 @@ function M.refs(type_name)
   end
 
   client:request("workspace/executeCommand", {
-    command = "basilisk/memory/refs",
+    command = "basilisk.memory.references",
     arguments = { { typeName = type_name } },
   }, function(err, result)
     if err then

@@ -16,29 +16,22 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
-    DIAGNOSTIC_TIMEOUT_MS,
+    WAIT_MS,
     EXTENSION_ID,
-    NO_DIAGNOSTIC_WAIT_MS,
-    SERVER_START_WAIT_MS,
+    POLL_INTERVAL_MS,
     closeAllEditors,
     findBasiliskBinary,
     openPythonFile,
     pollUntilResult,
     waitForDiagnostics,
     waitForDiagnosticsCleared,
-} from './test-helpers';
+} from "./test-helpers";
 
 /** Extra buffer (ms) added to test-level timeouts beyond the core wait. */
-const TIMEOUT_BUFFER_MS = 5_000;
 
 /** Large buffer (ms) for tests that do multiple diagnostic waits. */
-const LARGE_TIMEOUT_BUFFER_MS = 10_000;
 
 /** Interval (ms) between server readiness polls during suite setup. */
-const SETUP_POLL_INTERVAL_MS = 200;
-
-/** Suite-level timeout (ms) for server startup. */
-const SUITE_SETUP_TIMEOUT_MS = 30_000;
 
 // ── Test-specific line/column positions ──────────────────────────────
 
@@ -109,7 +102,6 @@ suite('LSP Integration Tests', () => {
     let _basiliskBinary: string | undefined;
 
     suiteSetup(async function () {
-        this.timeout(SUITE_SETUP_TIMEOUT_MS);
 
         _basiliskBinary = findBasiliskBinary();
         if (_basiliskBinary === undefined) {
@@ -137,8 +129,8 @@ suite('LSP Integration Tests', () => {
                 dummyUri
             ).then((r) => r, () => null),
             predicate: (r) => r !== null && r !== undefined,
-            timeoutMs: SERVER_START_WAIT_MS,
-            intervalMs: SETUP_POLL_INTERVAL_MS,
+            timeoutMs: WAIT_MS,
+            intervalMs: POLL_INTERVAL_MS,
         });
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     });
@@ -158,7 +150,6 @@ suite('LSP Integration Tests', () => {
     // 1. Diagnostics appear on a Python file with type errors
     // ----------------------------------------------------------------
     test('diagnostics appear for untyped function parameter', async function () {
-        this.timeout(DIAGNOSTIC_TIMEOUT_MS + TIMEOUT_BUFFER_MS);
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -166,7 +157,7 @@ suite('LSP Integration Tests', () => {
             'def greet(name):\n    return name\n'
         );
 
-        const diagnostics = await waitForDiagnostics(uri, DIAGNOSTIC_TIMEOUT_MS);
+        const diagnostics = await waitForDiagnostics(uri, WAIT_MS);
 
         assert.ok(
             diagnostics.length > 0,
@@ -187,7 +178,6 @@ suite('LSP Integration Tests', () => {
     // 2. Diagnostics clear when the file is closed
     // ----------------------------------------------------------------
     test('diagnostics clear when errors are fixed', async function () {
-        this.timeout(DIAGNOSTIC_TIMEOUT_MS * 2 + TIMEOUT_BUFFER_MS);
 
         const { doc, uri } = await openPythonFile(
             tmpDir,
@@ -196,7 +186,7 @@ suite('LSP Integration Tests', () => {
         );
 
         // Wait for diagnostics to appear first.
-        const diagsBefore = await waitForDiagnostics(uri, DIAGNOSTIC_TIMEOUT_MS);
+        const diagsBefore = await waitForDiagnostics(uri, WAIT_MS);
         assert.ok(
             diagsBefore.length > 0,
             'Expected diagnostics for code with missing type annotations'
@@ -213,7 +203,7 @@ suite('LSP Integration Tests', () => {
         assert.ok(applied, 'Expected the edit to be applied');
 
         // Wait for diagnostics to clear after the fix.
-        const diagsAfter = await waitForDiagnosticsCleared(uri, DIAGNOSTIC_TIMEOUT_MS);
+        const diagsAfter = await waitForDiagnosticsCleared(uri, WAIT_MS);
 
         assert.strictEqual(
             diagsAfter.length,
@@ -227,7 +217,6 @@ suite('LSP Integration Tests', () => {
     // 3. No diagnostics for fully typed code
     // ----------------------------------------------------------------
     test('no diagnostics for clean, fully typed code', async function () {
-        this.timeout(NO_DIAGNOSTIC_WAIT_MS + TIMEOUT_BUFFER_MS);
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -236,7 +225,7 @@ suite('LSP Integration Tests', () => {
         );
 
         // Wait for the server to process the file (no diagnostics expected).
-        await waitForDiagnosticsCleared(uri, NO_DIAGNOSTIC_WAIT_MS);
+        await waitForDiagnosticsCleared(uri, WAIT_MS);
 
         const diagnostics = vscode.languages.getDiagnostics(uri);
         const basiliskDiags = filterBasiliskDiagnostics(diagnostics);
@@ -254,7 +243,6 @@ suite('LSP Integration Tests', () => {
     // 4. Hover provides type information
     // ----------------------------------------------------------------
     test('hover provides type information for a function', async function () {
-        this.timeout(DIAGNOSTIC_TIMEOUT_MS + TIMEOUT_BUFFER_MS);
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -289,7 +277,6 @@ suite('LSP Integration Tests', () => {
     // 5. Completions include local symbols
     // ----------------------------------------------------------------
     test('completions include local function names', async function () {
-        this.timeout(DIAGNOSTIC_TIMEOUT_MS + TIMEOUT_BUFFER_MS);
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -331,7 +318,6 @@ suite('LSP Integration Tests', () => {
     // 6. Document symbols include classes and functions
     // ----------------------------------------------------------------
     test('document symbols include class and function names', async function () {
-        this.timeout(DIAGNOSTIC_TIMEOUT_MS + TIMEOUT_BUFFER_MS);
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -376,7 +362,6 @@ suite('LSP Integration Tests', () => {
     // 7. didChange updates diagnostics
     // ----------------------------------------------------------------
     test('did_change updates diagnostics', async function () {
-        this.timeout(DIAGNOSTIC_TIMEOUT_MS * 2 + LARGE_TIMEOUT_BUFFER_MS);
 
         // Open a fully typed file — should produce zero Basilisk diagnostics.
         const { doc, uri } = await openPythonFile(
@@ -386,7 +371,7 @@ suite('LSP Integration Tests', () => {
         );
 
         // Wait for the server to process the clean file (no diagnostics expected).
-        await waitForDiagnosticsCleared(uri, NO_DIAGNOSTIC_WAIT_MS);
+        await waitForDiagnosticsCleared(uri, WAIT_MS);
 
         const diagsBefore = vscode.languages.getDiagnostics(uri);
         const basiliskBefore = filterBasiliskDiagnostics(diagsBefore);
@@ -408,7 +393,7 @@ suite('LSP Integration Tests', () => {
         assert.ok(applied, 'Expected the workspace edit to be applied successfully');
 
         // Wait for diagnostics to appear after the change.
-        const diagsAfter = await waitForDiagnostics(uri, DIAGNOSTIC_TIMEOUT_MS);
+        const diagsAfter = await waitForDiagnostics(uri, WAIT_MS);
 
         assert.ok(
             diagsAfter.length > 0,

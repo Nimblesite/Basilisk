@@ -138,13 +138,7 @@ fn check_annotation(annotation: &str) -> Option<Violation> {
             }
             return check_callable_form(inner);
         }
-        "union" => {
-            if arg_count < 2 {
-                2
-            } else {
-                return None;
-            }
-        }
+        "union" if arg_count < 2 => 2,
         _ => return None,
     };
 
@@ -363,5 +357,6 @@ fn make_diagnostic(
         path: path.to_owned(),
         help,
         note,
+        provenance: None,
     }
 }

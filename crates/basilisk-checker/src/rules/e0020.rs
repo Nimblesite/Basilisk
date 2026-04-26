@@ -76,9 +76,7 @@ impl Rule for MissingOverloadImpl {
                 if overloaded.len() < 2 {
                     continue;
                 }
-                let is_exempt_class = class_name
-                    .map(|cls| exempt_classes.contains(cls))
-                    .unwrap_or(false);
+                let is_exempt_class = class_name.is_some_and(|cls| exempt_classes.contains(cls));
                 let has_abstract = overloaded
                     .iter()
                     .any(|f| has_decorator(&f.decorators, "abstractmethod"));
@@ -142,6 +140,7 @@ fn make_diagnostic(
             "`@overload` signatures are type-only; a concrete implementation is required at runtime"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }
 
@@ -165,5 +164,6 @@ fn make_single_overload_diagnostic(
             "Python's `@overload` protocol requires at least two type signatures before the implementation"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }

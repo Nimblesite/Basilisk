@@ -6,6 +6,8 @@
 
 use std::path::PathBuf;
 
+use basilisk_stubs::TypeProvenance;
+
 use super::span::Span;
 
 /// Kind of an externally imported symbol.
@@ -39,4 +41,9 @@ pub struct ExternalSymbol {
     pub source_span: Span,
     /// The full function/class signature for hover display.
     pub signature: Option<String>,
+    /// Where this symbol's type information came from.
+    ///
+    /// Set during cross-module resolution based on how the import was resolved.
+    /// Used by the checker for cascade suppression and by hover for annotations.
+    pub provenance: Option<TypeProvenance>,
 }

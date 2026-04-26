@@ -66,6 +66,7 @@ pub enum FixSource {
 // ---------------------------------------------------------------------------
 
 /// Context payload sent to an AI typing provider.
+#[derive(Debug)]
 pub struct AiTypingRequest {
     /// The diagnostic code (e.g. `"BSK-E0001"`).
     pub diagnostic_code: String,
@@ -82,6 +83,7 @@ pub struct AiTypingRequest {
 }
 
 /// Response from an AI typing provider.
+#[derive(Debug)]
 pub struct AiTypingResponse {
     /// The proposed type annotation text (e.g. `"int"`, `"list[str]"`, `"Optional[int]"`).
     pub suggested_type: String,
@@ -126,6 +128,7 @@ pub trait AiTypingProvider: Send + Sync {
 /// No-op AI typing provider — always returns `None`.
 ///
 /// This is the default provider used when AI typing is not configured.
+#[derive(Debug)]
 pub struct NoOpAiTypingProvider;
 
 impl AiTypingProvider for NoOpAiTypingProvider {

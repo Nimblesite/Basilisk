@@ -51,6 +51,24 @@ pub fn hover_at(
         if let Some(ds) = docstring {
             sections.push(ds.to_owned());
         }
+
+        // Show provenance annotation for imported symbols.
+        let hit_name = match hit {
+            SymbolHit::Function(f) => Some(f.name.as_str()),
+            SymbolHit::Class(c) => Some(c.name.as_str()),
+            SymbolHit::Variable(v) => Some(v.name.as_str()),
+            _ => None,
+        };
+        if let Some(name) = hit_name {
+            if let Some(ext_sym) = resolved.imported_symbols.get(name) {
+                if let Some(label) = ext_sym
+                    .provenance
+                    .and_then(basilisk_stubs::TypeProvenance::hover_label)
+                {
+                    sections.push(format!("*{label}*"));
+                }
+            }
+        }
     }
 
     // 3. Import resolution details when the cursor is on an import statement.
@@ -106,11 +124,20 @@ fn format_import_hover(import_info: &ImportInfo) -> String {
             parts.push("**Type stubs**: Available (.pyi)".to_owned());
         }
         ImportResolution::SourcePy => {
-            parts.push("**Source**: .py (no type stubs)".to_owned());
+            parts.push("**Source**: .py *(no type stubs available)*".to_owned());
         }
         ImportResolution::Unresolved => {
-            parts.push("**Status**: Unresolved".to_owned());
+            parts.push("**Status**: Unresolved *(no type stubs available)*".to_owned());
         }
+    }
+
+    // Show package name and version from the uv registry.
+    if let Some(ref version) = import_info.package_version {
+        let display_name = import_info
+            .package_name
+            .as_deref()
+            .unwrap_or(&import_info.module);
+        parts.push(format!("**Package**: {display_name} v{version}"));
     }
 
     // Show dependency classification from uv registry.
@@ -248,6 +275,108 @@ mod tests {
         assert!(
             import_hit.is_none(),
             "should not find import outside its span"
+        );
+    }
+
+    #[test]
+    fn test_hover_shows_package_version_and_name() {
+        let source = "import requests\n";
+        let parsed = basilisk_parser::parse_source(source.to_owned(), "test.py".to_owned())
+            .expect("test source should parse");
+        let mut resolved = basilisk_resolver::resolve(&parsed).expect("resolution should not fail");
+        if let Some(import) = resolved.imports.first_mut() {
+            import.resolution = ImportResolution::SourcePy;
+            import.resolved_path = Some(std::path::PathBuf::from(
+                "/venv/lib/python3.12/site-packages/requests/__init__.py",
+            ));
+            import.package_name = Some("requests".to_owned());
+            import.package_version = Some("2.31.0".to_owned());
+            import.package_dep_kind = Some(PackageDepKind::Direct);
+        }
+
+        let hover = hover_at(&resolved, source, 10, &[]);
+        let hover = hover.expect("hover should be Some");
+        let HoverContents::Markup(markup) = hover.contents else {
+            panic!("expected Markup hover contents");
+        };
+
+        assert!(
+            markup.value.contains("requests v2.31.0"),
+            "should show package name and version: {}",
+            markup.value
+        );
+        assert!(
+            markup.value.contains("direct dependency"),
+            "should show dependency kind: {}",
+            markup.value
+        );
+    }
+
+    #[test]
+    fn test_hover_no_package_info_for_stdlib() {
+        let source = "import os\n";
+        let resolved = resolve_with_patched_import(
+            source,
+            ImportResolution::StubPyi,
+            Some(std::path::PathBuf::from("/usr/lib/python3.12/os.pyi")),
+        );
+
+        let hover = hover_at(&resolved, source, 7, &[]);
+        let hover = hover.expect("hover should be Some");
+        let HoverContents::Markup(markup) = hover.contents else {
+            panic!("expected Markup hover contents");
+        };
+
+        // stdlib imports should not show package version or dependency kind.
+        assert!(
+            !markup.value.contains("**Package**"),
+            "stdlib should not show package info: {}",
+            markup.value
+        );
+        assert!(
+            !markup.value.contains("**Dependency**"),
+            "stdlib should not show dependency kind: {}",
+            markup.value
+        );
+    }
+
+    #[test]
+    fn test_hover_on_unresolved_import_shows_provenance_annotation() {
+        let source = "import nonexistent\n";
+        let resolved = resolve_with_patched_import(source, ImportResolution::Unresolved, None);
+
+        let hover = hover_at(&resolved, source, 10, &[]);
+        let hover = hover.expect("hover should be Some for unresolved import");
+        let HoverContents::Markup(markup) = hover.contents else {
+            panic!("expected Markup hover contents");
+        };
+
+        assert!(
+            markup.value.contains("no type stubs available"),
+            "unresolved import should show 'no type stubs available': {}",
+            markup.value
+        );
+    }
+
+    #[test]
+    fn test_hover_on_source_py_import_shows_no_stubs_annotation() {
+        let source = "import mymodule\n";
+        let resolved = resolve_with_patched_import(
+            source,
+            ImportResolution::SourcePy,
+            Some(std::path::PathBuf::from("/project/mymodule.py")),
+        );
+
+        let hover = hover_at(&resolved, source, 10, &[]);
+        let hover = hover.expect("hover should be Some for source import");
+        let HoverContents::Markup(markup) = hover.contents else {
+            panic!("expected Markup hover contents");
+        };
+
+        assert!(
+            markup.value.contains("no type stubs"),
+            "source .py import should show 'no type stubs': {}",
+            markup.value
         );
     }
 }

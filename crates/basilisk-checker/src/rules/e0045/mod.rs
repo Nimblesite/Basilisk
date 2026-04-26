@@ -60,6 +60,7 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
             "PEP 593: `Annotated[T, metadata...]` requires T to be a type, not a literal or expression"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }
 

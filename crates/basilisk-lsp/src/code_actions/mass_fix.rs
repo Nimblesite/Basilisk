@@ -22,13 +22,12 @@ pub const ALL_FIXABLE_RULES: &[&str] = &[
 ];
 
 /// Rules classified as safe (guaranteed not to change runtime semantics).
-pub const SAFE_FIXABLE_RULES: &[&str] = &[
-    "BSK-E0001",
-    "BSK-E0002",
-    "BSK-E0003",
-    "BSK-E0005",
-    "BSK-W0050",
-];
+///
+/// BSK-E0003 is intentionally excluded: its fix (adding `: Any`) conflicts
+/// with BSK-W0050's fix (removing redundant annotations), producing a
+/// non-idempotent cycle. Users who want E0003 auto-fixed must pass it
+/// explicitly via `--rules BSK-E0003` or use `--unsafe`.
+pub const SAFE_FIXABLE_RULES: &[&str] = &["BSK-E0001", "BSK-E0002", "BSK-E0005", "BSK-W0050"];
 
 /// Custom `CodeActionKind` for "fix all safe diagnostics in this file".
 ///

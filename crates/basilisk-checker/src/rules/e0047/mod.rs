@@ -77,6 +77,7 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
         note: Some(
             "PEP 484: annotations should be types, not arbitrary runtime expressions".to_owned(),
         ),
+        provenance: None,
     }
 }
 

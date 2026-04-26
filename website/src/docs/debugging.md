@@ -1,8 +1,11 @@
 ---
 layout: layouts/docs.njk
-title: Debugging
+title: "Python Debugging with Basilisk — VS Code and Zed"
 description: Integrated Python debugging with Basilisk — set breakpoints, step through code, inspect variables, and evaluate expressions. No separate debug extension needed.
 keywords: basilisk, debugging, python, debugpy, breakpoints, step through, variables, watch, debug console, vs code, zed, dap
+date: 2026-02-28
+dateModified: 2026-03-31
+author: The Basilisk Project
 eleventyNavigation:
   key: Debugging
   order: 4

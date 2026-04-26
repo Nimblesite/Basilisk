@@ -210,6 +210,7 @@ fn check_subscript_on_line(
                          literal integer is a type error."
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
             }
         }

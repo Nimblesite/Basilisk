@@ -1,12 +1,12 @@
 # LSP Implementation Plan
 
-> **Spec**: `docs/specs/LSP-ARCHITECTURE-SPEC.md` — read before touching any code.
+> **Spec**: [LSP-ARCHITECTURE-SPEC.md §LSPARCH-ARCH](../specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-ARCH) — read before touching any code.
 
 ---
 
 ## Status
 
-Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE — stub infrastructure, import graph, cross-file symbols all operational. Phase 3.5 (PEP conformance push) is ACTIVE — currently at 82.2%, target 85%.
+Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE — stub infrastructure, import graph, cross-file symbols all operational. Phase 3.5 (PEP conformance push) is ACTIVE — currently at 84.9% (124/146 files, 18 FPs).
 
 ---
 
@@ -102,7 +102,7 @@ Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE 
 > Every feature Pylance advertises. Every gap must be closed.
 > Reference: [Pylance marketplace](https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance), [Pyright docs](https://microsoft.github.io/pyright/#/)
 > Pylance PEP support: 484, 487, 526, 544, 561, 563, 570, 585, 586, 589, 591, 593, 604, 612, 613, 635, 646, 647, 655, 673, 675, 681, 692, 695, 696, 698, 702, 705, 728, 742.
-> See `docs/plans/CHECKER-PEP-CONFORMANCE-PLAN.md` for the detailed conformance push plan.
+> See [CHECKER-PEP-CONFORMANCE-PLAN.md](CHECKER-PEP-CONFORMANCE-PLAN.md) for the detailed conformance push plan.
 
 - [ ] Configurable strictness modes — off / basic / standard / strict (Pylance has 4 tiers)
 - [ ] Per-rule diagnostic severity overrides — `diagnosticSeverityOverrides` map (each of 70+ rules individually overridable to none/information/warning/error)
@@ -200,3 +200,30 @@ Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE 
 - [ ] Auto string splitting on Enter — multi-line string continuation
 - [ ] Graceful syntax error recovery — analysis continues on partial/broken code
 - [ ] Jupyter notebook cell awareness — cross-cell type checking
+
+---
+
+## Remaining Items (from completed plans)
+
+> Migrated from deleted plans: LSP-PROFILING-PLAN, EXTENSION-ACTIVITY-PANEL-PLAN, NEOVIM-PLAN, ZED-PLAN, LSP-UV-INTEGRATION-PLAN.
+
+### Zed Extension
+
+- [ ] Verify: highlighting, outline panel, bracket matching, auto-indent (manual — requires Zed with extension installed)
+- [ ] Test: breakpoints, stepping, variables, debug console, attach mode (manual — no Zed test framework)
+- [ ] Publish to Zed extension registry (PR to `zed-industries/extensions`)
+- [ ] When Zed adds panel API: implement native activity panels using same LSP commands
+
+### Neovim Extension
+
+- [ ] Verify all 21 core LSP features work (requires running basilisk binary against a real Python project)
+- [ ] DapTcpProxy integration tests with live TCP
+- [ ] Submit `lsp/basilisk.lua` PR to nvim-lspconfig
+
+### uv Integration
+
+- [ ] BSK-E0010: attach `code_action_data` to diagnostic for quick-fix wiring
+- [ ] BSK-W0012: unused dependency (in deps but never imported — whole-module only)
+- [ ] BSK-W0013: stale lock (`pyproject.toml` mtime > `uv.lock` mtime)
+- [ ] Graceful degradation: hide uv commands/actions when `uv` binary not found
+- [ ] Multi-root LSP mapping for workspace members (not implemented in LSP protocol sense)

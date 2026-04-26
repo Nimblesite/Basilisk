@@ -9,9 +9,47 @@ use tracing::{error, info, warn};
 
 use super::LspServer;
 
-/// Extract the first workspace root, returning an LSP error if none is available.
+/// Find the project root that contains `pyproject.toml`.
+///
+/// In monorepo layouts the workspace root (e.g. `ai_cms/`) may not itself
+/// contain a `pyproject.toml` — it could be in a subdirectory like
+/// `ai_cms/agent-backend/`. We check each workspace root directly, then
+/// search one level of subdirectories.
 async fn get_workspace_root(server: &LspServer) -> LspResult<std::path::PathBuf> {
     let roots = server.workspace_roots.read().await;
+    if roots.is_empty() {
+        return Err(tower_lsp::jsonrpc::Error {
+            code: tower_lsp::jsonrpc::ErrorCode::ServerError(-32010),
+            message: "No workspace root available".into(),
+            data: None,
+        });
+    }
+
+    // Check each workspace root directly.
+    for root in roots.iter() {
+        if root.join("pyproject.toml").is_file() {
+            return Ok(root.clone());
+        }
+    }
+
+    // Search one level deep for a subdirectory with pyproject.toml.
+    for root in roots.iter() {
+        if let Ok(entries) = std::fs::read_dir(root) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() && path.join("pyproject.toml").is_file() {
+                    info!(
+                        project_root = %path.display(),
+                        "found pyproject.toml in subdirectory"
+                    );
+                    return Ok(path);
+                }
+            }
+        }
+    }
+
+    // Fall back to the first workspace root even without pyproject.toml.
+    // `roots.is_empty()` is checked above with early return, so `first()` always succeeds.
     roots
         .first()
         .cloned()
@@ -69,12 +107,30 @@ where
             let msg = if result.success {
                 format!("{label} completed successfully")
             } else {
-                format!("{label} failed")
+                let stderr = result.stderr.trim();
+                if stderr.is_empty() {
+                    format!("{label} failed")
+                } else {
+                    format!("{label} failed: {stderr}")
+                }
+            };
+            let msg_type = if result.success {
+                MessageType::INFO
+            } else {
+                MessageType::ERROR
             };
             server
                 .client
-                .log_message(MessageType::INFO, format!("Basilisk: {msg}"))
+                .log_message(msg_type, format!("Basilisk: {msg}"))
                 .await;
+
+            // Show error to user in the UI (not just the output panel).
+            if !result.success {
+                server
+                    .client
+                    .show_message(MessageType::ERROR, format!("Basilisk: {msg}"))
+                    .await;
+            }
 
             // Rebuild registry and re-resolve imports on success.
             if result.success {
@@ -177,4 +233,57 @@ pub(super) async fn execute_uv_create_env(
         crate::uv_commands::uv_create_env(&root, pv.as_deref())
     })
     .await
+}
+
+#[cfg(test)]
+#[expect(
+    clippy::indexing_slicing,
+    reason = "test-only code: indexing acceptable in unit tests"
+)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_package_arg_bare_string() {
+        let args = vec![serde_json::json!("requests")];
+        assert_eq!(extract_package_arg(&args), Some("requests".to_owned()));
+    }
+
+    #[test]
+    fn extract_package_arg_object_with_package_field() {
+        let args = vec![serde_json::json!({"package": "flask"})];
+        assert_eq!(extract_package_arg(&args), Some("flask".to_owned()));
+    }
+
+    #[test]
+    fn extract_package_arg_empty_args() {
+        assert_eq!(extract_package_arg(&[]), None);
+    }
+
+    #[test]
+    fn extract_package_arg_wrong_type() {
+        let args = vec![serde_json::json!(42)];
+        assert_eq!(extract_package_arg(&args), None);
+    }
+
+    #[test]
+    fn uv_result_to_json_captures_all_fields() {
+        let result = crate::uv_commands::UvCommandResult {
+            success: true,
+            stdout: "ok".to_owned(),
+            stderr: String::new(),
+        };
+        let json = uv_result_to_json(&result);
+        assert_eq!(json["success"], true);
+        assert_eq!(json["stdout"], "ok");
+        assert_eq!(json["stderr"], "");
+    }
+
+    #[test]
+    fn spawn_error_includes_label_and_message() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "not found");
+        let lsp_err = spawn_error("uv sync", &io_err);
+        assert!(lsp_err.message.contains("uv sync"));
+        assert!(lsp_err.message.contains("not found"));
+    }
 }

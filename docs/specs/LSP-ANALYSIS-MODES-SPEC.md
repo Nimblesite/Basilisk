@@ -1,15 +1,15 @@
 # LSP Analysis Modes — Specification
 
 > **Scope**: How the LSP server decides which files to analyse and how symbol graphs are shared
-> **Related**: [LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md) — LSP features and protocol
+> **Related**: [LSP-ARCHITECTURE-SPEC.md §LSPARCH-FEATURES](LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES) — LSP features and protocol
 
 ---
 
-## 1. Analysis Modes
+## Analysis Modes {#ANALYSIS-MODES}
 
 Three modes govern which files are analysed and how symbol information flows between them.
 
-### 1.1 `openFilesOnly`
+### openFilesOnly {#ANALYSIS-OPEN}
 
 | Property | Value |
 |----------|-------|
@@ -21,7 +21,7 @@ Three modes govern which files are analysed and how symbol information flows bet
 
 Diagnostics are published only for open documents. Suitable for large monorepos where full workspace analysis is too expensive.
 
-### 1.2 `wholeModule` (default)
+### wholeModule {#ANALYSIS-WHOLE}
 
 | Property | Value |
 |----------|-------|
@@ -33,7 +33,7 @@ Diagnostics are published only for open documents. Suitable for large monorepos 
 
 This is the default mode. It corresponds to how Pyright's `basic` / `standard` mode works: the entire project is indexed and diagnostics are visible for **all** files, not just open ones.
 
-### 1.3 `crossModule`
+### crossModule {#ANALYSIS-CROSS}
 
 | Property | Value |
 |----------|-------|
@@ -56,9 +56,9 @@ This is the default mode. It corresponds to how Pyright's `basic` / `standard` m
 
 ---
 
-## 2. Configuration
+## Configuration {#ANALYSIS-CONFIG}
 
-### 2.1 Config Sources
+### Config Sources {#ANALYSIS-CONFIG-SRC}
 
 ```json
 { "analysisMode": "wholeModule" }
@@ -72,7 +72,7 @@ This is the default mode. It corresponds to how Pyright's `basic` / `standard` m
 
 Default: `"wholeModule"`. Basilisk is strict by default — the user must explicitly opt down to `openFilesOnly`.
 
-### 2.2 Config Priority
+### Config Priority {#ANALYSIS-CONFIG-PRI}
 
 Config resolution order (highest wins):
 
@@ -83,11 +83,11 @@ Config resolution order (highest wins):
 
 ---
 
-## 3. Workspace Index
+## Workspace Index {#ANALYSIS-INDEX}
 
 `wholeModule` and `crossModule` modes both require a **workspace index** — a persistent, process-scoped data structure that holds the resolved state of every file in the workspace.
 
-### 3.1 Structure
+### Structure {#ANALYSIS-INDEX-STRUCT}
 
 ```
 WorkspaceIndex {
@@ -106,7 +106,7 @@ FileEntry {
 }
 ```
 
-### 3.2 Invalidation
+### Invalidation {#ANALYSIS-INDEX-INVAL}
 
 A `FileEntry` is invalidated when:
 
@@ -116,17 +116,17 @@ A `FileEntry` is invalidated when:
 
 When invalidated: re-parse, re-resolve, re-check, update `source_hash` and `diagnostics`, re-publish.
 
-### 3.3 Open-File Priority
+### Open-File Priority {#ANALYSIS-INDEX-OPEN}
 
 When a file is open in the editor, the in-memory text (from `didOpen`/`didChange`) is authoritative. File-watcher events for the same path are silently ignored as long as `is_open == true`. When closed (`didClose`), on-disk text is re-read to rebuild the `FileEntry`.
 
 ---
 
-## 4. Import Graph (`crossModule`)
+## Import Graph {#ANALYSIS-GRAPH}
 
 The import graph is the core data structure that distinguishes `crossModule` from `wholeModule`.
 
-### 4.1 Structure
+### Structure {#ANALYSIS-GRAPH-STRUCT}
 
 ```rust
 // crates/basilisk-lsp/src/import_graph.rs
@@ -136,27 +136,27 @@ pub struct ImportGraph {
 }
 ```
 
-### 4.2 Construction
+### Construction {#ANALYSIS-GRAPH-BUILD}
 
 `build_from_index()` walks `ImportInfo.resolved_path` for every file in the `WorkspaceIndex`, populating forward and reverse edges.
 
-### 4.3 Topological Ordering
+### Topological Ordering {#ANALYSIS-GRAPH-TOPO}
 
 `topological_order()` uses Kahn's algorithm to produce an imported-first ordering. Files are analysed in this order so that imported symbols are available before importers are checked.
 
-### 4.4 Cycle Detection
+### Cycle Detection {#ANALYSIS-GRAPH-CYCLES}
 
 `detect_cycles()` uses DFS with white/gray/black coloring. Detected cycles produce an `ImportCycle` diagnostic. Cycles are broken for analysis ordering — one edge is arbitrarily dropped to allow analysis to proceed.
 
-### 4.5 Transitive Importers
+### Transitive Importers {#ANALYSIS-GRAPH-TRANS}
 
 `transitive_importers()` performs BFS over reverse edges. Used for invalidation cascading: when a file changes, all transitive importers may need re-analysis.
 
 ---
 
-## 5. Cross-Module Symbol Sharing
+## Cross-Module Symbol Sharing {#ANALYSIS-SYMBOLS}
 
-### 5.1 External Symbols
+### External Symbols {#ANALYSIS-SYMBOLS-EXT}
 
 ```rust
 // crates/basilisk-resolver/src/scope/external_symbol.rs
@@ -172,14 +172,14 @@ pub struct ExternalSymbol {
 
 Each `ResolvedModule` carries `imported_symbols: HashMap<String, ExternalSymbol>` — symbols imported from other modules, resolved during the cross-module pass.
 
-### 5.2 Two-Pass Population Algorithm
+### Two-Pass Population {#ANALYSIS-SYMBOLS-POP}
 
 `populate_cross_module_symbols()` in `cross_module.rs`:
 
 1. **Export extraction pass**: For each file, `extract_exports()` collects all public symbols (functions, classes, module-level variables) and builds their signatures via `build_function_signature()`.
 2. **Import resolution pass**: For each file's `ImportInfo`, look up the target file's exports and populate `imported_symbols` in the importer's `ResolvedModule`.
 
-### 5.3 Invalidation Cascading
+### Invalidation Cascading {#ANALYSIS-SYMBOLS-INVAL}
 
 When a file changes:
 
@@ -190,61 +190,61 @@ When a file changes:
 
 ---
 
-## 6. Cross-File LSP Features
+## Cross-File LSP Features {#ANALYSIS-CROSSLSP}
 
 Features enabled by `crossModule` that are unavailable or degraded in `wholeModule`:
 
-### 6.1 Cross-File Go to Definition
+### Cross-File Go to Definition {#ANALYSIS-CROSSLSP-GOTODEF}
 
 Follow `ImportInfo.resolved_path`, find the symbol's `name_span` in the target `ResolvedModule`. Re-exports are followed across the import chain.
 
-### 6.2 Cross-File Find All References
+### Cross-File Find All References {#ANALYSIS-CROSSLSP-REFS}
 
 Use import graph reverse edges. For a symbol defined in file A, search all importers of A for usage of that symbol name.
 
-### 6.3 Cross-File Rename
+### Cross-File Rename {#ANALYSIS-CROSSLSP-RENAME}
 
 Produces a multi-file `WorkspaceEdit`: definition site + import sites (`from module import old_name` → `from module import new_name`) + all usage sites in importing files.
 
-### 6.4 Auto-Import Completion
+### Auto-Import Completion {#ANALYSIS-CROSSLSP-IMPORT}
 
 `SymbolIndex` (built in `auto_import.rs`) indexes all workspace exports. When the user types an unknown symbol, completion suggests imports with `additionalTextEdits` that insert the import statement.
 
 ---
 
-## 7. Startup Behaviour
+## Startup Behaviour {#ANALYSIS-STARTUP}
 
-### 7.1 `openFilesOnly`
+### openFilesOnly Startup {#ANALYSIS-STARTUP-OPEN}
 
 No workspace scan. The server waits passively for `didOpen` notifications.
 
-### 7.2 `wholeModule`
+### wholeModule Startup {#ANALYSIS-STARTUP-WHOLE}
 
 On `initialized`: all `.py` / `.pyi` files under workspace roots are collected (respecting `include`/`exclude`), analysed in parallel, diagnostics published. Progress reported via `window/workDoneProgress`.
 
-### 7.3 `crossModule`
+### crossModule Startup {#ANALYSIS-STARTUP-CROSS}
 
 Same as `wholeModule`, with an additional pass: the import graph is built from `ImportInfo`, files are topologically sorted, and `populate_cross_module_symbols()` resolves inter-module references. Files whose diagnostics change are re-checked and re-published.
 
 ---
 
-## 8. Incremental Updates
+## Incremental Updates {#ANALYSIS-INCR}
 
-### 8.1 On `didChange` (all modes)
+### didChange {#ANALYSIS-INCR-CHANGE}
 
 Incremental text edits are applied to the in-memory buffer, then parse → resolve → check runs for the changed file. In `crossModule`, direct importers are queued for re-analysis if the exported symbol table changed.
 
-### 8.2 On File-Watcher Event (`wholeModule` / `crossModule`)
+### File-Watcher Event {#ANALYSIS-INCR-WATCH}
 
 If the file is open, the event is ignored. Otherwise the file is read from disk; if `source_hash` is unchanged the entry is left as-is. If changed, the pipeline re-runs.
 
-### 8.3 Debouncing
+### Debouncing {#ANALYSIS-INCR-DEBOUNCE}
 
 File-watcher events MUST be debounced with a 150 ms delay to avoid thrashing during bulk saves. `didChange` events are NOT debounced — latency matters.
 
 ---
 
-## 9. Diagnostic Publishing Contract
+## Diagnostic Publishing Contract {#ANALYSIS-PUBLISH}
 
 | Mode | Which files get diagnostics published |
 |------|--------------------------------------|
@@ -256,7 +256,7 @@ When a file is **deleted**, publish empty diagnostics to clear the error panel. 
 
 ---
 
-## 10. LSP Capabilities
+## LSP Capabilities {#ANALYSIS-CAPS}
 
 When `analysisMode` is `wholeModule` or `crossModule`, the server advertises:
 
@@ -274,7 +274,7 @@ When `analysisMode` is `openFilesOnly`, these capabilities are omitted.
 
 ---
 
-## 11. Performance Constraints
+## Performance Constraints {#ANALYSIS-PERF}
 
 | Metric | Target |
 |--------|--------|
@@ -288,7 +288,7 @@ Large workspaces (> 500 K LOC) MAY show a progress notification and allow the us
 
 ---
 
-## 12. Error Handling
+## Error Handling {#ANALYSIS-ERRORS}
 
 - If a file cannot be read (permissions, encoding), log a `window/logMessage` warning and skip it. Do not crash.
 - If the workspace root does not exist, skip silently.

@@ -10,7 +10,7 @@ def fibonacci(n: int) -> list[int]:
     seq: list[int] = []
     a, b = 0, 1
     for _ in range(n):
-        seq.append(a)       # Set a breakpoint here to watch the sequence grow
+        seq.append(a)  # Set a breakpoint here to watch the sequence grow
         a, b = b, a + b
     return seq
 

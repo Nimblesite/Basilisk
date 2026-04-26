@@ -6,13 +6,17 @@ use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::AbortHandle;
 
+pub(super) mod activity_panel;
 pub(super) mod adoption;
 pub(super) mod commands;
 pub(super) mod document;
 pub(super) mod handlers;
 pub(super) mod init;
+pub(super) mod memory_handlers;
+pub(super) mod profiler_handlers;
 pub(super) mod refactor_commands;
 pub(super) mod rule_override;
+pub(super) mod test_handlers;
 pub(super) mod uv_handlers;
 
 macro_rules! diaglog {
@@ -37,16 +41,17 @@ use tower_lsp::lsp_types::{
     CodeActionParams, CodeActionResponse, CodeLens, CodeLensParams, ColorInformation,
     ColorPresentation, ColorPresentationParams, CompletionItem, CompletionParams,
     CompletionResponse, DidChangeConfigurationParams, DidChangeTextDocumentParams,
-    DidChangeWatchedFilesParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-    DidSaveTextDocumentParams, DocumentColorParams, DocumentFormattingParams, DocumentHighlight,
-    DocumentHighlightParams, DocumentSymbolParams, DocumentSymbolResponse, ExecuteCommandParams,
-    FoldingRange, FoldingRangeParams, GotoDefinitionParams, GotoDefinitionResponse, Hover,
-    HoverParams, InitializeParams, InitializeResult, InitializedParams, InlayHint, InlayHintParams,
-    Location, Position, PrepareRenameResponse, ReferenceParams, RenameFilesParams, RenameParams,
-    SelectionRange, SelectionRangeParams, SemanticTokensParams, SemanticTokensResult,
-    SignatureHelpParams, SymbolInformation, TextDocumentPositionParams, TextEdit,
-    TypeHierarchyItem, TypeHierarchyPrepareParams, TypeHierarchySubtypesParams,
-    TypeHierarchySupertypesParams, Url, WorkspaceEdit, WorkspaceSymbolParams,
+    DidChangeWatchedFilesParams, DidChangeWorkspaceFoldersParams, DidCloseTextDocumentParams,
+    DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentColorParams,
+    DocumentFormattingParams, DocumentHighlight, DocumentHighlightParams, DocumentSymbolParams,
+    DocumentSymbolResponse, ExecuteCommandParams, FoldingRange, FoldingRangeParams,
+    GotoDefinitionParams, GotoDefinitionResponse, Hover, HoverParams, InitializeParams,
+    InitializeResult, InitializedParams, InlayHint, InlayHintParams, Location, Position,
+    PrepareRenameResponse, ReferenceParams, RenameFilesParams, RenameParams, SelectionRange,
+    SelectionRangeParams, SemanticTokensParams, SemanticTokensResult, SignatureHelpParams,
+    SymbolInformation, TextDocumentPositionParams, TextEdit, TypeHierarchyItem,
+    TypeHierarchyPrepareParams, TypeHierarchySubtypesParams, TypeHierarchySupertypesParams, Url,
+    WorkspaceEdit, WorkspaceSymbolParams,
 };
 use tower_lsp::{Client, LspService, Server};
 
@@ -54,6 +59,39 @@ use crate::workspace::WorkspaceIndex;
 
 /// Debounce interval for file-watcher notifications (milliseconds).
 pub(super) const FILE_WATCHER_DEBOUNCE_MS: u64 = 200;
+
+/// Debounce interval for `basilisk/moduleChanged` notifications (milliseconds).
+pub(super) const MODULE_CHANGED_DEBOUNCE_MS: u64 = 300;
+
+/// Runtime test explorer configuration received from the client.
+#[derive(Debug, Clone)]
+pub(super) struct TestExplorerConfig {
+    /// Whether test discovery is enabled.
+    pub(super) enabled: bool,
+    /// Test framework: `pytest`, `unittest`, or `auto`.
+    pub(super) framework: String,
+    /// Path to the pytest executable.
+    pub(super) pytest_path: String,
+    /// Additional test runner arguments.
+    pub(super) args: Vec<String>,
+    /// Re-discover tests on file save.
+    pub(super) auto_discover_on_save: bool,
+    /// Use `uv run` when a uv project is detected.
+    pub(super) use_uv_run: bool,
+}
+
+impl Default for TestExplorerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            framework: "auto".to_owned(),
+            pytest_path: "pytest".to_owned(),
+            args: Vec::new(),
+            auto_discover_on_save: true,
+            use_uv_run: true,
+        }
+    }
+}
 
 /// The Basilisk LSP server.
 pub struct LspServer {
@@ -65,8 +103,20 @@ pub struct LspServer {
     pub(super) workspace_roots: RwLock<Vec<std::path::PathBuf>>,
     /// Debug session manager — spawns debugpy and tracks active sessions.
     pub(super) debug_manager: crate::debug::DebugSessionManager,
+    /// Profiler session manager — py-spy sampling, aggregation, export.
+    pub(super) profiler_manager: crate::profiler::ProfileSessionManager,
     /// Debounced file-watcher task.
     pub(super) watcher_debounce: Mutex<Option<AbortHandle>>,
+    /// Debounced module-changed notification task.
+    pub(super) module_changed_debounce: Mutex<Option<AbortHandle>>,
+    /// Test explorer configuration from the client.
+    pub(super) test_config: RwLock<TestExplorerConfig>,
+}
+
+impl std::fmt::Debug for LspServer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LspServer").finish_non_exhaustive()
+    }
 }
 
 impl LspServer {
@@ -78,7 +128,10 @@ impl LspServer {
             index: Arc::new(RwLock::new(None)),
             workspace_roots: RwLock::new(Vec::new()),
             debug_manager: crate::debug::DebugSessionManager::new(),
+            profiler_manager: crate::profiler::ProfileSessionManager::new(),
             watcher_debounce: Mutex::new(None),
+            module_changed_debounce: Mutex::new(None),
+            test_config: RwLock::new(TestExplorerConfig::default()),
         }
     }
 
@@ -149,6 +202,10 @@ impl tower_lsp::LanguageServer for LspServer {
 
     async fn did_change_configuration(&self, params: DidChangeConfigurationParams) {
         init::did_change_configuration(self, params).await;
+    }
+
+    async fn did_change_workspace_folders(&self, params: DidChangeWorkspaceFoldersParams) {
+        init::did_change_workspace_folders(self, params).await;
     }
 
     async fn shutdown(&self) -> LspResult<()> {

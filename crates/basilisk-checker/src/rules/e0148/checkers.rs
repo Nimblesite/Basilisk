@@ -187,6 +187,7 @@ fn check_call(call: &ast::ExprCall, ctx: &ModuleContext, path: &str, diag: &mut 
                              same constraint alternative"
                                 .to_owned(),
                         ),
+                        provenance: None,
                     });
                     return; // One diagnostic per call.
                 }
@@ -240,6 +241,7 @@ fn check_subscript(
                 "PEP 484: subscript key must be compatible with the declared key type parameter"
                     .to_owned(),
             ),
+            provenance: None,
         });
     }
 }
@@ -282,6 +284,7 @@ pub(super) fn check_class_def(cls: &ast::StmtClassDef, path: &str, diag: &mut Ve
                     "Generic metaclasses are not supported by the Python type system".to_owned(),
                 ),
                 note: Some("PEP 484: generic metaclass instances are not supported".to_owned()),
+            provenance: None,
             });
         }
     }

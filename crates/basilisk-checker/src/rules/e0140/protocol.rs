@@ -29,6 +29,7 @@ pub(super) fn check_protocol_func_compat(
             path: path.to_owned(),
             help: None,
             note: None,
+            provenance: None,
         });
         return;
     }
@@ -82,6 +83,7 @@ fn check_overload_compat(
                         path: path.to_owned(),
                         help: None,
                         note: None,
+            provenance: None,
                     });
                     return;
                 }
@@ -114,6 +116,7 @@ fn check_protocol_varargs_kwargs(
             path: path.to_owned(),
             help: None,
             note: None,
+            provenance: None,
         });
         return true;
     }
@@ -129,6 +132,7 @@ fn check_protocol_varargs_kwargs(
             path: path.to_owned(),
             help: None,
             note: None,
+            provenance: None,
         });
         return true;
     }
@@ -179,6 +183,7 @@ fn check_protocol_param_counts(
             path: path.to_owned(),
             help: None,
             note: None,
+            provenance: None,
         });
         return true;
     }
@@ -199,6 +204,7 @@ fn check_protocol_param_counts(
             path: path.to_owned(),
             help: None,
             note: None,
+            provenance: None,
         });
         return true;
     }
@@ -247,6 +253,7 @@ fn check_positional_defaults(
                         path: path.to_owned(),
                         help: None,
                         note: None,
+                        provenance: None,
                     });
                 }
             }
@@ -282,6 +289,7 @@ fn check_kw_only_presence_and_defaults(
                 path: path.to_owned(),
                 help: None,
                 note: None,
+                provenance: None,
             });
             continue;
         }
@@ -300,6 +308,7 @@ fn check_kw_only_presence_and_defaults(
                     path: path.to_owned(),
                     help: None,
                     note: None,
+                    provenance: None,
                 });
             }
         }
@@ -337,6 +346,7 @@ fn check_source_required_kw(
                 path: path.to_owned(),
                 help: None,
                 note: None,
+                provenance: None,
             });
         }
     }
@@ -367,6 +377,7 @@ fn check_positional_only_mismatch(
                         path: path.to_owned(),
                         help: None,
                         note: None,
+            provenance: None,
                     });
                 }
             }
@@ -403,6 +414,7 @@ fn check_protocol_param_types(
                     path: path.to_owned(),
                     help: None,
                     note: None,
+                    provenance: None,
                 });
             }
         }
@@ -434,6 +446,7 @@ fn check_protocol_param_types(
                     path: path.to_owned(),
                     help: None,
                     note: None,
+            provenance: None,
                 });
             }
         }
@@ -456,6 +469,7 @@ fn check_protocol_param_types(
             path: path.to_owned(),
             help: None,
             note: None,
+            provenance: None,
         });
     }
     // **kwargs type compat
@@ -476,6 +490,7 @@ fn check_protocol_param_types(
             path: path.to_owned(),
             help: None,
             note: None,
+            provenance: None,
         });
     }
 }

@@ -30,6 +30,7 @@ fn make_diag(span: Span, path: &str) -> Diagnostic {
         path: path.to_owned(),
         help: Some("Use `Annotated[Type, metadata]` with at least one metadata value".to_owned()),
         note: Some("PEP 593: `Annotated[X]` with a single argument is invalid".to_owned()),
+        provenance: None,
     }
 }
 

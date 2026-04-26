@@ -183,6 +183,7 @@ fn emit_comparison_diagnostics(
                      are not generated"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         } else if left_class != right_class {
             diagnostics.push(Diagnostic {
@@ -204,6 +205,7 @@ fn emit_comparison_diagnostics(
                      instances of a different type"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }

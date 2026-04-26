@@ -244,5 +244,6 @@ fn make_diagnostic(func: &FunctionInfo, name: &str, span: Span, path: &str) -> D
             "Basilisk detects names in return expressions that have no visible definition"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }

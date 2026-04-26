@@ -67,6 +67,11 @@ pub fn code_actions(
         if code == "BSK-W0013" {
             actions.push(CodeActionOrCommand::CodeAction(make_uv_sync_action(diag)));
         }
+        if code == crate::server::test_handlers::PYTEST_NOT_FOUND_CODE {
+            actions.push(CodeActionOrCommand::CodeAction(
+                make_uv_add_dev_pytest_action(diag),
+            ));
+        }
         if let Some(a) = fix {
             actions.push(CodeActionOrCommand::CodeAction(a));
         }
@@ -184,11 +189,14 @@ fn collect_refactoring_actions(
 
 /// Extract the top-level module name from a diagnostic message.
 ///
-/// Looks for a quoted identifier (single or double quotes) and returns the
-/// first dotted component, e.g. `"foo.bar"` yields `"foo"`.
+/// Looks for a quoted identifier (backticks, single or double quotes) and
+/// returns the first dotted component, e.g. `` `foo.bar` `` yields `"foo"`.
 fn extract_module_from_diagnostic(message: &str) -> Option<String> {
-    // Find content between quotes: 'module' or "module"
-    let start = message.find('\'').or_else(|| message.find('"'))?;
+    // Find content between quotes: `module`, 'module', or "module"
+    let start = message
+        .find('`')
+        .or_else(|| message.find('\''))
+        .or_else(|| message.find('"'))?;
     let quote_char = char::from(*message.as_bytes().get(start)?);
     let after_quote = message.get(start + 1..)?;
     let end = after_quote.find(quote_char)?;
@@ -228,6 +236,22 @@ fn make_uv_sync_action(diag: &Diagnostic) -> CodeAction {
             command: basilisk_common::commands::UV_SYNC.to_owned(),
             arguments: None,
         }),
+        ..CodeAction::default()
+    }
+}
+
+/// Build a code action that runs `uv add --dev pytest` when pytest is missing.
+fn make_uv_add_dev_pytest_action(diag: &Diagnostic) -> CodeAction {
+    CodeAction {
+        title: "Install pytest (uv add --dev pytest)".to_owned(),
+        kind: Some(CodeActionKind::QUICKFIX),
+        diagnostics: Some(vec![diag.clone()]),
+        command: Some(Command {
+            title: "uv add --dev pytest".to_owned(),
+            command: basilisk_common::commands::UV_ADD_DEV.to_owned(),
+            arguments: Some(vec![serde_json::Value::String("pytest".to_owned())]),
+        }),
+        is_preferred: Some(true),
         ..CodeAction::default()
     }
 }
@@ -363,6 +387,21 @@ mod tests {
     }
 
     #[test]
+    fn test_extract_module_from_diagnostic_backticks() {
+        let msg = "Cannot resolve import `six` \u{2014} no type information available";
+        assert_eq!(extract_module_from_diagnostic(msg), Some("six".to_owned()));
+    }
+
+    #[test]
+    fn test_extract_module_from_diagnostic_backticks_dotted() {
+        let msg = "Cannot resolve import `agent_backend.db.session` \u{2014} no type information available";
+        assert_eq!(
+            extract_module_from_diagnostic(msg),
+            Some("agent_backend".to_owned())
+        );
+    }
+
+    #[test]
     fn test_extract_module_from_diagnostic_no_quotes() {
         let msg = "Something went wrong";
         assert_eq!(extract_module_from_diagnostic(msg), None);
@@ -472,6 +511,60 @@ mod tests {
                 args[0],
                 serde_json::Value::String("requests-stubs".to_owned())
             );
+        }
+    }
+
+    #[test]
+    fn test_bsk_w0014_code_action_includes_uv_add_dev_pytest() {
+        let diag = Diagnostic {
+            range: Range {
+                start: Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: Position {
+                    line: 0,
+                    character: 0,
+                },
+            },
+            severity: Some(tower_lsp::lsp_types::DiagnosticSeverity::WARNING),
+            code: Some(NumberOrString::String(
+                crate::server::test_handlers::PYTEST_NOT_FOUND_CODE.to_owned(),
+            )),
+            code_description: None,
+            source: Some("basilisk".to_owned()),
+            message: "pytest not found in uv.lock — use quick fix to install".to_owned(),
+            tags: None,
+            related_information: None,
+            data: None,
+        };
+        let uri = Url::parse("file:///test_example.py").unwrap();
+        let source = "def test_hello() -> None:\n    pass\n";
+        let range = Range {
+            start: Position {
+                line: 0,
+                character: 0,
+            },
+            end: Position {
+                line: 0,
+                character: 0,
+            },
+        };
+        let actions = super::code_actions(&uri, &[diag], source, &range, None);
+        let pytest_action = actions.iter().find(|a| match a {
+            CodeActionOrCommand::CodeAction(ca) => ca.title.contains("Install pytest"),
+            CodeActionOrCommand::Command(_) => false,
+        });
+        assert!(
+            pytest_action.is_some(),
+            "Should have install pytest action for BSK-W0014"
+        );
+        if let Some(CodeActionOrCommand::CodeAction(ca)) = pytest_action {
+            assert_eq!(ca.title, "Install pytest (uv add --dev pytest)");
+            let cmd = ca.command.as_ref().expect("should have command");
+            assert_eq!(cmd.command, basilisk_common::commands::UV_ADD_DEV);
+            let args = cmd.arguments.as_ref().expect("should have arguments");
+            assert_eq!(args[0], serde_json::Value::String("pytest".to_owned()));
         }
     }
 }

@@ -163,6 +163,7 @@ fn find_undeclared_self_assignments(
                      `__slots__`) cannot have undeclared attributes"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }
@@ -226,6 +227,7 @@ fn check_slots_access_on_non_slots_class(
                      definition have a `__slots__` attribute"
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }
@@ -313,6 +315,7 @@ fn check_instance_slots_access(
                          definition have a `__slots__` attribute"
                             .to_owned(),
                     ),
+                    provenance: None,
                 });
             }
         }

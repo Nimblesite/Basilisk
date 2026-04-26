@@ -57,6 +57,7 @@ impl Rule for FloatParamIntAttrAccess {
                      are `int`-only and are not available on `float`."
                         .to_owned(),
                 ),
+                provenance: None,
             });
         }
     }

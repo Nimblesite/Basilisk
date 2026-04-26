@@ -10,6 +10,9 @@ use serde::Deserialize;
 use crate::error::UvError;
 
 /// Top-level structure of a `uv.lock` file.
+///
+/// Uses `#[serde(flatten)]` with `HashMap` to tolerate unknown top-level
+/// keys (e.g. `revision`) that newer uv versions may add.
 #[derive(Debug, Clone, Deserialize)]
 pub struct LockFile {
     /// Lock file format version.
@@ -22,9 +25,16 @@ pub struct LockFile {
     /// All resolved packages.
     #[serde(rename = "package", default)]
     pub packages: Vec<LockPackage>,
+
+    /// Catch-all for unknown top-level fields (e.g. `revision`).
+    #[serde(flatten)]
+    pub extra: std::collections::HashMap<String, toml::Value>,
 }
 
 /// A single resolved package entry.
+///
+/// Tolerates unknown fields (`sdist`, `wheels`, `metadata`, etc.) that are
+/// present in real `uv.lock` files but not needed for type checking.
 #[derive(Debug, Clone, Deserialize)]
 pub struct LockPackage {
     /// Normalised package name.
@@ -34,15 +44,26 @@ pub struct LockPackage {
     pub version: String,
 
     /// Source information (registry, editable path, etc.).
+    #[serde(default)]
     pub source: Option<LockSource>,
 
     /// Runtime dependencies.
     #[serde(default)]
     pub dependencies: Vec<LockDependency>,
 
-    /// Development-only dependencies.
+    /// Development-only dependencies, keyed by group name (e.g. `"dev"`).
+    ///
+    /// In `uv.lock` format this is a table:
+    /// ```toml
+    /// [package.dev-dependencies]
+    /// dev = [{ name = "pytest" }]
+    /// ```
     #[serde(rename = "dev-dependencies", default)]
-    pub dev_dependencies: Vec<LockDependency>,
+    pub dev_dependencies: std::collections::HashMap<String, Vec<LockDependency>>,
+
+    /// Catch-all for unknown fields (`sdist`, `wheels`, `metadata`, etc.).
+    #[serde(flatten)]
+    pub extra: std::collections::HashMap<String, toml::Value>,
 }
 
 /// Source metadata for a locked package.
@@ -74,6 +95,10 @@ pub struct LockDependency {
     /// PEP 508 environment marker expression.
     #[serde(default)]
     pub marker: Option<String>,
+
+    /// Catch-all for unknown fields (e.g. `specifier`).
+    #[serde(flatten)]
+    pub extra: std::collections::HashMap<String, toml::Value>,
 }
 
 /// Parse a `uv.lock` file at the given path.
@@ -113,49 +138,38 @@ requires-python = ">=3.12"
 [[package]]
 name = "my-project"
 version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "requests" },
+]
 
-[package.source]
-virtual = "."
-
-[[package.dependencies]]
-name = "requests"
-version = "2.31.0"
-
-[[package.dev-dependencies]]
-name = "pytest"
-version = "8.0.0"
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
 
 [[package]]
 name = "requests"
 version = "2.31.0"
-
-[package.source]
-registry = "https://pypi.org/simple"
-
-[[package.dependencies]]
-name = "urllib3"
-version = "2.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "urllib3" },
+]
 
 [[package]]
 name = "urllib3"
 version = "2.1.0"
-
-[package.source]
-registry = "https://pypi.org/simple"
+source = { registry = "https://pypi.org/simple" }
 
 [[package]]
 name = "pytest"
 version = "8.0.0"
-
-[package.source]
-registry = "https://pypi.org/simple"
+source = { registry = "https://pypi.org/simple" }
 
 [[package]]
 name = "my-editable"
 version = "0.2.0"
-
-[package.source]
-editable = "../my-editable"
+source = { editable = "../my-editable" }
 "#;
 
     #[test]
@@ -240,7 +254,9 @@ editable = "../my-editable"
             .unwrap();
 
         assert_eq!(project.dev_dependencies.len(), 1);
-        assert_eq!(project.dev_dependencies[0].name, "pytest");
+        let dev_group = project.dev_dependencies.get("dev").unwrap();
+        assert_eq!(dev_group.len(), 1);
+        assert_eq!(dev_group[0].name, "pytest");
     }
 
     #[test]
@@ -287,11 +303,9 @@ version = "0.4.6"
 [[package]]
 name = "click"
 version = "8.1.7"
-
-[[package.dependencies]]
-name = "colorama"
-version = "0.4.6"
-marker = "sys_platform == 'win32'"
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+]
 "#;
         let lock: LockFile = toml::from_str(content).unwrap();
         let click = lock.packages.iter().find(|p| p.name == "click").unwrap();

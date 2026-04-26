@@ -23,33 +23,55 @@ import { type Store, type LspState } from "./store";
 const MAX_LSP_ERRORS_BEFORE_SHUTDOWN = 3;
 
 /** Read all Basilisk settings from the VS Code configuration. */
+function readInlayHints(cfg: vscode.WorkspaceConfiguration): Record<string, unknown> {
+  return {
+    parameterNames: cfg.get<boolean>("inlayHints.parameterNames") ?? true,
+    variableTypes: cfg.get<boolean>("inlayHints.variableTypes") ?? true,
+  };
+}
+
+function readRuffSettings(cfg: vscode.WorkspaceConfiguration): Record<string, unknown> {
+  return {
+    enabled: cfg.get<boolean>("ruff.enabled") ?? true,
+    executablePath: cfg.get<string>("ruff.executablePath") ?? "ruff",
+  };
+}
+
+function readUvSettings(cfg: vscode.WorkspaceConfiguration): Record<string, unknown> {
+  return {
+    enabled: cfg.get<boolean>("uv.enabled") ?? true,
+    executablePath: cfg.get<string>("uv.executablePath") ?? "",
+    autoSync: cfg.get<boolean>("uv.autoSync") ?? false,
+    stubSuggestions: cfg.get<boolean>("uv.stubSuggestions") ?? true,
+    dependencyDiagnostics: cfg.get<boolean>("uv.dependencyDiagnostics") ?? true,
+  };
+}
+
+function readTestExplorerSettings(cfg: vscode.WorkspaceConfiguration): Record<string, unknown> {
+  return {
+    enabled: cfg.get<boolean>("testExplorer.enabled") ?? true,
+    framework: cfg.get<string>("testExplorer.framework") ?? "auto",
+    pytestPath: cfg.get<string>("testExplorer.pytestPath") ?? "pytest",
+    args: cfg.get<string[]>("testExplorer.args") ?? [],
+    autoDiscoverOnSave: cfg.get<boolean>("testExplorer.autoDiscoverOnSave") ?? true,
+    useUvRun: cfg.get<boolean>("testExplorer.useUvRun") ?? true,
+  };
+}
+
 export function readBasiliskSettings(): Record<string, unknown> {
   const cfg = vscode.workspace.getConfiguration("basilisk");
+  const ruff = readRuffSettings(cfg);
   return {
     analysisMode: cfg.get<string>("analysisMode") ?? "wholeModule",
     basilisk: {
       python: cfg.get<string>("python") ?? "",
       analysisMode: cfg.get<string>("analysisMode") ?? "wholeModule",
-      inlayHints: {
-        parameterNames: cfg.get<boolean>("inlayHints.parameterNames") ?? true,
-        variableTypes: cfg.get<boolean>("inlayHints.variableTypes") ?? true,
-      },
-      ruff: {
-        enabled: cfg.get<boolean>("ruff.enabled") ?? true,
-        executablePath: cfg.get<string>("ruff.executablePath") ?? "ruff",
-      },
+      inlayHints: readInlayHints(cfg),
+      ruff,
     },
-    ruff: {
-      enabled: cfg.get<boolean>("ruff.enabled") ?? true,
-      executablePath: cfg.get<string>("ruff.executablePath") ?? "ruff",
-    },
-    uv: {
-      enabled: cfg.get<boolean>("uv.enabled") ?? true,
-      executablePath: cfg.get<string>("uv.executablePath") ?? "",
-      autoSync: cfg.get<boolean>("uv.autoSync") ?? false,
-      stubSuggestions: cfg.get<boolean>("uv.stubSuggestions") ?? true,
-      dependencyDiagnostics: cfg.get<boolean>("uv.dependencyDiagnostics") ?? true,
-    },
+    ruff,
+    uv: readUvSettings(cfg),
+    testExplorer: readTestExplorerSettings(cfg),
   };
 }
 
@@ -87,6 +109,12 @@ export function startLspClient(
     serverOptions,
     clientOptions
   );
+
+  // Remove the built-in ExecuteCommandFeature to prevent it from calling
+  // vscode.commands.registerCommand for server-advertised commands.
+  // This avoids "command already exists" crashes on extension reload.
+  // All command execution is handled by the executeCommand middleware.
+  removeExecuteCommandFeature(lspClient);
 
   // setClient wires up onDidChangeState internally — the store owns
   // all state transitions (server commands, ready handle, lspState).
@@ -215,6 +243,17 @@ const TOAST_MESSAGES: Record<string, string> = {
 
 type NextFn = (command: string, args: unknown[]) => Thenable<unknown>;
 
+function activeOrVisibleFileEditor(): vscode.TextEditor | undefined {
+  const active = vscode.window.activeTextEditor;
+  if (active?.document.uri.scheme === "file") {
+    return active;
+  }
+
+  return vscode.window.visibleTextEditors.find(
+    (editor) => editor.document.uri.scheme === "file" && editor.document.languageId === "python"
+  ) ?? vscode.window.visibleTextEditors.find((editor) => editor.document.uri.scheme === "file");
+}
+
 /**
  * Middleware for `workspace/executeCommand`. Injects client-side UI (editor
  * URI resolution, input prompts, toast notifications) around server-advertised
@@ -229,13 +268,15 @@ async function executeCommandMiddleware(
   next: NextFn
 ): Promise<unknown> {
   if (EDITOR_URI_COMMANDS.has(command)) {
-    const editor = vscode.window.activeTextEditor;
-    if (editor?.document.uri.scheme !== "file") { return undefined; }
+    const editor = activeOrVisibleFileEditor();
+    if (editor === undefined) { return undefined; }
     args = [editor.document.uri.toString()];
   }
 
   const pkgCmd = PACKAGE_COMMANDS[command];
-  if (pkgCmd !== undefined) {
+  if (pkgCmd !== undefined && (args.length === 0 || args[0] === undefined)) {
+    // Only prompt if the LSP didn't already provide the package name
+    // (e.g. when invoked from the command palette, not from a code action).
     const packageName = await vscode.window.showInputBox({
       prompt: pkgCmd.prompt,
       placeHolder: pkgCmd.placeholder,
@@ -257,6 +298,30 @@ async function executeCommandMiddleware(
   }
 
   return result;
+}
+
+/**
+ * Create a VS Code command handler that routes through the executeCommand
+ * middleware and then sends `workspace/executeCommand` to the LSP server.
+ *
+ * This replaces the vscode-languageclient `ExecuteCommandFeature` which was
+ * removed to prevent double-registration crashes. The store calls this for
+ * each server-advertised command and registers the result with
+ * `vscode.commands.registerCommand`.
+ */
+export function createServerCommandHandler(
+  client: LanguageClient,
+  command: string
+): (...args: unknown[]) => Promise<unknown> {
+  return async (...args: unknown[]) => {
+    async function next(cmd: string, a: unknown[]): Promise<unknown> {
+      return client.sendRequest("workspace/executeCommand", {
+        command: cmd,
+        arguments: a,
+      });
+    }
+    return executeCommandMiddleware(command, args, next);
+  };
 }
 
 function registerConfigForwarding(context: vscode.ExtensionContext, store: Store): void {
@@ -296,6 +361,36 @@ function registerTabTracking(context: vscode.ExtensionContext, store: Store): vo
       knownOpenUris = currentUris;
     })
   );
+}
+
+/**
+ * Remove the built-in ExecuteCommandFeature from a LanguageClient.
+ *
+ * The library's ExecuteCommandFeature calls vscode.commands.registerCommand
+ * for every server-advertised command. On extension reload, the old
+ * registrations persist and the re-registration throws "command already
+ * exists", killing the client. Since all command execution flows through
+ * our executeCommand middleware, the feature is unnecessary.
+ */
+function removeExecuteCommandFeature(client: LanguageClient): void {
+  const METHOD = "workspace/executeCommand";
+  const internals = client as unknown as {
+    _features: { registrationType?: { method?: string } }[];
+    _dynamicFeatures: Map<string, unknown>;
+  };
+
+  const idx = internals._features.findIndex(
+    (f) => f.registrationType?.method === METHOD
+  );
+  if (idx !== -1) {
+    internals._features.splice(idx, 1);
+  }
+
+  // The feature is also stored in _dynamicFeatures — if left there,
+  // the client's handleRegistrationRequest path can still call register()
+  // on it, which triggers vscode.commands.registerCommand and crashes
+  // with "command already exists" on reload.
+  internals._dynamicFeatures.delete(METHOD);
 }
 
 function collectOpenPythonUris(): Set<string> {

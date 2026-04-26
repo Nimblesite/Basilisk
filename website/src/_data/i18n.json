@@ -9,7 +9,14 @@
     },
     "blog": {
       "title": "Blog",
+      "subtitle": "Updates, announcements, and deep-dives from the Basilisk project.",
       "description": "Updates, announcements, and deep-dives from the Basilisk project.",
+      "tags": "Tags",
+      "categories": "Categories",
+      "tagsTitle": "Tags",
+      "tagsDescription": "Browse blog posts by tag.",
+      "categoriesTitle": "Categories",
+      "categoriesDescription": "Browse blog posts by category.",
       "readMore": "Read more",
       "publishedOn": "Published on"
     },
@@ -23,6 +30,39 @@
       "madeWith": "Built with",
       "license": "MIT License",
       "copyright": "The Basilisk Project"
+    }
+  },
+  "zh": {
+    "nav": {
+      "docs": "文档",
+      "rules": "规则",
+      "blog": "博客",
+      "github": "GitHub",
+      "getStarted": "立即开始"
+    },
+    "blog": {
+      "title": "博客",
+      "subtitle": "来自 Basilisk 项目的更新、公告和深度解析。",
+      "description": "来自 Basilisk 项目的更新、公告和深度解析。",
+      "tags": "标签",
+      "categories": "分类",
+      "tagsTitle": "标签",
+      "tagsDescription": "按标签浏览博客文章。",
+      "categoriesTitle": "分类",
+      "categoriesDescription": "按分类浏览博客文章。",
+      "readMore": "阅读更多",
+      "publishedOn": "发布于"
+    },
+    "docs": {
+      "onThisPage": "本页内容",
+      "editOnGithub": "在 GitHub 上编辑",
+      "nextPage": "下一页",
+      "prevPage": "上一页"
+    },
+    "footer": {
+      "madeWith": "构建于",
+      "license": "MIT 许可证",
+      "copyright": "Basilisk 项目"
     }
   }
 }

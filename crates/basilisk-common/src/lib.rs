@@ -43,6 +43,42 @@ pub mod commands {
     /// Move a symbol to an existing file (args: source URI, dest URI, symbol
     /// name, start line, end line).
     pub const MOVE_SYMBOL: &str = "basilisk.moveSymbol";
+    /// Discover tests in the workspace or a specific file.
+    pub const DISCOVER_TESTS: &str = "basilisk.discoverTests";
+    /// Run one or more tests by node ID.
+    pub const RUN_TESTS: &str = "basilisk.runTests";
+    /// Run all tests in the current file.
+    pub const RUN_TEST_FILE: &str = "basilisk.runTestFile";
+    /// Debug a specific test by node ID.
+    pub const DEBUG_TEST: &str = "basilisk.debugTest";
+    /// Run tests with coverage and return coverage results.
+    pub const RUN_TESTS_COVERAGE: &str = "basilisk.runTestsCoverage";
+    /// Return the workspace module tree (packages, modules, symbols).
+    pub const WORKSPACE_MODULES: &str = "basilisk.workspaceModules";
+    /// Return type health statistics (coverage, errors, warnings per module).
+    pub const TYPE_HEALTH: &str = "basilisk.typeHealth";
+
+    /// Start CPU profiling a Python process.
+    pub const PROFILER_START: &str = "basilisk.profiler.start";
+    /// Stop CPU profiling and return results.
+    pub const PROFILER_STOP: &str = "basilisk.profiler.stop";
+    /// Take a profiling snapshot without stopping.
+    pub const PROFILER_SNAPSHOT: &str = "basilisk.profiler.snapshot";
+    /// List active profiling sessions.
+    pub const PROFILER_LIST: &str = "basilisk.profiler.list";
+
+    /// Start memory tracking in the active debug session.
+    pub const MEMORY_START: &str = "basilisk.memory.start";
+    /// Take a memory allocation snapshot.
+    pub const MEMORY_SNAPSHOT: &str = "basilisk.memory.snapshot";
+    /// Compare two memory snapshots to find leaks.
+    pub const MEMORY_DIFF: &str = "basilisk.memory.diff";
+    /// Walk the reference graph for a specific object type.
+    pub const MEMORY_REFERENCES: &str = "basilisk.memory.references";
+    /// List objects of a given type with sizes and reference counts.
+    pub const MEMORY_OBJECTS_BY_TYPE: &str = "basilisk.memory.objectsByType";
+    /// Force garbage collection and report what was collected.
+    pub const MEMORY_GC_COLLECT: &str = "basilisk.memory.gcCollect";
 
     /// Command names advertised via `executeCommandProvider` capabilities.
     ///
@@ -69,6 +105,23 @@ pub mod commands {
         UV_LOCK,
         UV_CREATE_ENV,
         MOVE_SYMBOL,
+        DISCOVER_TESTS,
+        RUN_TESTS,
+        RUN_TEST_FILE,
+        DEBUG_TEST,
+        RUN_TESTS_COVERAGE,
+        WORKSPACE_MODULES,
+        TYPE_HEALTH,
+        PROFILER_START,
+        PROFILER_STOP,
+        PROFILER_SNAPSHOT,
+        PROFILER_LIST,
+        MEMORY_START,
+        MEMORY_SNAPSHOT,
+        MEMORY_DIFF,
+        MEMORY_REFERENCES,
+        MEMORY_OBJECTS_BY_TYPE,
+        MEMORY_GC_COLLECT,
     ];
 }
 
@@ -89,6 +142,20 @@ pub mod slash_commands {
     pub const MEMSTOP: &str = "memstop";
     /// Query reference/retention graph for a type.
     pub const MEMREFS: &str = "memrefs";
+    /// Show workspace module tree.
+    pub const MODULES: &str = "modules";
+    /// Show symbols in a module.
+    pub const SYMBOLS: &str = "symbols";
+    /// Show type health statistics.
+    pub const HEALTH: &str = "health";
+    /// Show Basilisk server info.
+    pub const BASILISK: &str = "basilisk";
+    /// Discover tests in the workspace.
+    pub const TESTS: &str = "tests";
+    /// Run tests by node ID or file.
+    pub const RUNTESTS: &str = "runtests";
+    /// Run tests in the current file.
+    pub const TESTFILE: &str = "testfile";
 }
 
 /// Configuration key names shared between editor extensions and the LSP.
@@ -123,6 +190,59 @@ pub mod config_keys {
     pub const UV_STUB_SUGGESTIONS: &str = "stubSuggestions";
     /// Show dependency hygiene diagnostics.
     pub const UV_DEPENDENCY_DIAGNOSTICS: &str = "dependencyDiagnostics";
+
+    /// Test explorer configuration section.
+    pub const TEST_EXPLORER: &str = "testExplorer";
+    /// Enable/disable test discovery and execution.
+    pub const TEST_EXPLORER_ENABLED: &str = "enabled";
+    /// Test framework: `pytest`, `unittest`, or `auto`.
+    pub const TEST_EXPLORER_FRAMEWORK: &str = "framework";
+    /// Path to the pytest executable.
+    pub const TEST_EXPLORER_PYTEST_PATH: &str = "pytestPath";
+    /// Additional test runner arguments.
+    pub const TEST_EXPLORER_ARGS: &str = "args";
+    /// Re-discover tests on file save.
+    pub const TEST_EXPLORER_AUTO_DISCOVER_ON_SAVE: &str = "autoDiscoverOnSave";
+    /// Use `uv run` when a uv project is detected.
+    pub const TEST_EXPLORER_USE_UV_RUN: &str = "useUvRun";
+    /// Enable coverage gutter decorations after test runs.
+    pub const TEST_EXPLORER_COVERAGE_ENABLED: &str = "coverageEnabled";
+
+    /// CPU profiler configuration section.
+    pub const PROFILER: &str = "profiler";
+    /// Enable CPU profiling features.
+    pub const PROFILER_ENABLED: &str = "enabled";
+    /// Samples per second (Hz). Default: 100.
+    pub const PROFILER_SAMPLE_RATE: &str = "sampleRate";
+    /// Preset name: `"lightweight"`, `"detailed"`, or `"memory"`.
+    pub const PROFILER_PRESET: &str = "preset";
+    /// Include native (C extension) frames in profiles.
+    pub const PROFILER_INCLUDE_NATIVE: &str = "includeNative";
+    /// Per-line hotspot threshold as a fraction (0.0–1.0). Default: 0.01 (1%).
+    pub const PROFILER_LINE_THRESHOLD: &str = "lineThreshold";
+    /// Per-function hotspot threshold as a fraction (0.0–1.0). Default: 0.02 (2%).
+    pub const PROFILER_FUNC_THRESHOLD: &str = "funcThreshold";
+    /// Maximum number of hotspot diagnostics per file. Default: 20.
+    pub const PROFILER_MAX_DIAGNOSTICS: &str = "maxDiagnostics";
+    /// Automatically start profiling when a debug session launches.
+    pub const PROFILER_AUTO_ON_LAUNCH: &str = "autoOnLaunch";
+    /// Default export format: `"speedscope"`, `"flamegraph"`, or `"summary"`.
+    pub const PROFILER_DEFAULT_FORMAT: &str = "defaultFormat";
+
+    /// Memory profiler configuration section.
+    pub const MEMORY: &str = "memory";
+    /// Tracemalloc traceback depth for allocation sites. Default: 25.
+    pub const MEMORY_TRACEBACK_DEPTH: &str = "tracebackDepth";
+    /// Seconds between automatic memory snapshots (0 = disabled). Default: 0.
+    pub const MEMORY_AUTO_SNAPSHOT_INTERVAL: &str = "autoSnapshotInterval";
+    /// Maximum number of memory allocation diagnostic entries per file. Default: 10.
+    pub const MEMORY_MAX_DIAGNOSTICS: &str = "maxDiagnostics";
+}
+
+/// Custom LSP notification method names for coverage.
+pub mod coverage_notifications {
+    /// Notification sent with coverage data after a test run with `--cov`.
+    pub const COVERAGE_RESULT: &str = "basilisk/coverageResult";
 }
 
 /// GitHub release asset naming for binary distribution.
@@ -156,6 +276,69 @@ pub mod release {
         let ext = if is_windows { "zip" } else { "tar.gz" };
         format!("basilisk-{arch}-{os}.{ext}")
     }
+}
+
+/// Custom LSP notification method names.
+pub mod notifications {
+    /// Notification sent when a module's symbol table changes after re-analysis.
+    pub const MODULE_CHANGED: &str = "basilisk/moduleChanged";
+    /// Periodic profiling progress update during active sessions.
+    pub const PROFILER_PROGRESS: &str = "basilisk/profiler/progress";
+    /// Memory timeline data from auto-snapshot mode.
+    pub const MEMORY_TIMELINE: &str = "basilisk/memory/timeline";
+}
+
+/// Diagnostic code prefixes for profiling features.
+pub mod profiler_diagnostics {
+    /// Hot line — above the configured CPU sample threshold.
+    pub const LINE: &str = "BSK-PROF-LINE";
+    /// Hot function — above the configured function threshold.
+    pub const FUNC: &str = "BSK-PROF-FUNC";
+    /// GIL contention detected on a thread.
+    pub const GIL: &str = "BSK-PROF-GIL";
+}
+
+/// Diagnostic code prefixes for memory profiling features.
+pub mod memory_diagnostics {
+    /// Memory allocation hotspot — high allocation volume at a source line.
+    pub const ALLOC: &str = "BSK-MEM-ALLOC";
+    /// Memory growth — allocation size increased between snapshots.
+    pub const GROWTH: &str = "BSK-MEM-GROWTH";
+    /// Suspected memory leak — consistent growth across multiple snapshots.
+    pub const LEAK: &str = "BSK-MEM-LEAK";
+    /// Reference cycle detected — objects with `__del__` in a cycle (uncollectable).
+    pub const CYCLE: &str = "BSK-MEM-CYCLE";
+}
+
+/// Profiler export format names and sampling preset names.
+///
+/// These string values are used in LSP request parameters (`basilisk.profiler.stop`
+/// `format` field) and workspace configuration (`profiler.preset`). Both the LSP
+/// server and editor extensions share these constants so there is a single source
+/// of truth for the allowed values.
+pub mod profiler_formats {
+    /// Speedscope JSON format — the default. Opens in speedscope.app.
+    pub const SPEEDSCOPE: &str = "speedscope";
+    /// Flamegraph SVG via the inferno crate.
+    pub const FLAMEGRAPH: &str = "flamegraph";
+    /// Text summary only — no file written to disk.
+    pub const SUMMARY: &str = "summary";
+
+    /// All valid format strings, in order of preference.
+    pub const ALL: &[&str] = &[SPEEDSCOPE, FLAMEGRAPH, SUMMARY];
+}
+
+/// Profiler preset names used in `basilisk.profiler.start` and workspace config.
+pub mod profiler_presets {
+    /// Low-overhead preset: 10 Hz sampling, no native frames.
+    pub const LIGHTWEIGHT: &str = "lightweight";
+    /// High-fidelity preset: 200 Hz sampling, native frames included.
+    pub const DETAILED: &str = "detailed";
+    /// Memory-oriented preset: 50 Hz sampling, native frames included.
+    pub const MEMORY: &str = "memory";
+
+    /// All valid preset names.
+    pub const ALL: &[&str] = &[LIGHTWEIGHT, DETAILED, MEMORY];
 }
 
 /// Diagnostic code ranges defined in the Basilisk specification.

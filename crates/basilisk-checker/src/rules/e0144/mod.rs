@@ -369,6 +369,7 @@ fn check_unbound_typevar_call(
                 "Add a `bound=` constraint to TypeVar `{inner_type}` if arguments are required"
             )),
             note: None,
+            provenance: None,
         });
     }
 }
@@ -403,6 +404,7 @@ fn check_constructor_call(
                     path: path.to_owned(),
                     help: Some(format!("Call `{class_name}()` with no arguments")),
                     note: None,
+                    provenance: None,
                 });
             }
         }
@@ -428,6 +430,7 @@ fn check_constructor_call(
                         "Provide at least {min} argument(s) when calling `{class_name}` via a `type[{class_name}]` variable"
                     )),
                     note: None,
+            provenance: None,
                 });
             } else if total_args > *max {
                 diagnostics.push(Diagnostic {
@@ -443,6 +446,7 @@ fn check_constructor_call(
                         "Pass at most {max} argument(s) when calling `{class_name}` via a `type[{class_name}]` variable"
                     )),
                     note: None,
+            provenance: None,
                 });
             } else {
                 check_kwarg_types(

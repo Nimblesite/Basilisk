@@ -187,6 +187,7 @@ fn check_subscript_expr(
                  no variant matches the provided argument"
                     .to_owned(),
             ),
+            provenance: None,
         });
     }
 }

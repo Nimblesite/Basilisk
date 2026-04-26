@@ -22,7 +22,7 @@
 use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
-use crate::rules::shared::split_top_level_commas;
+use crate::rules::shared::{extract_literal_inner, split_top_level_commas};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -47,6 +47,7 @@ fn make_diag(message: String, span: basilisk_resolver::Span, path: &str) -> Diag
             "PEP 586: expressions, floats, type objects, ellipsis, and variables are forbidden"
                 .to_owned(),
         ),
+        provenance: None,
     }
 }
 
@@ -62,28 +63,6 @@ fn is_bare_literal(ann: &str) -> bool {
 /// `true` when `ann` starts a `Literal[...]` subscript.
 fn is_literal_subscript(ann: &str) -> bool {
     ann.starts_with("Literal[") || ann.contains(".Literal[")
-}
-
-/// Extract the content between the outermost `Literal[` and its matching `]`.
-fn extract_literal_inner(ann: &str) -> Option<&str> {
-    let start_bracket = ann.find("Literal[")? + "Literal[".len();
-    let mut depth = 1i32;
-    let bytes = ann.as_bytes();
-    let mut i = start_bracket;
-    while i < bytes.len() {
-        match bytes.get(i).copied() {
-            Some(b'[') => depth += 1,
-            Some(b']') => {
-                depth -= 1;
-                if depth == 0 {
-                    return ann.get(start_bracket..i);
-                }
-            }
-            _ => {}
-        }
-        i += 1;
-    }
-    None
 }
 
 /// `true` when the inner content of `Literal[<content>]` contains an invalid arg.
