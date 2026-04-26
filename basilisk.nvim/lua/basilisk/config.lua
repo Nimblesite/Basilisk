@@ -3,6 +3,8 @@
 --- All shared LSP settings are defined in LSP-ARCHITECTURE-SPEC.md and forwarded
 --- to the server. Neovim-specific settings are documented here.
 
+local log = require("basilisk.log")
+
 local M = {}
 
 ---@class BasiliskInlayHints
@@ -135,7 +137,7 @@ function M.resolve(opts)
   local config = vim.tbl_deep_extend("force", {}, M.defaults, opts or {})
   local errors = M.validate(config)
   for _, err in ipairs(errors) do
-    vim.notify("[basilisk] config error: " .. err, vim.log.levels.ERROR)
+    log.error("config error: %s", err)
   end
   return config
 end

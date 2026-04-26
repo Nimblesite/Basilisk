@@ -23,10 +23,10 @@ pub use scope::{
     ProtocolInstantiationViolation, ProtocolRtcViolation, ProtocolRtcViolationKind,
     ProtocolSelfViolation, ReadOnlyViolationInfo, ReadOnlyViolationKind, ResolvedModule,
     ReturnAnnotationKind, ReturnStmtInfo, RevealTypeCallInfo, RhsKind, RhsStringRef, Span,
-    TupleIndexViolation, TypeAliasDefInfo, TypeAliasTypeCallInfo, TypeArg, TypeStatementInfo,
-    TypeVarCallInfo, TypedDictCallInfo, TypedDictKeyViolation, TypedDictKeyViolationKind,
-    TypedDictSecondArgKind, UnboundTypeVarUsage, UnhashableHashCallViolation, UnhashableKeyRef,
-    UnresolvedReason, VariableInfo, YieldExprInfo,
+    TupleIndexViolation, TypeAliasDefInfo, TypeAliasTypeCallInfo, TypeAliasTypeViolation,
+    TypeAliasTypeViolationKind, TypeArg, TypeStatementInfo, TypeVarCallInfo, TypedDictCallInfo,
+    TypedDictKeyViolation, TypedDictKeyViolationKind, TypedDictSecondArgKind, UnboundTypeVarUsage,
+    UnhashableHashCallViolation, UnhashableKeyRef, UnresolvedReason, VariableInfo, YieldExprInfo,
 };
 
 use basilisk_parser::ParsedModule;

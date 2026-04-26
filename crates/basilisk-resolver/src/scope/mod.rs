@@ -42,5 +42,5 @@ pub use violations::{
     Pep695BoundViolation, Pep695BoundViolationKind, ProtocolClassObjectViolation,
     ProtocolInstantiationViolation, ProtocolRtcViolation, ProtocolRtcViolationKind,
     ProtocolSelfViolation, ReadOnlyViolationInfo, ReadOnlyViolationKind, TupleIndexViolation,
-    UnboundTypeVarUsage,
+    TypeAliasTypeViolation, TypeAliasTypeViolationKind, UnboundTypeVarUsage,
 };
