@@ -11,49 +11,35 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { execFileSync } from 'child_process';
 
+export { POLL_INTERVAL_MS, WAIT_MS } from '../../timeouts';
+
 export const EXTENSION_ID = 'basilisk-lang.basilisk';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// THE ONLY THREE TIMEOUT CONSTANTS ALLOWED IN THIS EXTENSION.
-// Everything else MUST be one of these. No per-file knobs, no magic numbers.
-// ─────────────────────────────────────────────────────────────────────────────
+/** Maximum time (ms) to wait for diagnostics from the LSP server. */
+export const DIAGNOSTIC_TIMEOUT_MS = 15_000;
 
-/** Interval between polls. Tight loop — we do not wait longer than we must. */
-export const POLL_INTERVAL_MS = 10;
+/** Time (ms) to wait for "no diagnostics" assertions. */
+export const NO_DIAGNOSTIC_WAIT_MS = 5_000;
 
-/** Max time to wait for a single command/event to settle inside a test.
- *  If a wait exceeds this, the operation is broken. No retries, no excuses. */
-export const WAIT_MS = 1_000;
+/** Time (ms) to wait for the LSP server to fully start.
+ *  CI runners need up to 2 minutes for a cold start (cargo build + LSP init). */
+export const SERVER_START_WAIT_MS = 60_000;
 
-/** Max time to wait for an external process bootstrap (debugpy launch,
- *  socket handshake, debug session start). These steps involve spawning
- *  a subprocess and negotiating a protocol, so a tight WAIT_MS is wrong. */
-export const SESSION_START_WAIT_MS = 15_000;
+/** Mocha timeout (ms) for suiteSetup hooks that wait for the LSP.
+ *  Must exceed SERVER_START_WAIT_MS to avoid Mocha killing the hook early. */
+export const SUITE_SETUP_TIMEOUT_MS = 90_000;
 
-/** Max time to wait for a DAP step/continue to produce a new stop event.
- *  Stepping inside an already-running debug session is fast (~100-500ms),
- *  but slow CI can stretch it — hence a mid-range budget, not WAIT_MS. */
-export const STEP_WAIT_MS = 3_000;
+/** Maximum time (ms) to wait for a server-advertised command to appear. */
+export const COMMAND_WAIT_MS = 1_000;
 
-// Mocha default per-test timeout lives in .vscode-test.mjs (the only place
-// @vscode/test-cli honours it). Do NOT re-declare here — one source of truth.
+/** Timeout (ms) for basilisk binary version check via CLI. */
+const BINARY_VERSION_CHECK_TIMEOUT_MS = 5_000;
 
-/**
- * Module-level flag: once any poll (prewarmLsp or setupLspTestSuite)
- * confirms the LSP server is responsive, subsequent calls skip the
- * expensive 60-second poll entirely.
- */
-let lspReadyConfirmed = false;
+/** Default interval (ms) for polling loops. */
+export const DEFAULT_POLL_INTERVAL_MS = 100;
 
-/** Mark the LSP server as confirmed ready (called from prewarmLsp). */
-export function markLspReady(): void {
-    lspReadyConfirmed = true;
-}
-
-/** Returns true if the LSP server has been confirmed ready in this test run. */
-export function isLspReady(): boolean {
-    return lspReadyConfirmed;
-}
+/** Interval (ms) between server readiness polls during setup. */
+const SERVER_READINESS_POLL_INTERVAL_MS = 200;
 
 
 /**
@@ -79,7 +65,7 @@ export function findBasiliskBinary(): string | undefined {
     }
 
     try {
-        execFileSync('basilisk', ['--version'], { timeout: WAIT_MS });
+        execFileSync('basilisk', ['--version'], { timeout: BINARY_VERSION_CHECK_TIMEOUT_MS });
         return 'basilisk';
     } catch {
         return undefined;
@@ -87,14 +73,14 @@ export function findBasiliskBinary(): string | undefined {
 }
 
 /**
- * Wait until at least one diagnostic appears for the given URI,
- * or until the timeout elapses — whichever comes first.
+ * Wait until at least one diagnostic appears for the given URI.
+ * Throws if no diagnostics arrive before the timeout elapses.
  */
 export async function waitForDiagnostics(
     uri: vscode.Uri,
-    timeoutMs: number = WAIT_MS
+    timeoutMs: number = DIAGNOSTIC_TIMEOUT_MS
 ): Promise<vscode.Diagnostic[]> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         const existing = vscode.languages.getDiagnostics(uri);
         if (existing.length > 0) {
             resolve(existing);
@@ -103,7 +89,15 @@ export async function waitForDiagnostics(
 
         const timeout = setTimeout(() => {
             disposable.dispose();
-            resolve(vscode.languages.getDiagnostics(uri));
+            const stale = vscode.languages.getDiagnostics(uri);
+            if (stale.length > 0) {
+                resolve(stale);
+            } else {
+                reject(new Error(
+                    `waitForDiagnostics timed out after ${timeoutMs}ms — ` +
+                    `no diagnostics appeared for ${uri.fsPath}`
+                ));
+            }
         }, timeoutMs);
 
         const disposable = vscode.languages.onDidChangeDiagnostics((event) => {
@@ -120,14 +114,14 @@ export async function waitForDiagnostics(
 }
 
 /**
- * Wait for diagnostics to clear (reach zero) for the given URI,
- * or until the timeout elapses.
+ * Wait for diagnostics to clear (reach zero) for the given URI.
+ * Throws if diagnostics remain when the timeout elapses.
  */
 export async function waitForDiagnosticsCleared(
     uri: vscode.Uri,
-    timeoutMs: number = WAIT_MS
+    timeoutMs: number = DIAGNOSTIC_TIMEOUT_MS
 ): Promise<vscode.Diagnostic[]> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         const existing = vscode.languages.getDiagnostics(uri);
         if (existing.length === 0) {
             resolve([]);
@@ -136,7 +130,14 @@ export async function waitForDiagnosticsCleared(
 
         const timeout = setTimeout(() => {
             disposable.dispose();
-            resolve(vscode.languages.getDiagnostics(uri));
+            const remaining = vscode.languages.getDiagnostics(uri);
+            if (remaining.length === 0) {
+                resolve([]);
+            } else {
+                reject(new Error(
+                    `waitForDiagnosticsCleared timed out after ${timeoutMs}ms — ${remaining.length} diagnostic(s) still present for ${uri.fsPath}: ${remaining.map((d) => d.message).join('; ')}`
+                ));
+            }
         }, timeoutMs);
 
         const disposable = vscode.languages.onDidChangeDiagnostics((event) => {
@@ -161,8 +162,8 @@ export interface PollOptions<T> {
 }
 
 /**
- * Poll an async function until it returns a truthy, non-empty result.
- * Avoids fixed sleeps by retrying at short intervals.
+ * Poll an async function until it returns a result satisfying the predicate.
+ * Throws if the predicate is never satisfied before the timeout elapses.
  *
  * Supports two calling conventions:
  * - `pollUntilResult({ fn, predicate, timeoutMs?, intervalMs? })`
@@ -175,14 +176,20 @@ export async function pollUntilResult<T>(
     const options: PollOptions<T> = typeof optionsOrFn === 'function'
         ? { fn: optionsOrFn, predicate: predicateArg ?? (() => true) }
         : optionsOrFn;
-    const { fn, predicate, timeoutMs = WAIT_MS, intervalMs = POLL_INTERVAL_MS } = options;
+    const { fn, predicate, timeoutMs = NO_DIAGNOSTIC_WAIT_MS, intervalMs = DEFAULT_POLL_INTERVAL_MS } = options;
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
         const result = await fn();
         if (predicate(result)) {return result;}
         await new Promise<void>((r) => setTimeout(r, intervalMs));
     }
-    return fn();
+    // One final attempt after deadline.
+    const last = await fn();
+    if (predicate(last)) {return last;}
+    throw new Error(
+        `pollUntilResult timed out after ${timeoutMs}ms — ` +
+        `predicate never satisfied (last result: ${JSON.stringify(last)})`
+    );
 }
 
 /**
@@ -226,9 +233,45 @@ export async function replaceDocumentContent(
 }
 
 /**
- * Standard suiteSetup body: find binary, create tmpDir, activate extension,
- * poll until the LSP server responds to documentSymbol requests.
- * Returns the tmpDir path.
+ * Wait until the Basilisk LSP has fully initialized and advertised its commands.
+ *
+ * Use this in any suiteSetup that needs the LSP to be running before tests
+ * execute. It polls store.serverCommands rather than documentSymbol so
+ * Basilisk's own initialization — not VS Code's built-in Python extension
+ * — determines readiness.
+ *
+ * Handles the lazy re-init path after deactivate() cycles from earlier test
+ * suites: first calls getStore() to clear pendingReactivation (returns
+ * undefined), then calls again to trigger initExtension.
+ */
+export async function waitForLspReady(): Promise<void> {
+    const ext = vscode.extensions.getExtension(EXTENSION_ID);
+    if (ext && !ext.isActive) {
+        await ext.activate();
+    }
+
+    const { getStore: getStoreFromExtension } = await import('../../extension');
+    if (getStoreFromExtension() === undefined) {
+        getStoreFromExtension();
+    }
+
+    const deadline = Date.now() + SERVER_START_WAIT_MS;
+    while (Date.now() < deadline) {
+        const store = getStoreFromExtension();
+        if (store !== undefined && store.serverCommands.value.size > 0) {
+            return;
+        }
+        await new Promise<void>((r) => setTimeout(r, SERVER_READINESS_POLL_INTERVAL_MS));
+    }
+    throw new Error(
+        `LSP server failed to become responsive within ${SERVER_START_WAIT_MS}ms. ` +
+        'Ensure the basilisk binary is built: cargo build -p basilisk-cli'
+    );
+}
+
+/**
+ * Standard suiteSetup body: find binary, create tmpDir, wait for the LSP
+ * to be ready, then close all editors. Returns tmpDir and binary path.
  */
 export async function setupLspTestSuite(
     tmpDirPrefix: string
@@ -242,45 +285,8 @@ export async function setupLspTestSuite(
 
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), tmpDirPrefix));
 
-    const ext = vscode.extensions.getExtension(EXTENSION_ID);
-    if (ext && !ext.isActive) {
-        await ext.activate();
-    }
-
-    // After a simulated deactivate() cycle (e.g. from a prior test suite),
-    // the extension is still marked as active by VS Code, but the store is
-    // undefined and the LSP is stopped. Calling getStore() triggers the
-    // lazy re-init path that creates a new store and starts the LSP client.
-    const { getStore: getStoreFromExtension } = await import('../../extension');
-    // First call after deactivate() returns undefined (proves cleanup).
-    // Second call triggers lazy re-init.
-    if (getStoreFromExtension() === undefined) {
-        getStoreFromExtension();
-    }
-
-    // Poll until the LSP server is responsive.
-    // Skip if a prior call (prewarmLsp or earlier suite) already confirmed readiness.
-    if (!lspReadyConfirmed) {
-        const dummyPath = path.join(tmpDir, '__init__.py');
-        fs.writeFileSync(dummyPath, '', 'utf8');
-        const dummyUri = vscode.Uri.file(dummyPath);
-        const dummyDoc = await vscode.workspace.openTextDocument(dummyUri);
-        await vscode.window.showTextDocument(dummyDoc);
-        const deadline = Date.now() + WAIT_MS;
-        while (Date.now() < deadline) {
-            try {
-                const syms = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
-                    'vscode.executeDocumentSymbolProvider', dummyUri
-                );
-                if (syms !== null && syms !== undefined) {
-                    lspReadyConfirmed = true;
-                    break;
-                }
-            } catch { /* server not ready yet */ }
-            await new Promise<void>((r) => setTimeout(r, POLL_INTERVAL_MS));
-        }
-        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-    }
+    await waitForLspReady();
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
 
     return { tmpDir, basiliskBinary: binary };
 }

@@ -241,7 +241,7 @@ async fn test_ws_code_action_organize_imports() -> TestResult<()> {
     // Deliberately unsorted imports — ruff should reorder them.
     let code = "import os\nimport sys\nfrom typing import Optional\nimport json\n\nx: int = 1\n";
     fixture.did_open("file:///ca_org.py", code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    let _ = fixture.wait_for_diagnostics().await?;
 
     let resp = fixture
         .request(
@@ -288,7 +288,7 @@ async fn test_ws_code_action_organize_imports_fixes_order() -> TestResult<()> {
     // Use a clear case: `from __future__` must be first.
     let code = "import os\nfrom __future__ import annotations\n\nx: int = 1\n";
     fixture.did_open("file:///ca_org2.py", code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    let _ = fixture.wait_for_diagnostics().await?;
 
     let resp = fixture
         .request(
@@ -329,10 +329,7 @@ async fn test_ws_code_action_e0003_all_variants() -> TestResult<()> {
         .did_open("file:///ws_edge_ca_e0003.py", code)
         .await?;
 
-    let diag_msg = fixture
-        .wait_for_diagnostics()
-        .await
-        .ok_or("no diagnostics published")?;
+    let diag_msg = fixture.wait_for_diagnostics().await?;
 
     let diag_json: serde_json::Value = serde_json::from_str(&diag_msg)?;
     let diagnostics = diag_json["params"]["diagnostics"]
@@ -383,10 +380,7 @@ async fn test_ws_code_action_no_actions_for_clean_code() -> TestResult<()> {
     let code = "def add(a: int, b: int) -> int:\n    return a + b\n";
     fixture.did_open("file:///ws_ca_clean.py", code).await?;
 
-    let diag_msg = fixture
-        .wait_for_diagnostics()
-        .await
-        .ok_or("no diagnostics published")?;
+    let diag_msg = fixture.wait_for_diagnostics().await?;
 
     // Verify diagnostics are empty.
     assert!(

@@ -22,15 +22,17 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as net from 'net';
 import { execFileSync } from 'child_process';
-import { POLL_INTERVAL_MS, WAIT_MS, SESSION_START_WAIT_MS, STEP_WAIT_MS } from "./test-helpers";
 
 const EXTENSION_ID = 'basilisk-lang.basilisk';
 
 /** Maximum time (ms) to wait for the LSP server to fully start. */
+const SERVER_START_WAIT_MS = 10_000;
 
 /** Maximum time (ms) for a debug session to start. */
+const DEBUG_SESSION_TIMEOUT_MS = 15_000;
 
 /** Maximum time (ms) to wait for a stopped event (breakpoint/step). */
+const STOPPED_EVENT_TIMEOUT_MS = 10_000;
 
 /** Path to the debug stepping fixture. */
 const FIXTURE_DIR = path.resolve(__dirname, '../../src/test/fixtures');
@@ -54,128 +56,11 @@ interface PackageJSON {
     };
 }
 
-interface DapStoppedMessage {
-    type?: string;
-    event?: string;
-    body?: {
-        threadId?: unknown;
-    };
-}
-
-interface QueuedStoppedEvent {
-    session: vscode.DebugSession;
-    threadId?: number;
-}
-
-interface StopWaiter {
-    accept: (event: QueuedStoppedEvent) => void;
-    reject: (reason: Error) => void;
-    timer: ReturnType<typeof setTimeout>;
-}
-
-/**
- * Event-driven DAP stop queue for debug stepping tests.
- *
- * The previous polling helper could observe the old stack frame immediately
- * after a `next` request. This queue listens to real DAP `stopped` events and
- * keeps them until the test asks for the next stop, so fast loop-iteration
- * stops cannot be missed.
- */
-class DebugStopEventQueue implements vscode.DebugAdapterTrackerFactory {
-    private stoppedEvents: QueuedStoppedEvent[] = [];
-    private waiters: StopWaiter[] = [];
-
-    public createDebugAdapterTracker(
-        session: vscode.DebugSession
-    ): vscode.ProviderResult<vscode.DebugAdapterTracker> {
-        return {
-            onDidSendMessage: (message: unknown): void => {
-                this.recordStoppedEvent(session, message);
-            },
-        };
-    }
-
-    public reset(): void {
-        this.stoppedEvents = [];
-        for (const waiter of this.waiters) {
-            clearTimeout(waiter.timer);
-            waiter.reject(new Error("Reset DAP stopped-event queue before a 'stopped' event arrived"));
-        }
-        this.waiters = [];
-    }
-
-    public async waitForStop(timeoutMs: number = STEP_WAIT_MS): Promise<number> {
-        const queuedEvent = this.stoppedEvents.shift();
-        if (queuedEvent !== undefined) {
-            return DebugStopEventQueue.resolveThreadId(queuedEvent);
-        }
-
-        return new Promise<number>((resolve, reject) => {
-            const timer = setTimeout(() => {
-                this.removeWaiter(timer);
-                reject(new Error(`Timed out waiting for DAP 'stopped' event after ${timeoutMs}ms`));
-            }, timeoutMs);
-
-            this.waiters.push({
-                timer: timer,
-                reject: reject,
-                accept: (event: QueuedStoppedEvent): void => {
-                    clearTimeout(timer);
-                    void DebugStopEventQueue.resolveThreadId(event).then(resolve, reject);
-                },
-            });
-        });
-    }
-
-    private recordStoppedEvent(session: vscode.DebugSession, message: unknown): void {
-        const stoppedMessage = message as DapStoppedMessage;
-        if (stoppedMessage.type !== 'event' || stoppedMessage.event !== 'stopped') {
-            return;
-        }
-
-        const rawThreadId = stoppedMessage.body?.threadId;
-        const threadId = typeof rawThreadId === 'number' ? rawThreadId : undefined;
-        const stoppedEvent: QueuedStoppedEvent = { session: session, threadId: threadId };
-        const waiter = this.waiters.shift();
-        if (waiter !== undefined) {
-            waiter.accept(stoppedEvent);
-            return;
-        }
-
-        this.stoppedEvents.push(stoppedEvent);
-    }
-
-    private removeWaiter(timer: ReturnType<typeof setTimeout>): void {
-        const waiterIndex = this.waiters.findIndex((waiter) => waiter.timer === timer);
-        if (waiterIndex >= 0) {
-            this.waiters.splice(waiterIndex, 1);
-        }
-    }
-
-    private static async resolveThreadId(stoppedEvent: QueuedStoppedEvent): Promise<number> {
-        if (stoppedEvent.threadId !== undefined && stoppedEvent.threadId > 0) {
-            return stoppedEvent.threadId;
-        }
-
-        const threadsResponse = (await stoppedEvent.session.customRequest('threads')) as {
-            threads?: { id?: unknown }[];
-        };
-        const thread = threadsResponse.threads?.find(
-            (candidate) => typeof candidate.id === 'number' && candidate.id > 0
-        );
-        if (thread !== undefined && typeof thread.id === 'number') {
-            return thread.id;
-        }
-
-        throw new Error("DAP 'stopped' event did not include a usable threadId");
-    }
-}
-
-const debugStopEvents = new DebugStopEventQueue();
-
 /** Timeout (ms) for subprocess commands (binary/python detection). */
+const SUBPROCESS_TIMEOUT_MS = 5_000;
 
 /** Timeout (ms) for TCP port checks. */
+const PORT_CHECK_TIMEOUT_MS = 3_000;
 
 /** Short timeout (ms) for port-closed verification. */
 const PORT_CLOSED_CHECK_MS = 1_000;
@@ -184,17 +69,22 @@ const PORT_CLOSED_CHECK_MS = 1_000;
 const MAX_STACK_LEVELS = 20;
 
 /** Polling interval (ms) for stop detection. */
+const STOP_POLL_INTERVAL_MS = 100;
 
 /** Short settle time (ms) after debug session stops. */
 const SESSION_SETTLE_MS = 500;
 
 /** Timeout (ms) for DAP handshake. */
+const DAP_HANDSHAKE_TIMEOUT_MS = 5_000;
 
 /** Timeout (ms) for individual debug tests. */
+const DEBUG_TEST_TIMEOUT_MS = 30_000;
 
 /** Timeout (ms) for the loop/accumulate test (more stepping). */
+const LOOP_TEST_TIMEOUT_MS = 45_000;
 
 /** Timeout (ms) to wait for debug session end. */
+const SESSION_END_WAIT_MS = 15_000;
 
 /** Max poll iterations waiting for debug session to clear. */
 const SESSION_CLEAR_MAX_POLLS = 20;
@@ -266,7 +156,7 @@ function findBasiliskBinary(): string | undefined {
         return debugBinary;
     }
     try {
-        execFileSync('basilisk', ['--version'], { timeout: WAIT_MS });
+        execFileSync('basilisk', ['--version'], { timeout: SUBPROCESS_TIMEOUT_MS });
         return 'basilisk';
     } catch {
         return undefined;
@@ -280,7 +170,7 @@ function isDebugpyInstalled(): boolean {
     for (const python of ['python3', 'python']) {
         try {
             execFileSync(python, ['-c', 'import debugpy'], {
-                timeout: WAIT_MS,
+                timeout: SUBPROCESS_TIMEOUT_MS,
                 stdio: 'pipe',
             });
             return true;
@@ -297,7 +187,7 @@ function isDebugpyInstalled(): boolean {
 function findPython(): string | undefined {
     for (const python of ['python3', 'python']) {
         try {
-            execFileSync(python, ['--version'], { timeout: WAIT_MS, stdio: 'pipe' });
+            execFileSync(python, ['--version'], { timeout: SUBPROCESS_TIMEOUT_MS, stdio: 'pipe' });
             return python;
         } catch {
             // try next
@@ -309,7 +199,7 @@ function findPython(): string | undefined {
 /**
  * Attempt a TCP connection to verify a port is accepting connections.
  */
-async function checkPortListening(host: string, port: number, timeoutMs = WAIT_MS): Promise<boolean> {
+async function checkPortListening(host: string, port: number, timeoutMs = PORT_CHECK_TIMEOUT_MS): Promise<boolean> {
     return new Promise((resolve) => {
         const socket = new net.Socket();
         const timer = setTimeout(() => {
@@ -356,7 +246,7 @@ async function stopDebugSession(sessionId: string): Promise<{ stopped: boolean }
 /**
  * Wait for the debug session to be fully started.
  */
-async function waitForDebugSessionStart(timeoutMs: number = SESSION_START_WAIT_MS): Promise<vscode.DebugSession> {
+async function waitForDebugSessionStart(timeoutMs: number = DEBUG_SESSION_TIMEOUT_MS): Promise<vscode.DebugSession> {
     return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
             disposable.dispose();
@@ -374,7 +264,7 @@ async function waitForDebugSessionStart(timeoutMs: number = SESSION_START_WAIT_M
 /**
  * Wait for the debug session to terminate.
  */
-async function waitForDebugSessionEnd(timeoutMs: number = SESSION_START_WAIT_MS): Promise<void> {
+async function waitForDebugSessionEnd(timeoutMs: number = DEBUG_SESSION_TIMEOUT_MS): Promise<void> {
     return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
             disposable.dispose();
@@ -516,10 +406,45 @@ async function continueExecution(session: vscode.DebugSession, threadId: number)
 
 /**
  * Wait for the debugger to stop (after a step or continue), returning the thread ID.
- * Uses queued DAP `stopped` events from the suite-level debug adapter tracker.
+ * Uses polling on the active session's stack trace availability.
  */
-async function waitForStop(timeoutMs: number = STEP_WAIT_MS): Promise<number> {
-    return debugStopEvents.waitForStop(timeoutMs);
+async function waitForStop(timeoutMs: number = STOPPED_EVENT_TIMEOUT_MS): Promise<number> {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            clearInterval(poll);
+            reject(new Error(`Timed out waiting for debugger to stop after ${timeoutMs}ms`));
+        }, timeoutMs);
+
+        const poll = setInterval(() => {
+            void (async () => {
+            const session = vscode.debug.activeDebugSession;
+            if (session === undefined) {
+                return;
+            }
+            try {
+                const threadsResponse = (await session.customRequest('threads')) as {
+                    threads?: { id: number }[];
+                };
+                const threads = threadsResponse.threads;
+                if (threads !== undefined && threads.length > 0) {
+                    const threadId: number = threads[0].id;
+                    try {
+                        const stack = await getStackTrace(session, threadId);
+                        if (stack.stackFrames.length > 0) {
+                            clearInterval(poll);
+                            clearTimeout(timer);
+                            resolve(threadId);
+                        }
+                    } catch {
+                        // Thread is running, not stopped yet.
+                    }
+                }
+            } catch {
+                // Session not ready yet.
+            }
+            })();
+        }, STOP_POLL_INTERVAL_MS);
+    });
 }
 
 /**
@@ -658,12 +583,11 @@ async function launchAndWaitForBreakpoint(
     breakpointLines: number[],
     pythonPath?: string
 ): Promise<{ session: vscode.DebugSession; threadId: number }> {
-    debugStopEvents.reset();
     clearAllBreakpoints();
     setBreakpoints(STEPPING_FIXTURE, breakpointLines);
 
     const sessionPromise = waitForDebugSessionStart();
-    const stoppedPromise = waitForStop(SESSION_START_WAIT_MS);
+    const stoppedPromise = waitForStop();
 
     const started = await vscode.debug.startDebugging(undefined, {
         name: 'Basilisk Debug Test',
@@ -694,9 +618,9 @@ suite('Debug Integration E2E Tests', () => {
     let debugpyAvailable: boolean;
     let pythonPath: string | undefined;
     let tmpDir: string;
-    let debugStopTrackerRegistration: vscode.Disposable | undefined;
 
     suiteSetup(async function () {
+        this.timeout(SERVER_START_WAIT_MS + STOPPED_EVENT_TIMEOUT_MS);
 
         basiliskBinary = findBasiliskBinary();
         debugpyAvailable = isDebugpyInstalled();
@@ -730,13 +654,8 @@ suite('Debug Integration E2E Tests', () => {
             await ext.activate();
         }
 
-        debugStopTrackerRegistration = vscode.debug.registerDebugAdapterTrackerFactory(
-            'basilisk-debug',
-            debugStopEvents
-        );
-
         // Give the LSP server time to fully initialize.
-        await new Promise<void>((resolve) => setTimeout(resolve, WAIT_MS));
+        await new Promise<void>((resolve) => setTimeout(resolve, SERVER_START_WAIT_MS));
     });
 
     suiteTeardown(async () => {
@@ -747,9 +666,6 @@ suite('Debug Integration E2E Tests', () => {
         if (tmpDir !== undefined && tmpDir !== '' && fs.existsSync(tmpDir)) {
             fs.rmSync(tmpDir, { recursive: true, force: true });
         }
-        debugStopTrackerRegistration?.dispose();
-        debugStopTrackerRegistration = undefined;
-        debugStopEvents.reset();
     });
 
     teardown(async () => {
@@ -758,7 +674,6 @@ suite('Debug Integration E2E Tests', () => {
             await vscode.debug.stopDebugging();
             await new Promise<void>((resolve) => setTimeout(resolve, SESSION_SETTLE_MS));
         }
-        debugStopEvents.reset();
     });
 
     // ────────────────────────────────────────────────────────────────────────
@@ -766,6 +681,7 @@ suite('Debug Integration E2E Tests', () => {
     // ────────────────────────────────────────────────────────────────────────
 
     test('LSP advertises startDebugSession and stopDebugSession commands', function () {
+        this.timeout(SUBPROCESS_TIMEOUT_MS);
         const ext = vscode.extensions.getExtension(EXTENSION_ID);
         assert.ok(ext, 'Extension must be installed');
         const pkg = ext.packageJSON as PackageJSON;
@@ -779,6 +695,7 @@ suite('Debug Integration E2E Tests', () => {
 
     // eslint-disable-next-line complexity
     test('basilisk-debug type has correct configuration attributes', function () {
+        this.timeout(SUBPROCESS_TIMEOUT_MS);
         const ext = vscode.extensions.getExtension(EXTENSION_ID);
         assert.ok(ext, 'Extension must be installed');
 
@@ -821,6 +738,7 @@ suite('Debug Integration E2E Tests', () => {
     // ────────────────────────────────────────────────────────────────────────
 
     test('startDebugSession spawns debugpy on a TCP port', async function () {
+        this.timeout(DEBUG_SESSION_TIMEOUT_MS);
 
         const result = await startDebugSession(pythonPath);
         assert.ok(result !== undefined, 'Expected startDebugSession to return a result');
@@ -838,6 +756,7 @@ suite('Debug Integration E2E Tests', () => {
     });
 
     test('stopDebugSession kills the debugpy process', async function () {
+        this.timeout(DEBUG_SESSION_TIMEOUT_MS);
 
         const result = await startDebugSession(pythonPath);
         assert.ok(result.port > 0);
@@ -851,11 +770,13 @@ suite('Debug Integration E2E Tests', () => {
     });
 
     test('stopDebugSession with invalid sessionId returns stopped: false', async function () {
+        this.timeout(SUBPROCESS_TIMEOUT_MS);
         const result = await stopDebugSession('nonexistent-session-id');
         assert.strictEqual(result.stopped, false);
     });
 
     test('can start multiple debug sessions on different ports', async function () {
+        this.timeout(DEBUG_SESSION_TIMEOUT_MS * 2);
 
         const session1 = await startDebugSession(pythonPath);
         const session2 = await startDebugSession(pythonPath);
@@ -873,6 +794,7 @@ suite('Debug Integration E2E Tests', () => {
     });
 
     test('startDebugSession with bad Python path returns error', async function () {
+        this.timeout(DEBUG_SESSION_TIMEOUT_MS);
         try {
             await startDebugSession('/nonexistent/python3.99');
             assert.fail('Expected startDebugSession to throw with a bad Python path');
@@ -888,6 +810,7 @@ suite('Debug Integration E2E Tests', () => {
     // ────────────────────────────────────────────────────────────────────────
 
     test('full debug lifecycle: start, verify DAP handshake, stop', async function () {
+        this.timeout(DEBUG_SESSION_TIMEOUT_MS + SUBPROCESS_TIMEOUT_MS);
 
         const session = await startDebugSession(pythonPath);
 
@@ -896,7 +819,7 @@ suite('Debug Integration E2E Tests', () => {
             const timer = setTimeout(() => {
                 socket.destroy();
                 reject(new Error('DAP handshake timed out'));
-            }, WAIT_MS);
+            }, DAP_HANDSHAKE_TIMEOUT_MS);
 
             socket.connect(session.port, session.host, () => {
                 const initRequest = JSON.stringify({
@@ -972,6 +895,7 @@ suite('Debug Integration E2E Tests', () => {
     // ────────────────────────────────────────────────────────────────────────
 
     test('arithmetic: step through and assert variable values at each line', async function () {
+        this.timeout(DEBUG_TEST_TIMEOUT_MS);
 
         // Break on line 11: x = 10
         const { session, threadId } = await launchAndWaitForBreakpoint([ARITH_X_LINE], pythonPath);
@@ -1026,6 +950,7 @@ suite('Debug Integration E2E Tests', () => {
     // ────────────────────────────────────────────────────────────────────────
 
     test('string_ops: step through and assert string values', async function () {
+        this.timeout(DEBUG_TEST_TIMEOUT_MS);
 
         const { session, threadId } = await launchAndWaitForBreakpoint([STRING_OPS_START_LINE], pythonPath);
 
@@ -1072,6 +997,7 @@ suite('Debug Integration E2E Tests', () => {
     // ────────────────────────────────────────────────────────────────────────
 
     test('list_ops: step through and assert list contents', async function () {
+        this.timeout(DEBUG_TEST_TIMEOUT_MS);
 
         const { session, threadId } = await launchAndWaitForBreakpoint([LIST_OPS_START_LINE], pythonPath);
 
@@ -1122,6 +1048,7 @@ suite('Debug Integration E2E Tests', () => {
     // ────────────────────────────────────────────────────────────────────────
 
     test('dict_ops: step through and assert dict contents', async function () {
+        this.timeout(DEBUG_TEST_TIMEOUT_MS);
 
         const { session, threadId } = await launchAndWaitForBreakpoint([DICT_OPS_START_LINE], pythonPath);
 
@@ -1168,6 +1095,7 @@ suite('Debug Integration E2E Tests', () => {
     // ────────────────────────────────────────────────────────────────────────
 
     test('nested_call: step into function, verify call stack', async function () {
+        this.timeout(DEBUG_TEST_TIMEOUT_MS);
 
         const { session, threadId } = await launchAndWaitForBreakpoint([NESTED_CALL_START_LINE], pythonPath);
 
@@ -1210,6 +1138,7 @@ suite('Debug Integration E2E Tests', () => {
     // ────────────────────────────────────────────────────────────────────────
 
     test('loop_and_accumulate: step through loop, verify accumulator', async function () {
+        this.timeout(LOOP_TEST_TIMEOUT_MS);
 
         const { session, threadId } = await launchAndWaitForBreakpoint([LOOP_START_LINE], pythonPath);
 
@@ -1264,6 +1193,7 @@ suite('Debug Integration E2E Tests', () => {
     // ────────────────────────────────────────────────────────────────────────
 
     test('conditional_branches: verify correct branch taken', async function () {
+        this.timeout(DEBUG_TEST_TIMEOUT_MS);
 
         const { session, threadId } = await launchAndWaitForBreakpoint([COND_START_LINE], pythonPath);
 
@@ -1301,6 +1231,7 @@ suite('Debug Integration E2E Tests', () => {
     // ────────────────────────────────────────────────────────────────────────
 
     test('exception_handling: step through try/except, verify caught state', async function () {
+        this.timeout(DEBUG_TEST_TIMEOUT_MS);
 
         const { session, threadId } = await launchAndWaitForBreakpoint([EXCEPT_START_LINE], pythonPath);
 
@@ -1342,6 +1273,7 @@ suite('Debug Integration E2E Tests', () => {
     // ────────────────────────────────────────────────────────────────────────
 
     test('type_variety: verify different Python types in debugger', async function () {
+        this.timeout(DEBUG_TEST_TIMEOUT_MS);
 
         const { session, threadId } = await launchAndWaitForBreakpoint([TYPE_VARIETY_START_LINE], pythonPath);
 
@@ -1398,6 +1330,7 @@ suite('Debug Integration E2E Tests', () => {
     // ────────────────────────────────────────────────────────────────────────
 
     test('class_instance: step through, inspect object attributes', async function () {
+        this.timeout(DEBUG_TEST_TIMEOUT_MS);
 
         // Break at line 119: p = Point(3, 4)
         const { session, threadId } = await launchAndWaitForBreakpoint([CLASS_INSTANCE_START_LINE], pythonPath);
@@ -1429,6 +1362,7 @@ suite('Debug Integration E2E Tests', () => {
     // ────────────────────────────────────────────────────────────────────────
 
     test('continue between multiple breakpoints', async function () {
+        this.timeout(DEBUG_TEST_TIMEOUT_MS);
 
         // Set breakpoints in arithmetic() and string_ops()
         const { session, threadId } = await launchAndWaitForBreakpoint([ARITH_Z_LINE, STRING_OPS_MESSAGE_LINE], pythonPath);
@@ -1456,6 +1390,7 @@ suite('Debug Integration E2E Tests', () => {
     // ────────────────────────────────────────────────────────────────────────
 
     test('stack trace shows correct call hierarchy', async function () {
+        this.timeout(DEBUG_TEST_TIMEOUT_MS);
 
         // Break inside double(), called from nested_call()
         const { session, threadId } = await launchAndWaitForBreakpoint([DOUBLE_RESULT_LINE], pythonPath);
@@ -1490,6 +1425,7 @@ suite('Debug Integration E2E Tests', () => {
     // ────────────────────────────────────────────────────────────────────────
 
     test('scopes show Locals and variable details', async function () {
+        this.timeout(DEBUG_TEST_TIMEOUT_MS);
 
         const { session, threadId } = await launchAndWaitForBreakpoint([ARITH_Z_LINE], pythonPath);
 
@@ -1531,6 +1467,7 @@ suite('Debug Integration E2E Tests', () => {
     // ────────────────────────────────────────────────────────────────────────
 
     test('watch expressions: evaluate complex expressions', async function () {
+        this.timeout(DEBUG_TEST_TIMEOUT_MS);
 
         // Stop at line 15 in arithmetic where x=10, y=20, z=30, w=60
         const { session, threadId } = await launchAndWaitForBreakpoint([ARITH_RESULT_LINE], pythonPath);
@@ -1576,6 +1513,7 @@ suite('Debug Integration E2E Tests', () => {
     // ────────────────────────────────────────────────────────────────────────
 
     test('hover evaluation: evaluate expressions in hover context', async function () {
+        this.timeout(DEBUG_TEST_TIMEOUT_MS);
 
         const { session, threadId } = await launchAndWaitForBreakpoint([ARITH_Z_LINE], pythonPath);
 
@@ -1596,6 +1534,7 @@ suite('Debug Integration E2E Tests', () => {
     // ────────────────────────────────────────────────────────────────────────
 
     test('REPL evaluation: evaluate expressions in debug console context', async function () {
+        this.timeout(DEBUG_TEST_TIMEOUT_MS);
 
         const { session, threadId } = await launchAndWaitForBreakpoint([ARITH_Z_LINE], pythonPath);
 
@@ -1619,13 +1558,14 @@ suite('Debug Integration E2E Tests', () => {
     // ────────────────────────────────────────────────────────────────────────
 
     test('debug session terminates cleanly after continue past end', async function () {
+        this.timeout(DEBUG_TEST_TIMEOUT_MS);
 
         // Break at the return of arithmetic()
         const { session, threadId } = await launchAndWaitForBreakpoint([ARITH_RETURN_LINE], pythonPath);
 
         await assertCurrentLine({ session: session, threadId: threadId, expectedLine: ARITH_RETURN_LINE });
 
-        const endPromise = waitForDebugSessionEnd(WAIT_MS);
+        const endPromise = waitForDebugSessionEnd(SESSION_END_WAIT_MS);
 
         // Continue — the program will run through remaining functions and exit
         await continueExecution(session, threadId);
@@ -1635,7 +1575,7 @@ suite('Debug Integration E2E Tests', () => {
         // VS Code may not clear activeDebugSession synchronously with the
         // terminate event — poll briefly to let the runtime settle.
         for (let i = 0; i < SESSION_CLEAR_MAX_POLLS && vscode.debug.activeDebugSession; i++) {
-            await new Promise<void>((r) => setTimeout(r, POLL_INTERVAL_MS));
+            await new Promise<void>((r) => setTimeout(r, STOP_POLL_INTERVAL_MS));
         }
 
         assert.strictEqual(
@@ -1650,6 +1590,7 @@ suite('Debug Integration E2E Tests', () => {
     // ────────────────────────────────────────────────────────────────────────
 
     test('attach to manually spawned debugpy server', async function () {
+        this.timeout(DEBUG_TEST_TIMEOUT_MS);
 
         // Start debugpy via LSP command to get a running server
         const lspSession = await startDebugSession(pythonPath);
@@ -1688,6 +1629,7 @@ suite('Debug Integration E2E Tests', () => {
     // ────────────────────────────────────────────────────────────────────────
 
     test('startDebugSession with bad python shows error', async function () {
+        this.timeout(DEBUG_SESSION_TIMEOUT_MS);
 
         try {
             await startDebugSession('/nonexistent/python_for_debugpy_test');

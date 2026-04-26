@@ -128,7 +128,7 @@ async fn test_ws_requests_after_shutdown_return_error() -> TestResult<()> {
     fixture
         .did_open("file:///ws_post_shutdown.py", "x: int = 1\n")
         .await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    let _ = fixture.wait_for_diagnostics().await?;
 
     // Shutdown.
     fixture

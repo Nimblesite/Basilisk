@@ -16,8 +16,11 @@ import {
     openPythonFile,
     closeAllEditors,
     pollUntilResult,
-    WAIT_MS,
-} from "./test-helpers";
+    DIAGNOSTIC_TIMEOUT_MS,
+    SERVER_START_WAIT_MS,
+    SUITE_SETUP_TIMEOUT_MS,
+} from './test-helpers';
+const RENAME_POLL_TIMEOUT_MS = 3_000;
 const LOCAL_VAR_START_LINE = 3;
 const LOCAL_VAR_END_LINE = 4;
 const MODULE_USAGE_LINE = 6;
@@ -34,6 +37,7 @@ suite('LSP Refactoring Tests', () => {
     let tmpDir: string;
 
     suiteSetup(async function () {
+        this.timeout(SUITE_SETUP_TIMEOUT_MS);
         const setup = await setupLspTestSuite('basilisk-refactoring-');
         tmpDir = setup.tmpDir;
     });
@@ -51,6 +55,7 @@ suite('LSP Refactoring Tests', () => {
     // 1. Scope-aware rename: local var does NOT rename module-level var
     // ----------------------------------------------------------------
     test('rename local variable does not affect module-level', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + SERVER_START_WAIT_MS);
 
         const source = [
             'x: int = 1',
@@ -92,6 +97,7 @@ suite('LSP Refactoring Tests', () => {
     // 2. Scope-aware rename: module-level var skips shadowed local
     // ----------------------------------------------------------------
     test('rename module variable skips shadowed local', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + SERVER_START_WAIT_MS);
 
         const source = [
             'x: int = 1',
@@ -133,6 +139,7 @@ suite('LSP Refactoring Tests', () => {
     // 3. Rename parameter stays within function scope
     // ----------------------------------------------------------------
     test('rename parameter stays within function', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + SERVER_START_WAIT_MS);
 
         const source = [
             'name: str = "global"',
@@ -172,6 +179,7 @@ suite('LSP Refactoring Tests', () => {
     // 4. Rename rejects Python keywords
     // ----------------------------------------------------------------
     test('rename to keyword is rejected', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + SERVER_START_WAIT_MS);
 
         const source = 'x: int = 1\n';
         const { uri } = await openPythonFile(tmpDir, 'scope_rename_keyword.py', source);
@@ -184,7 +192,7 @@ suite('LSP Refactoring Tests', () => {
                     'vscode.executeDocumentRenameProvider', uri, pos, 'class'
                 ).then((r) => r, () => null),
                 predicate: (r) => r !== null && r !== undefined && r.get(uri).length > 0,
-                timeoutMs: WAIT_MS,
+                timeoutMs: RENAME_POLL_TIMEOUT_MS,
             });
         } catch {
             rejected = true;
@@ -200,6 +208,7 @@ suite('LSP Refactoring Tests', () => {
     // 5. Rename rejects invalid identifiers
     // ----------------------------------------------------------------
     test('rename to invalid identifier is rejected', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + SERVER_START_WAIT_MS);
 
         const source = 'x: int = 1\n';
         const { uri } = await openPythonFile(tmpDir, 'scope_rename_invalid.py', source);
@@ -212,7 +221,7 @@ suite('LSP Refactoring Tests', () => {
                     'vscode.executeDocumentRenameProvider', uri, pos, '123abc'
                 ).then((r) => r, () => null),
                 predicate: (r) => r !== null && r !== undefined && r.get(uri).length > 0,
-                timeoutMs: WAIT_MS,
+                timeoutMs: RENAME_POLL_TIMEOUT_MS,
             });
         } catch {
             rejected = true;
@@ -226,6 +235,7 @@ suite('LSP Refactoring Tests', () => {
     // 6. Nested function scoping: outer rename does not touch inner shadow
     // ----------------------------------------------------------------
     test('rename in outer function skips inner shadowed variable', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + SERVER_START_WAIT_MS);
 
         const source = [
             'def outer() -> int:',
@@ -266,6 +276,7 @@ suite('LSP Refactoring Tests', () => {
     // 7. Multi-occurrence rename at module level
     // ----------------------------------------------------------------
     test('rename function with multiple call sites', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + SERVER_START_WAIT_MS);
 
         const source = [
             'def helper(x: int) -> int:',

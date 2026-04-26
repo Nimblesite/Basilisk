@@ -14,17 +14,22 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import {
-    WAIT_MS,
+    DIAGNOSTIC_TIMEOUT_MS,
     EXTENSION_ID,
+    NO_DIAGNOSTIC_WAIT_MS,
+    SERVER_START_WAIT_MS,
+    SUITE_SETUP_TIMEOUT_MS,
     closeAllEditors,
     openPythonFile,
     waitForDiagnostics,
     waitForDiagnosticsCleared,
-} from "./test-helpers";
+} from './test-helpers';
 
 /** Extra buffer (ms) added to test timeouts beyond core wait. */
+const TIMEOUT_BUFFER_MS = 5_000;
 
 /** Large buffer (ms) for tests with multiple diagnostic waits or startup delays. */
+const LARGE_TIMEOUT_BUFFER_MS = 15_000;
 
 /**
  * Filter diagnostics to only those produced by the Basilisk LSP server.
@@ -176,6 +181,7 @@ suite('Analysis Mode Tests', () => {
     // -------------------------------------------------------
 
     test('wholeModule: startup scan publishes diagnostics for closed file in workspace root', async function () {
+        this.timeout(SUITE_SETUP_TIMEOUT_MS);
 
         // Determine the workspace root that VS Code opened.
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -209,11 +215,11 @@ suite('Analysis Mode Tests', () => {
             }
 
             // Wait for the LSP server startup scan to complete.
-            await new Promise<void>((resolve) => setTimeout(resolve, WAIT_MS + WAIT_MS));
+            await new Promise<void>((resolve) => setTimeout(resolve, SERVER_START_WAIT_MS + TIMEOUT_BUFFER_MS));
 
             // The startup scan must have published diagnostics for the closed file.
             const closedFileUri = vscode.Uri.file(closedFilePath);
-            const diags = await waitForDiagnostics(closedFileUri, WAIT_MS);
+            const diags = await waitForDiagnostics(closedFileUri, DIAGNOSTIC_TIMEOUT_MS);
 
             assert.ok(
                 diags.length > 0,
@@ -238,6 +244,7 @@ suite('Analysis Mode Tests', () => {
     });
 
     test('openFilesOnly: startup scan does NOT run — closed workspace file gets no diagnostics', async function () {
+        this.timeout(NO_DIAGNOSTIC_WAIT_MS + LARGE_TIMEOUT_BUFFER_MS);
 
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
         assert.ok(
@@ -267,7 +274,7 @@ suite('Analysis Mode Tests', () => {
             }
 
             // Wait long enough for a scan to have run (if it was going to).
-            await new Promise<void>((resolve) => setTimeout(resolve, WAIT_MS));
+            await new Promise<void>((resolve) => setTimeout(resolve, NO_DIAGNOSTIC_WAIT_MS));
 
             // In openFilesOnly mode, the closed file must NOT have diagnostics.
             const closedFileUri = vscode.Uri.file(closedFilePath);
@@ -285,6 +292,7 @@ suite('Analysis Mode Tests', () => {
     });
 
     test('openFilesOnly: opening a file produces diagnostics, closing clears them', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + LARGE_TIMEOUT_BUFFER_MS);
 
         const cfg = vscode.workspace.getConfiguration('basilisk');
         const originalMode = cfg.get<string>('analysisMode');
@@ -301,7 +309,7 @@ suite('Analysis Mode Tests', () => {
 
             // Wait for diagnostics to appear (file is open, so should be analysed
             // regardless of mode).
-            const openDiags = await waitForDiagnostics(uri, WAIT_MS);
+            const openDiags = await waitForDiagnostics(uri, DIAGNOSTIC_TIMEOUT_MS);
             assert.ok(
                 openDiags.length > 0,
                 'openFilesOnly: should have diagnostics while file is open'
@@ -311,7 +319,7 @@ suite('Analysis Mode Tests', () => {
             await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
 
             // In openFilesOnly mode the server clears diagnostics when the file is closed.
-            const clearedDiags = await waitForDiagnosticsCleared(uri, WAIT_MS);
+            const clearedDiags = await waitForDiagnosticsCleared(uri, NO_DIAGNOSTIC_WAIT_MS);
             assert.strictEqual(
                 clearedDiags.length,
                 0,

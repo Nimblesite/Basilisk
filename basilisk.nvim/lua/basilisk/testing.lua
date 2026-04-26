@@ -255,10 +255,6 @@ function M.debug(config, test_id)
     log.error("nvim-dap required for debugging tests")
     return
   end
-  if not dap.adapters or not dap.adapters.basilisk then
-    log.warn("basilisk DAP adapter not configured")
-    return
-  end
 
   dap.run({
     type = "basilisk",
@@ -267,7 +263,6 @@ function M.debug(config, test_id)
     module = "pytest",
     args = { "-xvs", test_id },
     justMyCode = true,
-    cwd = vim.fn.getcwd(),
   })
 end
 

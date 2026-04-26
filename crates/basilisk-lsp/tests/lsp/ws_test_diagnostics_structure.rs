@@ -9,10 +9,7 @@ async fn test_ws_diagnostic_structure_is_well_formed() -> TestResult<()> {
 
     let code = "def f(x, y):\n    return x + y\n";
     fixture.did_open("file:///structure.py", code).await?;
-    let raw = fixture
-        .wait_for_diagnostics()
-        .await
-        .ok_or("no diagnostics")?;
+    let raw = fixture.wait_for_diagnostics().await?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     // Verify outer JSON-RPC envelope

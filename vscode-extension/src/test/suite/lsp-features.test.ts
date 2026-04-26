@@ -16,14 +16,17 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import {
-    WAIT_MS,
-    EXTENSION_ID,
-    POLL_INTERVAL_MS,
-    closeAllEditors,
+    DIAGNOSTIC_TIMEOUT_MS,
+    SUITE_SETUP_TIMEOUT_MS,
+    pollUntilResult,
     findBasiliskBinary,
     openPythonFile,
-    pollUntilResult,
-} from "./test-helpers";
+    closeAllEditors,
+    waitForLspReady,
+} from './test-helpers';
+
+/** Additional time (ms) added to DIAGNOSTIC_TIMEOUT_MS for individual test timeouts. */
+const EXTRA_TEST_TIMEOUT_MS = 10_000;
 
 /** Column position of the function name in a `def name(...)` declaration. */
 const DEF_NAME_COLUMN = 4;
@@ -40,8 +43,6 @@ const MIN_INLAY_HINT_COUNT = 2;
 /** Tab size used for formatting requests. */
 const FORMAT_TAB_SIZE = 4;
 
-/** Interval (ms) between server readiness polls during setup. */
-
 /** Minimum expected highlight count: 1 definition + 2 call sites. */
 const MIN_HIGHLIGHT_COUNT = 3;
 
@@ -57,6 +58,7 @@ suite('LSP Feature Tests', () => {
     let basiliskBinary: string | undefined;
 
     suiteSetup(async function () {
+        this.timeout(SUITE_SETUP_TIMEOUT_MS);
 
         basiliskBinary = findBasiliskBinary();
         if (basiliskBinary === undefined) {
@@ -67,26 +69,7 @@ suite('LSP Feature Tests', () => {
 
         tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'basilisk-lsp-features-'));
 
-        // Ensure the extension is activated.
-        const ext = vscode.extensions.getExtension(EXTENSION_ID);
-        if (ext && !ext.isActive) {
-            await ext.activate();
-        }
-
-        // Poll until the LSP server is responsive.
-        const dummyPath = path.join(tmpDir, '__init__.py');
-        fs.writeFileSync(dummyPath, '', 'utf8');
-        const dummyUri = vscode.Uri.file(dummyPath);
-        const dummyDoc = await vscode.workspace.openTextDocument(dummyUri);
-        await vscode.window.showTextDocument(dummyDoc);
-        await pollUntilResult({
-            fn: () => vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
-                'vscode.executeDocumentSymbolProvider', dummyUri
-            ).then((r) => r, () => null),
-            predicate: (r) => r !== null && r !== undefined,
-            timeoutMs: WAIT_MS,
-            intervalMs: POLL_INTERVAL_MS,
-        });
+        await waitForLspReady();
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     });
 
@@ -105,6 +88,7 @@ suite('LSP Feature Tests', () => {
     // 1. Find references works through extension
     // ----------------------------------------------------------------
     test('find references works through extension', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + EXTRA_TEST_TIMEOUT_MS);
 
         const source = [
             'def compute(x: int) -> int:',
@@ -151,6 +135,7 @@ suite('LSP Feature Tests', () => {
     // 2. Rename symbol works through extension
     // ----------------------------------------------------------------
     test('rename symbol works through extension', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + EXTRA_TEST_TIMEOUT_MS);
 
         const source = [
             'def old_name(x: int) -> int:',
@@ -208,6 +193,7 @@ suite('LSP Feature Tests', () => {
     // 3. Inlay hints appear for unannotated variables
     // ----------------------------------------------------------------
     test('inlay hints appear for unannotated variables', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + EXTRA_TEST_TIMEOUT_MS);
 
         const source = [
             'x = 42',
@@ -259,6 +245,7 @@ suite('LSP Feature Tests', () => {
     // 4. Format document works through extension
     // ----------------------------------------------------------------
     test('format document works through extension', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + EXTRA_TEST_TIMEOUT_MS);
 
         // Intentionally badly formatted Python code.
         const source = [
@@ -303,6 +290,7 @@ suite('LSP Feature Tests', () => {
     // 5. Document highlight works for symbol
     // ----------------------------------------------------------------
     test('document highlight works for symbol', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + EXTRA_TEST_TIMEOUT_MS);
 
         const source = [
             'def process(data: str) -> str:',

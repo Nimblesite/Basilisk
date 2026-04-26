@@ -113,7 +113,7 @@ async fn test_ws_whole_module_did_close_keeps_diagnostics() -> TestResult<()> {
         )
         .await?;
     // Drain open diagnostics.
-    let _ = fixture.wait_for_diagnostics().await;
+    let _ = fixture.wait_for_diagnostics().await?;
 
     // Close the file.
     fixture.did_close(&file_uri).await?;
@@ -121,7 +121,7 @@ async fn test_ws_whole_module_did_close_keeps_diagnostics() -> TestResult<()> {
     // Should receive a publishDiagnostics after close (re-analysis from disk).
     let diag = fixture.wait_for_diagnostics().await;
     assert!(
-        diag.is_some(),
+        diag.is_ok(),
         "wholeModule mode should re-publish diagnostics after didClose"
     );
 
@@ -141,14 +141,14 @@ async fn test_ws_whole_module_did_close_non_disk_file_returns_empty_diagnostics(
     fixture
         .did_open(uri, "def greet(name):\n    return f\"Hello, {name}!\"\n")
         .await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    let _ = fixture.wait_for_diagnostics().await?;
 
     fixture.did_close(uri).await?;
 
     // File doesn't exist on disk → set_closed() removes it and returns empty diagnostics.
     let diag = fixture.wait_for_diagnostics().await;
-    assert!(diag.is_some(), "should publish diagnostics on close");
-    let diag_msg = diag.ok_or("expected diagnostics message")?;
+    assert!(diag.is_ok(), "should publish diagnostics on close");
+    let diag_msg = diag?;
     assert!(
         diag_msg.contains("\"diagnostics\":[]"),
         "non-disk file close should produce empty diagnostics in wholeModule mode: {diag_msg}"
@@ -185,7 +185,7 @@ async fn test_ws_open_files_only_did_close_clears_diagnostics() -> TestResult<()
         .await?;
     let open_diag = fixture.wait_for_diagnostics().await;
     assert!(
-        open_diag.is_some(),
+        open_diag.is_ok(),
         "openFilesOnly: should have diagnostics while file is open"
     );
 
@@ -194,10 +194,10 @@ async fn test_ws_open_files_only_did_close_clears_diagnostics() -> TestResult<()
 
     let close_diag = fixture.wait_for_diagnostics().await;
     assert!(
-        close_diag.is_some(),
+        close_diag.is_ok(),
         "should receive publishDiagnostics after didClose"
     );
-    let close_msg = close_diag.ok_or("expected diagnostics on close")?;
+    let close_msg = close_diag?;
     assert!(
         close_msg.contains("\"diagnostics\":[]"),
         "openFilesOnly: didClose should clear diagnostics (empty array): {close_msg}"
@@ -232,7 +232,7 @@ async fn test_ws_whole_module_did_close_disk_file_keeps_diagnostics() -> TestRes
             "def greet(name):\n    return f\"Hello, {name}!\"\n",
         )
         .await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    let _ = fixture.wait_for_diagnostics().await?;
 
     // Close the file — in wholeModule mode the server re-analyses from disk.
     fixture.did_close(&file_uri).await?;
@@ -240,10 +240,10 @@ async fn test_ws_whole_module_did_close_disk_file_keeps_diagnostics() -> TestRes
     // Should receive publishDiagnostics with non-empty diagnostics (re-analysed from disk).
     let close_diag = fixture.wait_for_diagnostics().await;
     assert!(
-        close_diag.is_some(),
+        close_diag.is_ok(),
         "wholeModule: should receive publishDiagnostics after didClose"
     );
-    let close_msg = close_diag.ok_or("expected diagnostics on close")?;
+    let close_msg = close_diag?;
     assert!(
         !close_msg.contains("\"diagnostics\":[]"),
         "wholeModule: didClose disk file should keep diagnostics (non-empty): {close_msg}"
@@ -357,7 +357,7 @@ async fn test_ws_file_watcher_triggers_reanalysis_in_whole_module() -> TestResul
     // Should receive publishDiagnostics with errors.
     let diag = fixture.wait_for_diagnostics().await;
     assert!(
-        diag.is_some(),
+        diag.is_ok(),
         "wholeModule: file-watcher event should trigger re-analysis and publish diagnostics"
     );
 
