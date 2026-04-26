@@ -234,7 +234,11 @@ export async function replaceDocumentContent(
 
 /**
  * Standard suiteSetup body: find binary, create tmpDir, activate extension,
- * poll until the LSP server responds to documentSymbol requests.
+ * poll until the LSP server has advertised its commands (store.serverCommands
+ * non-empty). Using server commands as the readiness signal ensures Basilisk's
+ * LSP has completed the initialize handshake — not just that any documentSymbol
+ * provider responded (VS Code's built-in Python extension answers immediately
+ * and would produce a false-positive before Basilisk is ready).
  * Returns the tmpDir path.
  */
 export async function setupLspTestSuite(
@@ -265,24 +269,18 @@ export async function setupLspTestSuite(
         getStoreFromExtension();
     }
 
-    // Poll until the LSP server is responsive.
-    const dummyPath = path.join(tmpDir, '__init__.py');
-    fs.writeFileSync(dummyPath, '', 'utf8');
-    const dummyUri = vscode.Uri.file(dummyPath);
-    const dummyDoc = await vscode.workspace.openTextDocument(dummyUri);
-    await vscode.window.showTextDocument(dummyDoc);
+    // Poll until the LSP server has completed the initialize handshake and
+    // advertised its commands. This is the correct readiness gate: it
+    // confirms Basilisk's own LSP process is running and has sent
+    // ServerCapabilities.executeCommandProvider to the client.
     const deadline = Date.now() + SERVER_START_WAIT_MS;
     let serverReady = false;
     while (Date.now() < deadline) {
-        try {
-            const syms = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
-                'vscode.executeDocumentSymbolProvider', dummyUri
-            );
-            if (syms !== null && syms !== undefined) {
-                serverReady = true;
-                break;
-            }
-        } catch { /* server not ready yet */ }
+        const store = getStoreFromExtension();
+        if (store !== undefined && store.serverCommands.value.size > 0) {
+            serverReady = true;
+            break;
+        }
         await new Promise<void>((r) => setTimeout(r, SERVER_READINESS_POLL_INTERVAL_MS));
     }
     if (!serverReady) {

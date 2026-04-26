@@ -1,6 +1,4 @@
 import * as path from 'path';
-import * as fs from 'fs';
-import * as os from 'os';
 import Mocha from 'mocha';
 import { glob } from 'glob';
 import * as vscode from 'vscode';
@@ -17,6 +15,9 @@ import {
  * server is already responsive, but too short for a cold CI start (cargo build +
  * LSP init can exceed 60 s).  By waiting here — with the generous 90 s timeout —
  * we guarantee the server is ready before any suite begins.
+ *
+ * Readiness is determined by store.serverCommands being non-empty, which means
+ * Basilisk's LSP has completed the initialize handshake and sent its capabilities.
  */
 async function prewarmLsp(): Promise<void> {
     const ext = vscode.extensions.getExtension(EXTENSION_ID);
@@ -24,31 +25,19 @@ async function prewarmLsp(): Promise<void> {
         await ext.activate();
     }
 
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'basilisk-prewarm-'));
-    const dummyPath = path.join(tmpDir, '__init__.py');
-    fs.writeFileSync(dummyPath, '', 'utf8');
-    const dummyUri = vscode.Uri.file(dummyPath);
-    const dummyDoc = await vscode.workspace.openTextDocument(dummyUri);
-    await vscode.window.showTextDocument(dummyDoc);
+    const { getStore } = await import('./../../extension');
 
     const pollIntervalMs = 200;
     const deadline = Date.now() + SERVER_START_WAIT_MS;
     let serverReady = false;
     while (Date.now() < deadline) {
-        try {
-            const syms = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
-                'vscode.executeDocumentSymbolProvider', dummyUri
-            );
-            if (syms !== null && syms !== undefined) {
-                serverReady = true;
-                break;
-            }
-        } catch { /* server not ready yet */ }
+        const store = getStore();
+        if (store !== undefined && store.serverCommands.value.size > 0) {
+            serverReady = true;
+            break;
+        }
         await new Promise<void>((r) => setTimeout(r, pollIntervalMs));
     }
-
-    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-    fs.rmSync(tmpDir, { recursive: true, force: true });
 
     if (!serverReady) {
         throw new Error(
