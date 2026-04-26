@@ -16,14 +16,13 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import {
-    EXTENSION_ID,
     DIAGNOSTIC_TIMEOUT_MS,
-    SERVER_START_WAIT_MS,
     SUITE_SETUP_TIMEOUT_MS,
     pollUntilResult,
     findBasiliskBinary,
     openPythonFile,
     closeAllEditors,
+    waitForLspReady,
 } from './test-helpers';
 
 /** Additional time (ms) added to DIAGNOSTIC_TIMEOUT_MS for individual test timeouts. */
@@ -43,9 +42,6 @@ const MIN_INLAY_HINT_COUNT = 2;
 
 /** Tab size used for formatting requests. */
 const FORMAT_TAB_SIZE = 4;
-
-/** Interval (ms) between server readiness polls during setup. */
-const SERVER_READINESS_POLL_INTERVAL_MS = 200;
 
 /** Minimum expected highlight count: 1 definition + 2 call sites. */
 const MIN_HIGHLIGHT_COUNT = 3;
@@ -73,26 +69,7 @@ suite('LSP Feature Tests', () => {
 
         tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'basilisk-lsp-features-'));
 
-        // Ensure the extension is activated.
-        const ext = vscode.extensions.getExtension(EXTENSION_ID);
-        if (ext && !ext.isActive) {
-            await ext.activate();
-        }
-
-        // Poll until the LSP server is responsive.
-        const dummyPath = path.join(tmpDir, '__init__.py');
-        fs.writeFileSync(dummyPath, '', 'utf8');
-        const dummyUri = vscode.Uri.file(dummyPath);
-        const dummyDoc = await vscode.workspace.openTextDocument(dummyUri);
-        await vscode.window.showTextDocument(dummyDoc);
-        await pollUntilResult({
-            fn: () => vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
-                'vscode.executeDocumentSymbolProvider', dummyUri
-            ).then((r) => r, () => null),
-            predicate: (r) => r !== null && r !== undefined,
-            timeoutMs: SERVER_START_WAIT_MS,
-            intervalMs: SERVER_READINESS_POLL_INTERVAL_MS,
-        });
+        await waitForLspReady();
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     });
 

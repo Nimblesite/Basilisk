@@ -233,13 +233,45 @@ export async function replaceDocumentContent(
 }
 
 /**
- * Standard suiteSetup body: find binary, create tmpDir, activate extension,
- * poll until the LSP server has advertised its commands (store.serverCommands
- * non-empty). Using server commands as the readiness signal ensures Basilisk's
- * LSP has completed the initialize handshake — not just that any documentSymbol
- * provider responded (VS Code's built-in Python extension answers immediately
- * and would produce a false-positive before Basilisk is ready).
- * Returns the tmpDir path.
+ * Wait until the Basilisk LSP has fully initialized and advertised its commands.
+ *
+ * Use this in any suiteSetup that needs the LSP to be running before tests
+ * execute. It polls store.serverCommands rather than documentSymbol so
+ * Basilisk's own initialization — not VS Code's built-in Python extension
+ * — determines readiness.
+ *
+ * Handles the lazy re-init path after deactivate() cycles from earlier test
+ * suites: first calls getStore() to clear pendingReactivation (returns
+ * undefined), then calls again to trigger initExtension.
+ */
+export async function waitForLspReady(): Promise<void> {
+    const ext = vscode.extensions.getExtension(EXTENSION_ID);
+    if (ext && !ext.isActive) {
+        await ext.activate();
+    }
+
+    const { getStore: getStoreFromExtension } = await import('../../extension');
+    if (getStoreFromExtension() === undefined) {
+        getStoreFromExtension();
+    }
+
+    const deadline = Date.now() + SERVER_START_WAIT_MS;
+    while (Date.now() < deadline) {
+        const store = getStoreFromExtension();
+        if (store !== undefined && store.serverCommands.value.size > 0) {
+            return;
+        }
+        await new Promise<void>((r) => setTimeout(r, SERVER_READINESS_POLL_INTERVAL_MS));
+    }
+    throw new Error(
+        `LSP server failed to become responsive within ${SERVER_START_WAIT_MS}ms. ` +
+        'Ensure the basilisk binary is built: cargo build -p basilisk-cli'
+    );
+}
+
+/**
+ * Standard suiteSetup body: find binary, create tmpDir, wait for the LSP
+ * to be ready, then close all editors. Returns tmpDir and binary path.
  */
 export async function setupLspTestSuite(
     tmpDirPrefix: string
@@ -253,42 +285,7 @@ export async function setupLspTestSuite(
 
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), tmpDirPrefix));
 
-    const ext = vscode.extensions.getExtension(EXTENSION_ID);
-    if (ext && !ext.isActive) {
-        await ext.activate();
-    }
-
-    // After a simulated deactivate() cycle (e.g. from a prior test suite),
-    // the extension is still marked as active by VS Code, but the store is
-    // undefined and the LSP is stopped. Calling getStore() triggers the
-    // lazy re-init path that creates a new store and starts the LSP client.
-    const { getStore: getStoreFromExtension } = await import('../../extension');
-    // First call after deactivate() returns undefined (proves cleanup).
-    // Second call triggers lazy re-init.
-    if (getStoreFromExtension() === undefined) {
-        getStoreFromExtension();
-    }
-
-    // Poll until the LSP server has completed the initialize handshake and
-    // advertised its commands. This is the correct readiness gate: it
-    // confirms Basilisk's own LSP process is running and has sent
-    // ServerCapabilities.executeCommandProvider to the client.
-    const deadline = Date.now() + SERVER_START_WAIT_MS;
-    let serverReady = false;
-    while (Date.now() < deadline) {
-        const store = getStoreFromExtension();
-        if (store !== undefined && store.serverCommands.value.size > 0) {
-            serverReady = true;
-            break;
-        }
-        await new Promise<void>((r) => setTimeout(r, SERVER_READINESS_POLL_INTERVAL_MS));
-    }
-    if (!serverReady) {
-        throw new Error(
-            `LSP server failed to become responsive within ${SERVER_START_WAIT_MS}ms. ` +
-            'Ensure the basilisk binary is built: cargo build -p basilisk-cli'
-        );
-    }
+    await waitForLspReady();
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
 
     return { tmpDir, basiliskBinary: binary };

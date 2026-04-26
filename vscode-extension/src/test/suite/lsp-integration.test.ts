@@ -17,9 +17,7 @@ import * as os from 'os';
 import * as path from 'path';
 import {
     DIAGNOSTIC_TIMEOUT_MS,
-    EXTENSION_ID,
     NO_DIAGNOSTIC_WAIT_MS,
-    SERVER_START_WAIT_MS,
     SUITE_SETUP_TIMEOUT_MS,
     closeAllEditors,
     findBasiliskBinary,
@@ -27,6 +25,7 @@ import {
     pollUntilResult,
     waitForDiagnostics,
     waitForDiagnosticsCleared,
+    waitForLspReady,
 } from './test-helpers';
 
 /** Extra buffer (ms) added to test-level timeouts beyond the core wait. */
@@ -34,9 +33,6 @@ const TIMEOUT_BUFFER_MS = 5_000;
 
 /** Large buffer (ms) for tests that do multiple diagnostic waits. */
 const LARGE_TIMEOUT_BUFFER_MS = 10_000;
-
-/** Interval (ms) between server readiness polls during suite setup. */
-const SETUP_POLL_INTERVAL_MS = 200;
 
 // ── Test-specific line/column positions ──────────────────────────────
 
@@ -118,26 +114,7 @@ suite('LSP Integration Tests', () => {
 
         tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'basilisk-lsp-test-'));
 
-        // Ensure the extension is activated.
-        const ext = vscode.extensions.getExtension(EXTENSION_ID);
-        if (ext !== undefined && !ext.isActive) {
-            await ext.activate();
-        }
-
-        // Wait for the LSP server to be responsive (poll with a lightweight request).
-        const dummyUri = vscode.Uri.file(path.join(tmpDir, '__init__.py'));
-        fs.writeFileSync(dummyUri.fsPath, '', 'utf8');
-        const dummyDoc = await vscode.workspace.openTextDocument(dummyUri);
-        await vscode.window.showTextDocument(dummyDoc);
-        await pollUntilResult({
-            fn: async () => vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
-                'vscode.executeDocumentSymbolProvider',
-                dummyUri
-            ).then((r) => r, () => null),
-            predicate: (r) => r !== null && r !== undefined,
-            timeoutMs: SERVER_START_WAIT_MS,
-            intervalMs: SETUP_POLL_INTERVAL_MS,
-        });
+        await waitForLspReady();
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     });
 
