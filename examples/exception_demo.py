@@ -18,7 +18,7 @@ def main() -> None:
     # 1. KeyError — inspect exc, exc.args
     try:
         data: dict[str, int] = {"a": 1, "b": 2}
-        value = data["missing_key"]
+        _value = data["missing_key"]
     except KeyError as exc:
         print(f"Caught KeyError: {exc}")  # breakpoint here
 
