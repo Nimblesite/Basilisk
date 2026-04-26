@@ -4,6 +4,8 @@
 
 local M = {}
 
+local default_notify = vim.notify
+
 --- Log level names to vim.log.levels mapping.
 ---@type table<string, integer>
 local LEVELS = {
@@ -21,6 +23,20 @@ local min_level = vim.log.levels.INFO
 --- Optional file handle for file logging.
 ---@type file*?
 local log_file = nil
+
+--- Resolve the notification level for the current Neovim context.
+---@param level integer vim.log.levels.*
+---@return integer
+local function notify_level(level)
+  if
+    level == vim.log.levels.ERROR
+    and vim.notify == default_notify
+    and #vim.api.nvim_list_uis() == 0
+  then
+    return vim.log.levels.WARN
+  end
+  return level
+end
 
 --- Set the minimum log level.
 ---@param level string One of "trace", "debug", "info", "warn", "error".
@@ -57,7 +73,7 @@ local function log(level, fmt, ...)
     return
   end
   local msg = string.format(fmt, ...)
-  vim.notify("[basilisk] " .. msg, level)
+  vim.notify("[basilisk] " .. msg, notify_level(level))
   if log_file then
     log_file:write(string.format("%s [%s] %s\n", os.date("%Y-%m-%d %H:%M:%S"), level, msg))
     log_file:flush()

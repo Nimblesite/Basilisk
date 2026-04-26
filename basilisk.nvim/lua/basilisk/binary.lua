@@ -9,6 +9,8 @@
 --- 6. Fall back to OS PATH search
 --- 7. Auto-download from GitHub releases (fallback)
 
+local log = require("basilisk.log")
+
 local M = {}
 
 --- GitHub repo for release downloads.
@@ -147,13 +149,13 @@ function M.download()
   vim.fn.mkdir(dir, "p")
 
   local archive_path = dir .. "/" .. asset_name
-  vim.notify("[basilisk] downloading " .. version .. "...", vim.log.levels.INFO)
+  log.info("downloading %s...", version)
 
   local curl_ok = pcall(vim.fn.system, {
     "curl", "-sSL", "-o", archive_path, download_url,
   })
   if not curl_ok or vim.v.shell_error ~= 0 then
-    vim.notify("[basilisk] download failed", vim.log.levels.ERROR)
+    log.error("download failed")
     return nil, nil
   end
 
@@ -165,7 +167,7 @@ function M.download()
   end
 
   if vim.v.shell_error ~= 0 then
-    vim.notify("[basilisk] extraction failed", vim.log.levels.ERROR)
+    log.error("extraction failed")
     return nil, nil
   end
 
@@ -178,7 +180,7 @@ function M.download()
   end
 
   if is_executable(binary_path) then
-    vim.notify("[basilisk] installed " .. version, vim.log.levels.INFO)
+    log.info("installed %s", version)
     return binary_path, version
   end
 
@@ -194,10 +196,7 @@ function M.resolve(configured_path)
     if is_executable(configured_path) then
       return configured_path
     end
-    vim.notify(
-      "[basilisk] configured binary_path not found: " .. configured_path,
-      vim.log.levels.WARN
-    )
+    log.warn("configured binary_path not found: %s", configured_path)
   end
 
   -- 2. BASILISK_PATH environment variable.
@@ -269,12 +268,10 @@ function M.check_for_updates(binary_path)
       end
       if M.is_newer_version(current_version, data.tag_name) then
         vim.schedule(function()
-          vim.notify(
-            string.format(
-              "[basilisk] update available: %s → %s. Run :checkhealth basilisk for details.",
-              current_version, data.tag_name
-            ),
-            vim.log.levels.INFO
+          log.info(
+            "update available: %s → %s. Run :checkhealth basilisk for details.",
+            current_version,
+            data.tag_name
           )
         end)
       end
