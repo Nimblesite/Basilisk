@@ -12,7 +12,7 @@ async fn test_ws_diagnostic_structure_is_well_formed() -> TestResult<()> {
     let raw = fixture
         .wait_for_diagnostics()
         .await
-        .ok_or("no diagnostics")?;
+        ?;
     let json: serde_json::Value = serde_json::from_str(&raw)?;
 
     // Verify outer JSON-RPC envelope

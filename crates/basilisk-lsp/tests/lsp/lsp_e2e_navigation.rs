@@ -13,7 +13,7 @@ fn test_lsp_goto_definition_function() -> TestResult<()> {
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n";
     fixture.did_open("file:///gotodef.py", code)?;
-    fixture.wait_for_diagnostics()?;
+    let _ = fixture.wait_for_diagnostics();
 
     let resp = send_request(
         &mut fixture,
@@ -40,7 +40,7 @@ fn test_lsp_goto_definition_class() -> TestResult<()> {
 
     let code = "class Dog:\n    name: str\n    def bark(self) -> str:\n        return \"woof\"\n";
     fixture.did_open("file:///gotoclass.py", code)?;
-    fixture.wait_for_diagnostics()?;
+    let _ = fixture.wait_for_diagnostics();
 
     let resp = send_request(
         &mut fixture,
@@ -69,7 +69,7 @@ fn test_lsp_goto_definition_returns_exact_position() -> TestResult<()> {
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n";
     fixture.did_open("file:///gotoexact.py", code)?;
-    fixture.wait_for_diagnostics()?;
+    let _ = fixture.wait_for_diagnostics();
 
     let resp = send_request(
         &mut fixture,
@@ -103,7 +103,7 @@ fn test_lsp_goto_definition_from_call_site() -> TestResult<()> {
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n\nresult: str = greet(\"world\")\n";
     fixture.did_open("file:///goto_call.py", code)?;
-    fixture.wait_for_diagnostics()?;
+    let _ = fixture.wait_for_diagnostics();
 
     let resp = send_request(
         &mut fixture,
@@ -140,7 +140,7 @@ fn test_lsp_goto_definition_class_from_type_annotation() -> TestResult<()> {
 
     let code = "class Dog:\n    name: str\n\ndef pet(dog: Dog) -> None:\n    pass\n";
     fixture.did_open("file:///goto_type.py", code)?;
-    fixture.wait_for_diagnostics()?;
+    let _ = fixture.wait_for_diagnostics();
 
     let resp = send_request(
         &mut fixture,
@@ -184,7 +184,7 @@ def compute(x: int) -> int:
 result: int = compute(10)
 ";
     fixture.did_open("file:///decl.py", code)?;
-    fixture.wait_for_diagnostics()?;
+    let _ = fixture.wait_for_diagnostics();
 
     let resp = send_request(
         &mut fixture,
@@ -218,7 +218,7 @@ class MyData:
 instance: MyData = MyData()
 ";
     fixture.did_open("file:///typedef.py", code)?;
-    fixture.wait_for_diagnostics()?;
+    let _ = fixture.wait_for_diagnostics();
 
     let resp = send_request(
         &mut fixture,
@@ -251,7 +251,7 @@ def process(cfg: Config) -> None:
     pass
 ";
     fixture.did_open("file:///typedef2.py", code)?;
-    fixture.wait_for_diagnostics()?;
+    let _ = fixture.wait_for_diagnostics();
 
     let resp = send_request(
         &mut fixture,

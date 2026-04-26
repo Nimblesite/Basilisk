@@ -10,7 +10,7 @@ async fn test_ws_execute_command_organize_imports_returns_success() -> TestResul
     // Open a document with unsorted imports so the command has something to work with.
     let code = "import os\nimport sys\n\nx: int = 42\n";
     fixture.did_open("file:///ws_exec_cmd_org.py", code).await?;
-    fixture.wait_for_diagnostics().await?;
+    let _ = fixture.wait_for_diagnostics().await?;
 
     // Send workspace/executeCommand with basilisk.organizeImports.
     let resp = fixture

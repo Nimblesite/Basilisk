@@ -78,7 +78,7 @@ async fn test_ws_did_change_updates_diagnostics() -> TestResult<()> {
 
     let initial_code = "def greet(name):\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///test.py", initial_code).await?;
-    fixture.wait_for_diagnostics().await?;
+    let _ = fixture.wait_for_diagnostics().await?;
 
     // Change to fully annotated code.
     fixture
@@ -100,7 +100,7 @@ async fn test_ws_did_change_updates_diagnostics() -> TestResult<()> {
     let diag = fixture
         .wait_for_diagnostics()
         .await
-        .ok_or("no diagnostics after change")?;
+        ?;
 
     assert!(diag.contains("\"diagnostics\":[]"));
     Ok(())
@@ -113,14 +113,14 @@ async fn test_ws_did_close_clears_diagnostics() -> TestResult<()> {
 
     let python_code = "def greet(name):\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///test.py", python_code).await?;
-    fixture.wait_for_diagnostics().await?;
+    let _ = fixture.wait_for_diagnostics().await?;
 
     fixture.did_close("file:///test.py").await?;
 
     let diag = fixture
         .wait_for_diagnostics()
         .await
-        .ok_or("no diagnostics after close")?;
+        ?;
 
     assert!(diag.contains("\"diagnostics\":[]"));
     Ok(())
@@ -135,7 +135,7 @@ async fn test_ws_hover_on_error_location() -> TestResult<()> {
 
     let python_code = "def greet(name):\n    return f\"Hello, {name}!\"";
     fixture.did_open("file:///test.py", python_code).await?;
-    fixture.wait_for_diagnostics().await?;
+    let _ = fixture.wait_for_diagnostics().await?;
 
     let hover = fixture
         .request(
@@ -219,7 +219,7 @@ async fn test_ws_concurrent_document_handling() -> TestResult<()> {
 
     let mut diags = Vec::new();
     for _ in 0..2 {
-        if let Some(msg) = fixture.wait_for_diagnostics().await {
+        if let Ok(msg) = fixture.wait_for_diagnostics().await {
             diags.push(msg);
         }
     }
@@ -247,7 +247,7 @@ async fn test_ws_large_file_handling() -> TestResult<()> {
     let diag = fixture
         .wait_for_diagnostics()
         .await
-        .ok_or("no diagnostics published")?;
+        ?;
 
     assert!(diag.contains("\"method\":\"textDocument/publishDiagnostics\""));
     assert!(diag.matches("BSK-E0001").count() >= 50);

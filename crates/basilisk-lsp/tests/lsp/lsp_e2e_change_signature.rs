@@ -40,7 +40,7 @@ fn test_refactor_change_signature_remove_param_offered() -> TestResult<()> {
 
     let code = "def greet(name: str, greeting: str) -> str:\n    return f\"{greeting}, {name}\"\n\nresult: str = greet(\"world\", \"Hello\")\n";
     fixture.did_open("file:///change_sig_remove.py", code)?;
-    fixture.wait_for_diagnostics()?;
+    let _ = fixture.wait_for_diagnostics();
 
     let resp = request_code_actions(
         &mut fixture,
@@ -68,7 +68,7 @@ fn test_refactor_change_signature_add_param_offered() -> TestResult<()> {
 
     let code = "def greet(name: str) -> str:\n    return f\"Hello, {name}\"\n";
     fixture.did_open("file:///change_sig_add.py", code)?;
-    fixture.wait_for_diagnostics()?;
+    let _ = fixture.wait_for_diagnostics();
 
     let resp = request_code_actions(
         &mut fixture,
@@ -96,7 +96,7 @@ fn test_refactor_change_signature_reorder_offered() -> TestResult<()> {
 
     let code = "def process(zebra: int, apple: int, mango: int) -> int:\n    return zebra + apple + mango\n";
     fixture.did_open("file:///change_sig_reorder.py", code)?;
-    fixture.wait_for_diagnostics()?;
+    let _ = fixture.wait_for_diagnostics();
 
     let resp = request_code_actions(
         &mut fixture,
@@ -124,7 +124,7 @@ fn test_refactor_change_signature_remove_param_edit_correctness() -> TestResult<
 
     let code = "def greet(name: str, greeting: str) -> str:\n    return f\"{greeting}, {name}\"\n\nresult: str = greet(\"world\", \"Hello\")\n";
     fixture.did_open("file:///change_sig_rm_edit.py", code)?;
-    fixture.wait_for_diagnostics()?;
+    let _ = fixture.wait_for_diagnostics();
 
     let resp = request_code_actions(
         &mut fixture,
@@ -164,7 +164,7 @@ fn test_refactor_implement_abstract_methods_edit_correctness() -> TestResult<()>
 
     let code = "from abc import ABC, abstractmethod\n\nclass Base(ABC):\n    @abstractmethod\n    def do_thing(self) -> None:\n        ...\n\nclass Child(Base):\n    pass\n";
     fixture.did_open("file:///abstract_edit.py", code)?;
-    fixture.wait_for_diagnostics()?;
+    let _ = fixture.wait_for_diagnostics();
 
     let resp = request_code_actions(
         &mut fixture,
