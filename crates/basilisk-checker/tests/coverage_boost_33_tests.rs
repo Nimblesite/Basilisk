@@ -555,7 +555,7 @@ cfg.setting = 42
 /// would cause downstream panics or false diagnostics. We assert that
 /// EXACTLY the annotated-with-RHS mismatches are flagged and nothing else.
 #[test]
-fn e0014_mutant_annotation_and_rhs_required() -> Result<(), Box<dyn std::error::Error>> {
+fn mutation_safe_e0014_mutant_annotation_and_rhs_required() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 # Has annotation, has RHS → should fire
 bad: int = "hello"
@@ -589,7 +589,7 @@ good: int = 42
 /// Kills mutant: line 126 `.ends_with(".typealias")` → `&&`.
 /// `typing.TypeAlias` annotation must be skipped by e0014 (handled by e0048).
 #[test]
-fn e0014_mutant_typing_dot_typealias_skipped() -> Result<(), Box<dyn std::error::Error>> {
+fn mutation_safe_e0014_mutant_typing_dot_typealias_skipped() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 import typing
 
@@ -623,7 +623,7 @@ x: int = "hello"
 /// Kills mutant: line 127 `InferredType::Named` check for "ta".
 /// `TypeAlias as TA` must be skipped by e0014.
 #[test]
-fn e0014_mutant_ta_alias_skipped() -> Result<(), Box<dyn std::error::Error>> {
+fn mutation_safe_e0014_mutant_ta_alias_skipped() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias as TA
 
@@ -649,7 +649,7 @@ x: int = "hello"
 /// Kills mutant: line 220 `!param.has_annotation` → removing `!`.
 /// Annotated params must be included in `param_type_map` for local var checks.
 #[test]
-fn e0014_mutant_annotated_param_type_used() -> Result<(), Box<dyn std::error::Error>> {
+fn mutation_safe_e0014_mutant_annotated_param_type_used() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def func(x: int, y: str) -> None:
     # Local var assigned from param — type should propagate
@@ -675,7 +675,7 @@ def func(x: int, y: str) -> None:
 /// Kills mutants in `has_top_level_token` depth tracking.
 /// Nested brackets must NOT trigger `if`/`or`/`and` detection inside them.
 #[test]
-fn e0048_mutant_nested_brackets_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
+fn mutation_safe_e0048_mutant_nested_brackets_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias
 
@@ -733,7 +733,7 @@ BadTernary: TypeAlias = int if True else str
 /// on the second line where the annotation text would be corrupted by the
 /// off-by-one and assert the diagnostic message contains the correct type.
 #[test]
-fn e0014_mutant_multiline_annotation_extraction() -> Result<(), Box<dyn std::error::Error>> {
+fn mutation_safe_e0014_mutant_multiline_annotation_extraction() -> Result<(), Box<dyn std::error::Error>> {
     // The `\n` at position 0 means rfind returns Some(0).
     // Correct: line_start = 0 + 1 = 1 (skip newline)
     // Mutant:  line_start = 0 * 1 = 0 (include newline → corrupts annotation)

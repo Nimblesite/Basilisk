@@ -406,7 +406,7 @@ def check():
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
-fn mutant_e0014_every_literal_type() -> Result<(), Box<dyn std::error::Error>> {
+fn mutation_safe_e0014_every_literal_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 # Each literal type assigned to wrong annotation
 a: str = 42            # int → str FAIL
@@ -445,7 +445,7 @@ n: bytes = b"data"
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
-fn mutant_e0014_negative_and_float() -> Result<(), Box<dyn std::error::Error>> {
+fn mutation_safe_e0014_negative_and_float() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 # Negative int → float: OK
 a: float = -42

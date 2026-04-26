@@ -5,17 +5,7 @@
 # Exactly 7 standard targets: build, test, lint, fmt, clean, ci, setup
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup conformance package-vsix install-binaries
-.PHONY: mutation-list mutation-list-working mutation-list-recorded-scores
-.PHONY: mutation-run-group-fast mutation-run-group-small-crates mutation-run-group-all-crates
-.PHONY: mutation-run-crate mutation-run-crate-stubs mutation-run-crate-db mutation-run-crate-config
-.PHONY: mutation-run-crate-parser mutation-run-crate-mojo mutation-run-crate-checker mutation-run-crate-resolver
-.PHONY: mutation-list-checker-groups mutation-run-checker-rule
-.PHONY: mutation-run-checker-group-01 mutation-run-checker-group-02 mutation-run-checker-group-03
-.PHONY: mutation-run-checker-group-04 mutation-run-checker-group-05 mutation-run-checker-group-06
-.PHONY: mutation-run-checker-group-07 mutation-run-checker-group-08 mutation-run-checker-group-09
-.PHONY: mutation-run-checker-group-10 mutation-run-checker-group-11 mutation-run-checker-group-12
-.PHONY: mutation-run-checker-group-13 mutation-run-checker-group-14
+.PHONY: build test lint fmt clean ci setup conformance package-vsix install-binaries mutation-test
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -40,8 +30,9 @@ NVIM_DIR      := basilisk.nvim
 OPEN          ?= 0
 RULE          ?=
 MUTATION_DIR  := mutation_testing
-MUTATION_CRATE ?=
-MUTATION_RULE  ?= $(RULE)
+MUTATION_TEST_PACKAGE := basilisk-checker
+MUTATION_TEST_MARKER  := mutation_safe
+ALL           ?= 0
 COVERAGE_THRESHOLDS_FILE := coverage-thresholds.json
 
 # =============================================================================
@@ -133,102 +124,56 @@ install-binaries: ## Install all Basilisk binaries (basilisk, basilisk-profiler-
 # Mutation Testing Targets
 # =============================================================================
 
-mutation-list: ## List mutation crates, groups, and per-crate options
-	@bash $(MUTATION_DIR)/mutate.sh --list
-
-mutation-list-working: ## Show verified mutation slices that can be expanded over time
-	@sed -n '1,220p' $(MUTATION_DIR)/working_tests.md
-
-mutation-list-recorded-scores: ## Show recorded mutation scores
-	@column -s, -t < $(MUTATION_DIR)/mutation_scores.csv
-
-mutation-run-group-fast: ## Run fast mutation crate targets only
-	@$(MAKE) --no-print-directory mutation-run-crate-stubs
-	@$(MAKE) --no-print-directory mutation-run-crate-db
-	@$(MAKE) --no-print-directory mutation-run-crate-config
-	@$(MAKE) --no-print-directory mutation-run-crate-parser
-	@$(MAKE) --no-print-directory mutation-run-crate-mojo
-
-mutation-run-group-small-crates: mutation-run-group-fast ## Run small mutation crate targets
-
-mutation-run-group-all-crates: ## Run every mutation crate target; this is slow
-	@$(MAKE) --no-print-directory mutation-run-group-fast
-	@$(MAKE) --no-print-directory mutation-run-crate-checker
-	@$(MAKE) --no-print-directory mutation-run-crate-resolver
-
-mutation-run-crate: ## Run one mutation crate target (MUTATION_CRATE=checker|stubs|db|config|parser|mojo|resolver)
-	$(if $(strip $(MUTATION_CRATE)),,$(error MUTATION_CRATE is required. Example: make mutation-run-crate MUTATION_CRATE=checker))
-	@bash $(MUTATION_DIR)/mutate.sh --crate "$(MUTATION_CRATE)"
-
-mutation-run-crate-stubs: ## Run basilisk-stubs mutation tests
-	@bash $(MUTATION_DIR)/stubs.sh
-
-mutation-run-crate-db: ## Run basilisk-db mutation tests
-	@bash $(MUTATION_DIR)/db.sh
-
-mutation-run-crate-config: ## Run basilisk-config mutation tests
-	@bash $(MUTATION_DIR)/config.sh
-
-mutation-run-crate-parser: ## Run basilisk-parser mutation tests
-	@bash $(MUTATION_DIR)/parser.sh
-
-mutation-run-crate-mojo: ## Run basilisk-mojo mutation tests
-	@bash $(MUTATION_DIR)/mojo.sh
-
-mutation-run-crate-checker: ## Run all basilisk-checker mutation groups
-	@bash $(MUTATION_DIR)/checker.sh
-
-mutation-run-crate-resolver: ## Run basilisk-resolver mutation tests; expensive
-	@bash $(MUTATION_DIR)/resolver.sh
-
-mutation-list-checker-groups: ## List checker mutation groups and their mutant counts
-	@bash $(MUTATION_DIR)/checker.sh --list
-
-mutation-run-checker-rule: ## Run one checker rule mutation slice (MUTATION_RULE=e0014 or RULE=e0014)
-	$(if $(strip $(MUTATION_RULE)),,$(error MUTATION_RULE is required. Example: make mutation-run-checker-rule MUTATION_RULE=e0014))
-	@bash $(MUTATION_DIR)/checker.sh --rule "$(MUTATION_RULE)"
-
-mutation-run-checker-group-01: ## Run checker mutation group 01
-	@bash $(MUTATION_DIR)/checker.sh --group 1
-
-mutation-run-checker-group-02: ## Run checker mutation group 02
-	@bash $(MUTATION_DIR)/checker.sh --group 2
-
-mutation-run-checker-group-03: ## Run checker mutation group 03
-	@bash $(MUTATION_DIR)/checker.sh --group 3
-
-mutation-run-checker-group-04: ## Run checker mutation group 04
-	@bash $(MUTATION_DIR)/checker.sh --group 4
-
-mutation-run-checker-group-05: ## Run checker mutation group 05
-	@bash $(MUTATION_DIR)/checker.sh --group 5
-
-mutation-run-checker-group-06: ## Run checker mutation group 06
-	@bash $(MUTATION_DIR)/checker.sh --group 6
-
-mutation-run-checker-group-07: ## Run checker mutation group 07
-	@bash $(MUTATION_DIR)/checker.sh --group 7
-
-mutation-run-checker-group-08: ## Run checker mutation group 08
-	@bash $(MUTATION_DIR)/checker.sh --group 8
-
-mutation-run-checker-group-09: ## Run checker mutation group 09
-	@bash $(MUTATION_DIR)/checker.sh --group 9
-
-mutation-run-checker-group-10: ## Run checker mutation group 10
-	@bash $(MUTATION_DIR)/checker.sh --group 10
-
-mutation-run-checker-group-11: ## Run checker mutation group 11
-	@bash $(MUTATION_DIR)/checker.sh --group 11
-
-mutation-run-checker-group-12: ## Run checker mutation group 12
-	@bash $(MUTATION_DIR)/checker.sh --group 12
-
-mutation-run-checker-group-13: ## Run checker mutation group 13
-	@bash $(MUTATION_DIR)/checker.sh --group 13
-
-mutation-run-checker-group-14: ## Run checker mutation group 14
-	@bash $(MUTATION_DIR)/checker.sh --group 14
+mutation-test: ## Run mutation-safe tests by default. Use ALL=1 for the full checker suite.
+	@bash -euo pipefail -c '\
+		package="$(MUTATION_TEST_PACKAGE)"; \
+		marker="$(MUTATION_TEST_MARKER)"; \
+		mode="working"; \
+		test_filter="$$marker"; \
+		examine_re=""; \
+		if [ "$(ALL)" = "1" ]; then \
+			mode="all"; \
+			test_filter=""; \
+			examine_re="."; \
+		else \
+			tests_file="$$(mktemp)"; \
+			cargo test --package "$$package" "$$marker" -- --list > "$$tests_file"; \
+			examine_re="$$(python3 -c '"'"'import pathlib,re,sys; rules=[]; [rules.append(match.group(1)) for line in pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").splitlines() for match in [re.search(r"mutation_safe_(e[0-9]{4})", line)] if match and match.group(1) not in rules]; sys.exit("no mutation-safe tests found; mark tests as mutation_safe_eNNNN_*") if not rules else print(r"rules/(" + "|".join(rules) + r")[.]rs")'"'"' "$$tests_file")"; \
+			rm -f "$$tests_file"; \
+		fi; \
+		echo -e "\033[1m\033[0;36m▶ Mutation testing ($$mode): $$package\033[0m"; \
+		echo -e "\033[0;36m  [diag] Tests: $${test_filter:-all}\033[0m"; \
+		echo -e "\033[0;36m  [diag] Mutants: $$examine_re\033[0m"; \
+		if [ -n "$$test_filter" ]; then \
+			cargo test --package "$$package" "$$test_filter"; \
+		else \
+			cargo test --package "$$package"; \
+		fi; \
+		rm -rf "$(MUTATION_DIR)/mutants.out.$$mode".*; \
+		mutants_file="$$(mktemp)"; \
+		cargo mutants --list --package "$$package" --re "$$examine_re" --exclude-re "src/inference" > "$$mutants_file"; \
+		total="$$(wc -l < "$$mutants_file" | tr -d " ")"; \
+		if [ "$$total" -eq 0 ]; then \
+			echo -e "\033[0;31m✗ No mutants selected\033[0m"; \
+			rm -f "$$mutants_file"; \
+			exit 1; \
+		fi; \
+		i=0; \
+		while IFS= read -r mutant; do \
+			i=$$((i + 1)); \
+			exact_re="$$(python3 -c "import re, sys; print(\"^\" + re.escape(sys.argv[1]) + \"$$\")" "$$mutant")"; \
+			out_dir="$(MUTATION_DIR)/mutants.out.$$mode.$$(printf "%04d" "$$i")"; \
+			echo -e "\033[1m\033[0;36m▶ Mutant $$i/$$total\033[0m"; \
+			echo -e "\033[0;36m  [diag] $$mutant\033[0m"; \
+			if [ -n "$$test_filter" ]; then \
+				cargo mutants --jobs 1 --timeout 30 --baseline skip --package "$$package" --re "$$exact_re" --exclude-re "src/inference" --cargo-test-arg "$$test_filter" --output "$$out_dir"; \
+			else \
+				cargo mutants --jobs 1 --timeout 30 --baseline skip --package "$$package" --re "$$exact_re" --exclude-re "src/inference" --output "$$out_dir"; \
+			fi; \
+		done < "$$mutants_file"; \
+		rm -f "$$mutants_file"; \
+		echo -e "\033[0;32m✓ Mutation testing complete: $$total mutants checked\033[0m"; \
+	'
 
 # =============================================================================
 # Internal Recipes (private — not in .PHONY)
