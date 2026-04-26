@@ -44,7 +44,6 @@ pub mod hover;
 pub mod import_graph;
 pub mod import_resolver;
 pub mod inlay_hints;
-pub mod profiler;
 pub mod references;
 pub mod scope_tree;
 pub mod selection;

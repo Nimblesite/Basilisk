@@ -4,22 +4,19 @@
 
 use std::sync::Arc;
 
-use tokio::sync::RwLock;
 use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::{
     CallHierarchyServerCapability, CodeActionKind, CodeActionOptions, CodeActionProviderCapability,
     CodeLensOptions, ColorProviderCapability, CompletionOptions, DeclarationCapability,
-    DidChangeConfigurationParams, DidChangeWatchedFilesRegistrationOptions,
-    DidChangeWorkspaceFoldersParams, ExecuteCommandOptions, FileOperationFilter,
-    FileOperationPattern, FileOperationPatternKind, FileOperationRegistrationOptions,
-    FileSystemWatcher, FoldingRangeProviderCapability, GlobPattern, HoverProviderCapability,
-    InitializeParams, InitializeResult, MessageType, OneOf, Registration, RenameOptions,
-    SelectionRangeProviderCapability, SemanticTokensFullOptions, SemanticTokensLegend,
-    SemanticTokensOptions, SemanticTokensServerCapabilities, ServerCapabilities, ServerInfo,
-    SignatureHelpOptions, TextDocumentSyncCapability, TextDocumentSyncKind,
-    TypeDefinitionProviderCapability, Url, WorkDoneProgressOptions,
-    WorkspaceFileOperationsServerCapabilities, WorkspaceFoldersServerCapabilities,
-    WorkspaceServerCapabilities,
+    DidChangeConfigurationParams, DidChangeWatchedFilesRegistrationOptions, ExecuteCommandOptions,
+    FileOperationFilter, FileOperationPattern, FileOperationPatternKind,
+    FileOperationRegistrationOptions, FileSystemWatcher, FoldingRangeProviderCapability,
+    GlobPattern, HoverProviderCapability, InitializeParams, InitializeResult, MessageType, OneOf,
+    Registration, RenameOptions, SelectionRangeProviderCapability, SemanticTokensFullOptions,
+    SemanticTokensLegend, SemanticTokensOptions, SemanticTokensServerCapabilities,
+    ServerCapabilities, ServerInfo, SignatureHelpOptions, TextDocumentSyncCapability,
+    TextDocumentSyncKind, TypeDefinitionProviderCapability, Url, WorkDoneProgressOptions,
+    WorkspaceFileOperationsServerCapabilities, WorkspaceServerCapabilities,
 };
 use tower_lsp::Client;
 use tracing::info;
@@ -61,16 +58,8 @@ pub(super) async fn initialize(
     // Store workspace roots for later use by import resolution.
     (*server.workspace_roots.write().await).clone_from(&roots);
 
-    // Load project-level checker config (pyproject.toml / basilisk.json) so
-    // that rule severity overrides, per-module, and per-path settings match
-    // the CLI.
-    let checker_config = roots
-        .first()
-        .map(|r| basilisk_config::load_basilisk_config(r))
-        .unwrap_or_default();
-
     // Build the workspace index now so `initialized()` can scan immediately.
-    let index = WorkspaceIndex::new(roots, mode, checker_config);
+    let index = WorkspaceIndex::new(roots, mode);
     *server.index.write().await = Some(index);
 
     Ok(InitializeResult {
@@ -149,10 +138,6 @@ fn build_capabilities() -> ServerCapabilities {
         )),
         color_provider: Some(ColorProviderCapability::Simple(true)),
         workspace: Some(WorkspaceServerCapabilities {
-            workspace_folders: Some(WorkspaceFoldersServerCapabilities {
-                supported: Some(true),
-                change_notifications: Some(OneOf::Left(true)),
-            }),
             file_operations: Some(WorkspaceFileOperationsServerCapabilities {
                 will_rename: Some(FileOperationRegistrationOptions {
                     filters: vec![FileOperationFilter {
@@ -166,6 +151,7 @@ fn build_capabilities() -> ServerCapabilities {
                 }),
                 ..Default::default()
             }),
+            ..Default::default()
         }),
         ..Default::default()
     }
@@ -186,16 +172,10 @@ pub(super) async fn initialized(server: &LspServer) {
         register_file_watchers(&client).await;
     }));
 
-    // Read the analysis mode, then release the lock immediately so the
-    // message loop is not blocked while the workspace scan runs.
-    let mode = {
-        let guard = server.index.read().await;
-        guard.as_ref().map(|idx| idx.mode)
-    };
+    let guard = server.index.read().await;
+    let Some(index) = guard.as_ref() else { return };
 
-    let Some(mode) = mode else { return };
-
-    match mode {
+    match index.mode {
         AnalysisMode::OpenFilesOnly => {
             server
                 .client
@@ -210,41 +190,31 @@ pub(super) async fn initialized(server: &LspServer) {
                 .client
                 .log_message(MessageType::INFO, "Basilisk: scanning workspace files...")
                 .await;
+            let scan_result = scan_resolve_and_check(server, index).await;
+            drop(guard);
+            for (uri, diags) in scan_result.diagnostics {
+                server.client.publish_diagnostics(uri, diags, None).await;
+            }
+            server
+                .client
+                .log_message(
+                    MessageType::INFO,
+                    format!(
+                        "Basilisk: workspace scan complete — {} files, {} error(s)",
+                        scan_result.file_count, scan_result.error_count
+                    ),
+                )
+                .await;
 
-            // Spawn the workspace scan in the background so the server can
-            // respond to requests (documentSymbol, etc.) while scanning.
-            // tower-lsp v0.20 processes messages sequentially — blocking here
-            // prevents ALL request handling until the scan completes.
-            let scan_client = server.client.clone();
-            let scan_index = Arc::clone(&server.index);
-            let scan_roots = {
-                let roots = server.workspace_roots.read().await;
-                roots.clone()
-            };
-            drop(tokio::spawn(async move {
-                let guard = scan_index.read().await;
-                if let Some(index) = guard.as_ref() {
-                    let scan_result = scan_resolve_and_check_with_roots(index, &scan_roots);
-                    drop(guard);
-                    for (uri, diags) in scan_result.diagnostics {
-                        scan_client.publish_diagnostics(uri, diags, None).await;
-                    }
-                    scan_client
-                        .log_message(
-                            MessageType::INFO,
-                            format!(
-                                "Basilisk: workspace scan complete — {} files, {} error(s)",
-                                scan_result.file_count, scan_result.error_count
-                            ),
-                        )
-                        .await;
-                }
-            }));
+            // Send initial test discovery results.
+            send_initial_test_discovery(server).await;
+            return;
         }
     }
+    drop(guard);
 
-    // Spawn initial test discovery in the background.
-    spawn_initial_test_discovery(server);
+    // Send initial test discovery even in openFilesOnly mode.
+    send_initial_test_discovery(server).await;
 }
 
 /// Handle `didChangeConfiguration`: update the analysis mode on the index and
@@ -273,24 +243,6 @@ pub(super) async fn did_change_configuration(
         return;
     };
 
-    // Check whether the mode actually changed — skip the expensive write
-    // lock + workspace scan if it hasn't.  The background scan spawned by
-    // `initialized()` holds a READ lock on the index; acquiring a WRITE
-    // lock here would block the entire message loop until that scan
-    // finishes, preventing `textDocument/didOpen` and other requests from
-    // being processed.
-    let current_mode = {
-        let guard = server.index.read().await;
-        guard.as_ref().map(|idx| idx.mode)
-    };
-    if current_mode == Some(new_mode) {
-        info!(
-            ?new_mode,
-            "did_change_configuration: mode unchanged, skipping scan"
-        );
-        return;
-    }
-
     // Update the mode on the index.
     {
         let mut guard = server.index.write().await;
@@ -314,66 +266,6 @@ pub(super) async fn did_change_configuration(
         AnalysisMode::OpenFilesOnly => {
             clear_non_open_diagnostics(server).await;
         }
-    }
-}
-
-/// Handle `workspace/didChangeWorkspaceFolders`: update roots and re-scan.
-///
-/// When the editor adds or removes workspace folders, we update our root list
-/// and trigger a fresh workspace scan so import resolution and diagnostics
-/// reflect the new folder set.
-pub(super) async fn did_change_workspace_folders(
-    server: &LspServer,
-    params: DidChangeWorkspaceFoldersParams,
-) {
-    let event = params.event;
-
-    let mut roots = server.workspace_roots.write().await;
-
-    // Remove folders that were closed.
-    for removed in &event.removed {
-        if let Ok(path) = removed.uri.to_file_path() {
-            roots.retain(|r| r != &path);
-        }
-    }
-
-    // Add newly opened folders.
-    for added in &event.added {
-        if let Ok(path) = added.uri.to_file_path() {
-            if !roots.contains(&path) {
-                roots.push(path);
-            }
-        }
-    }
-
-    let updated_roots = roots.clone();
-    drop(roots);
-
-    info!(
-        roots = ?updated_roots,
-        added = event.added.len(),
-        removed = event.removed.len(),
-        "workspace folders changed"
-    );
-
-    // Rebuild the workspace index with the new root set.
-    let mode = {
-        let guard = server.index.read().await;
-        guard
-            .as_ref()
-            .map_or(AnalysisMode::OpenFilesOnly, |idx| idx.mode)
-    };
-
-    let checker_config = updated_roots
-        .first()
-        .map(|r| basilisk_config::load_basilisk_config(r))
-        .unwrap_or_default();
-    let index = WorkspaceIndex::new(updated_roots, mode, checker_config);
-    *server.index.write().await = Some(index);
-
-    // Re-scan if in a whole-workspace analysis mode.
-    if matches!(mode, AnalysisMode::WholeModule | AnalysisMode::CrossModule) {
-        run_workspace_scan(server, mode).await;
     }
 }
 
@@ -457,64 +349,37 @@ struct ScanResult {
 /// This is the single source of truth for the scan+resolve+crossmod pipeline,
 /// used by both `initialized()` and `run_workspace_scan()`.
 async fn scan_resolve_and_check(server: &LspServer, index: &WorkspaceIndex) -> ScanResult {
-    let roots = server.workspace_roots.read().await;
-    let result = scan_resolve_and_check_with_roots(index, &roots);
-    drop(roots);
-    result
-}
-
-/// Core scan logic that takes roots directly instead of `&LspServer`.
-///
-/// This allows the scan to run in a spawned task with cloned data.
-fn scan_resolve_and_check_with_roots(
-    index: &WorkspaceIndex,
-    roots: &[std::path::PathBuf],
-) -> ScanResult {
-    let (_results, file_count, _initial_error_count) = index.scan();
+    let (results, file_count, error_count) = index.scan();
 
     // Resolve imports for all scanned files.
+    let roots = server.workspace_roots.read().await;
     let config = roots
         .first()
         .map(|r| crate::config::load_config(r))
         .unwrap_or_default();
 
     // Detect uv project, build package registry and discover workspace members.
-    let registry = build_uv_registry(roots);
+    let registry = build_uv_registry(&roots);
     let mut search_paths =
-        crate::import_resolver::ImportSearchPaths::from_config(roots, &config, registry);
-    search_paths.workspace_members = discover_workspace_members(roots);
+        crate::import_resolver::ImportSearchPaths::from_config(&roots, &config, registry);
+    search_paths.workspace_members = discover_workspace_members(&roots);
     crate::import_resolver::resolve_workspace_imports(index, &search_paths);
+    drop(roots);
 
-    // Re-check all files now that imports are resolved. The initial scan()
-    // generates diagnostics before workspace members are known, so BSK-E0010
-    // fires for imports that are actually resolvable via workspace members.
+    // Cross-module: populate imported symbols and rebuild import graph, then re-check.
     let diagnostics = if matches!(index.mode, AnalysisMode::CrossModule) {
         crate::cross_module::populate_cross_module_symbols(index);
         index.build_import_graph();
         info!("cross-module symbol population complete");
         recheck_with_cross_module_symbols(index)
     } else {
-        recheck_with_cross_module_symbols(index)
+        results
     };
-
-    // Recount errors after re-check (resolved imports reduce false E0010s).
-    let final_error_count: usize = diagnostics
-        .iter()
-        .map(|(_, diags)| {
-            diags
-                .iter()
-                .filter(|d| {
-                    d.severity
-                        .is_none_or(|s| s == tower_lsp::lsp_types::DiagnosticSeverity::ERROR)
-                })
-                .count()
-        })
-        .sum();
 
     ScanResult {
         diagnostics,
         file_count,
-        error_count: final_error_count,
+        error_count,
     }
 }
 
@@ -549,8 +414,7 @@ fn recheck_with_cross_module_symbols(
             continue;
         };
 
-        let file_config = index.config_for_file(entry.key());
-        let checker_diags = basilisk_checker::check_with_config(resolved, file_config);
+        let checker_diags = basilisk_checker::check(resolved);
         let lsp_diags: Vec<tower_lsp::lsp_types::Diagnostic> = checker_diags
             .iter()
             .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &entry.text))
@@ -573,92 +437,35 @@ fn recheck_with_cross_module_symbols(
 /// a `src/` subdirectory (common Python project layout) and adds it; otherwise
 /// adds the member directory itself.
 ///
-/// In monorepo layouts (e.g. `ai_cms/agent-backend/`), `pyproject.toml` may
-/// not be at the workspace root itself. If no uv workspace is found at a root,
-/// we search one level of subdirectories for `pyproject.toml` with `src/`
-/// layouts and add those as source roots.
-///
-/// Returns an empty vec if no workspace members are found.
+/// Returns an empty vec if this is not a uv workspace or parsing fails.
 fn discover_workspace_members(roots: &[std::path::PathBuf]) -> Vec<std::path::PathBuf> {
     let mut members = Vec::new();
 
     for root in roots {
-        // Try uv workspace at this root first.
-        if let Ok(Some(workspace)) = basilisk_uv::parse_uv_workspace(root) {
-            for member_dir in &workspace.members {
-                add_source_root(&mut members, member_dir);
-            }
-
-            if !workspace.members.is_empty() {
-                info!(
-                    root = %root.display(),
-                    member_count = workspace.members.len(),
-                    "discovered uv workspace members"
-                );
-                continue;
-            }
-        }
-
-        // Root itself is a Python project (pyproject.toml at the workspace
-        // root, not inside a uv workspace). Add its source root so first-party
-        // imports resolve under a `src/` layout.
-        if root.join("pyproject.toml").is_file() {
-            add_source_root(&mut members, root);
-            info!(
-                root = %root.display(),
-                "discovered project at workspace root"
-            );
-        }
-
-        // Also search subdirectories for projects. This handles monorepos
-        // where the IDE root (e.g. `ai_cms/`) is a parent of the actual
-        // Python project (e.g. `ai_cms/agent-backend/`).
-        let Ok(entries) = std::fs::read_dir(root) else {
+        let Ok(Some(workspace)) = basilisk_uv::parse_uv_workspace(root) else {
             continue;
         };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if !path.is_dir() || !path.join("pyproject.toml").is_file() {
-                continue;
-            }
 
-            // Try uv workspace in the subdirectory.
-            if let Ok(Some(workspace)) = basilisk_uv::parse_uv_workspace(&path) {
-                for member_dir in &workspace.members {
-                    add_source_root(&mut members, member_dir);
-                }
-                if !workspace.members.is_empty() {
-                    info!(
-                        root = %path.display(),
-                        member_count = workspace.members.len(),
-                        "discovered uv workspace members in subdirectory"
-                    );
-                    continue;
-                }
+        for member_dir in &workspace.members {
+            // Prefer src/ layout if it exists.
+            let src_dir = member_dir.join("src");
+            if src_dir.is_dir() {
+                members.push(src_dir);
+            } else {
+                members.push(member_dir.clone());
             }
+        }
 
-            // No uv workspace, but has pyproject.toml — treat as a project.
-            add_source_root(&mut members, &path);
+        if !workspace.members.is_empty() {
             info!(
-                path = %path.display(),
-                "discovered project subdirectory"
+                root = %root.display(),
+                member_count = workspace.members.len(),
+                "discovered uv workspace members"
             );
         }
     }
 
     members
-}
-
-/// Add a project directory's source root to the member list.
-///
-/// Prefers `src/` layout if it exists, otherwise adds the directory itself.
-fn add_source_root(members: &mut Vec<std::path::PathBuf>, project_dir: &std::path::Path) {
-    let src_dir = project_dir.join("src");
-    if src_dir.is_dir() {
-        members.push(src_dir);
-    } else {
-        members.push(project_dir.to_path_buf());
-    }
 }
 
 /// Detect a uv project and build a [`PackageRegistry`] from its lock file.
@@ -730,8 +537,7 @@ pub(super) async fn rebuild_registry_and_resolve(server: &LspServer) {
         .iter_mut()
         .filter_map(|mut entry| {
             let resolved = entry.resolved.as_ref()?;
-            let file_config = index.config_for_file(entry.key());
-            let checker_diags = basilisk_checker::check_with_config(resolved, file_config);
+            let checker_diags = basilisk_checker::check(resolved);
             let lsp_diags: Vec<tower_lsp::lsp_types::Diagnostic> = checker_diags
                 .iter()
                 .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &entry.text))
@@ -791,157 +597,30 @@ async fn update_test_explorer_config(server: &LspServer, settings: &serde_json::
     info!(?config, "test explorer config updated");
 }
 
-/// Spawn initial test discovery in the background so the message loop stays
-/// responsive.  This follows the same pattern as `register_file_watchers`.
-fn spawn_initial_test_discovery(server: &LspServer) {
-    let client = server.client.clone();
-    let index = Arc::clone(&server.index);
-    let roots_lock = &server.workspace_roots;
-
-    // Read the workspace root synchronously (fast, just a lock read).
-    // We can't move the RwLock into the spawned task, so read it here.
-    let root = {
-        // Safety: we're in an async context but this is a tokio RwLock.
-        // Use try_read since we're in a sync fn — if the lock is held,
-        // skip discovery rather than blocking.
-        let Some(guard) = roots_lock.try_read().ok() else {
-            return;
-        };
-        guard.first().cloned()
-    };
-
-    let Some(root) = root else { return };
-
-    drop(tokio::spawn(async move {
-        let items = crate::test_discovery::discover_workspace_tests(&root);
-        let count: usize = items
-            .iter()
-            .map(|file_item| file_item.children.len() + 1)
-            .sum();
-        info!(count, "initial test discovery complete");
-
-        let value = serde_json::json!({ "items": items });
-        client
-            .send_notification::<super::test_handlers::TestDiscoveryNotification>(value)
-            .await;
-
-        // Check pytest availability using the cloned index.
-        check_pytest_from_index(&client, &index, &root).await;
-    }));
-}
-
-/// Check pytest / pytest-cov availability using a cloned index Arc.
-///
-/// Standalone helper so `spawn_initial_test_discovery` can run without
-/// holding a reference to `LspServer`.
-async fn check_pytest_from_index(
-    client: &Client,
-    index: &Arc<RwLock<Option<WorkspaceIndex>>>,
-    root: &std::path::Path,
-) {
-    // We need workspace roots to detect uv — use root directly.
-    let roots = vec![root.to_path_buf()];
-    let is_uv = basilisk_uv::detect_uv_project(&roots).is_some();
-    if !is_uv {
+/// Send initial test discovery results to the client after workspace initialization.
+async fn send_initial_test_discovery(server: &LspServer) {
+    let roots = server.workspace_roots.read().await;
+    let Some(root) = roots.first().cloned() else {
         return;
-    }
-
-    let has_pytest = {
-        let guard = index.read().await;
-        guard.as_ref().is_none_or(|idx| {
-            idx.registry
-                .as_ref()
-                .is_none_or(|reg| reg.has_package("pytest"))
-        })
     };
+    drop(roots);
 
-    if !has_pytest {
-        client
-            .log_message(
-                MessageType::WARNING,
-                "Basilisk: pytest not found in uv.lock — use the quick fix to install it"
-                    .to_owned(),
-            )
-            .await;
+    let items = crate::test_discovery::discover_workspace_tests(&root);
+    let count: usize = items
+        .iter()
+        .map(|file_item| file_item.children.len() + 1)
+        .sum();
+    info!(count, "initial test discovery complete");
 
-        let test_files = crate::test_discovery::discover_test_files(root);
-        for path in test_files {
-            let Ok(uri) = Url::from_file_path(&path) else {
-                continue;
-            };
-            let diag = super::test_handlers::make_pytest_not_found_diagnostic();
-            client.publish_diagnostics(uri, vec![diag], None).await;
-        }
-    }
+    super::test_handlers::send_test_discovery_notification(server, items).await;
 
-    let has_pytest_cov = {
-        let guard = index.read().await;
-        guard.as_ref().is_none_or(|idx| {
-            idx.registry
-                .as_ref()
-                .is_none_or(|reg| reg.has_package("pytest_cov"))
-        })
-    };
-
-    if !has_pytest_cov {
-        client
-            .log_message(
-                MessageType::INFO,
-                "Basilisk: pytest-cov not found in uv.lock — install it for coverage support"
-                    .to_owned(),
-            )
-            .await;
-    }
+    // Check if pytest is available in the uv registry.
+    super::test_handlers::check_pytest_availability(server).await;
+    super::test_handlers::check_pytest_cov_availability(server).await;
 }
 
-/// Handle the `shutdown` request: stop all debug and profiling sessions.
+/// Handle the `shutdown` request: stop all debug sessions.
 pub(super) async fn shutdown(server: &LspServer) -> LspResult<()> {
     server.debug_manager.stop_all().await;
-    server.profiler_manager.stop_all().await;
     Ok(())
-}
-
-#[cfg(test)]
-#[expect(
-    clippy::unwrap_used,
-    reason = "test-only code: unwrap acceptable in unit tests"
-)]
-mod tests {
-    use super::discover_workspace_members;
-    use std::sync::atomic::{AtomicU64, Ordering};
-
-    static TEST_CTR: AtomicU64 = AtomicU64::new(0);
-
-    fn unique_tmp(prefix: &str) -> std::path::PathBuf {
-        let n = TEST_CTR.fetch_add(1, Ordering::Relaxed);
-        std::env::temp_dir().join(format!("{prefix}_{n}_{}", std::process::id()))
-    }
-
-    /// Regression: when the workspace root itself is a Python project with a
-    /// `src/` layout (no uv workspace, no subdirectory projects), the `src/`
-    /// directory must be added to workspace members so first-party imports
-    /// like `from agent_backend.config import settings` resolve.
-    #[test]
-    fn root_src_layout_project_is_discovered() {
-        let root = unique_tmp("bsk_init_root_src");
-        let src = root.join("src");
-        let pkg = src.join("mypkg");
-        std::fs::create_dir_all(&pkg).unwrap();
-        std::fs::write(pkg.join("__init__.py"), "").unwrap();
-        std::fs::write(pkg.join("config.py"), "settings = 1\n").unwrap();
-        std::fs::write(
-            root.join("pyproject.toml"),
-            "[project]\nname = \"mypkg\"\nversion = \"0.1.0\"\n",
-        )
-        .unwrap();
-
-        let members = discover_workspace_members(std::slice::from_ref(&root));
-
-        assert!(
-            members.iter().any(|m| m == &src),
-            "expected src/ to be in workspace_members, got: {members:?}"
-        );
-
-        let _ = std::fs::remove_dir_all(&root);
-    }
 }

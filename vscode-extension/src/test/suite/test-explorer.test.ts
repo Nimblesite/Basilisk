@@ -20,12 +20,15 @@ import * as fs from "fs";
 import { type LanguageClient } from "vscode-languageclient/node";
 import { getStore } from "../../extension";
 import {
-    WAIT_MS,
-    setupLspTestSuite,
-    teardownLspTestSuite,
-    pollUntilResult,
-    closeAllEditors,
+  SERVER_START_WAIT_MS,
+  setupLspTestSuite,
+  teardownLspTestSuite,
+  pollUntilResult,
+  closeAllEditors,
 } from "./test-helpers";
+
+const SUITE_SETUP_TIMEOUT_MS = 30_000;
+const TEST_TIMEOUT_MS = 15_000;
 
 /** Shape of a test item received from the LSP server. */
 interface LspTestItem {
@@ -93,19 +96,22 @@ async function discoverTests(
 
 // eslint-disable-next-line max-lines-per-function
 suite("Basilisk Test Explorer E2E Tests", function () {
+  this.timeout(SUITE_SETUP_TIMEOUT_MS);
 
   let context: { tmpDir: string; basiliskBinary: string };
 
   suiteSetup(async function () {
+    this.timeout(SUITE_SETUP_TIMEOUT_MS);
     context = await setupLspTestSuite("test-explorer");
 
     const store = getStore();
     assert.ok(store, "Store should exist after activation");
-    const result = await store.ensureLspReadyPromise(WAIT_MS);
+    const result = await store.ensureLspReadyPromise(SERVER_START_WAIT_MS);
     assert.ok(result.ok, "LSP should be running");
   });
 
   suiteTeardown(async function () {
+    this.timeout(SUITE_SETUP_TIMEOUT_MS);
     await teardownLspTestSuite(context?.tmpDir);
   });
 
@@ -213,58 +219,66 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   // ── Settings Enum Validation ───────────────────────────────────────
 
   test("testExplorer.framework accepts pytest value", async function () {
+    this.timeout(TEST_TIMEOUT_MS);
     const cfg = vscode.workspace.getConfiguration("basilisk");
     await cfg.update("testExplorer.framework", "pytest", vscode.ConfigurationTarget.Workspace);
-    assert.strictEqual(vscode.workspace.getConfiguration("basilisk").get<string>("testExplorer.framework"), "pytest");
+    assert.strictEqual(cfg.get<string>("testExplorer.framework"), "pytest");
     await cfg.update("testExplorer.framework", undefined, vscode.ConfigurationTarget.Workspace);
   });
 
   test("testExplorer.framework accepts unittest value", async function () {
+    this.timeout(TEST_TIMEOUT_MS);
     const cfg = vscode.workspace.getConfiguration("basilisk");
     await cfg.update("testExplorer.framework", "unittest", vscode.ConfigurationTarget.Workspace);
-    assert.strictEqual(vscode.workspace.getConfiguration("basilisk").get<string>("testExplorer.framework"), "unittest");
+    assert.strictEqual(cfg.get<string>("testExplorer.framework"), "unittest");
     await cfg.update("testExplorer.framework", undefined, vscode.ConfigurationTarget.Workspace);
   });
 
   test("testExplorer.pytestPath can be overridden", async function () {
+    this.timeout(TEST_TIMEOUT_MS);
     const cfg = vscode.workspace.getConfiguration("basilisk");
     await cfg.update("testExplorer.pytestPath", "/custom/pytest", vscode.ConfigurationTarget.Workspace);
-    assert.strictEqual(vscode.workspace.getConfiguration("basilisk").get<string>("testExplorer.pytestPath"), "/custom/pytest");
+    assert.strictEqual(cfg.get<string>("testExplorer.pytestPath"), "/custom/pytest");
     await cfg.update("testExplorer.pytestPath", undefined, vscode.ConfigurationTarget.Workspace);
   });
 
   test("testExplorer.args can be set to custom arguments", async function () {
+    this.timeout(TEST_TIMEOUT_MS);
     const cfg = vscode.workspace.getConfiguration("basilisk");
     await cfg.update("testExplorer.args", ["-v", "--tb=long"], vscode.ConfigurationTarget.Workspace);
-    const args = vscode.workspace.getConfiguration("basilisk").get<string[]>("testExplorer.args");
+    const args = cfg.get<string[]>("testExplorer.args");
     assert.deepStrictEqual(args, ["-v", "--tb=long"]);
     await cfg.update("testExplorer.args", undefined, vscode.ConfigurationTarget.Workspace);
   });
 
   test("testExplorer.useUvRun can be disabled", async function () {
+    this.timeout(TEST_TIMEOUT_MS);
     const cfg = vscode.workspace.getConfiguration("basilisk");
     await cfg.update("testExplorer.useUvRun", false, vscode.ConfigurationTarget.Workspace);
-    assert.strictEqual(vscode.workspace.getConfiguration("basilisk").get<boolean>("testExplorer.useUvRun"), false);
+    assert.strictEqual(cfg.get<boolean>("testExplorer.useUvRun"), false);
     await cfg.update("testExplorer.useUvRun", undefined, vscode.ConfigurationTarget.Workspace);
   });
 
   test("testExplorer.enabled can be disabled", async function () {
+    this.timeout(TEST_TIMEOUT_MS);
     const cfg = vscode.workspace.getConfiguration("basilisk");
     await cfg.update("testExplorer.enabled", false, vscode.ConfigurationTarget.Workspace);
-    assert.strictEqual(vscode.workspace.getConfiguration("basilisk").get<boolean>("testExplorer.enabled"), false);
+    assert.strictEqual(cfg.get<boolean>("testExplorer.enabled"), false);
     await cfg.update("testExplorer.enabled", undefined, vscode.ConfigurationTarget.Workspace);
   });
 
   test("testExplorer.autoDiscoverOnSave can be disabled", async function () {
+    this.timeout(TEST_TIMEOUT_MS);
     const cfg = vscode.workspace.getConfiguration("basilisk");
     await cfg.update("testExplorer.autoDiscoverOnSave", false, vscode.ConfigurationTarget.Workspace);
-    assert.strictEqual(vscode.workspace.getConfiguration("basilisk").get<boolean>("testExplorer.autoDiscoverOnSave"), false);
+    assert.strictEqual(cfg.get<boolean>("testExplorer.autoDiscoverOnSave"), false);
     await cfg.update("testExplorer.autoDiscoverOnSave", undefined, vscode.ConfigurationTarget.Workspace);
   });
 
   // ── Test Discovery: Workspace ──────────────────────────────────────
 
   test("discoverTests returns items for workspace with test files", async function () {
+    this.timeout(TEST_TIMEOUT_MS);
     const wsRoot = requireWorkspaceRoot();
     const testFilePath = writeTestFile(
       wsRoot,
@@ -283,6 +297,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   // ── Test Discovery: Single File Scoped ─────────────────────────────
 
   test("discoverTests with URI scopes to single file", async function () {
+    this.timeout(TEST_TIMEOUT_MS);
     const wsRoot = requireWorkspaceRoot();
     const testFilePath = writeTestFile(
       wsRoot,
@@ -305,6 +320,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   // ── Test Discovery: Pytest Functions ───────────────────────────────
 
   test("discovery finds pytest functions with correct structure", async function () {
+    this.timeout(TEST_TIMEOUT_MS);
     const wsRoot = requireWorkspaceRoot();
     const testFilePath = writeTestFile(
       wsRoot,
@@ -359,6 +375,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   // ── Test Discovery: Test Class with Methods ────────────────────────
 
   test("discovery finds test class with child methods", async function () {
+    this.timeout(TEST_TIMEOUT_MS);
     const wsRoot = requireWorkspaceRoot();
     const testFilePath = writeTestFile(
       wsRoot,
@@ -407,6 +424,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   // ── Test Discovery: unittest.TestCase ──────────────────────────────
 
   test("discovery finds unittest.TestCase subclass with methods", async function () {
+    this.timeout(TEST_TIMEOUT_MS);
     const wsRoot = requireWorkspaceRoot();
     const testFilePath = writeTestFile(
       wsRoot,
@@ -449,6 +467,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   // ── Test Discovery: Mixed Functions and Classes ────────────────────
 
   test("discovery finds both free functions and class methods", async function () {
+    this.timeout(TEST_TIMEOUT_MS);
     const wsRoot = requireWorkspaceRoot();
     const testFilePath = writeTestFile(
       wsRoot,
@@ -487,6 +506,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   // ── Test Discovery: Line Numbers ───────────────────────────────────
 
   test("discovery reports correct line numbers for test items", async function () {
+    this.timeout(TEST_TIMEOUT_MS);
     const wsRoot = requireWorkspaceRoot();
     const testFilePath = writeTestFile(
       wsRoot,
@@ -530,6 +550,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   // ── Test Discovery: Empty File ─────────────────────────────────────
 
   test("discovery returns empty items for file with no tests", async function () {
+    this.timeout(TEST_TIMEOUT_MS);
     const wsRoot = requireWorkspaceRoot();
     const testFilePath = writeTestFile(
       wsRoot,
@@ -552,6 +573,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   // ── Test Discovery: Non-test File ──────────────────────────────────
 
   test("discovery returns empty for non-test file pattern", async function () {
+    this.timeout(TEST_TIMEOUT_MS);
     const wsRoot = requireWorkspaceRoot();
     // File does not match test_*.py or *_test.py.
     const filePath = writeTestFile(
@@ -579,6 +601,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   // ── Test Discovery: *_test.py Naming Convention ────────────────────
 
   test("discovery finds tests in files matching *_test.py convention", async function () {
+    this.timeout(TEST_TIMEOUT_MS);
     const wsRoot = requireWorkspaceRoot();
     const testFilePath = writeTestFile(
       wsRoot,
@@ -602,6 +625,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   // ── Test Discovery: Test IDs ───────────────────────────────────────
 
   test("discovery generates correct test IDs with :: separator", async function () {
+    this.timeout(TEST_TIMEOUT_MS);
     const wsRoot = requireWorkspaceRoot();
     const testFilePath = writeTestFile(
       wsRoot,
@@ -648,6 +672,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   // ── Test Discovery: Multiple Files ─────────────────────────────────
 
   test("workspace discovery finds tests across multiple files", async function () {
+    this.timeout(TEST_TIMEOUT_MS);
     const wsRoot = requireWorkspaceRoot();
     const file1 = writeTestFile(wsRoot, "test_multi_a.py", "def test_a() -> None:\n    pass\n");
     const file2 = writeTestFile(wsRoot, "test_multi_b.py", "def test_b() -> None:\n    pass\n");
@@ -671,6 +696,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   // ── Test Run: runTests Command ─────────────────────────────────────
 
   test("runTests command returns structured result", async function () {
+    this.timeout(TEST_TIMEOUT_MS);
     const client = requireClient();
 
     // Run with empty test IDs — should return a result (possibly an error).
@@ -695,6 +721,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   // ── Test Run: runTestFile Command ──────────────────────────────────
 
   test("runTestFile command accepts a URI argument", async function () {
+    this.timeout(TEST_TIMEOUT_MS);
     const client = requireClient();
     const wsRoot = requireWorkspaceRoot();
     const testFilePath = writeTestFile(
@@ -725,6 +752,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   // ── Test Run: debugTest Command Validates Input ────────────────────
 
   test("debugTest command with empty testId returns null", async function () {
+    this.timeout(TEST_TIMEOUT_MS);
     const client = requireClient();
 
     const result = await client.sendRequest("workspace/executeCommand", {
@@ -739,6 +767,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   // ── Discovery Result Shape Validation ──────────────────────────────
 
   test("discovered items have all required fields", async function () {
+    this.timeout(TEST_TIMEOUT_MS);
     const wsRoot = requireWorkspaceRoot();
     const testFilePath = writeTestFile(
       wsRoot,
@@ -772,6 +801,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   // ── Discovery Notification ─────────────────────────────────────────
 
   test("basilisk/testDiscoveryResult notification is received on open", async function () {
+    this.timeout(TEST_TIMEOUT_MS);
     const client = requireClient();
 
     // The notification is sent on workspace init. We can verify the client
@@ -801,6 +831,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   // ── Discovery: Deeply Nested Class ─────────────────────────────────
 
   test("discovery handles class with many test methods", async function () {
+    this.timeout(TEST_TIMEOUT_MS);
     const wsRoot = requireWorkspaceRoot();
     const methods = Array.from({ length: 10 }, (_, i) =>
       `    def test_method_${i}(self) -> None:\n        pass`
@@ -837,9 +868,10 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   });
 
   test("testExplorer.coverageEnabled can be enabled", async function () {
+    this.timeout(TEST_TIMEOUT_MS);
     const cfg = vscode.workspace.getConfiguration("basilisk");
     await cfg.update("testExplorer.coverageEnabled", true, vscode.ConfigurationTarget.Workspace);
-    assert.strictEqual(vscode.workspace.getConfiguration("basilisk").get<boolean>("testExplorer.coverageEnabled"), true);
+    assert.strictEqual(cfg.get<boolean>("testExplorer.coverageEnabled"), true);
     await cfg.update("testExplorer.coverageEnabled", undefined, vscode.ConfigurationTarget.Workspace);
   });
 
@@ -870,6 +902,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   // ── Coverage Command Execution ─────────────────────────────────────
 
   test("runTestsCoverage command returns structured result", async function () {
+    this.timeout(TEST_TIMEOUT_MS);
     const client = requireClient();
 
     try {
@@ -891,6 +924,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   // ── Coverage Notification Handler ──────────────────────────────────
 
   test("basilisk/coverageResult notification handler can be registered", async function () {
+    this.timeout(TEST_TIMEOUT_MS);
     const client = requireClient();
 
     let notificationReceived = false;

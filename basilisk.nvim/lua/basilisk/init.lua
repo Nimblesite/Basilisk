@@ -27,7 +27,7 @@ local function register_lsp_commands()
   end
 end
 
---- Register notification handlers for basilisk/* server-push notifications.
+--- Register the basilisk/moduleChanged notification handler.
 local function register_notification_handlers()
   vim.lsp.handlers["basilisk/moduleChanged"] = function(_err, _result, _ctx, _config)
     local modules_ok, modules_panel = pcall(require, "basilisk.modules")
@@ -38,31 +38,6 @@ local function register_notification_handlers()
     if health_ok then
       health_panel.refresh()
     end
-  end
-
-  -- Profiler progress: update statusline while a session is running.
-  vim.lsp.handlers["basilisk/profiler/progress"] = function(_err, result, _ctx, _config)
-    if not result then
-      return
-    end
-    local statusline = require("basilisk.statusline")
-    local samples = result.totalSamples or 0
-    local elapsed = result.elapsedSeconds or 0
-    local pid = result.pid or 0
-    log.info("profiling PID %d: %ds, %d samples", pid, elapsed, samples)
-    statusline.set_profiler_status(result)
-  end
-
-  -- Memory timeline: periodic snapshot data during auto-snapshot mode.
-  vim.lsp.handlers["basilisk/memory/timeline"] = function(_err, result, _ctx, _config)
-    if not result then
-      return
-    end
-    log.info(
-      "memory timeline: current=%d peak=%d",
-      result.currentMemory or 0,
-      result.peakMemory or 0
-    )
   end
 end
 
@@ -99,16 +74,7 @@ function M.setup(opts)
   register_notification_handlers()
 
   -- Start the LSP client.
-  local started = lsp.start(M.config)
-
-  -- Check for updates asynchronously after successful start.
-  if started then
-    local bin = require("basilisk.binary")
-    local bin_path = bin.resolve(M.config.binary_path)
-    if bin_path then
-      bin.check_for_updates(bin_path)
-    end
-  end
+  lsp.start(M.config)
 
   -- Register user commands.
   commands.register(M.config)

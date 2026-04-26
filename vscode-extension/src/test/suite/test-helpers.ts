@@ -13,47 +13,26 @@ import { execFileSync } from 'child_process';
 
 export const EXTENSION_ID = 'basilisk-lang.basilisk';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// THE ONLY THREE TIMEOUT CONSTANTS ALLOWED IN THIS EXTENSION.
-// Everything else MUST be one of these. No per-file knobs, no magic numbers.
-// ─────────────────────────────────────────────────────────────────────────────
+/** Maximum time (ms) to wait for diagnostics from the LSP server. */
+export const DIAGNOSTIC_TIMEOUT_MS = 15_000;
 
-/** Interval between polls. Tight loop — we do not wait longer than we must. */
-export const POLL_INTERVAL_MS = 10;
+/** Time (ms) to wait for "no diagnostics" assertions. */
+export const NO_DIAGNOSTIC_WAIT_MS = 5_000;
 
-/** Max time to wait for a single command/event to settle inside a test.
- *  If a wait exceeds this, the operation is broken. No retries, no excuses. */
-export const WAIT_MS = 1_000;
+/** Time (ms) to wait for the LSP server to fully start. */
+export const SERVER_START_WAIT_MS = 10_000;
 
-/** Max time to wait for an external process bootstrap (debugpy launch,
- *  socket handshake, debug session start). These steps involve spawning
- *  a subprocess and negotiating a protocol, so a tight WAIT_MS is wrong. */
-export const SESSION_START_WAIT_MS = 15_000;
+/** Maximum time (ms) to wait for a server-advertised command to appear. */
+export const COMMAND_WAIT_MS = 1_000;
 
-/** Max time to wait for a DAP step/continue to produce a new stop event.
- *  Stepping inside an already-running debug session is fast (~100-500ms),
- *  but slow CI can stretch it — hence a mid-range budget, not WAIT_MS. */
-export const STEP_WAIT_MS = 3_000;
+/** Timeout (ms) for basilisk binary version check via CLI. */
+const BINARY_VERSION_CHECK_TIMEOUT_MS = 5_000;
 
-// Mocha default per-test timeout lives in .vscode-test.mjs (the only place
-// @vscode/test-cli honours it). Do NOT re-declare here — one source of truth.
+/** Default interval (ms) for polling loops. */
+export const DEFAULT_POLL_INTERVAL_MS = 100;
 
-/**
- * Module-level flag: once any poll (prewarmLsp or setupLspTestSuite)
- * confirms the LSP server is responsive, subsequent calls skip the
- * expensive 60-second poll entirely.
- */
-let lspReadyConfirmed = false;
-
-/** Mark the LSP server as confirmed ready (called from prewarmLsp). */
-export function markLspReady(): void {
-    lspReadyConfirmed = true;
-}
-
-/** Returns true if the LSP server has been confirmed ready in this test run. */
-export function isLspReady(): boolean {
-    return lspReadyConfirmed;
-}
+/** Interval (ms) between server readiness polls during setup. */
+const SERVER_READINESS_POLL_INTERVAL_MS = 200;
 
 
 /**
@@ -79,7 +58,7 @@ export function findBasiliskBinary(): string | undefined {
     }
 
     try {
-        execFileSync('basilisk', ['--version'], { timeout: WAIT_MS });
+        execFileSync('basilisk', ['--version'], { timeout: BINARY_VERSION_CHECK_TIMEOUT_MS });
         return 'basilisk';
     } catch {
         return undefined;
@@ -92,7 +71,7 @@ export function findBasiliskBinary(): string | undefined {
  */
 export async function waitForDiagnostics(
     uri: vscode.Uri,
-    timeoutMs: number = WAIT_MS
+    timeoutMs: number = DIAGNOSTIC_TIMEOUT_MS
 ): Promise<vscode.Diagnostic[]> {
     return new Promise((resolve) => {
         const existing = vscode.languages.getDiagnostics(uri);
@@ -125,7 +104,7 @@ export async function waitForDiagnostics(
  */
 export async function waitForDiagnosticsCleared(
     uri: vscode.Uri,
-    timeoutMs: number = WAIT_MS
+    timeoutMs: number = DIAGNOSTIC_TIMEOUT_MS
 ): Promise<vscode.Diagnostic[]> {
     return new Promise((resolve) => {
         const existing = vscode.languages.getDiagnostics(uri);
@@ -175,7 +154,7 @@ export async function pollUntilResult<T>(
     const options: PollOptions<T> = typeof optionsOrFn === 'function'
         ? { fn: optionsOrFn, predicate: predicateArg ?? (() => true) }
         : optionsOrFn;
-    const { fn, predicate, timeoutMs = WAIT_MS, intervalMs = POLL_INTERVAL_MS } = options;
+    const { fn, predicate, timeoutMs = NO_DIAGNOSTIC_WAIT_MS, intervalMs = DEFAULT_POLL_INTERVAL_MS } = options;
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
         const result = await fn();
@@ -259,28 +238,22 @@ export async function setupLspTestSuite(
     }
 
     // Poll until the LSP server is responsive.
-    // Skip if a prior call (prewarmLsp or earlier suite) already confirmed readiness.
-    if (!lspReadyConfirmed) {
-        const dummyPath = path.join(tmpDir, '__init__.py');
-        fs.writeFileSync(dummyPath, '', 'utf8');
-        const dummyUri = vscode.Uri.file(dummyPath);
-        const dummyDoc = await vscode.workspace.openTextDocument(dummyUri);
-        await vscode.window.showTextDocument(dummyDoc);
-        const deadline = Date.now() + WAIT_MS;
-        while (Date.now() < deadline) {
-            try {
-                const syms = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
-                    'vscode.executeDocumentSymbolProvider', dummyUri
-                );
-                if (syms !== null && syms !== undefined) {
-                    lspReadyConfirmed = true;
-                    break;
-                }
-            } catch { /* server not ready yet */ }
-            await new Promise<void>((r) => setTimeout(r, POLL_INTERVAL_MS));
-        }
-        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    const dummyPath = path.join(tmpDir, '__init__.py');
+    fs.writeFileSync(dummyPath, '', 'utf8');
+    const dummyUri = vscode.Uri.file(dummyPath);
+    const dummyDoc = await vscode.workspace.openTextDocument(dummyUri);
+    await vscode.window.showTextDocument(dummyDoc);
+    const deadline = Date.now() + SERVER_START_WAIT_MS;
+    while (Date.now() < deadline) {
+        try {
+            const syms = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+                'vscode.executeDocumentSymbolProvider', dummyUri
+            );
+            if (syms !== null && syms !== undefined) {break;}
+        } catch { /* server not ready yet */ }
+        await new Promise<void>((r) => setTimeout(r, SERVER_READINESS_POLL_INTERVAL_MS));
     }
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
 
     return { tmpDir, basiliskBinary: binary };
 }

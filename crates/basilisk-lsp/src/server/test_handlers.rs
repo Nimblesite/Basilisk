@@ -63,10 +63,6 @@ pub(super) async fn execute_discover_tests(
         .sum();
     info!(count, "discovered tests in workspace");
 
-    // Always send a notification so the client populates the test explorer,
-    // regardless of whether it uses the JSON-RPC response.
-    send_test_discovery_notification(server, items.clone()).await;
-
     Ok(Some(serde_json::json!({ "items": items })))
 }
 
@@ -353,8 +349,63 @@ impl tower_lsp::lsp_types::notification::Notification for CoverageResultNotifica
 /// Diagnostic code for pytest not found in uv project.
 pub(crate) const PYTEST_NOT_FOUND_CODE: &str = "BSK-W0014";
 
+/// Check if pytest is available in the uv package registry.
+///
+/// If a uv project is detected but pytest is not in the lock file, sends a
+/// warning to the client suggesting `uv add --dev pytest` and publishes a
+/// `BSK-W0014` diagnostic on each discovered test file so the code action
+/// system can offer a quick-fix.
+pub(super) async fn check_pytest_availability(server: &LspServer) {
+    let roots = server.workspace_roots.read().await;
+    let root = roots.first().cloned();
+    let is_uv = basilisk_uv::detect_uv_project(&roots).is_some();
+    drop(roots);
+
+    if !is_uv {
+        return;
+    }
+
+    let has_pytest = server
+        .with_index(|idx| {
+            Some(
+                idx.registry
+                    .as_ref()
+                    .is_none_or(|reg| reg.has_package("pytest")),
+            )
+        })
+        .await
+        .unwrap_or(true);
+
+    if !has_pytest {
+        server
+            .client
+            .log_message(
+                MessageType::WARNING,
+                "Basilisk: pytest not found in uv.lock. Run `uv add --dev pytest` to install it."
+                    .to_owned(),
+            )
+            .await;
+
+        // Publish BSK-W0014 diagnostic on each test file so the code action
+        // system can offer a "uv add --dev pytest" quick-fix.
+        if let Some(root) = root {
+            let test_files = crate::test_discovery::discover_test_files(&root);
+            for path in test_files {
+                let Ok(uri) = tower_lsp::lsp_types::Url::from_file_path(&path) else {
+                    continue;
+                };
+                let diag = make_pytest_not_found_diagnostic();
+                server
+                    .client
+                    .publish_diagnostics(uri, vec![diag], None)
+                    .await;
+            }
+        }
+    }
+}
+
 /// Build a `BSK-W0014` diagnostic for a test file missing pytest.
-pub(super) fn make_pytest_not_found_diagnostic() -> Diagnostic {
+fn make_pytest_not_found_diagnostic() -> Diagnostic {
     Diagnostic {
         range: Range {
             start: Position {
@@ -370,7 +421,7 @@ pub(super) fn make_pytest_not_found_diagnostic() -> Diagnostic {
         code: Some(NumberOrString::String(PYTEST_NOT_FOUND_CODE.to_owned())),
         code_description: None,
         source: Some("basilisk".to_owned()),
-        message: "pytest not found in uv.lock — use quick fix to install".to_owned(),
+        message: "pytest not found in uv.lock — run `uv add --dev pytest` to install it".to_owned(),
         tags: None,
         related_information: None,
         data: None,
@@ -403,7 +454,7 @@ pub(super) async fn check_pytest_cov_availability(server: &LspServer) {
             .client
             .log_message(
                 MessageType::INFO,
-                "Basilisk: pytest-cov not found in uv.lock — install it for coverage support"
+                "Basilisk: pytest-cov not found in uv.lock. Run `uv add --dev pytest-cov` for coverage support."
                     .to_owned(),
             )
             .await;
@@ -425,7 +476,7 @@ pub(super) async fn send_test_discovery_notification(
 }
 
 /// Custom notification type for test discovery results.
-pub(super) struct TestDiscoveryNotification;
+struct TestDiscoveryNotification;
 
 impl tower_lsp::lsp_types::notification::Notification for TestDiscoveryNotification {
     type Params = serde_json::Value;

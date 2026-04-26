@@ -1,12 +1,12 @@
 # Basilisk Neovim Extension (`basilisk.nvim`)
 
-## Goal {#NEOVIM-GOAL}
+## Goal
 
 A first-class Neovim plugin that connects to the same `basilisk lsp` binary as the VS Code and Zed extensions. One LSP, three editors. Feature parity across all of them.
 
 **CRITICAL: AIMING FOR FEATURE PARITY BETWEEN NEOVIM, VS CODE, AND ZED EXTENSIONS**
 
-All LSP features, DAP integration, custom commands, configuration settings, and binary resolution are defined in **[LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md)** — the single source of truth. This spec only documents **Neovim-specific implementation details**.
+All LSP features, DAP integration, custom commands, configuration settings, and binary resolution are defined in **`LSP-ARCHITECTURE-SPEC.md`** — the single source of truth. This spec only documents **Neovim-specific implementation details**.
 
 ## Critical Docs
 
@@ -35,28 +35,31 @@ All LSP features, DAP integration, custom commands, configuration settings, and 
 
 ---
 
-## Architecture {#NEOVIM-ARCH}
+## Architecture
 
-```mermaid
-graph LR
-    subgraph "Neovim"
-        VLSP["vim.lsp (built-in)<br/>All 21 LSP features"]
-        VDAP["nvim-dap (optional)<br/>DAP via DapTcpProxy"]
-        PLUG["basilisk.nvim (Lua)<br/>Config, keymaps, UI, commands"]
-    end
-
-    subgraph "basilisk binary (Rust)"
-        LSP["basilisk lsp<br/>(JSON-RPC)"]
-        DBG["debugpy<br/>(spawned by basilisk/startDebug)"]
-    end
-
-    VLSP <-->|"stdio JSON-RPC"| LSP
-    VDAP <-->|"TCP DAP"| DBG
+```
+┌──────────────────────────┐         ┌──────────────────────────┐
+│   Neovim                 │         │  basilisk binary (Rust)  │
+│                          │         │                          │
+│  vim.lsp (built-in)      │◄───────►│  basilisk lsp            │
+│  ─────────────────────   │  stdio  │  (JSON-RPC)              │
+│  All 21 LSP features     │  JSON   │                          │
+│  native in Neovim 0.10+  │  RPC    │  See LSP-ARCHITECTURE-SPEC.md   │
+│                          │         │  for all features        │
+│  nvim-dap (optional)     │◄───────►│                          │
+│  ─────────────────────   │  TCP    │  debugpy (spawned by     │
+│  DAP via DapTcpProxy     │  DAP    │  basilisk/startDebug)    │
+│                          │         │                          │
+│  basilisk.nvim (Lua)     │         │                          │
+│  ─────────────────────   │         │                          │
+│  Config, keymaps, UI,    │         │                          │
+│  commands, status line   │         │                          │
+└──────────────────────────┘         └──────────────────────────┘
 ```
 
 ---
 
-## Plugin Structure {#NEOVIM-STRUCTURE}
+## Plugin Structure
 
 ```
 basilisk.nvim/
@@ -66,12 +69,12 @@ basilisk.nvim/
 │   └── basilisk/
 │       ├── init.lua              # setup() entry, config merge, module orchestration
 │       ├── config.lua            # Defaults + LuaCATS type annotations + validation
-│       ├── binary.lua            # Binary resolution (see LSP-ARCHITECTURE-SPEC.md §LSPARCH-BINRES)
+│       ├── binary.lua            # Binary resolution (see LSP-ARCHITECTURE-SPEC.md for cascade)
 │       ├── lsp.lua               # LSP client config, lifecycle, error recovery
 │       ├── dap.lua               # nvim-dap adapter, configs, DapTcpProxy
 │       ├── commands.lua          # :Basilisk* user commands
-│       ├── profiling.lua         # Profiling commands (see LSP-ARCHITECTURE-SPEC.md §LSPARCH-CMDS)
-│       ├── memory.lua            # Memory commands (see LSP-ARCHITECTURE-SPEC.md §LSPARCH-CMDS)
+│       ├── profiling.lua         # Profiling commands (see LSP-ARCHITECTURE-SPEC.md for LSP commands)
+│       ├── memory.lua            # Memory commands (see LSP-ARCHITECTURE-SPEC.md for LSP commands)
 │       ├── testing.lua           # Test discovery, tree UI, run/debug
 │       ├── statusline.lua        # Status line component (lualine compat)
 │       ├── health.lua            # :checkhealth basilisk
@@ -93,7 +96,7 @@ basilisk.nvim/
 
 ---
 
-## LSP Client Configuration {#NEOVIM-LSP}
+## LSP Client Configuration
 
 Uses modern Neovim 0.10+ API (NOT nvim-lspconfig as a hard dependency):
 
@@ -105,7 +108,7 @@ vim.lsp.config('basilisk', {
   root_markers = { 'pyproject.toml', 'setup.py', 'setup.cfg', '.git' },
   settings = {
     basilisk = {
-      -- All settings from LSP-ARCHITECTURE-SPEC.md §LSPARCH-CONFIG
+      -- All settings from LSP-ARCHITECTURE-SPEC.md "Shared Configuration Settings"
       python = config.python,
       analysisMode = config.analysis_mode,
       inlayHints = {
@@ -123,9 +126,9 @@ vim.lsp.config('basilisk', {
 vim.lsp.enable('basilisk')
 ```
 
-### Neovim API Mappings {#NEOVIM-LSP-MAP}
+### Neovim API Mappings for LSP Features
 
-All 21 core LSP features (defined in [LSP-ARCHITECTURE-SPEC.md §LSPARCH-FEATURES](LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES)) are native in Neovim 0.10+ — zero custom implementation needed:
+All 21 core LSP features (defined in LSP-ARCHITECTURE-SPEC.md) are native in Neovim 0.10+ — zero custom implementation needed:
 
 | LSP Feature | Neovim API |
 |------------|------------|
@@ -146,11 +149,11 @@ All 21 core LSP features (defined in [LSP-ARCHITECTURE-SPEC.md §LSPARCH-FEATURE
 | Document Highlight | `vim.lsp.buf.document_highlight()` |
 | Folding/Selection Ranges | Automatic via LSP client |
 
-### Custom LSP Command Registration {#NEOVIM-LSP-CMDS}
+### Custom LSP Command Registration
 
-> **Command Registration Rule**: See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CMDRULE](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDRULE). The plugin MUST NOT register commands that the LSP server advertises via `executeCommandProvider`. The server is the single source of truth.
+> **Command Registration Rule**: See `LSP-ARCHITECTURE-SPEC.md` § Command Registration Rule. The plugin MUST NOT register commands that the LSP server advertises via `executeCommandProvider`. The server is the single source of truth.
 
-Register handlers for custom commands (defined in [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CMDS](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDS)):
+Register handlers for custom commands (defined in LSP-ARCHITECTURE-SPEC.md):
 
 ```lua
 vim.lsp.commands['basilisk.organizeImports'] = function(cmd, ctx)
@@ -158,7 +161,7 @@ vim.lsp.commands['basilisk.organizeImports'] = function(cmd, ctx)
 end
 ```
 
-### Error Recovery {#NEOVIM-RECOVERY}
+### Error Recovery
 
 - Track restart count, auto-restart up to 3 times
 - Exponential backoff: 1s, 2s, 4s
@@ -167,13 +170,13 @@ end
 
 ---
 
-## DAP Integration {#NEOVIM-DAP}
+## DAP Integration
 
-> See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CMDS](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDS) for DAP features, launch configurations, and [§LSPARCH-DAPPROXY](LSP-ARCHITECTURE-SPEC.md#LSPARCH-DAPPROXY) for the DapTcpProxy specification.
+> See LSP-ARCHITECTURE-SPEC.md for DAP features, launch configurations, and DapTcpProxy specification.
 
 Detects `nvim-dap` at runtime via `pcall(require, 'dap')`. Degrades gracefully if absent.
 
-### Adapter Registration {#NEOVIM-DAP-ADAPTER}
+### Adapter Registration
 
 ```lua
 dap.adapters.basilisk = function(callback, config)
@@ -185,15 +188,15 @@ dap.adapters.basilisk = function(callback, config)
 end
 ```
 
-### DapTcpProxy {#NEOVIM-DAP-PROXY}
+### DapTcpProxy (Lua/libuv)
 
-Port of VS Code's `dap-proxy.ts` using `vim.uv` (libuv bindings). See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-DAPPROXY](LSP-ARCHITECTURE-SPEC.md#LSPARCH-DAPPROXY) for the full proxy specification. Implementation uses:
+Port of VS Code's `dap-proxy.ts` using `vim.uv` (libuv bindings). See LSP-ARCHITECTURE-SPEC.md for the full proxy specification. Implementation uses:
 
 - `vim.uv.new_tcp()` — TCP socket creation
 - Content-Length header framing for DAP messages
-- All interception rules from [LSP-ARCHITECTURE-SPEC.md §LSPARCH-DAPPROXY](LSP-ARCHITECTURE-SPEC.md#LSPARCH-DAPPROXY)
+- All interception rules from LSP-ARCHITECTURE-SPEC.md
 
-### Default Configurations {#NEOVIM-DAP-CONFIG}
+### Default Configurations
 
 ```lua
 dap.configurations.python = {
@@ -215,18 +218,18 @@ dap.configurations.python = {
 }
 ```
 
-### Optional Integrations {#NEOVIM-DAP-OPT}
+### Optional Integrations
 
 - **nvim-dap-ui**: auto-open on `event_initialized`, auto-close on `event_terminated`
 - **nvim-dap-virtual-text**: enable for type-aware inline variable display
 
 ---
 
-## User Commands {#NEOVIM-CMDS}
+## Neovim User Commands
 
-All profiling/memory/test LSP commands (defined in [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CMDS](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDS)) surface as Neovim user commands:
+All profiling/memory/test LSP commands (defined in LSP-ARCHITECTURE-SPEC.md) surface as Neovim user commands:
 
-| Neovim Command | LSP Command (from [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CMDS](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDS)) | UI |
+| Neovim Command | LSP Command (from LSP-ARCHITECTURE-SPEC.md) | UI |
 |---------------|-------------------------------|-----|
 | `:BasiliskRestart` | — (client-side) | Restart LSP server |
 | `:BasiliskInfo` | — (client-side) | Show server status |
@@ -257,14 +260,14 @@ All profiling/memory/test LSP commands (defined in [LSP-ARCHITECTURE-SPEC.md §L
 
 ---
 
-## Test Explorer {#NEOVIM-TESTS}
+## Test Explorer
 
-> See [LSP-TEST-INTEGRATION-SPEC.md §TESTINT-ARCH](LSP-TEST-INTEGRATION-SPEC.md#TESTINT-ARCH) for full test explorer architecture, data model, configuration, and features.
-> Neovim-specific wiring (tree UI, keymaps, nvim-dap integration) is documented in [LSP-TEST-INTEGRATION-SPEC.md §TESTINT-NEOVIM](LSP-TEST-INTEGRATION-SPEC.md#TESTINT-NEOVIM).
+> See `LSP-TEST-INTEGRATION-SPEC.md` for full test explorer architecture, data model, configuration, and features.
+> Neovim-specific wiring (tree UI, keymaps, nvim-dap integration) is documented in the Neovim section of that spec.
 
 ---
 
-## Status Line {#NEOVIM-STATUSLINE}
+## Status Line
 
 Provides a component for any status line plugin (lualine, heirline, etc.):
 
@@ -287,7 +290,7 @@ States (matching VS Code/Zed behavior):
 
 ---
 
-## Default Keymaps {#NEOVIM-KEYMAPS}
+## Default Keymaps
 
 Set via `LspAttach` autocmd in `ftplugin/python.lua`. All configurable, can be disabled.
 
@@ -321,9 +324,9 @@ Set via `LspAttach` autocmd in `ftplugin/python.lua`. All configurable, can be d
 
 ---
 
-## Neovim-Only Configuration {#NEOVIM-CONFIG}
+## Neovim-Only Configuration
 
-These settings are Neovim-specific (not in [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)):
+These settings are Neovim-specific (not in LSP-ARCHITECTURE-SPEC.md):
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -334,11 +337,11 @@ These settings are Neovim-specific (not in [LSP-ARCHITECTURE-SPEC.md §LSPARCH-C
 | `test_explorer.width` | `40` | Test panel width |
 | `log_level` | `"info"` | Logging verbosity |
 
-All shared settings are defined in [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG) and passed through to the LSP server.
+All shared settings are defined in LSP-ARCHITECTURE-SPEC.md and passed through to the LSP server.
 
 ---
 
-## Health Check {#NEOVIM-HEALTH}
+## Health Check
 
 `:checkhealth basilisk` reports:
 
@@ -352,7 +355,7 @@ All shared settings are defined in [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CONFIG](L
 
 ---
 
-## Distribution {#NEOVIM-DIST}
+## Distribution
 
 ### Primary: Standalone Plugin
 

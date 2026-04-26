@@ -19,8 +19,6 @@ import { registerModuleExplorer } from "./module-explorer";
 import { registerTypeHealth } from "./type-health";
 import { registerInfoPanel } from "./info-panel";
 import { createStore, type Store } from "./store";
-import { registerProfiler, disposeProfiler } from "./profiler";
-import { registerMemoryProfiler, disposeMemoryProfiler } from "./memory-profiler";
 
 /** Priority for the Basilisk status bar item (higher = further left). */
 const STATUS_BAR_PRIORITY = 100;
@@ -133,7 +131,31 @@ function initExtension(context: vscode.ExtensionContext): void {
   Logger.info(`Basilisk executable: ${executablePath}`);
 
   if (firstInit) {
-    registerPanelsAndCommands(context, store);
+    // Set context key so panel visibility conditions work.
+    const hasWorkspace = (vscode.workspace.workspaceFolders?.length ?? 0) > 0;
+    void vscode.commands.executeCommand("setContext", "basilisk.hasWorkspace", hasWorkspace);
+
+    // Activity bar panels — register once (tree view IDs must be unique).
+    // Command disposables go to singletonDisposables so deactivate() can
+    // dispose them before re-init (prevents "command already exists" on reload).
+    const moduleResult = registerModuleExplorer(context, store);
+    singletonDisposables.push(...moduleResult.disposables);
+
+    const typeHealthResult = registerTypeHealth(context, store);
+    singletonDisposables.push(...typeHealthResult.disposables);
+
+    const infoPanelResult = registerInfoPanel(context, store);
+    singletonDisposables.push(...infoPanelResult.disposables);
+
+    // Walkthrough command — tracked in singletonDisposables for the same reason.
+    singletonDisposables.push(
+      vscode.commands.registerCommand("basilisk.openWalkthrough", () => {
+        void vscode.commands.executeCommand(
+          "workbench.action.openWalkthrough",
+          "basilisk-lang.basilisk#basilisk.gettingStarted",
+        );
+      }),
+    );
   }
 
   if (useLsp) {
@@ -161,47 +183,7 @@ function initExtension(context: vscode.ExtensionContext): void {
   }
 }
 
-/**
- * Register activity panels, profiler UI, memory profiler, and walkthrough.
- * Called once on the first activation only.
- */
-function registerPanelsAndCommands(context: vscode.ExtensionContext, s: Store): void {
-  // Set context key so panel visibility conditions work.
-  const hasWorkspace = (vscode.workspace.workspaceFolders?.length ?? 0) > 0;
-  void vscode.commands.executeCommand("setContext", "basilisk.hasWorkspace", hasWorkspace);
-
-  // Activity bar panels — register once (tree view IDs must be unique).
-  const moduleResult = registerModuleExplorer(context, s);
-  singletonDisposables.push(...moduleResult.disposables);
-
-  const typeHealthResult = registerTypeHealth(context, s);
-  singletonDisposables.push(...typeHealthResult.disposables);
-
-  const infoPanelResult = registerInfoPanel(context, s);
-  singletonDisposables.push(...infoPanelResult.disposables);
-
-  // Profiler UI — status bar, commands, decorations, flamegraph webview.
-  const profilerDisposables = registerProfiler(context, s);
-  singletonDisposables.push(...profilerDisposables);
-
-  // Memory profiler UI — commands, reference graph webview, memory dashboard.
-  const memoryDisposables = registerMemoryProfiler(context, s);
-  singletonDisposables.push(...memoryDisposables);
-
-  // Walkthrough command.
-  singletonDisposables.push(
-    vscode.commands.registerCommand("basilisk.openWalkthrough", () => {
-      void vscode.commands.executeCommand(
-        "workbench.action.openWalkthrough",
-        "basilisk-lang.basilisk#basilisk.gettingStarted",
-      );
-    }),
-  );
-}
-
 export function deactivate(): Promise<void> | undefined {
-  disposeProfiler();
-  disposeMemoryProfiler();
   const result = store?.client.value?.stop();
   // Set store = undefined BEFORE calling reset() so the onReset callback
   // (which checks `store !== undefined`) does NOT restart the LSP client.

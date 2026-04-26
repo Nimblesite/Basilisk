@@ -12,8 +12,6 @@ pub(super) mod commands;
 pub(super) mod document;
 pub(super) mod handlers;
 pub(super) mod init;
-pub(super) mod memory_handlers;
-pub(super) mod profiler_handlers;
 pub(super) mod refactor_commands;
 pub(super) mod rule_override;
 pub(super) mod test_handlers;
@@ -41,17 +39,16 @@ use tower_lsp::lsp_types::{
     CodeActionParams, CodeActionResponse, CodeLens, CodeLensParams, ColorInformation,
     ColorPresentation, ColorPresentationParams, CompletionItem, CompletionParams,
     CompletionResponse, DidChangeConfigurationParams, DidChangeTextDocumentParams,
-    DidChangeWatchedFilesParams, DidChangeWorkspaceFoldersParams, DidCloseTextDocumentParams,
-    DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentColorParams,
-    DocumentFormattingParams, DocumentHighlight, DocumentHighlightParams, DocumentSymbolParams,
-    DocumentSymbolResponse, ExecuteCommandParams, FoldingRange, FoldingRangeParams,
-    GotoDefinitionParams, GotoDefinitionResponse, Hover, HoverParams, InitializeParams,
-    InitializeResult, InitializedParams, InlayHint, InlayHintParams, Location, Position,
-    PrepareRenameResponse, ReferenceParams, RenameFilesParams, RenameParams, SelectionRange,
-    SelectionRangeParams, SemanticTokensParams, SemanticTokensResult, SignatureHelpParams,
-    SymbolInformation, TextDocumentPositionParams, TextEdit, TypeHierarchyItem,
-    TypeHierarchyPrepareParams, TypeHierarchySubtypesParams, TypeHierarchySupertypesParams, Url,
-    WorkspaceEdit, WorkspaceSymbolParams,
+    DidChangeWatchedFilesParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
+    DidSaveTextDocumentParams, DocumentColorParams, DocumentFormattingParams, DocumentHighlight,
+    DocumentHighlightParams, DocumentSymbolParams, DocumentSymbolResponse, ExecuteCommandParams,
+    FoldingRange, FoldingRangeParams, GotoDefinitionParams, GotoDefinitionResponse, Hover,
+    HoverParams, InitializeParams, InitializeResult, InitializedParams, InlayHint, InlayHintParams,
+    Location, Position, PrepareRenameResponse, ReferenceParams, RenameFilesParams, RenameParams,
+    SelectionRange, SelectionRangeParams, SemanticTokensParams, SemanticTokensResult,
+    SignatureHelpParams, SymbolInformation, TextDocumentPositionParams, TextEdit,
+    TypeHierarchyItem, TypeHierarchyPrepareParams, TypeHierarchySubtypesParams,
+    TypeHierarchySupertypesParams, Url, WorkspaceEdit, WorkspaceSymbolParams,
 };
 use tower_lsp::{Client, LspService, Server};
 
@@ -103,20 +100,12 @@ pub struct LspServer {
     pub(super) workspace_roots: RwLock<Vec<std::path::PathBuf>>,
     /// Debug session manager — spawns debugpy and tracks active sessions.
     pub(super) debug_manager: crate::debug::DebugSessionManager,
-    /// Profiler session manager — py-spy sampling, aggregation, export.
-    pub(super) profiler_manager: crate::profiler::ProfileSessionManager,
     /// Debounced file-watcher task.
     pub(super) watcher_debounce: Mutex<Option<AbortHandle>>,
     /// Debounced module-changed notification task.
     pub(super) module_changed_debounce: Mutex<Option<AbortHandle>>,
     /// Test explorer configuration from the client.
     pub(super) test_config: RwLock<TestExplorerConfig>,
-}
-
-impl std::fmt::Debug for LspServer {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("LspServer").finish_non_exhaustive()
-    }
 }
 
 impl LspServer {
@@ -128,7 +117,6 @@ impl LspServer {
             index: Arc::new(RwLock::new(None)),
             workspace_roots: RwLock::new(Vec::new()),
             debug_manager: crate::debug::DebugSessionManager::new(),
-            profiler_manager: crate::profiler::ProfileSessionManager::new(),
             watcher_debounce: Mutex::new(None),
             module_changed_debounce: Mutex::new(None),
             test_config: RwLock::new(TestExplorerConfig::default()),
@@ -202,10 +190,6 @@ impl tower_lsp::LanguageServer for LspServer {
 
     async fn did_change_configuration(&self, params: DidChangeConfigurationParams) {
         init::did_change_configuration(self, params).await;
-    }
-
-    async fn did_change_workspace_folders(&self, params: DidChangeWorkspaceFoldersParams) {
-        init::did_change_workspace_folders(self, params).await;
     }
 
     async fn shutdown(&self) -> LspResult<()> {
