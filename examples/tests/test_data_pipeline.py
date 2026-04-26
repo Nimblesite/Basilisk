@@ -12,6 +12,7 @@ from data_pipeline import (
     PartitionKey,
     coerce_field,
     detect_encoding,
+    empty_schema,
     read_source,
 )
 
