@@ -8,6 +8,53 @@ local ui = require("basilisk.ui")
 
 local M = {}
 
+--- Map LSP message types to Neovim notification levels.
+---@param message_type integer?
+---@return integer
+local function lsp_message_level(message_type)
+  local message_types = vim.lsp.protocol.MessageType
+  if message_type == message_types.Error then
+    return vim.log.levels.ERROR
+  end
+  if message_type == message_types.Warning then
+    return vim.log.levels.WARN
+  end
+  return vim.log.levels.INFO
+end
+
+--- Send an LSP server message through the plugin logger.
+---@param result table?
+---@param show_info boolean
+local function log_lsp_message(result, show_info)
+  if not result or type(result.message) ~= "string" or result.message == "" then
+    return
+  end
+  local message = result.message:gsub("^Basilisk:%s*", "")
+  local level = lsp_message_level(result.type)
+  if level == vim.log.levels.ERROR then
+    log.error("%s", message)
+  elseif level == vim.log.levels.WARN then
+    log.warn("%s", message)
+  elseif show_info then
+    log.info("%s", message)
+  else
+    log.debug("%s", message)
+  end
+end
+
+--- Install Basilisk message handlers on already-running clients.
+local function install_message_handlers()
+  for _, client in ipairs(vim.lsp.get_clients({ name = "basilisk" })) do
+    client.handlers = client.handlers or {}
+    client.handlers["window/logMessage"] = function(_err, result)
+      log_lsp_message(result, false)
+    end
+    client.handlers["window/showMessage"] = function(_err, result)
+      log_lsp_message(result, true)
+    end
+  end
+end
+
 --- Send an LSP executeCommand request.
 ---@param command string
 ---@param args? table
@@ -18,49 +65,13 @@ local function execute_command(command, args, callback)
     log.warn("no active LSP client")
     return
   end
+  install_message_handlers()
   client:request("workspace/executeCommand", {
     command = command,
     arguments = args or {},
   }, callback, 0)
 end
 
---- Open a floating window showing server info.
----@param config BasiliskConfig
-local function show_info_float(config)
-  local client = ui.get_client()
-  local binary_mod = require("basilisk.binary")
-  local lsp_mod = require("basilisk.lsp")
-
-  local bin = binary_mod.resolve(config.binary_path)
-  local version = bin and binary_mod.version(bin) or "unknown"
-
-  local lines = {
-    "Basilisk LSP Server Info",
-    "",
-  }
-
-  if client then
-    lines[#lines + 1] = "  Status:     active"
-    lines[#lines + 1] = "  Client ID:  " .. tostring(client.id)
-    lines[#lines + 1] = "  Root:       " .. (client.root_dir or "nil")
-  else
-    lines[#lines + 1] = "  Status:     stopped"
-  end
-
-  lines[#lines + 1] = ""
-  lines[#lines + 1] = "  Binary:     " .. (bin or "not found")
-  lines[#lines + 1] = "  Version:    " .. version
-  lines[#lines + 1] = "  Python:     " .. (config.python or "auto-detect")
-  lines[#lines + 1] = "  Mode:       " .. config.analysis_mode
-  lines[#lines + 1] = "  Restarts:   " .. tostring(lsp_mod.get_restart_count())
-  lines[#lines + 1] = ""
-  lines[#lines + 1] = "  Ruff:       " .. (config.ruff.enabled and "enabled" or "disabled")
-  lines[#lines + 1] = "  Debugger:   " .. (config.debugger.enabled and "enabled" or "disabled")
-  lines[#lines + 1] = "  Tests:      " .. (config.test_explorer.enabled and "enabled" or "disabled")
-  lines[#lines + 1] = "  uv:         " .. (config.uv.enabled and "enabled" or "disabled")
-
-  ui.open_float("Basilisk Info", lines)
-end
 
 --- Register all :Basilisk* commands.
 ---@param config BasiliskConfig
@@ -69,6 +80,10 @@ function M.register(config)
   local profiling = require("basilisk.profiling")
   local memory = require("basilisk.memory")
   local testing = require("basilisk.testing")
+  install_message_handlers()
+  if lsp_mod.install_handlers then
+    lsp_mod.install_handlers()
+  end
 
   -- Core commands.
 
@@ -78,8 +93,10 @@ function M.register(config)
     log.info("restarting server...")
   end, { desc = "Restart the Basilisk LSP server" })
 
+  local info_panel = require("basilisk.info")
+
   vim.api.nvim_create_user_command("BasiliskInfo", function()
-    show_info_float(config)
+    info_panel.show(config)
   end, { desc = "Show Basilisk LSP server info" })
 
   vim.api.nvim_create_user_command("BasiliskOrganizeImports", function()
@@ -245,12 +262,22 @@ function M.register(config)
       log.error("nvim-dap required for debugging")
       return
     end
+    if not dap.adapters or not dap.adapters.basilisk then
+      log.warn("basilisk DAP adapter not configured")
+      return
+    end
+    local program = vim.api.nvim_buf_get_name(0)
+    if program == "" or vim.fn.filereadable(program) ~= 1 then
+      log.warn("no readable file to debug")
+      return
+    end
     dap.run({
       type = "basilisk",
       request = "launch",
       name = "Debug: Current File",
-      program = "${file}",
+      program = program,
       justMyCode = true,
+      cwd = vim.fn.getcwd(),
     })
   end, { desc = "Start debugging current file" })
 

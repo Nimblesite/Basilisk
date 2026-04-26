@@ -18,10 +18,9 @@ import { signal, computed, type ReadonlySignal, type Signal } from "@preact/sign
 import { type LanguageClient, State } from "vscode-languageclient/node";
 import * as vscode from "vscode";
 import { Logger, type LogSink } from "./logger";
+import { createServerCommandHandler } from "./lsp-client";
 import type { Result } from "./result";
-
-/** Default timeout (ms) for waiting on the LSP client to become ready. */
-export const DEFAULT_LSP_READY_TIMEOUT_MS = 1_000;
+import { POLL_INTERVAL_MS, WAIT_MS } from "./timeouts";
 
 /** LSP lifecycle states exposed to consumers. */
 export type LspState = "idle" | "starting" | "running" | "stopped";
@@ -94,8 +93,9 @@ function disposeServerCommands(signals: StoreSignals): void {
 function syncServerCommands(signals: StoreSignals): void {
   disposeServerCommands(signals);
 
-  const commands = signals.client.value?.initializeResult?.capabilities?.executeCommandProvider?.commands;
-  if (!Array.isArray(commands)) {
+  const client = signals.client.value;
+  const commands = client?.initializeResult?.capabilities?.executeCommandProvider?.commands;
+  if (!Array.isArray(commands) || client === undefined) {
     signals.serverCommands.value = new Set();
     return;
   }
@@ -104,19 +104,17 @@ function syncServerCommands(signals: StoreSignals): void {
   for (const cmd of commands) {
     if (typeof cmd === "string") {
       next.add(cmd);
+      const handler = createServerCommandHandler(client, cmd);
+      const disposable = vscode.commands.registerCommand(cmd, handler);
+      signals.serverCommandDisposables.push(disposable);
     }
   }
   signals.serverCommands.value = next;
-
-  // Server commands are NOT registered via vscode.commands.registerCommand.
-  // They are declared in package.json contributes.commands (making them
-  // available in the command palette) and executed through the LSP
-  // client's executeCommand middleware. The ExecuteCommandFeature was
-  // removed from the LanguageClient to prevent double-registration on
-  // reload — our middleware handles the routing instead.
 }
 
-/** Resolve the ready handle and clear it. */
+/** Resolve the ready handle and clear it.
+ *  Resolution MUST be async (next tick) so callers' .then() handlers
+ *  are attached before the promise settles. */
 function resolveLspReady(signals: StoreSignals): void {
   const handle = signals.readyHandle.value;
   if (handle !== undefined) {
@@ -236,20 +234,47 @@ function bindClientStateListener(
 
 /** Wait for the LSP ready handle with a timeout, returning Result. */
 async function awaitLspReady(signals: StoreSignals, timeoutMs: number): Promise<Result<LanguageClient>> {
+  // Fast path: client already running.
+  const client = signals.client.value;
+  if (client?.isRunning() === true) {
+    return { ok: true, value: client };
+  }
+  // Also check our own state signal (catches post-restart where isRunning()
+  // lags behind the onDidChangeState callback that set lspState = "running").
+  if (signals.lspState.value === "running" && client !== undefined) {
+    return { ok: true, value: client };
+  }
+
   const existing = signals.readyHandle.value;
   const ready = existing !== undefined ? existing.promise : createReadyHandle(signals).promise;
+
+  // Poll for the client becoming ready via both isRunning() and our own
+  // lspState signal. The double check catches cases where the readyHandle
+  // was resolved before this function was called (e.g. after a deactivate/
+  // activate cycle where the state listener already fired).
+  const poll = new Promise<"poll">((resolve) => {
+    const interval = setInterval(() => {
+      const c = signals.client.value;
+      if (c?.isRunning() === true || (signals.lspState.value === "running" && c !== undefined)) {
+        clearInterval(interval);
+        resolve("poll");
+      }
+    }, POLL_INTERVAL_MS);
+    setTimeout(() => { clearInterval(interval); }, timeoutMs);
+  });
+
   const timeout = new Promise<"timeout">((resolve) => {
     setTimeout(() => { resolve("timeout"); }, timeoutMs);
   });
-  const outcome = await Promise.race([ready.then(() => "ready" as const), timeout]);
+  const outcome = await Promise.race([ready.then(() => "ready" as const), poll, timeout]);
   if (outcome === "timeout") {
     return { ok: false, error: new Error(`LSP client did not reach Running state within ${timeoutMs}ms`) };
   }
-  const client = signals.client.value;
-  if (client === undefined) {
+  const resolved = signals.client.value;
+  if (resolved === undefined) {
     return { ok: false, error: new Error("LSP client resolved but is undefined") };
   }
-  return { ok: true, value: client };
+  return { ok: true, value: resolved };
 }
 
 /** Reset all signals to their initial values. */
@@ -313,7 +338,7 @@ export function createStore(onReset?: () => void): Store {
     isServerCommandAdvertised(id: string): boolean {
       return signals.serverCommands.value.has(id);
     },
-    async ensureLspReadyPromise(timeoutMs = DEFAULT_LSP_READY_TIMEOUT_MS): Promise<Result<LanguageClient>> {
+    async ensureLspReadyPromise(timeoutMs = WAIT_MS): Promise<Result<LanguageClient>> {
       return awaitLspReady(signals, timeoutMs);
     },
     reset(): void {

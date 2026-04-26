@@ -14,15 +14,12 @@ import * as assert from "assert";
 import * as vscode from "vscode";
 import { getStore } from "../../extension";
 import {
-  EXTENSION_ID,
-  SERVER_START_WAIT_MS,
-  setupLspTestSuite,
-  teardownLspTestSuite,
-  closeAllEditors,
+    EXTENSION_ID,
+    WAIT_MS,
+    setupLspTestSuite,
+    teardownLspTestSuite,
+    closeAllEditors,
 } from "./test-helpers";
-
-const SUITE_SETUP_TIMEOUT_MS = 30_000;
-const TEST_TIMEOUT_MS = 15_000;
 
 // ── Package.json type definitions ─────────────────────────────────────────
 
@@ -144,22 +141,19 @@ function loadBasiliskViews(): ViewContribution[] {
 
 // eslint-disable-next-line max-lines-per-function
 suite("Basilisk Activity Panel E2E Tests", function () {
-  this.timeout(SUITE_SETUP_TIMEOUT_MS);
 
   let suiteContext: { tmpDir: string; basiliskBinary: string };
 
   suiteSetup(async function () {
-    this.timeout(SUITE_SETUP_TIMEOUT_MS);
     suiteContext = await setupLspTestSuite("activity-panel");
 
     const store = getStore();
     assert.ok(store, "Store should exist after activation");
-    const result = await store.ensureLspReadyPromise(SERVER_START_WAIT_MS);
+    const result = await store.ensureLspReadyPromise(WAIT_MS);
     assert.ok(result.ok, "LSP should be running");
   });
 
   suiteTeardown(function () {
-    this.timeout(SUITE_SETUP_TIMEOUT_MS);
     teardownLspTestSuite(suiteContext?.tmpDir);
   });
 
@@ -223,17 +217,14 @@ suite("Basilisk Activity Panel E2E Tests", function () {
   });
 
   test("refreshModuleExplorer command is executable", async function () {
-    this.timeout(TEST_TIMEOUT_MS);
     await vscode.commands.executeCommand("basilisk.refreshModuleExplorer");
   });
 
   test("collapseModuleExplorer command is executable", async function () {
-    this.timeout(TEST_TIMEOUT_MS);
     await vscode.commands.executeCommand("basilisk.collapseModuleExplorer");
   });
 
   test("toggleModuleExplorerView command is executable", async function () {
-    this.timeout(TEST_TIMEOUT_MS);
     await vscode.commands.executeCommand("basilisk.toggleModuleExplorerView");
   });
 
@@ -246,12 +237,10 @@ suite("Basilisk Activity Panel E2E Tests", function () {
   });
 
   test("refreshTypeHealth command is executable", async function () {
-    this.timeout(TEST_TIMEOUT_MS);
     await vscode.commands.executeCommand("basilisk.refreshTypeHealth");
   });
 
   test("sortTypeHealth command is executable", async function () {
-    this.timeout(TEST_TIMEOUT_MS);
     await vscode.commands.executeCommand("basilisk.sortTypeHealth");
   });
 
@@ -268,7 +257,6 @@ suite("Basilisk Activity Panel E2E Tests", function () {
   });
 
   test("toggleFeature command can toggle a boolean setting", async function () {
-    this.timeout(TEST_TIMEOUT_MS);
     const cfg = vscode.workspace.getConfiguration("basilisk");
     const original = cfg.get<boolean>("ruff.enabled") ?? true;
 

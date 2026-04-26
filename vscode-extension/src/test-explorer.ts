@@ -4,7 +4,7 @@
  * Creates a TestController that listens for `basilisk/testDiscoveryResult`
  * notifications from the LSP server and populates VS Code's native Test
  * Explorer. Test execution flows through `workspace/executeCommand` to the
- * server's `basilisk.runTests` / `basilisk.debugTest` handlers.
+ * server's `basilisk.runTests` / `basilisk.debugTest` / `basilisk.runTestsCoverage` handlers.
  *
  * Architecture follows LSP-TEST-INTEGRATION-SPEC.md:
  * - Discovery: LSP server parses AST, sends notification
@@ -17,6 +17,7 @@ import { type LanguageClient } from "vscode-languageclient/node";
 import { applyCoverageDecorations, type LspCoverageResult } from "./coverage-decorations";
 import { Logger } from "./logger";
 import type { Store } from "./store";
+import { POLL_INTERVAL_MS } from "./timeouts";
 
 /** Test item kind — mirrors the Rust `TestItemKind` enum. */
 type TestItemKind = "file" | "function" | "class" | "method";
@@ -50,14 +51,11 @@ interface LspTestRunResult {
   perTest: LspPerTestResult[];
 }
 
-/** Polling interval (ms) for checking LSP client changes. */
-const CLIENT_POLL_INTERVAL_MS = 1000;
-
 /**
  * Register the Basilisk test explorer.
  *
  * Creates a `TestController`, wires up notification listeners, and registers
- * run/debug profiles. Call this from `activate()` when LSP mode is active.
+ * run/debug/coverage profiles. Call this from `activate()` when LSP mode is active.
  */
 export function registerTestExplorer(
   context: vscode.ExtensionContext,
@@ -81,6 +79,14 @@ export function registerTestExplorer(
     "Debug",
     vscode.TestRunProfileKind.Debug,
     async (request, token) => runTests({ controller, store, request, token, debug: true }),
+    false
+  );
+
+  // Coverage profile: run tests with pytest-cov and show gutter decorations.
+  controller.createRunProfile(
+    "Coverage",
+    vscode.TestRunProfileKind.Coverage,
+    async (request, token) => runTests({ controller, store, request, token, debug: false, coverage: true }),
     false
   );
 
@@ -131,13 +137,22 @@ function wireNotificationListener(
         applyCoverageDecorations(params);
       }
     );
+
+    // Request discovery now that the notification handler is wired up.
+    // The initial notification from `initialized` may have been sent
+    // before this handler was registered, so we request a fresh one.
+    if (client.isRunning()) {
+      requestDiscovery(store).catch((err: unknown) => {
+        Logger.error(`Initial test discovery request failed: ${err}`);
+      });
+    }
   }
 
   // Check immediately and on state changes.
   checkClient();
   // Poll on a short interval since store.client is a signal but we can't
   // subscribe to it directly from here. The effect runs in lsp-client.ts.
-  const interval = setInterval(checkClient, CLIENT_POLL_INTERVAL_MS);
+  const interval = setInterval(checkClient, POLL_INTERVAL_MS);
   const disposable = new vscode.Disposable(() => { clearInterval(interval); });
   const originalDispose = controller.dispose.bind(controller);
   controller.dispose = () => {
@@ -232,6 +247,7 @@ interface RunTestsArgs {
   request: vscode.TestRunRequest;
   token: vscode.CancellationToken;
   debug: boolean;
+  coverage?: boolean;
 }
 
 /**
@@ -241,7 +257,7 @@ interface RunTestsArgs {
  * For debug mode, sends `basilisk.debugTest` and starts a VS Code debug session.
  */
 async function runTests(args: RunTestsArgs): Promise<void> {
-  const { controller, store, request, token, debug } = args;
+  const { controller, store, request, token, debug, coverage = false } = args;
   const run = controller.createTestRun(request);
   const client = store.client.value;
 
@@ -272,7 +288,7 @@ async function runTests(args: RunTestsArgs): Promise<void> {
     if (debug) {
       await runDebugTest({ client, store, run, controller, testId: testIds[0] });
     } else {
-      await runNormalTests({ client, run, controller, testIds });
+      await runNormalTests({ client, run, controller, testIds, coverage });
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -294,13 +310,15 @@ interface RunNormalTestsArgs {
   run: vscode.TestRun;
   controller: vscode.TestController;
   testIds: string[];
+  coverage: boolean;
 }
 
 /** Execute tests normally (not debug). */
 async function runNormalTests(args: RunNormalTestsArgs): Promise<void> {
-  const { client, run, controller, testIds } = args;
+  const { client, run, controller, testIds, coverage } = args;
+  const command = coverage ? "basilisk.runTestsCoverage" : "basilisk.runTests";
   const result = await client.sendRequest("workspace/executeCommand", {
-    command: "basilisk.runTests",
+    command,
     arguments: [{ testIds }],
   });
 

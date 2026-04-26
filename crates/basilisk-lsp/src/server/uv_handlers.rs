@@ -9,9 +9,47 @@ use tracing::{error, info, warn};
 
 use super::LspServer;
 
-/// Extract the first workspace root, returning an LSP error if none is available.
+/// Find the project root that contains `pyproject.toml`.
+///
+/// In monorepo layouts the workspace root (e.g. `ai_cms/`) may not itself
+/// contain a `pyproject.toml` — it could be in a subdirectory like
+/// `ai_cms/agent-backend/`. We check each workspace root directly, then
+/// search one level of subdirectories.
 async fn get_workspace_root(server: &LspServer) -> LspResult<std::path::PathBuf> {
     let roots = server.workspace_roots.read().await;
+    if roots.is_empty() {
+        return Err(tower_lsp::jsonrpc::Error {
+            code: tower_lsp::jsonrpc::ErrorCode::ServerError(-32010),
+            message: "No workspace root available".into(),
+            data: None,
+        });
+    }
+
+    // Check each workspace root directly.
+    for root in roots.iter() {
+        if root.join("pyproject.toml").is_file() {
+            return Ok(root.clone());
+        }
+    }
+
+    // Search one level deep for a subdirectory with pyproject.toml.
+    for root in roots.iter() {
+        if let Ok(entries) = std::fs::read_dir(root) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() && path.join("pyproject.toml").is_file() {
+                    info!(
+                        project_root = %path.display(),
+                        "found pyproject.toml in subdirectory"
+                    );
+                    return Ok(path);
+                }
+            }
+        }
+    }
+
+    // Fall back to the first workspace root even without pyproject.toml.
+    // `roots.is_empty()` is checked above with early return, so `first()` always succeeds.
     roots
         .first()
         .cloned()
@@ -69,12 +107,30 @@ where
             let msg = if result.success {
                 format!("{label} completed successfully")
             } else {
-                format!("{label} failed")
+                let stderr = result.stderr.trim();
+                if stderr.is_empty() {
+                    format!("{label} failed")
+                } else {
+                    format!("{label} failed: {stderr}")
+                }
+            };
+            let msg_type = if result.success {
+                MessageType::INFO
+            } else {
+                MessageType::ERROR
             };
             server
                 .client
-                .log_message(MessageType::INFO, format!("Basilisk: {msg}"))
+                .log_message(msg_type, format!("Basilisk: {msg}"))
                 .await;
+
+            // Show error to user in the UI (not just the output panel).
+            if !result.success {
+                server
+                    .client
+                    .show_message(MessageType::ERROR, format!("Basilisk: {msg}"))
+                    .await;
+            }
 
             // Rebuild registry and re-resolve imports on success.
             if result.success {

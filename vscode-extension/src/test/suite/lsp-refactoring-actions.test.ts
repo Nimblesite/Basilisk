@@ -16,18 +16,13 @@ import {
     openPythonFile,
     closeAllEditors,
     pollUntilResult,
-    DIAGNOSTIC_TIMEOUT_MS,
-    SERVER_START_WAIT_MS,
-} from './test-helpers';
-
-const SUITE_SETUP_TIMEOUT_MS = 30_000;
+} from "./test-helpers";
 
 // eslint-disable-next-line max-lines-per-function
 suite('LSP Refactoring Code Action Tests', () => {
     let tmpDir: string;
 
     suiteSetup(async function () {
-        this.timeout(SUITE_SETUP_TIMEOUT_MS);
         const setup = await setupLspTestSuite('basilisk-refactor-actions-');
         tmpDir = setup.tmpDir;
     });
@@ -44,7 +39,6 @@ suite('LSP Refactoring Code Action Tests', () => {
     // ── Extract Variable ────────────────────────────────────────────────
 
     test('extract variable code action is offered for expression selection', async function () {
-        this.timeout(DIAGNOSTIC_TIMEOUT_MS + SERVER_START_WAIT_MS);
 
         const source = 'result: int = some_func(42) + other_func(7)\n';
         const { uri } = await openPythonFile(tmpDir, 'refactor_extract_var.py', source);
@@ -71,7 +65,6 @@ suite('LSP Refactoring Code Action Tests', () => {
     // ── Extract Constant ────────────────────────────────────────────────
 
     test('extract constant code action is offered inside function', async function () {
-        this.timeout(DIAGNOSTIC_TIMEOUT_MS + SERVER_START_WAIT_MS);
 
         const source = 'import os\n\ndef f() -> int:\n    return 42\n';
         const { uri } = await openPythonFile(tmpDir, 'refactor_extract_const.py', source);
@@ -98,7 +91,6 @@ suite('LSP Refactoring Code Action Tests', () => {
     // ── Extract Function ────────────────────────────────────────────────
 
     test('extract function code action is offered for statement selection', async function () {
-        this.timeout(DIAGNOSTIC_TIMEOUT_MS + SERVER_START_WAIT_MS);
 
         const source = 'def main() -> None:\n    x: int = 1\n    y: int = x + 1\n    print(y)\n';
         const { uri } = await openPythonFile(tmpDir, 'refactor_extract_func.py', source);
@@ -125,7 +117,6 @@ suite('LSP Refactoring Code Action Tests', () => {
     // ── Inline Variable ─────────────────────────────────────────────────
 
     test('inline variable code action is offered', async function () {
-        this.timeout(DIAGNOSTIC_TIMEOUT_MS + SERVER_START_WAIT_MS);
 
         const source = 'def f() -> None:\n    temp = calculate()\n    result = temp + 1\n';
         const { uri } = await openPythonFile(tmpDir, 'refactor_inline_var.py', source);
@@ -152,7 +143,6 @@ suite('LSP Refactoring Code Action Tests', () => {
     // ── Inline Function ─────────────────────────────────────────────────
 
     test('inline function code action is offered', async function () {
-        this.timeout(DIAGNOSTIC_TIMEOUT_MS + SERVER_START_WAIT_MS);
 
         const source = 'def double(x: int) -> int:\n    return x * 2\n\nresult: int = double(5)\n';
         const { uri } = await openPythonFile(tmpDir, 'refactor_inline_func.py', source);
@@ -179,7 +169,6 @@ suite('LSP Refactoring Code Action Tests', () => {
     // ── Union Conversion ────────────────────────────────────────────────
 
     test('Union conversion code action is offered', async function () {
-        this.timeout(DIAGNOSTIC_TIMEOUT_MS + SERVER_START_WAIT_MS);
 
         const source = 'from typing import Union\nx: Union[int, str] = 1\n';
         const { uri } = await openPythonFile(tmpDir, 'refactor_union.py', source);
@@ -206,7 +195,6 @@ suite('LSP Refactoring Code Action Tests', () => {
     // ── Optional Conversion ─────────────────────────────────────────────
 
     test('Optional conversion code action is offered', async function () {
-        this.timeout(DIAGNOSTIC_TIMEOUT_MS + SERVER_START_WAIT_MS);
 
         const source = 'from typing import Optional\nx: Optional[int] = None\n';
         const { uri } = await openPythonFile(tmpDir, 'refactor_optional.py', source);
@@ -233,7 +221,6 @@ suite('LSP Refactoring Code Action Tests', () => {
     // ── f-string Conversion ─────────────────────────────────────────────
 
     test('f-string conversion code action is offered', async function () {
-        this.timeout(DIAGNOSTIC_TIMEOUT_MS + SERVER_START_WAIT_MS);
 
         const source = 'name: str = "world"\nx: str = f"hello {name}"\n';
         const { uri } = await openPythonFile(tmpDir, 'refactor_fstring.py', source);
@@ -260,7 +247,6 @@ suite('LSP Refactoring Code Action Tests', () => {
     // ── dict Literal Conversion ─────────────────────────────────────────
 
     test('dict literal conversion code action is offered', async function () {
-        this.timeout(DIAGNOSTIC_TIMEOUT_MS + SERVER_START_WAIT_MS);
 
         const source = 'x: dict[str, int] = dict(a=1, b=2)\n';
         const { uri } = await openPythonFile(tmpDir, 'refactor_dict.py', source);
@@ -287,7 +273,6 @@ suite('LSP Refactoring Code Action Tests', () => {
     // ── list Literal Conversion ─────────────────────────────────────────
 
     test('list literal conversion code action is offered', async function () {
-        this.timeout(DIAGNOSTIC_TIMEOUT_MS + SERVER_START_WAIT_MS);
 
         const source = 'x: list[int] = list()\n';
         const { uri } = await openPythonFile(tmpDir, 'refactor_list.py', source);
@@ -314,7 +299,6 @@ suite('LSP Refactoring Code Action Tests', () => {
     // ── Ternary Conversion ──────────────────────────────────────────────
 
     test('ternary conversion code action is offered', async function () {
-        this.timeout(DIAGNOSTIC_TIMEOUT_MS + SERVER_START_WAIT_MS);
 
         const source = 'def f(cond: bool) -> int:\n    x: int = 1 if cond else 0\n    return x\n';
         const { uri } = await openPythonFile(tmpDir, 'refactor_ternary.py', source);
@@ -341,7 +325,6 @@ suite('LSP Refactoring Code Action Tests', () => {
     // ── Move Symbol ─────────────────────────────────────────────────────
 
     test('move symbol code action is offered for class', async function () {
-        this.timeout(DIAGNOSTIC_TIMEOUT_MS + SERVER_START_WAIT_MS);
 
         const source = 'import os\n\nclass MyWidget:\n    pass\n';
         const { uri } = await openPythonFile(tmpDir, 'refactor_move.py', source);
@@ -368,7 +351,6 @@ suite('LSP Refactoring Code Action Tests', () => {
     // ── Change Signature ────────────────────────────────────────────────
 
     test('change signature remove parameter is offered', async function () {
-        this.timeout(DIAGNOSTIC_TIMEOUT_MS + SERVER_START_WAIT_MS);
 
         const source = 'def greet(name: str, greeting: str) -> str:\n    return f"{greeting}, {name}"\n\nresult: str = greet("world", "Hello")\n';
         const { uri } = await openPythonFile(tmpDir, 'refactor_change_sig.py', source);
