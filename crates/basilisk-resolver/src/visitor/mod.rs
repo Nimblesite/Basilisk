@@ -183,6 +183,11 @@ fn build_resolved_module(
     results: AnalysisResults,
 ) -> ResolvedModule {
     let stmts = &module.ast.body;
+    let type_alias_type_violations = {
+        let tv_names: std::collections::HashSet<String> =
+            typevar_calls.iter().map(|tv| tv.name.clone()).collect();
+        type_alias::collect_type_alias_type_violations(stmts, &tv_names)
+    };
     ResolvedModule {
         functions,
         classes,
@@ -205,6 +210,7 @@ fn build_resolved_module(
         annotated_direct_call_spans: module_level::collect_annotated_direct_calls(stmts),
         imported_final_names: final_readonly::collect_imported_final_names(stmts, &module.path),
         type_alias_type_calls: type_alias::collect_type_alias_type_calls(stmts),
+        type_alias_type_violations,
         type_statements: type_alias::collect_type_statements(stmts),
         annotated_too_few_args: Vec::new(),
         namedtuple_defs: results.namedtuple_defs,

@@ -132,6 +132,7 @@ export class DapTcpProxy {
       });
       this.debugpySocket.on("close", () => {
         Logger.info("[DAP Proxy] debugpy socket closed");
+        this.completeTermination("debugpy socket closed");
       });
     });
   }
@@ -266,6 +267,7 @@ export class DapTcpProxy {
       // Also forward to debugpy for cleanup, swallowing its duplicate response.
       this.sawDisconnectForwarded = true;
       this.sendToDebugpy(msg);
+      this.closeClientConnection();
       return;
     }
 
@@ -503,6 +505,26 @@ export class DapTcpProxy {
     }
 
     return false;
+  }
+
+  /** Ensure VS Code observes termination even if debugpy closes before sending `terminated`. */
+  private completeTermination(reason: string): void {
+    if (!this.sawTerminatedEvent) {
+      Logger.warn(`[DAP Proxy] synthesizing terminated event: ${reason}`);
+      if (!this.sawExitedEvent) {
+        this.sawExitedEvent = true;
+        this.sendToClient({ type: "event", event: "exited", seq: 0, body: { exitCode: 0 } });
+      }
+      this.sawTerminatedEvent = true;
+      this.sendToClient({ type: "event", event: "terminated", seq: 0, body: {} });
+    }
+    this.closeClientConnection();
+  }
+
+  /** Close the VS Code side after queued DAP responses/events have been written. */
+  private closeClientConnection(): void {
+    this.clientSocket?.end();
+    this.server?.close();
   }
 
   /**

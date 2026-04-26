@@ -387,3 +387,42 @@ pub enum ReadOnlyViolationKind {
     /// `.update(...)` call on a `TypedDict` with `ReadOnly` fields.
     UpdateCall,
 }
+
+/// A violation detected in a `TypeAliasType(...)` call.
+#[derive(Debug, Clone)]
+pub struct TypeAliasTypeViolation {
+    /// The source span to highlight.
+    pub span: Span,
+    /// The kind of violation.
+    pub kind: TypeAliasTypeViolationKind,
+    /// The alias name (LHS variable).
+    pub alias_name: String,
+}
+
+/// Kind of `TypeAliasType` violation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TypeAliasTypeViolationKind {
+    /// The value argument is not a valid type expression.
+    InvalidTypeExpression,
+    /// The alias value references itself (circular dependency).
+    CircularReference,
+    /// A `TypeVar` used in the value is not declared in `type_params`.
+    UndeclaredTypeVar {
+        /// The name of the undeclared type variable.
+        typevar_name: String,
+    },
+    /// The `type_params` keyword is not a literal tuple.
+    NonLiteralTypeParams,
+    /// Accessing an attribute that doesn't exist on `TypeAliasType` instances.
+    InvalidAttributeAccess {
+        /// The attribute name that was accessed.
+        attr_name: String,
+    },
+    /// Incorrect number of type arguments when subscripting a type alias.
+    IncorrectTypeArgCount {
+        /// Expected (minimum) number of type arguments.
+        expected: usize,
+        /// Actual number provided.
+        actual: usize,
+    },
+}
