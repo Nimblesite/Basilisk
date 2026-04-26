@@ -16,8 +16,10 @@ import { getStore } from '../../extension';
 
 import {
     EXTENSION_ID,
-    POLL_INTERVAL_MS,
-    WAIT_MS,
+    DIAGNOSTIC_TIMEOUT_MS,
+    NO_DIAGNOSTIC_WAIT_MS,
+    SERVER_START_WAIT_MS,
+    SUITE_SETUP_TIMEOUT_MS,
     waitForDiagnostics,
     waitForDiagnosticsCleared,
     openPythonFile,
@@ -25,9 +27,16 @@ import {
     replaceDocumentContent,
     setupLspTestSuite,
     teardownLspTestSuite,
-} from "./test-helpers";
+} from './test-helpers';
 
 /** Extra buffer (ms) added to restart-test timeout to cover server restart. */
+const RESTART_EXTRA_TIMEOUT_MS = 20_000;
+
+/** Brief pause (ms) after issuing a restart command before probing the server. */
+const RESTART_SETTLE_MS = 500;
+
+/** Multiplier applied to DIAGNOSTIC_TIMEOUT_MS for multi-phase tests. */
+const DIAGNOSTIC_TIMEOUT_MULTIPLIER = 3;
 
 interface PackageJSON {
     readonly activationEvents?: string[];
@@ -38,6 +47,7 @@ suite('LSP Lifecycle Tests', () => {
     let tmpDir: string;
 
     suiteSetup(async function () {
+        this.timeout(SUITE_SETUP_TIMEOUT_MS);
         const result = await setupLspTestSuite('basilisk-lifecycle-test-');
         tmpDir = result.tmpDir;
     });
@@ -55,6 +65,7 @@ suite('LSP Lifecycle Tests', () => {
     // 1. restartServer command works
     // ----------------------------------------------------------------
     test('restartServer command works and server remains functional', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + RESTART_EXTRA_TIMEOUT_MS);
 
         // Execute the restart command -- it should not throw.
         let didThrow = false;
@@ -67,7 +78,7 @@ suite('LSP Lifecycle Tests', () => {
 
         // Brief pause for the server to restart — diagnostics polling below
         // will wait for the server to actually respond.
-        await new Promise<void>((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+        await new Promise<void>((resolve) => setTimeout(resolve, RESTART_SETTLE_MS));
 
         // Verify the extension is still active after restart.
         const ext = vscode.extensions.getExtension(EXTENSION_ID);
@@ -81,7 +92,7 @@ suite('LSP Lifecycle Tests', () => {
             'def after_restart(x):\n    return x\n'
         );
 
-        const diagnostics = await waitForDiagnostics(uri, WAIT_MS);
+        const diagnostics = await waitForDiagnostics(uri, DIAGNOSTIC_TIMEOUT_MS);
         assert.ok(
             diagnostics.length > 0,
             'Expected diagnostics after server restart, proving the server restarted and is working'
@@ -92,6 +103,7 @@ suite('LSP Lifecycle Tests', () => {
     // 2. showOutput command works
     // ----------------------------------------------------------------
     test('showOutput command works without error', async function () {
+        this.timeout(SERVER_START_WAIT_MS);
 
         // Ensure the extension is active.
         const ext = vscode.extensions.getExtension(EXTENSION_ID);
@@ -112,6 +124,7 @@ suite('LSP Lifecycle Tests', () => {
     // 3. Status bar exists after activation
     // ----------------------------------------------------------------
     test('status bar exists after activation', async function () {
+        this.timeout(SERVER_START_WAIT_MS);
 
         const ext = vscode.extensions.getExtension(EXTENSION_ID);
         assert.ok(ext, `Extension ${EXTENSION_ID} should be installed`);
@@ -144,6 +157,7 @@ suite('LSP Lifecycle Tests', () => {
     // 4. Extension activates on Python file open
     // ----------------------------------------------------------------
     test('extension activates on Python file open', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS);
 
         // The extension should already be active from suiteSetup, but we
         // verify the activation mechanism by checking the extension state.
@@ -178,6 +192,7 @@ suite('LSP Lifecycle Tests', () => {
     // 5. Diagnostics update on file edit (full edit-diagnose-fix-clear cycle)
     // ----------------------------------------------------------------
     test('diagnostics update on file edit -- full edit-diagnose-fix-clear cycle', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS * DIAGNOSTIC_TIMEOUT_MULTIPLIER + SERVER_START_WAIT_MS);
 
         // Step 1: Open a clean, fully typed file -- expect zero diagnostics.
         const { doc, uri } = await openPythonFile(
@@ -187,7 +202,7 @@ suite('LSP Lifecycle Tests', () => {
         );
 
         // Wait for the server to have processed the file (diagnostics cleared or stable).
-        await waitForDiagnosticsCleared(uri, WAIT_MS);
+        await waitForDiagnosticsCleared(uri, NO_DIAGNOSTIC_WAIT_MS);
 
         const initialDiags = vscode.languages.getDiagnostics(uri);
         const initialBasiliskDiags = initialDiags.filter(
@@ -212,7 +227,7 @@ suite('LSP Lifecycle Tests', () => {
         );
         assert.strictEqual(editApplied, true, 'Edit to introduce error should succeed');
 
-        const errorDiags = await waitForDiagnostics(uri, WAIT_MS);
+        const errorDiags = await waitForDiagnostics(uri, DIAGNOSTIC_TIMEOUT_MS);
         assert.ok(
             errorDiags.length > 0,
             'Expected diagnostics after introducing untyped parameter'
@@ -225,7 +240,7 @@ suite('LSP Lifecycle Tests', () => {
         );
         assert.strictEqual(fixApplied, true, 'Edit to fix error should succeed');
 
-        const clearedDiags = await waitForDiagnosticsCleared(uri, WAIT_MS);
+        const clearedDiags = await waitForDiagnosticsCleared(uri, DIAGNOSTIC_TIMEOUT_MS);
         const remainingBasilisk = clearedDiags.filter(
             (d) =>
                 d.source === 'basilisk' ||
@@ -246,6 +261,7 @@ suite('LSP Lifecycle Tests', () => {
     // 6. Multiple files get independent diagnostics
     // ----------------------------------------------------------------
     test('multiple files get independent diagnostics', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS * 2 + SERVER_START_WAIT_MS);
 
         // Open file A with an error.
         const { uri: uriA } = await openPythonFile(
@@ -255,7 +271,7 @@ suite('LSP Lifecycle Tests', () => {
         );
 
         // Wait for diagnostics on file A.
-        const diagsA = await waitForDiagnostics(uriA, WAIT_MS);
+        const diagsA = await waitForDiagnostics(uriA, DIAGNOSTIC_TIMEOUT_MS);
         assert.ok(
             diagsA.length > 0,
             'File A (with errors) should have diagnostics'
@@ -269,7 +285,7 @@ suite('LSP Lifecycle Tests', () => {
         );
 
         // Wait for the server to process file B (no diagnostics expected).
-        await waitForDiagnosticsCleared(uriB, WAIT_MS);
+        await waitForDiagnosticsCleared(uriB, NO_DIAGNOSTIC_WAIT_MS);
 
         const diagsB = vscode.languages.getDiagnostics(uriB);
         const basiliskDiagsB = diagsB.filter(
@@ -304,7 +320,7 @@ suite('LSP Lifecycle Tests', () => {
             'def clean(x: int) -> int:\n    return x\n'
         );
 
-        await waitForDiagnosticsCleared(uriBReopened, WAIT_MS);
+        await waitForDiagnosticsCleared(uriBReopened, NO_DIAGNOSTIC_WAIT_MS);
 
         const diagsBAfterClose = vscode.languages.getDiagnostics(uriBReopened);
         const basiliskDiagsBAfter = diagsBAfterClose.filter(

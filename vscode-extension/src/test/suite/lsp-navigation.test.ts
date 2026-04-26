@@ -15,18 +15,21 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import {
-    WAIT_MS,
+    DIAGNOSTIC_TIMEOUT_MS,
+    SUITE_SETUP_TIMEOUT_MS,
     closeAllEditors,
     openPythonFile,
     pollUntilResult,
     setupLspTestSuite,
     teardownLspTestSuite,
     waitForDiagnostics,
-} from "./test-helpers";
+} from './test-helpers';
 
 /** Extra buffer (ms) added to test-level timeouts beyond the core wait. */
+const TIMEOUT_BUFFER_MS = 5_000;
 
 /** Large buffer (ms) for tests that involve multiple operations. */
+const LARGE_TIMEOUT_BUFFER_MS = 10_000;
 
 // ── Test-specific line/column positions ──────────────────────────────
 
@@ -75,6 +78,7 @@ suite('LSP Navigation & Code Action Tests', () => {
     let tmpDir: string;
 
     suiteSetup(async function () {
+        this.timeout(SUITE_SETUP_TIMEOUT_MS);
         const setup = await setupLspTestSuite('basilisk-nav-test-');
         tmpDir = setup.tmpDir;
     });
@@ -92,6 +96,7 @@ suite('LSP Navigation & Code Action Tests', () => {
     // Go-to-definition works through extension
     // ----------------------------------------------------------------
     test('go-to-definition works through extension', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + TIMEOUT_BUFFER_MS);
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -140,6 +145,7 @@ suite('LSP Navigation & Code Action Tests', () => {
     // Signature help works through extension
     // ----------------------------------------------------------------
     test('signature help works through extension', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + TIMEOUT_BUFFER_MS);
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -189,6 +195,7 @@ suite('LSP Navigation & Code Action Tests', () => {
     // Code actions provided for diagnostics
     // ----------------------------------------------------------------
     test('code actions provided for diagnostics', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + LARGE_TIMEOUT_BUFFER_MS);
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -197,7 +204,7 @@ suite('LSP Navigation & Code Action Tests', () => {
         );
 
         // Wait for diagnostics to appear (missing type annotation).
-        const diagnostics = await waitForDiagnostics(uri, WAIT_MS);
+        const diagnostics = await waitForDiagnostics(uri, DIAGNOSTIC_TIMEOUT_MS);
 
         assert.ok(
             diagnostics.length > 0,
@@ -231,6 +238,7 @@ suite('LSP Navigation & Code Action Tests', () => {
     // Go-to-declaration works through extension
     // ----------------------------------------------------------------
     test('go-to-declaration works through extension', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + TIMEOUT_BUFFER_MS);
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -277,6 +285,7 @@ suite('LSP Navigation & Code Action Tests', () => {
     // Go-to-type-definition works through extension
     // ----------------------------------------------------------------
     test('go-to-type-definition works through extension', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + TIMEOUT_BUFFER_MS);
 
         const { uri } = await openPythonFile(
             tmpDir,
@@ -323,6 +332,7 @@ suite('LSP Navigation & Code Action Tests', () => {
     // Hover shows docstrings
     // ----------------------------------------------------------------
     test('hover shows docstring for function', async function () {
+        this.timeout(DIAGNOSTIC_TIMEOUT_MS + TIMEOUT_BUFFER_MS);
 
         const { uri } = await openPythonFile(
             tmpDir,

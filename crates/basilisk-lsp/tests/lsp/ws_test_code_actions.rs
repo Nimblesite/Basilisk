@@ -241,7 +241,7 @@ async fn test_ws_code_action_organize_imports() -> TestResult<()> {
     // Deliberately unsorted imports — ruff should reorder them.
     let code = "import os\nimport sys\nfrom typing import Optional\nimport json\n\nx: int = 1\n";
     fixture.did_open("file:///ca_org.py", code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     let resp = fixture
         .request(
@@ -288,7 +288,7 @@ async fn test_ws_code_action_organize_imports_fixes_order() -> TestResult<()> {
     // Use a clear case: `from __future__` must be first.
     let code = "import os\nfrom __future__ import annotations\n\nx: int = 1\n";
     fixture.did_open("file:///ca_org2.py", code).await?;
-    let _ = fixture.wait_for_diagnostics().await;
+    fixture.wait_for_diagnostics().await?;
 
     let resp = fixture
         .request(
