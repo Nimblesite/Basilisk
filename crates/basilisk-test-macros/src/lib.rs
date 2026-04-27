@@ -52,7 +52,9 @@ pub fn mutation_safe(attribute: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attribute as MutationSafeArgs);
     let function = parse_macro_input!(item as ItemFn);
 
-    expand_mutation_safe(&args, &function).unwrap_or_else(syn::Error::into_compile_error).into()
+    expand_mutation_safe(&args, &function)
+        .unwrap_or_else(syn::Error::into_compile_error)
+        .into()
 }
 
 fn expand_mutation_safe(
@@ -80,7 +82,11 @@ fn expand_mutation_safe(
 }
 
 fn validate_test_function(function: &ItemFn) -> Result<(), syn::Error> {
-    if !function.attrs.iter().any(|attribute| attribute.path().is_ident("test")) {
+    if !function
+        .attrs
+        .iter()
+        .any(|attribute| attribute.path().is_ident("test"))
+    {
         return Err(syn::Error::new_spanned(
             &function.sig.ident,
             "`#[mutation_safe]` must be used on a `#[test]` function",

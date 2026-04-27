@@ -13,6 +13,7 @@ members = [
     "crates/basilisk-mojo",
     "crates/basilisk-compiler",
     "crates/basilisk-common",
+    "crates/basilisk-test-macros",
     "crates/basilisk-test-utils",
     "crates/basilisk-uv",
     "crates/basilisk-profiler-helper",
@@ -58,6 +59,7 @@ basilisk-compiler = { path = "crates/basilisk-compiler" }
 basilisk-stubs      = { path = "crates/basilisk-stubs" }
 basilisk-config     = { path = "crates/basilisk-config" }
 basilisk-common     = { path = "crates/basilisk-common" }
+basilisk-test-macros = { path = "crates/basilisk-test-macros" }
 basilisk-uv         = { path = "crates/basilisk-uv" }
 basilisk-test-utils = { path = "crates/basilisk-test-utils" }
 
@@ -76,6 +78,7 @@ trivial_numeric_casts = "deny"
 elided_lifetimes_in_paths = "deny"
 # Stale #[expect] attributes must be errors, not warnings — no dead suppressions
 unfulfilled_lint_expectations = "deny"
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(mutation_testing)"] }
 future_incompatible = { level = "deny", priority = -1 }
 nonstandard_style = { level = "deny", priority = -1 }
 rust_2018_idioms = { level = "deny", priority = -1 }

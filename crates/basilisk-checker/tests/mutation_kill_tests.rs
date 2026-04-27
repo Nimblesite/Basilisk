@@ -5,6 +5,7 @@
 use basilisk_checker::check;
 use basilisk_parser::parse_source;
 use basilisk_resolver::resolve;
+use basilisk_test_macros::mutation_safe;
 
 fn run(source: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::error::Error>> {
     let parsed = parse_source(source.to_owned(), "test.py".to_owned())?;
@@ -413,8 +414,9 @@ def check():
 // E0014: Various literal type mismatches — each type path
 // ═══════════════════════════════════════════════════════════════════════
 
+#[mutation_safe(rule = "e0014")]
 #[test]
-fn mutation_safe_e0014_every_literal_type() -> Result<(), Box<dyn std::error::Error>> {
+fn mutant_e0014_every_literal_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 # Each literal type assigned to wrong annotation
 a: str = 42            # int → str FAIL
@@ -452,8 +454,9 @@ n: bytes = b"data"
 // E0014: Negative literal and float literal
 // ═══════════════════════════════════════════════════════════════════════
 
+#[mutation_safe(rule = "e0014")]
 #[test]
-fn mutation_safe_e0014_negative_and_float() -> Result<(), Box<dyn std::error::Error>> {
+fn mutant_e0014_negative_and_float() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 # Negative int → float: OK
 a: float = -42

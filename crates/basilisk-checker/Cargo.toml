@@ -15,6 +15,7 @@ ruff_text_size.workspace    = true
 basilisk-uv.workspace       = true
 
 [dev-dependencies]
+basilisk-test-macros.workspace = true
 tempfile = "3"
 
 [lints]

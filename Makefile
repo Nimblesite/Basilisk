@@ -128,6 +128,7 @@ mutation-test: ## Run mutation-safe tests by default. Use ALL=1 for the full che
 	@bash -euo pipefail -c '\
 		package="$(MUTATION_TEST_PACKAGE)"; \
 		marker="$(MUTATION_TEST_MARKER)"; \
+		mutation_rustflags="$${RUSTFLAGS:-}"; \
 		mode="working"; \
 		test_filter="$$marker"; \
 		examine_re=""; \
@@ -136,22 +137,23 @@ mutation-test: ## Run mutation-safe tests by default. Use ALL=1 for the full che
 			test_filter=""; \
 			examine_re="."; \
 		else \
+			mutation_rustflags="$${mutation_rustflags:+$$mutation_rustflags }--cfg mutation_testing"; \
 			tests_file="$$(mktemp)"; \
-			cargo test --package "$$package" "$$marker" -- --list > "$$tests_file"; \
-			examine_re="$$(python3 -c '"'"'import pathlib,re,sys; rules=[]; [rules.append(match.group(1)) for line in pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").splitlines() for match in [re.search(r"mutation_safe_(e[0-9]{4})", line)] if match and match.group(1) not in rules]; sys.exit("no mutation-safe tests found; mark tests as mutation_safe_eNNNN_*") if not rules else print(r"rules/(" + "|".join(rules) + r")[.]rs")'"'"' "$$tests_file")"; \
+			RUSTFLAGS="$$mutation_rustflags" cargo test --package "$$package" "$$marker" -- --list > "$$tests_file"; \
+			examine_re="$$(python3 -c '"'"'import pathlib,sys; prefix="mutation_safe_"; rules=[]; [rules.append(code) for line in pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").splitlines() for index in [line.find(prefix)] if index >= 0 for code in [line[index + len(prefix):index + len(prefix) + 5]] if len(code) == 5 and code[0] == "e" and code[1:].isdigit() and code not in rules]; sys.exit("no mutation-safe tests found; add #[mutation_safe(rule = \"eNNNN\")]") if not rules else print(r"rules/(" + "|".join(rules) + r")[.]rs")'"'"' "$$tests_file")"; \
 			rm -f "$$tests_file"; \
 		fi; \
 		echo -e "\033[1m\033[0;36m▶ Mutation testing ($$mode): $$package\033[0m"; \
 		echo -e "\033[0;36m  [diag] Tests: $${test_filter:-all}\033[0m"; \
 		echo -e "\033[0;36m  [diag] Mutants: $$examine_re\033[0m"; \
 		if [ -n "$$test_filter" ]; then \
-			cargo test --package "$$package" "$$test_filter"; \
+			RUSTFLAGS="$$mutation_rustflags" cargo test --package "$$package" "$$test_filter"; \
 		else \
-			cargo test --package "$$package"; \
+			RUSTFLAGS="$$mutation_rustflags" cargo test --package "$$package"; \
 		fi; \
 		rm -rf "$(MUTATION_DIR)/mutants.out.$$mode".*; \
 		mutants_file="$$(mktemp)"; \
-		cargo mutants --list --package "$$package" --re "$$examine_re" --exclude-re "src/inference" > "$$mutants_file"; \
+		RUSTFLAGS="$$mutation_rustflags" cargo mutants --list --package "$$package" --re "$$examine_re" --exclude-re "src/inference" > "$$mutants_file"; \
 		total="$$(wc -l < "$$mutants_file" | tr -d " ")"; \
 		if [ "$$total" -eq 0 ]; then \
 			echo -e "\033[0;31m✗ No mutants selected\033[0m"; \
@@ -166,9 +168,9 @@ mutation-test: ## Run mutation-safe tests by default. Use ALL=1 for the full che
 			echo -e "\033[1m\033[0;36m▶ Mutant $$i/$$total\033[0m"; \
 			echo -e "\033[0;36m  [diag] $$mutant\033[0m"; \
 			if [ -n "$$test_filter" ]; then \
-				cargo mutants --jobs 1 --timeout 30 --baseline skip --package "$$package" --re "$$exact_re" --exclude-re "src/inference" --cargo-test-arg "$$test_filter" --output "$$out_dir"; \
+				RUSTFLAGS="$$mutation_rustflags" cargo mutants --jobs 1 --timeout 30 --baseline skip --package "$$package" --re "$$exact_re" --exclude-re "src/inference" --cargo-test-arg "$$test_filter" --output "$$out_dir"; \
 			else \
-				cargo mutants --jobs 1 --timeout 30 --baseline skip --package "$$package" --re "$$exact_re" --exclude-re "src/inference" --output "$$out_dir"; \
+				RUSTFLAGS="$$mutation_rustflags" cargo mutants --jobs 1 --timeout 30 --baseline skip --package "$$package" --re "$$exact_re" --exclude-re "src/inference" --output "$$out_dir"; \
 			fi; \
 		done < "$$mutants_file"; \
 		rm -f "$$mutants_file"; \
