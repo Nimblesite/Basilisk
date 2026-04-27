@@ -414,7 +414,7 @@ def check():
 // E0014: Various literal type mismatches — each type path
 // ═══════════════════════════════════════════════════════════════════════
 
-#[mutation_safe(rule = "e0014")]
+#[mutation_safe(rule = "e0014", fns = "check_vars")]
 #[test]
 fn mutant_e0014_every_literal_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
@@ -454,7 +454,7 @@ n: bytes = b"data"
 // E0014: Negative literal and float literal
 // ═══════════════════════════════════════════════════════════════════════
 
-#[mutation_safe(rule = "e0014")]
+#[mutation_safe(rule = "e0014", fns = "check_vars")]
 #[test]
 fn mutant_e0014_negative_and_float() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"

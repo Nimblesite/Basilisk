@@ -555,7 +555,7 @@ cfg.setting = 42
 /// When the `&&` is flipped to `||`, unannotated variables leak through and
 /// would cause downstream panics or false diagnostics. We assert that
 /// EXACTLY the annotated-with-RHS mismatches are flagged and nothing else.
-#[mutation_safe(rule = "e0014")]
+#[mutation_safe(rule = "e0014", fns = "check_vars")]
 #[test]
 fn e0014_mutant_annotation_and_rhs_required() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
@@ -590,7 +590,7 @@ good: int = 42
 
 /// Kills mutant: line 126 `.ends_with(".typealias")` → `&&`.
 /// `typing.TypeAlias` annotation must be skipped by e0014 (handled by e0048).
-#[mutation_safe(rule = "e0014")]
+#[mutation_safe(rule = "e0014", fns = "check_vars")]
 #[test]
 fn e0014_mutant_typing_dot_typealias_skipped() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
@@ -625,7 +625,7 @@ x: int = "hello"
 
 /// Kills mutant: line 127 `InferredType::Named` check for "ta".
 /// `TypeAlias as TA` must be skipped by e0014.
-#[mutation_safe(rule = "e0014")]
+#[mutation_safe(rule = "e0014", fns = "check_vars")]
 #[test]
 fn e0014_mutant_ta_alias_skipped() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
@@ -652,7 +652,7 @@ x: int = "hello"
 
 /// Kills mutant: line 220 `!param.has_annotation` → removing `!`.
 /// Annotated params must be included in `param_type_map` for local var checks.
-#[mutation_safe(rule = "e0014")]
+#[mutation_safe(rule = "e0014", fns = "build_param_type_map")]
 #[test]
 fn e0014_mutant_annotated_param_type_used() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
@@ -679,7 +679,7 @@ def func(x: int, y: str) -> None:
 
 /// Kills mutants in `has_top_level_token` depth tracking.
 /// Nested brackets must NOT trigger `if`/`or`/`and` detection inside them.
-#[mutation_safe(rule = "e0048")]
+#[mutation_safe(rule = "e0048", fns = "has_top_level_token")]
 #[test]
 fn e0048_mutant_nested_brackets_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
@@ -738,7 +738,7 @@ BadTernary: TypeAlias = int if True else str
 /// but `0*1=0` (wrong: includes the newline char). We test with a variable
 /// on the second line where the annotation text would be corrupted by the
 /// off-by-one and assert the diagnostic message contains the correct type.
-#[mutation_safe(rule = "e0014")]
+#[mutation_safe(rule = "e0014", fns = "extract_annotation")]
 #[test]
 fn e0014_mutant_multiline_annotation_extraction() -> Result<(), Box<dyn std::error::Error>> {
     // The `\n` at position 0 means rfind returns Some(0).
@@ -770,7 +770,7 @@ fn e0014_mutant_multiline_annotation_extraction() -> Result<(), Box<dyn std::err
 /// Kills mutant: e0048.rs line 69 `import.kind != ImportKind::From` → `==`.
 /// With the mutant, `From` imports are skipped, so `TypeAlias as TA` is never
 /// registered and `BadAlias: TA = [int, str]` would not be detected as E0048.
-#[mutation_safe(rule = "e0048")]
+#[mutation_safe(rule = "e0048", fns = "collect_type_alias_names")]
 #[test]
 fn e0048_mutant_from_import_kind_guard() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"

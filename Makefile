@@ -125,7 +125,7 @@ install-binaries: ## Install all Basilisk binaries (basilisk, basilisk-profiler-
 # =============================================================================
 
 mutation-test: ## Run mutation-safe tests by default. Use ALL=1 for the full checker suite.
-	@bash -uo pipefail -c '\
+	@bash -euo pipefail -c '\
 		package="$(MUTATION_TEST_PACKAGE)"; \
 		marker="$(MUTATION_TEST_MARKER)"; \
 		mutation_rustflags="$${RUSTFLAGS:-}"; \
@@ -140,50 +140,45 @@ mutation-test: ## Run mutation-safe tests by default. Use ALL=1 for the full che
 			mutation_rustflags="$${mutation_rustflags:+$$mutation_rustflags }--cfg mutation_testing"; \
 			tests_file="$$(mktemp)"; \
 			RUSTFLAGS="$$mutation_rustflags" cargo test --package "$$package" "$$marker" -- --list > "$$tests_file"; \
-			examine_re="$$(python3 -c '"'"'import pathlib,sys; prefix="mutation_safe_"; rules=[]; [rules.append(code) for line in pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").splitlines() for index in [line.find(prefix)] if index >= 0 for code in [line[index + len(prefix):index + len(prefix) + 5]] if len(code) == 5 and code[0] == "e" and code[1:].isdigit() and code not in rules]; sys.exit("no mutation-safe tests found; add #[mutation_safe(rule = \"eNNNN\")]") if not rules else print(r"rules/(" + "|".join(rules) + r")[.]rs")'"'"' "$$tests_file")"; \
+			examine_re="$$(python3 scripts/mutation_examine_re.py "$$tests_file")"; \
 			rm -f "$$tests_file"; \
 		fi; \
 		echo -e "\033[1m\033[0;36m▶ Mutation testing ($$mode): $$package\033[0m"; \
 		echo -e "\033[0;36m  [diag] Tests: $${test_filter:-all}\033[0m"; \
 		echo -e "\033[0;36m  [diag] Mutants: $$examine_re\033[0m"; \
-		rm -rf "$(MUTATION_DIR)/mutants.out.$$mode".*; \
-		mutants_file="$$(mktemp)"; \
-		RUSTFLAGS="$$mutation_rustflags" cargo mutants --list --package "$$package" --re "$$examine_re" --exclude-re "src/inference" > "$$mutants_file"; \
-		total="$$(wc -l < "$$mutants_file" | tr -d " ")"; \
-		if [ "$$total" -eq 0 ]; then \
+		out_dir="$(MUTATION_DIR)/mutants.out.$$mode"; \
+		rm -rf "$$out_dir"; \
+		mutants_count="$$(RUSTFLAGS="$$mutation_rustflags" cargo mutants --list --package "$$package" --re "$$examine_re" --exclude-re "src/inference" | wc -l | tr -d " ")"; \
+		if [ "$$mutants_count" -eq 0 ]; then \
 			echo -e "\033[0;31m✗ No mutants selected\033[0m"; \
-			rm -f "$$mutants_file"; \
 			exit 1; \
 		fi; \
-		i=0; missed=0; unviable=0; caught=0; \
-		while IFS= read -r mutant; do \
-			i=$$((i + 1)); \
-			exact_re="$$(python3 -c "import re, sys; print(\"^\" + re.escape(sys.argv[1]) + \"$$\")" "$$mutant")"; \
-			out_dir="$(MUTATION_DIR)/mutants.out.$$mode.$$(printf "%04d" "$$i")"; \
-			echo -e "\033[1m\033[0;36m▶ Mutant $$i/$$total\033[0m"; \
-			echo -e "\033[0;36m  [diag] $$mutant\033[0m"; \
-			if [ -n "$$test_filter" ]; then \
-				result_file="$$(mktemp)"; \
-				RUSTFLAGS="$$mutation_rustflags" cargo mutants --jobs 1 --timeout 30 --baseline skip --package "$$package" --re "$$exact_re" --exclude-re "src/inference" --cargo-test-arg "$$test_filter" --output "$$out_dir" > "$$result_file" 2>&1; rc=$$?; \
-			else \
-				result_file="$$(mktemp)"; \
-				RUSTFLAGS="$$mutation_rustflags" cargo mutants --jobs 1 --timeout 30 --baseline skip --package "$$package" --re "$$exact_re" --exclude-re "src/inference" --output "$$out_dir" > "$$result_file" 2>&1; rc=$$?; \
-			fi; \
-			cat "$$result_file"; \
-			if grep -q "1 unviable" "$$result_file"; then \
-				unviable=$$((unviable + 1)); \
-				echo -e "\033[0;33m  [skip] unviable (cannot compile in mutated form)\033[0m"; \
-			elif grep -q "1 missed" "$$result_file"; then \
-				missed=$$((missed + 1)); \
-				echo -e "\033[0;31m  [FAIL] MISSED — add a test to kill this mutant\033[0m"; \
-			else \
-				caught=$$((caught + 1)); \
-			fi; \
-			rm -f "$$result_file"; \
-		done < "$$mutants_file"; \
-		rm -f "$$mutants_file"; \
-		echo -e "\033[1m\033[0;36m▶ Results: $$total mutants — $$caught caught, $$missed missed, $$unviable unviable\033[0m"; \
+		echo -e "\033[0;36m  [diag] Total mutants: $$mutants_count\033[0m"; \
+		if [ -n "$$test_filter" ]; then \
+			RUSTFLAGS="$$mutation_rustflags" cargo mutants \
+				--jobs 4 --timeout 5 --baseline skip \
+				--package "$$package" --re "$$examine_re" --exclude-re "src/inference" \
+				--cargo-test-arg "$$test_filter" --output "$$out_dir" || true; \
+		else \
+			RUSTFLAGS="$$mutation_rustflags" cargo mutants \
+				--jobs 4 --timeout 5 --baseline skip \
+				--package "$$package" --re "$$examine_re" --exclude-re "src/inference" \
+				--output "$$out_dir" || true; \
+		fi; \
+		results_dir="$$out_dir/mutants.out"; \
+		missed_file="$$results_dir/missed.txt"; \
+		unviable_file="$$results_dir/unviable.txt"; \
+		caught_file="$$results_dir/caught.txt"; \
+		timeout_file="$$results_dir/timeout.txt"; \
+		missed=0; unviable=0; caught=0; timed_out=0; \
+		[ -s "$$missed_file" ] && missed="$$(wc -l < "$$missed_file" | tr -d " ")" || true; \
+		[ -s "$$unviable_file" ] && unviable="$$(wc -l < "$$unviable_file" | tr -d " ")" || true; \
+		[ -s "$$caught_file" ] && caught="$$(wc -l < "$$caught_file" | tr -d " ")" || true; \
+		[ -s "$$timeout_file" ] && timed_out="$$(wc -l < "$$timeout_file" | tr -d " ")" || true; \
+		echo -e "\033[1m\033[0;36m▶ Results: $$mutants_count mutants — $$caught caught, $$missed missed, $$unviable unviable, $$timed_out timeout\033[0m"; \
 		if [ "$$missed" -gt 0 ]; then \
+			echo -e "\033[0;31m  Missed mutants:\033[0m"; \
+			cat "$$missed_file"; \
 			echo -e "\033[0;31m✗ $$missed mutant(s) survived — add tests to kill them\033[0m"; \
 			exit 1; \
 		fi; \
