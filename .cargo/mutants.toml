@@ -5,6 +5,11 @@
 # Do not rebuild/test packages outside the ones being mutated.
 test_workspace = false
 
+# Cap lints to allow so that deny-warnings don't make mutants unviable.
+# When cargo-mutants replaces a function body (e.g. `-> Option<&str>` with `None`),
+# the original parameters become unused and trigger --deny=unused_variables.
+cap_lints = true
+
 # Respect .gitignore when copying workspace (excludes node_modules, target, etc.)
 # Without this, cargo-mutants copies 200MB+ of node_modules per mutant → disk full.
 gitignore = true

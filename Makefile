@@ -146,11 +146,6 @@ mutation-test: ## Run mutation-safe tests by default. Use ALL=1 for the full che
 		echo -e "\033[1m\033[0;36m▶ Mutation testing ($$mode): $$package\033[0m"; \
 		echo -e "\033[0;36m  [diag] Tests: $${test_filter:-all}\033[0m"; \
 		echo -e "\033[0;36m  [diag] Mutants: $$examine_re\033[0m"; \
-		if [ -n "$$test_filter" ]; then \
-			RUSTFLAGS="$$mutation_rustflags" cargo test --package "$$package" "$$test_filter"; \
-		else \
-			RUSTFLAGS="$$mutation_rustflags" cargo test --package "$$package"; \
-		fi; \
 		rm -rf "$(MUTATION_DIR)/mutants.out.$$mode".*; \
 		mutants_file="$$(mktemp)"; \
 		RUSTFLAGS="$$mutation_rustflags" cargo mutants --list --package "$$package" --re "$$examine_re" --exclude-re "src/inference" > "$$mutants_file"; \
