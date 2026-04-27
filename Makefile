@@ -148,7 +148,7 @@ mutation-test: ## Run mutation-safe tests by default. Use ALL=1 for the full che
 		echo -e "\033[0;36m  [diag] Mutants: $$examine_re\033[0m"; \
 		out_dir="$(MUTATION_DIR)/mutants.out.$$mode"; \
 		rm -rf "$$out_dir"; \
-		mutants_count="$$(RUSTFLAGS="$$mutation_rustflags" cargo mutants --list --package "$$package" --re "$$examine_re" --exclude-re "src/inference" | wc -l | tr -d " ")"; \
+		mutants_count="$$(RUSTFLAGS="$$mutation_rustflags" cargo mutants --list --package "$$package" --re "$$examine_re" | wc -l | tr -d " ")"; \
 		if [ "$$mutants_count" -eq 0 ]; then \
 			echo -e "\033[0;31m✗ No mutants selected\033[0m"; \
 			exit 1; \
@@ -156,13 +156,14 @@ mutation-test: ## Run mutation-safe tests by default. Use ALL=1 for the full che
 		echo -e "\033[0;36m  [diag] Total mutants: $$mutants_count\033[0m"; \
 		if [ -n "$$test_filter" ]; then \
 			RUSTFLAGS="$$mutation_rustflags" cargo mutants \
-				--jobs 4 --timeout 5 --baseline skip \
-				--package "$$package" --re "$$examine_re" --exclude-re "src/inference" \
-				--cargo-test-arg "$$test_filter" --output "$$out_dir" || true; \
+				--jobs 4 --timeout 60 --baseline skip --copy-target true \
+				--package "$$package" --re "$$examine_re" \
+				--output "$$out_dir" \
+				-- --test coverage_boost_33_tests --test mutation_kill_tests "$$test_filter" || true; \
 		else \
 			RUSTFLAGS="$$mutation_rustflags" cargo mutants \
-				--jobs 4 --timeout 5 --baseline skip \
-				--package "$$package" --re "$$examine_re" --exclude-re "src/inference" \
+				--jobs 4 --timeout 60 --baseline skip --copy-target true \
+				--package "$$package" --re "$$examine_re" \
 				--output "$$out_dir" || true; \
 		fi; \
 		results_dir="$$out_dir/mutants.out"; \
@@ -182,6 +183,9 @@ mutation-test: ## Run mutation-safe tests by default. Use ALL=1 for the full che
 			echo -e "\033[0;31m✗ $$missed mutant(s) survived — add tests to kill them\033[0m"; \
 			exit 1; \
 		fi; \
+		report="$(MUTATION_DIR)/mutants_report.html"; \
+		python3 "$(MUTATION_DIR)/mutants_report.py" "$$results_dir/outcomes.json" "$$report"; \
+		echo -e "\033[0;36m  Report: $$report\033[0m"; \
 		echo -e "\033[0;32m✓ Mutation testing complete: all viable mutants caught\033[0m"; \
 	'
 
