@@ -125,7 +125,7 @@ install-binaries: ## Install all Basilisk binaries (basilisk, basilisk-profiler-
 # =============================================================================
 
 mutation-test: ## Run mutation-safe tests by default. Use ALL=1 for the full checker suite.
-	@bash -euo pipefail -c '\
+	@bash -uo pipefail -c '\
 		package="$(MUTATION_TEST_PACKAGE)"; \
 		marker="$(MUTATION_TEST_MARKER)"; \
 		mutation_rustflags="$${RUSTFLAGS:-}"; \
@@ -155,7 +155,7 @@ mutation-test: ## Run mutation-safe tests by default. Use ALL=1 for the full che
 			rm -f "$$mutants_file"; \
 			exit 1; \
 		fi; \
-		i=0; \
+		i=0; missed=0; unviable=0; caught=0; \
 		while IFS= read -r mutant; do \
 			i=$$((i + 1)); \
 			exact_re="$$(python3 -c "import re, sys; print(\"^\" + re.escape(sys.argv[1]) + \"$$\")" "$$mutant")"; \
@@ -163,13 +163,31 @@ mutation-test: ## Run mutation-safe tests by default. Use ALL=1 for the full che
 			echo -e "\033[1m\033[0;36m▶ Mutant $$i/$$total\033[0m"; \
 			echo -e "\033[0;36m  [diag] $$mutant\033[0m"; \
 			if [ -n "$$test_filter" ]; then \
-				RUSTFLAGS="$$mutation_rustflags" cargo mutants --jobs 1 --timeout 30 --baseline skip --package "$$package" --re "$$exact_re" --exclude-re "src/inference" --cargo-test-arg "$$test_filter" --output "$$out_dir"; \
+				result_file="$$(mktemp)"; \
+				RUSTFLAGS="$$mutation_rustflags" cargo mutants --jobs 1 --timeout 30 --baseline skip --package "$$package" --re "$$exact_re" --exclude-re "src/inference" --cargo-test-arg "$$test_filter" --output "$$out_dir" > "$$result_file" 2>&1; rc=$$?; \
 			else \
-				RUSTFLAGS="$$mutation_rustflags" cargo mutants --jobs 1 --timeout 30 --baseline skip --package "$$package" --re "$$exact_re" --exclude-re "src/inference" --output "$$out_dir"; \
+				result_file="$$(mktemp)"; \
+				RUSTFLAGS="$$mutation_rustflags" cargo mutants --jobs 1 --timeout 30 --baseline skip --package "$$package" --re "$$exact_re" --exclude-re "src/inference" --output "$$out_dir" > "$$result_file" 2>&1; rc=$$?; \
 			fi; \
+			cat "$$result_file"; \
+			if grep -q "1 unviable" "$$result_file"; then \
+				unviable=$$((unviable + 1)); \
+				echo -e "\033[0;33m  [skip] unviable (cannot compile in mutated form)\033[0m"; \
+			elif grep -q "1 missed" "$$result_file"; then \
+				missed=$$((missed + 1)); \
+				echo -e "\033[0;31m  [FAIL] MISSED — add a test to kill this mutant\033[0m"; \
+			else \
+				caught=$$((caught + 1)); \
+			fi; \
+			rm -f "$$result_file"; \
 		done < "$$mutants_file"; \
 		rm -f "$$mutants_file"; \
-		echo -e "\033[0;32m✓ Mutation testing complete: $$total mutants checked\033[0m"; \
+		echo -e "\033[1m\033[0;36m▶ Results: $$total mutants — $$caught caught, $$missed missed, $$unviable unviable\033[0m"; \
+		if [ "$$missed" -gt 0 ]; then \
+			echo -e "\033[0;31m✗ $$missed mutant(s) survived — add tests to kill them\033[0m"; \
+			exit 1; \
+		fi; \
+		echo -e "\033[0;32m✓ Mutation testing complete: all viable mutants caught\033[0m"; \
 	'
 
 # =============================================================================

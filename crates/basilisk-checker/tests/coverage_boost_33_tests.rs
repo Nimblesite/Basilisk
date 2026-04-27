@@ -766,3 +766,26 @@ fn e0014_mutant_multiline_annotation_extraction() -> Result<(), Box<dyn std::err
     );
     Ok(())
 }
+
+/// Kills mutant: e0048.rs line 69 `import.kind != ImportKind::From` → `==`.
+/// With the mutant, `From` imports are skipped, so `TypeAlias as TA` is never
+/// registered and `BadAlias: TA = [int, str]` would not be detected as E0048.
+#[mutation_safe(rule = "e0048")]
+#[test]
+fn e0048_mutant_from_import_kind_guard() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+from typing import TypeAlias as TA
+
+BadAlias: TA = [int, str]
+"#;
+    let diagnostics = run(source)?;
+    let e0048: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0048")
+        .collect();
+    assert!(
+        !e0048.is_empty(),
+        "BSK-E0048 must fire for `TA = [int, str]` where TA is aliased from TypeAlias: {diagnostics:?}"
+    );
+    Ok(())
+}
