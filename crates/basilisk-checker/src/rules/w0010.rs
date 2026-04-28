@@ -76,6 +76,7 @@ mod tests {
     use super::*;
     use basilisk_resolver::scope::ImportKind;
     use basilisk_resolver::Span;
+    use std::fs;
     use std::path::PathBuf;
 
     fn make_module(imports: Vec<ImportInfo>) -> ResolvedModule {
@@ -191,5 +192,44 @@ mod tests {
         let mut diagnostics = Vec::new();
         MissingTypeStubs.check(&module, &mut diagnostics);
         assert!(diagnostics.is_empty());
+    }
+
+    #[test]
+    fn skips_site_packages_package_with_py_typed_marker() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let dir = tempfile::tempdir()?;
+        let package = dir
+            .path()
+            .join("lib")
+            .join("python3.12")
+            .join("site-packages")
+            .join("httpx_fake");
+        fs::create_dir_all(&package)?;
+        fs::write(package.join("py.typed"), "")?;
+        let init_path = package.join("__init__.py");
+        fs::write(&init_path, "def get(url: str) -> str: ...\n")?;
+
+        let import = ImportInfo {
+            module: "httpx_fake".to_owned(),
+            names: vec![],
+            span: Span::new(0, 16),
+            kind: ImportKind::Plain,
+            resolution: ImportResolution::SourcePy,
+            resolved_path: Some(init_path),
+            package_dep_kind: None,
+            package_version: None,
+            package_name: None,
+            unresolved_reason: None,
+        };
+        let module = make_module(vec![import]);
+        let mut diagnostics = Vec::new();
+
+        MissingTypeStubs.check(&module, &mut diagnostics);
+
+        assert!(
+            diagnostics.is_empty(),
+            "PEP 561 inline-typed packages must not emit BSK-W0010"
+        );
+        Ok(())
     }
 }

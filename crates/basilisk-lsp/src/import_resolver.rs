@@ -731,6 +731,39 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
+    // BSK-E0010 false positive: sibling-module import — issue #22
+    // `import configure_agent_backend` in scripts/configure_agent_backend_test.py
+    // should resolve to the sibling configure_agent_backend.py even when the
+    // scripts/ directory is not listed as a workspace root.
+    #[test]
+    fn test_sibling_module_resolved_when_importer_dir_not_in_roots() {
+        let scripts_dir = unique_tmp("bsk_ir_sibling");
+        let workspace_root = unique_tmp("bsk_ir_sibling_root");
+        fs::create_dir_all(&scripts_dir).unwrap();
+        fs::create_dir_all(&workspace_root).unwrap();
+        fs::write(scripts_dir.join("configure_agent_backend.py"), "x = 1\n").unwrap();
+        let importing_file = scripts_dir.join("configure_agent_backend_test.py");
+
+        // Workspace root does NOT include scripts_dir — only the project root is listed.
+        let paths = make_search_paths(vec![workspace_root.clone()]);
+
+        // A bare `import configure_agent_backend` from a file inside scripts_dir must
+        // resolve to the sibling .py file.  The fix is resolve_module_with_importer().
+        let result =
+            resolve_module_with_importer("configure_agent_backend", &paths, Some(&importing_file));
+        assert!(
+            result.is_some(),
+            "BSK-E0010 false positive: sibling module in the same directory as the importing \
+             file should resolve without the directory being listed as a workspace root"
+        );
+        let r = result.unwrap();
+        assert_eq!(r.resolution, ImportResolution::SourcePy);
+        assert!(r.path.ends_with("configure_agent_backend.py"));
+
+        let _ = fs::remove_dir_all(&scripts_dir);
+        let _ = fs::remove_dir_all(&workspace_root);
+    }
+
     #[test]
     fn test_resolve_relative_import_too_many_levels() {
         let dir = unique_tmp("bsk_ir_rel_deep");
