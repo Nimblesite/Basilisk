@@ -32,6 +32,7 @@ impl Rule for MissingTypeStubs {
             .filter(|import| import.resolution == ImportResolution::SourcePy)
             .filter(|import| !basilisk_stubs::is_stdlib_module(&import.module))
             .filter(|import| is_site_packages_import(import))
+            .filter(|import| !has_py_typed_marker(import))
             .for_each(|import| diagnostics.push(make_diagnostic(import, &module.path)));
     }
 }
@@ -44,6 +45,19 @@ fn is_site_packages_import(import: &ImportInfo) -> bool {
         .resolved_path
         .as_ref()
         .is_some_and(|path| path.to_string_lossy().contains("site-packages"))
+}
+
+/// Check whether the resolved package has a `py.typed` marker (PEP 561).
+///
+/// The marker lives next to `__init__.py` (for packages) or next to the
+/// module file itself (for single-file modules).  Both cases are covered by
+/// checking the parent directory of the resolved path.
+fn has_py_typed_marker(import: &ImportInfo) -> bool {
+    import
+        .resolved_path
+        .as_ref()
+        .and_then(|p| p.parent())
+        .is_some_and(|pkg_dir| pkg_dir.join("py.typed").is_file())
 }
 
 /// Build the diagnostic for a missing type stubs warning.

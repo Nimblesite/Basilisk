@@ -142,6 +142,31 @@ pub fn resolve_module(
     None
 }
 
+/// Resolve an absolute import, also searching the importing file's own directory.
+///
+/// Python adds the directory of the script being run to `sys.path[0]`, so a
+/// bare `import foo` in `scripts/test.py` can resolve to `scripts/foo.py` even
+/// when `scripts/` is not listed as a workspace root.  This function replicates
+/// that behaviour by checking the importer's directory after the normal PEP 561
+/// search order but before concluding that the import is unresolved.
+///
+/// Use this in place of [`resolve_module`] whenever the path of the importing
+/// file is known (i.e. everywhere in the workspace resolver loop).
+#[must_use]
+pub fn resolve_module_with_importer(
+    module_name: &str,
+    search_paths: &ImportSearchPaths,
+    importing_file: Option<&Path>,
+) -> Option<ResolvedImport> {
+    // Standard PEP 561 search first.
+    if let Some(resolved) = resolve_module(module_name, search_paths) {
+        return Some(resolved);
+    }
+    // Fall back to the importer's own directory — mirrors Python's sys.path[0].
+    let importer_dir = importing_file?.parent()?;
+    try_resolve_in_dir(module_name, importer_dir)
+}
+
 /// Try resolving a module in a stub-only directory (only `.pyi` files).
 fn try_resolve_stub_only(module_name: &str, stub_dir: &Path) -> Option<ResolvedImport> {
     let parts: Vec<&str> = module_name.split('.').collect();
@@ -427,10 +452,17 @@ pub fn resolve_workspace_imports(index: &WorkspaceIndex, search_paths: &ImportSe
         };
         let mut resolved = Arc::try_unwrap(resolved_arc).unwrap_or_else(|arc| (*arc).clone());
 
+        // The file's own path, used to search its directory for sibling modules.
+        let importing_file = PathBuf::from(&resolved.path);
+
         for import in &mut resolved.imports {
             let result = match import.kind {
                 ImportKind::Plain | ImportKind::From | ImportKind::Star => {
-                    resolve_module(&import.module, search_paths)
+                    resolve_module_with_importer(
+                        &import.module,
+                        search_paths,
+                        Some(&importing_file),
+                    )
                 }
             };
             if let Some(r) = result {
