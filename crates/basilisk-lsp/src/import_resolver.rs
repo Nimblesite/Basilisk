@@ -796,6 +796,34 @@ mod tests {
         let _ = fs::remove_dir_all(&workspace_root);
     }
 
+    /// Regression for issue #24: a `tests/` directory that does NOT contain
+    /// `__init__.py` (PEP 420 implicit namespace package) must still resolve
+    /// `from tests.helpers import X` when the workspace root is on the
+    /// search path. pytest enables this layout by adding the project root
+    /// to `sys.path`; Basilisk needs to mirror that behaviour.
+    #[test]
+    fn test_resolve_tests_namespace_package_without_init() {
+        let root = unique_tmp("bsk_ir_tests_ns");
+        let tests = root.join("tests");
+        fs::create_dir_all(&tests).unwrap();
+        // No __init__.py — PEP 420 namespace package layout.
+        fs::write(tests.join("helpers.py"), "TEST_BUNDLE = 1\n").unwrap();
+
+        let paths = make_search_paths(vec![root.clone()]);
+        let result = resolve_module("tests.helpers", &paths);
+
+        assert!(
+            result.is_some(),
+            "BSK-E0010 false positive: PEP 420 namespace package `tests/` (no __init__.py) \
+             must resolve when the project root is on the search path"
+        );
+        let r = result.unwrap();
+        assert_eq!(r.resolution, ImportResolution::SourcePy);
+        assert!(r.path.ends_with("helpers.py"));
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
     #[test]
     fn test_resolve_relative_import_too_many_levels() {
         let dir = unique_tmp("bsk_ir_rel_deep");

@@ -987,6 +987,168 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    // ── Issue #22: sibling-module imports in script directories ─────────────
+    //
+    // `import configure_agent_backend` from `scripts/configure_agent_backend_test.py`
+    // must resolve to the sibling `scripts/configure_agent_backend.py` even when
+    // the workspace root is the project root (not `scripts/`). This mirrors
+    // Python's `sys.path[0]` behaviour and prevents BSK-E0010 false positives
+    // for the common scripts-with-tests pattern.
+    #[test]
+    fn test_sibling_import_in_scripts_dir_does_not_emit_e0010() {
+        let project_root = unique_tmp("bsk_e0010_sibling_root");
+        let scripts_dir = project_root.join("scripts");
+        std::fs::create_dir_all(&scripts_dir).unwrap();
+
+        // The sibling module being imported.
+        std::fs::write(
+            scripts_dir.join("configure_agent_backend.py"),
+            "VALUE: int = 1\n",
+        )
+        .unwrap();
+        // The importing file lives next to the sibling.
+        let test_path = scripts_dir.join("configure_agent_backend_test.py");
+        std::fs::write(&test_path, "import configure_agent_backend\n").unwrap();
+
+        // Workspace root is the *project* root — `scripts/` is NOT listed.
+        let roots = vec![project_root.clone()];
+        let config = crate::config::load_config(&project_root);
+
+        let idx = WorkspaceIndex::new(
+            roots.clone(),
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
+        let uri = Url::from_file_path(&test_path).unwrap();
+        let _ = idx.set_open(&uri, "import configure_agent_backend\n", 1);
+
+        let search_paths = crate::import_resolver::ImportSearchPaths::from_config(
+            &roots, &config, /*registry=*/ None,
+        );
+        crate::import_resolver::resolve_workspace_imports(&idx, &search_paths);
+        recheck_all(&idx);
+
+        let diags = get_diagnostics(&idx, &uri);
+        let has_e0010 = diags.iter().any(|d| {
+            d.code.code == "BSK-E0010" && d.message.contains("configure_agent_backend")
+        });
+        assert!(
+            !has_e0010,
+            "sibling-module import in a script directory must resolve via sys.path[0] \
+             fallback; got BSK-E0010: {diags:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(&project_root);
+    }
+
+    // ── Issue #24: src layout test helpers must resolve ─────────────────────
+    //
+    // Project layout (very common — pytest src layout):
+    //   pyproject.toml
+    //   src/agent_backend/__init__.py
+    //   src/agent_backend/db/models.py
+    //   tests/helpers.py        ← imports `from agent_backend.db.models import X`
+    //   tests/test_foo.py       ← imports `from tests.helpers import Y`
+    //
+    // Both imports must resolve:
+    //   * `agent_backend.db.models` — via `src/` on search path (workspace_member)
+    //   * `tests.helpers` — via the workspace root being on the search path
+    #[test]
+    fn test_src_layout_test_helpers_resolve() {
+        let root = unique_tmp("bsk_e0010_src_layout");
+        let src_pkg = root.join("src").join("agent_backend").join("db");
+        let tests_dir = root.join("tests");
+        std::fs::create_dir_all(&src_pkg).unwrap();
+        std::fs::create_dir_all(&tests_dir).unwrap();
+
+        // pyproject.toml so src layout discovery picks up `src/`.
+        std::fs::write(
+            root.join("pyproject.toml"),
+            "[project]\nname = \"agent_backend\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+
+        // Production package.
+        std::fs::write(
+            root.join("src").join("agent_backend").join("__init__.py"),
+            "",
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("src")
+                .join("agent_backend")
+                .join("db")
+                .join("__init__.py"),
+            "",
+        )
+        .unwrap();
+        std::fs::write(src_pkg.join("models.py"), "class AgentConfig: ...\n").unwrap();
+
+        // Test helpers (PEP 420 namespace, no __init__.py at tests/).
+        let helpers_path = tests_dir.join("helpers.py");
+        std::fs::write(
+            &helpers_path,
+            "from agent_backend.db.models import AgentConfig\n",
+        )
+        .unwrap();
+        let test_path = tests_dir.join("test_foo.py");
+        std::fs::write(&test_path, "from tests.helpers import AgentConfig\n").unwrap();
+
+        let roots = vec![root.clone()];
+        let config = crate::config::load_config(&root);
+
+        let idx = WorkspaceIndex::new(
+            roots.clone(),
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
+
+        // Open the helper and the test file (mirrors a real LSP session).
+        let helpers_uri = Url::from_file_path(&helpers_path).unwrap();
+        let _ = idx.set_open(
+            &helpers_uri,
+            "from agent_backend.db.models import AgentConfig\n",
+            1,
+        );
+        let test_uri = Url::from_file_path(&test_path).unwrap();
+        let _ = idx.set_open(&test_uri, "from tests.helpers import AgentConfig\n", 1);
+
+        // Mirror the LSP init flow: workspace_members get added (src/ for
+        // src-layout projects), then imports are resolved.
+        let mut search_paths = crate::import_resolver::ImportSearchPaths::from_config(
+            &roots, &config, /*registry=*/ None,
+        );
+        // Use the real init.rs discovery helper so this test exercises the
+        // production path, not a hand-built workspace_members list.
+        search_paths.workspace_members = crate::server::init::discover_workspace_members(&roots);
+        crate::import_resolver::resolve_workspace_imports(&idx, &search_paths);
+        recheck_all(&idx);
+
+        // tests/helpers.py — imports agent_backend.db.models (via src/).
+        let helpers_diags = get_diagnostics(&idx, &helpers_uri);
+        let helpers_e0010 = helpers_diags
+            .iter()
+            .any(|d| d.code.code == "BSK-E0010" && d.message.contains("agent_backend"));
+        assert!(
+            !helpers_e0010,
+            "BSK-E0010 false positive: src-layout production import from a test \
+             helper must resolve via src/ on the search path; got: {helpers_diags:?}"
+        );
+
+        // tests/test_foo.py — imports tests.helpers (via workspace root).
+        let test_diags = get_diagnostics(&idx, &test_uri);
+        let test_e0010 = test_diags
+            .iter()
+            .any(|d| d.code.code == "BSK-E0010" && d.message.contains("tests.helpers"));
+        assert!(
+            !test_e0010,
+            "BSK-E0010 false positive: `tests.helpers` import must resolve when the \
+             workspace root is on the search path; got: {test_diags:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     // ── Phase 5: .python-version change updates stdlib availability ──────────
 
     #[test]

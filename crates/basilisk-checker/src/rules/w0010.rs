@@ -49,15 +49,30 @@ fn is_site_packages_import(import: &ImportInfo) -> bool {
 
 /// Check whether the resolved package has a `py.typed` marker (PEP 561).
 ///
-/// The marker lives next to `__init__.py` (for packages) or next to the
-/// module file itself (for single-file modules).  Both cases are covered by
-/// checking the parent directory of the resolved path.
+/// Per PEP 561 the marker is placed at the **top-level package** and applies
+/// to every submodule. For a `from sqlalchemy.orm import ...` import the
+/// resolved path is `.../sqlalchemy/orm/__init__.py`, but the marker lives
+/// at `.../sqlalchemy/py.typed`. We walk up `depth(module)` levels from the
+/// resolved file's parent to reach the top-level package directory.
 fn has_py_typed_marker(import: &ImportInfo) -> bool {
-    import
-        .resolved_path
-        .as_ref()
-        .and_then(|p| p.parent())
-        .is_some_and(|pkg_dir| pkg_dir.join("py.typed").is_file())
+    let Some(resolved) = import.resolved_path.as_ref() else {
+        return false;
+    };
+    let Some(mut pkg_dir) = resolved.parent() else {
+        return false;
+    };
+    // For nested imports like `sqlalchemy.orm.session` we need to climb up
+    // one directory per dot in the dotted module name to reach the top
+    // package directory. Single-file modules (`flask.py`) and top-level
+    // packages have zero dots and need no climbing.
+    let depth = import.module.matches('.').count();
+    for _ in 0..depth {
+        let Some(parent) = pkg_dir.parent() else {
+            return false;
+        };
+        pkg_dir = parent;
+    }
+    pkg_dir.join("py.typed").is_file()
 }
 
 /// Build the diagnostic for a missing type stubs warning.
@@ -243,6 +258,54 @@ mod tests {
         assert!(
             diagnostics.is_empty(),
             "PEP 561 inline-typed packages must not emit BSK-W0010"
+        );
+        Ok(())
+    }
+
+    /// Regression for issue #13: `from sqlalchemy.orm import session` resolves
+    /// to `.../sqlalchemy/orm/__init__.py`. The `py.typed` marker lives at the
+    /// package root (`.../sqlalchemy/py.typed`), not next to the resolved
+    /// submodule. The marker check must walk up to the top-level package.
+    #[test]
+    fn skips_nested_submodule_when_root_package_has_py_typed()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let root_pkg = dir
+            .path()
+            .join("lib")
+            .join("python3.12")
+            .join("site-packages")
+            .join("sqlalchemy_fake");
+        let sub_pkg = root_pkg.join("orm");
+        fs::create_dir_all(&sub_pkg)?;
+        // py.typed lives at the top-level package only — per PEP 561 it
+        // applies to the entire package and all its submodules.
+        fs::write(root_pkg.join("py.typed"), "")?;
+        fs::write(root_pkg.join("__init__.py"), "")?;
+        let sub_init = sub_pkg.join("__init__.py");
+        fs::write(&sub_init, "class Session: ...\n")?;
+
+        let import = ImportInfo {
+            module: "sqlalchemy_fake.orm".to_owned(),
+            names: vec!["Session".to_owned()],
+            span: Span::new(0, 32),
+            kind: ImportKind::From,
+            resolution: ImportResolution::SourcePy,
+            resolved_path: Some(sub_init),
+            package_dep_kind: None,
+            package_version: None,
+            package_name: None,
+            unresolved_reason: None,
+        };
+        let module = make_module(vec![import]);
+        let mut diagnostics = Vec::new();
+
+        MissingTypeStubs.check(&module, &mut diagnostics);
+
+        assert!(
+            diagnostics.is_empty(),
+            "PEP 561 py.typed at the top-level package must apply to all submodules; \
+             got: {diagnostics:?}"
         );
         Ok(())
     }
