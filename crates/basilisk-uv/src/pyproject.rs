@@ -10,9 +10,13 @@ use tracing::debug;
 
 /// Extract the list of direct dependency names from `pyproject.toml`.
 ///
-/// Reads the `[project].dependencies` array and returns normalised package
-/// names (lowercased, hyphens replaced with underscores). Returns an empty
-/// vec if the file is missing, malformed, or has no dependencies section.
+/// Includes:
+/// - `[project].dependencies` (PEP 621 runtime deps)
+/// - `[project.optional-dependencies].*` (PEP 621 extras, e.g. `dev`, `test`)
+/// - `[dependency-groups].*` (PEP 735, used by uv for dev groups)
+///
+/// All names are normalised (lowercased, hyphens replaced with underscores).
+/// Returns an empty vec if the file is missing, malformed, or declares no deps.
 #[must_use]
 pub fn extract_pyproject_deps(root: &Path) -> Vec<String> {
     let path = root.join("pyproject.toml");
@@ -26,20 +30,55 @@ pub fn extract_pyproject_deps(root: &Path) -> Vec<String> {
         return Vec::new();
     };
 
-    let Some(deps_array) = table
+    let mut deps = Vec::new();
+
+    if let Some(arr) = table
         .get("project")
         .and_then(toml::Value::as_table)
         .and_then(|project| project.get("dependencies"))
         .and_then(toml::Value::as_array)
-    else {
-        return Vec::new();
-    };
+    {
+        collect_deps_into(arr, &mut deps);
+    }
 
-    deps_array
-        .iter()
-        .filter_map(toml::Value::as_str)
-        .map(|dep| extract_package_name(dep).to_lowercase().replace('-', "_"))
-        .collect()
+    if let Some(extras) = table
+        .get("project")
+        .and_then(toml::Value::as_table)
+        .and_then(|project| project.get("optional-dependencies"))
+        .and_then(toml::Value::as_table)
+    {
+        for value in extras.values() {
+            if let Some(arr) = value.as_array() {
+                collect_deps_into(arr, &mut deps);
+            }
+        }
+    }
+
+    if let Some(groups) = table
+        .get("dependency-groups")
+        .and_then(toml::Value::as_table)
+    {
+        for value in groups.values() {
+            if let Some(arr) = value.as_array() {
+                collect_deps_into(arr, &mut deps);
+            }
+        }
+    }
+
+    deps
+}
+
+/// Append normalised package names from a TOML array of PEP 508 specifiers.
+///
+/// Skips entries that aren't strings (e.g. `{ include-group = "..." }` table
+/// references in PEP 735 groups — those resolve transitively via the named
+/// groups themselves, which we already iterate).
+fn collect_deps_into(array: &[toml::Value], out: &mut Vec<String>) {
+    for value in array {
+        if let Some(spec) = value.as_str() {
+            out.push(extract_package_name(spec).to_lowercase().replace('-', "_"));
+        }
+    }
 }
 
 /// Extract the package name from a PEP 508 dependency specifier.
@@ -171,5 +210,72 @@ name = "my-app"
     #[test]
     fn extract_package_name_with_spaces() {
         assert_eq!(extract_package_name("  requests >= 2.0  "), "requests");
+    }
+
+    /// Regression for issue #25: dev/optional dependencies declared in
+    /// `[project.optional-dependencies]` (PEP 621) must also be returned, or
+    /// `pytest`/`Pillow`/`GitPython` etc. wrongly trigger BSK-E0010.
+    #[test]
+    fn includes_pep621_optional_dependencies() {
+        let dir = setup_dir();
+        let content = r#"
+[project]
+name = "my-app"
+dependencies = ["requests"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3.0", "Pillow>=11.0.0", "GitPython>=3.1.44"]
+test = ["httpx>=0.28.0"]
+"#;
+        std::fs::write(dir.path().join("pyproject.toml"), content).unwrap();
+
+        let deps = extract_pyproject_deps(dir.path());
+        assert!(
+            deps.contains(&"pytest".to_owned()),
+            "issue #25: pytest from [project.optional-dependencies].dev must be included; got {deps:?}"
+        );
+        assert!(
+            deps.contains(&"pillow".to_owned()),
+            "issue #25: Pillow from optional-dependencies must be included; got {deps:?}"
+        );
+        assert!(
+            deps.contains(&"gitpython".to_owned()),
+            "issue #25: GitPython from optional-dependencies must be included; got {deps:?}"
+        );
+        assert!(
+            deps.contains(&"httpx".to_owned()),
+            "issue #25: deps from non-`dev` extras must also be included; got {deps:?}"
+        );
+    }
+
+    /// Regression for issue #25: PEP 735 `[dependency-groups]` (uv-native) must
+    /// be parsed too — `pytest`/`httpx` declared there are real direct deps.
+    #[test]
+    fn includes_pep735_dependency_groups() {
+        let dir = setup_dir();
+        let content = r#"
+[project]
+name = "my-app"
+dependencies = ["requests"]
+
+[dependency-groups]
+dev = ["pytest>=8.3.0", "httpx>=0.28.0"]
+docs = ["sphinx>=7.0"]
+"#;
+        std::fs::write(dir.path().join("pyproject.toml"), content).unwrap();
+
+        let deps = extract_pyproject_deps(dir.path());
+        assert!(
+            deps.contains(&"pytest".to_owned()),
+            "issue #25: pytest from [dependency-groups].dev must be included; got {deps:?}"
+        );
+        assert!(
+            deps.contains(&"httpx".to_owned()),
+            "issue #25: httpx from [dependency-groups].dev must be included; got {deps:?}"
+        );
+        assert!(
+            deps.contains(&"sphinx".to_owned()),
+            "issue #25: deps from non-`dev` groups must also be included; got {deps:?}"
+        );
     }
 }

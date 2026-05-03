@@ -341,15 +341,42 @@ pub fn has_stub_package(module_name: &str, site_packages: &Path) -> bool {
 
 /// Detect site-packages directory from venv config, then fall back to
 /// `python3 -c "import sys; ..."` subprocess for system Python discovery.
+///
+/// Reads the `VIRTUAL_ENV` environment variable as the highest-priority
+/// override — `source .venv/bin/activate` (and CI scripts that install
+/// dependencies into a venv outside the workspace tree) set this to the
+/// active venv root.
 fn resolve_site_packages(
     roots: &[PathBuf],
     config: &crate::config::WorkspaceConfig,
 ) -> Option<PathBuf> {
-    // 1. Try venv-based discovery first.
+    let virtual_env = std::env::var_os("VIRTUAL_ENV").map(PathBuf::from);
+    resolve_site_packages_with_env(roots, config, virtual_env.as_deref())
+}
+
+/// `resolve_site_packages` with the `VIRTUAL_ENV` value injected.
+///
+/// Split out so tests can exercise the env-var path without mutating process
+/// state (which is `unsafe` under the project's `unsafe_code = "deny"` lint).
+fn resolve_site_packages_with_env(
+    roots: &[PathBuf],
+    config: &crate::config::WorkspaceConfig,
+    virtual_env: Option<&Path>,
+) -> Option<PathBuf> {
+    // 1. Honour an active venv signalled by `VIRTUAL_ENV` — the standard
+    //    Python convention. Issue #25.
+    if let Some(venv) = virtual_env {
+        if venv.is_dir() {
+            if let Some(sp) = site_packages_in_dir(venv) {
+                return Some(sp);
+            }
+        }
+    }
+    // 2. Try venv-based discovery from workspace roots / explicit config.
     if let Some(sp) = resolve_venv_site_packages(roots, config) {
         return Some(sp);
     }
-    // 2. Fall back to Python subprocess discovery.
+    // 3. Fall back to Python subprocess discovery.
     detect_python_site_packages()
 }
 
@@ -885,6 +912,82 @@ mod tests {
         assert!(result.unwrap().ends_with("site-packages"));
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Regression for issue #25: when the user activates a venv outside the
+    /// workspace (e.g. CI installs to `/tmp/nap-ci-prep-py312`), Basilisk
+    /// could not locate site-packages and reported BSK-E0010 `NeedsSync` for
+    /// every installed dep. Honour the `VIRTUAL_ENV` environment variable —
+    /// the standard Python convention set by `source .venv/bin/activate`.
+    #[test]
+    fn test_resolve_site_packages_uses_virtual_env_var() {
+        let venv = unique_tmp("bsk_ir_external_venv");
+        let sp = venv
+            .join("lib")
+            .join("python3.12")
+            .join("site-packages");
+        fs::create_dir_all(&sp).unwrap();
+
+        // Workspace root is intentionally empty (no .venv inside it).
+        let workspace = unique_tmp("bsk_ir_workspace_no_venv");
+        fs::create_dir_all(&workspace).unwrap();
+
+        let config = crate::config::WorkspaceConfig::default();
+        let result = resolve_site_packages_with_env(
+            std::slice::from_ref(&workspace),
+            &config,
+            Some(&venv),
+        );
+
+        assert!(
+            result.is_some(),
+            "issue #25: VIRTUAL_ENV must be honoured when workspace has no venv"
+        );
+        let resolved = result.unwrap();
+        assert!(
+            resolved.ends_with("site-packages"),
+            "expected site-packages dir, got {resolved:?}"
+        );
+        assert!(
+            resolved.starts_with(&venv),
+            "expected resolved path under {venv:?}, got {resolved:?}"
+        );
+
+        let _ = fs::remove_dir_all(&venv);
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    /// `VIRTUAL_ENV` pointing at a non-existent path must not crash and must
+    /// fall through to the normal workspace-root scan.
+    #[test]
+    fn test_virtual_env_var_invalid_falls_through_to_workspace_scan() {
+        let workspace = unique_tmp("bsk_ir_ws_with_venv");
+        let sp = workspace
+            .join(".venv")
+            .join("lib")
+            .join("python3.12")
+            .join("site-packages");
+        fs::create_dir_all(&sp).unwrap();
+
+        let bogus = std::path::PathBuf::from("/definitely/does/not/exist");
+        let config = crate::config::WorkspaceConfig::default();
+        let result = resolve_site_packages_with_env(
+            std::slice::from_ref(&workspace),
+            &config,
+            Some(&bogus),
+        );
+
+        assert!(
+            result.is_some(),
+            "bogus VIRTUAL_ENV must not block fallback to workspace .venv scan"
+        );
+        let resolved = result.unwrap();
+        assert!(
+            resolved.starts_with(&workspace),
+            "expected workspace .venv site-packages, got {resolved:?}"
+        );
+
+        let _ = fs::remove_dir_all(&workspace);
     }
 
     // ── Stub-path resolution (Phase 1.2) ────────────────────────────────
