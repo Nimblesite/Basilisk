@@ -204,9 +204,7 @@ async fn no_uv_project_response(
     server: &LspServer,
     label: &str,
 ) -> LspResult<Option<serde_json::Value>> {
-    let msg = format!(
-        "Basilisk: {label} skipped — no `pyproject.toml` found in this workspace"
-    );
+    let msg = format!("Basilisk: {label} skipped — no `pyproject.toml` found in this workspace");
     info!("{msg}");
     server
         .client

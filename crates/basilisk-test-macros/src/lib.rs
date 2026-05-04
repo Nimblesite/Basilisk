@@ -48,7 +48,9 @@ impl Parse for MutationSafeArgs {
         };
 
         if !input.is_empty() {
-            return Err(input.error("expected `rule = \"eNNNN\"` or `rule = \"eNNNN\", fns = \"fn1|fn2\"`"));
+            return Err(
+                input.error("expected `rule = \"eNNNN\"` or `rule = \"eNNNN\", fns = \"fn1|fn2\"`")
+            );
         }
 
         Ok(Self { rule, fns })

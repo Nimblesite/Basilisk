@@ -34,7 +34,7 @@ def _parse(list_file: str) -> tuple[dict[str, set[str]], list[str], list[str]]:
         idx = line.find(prefix)
         if idx < 0:
             continue
-        rest = line[idx + len(prefix):]
+        rest = line[idx + len(prefix) :]
         m = re.match(r"(e\d{4})_fns__(.+?)__\w+::", rest)
         if m:
             rule, slug = m.group(1), m.group(2)
@@ -87,7 +87,9 @@ def build_test_args(list_file: str, marker: str) -> str:
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        sys.exit(f"usage: {sys.argv[0]} <test-list-file> [examine_re|test_args [marker]]")
+        sys.exit(
+            f"usage: {sys.argv[0]} <test-list-file> [examine_re|test_args [marker]]"
+        )
     mode = sys.argv[2] if len(sys.argv) > 2 else "examine_re"
     marker = sys.argv[3] if len(sys.argv) > 3 else "mutation_safe"
     if mode == "test_args":

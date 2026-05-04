@@ -1029,9 +1029,9 @@ mod tests {
         recheck_all(&idx);
 
         let diags = get_diagnostics(&idx, &uri);
-        let has_e0010 = diags.iter().any(|d| {
-            d.code.code == "BSK-E0010" && d.message.contains("configure_agent_backend")
-        });
+        let has_e0010 = diags
+            .iter()
+            .any(|d| d.code.code == "BSK-E0010" && d.message.contains("configure_agent_backend"));
         assert!(
             !has_e0010,
             "sibling-module import in a script directory must resolve via sys.path[0] \

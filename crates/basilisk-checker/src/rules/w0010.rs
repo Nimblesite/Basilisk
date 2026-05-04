@@ -267,8 +267,8 @@ mod tests {
     /// package root (`.../sqlalchemy/py.typed`), not next to the resolved
     /// submodule. The marker check must walk up to the top-level package.
     #[test]
-    fn skips_nested_submodule_when_root_package_has_py_typed()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn skips_nested_submodule_when_root_package_has_py_typed(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let dir = tempfile::tempdir()?;
         let root_pkg = dir
             .path()

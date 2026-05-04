@@ -922,10 +922,7 @@ mod tests {
     #[test]
     fn test_resolve_site_packages_uses_virtual_env_var() {
         let venv = unique_tmp("bsk_ir_external_venv");
-        let sp = venv
-            .join("lib")
-            .join("python3.12")
-            .join("site-packages");
+        let sp = venv.join("lib").join("python3.12").join("site-packages");
         fs::create_dir_all(&sp).unwrap();
 
         // Workspace root is intentionally empty (no .venv inside it).
@@ -933,11 +930,8 @@ mod tests {
         fs::create_dir_all(&workspace).unwrap();
 
         let config = crate::config::WorkspaceConfig::default();
-        let result = resolve_site_packages_with_env(
-            std::slice::from_ref(&workspace),
-            &config,
-            Some(&venv),
-        );
+        let result =
+            resolve_site_packages_with_env(std::slice::from_ref(&workspace), &config, Some(&venv));
 
         assert!(
             result.is_some(),
@@ -971,11 +965,8 @@ mod tests {
 
         let bogus = std::path::PathBuf::from("/definitely/does/not/exist");
         let config = crate::config::WorkspaceConfig::default();
-        let result = resolve_site_packages_with_env(
-            std::slice::from_ref(&workspace),
-            &config,
-            Some(&bogus),
-        );
+        let result =
+            resolve_site_packages_with_env(std::slice::from_ref(&workspace), &config, Some(&bogus));
 
         assert!(
             result.is_some(),
