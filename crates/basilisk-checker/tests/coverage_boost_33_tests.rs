@@ -773,11 +773,11 @@ fn e0014_mutant_multiline_annotation_extraction() -> Result<(), Box<dyn std::err
 #[mutation_safe(rule = "e0048", fns = "collect_type_alias_names")]
 #[test]
 fn e0048_mutant_from_import_kind_guard() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeAlias as TA
 
 BadAlias: TA = [int, str]
-"#;
+";
     let diagnostics = run(source)?;
     let e0048: Vec<_> = diagnostics
         .iter()
@@ -796,11 +796,11 @@ BadAlias: TA = [int, str]
 #[mutation_safe(rule = "e0048", fns = "collect_type_alias_names")]
 #[test]
 fn e0048_mutant_alias_underscore_accepted() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeAlias as My_Alias
 
 Bad: My_Alias = [int, str]
-"#;
+";
     let diagnostics = run(source)?;
     let e0048: Vec<_> = diagnostics
         .iter()
@@ -815,17 +815,17 @@ Bad: My_Alias = [int, str]
 
 /// Kills mutant: e0048.rs line 88 `!alias.is_empty() && alias != "TypeAlias"` → `||`.
 /// With the mutant, a non-aliased `from typing import TypeAlias` adds a second
-/// "TypeAlias" entry. The outer check `alias != "TypeAlias"` guards against this.
+/// "`TypeAlias`" entry. The outer check `alias != "TypeAlias"` guards against this.
 /// We verify that `TypeAlias`-annotated bad RHS is still caught exactly once.
 #[mutation_safe(rule = "e0048", fns = "collect_type_alias_names")]
 #[test]
 fn e0048_mutant_typealias_self_alias_not_duplicated() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeAlias
 
 Bad: TypeAlias = [int, str]
 Good: TypeAlias = int | str
-"#;
+";
     let diagnostics = run(source)?;
     let e0048: Vec<_> = diagnostics
         .iter()
@@ -863,7 +863,7 @@ assigned: int = "wrong"
     Ok(())
 }
 
-/// Kills mutant: e0014 line 304 `pos + 1` → `pos * 1` in extract_annotation.
+/// Kills mutant: e0014 line 304 `pos + 1` → `pos * 1` in `extract_annotation`.
 /// With the mutant, `line_start = pos` includes the preceding `\n` char, so
 /// the annotation is extracted from a shifted offset and may be wrong or None.
 /// We use a name on line 2 (rfind gives pos > 0) with a type annotation
@@ -890,11 +890,11 @@ fn e0014_mutant_line_start_off_by_one_second_var() -> Result<(), Box<dyn std::er
 #[mutation_safe(rule = "e0048", fns = "collect_type_alias_names")]
 #[test]
 fn e0048_mutant_typing_module_guard() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeAlias as Alias
 
 Bad: Alias = [int, str]
-"#;
+";
     let diagnostics = run(source)?;
     let e0048: Vec<_> = diagnostics
         .iter()
@@ -916,13 +916,13 @@ Bad: Alias = [int, str]
 #[mutation_safe(rule = "e0048", fns = "has_top_level_token")]
 #[test]
 fn e0048_mutant_depth_tracking_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeAlias
 
 GoodUnion: TypeAlias = dict[str, int] | list[str]
 GoodOptional: TypeAlias = tuple[int, str, float]
 GoodDeep: TypeAlias = dict[str, tuple[int, list[str]]]
-"#;
+";
     let diagnostics = run(source)?;
     let e0048: Vec<_> = diagnostics
         .iter()
@@ -941,11 +941,11 @@ GoodDeep: TypeAlias = dict[str, tuple[int, list[str]]]
 #[mutation_safe(rule = "e0048", fns = "has_top_level_token")]
 #[test]
 fn e0048_mutant_depth_decrement_catches_after_bracket() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing import TypeAlias
 
 BadAfterBracket: TypeAlias = tuple[int] or list[str]
-"#;
+";
     let diagnostics = run(source)?;
     let e0048: Vec<_> = diagnostics
         .iter()
@@ -960,16 +960,16 @@ BadAfterBracket: TypeAlias = tuple[int] or list[str]
 
 /// Kills mutant: e0048.rs line 72 second `!=` → `==` in module guard.
 /// Mutant: `module != "typing" && module == "typing_extensions"` → skips
-/// typing_extensions imports. `from typing_extensions import TypeAlias as TEA`
+/// `typing_extensions` imports. `from typing_extensions import TypeAlias as TEA`
 /// would not register TEA, so `Bad: TEA = [int]` fires no E0048.
 #[mutation_safe(rule = "e0048", fns = "collect_type_alias_names")]
 #[test]
 fn e0048_mutant_typing_extensions_module_guard() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let source = r"
 from typing_extensions import TypeAlias as TEA
 
 Bad: TEA = [int, str]
-"#;
+";
     let diagnostics = run(source)?;
     let e0048: Vec<_> = diagnostics
         .iter()
