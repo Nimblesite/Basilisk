@@ -38,8 +38,6 @@ test_package = [
 #   e0048.rs collect_type_alias_names `&& alias != "TypeAlias"` → `||`: empty aliases
 #   pushed to names never match a real (non-empty) annotation identifier.
 #
-#   e0048.rs has_top_level_token `i < bytes.len()` → `i <= bytes.len()`: the extra
-#   iteration calls bytes.get(len) = None, hits `_ => {}`, then exits on next guard.
 exclude_re = [
     # Inference engine: slow, not covered by mutation-safe tests.
     "src/inference",
@@ -47,5 +45,4 @@ exclude_re = [
     "e0014/mod\\.rs:\\d+:\\d+: replace && with \\|\\| in check_vars",
     "e0014/mod\\.rs:\\d+:\\d+: replace \\+ with \\* in extract_annotation",
     "e0048\\.rs:88:\\d+: replace && with \\|\\| in collect_type_alias_names",
-    "e0048\\.rs:178:\\d+: replace < with <= in has_top_level_token",
 ]
