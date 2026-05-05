@@ -478,3 +478,178 @@ d: float = 3.14
     );
     Ok(())
 }
+
+fn e0001_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
+    diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0001")
+        .count()
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// E0001 check_function: !p.has_annotation guard
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Kills mutant: e0001.rs:33 `delete ! in check_function` and `replace != with ==`
+/// on the name guards. Asserts BOTH that an unannotated regular param fires E0001
+/// AND that an annotated regular param does NOT — so flipping the polarity of the
+/// annotation check or the name guards produces an observable diagnostic count.
+#[mutation_safe(rule = "e0001", fns = "check_function")]
+#[test]
+fn mutant_e0001_annotation_polarity() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+def has_annotated_only(annotated: int) -> int:
+    return annotated
+
+def missing(unannotated, annotated: int) -> int:
+    return annotated
+";
+    let diagnostics = run(source)?;
+    let e0001: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0001")
+        .collect();
+    assert_eq!(
+        e0001.len(),
+        1,
+        "exactly one E0001 expected for `unannotated` only, got {}: {e0001:?}",
+        e0001.len()
+    );
+    assert!(
+        e0001[0].message.contains("unannotated"),
+        "diagnostic must name `unannotated`, got: {}",
+        e0001[0].message
+    );
+    Ok(())
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// E0001 check_function: self/cls guards (&& vs ||)
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Kills mutants: e0001.rs:33 `replace && with ||` (both occurrences).
+/// With `||` instead of `&&`, every parameter satisfies at least one branch,
+/// so unannotated `self`/`cls` would fire E0001 (false positive). This test
+/// asserts that unannotated `self` and `cls` do NOT fire while a sibling
+/// unannotated regular param DOES — exactly distinguishing && from ||.
+#[mutation_safe(rule = "e0001", fns = "check_function")]
+#[test]
+fn mutant_e0001_self_and_cls_exempt() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+class Foo:
+    def method(self, x):
+        return x
+
+    @classmethod
+    def klass(cls, y):
+        return y
+";
+    let diagnostics = run(source)?;
+    let e0001: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0001")
+        .collect();
+    assert_eq!(
+        e0001.len(),
+        2,
+        "exactly two E0001s expected (for `x` and `y`), got {}: {e0001:?}",
+        e0001.len()
+    );
+    let names: Vec<&str> = e0001.iter().map(|d| d.message.as_str()).collect();
+    assert!(
+        names.iter().any(|m| m.contains("`x`")),
+        "E0001 must fire for `x`, got: {names:?}"
+    );
+    assert!(
+        names.iter().any(|m| m.contains("`y`")),
+        "E0001 must fire for `y`, got: {names:?}"
+    );
+    assert!(
+        !names.iter().any(|m| m.contains("`self`") || m.contains("`cls`")),
+        "E0001 must NOT fire for `self` or `cls`, got: {names:?}"
+    );
+    Ok(())
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// E0001 check (impl): is_stub_context filter (delete !)
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Kills mutant: e0001.rs:25 `delete ! in check`. Without the negation,
+/// only stub-context functions are checked — so unannotated params in regular
+/// (non-stub) functions are missed AND unannotated params inside Protocol
+/// methods would incorrectly fire. This test asserts both directions.
+#[mutation_safe(rule = "e0001", fns = "check")]
+#[test]
+fn mutant_e0001_stub_context_negation() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Protocol
+
+class Iface(Protocol):
+    def stub_method(self, p): ...
+
+def regular(unannotated):
+    return unannotated
+";
+    let diagnostics = run(source)?;
+    let e0001: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0001")
+        .collect();
+    assert_eq!(
+        e0001.len(),
+        1,
+        "exactly one E0001 expected (for `unannotated` in regular fn), got {}: {e0001:?}",
+        e0001.len()
+    );
+    assert!(
+        e0001[0].message.contains("unannotated"),
+        "diagnostic must name `unannotated`, not the Protocol param: {}",
+        e0001[0].message
+    );
+    Ok(())
+}
+
+/// Kills mutant: e0001.rs:22 `replace check with ()`. With the empty body,
+/// no E0001 ever fires. A simple presence-of-diagnostic assertion kills it.
+#[mutation_safe(rule = "e0001", fns = "check")]
+#[test]
+fn mutant_e0001_check_body_present() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+def f(unannotated):
+    return unannotated
+";
+    let diagnostics = run(source)?;
+    let count = e0001_count(&diagnostics);
+    assert_eq!(
+        count, 1,
+        "E0001 must fire exactly once for unannotated param, got {count}"
+    );
+    Ok(())
+}
+
+/// Kills mutant: e0001.rs:38 `replace make_diagnostic -> Diagnostic with Default::default()`.
+/// `Default::default()` produces an empty Diagnostic (empty code, empty message).
+/// Asserting both code AND message content kills the mutant — `Default` cannot
+/// produce `BSK-E0001` and a parameter-named message simultaneously.
+#[mutation_safe(rule = "e0001", fns = "make_diagnostic")]
+#[test]
+fn mutant_e0001_diagnostic_payload() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+def f(specific_name):
+    return specific_name
+";
+    let diagnostics = run(source)?;
+    let e0001: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0001")
+        .collect();
+    assert_eq!(e0001.len(), 1, "exactly one E0001 expected: {e0001:?}");
+    assert_eq!(e0001[0].code.code, "BSK-E0001");
+    assert!(
+        e0001[0].message.contains("specific_name"),
+        "message must name the parameter, got: {}",
+        e0001[0].message
+    );
+    Ok(())
+}
