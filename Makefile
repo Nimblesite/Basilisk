@@ -31,6 +31,8 @@ _MUTATION_TEST_MARKER      := mutation_safe
 _COVERAGE_THRESHOLDS_FILE  := coverage-thresholds.json
 OPEN                       ?= 0
 ALL                        ?= 0
+SHARD                      ?=
+MUTATION_CHECK             ?= auto
 
 # =============================================================================
 # Standard Targets
@@ -74,6 +76,9 @@ mutation-test:
 		mode="working"; \
 		test_filter="$$marker"; \
 		examine_re=""; \
+		shard="$(SHARD)"; \
+		shard_arg=""; \
+		mutation_check="$(MUTATION_CHECK)"; \
 		if [ "$(ALL)" = "1" ]; then \
 			mode="all"; \
 			test_filter=""; \
@@ -85,12 +90,27 @@ mutation-test:
 			examine_re="$$(python3 scripts/mutation_examine_re.py "$$tests_file")"; \
 			rm -f "$$tests_file"; \
 		fi; \
+		if [ -n "$$shard" ]; then \
+			shard_label="$${shard//\//-of-}"; \
+			mode="$${mode}-shard-$$shard_label"; \
+			shard_arg="--shard $$shard"; \
+		fi; \
+		if [ "$$mutation_check" = "auto" ]; then \
+			if [ -n "$$shard" ]; then \
+				mutation_check="0"; \
+			else \
+				mutation_check="1"; \
+			fi; \
+		fi; \
 		echo -e "\033[1m\033[0;36m▶ Mutation testing ($$mode): $$package\033[0m"; \
 		echo -e "\033[0;36m  [diag] Tests: $${test_filter:-all}\033[0m"; \
 		echo -e "\033[0;36m  [diag] Mutants: $$examine_re\033[0m"; \
+		if [ -n "$$shard" ]; then \
+			echo -e "\033[0;36m  [diag] Shard: $$shard\033[0m"; \
+		fi; \
 		out_dir="$(_MUTATION_DIR)/mutants.out.$$mode"; \
 		rm -rf "$$out_dir"; \
-		mutants_count="$$(RUSTFLAGS="$$mutation_rustflags" cargo mutants --list --package "$$package" --re "$$examine_re" | wc -l | tr -d " ")"; \
+		mutants_count="$$(RUSTFLAGS="$$mutation_rustflags" cargo mutants --list --package "$$package" --re "$$examine_re" $$shard_arg | wc -l | tr -d " ")"; \
 		if [ "$$mutants_count" -eq 0 ]; then \
 			echo -e "\033[0;31m✗ No mutants selected\033[0m"; \
 			exit 1; \
@@ -100,12 +120,14 @@ mutation-test:
 			RUSTFLAGS="$$mutation_rustflags" cargo mutants \
 				--jobs 4 --timeout 60 --baseline skip --copy-target true \
 				--package "$$package" --re "$$examine_re" \
+				$$shard_arg \
 				--output "$$out_dir" \
 				-- --test coverage_boost_33_tests --test mutation_kill_tests "$$test_filter" || true; \
 		else \
 			RUSTFLAGS="$$mutation_rustflags" cargo mutants \
 				--jobs 4 --timeout 60 --baseline skip --copy-target true \
 				--package "$$package" --re "$$examine_re" \
+				$$shard_arg \
 				--output "$$out_dir" || true; \
 		fi; \
 		results_dir="$$out_dir/mutants.out"; \
@@ -121,11 +143,17 @@ mutation-test:
 		echo -e "\033[1m\033[0;36m▶ Results: $$mutants_count mutants — $$caught caught, $$missed missed, $$unviable unviable, $$timed_out timeout\033[0m"; \
 		report="$(_MUTATION_DIR)/mutants_report.html"; \
 		scores="$(_MUTATION_DIR)/mutation_scores.json"; \
-		python3 "$(_MUTATION_DIR)/mutants_report.py" \
-			"$$results_dir/outcomes.json" \
-			"$$report" \
-			--scores "$$scores" \
-			--scope "$$mode"; \
+		if [ "$$mutation_check" = "1" ]; then \
+			python3 "$(_MUTATION_DIR)/mutants_report.py" \
+				"$$results_dir/outcomes.json" \
+				"$$report" \
+				--scores "$$scores" \
+				--scope "$$mode"; \
+		else \
+			python3 "$(_MUTATION_DIR)/mutants_report.py" \
+				"$$results_dir/outcomes.json" \
+				"$$report"; \
+		fi; \
 		echo -e "\033[0;36m  Report: $$report\033[0m"; \
 		if [ "$$missed" -gt 0 ]; then \
 			echo -e "\033[0;33m  Missed mutants ($$missed) — recorded in baseline:\033[0m"; \
