@@ -334,7 +334,11 @@ pub mod shipwright_version {
         push_optional_field(&mut fields, "gitSha", option_env!("BASILISK_GIT_SHA"));
         push_optional_field(&mut fields, "gitCommit", option_env!("BASILISK_GIT_SHA"));
         push_optional_field(&mut fields, "target", option_env!("BASILISK_TARGET"));
-        push_optional_field(&mut fields, "toolchain", option_env!("BASILISK_RUSTC_VERSION"));
+        push_optional_field(
+            &mut fields,
+            "toolchain",
+            option_env!("BASILISK_RUSTC_VERSION"),
+        );
         fields.push(format!(
             "\"gitDirty\":{}",
             option_env!("BASILISK_GIT_DIRTY").unwrap_or("false")
@@ -348,7 +352,9 @@ pub mod shipwright_version {
     fn is_version_request(args: &[String]) -> bool {
         args.iter()
             .all(|arg| matches!(arg.as_str(), "--version" | "-V" | "--json"))
-            && args.iter().any(|arg| matches!(arg.as_str(), "--version" | "-V"))
+            && args
+                .iter()
+                .any(|arg| matches!(arg.as_str(), "--version" | "-V"))
     }
 
     fn push_optional_field(fields: &mut Vec<String>, key: &str, value: Option<&str>) {

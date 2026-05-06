@@ -89,7 +89,10 @@ fn version_json_matches_shipwright_contract() -> Result<(), Box<dyn std::error::
     assert_eq!(value["kind"], "lsp");
     assert_eq!(value["language"], "rust");
     assert_eq!(value["product"], "basilisk");
-    assert!(value.get("buildTime").is_some(), "buildTime must be present");
+    assert!(
+        value.get("buildTime").is_some(),
+        "buildTime must be present"
+    );
     assert!(value.get("gitDirty").is_some(), "gitDirty must be present");
     assert!(
         out.stderr.is_empty(),

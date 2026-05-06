@@ -1,15 +1,19 @@
 import * as vscode from "vscode";
+import * as path from "path";
 import { Logger } from "./logger";
 
 const SHIPWRIGHT_PACKAGE = "@nimblesite/shipwright-vscode";
 const BASILISK_COMPONENT_ID = "basilisk";
 
 interface ShipwrightApi {
-  activateShipwright(
-    context: vscode.ExtensionContext,
-    options: { vscode: typeof vscode }
-  ): Promise<ActivationResult>;
+  activateShipwright?: ActivateRuntime;
+  activateDeploymentToolkit?: ActivateRuntime;
 }
+
+type ActivateRuntime = (
+  context: vscode.ExtensionContext,
+  options: { readonly vscode: typeof vscode; readonly manifestPath: string }
+) => Promise<ActivationResult>;
 
 interface ActivationResult {
   readonly diagnostics: readonly ActivationDiagnostic[];
@@ -38,7 +42,14 @@ export interface BasiliskRuntime {
 
 export async function resolveBasiliskRuntime(context: vscode.ExtensionContext): Promise<BasiliskRuntime> {
   const api = await loadShipwrightApi();
-  const result = await api.activateShipwright(context, { vscode });
+  const activate = api.activateShipwright ?? api.activateDeploymentToolkit;
+  if (activate === undefined) {
+    throw new Error(`${SHIPWRIGHT_PACKAGE} does not export a VS Code activation function.`);
+  }
+  const result = await activate(context, {
+    vscode,
+    manifestPath: path.join(context.extensionPath, "shipwright.json"),
+  });
   const diagnostic = basiliskDiagnostic(result);
   if (!result.ok) {
     throw new Error(formatActivationFailure(result));
@@ -59,6 +70,7 @@ export async function resolveBasiliskRuntime(context: vscode.ExtensionContext): 
 }
 
 async function loadShipwrightApi(): Promise<ShipwrightApi> {
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval -- preserves native ESM import from this CommonJS extension build.
   const importModule = new Function("specifier", "return import(specifier)") as (
     specifier: string
   ) => Promise<ShipwrightApi>;

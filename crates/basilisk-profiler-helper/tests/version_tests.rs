@@ -23,7 +23,11 @@ fn version_plain_matches_shipwright_contract() -> Result<(), Box<dyn std::error:
 #[test]
 fn version_json_matches_shipwright_contract() -> Result<(), Box<dyn std::error::Error>> {
     let output = binary().args(["--version", "--json"]).output()?;
-    assert_eq!(output.status.code(), Some(0), "--version --json must exit 0");
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "--version --json must exit 0"
+    );
 
     let value: Value = serde_json::from_slice(&output.stdout)?;
     assert_eq!(value["manifestVersion"], 1);
@@ -33,8 +37,14 @@ fn version_json_matches_shipwright_contract() -> Result<(), Box<dyn std::error::
     assert_eq!(value["kind"], "tool");
     assert_eq!(value["language"], "rust");
     assert_eq!(value["product"], "basilisk");
-    assert!(value.get("buildTime").is_some(), "buildTime must be present");
+    assert!(
+        value.get("buildTime").is_some(),
+        "buildTime must be present"
+    );
     assert!(value.get("gitDirty").is_some(), "gitDirty must be present");
-    assert!(output.stderr.is_empty(), "--version --json must keep stderr empty");
+    assert!(
+        output.stderr.is_empty(),
+        "--version --json must keep stderr empty"
+    );
     Ok(())
 }

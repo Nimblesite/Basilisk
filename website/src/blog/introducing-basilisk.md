@@ -100,7 +100,7 @@ Basilisk v0.1.0 implements Phase 1 of a seven-phase roadmap.
 
 **Working today:**
 - Language Server Protocol (LSP) server — autocomplete, go-to-definition, hover, diagnostics, inlay hints, 17 refactoring actions
-- VS Code extension — auto-downloads the correct binary per platform
+- VS Code extension — bundles the correct binary per platform
 - Neovim extension (0.10+)
 - Zed extension
 - Integrated debugger (debugpy, press F5)

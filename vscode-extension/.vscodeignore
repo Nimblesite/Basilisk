@@ -2,6 +2,8 @@
 .vscode-test/**
 .vscode-test.mjs
 .ruff_cache/**
+coverage/**
+test-fixtures/**
 src/**
 node_modules/.package-lock.json
 out/test/**

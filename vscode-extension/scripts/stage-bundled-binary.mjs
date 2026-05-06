@@ -40,7 +40,8 @@ if (!binaryArg) {
   process.exit(2);
 }
 
-const binaryPath = resolve(repoRoot, binaryArg);
+const cwdPath = resolve(process.cwd(), binaryArg);
+const binaryPath = existsSync(cwdPath) ? cwdPath : resolve(repoRoot, binaryArg);
 if (!existsSync(binaryPath)) {
   throw new Error(`Binary does not exist: ${binaryPath}`);
 }
