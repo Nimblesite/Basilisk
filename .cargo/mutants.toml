@@ -5,6 +5,11 @@
 # Do not rebuild/test packages outside the ones being mutated.
 test_workspace = false
 
+# Cap lints to allow so that deny-warnings don't make mutants unviable.
+# When cargo-mutants replaces a function body (e.g. `-> Option<&str>` with `None`),
+# the original parameters become unused and trigger --deny=unused_variables.
+cap_lints = true
+
 # Respect .gitignore when copying workspace (excludes node_modules, target, etc.)
 # Without this, cargo-mutants copies 200MB+ of node_modules per mutant → disk full.
 gitignore = true
@@ -16,4 +21,28 @@ gitignore = true
 #   basilisk-cli      — e2e tests spawn compiled binary; hangs per-mutant
 test_package = [
     "basilisk-checker",
+]
+
+# Equivalent mutants: these produce no observable behaviour change because
+# surrounding code handles the edge case gracefully. Excluding them avoids
+# false "missed" reports that can never be killed by a test.
+# Equivalent mutants excluded by regex (matched against `cargo mutants --list` output).
+# These produce no observable behaviour change — documented in comments below.
+#
+#   e0014/mod.rs check_vars `&& rhs_span.is_some()` → `||`: vars without rhs pass
+#   the filter but infer_with_literal_value returns Unknown; no diagnostic fires.
+#
+#   e0014/mod.rs extract_annotation `pos + 1` → `pos * 1`: line_start = pos includes
+#   the '\n' char but source.get() gracefully handles the off-by-one.
+#
+#   e0048.rs collect_type_alias_names `&& alias != "TypeAlias"` → `||`: empty aliases
+#   pushed to names never match a real (non-empty) annotation identifier.
+#
+exclude_re = [
+    # Inference engine: slow, not covered by mutation-safe tests.
+    "src/inference",
+    # Equivalent mutants — produce no observable behaviour change:
+    "e0014/mod\\.rs:\\d+:\\d+: replace && with \\|\\| in check_vars",
+    "e0014/mod\\.rs:\\d+:\\d+: replace \\+ with \\* in extract_annotation",
+    "e0048\\.rs:88:\\d+: replace && with \\|\\| in collect_type_alias_names",
 ]

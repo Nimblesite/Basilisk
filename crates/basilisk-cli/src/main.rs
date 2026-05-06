@@ -539,8 +539,13 @@ fn resolve_file_imports(
     resolved: &mut basilisk_resolver::ResolvedModule,
     search_paths: &basilisk_lsp::import_resolver::ImportSearchPaths,
 ) {
+    let importing_file = std::path::Path::new(&resolved.path);
     for import in &mut resolved.imports {
-        let result = basilisk_lsp::import_resolver::resolve_module(&import.module, search_paths);
+        let result = basilisk_lsp::import_resolver::resolve_module_with_importer(
+            &import.module,
+            search_paths,
+            Some(importing_file),
+        );
         if let Some(r) = result {
             import.resolution = r.resolution;
             import.resolved_path = Some(r.path);

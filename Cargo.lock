@@ -230,6 +230,7 @@ dependencies = [
  "basilisk-parser",
  "basilisk-resolver",
  "basilisk-stubs",
+ "basilisk-test-macros",
  "basilisk-uv",
  "ruff_python_ast",
  "ruff_text_size",
@@ -367,6 +368,15 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tracing",
+]
+
+[[package]]
+name = "basilisk-test-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]

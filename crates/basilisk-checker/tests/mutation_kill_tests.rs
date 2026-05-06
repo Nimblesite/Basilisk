@@ -5,6 +5,7 @@
 use basilisk_checker::check;
 use basilisk_parser::parse_source;
 use basilisk_resolver::resolve;
+use basilisk_test_macros::mutation_safe;
 
 fn run(source: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::error::Error>> {
     let parsed = parse_source(source.to_owned(), "test.py".to_owned())?;
@@ -413,8 +414,9 @@ def check():
 // E0014: Various literal type mismatches — each type path
 // ═══════════════════════════════════════════════════════════════════════
 
+#[mutation_safe(rule = "e0014", fns = "check_vars")]
 #[test]
-fn mutation_safe_e0014_every_literal_type() -> Result<(), Box<dyn std::error::Error>> {
+fn mutant_e0014_every_literal_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 # Each literal type assigned to wrong annotation
 a: str = 42            # int → str FAIL
@@ -452,8 +454,9 @@ n: bytes = b"data"
 // E0014: Negative literal and float literal
 // ═══════════════════════════════════════════════════════════════════════
 
+#[mutation_safe(rule = "e0014", fns = "check_vars")]
 #[test]
-fn mutation_safe_e0014_negative_and_float() -> Result<(), Box<dyn std::error::Error>> {
+fn mutant_e0014_negative_and_float() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 # Negative int → float: OK
 a: float = -42
@@ -472,6 +475,375 @@ d: float = 3.14
     assert!(
         e0014 >= 1,
         "at least 1 mismatch (b: str = -42 or c: int = 3.14), got {e0014}"
+    );
+    Ok(())
+}
+
+fn e0001_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
+    diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0001")
+        .count()
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// E0001 check_function: !p.has_annotation guard
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Kills mutant: e0001.rs:33 `delete ! in check_function` and `replace != with ==`
+/// on the name guards. Asserts BOTH that an unannotated regular param fires E0001
+/// AND that an annotated regular param does NOT — so flipping the polarity of the
+/// annotation check or the name guards produces an observable diagnostic count.
+#[mutation_safe(rule = "e0001", fns = "check_function")]
+#[test]
+fn mutant_e0001_annotation_polarity() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+def has_annotated_only(annotated: int) -> int:
+    return annotated
+
+def missing(unannotated, annotated: int) -> int:
+    return annotated
+";
+    let diagnostics = run(source)?;
+    let e0001: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0001")
+        .collect();
+    let [only] = e0001.as_slice() else {
+        return Err(format!(
+            "exactly one E0001 expected for `unannotated` only, got {}: {e0001:?}",
+            e0001.len()
+        )
+        .into());
+    };
+    assert!(
+        only.message.contains("unannotated"),
+        "diagnostic must name `unannotated`, got: {}",
+        only.message
+    );
+    Ok(())
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// E0001 check_function: self/cls guards (&& vs ||)
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Kills mutants: e0001.rs:33 `replace && with ||` (both occurrences).
+/// With `||` instead of `&&`, every parameter satisfies at least one branch,
+/// so unannotated `self`/`cls` would fire E0001 (false positive). This test
+/// asserts that unannotated `self` and `cls` do NOT fire while a sibling
+/// unannotated regular param DOES — exactly distinguishing && from ||.
+#[mutation_safe(rule = "e0001", fns = "check_function")]
+#[test]
+fn mutant_e0001_self_and_cls_exempt() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+class Foo:
+    def method(self, x):
+        return x
+
+    @classmethod
+    def klass(cls, y):
+        return y
+";
+    let diagnostics = run(source)?;
+    let e0001: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0001")
+        .collect();
+    assert_eq!(
+        e0001.len(),
+        2,
+        "exactly two E0001s expected (for `x` and `y`), got {}: {e0001:?}",
+        e0001.len()
+    );
+    let names: Vec<&str> = e0001.iter().map(|d| d.message.as_str()).collect();
+    assert!(
+        names.iter().any(|m| m.contains("`x`")),
+        "E0001 must fire for `x`, got: {names:?}"
+    );
+    assert!(
+        names.iter().any(|m| m.contains("`y`")),
+        "E0001 must fire for `y`, got: {names:?}"
+    );
+    assert!(
+        !names
+            .iter()
+            .any(|m| m.contains("`self`") || m.contains("`cls`")),
+        "E0001 must NOT fire for `self` or `cls`, got: {names:?}"
+    );
+    Ok(())
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// E0001 check (impl): is_stub_context filter (delete !)
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Kills mutant: e0001.rs:25 `delete ! in check`. Without the negation,
+/// only stub-context functions are checked — so unannotated params in regular
+/// (non-stub) functions are missed AND unannotated params inside Protocol
+/// methods would incorrectly fire. This test asserts both directions.
+#[mutation_safe(rule = "e0001", fns = "check")]
+#[test]
+fn mutant_e0001_stub_context_negation() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Protocol
+
+class Iface(Protocol):
+    def stub_method(self, p): ...
+
+def regular(unannotated):
+    return unannotated
+";
+    let diagnostics = run(source)?;
+    let e0001: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0001")
+        .collect();
+    let [only] = e0001.as_slice() else {
+        return Err(format!(
+            "exactly one E0001 expected (for `unannotated` in regular fn), \
+             got {}: {e0001:?}",
+            e0001.len()
+        )
+        .into());
+    };
+    assert!(
+        only.message.contains("unannotated"),
+        "diagnostic must name `unannotated`, not the Protocol param: {}",
+        only.message
+    );
+    Ok(())
+}
+
+/// Kills mutant: e0001.rs:22 `replace check with ()`. With the empty body,
+/// no E0001 ever fires. A simple presence-of-diagnostic assertion kills it.
+#[mutation_safe(rule = "e0001", fns = "check")]
+#[test]
+fn mutant_e0001_check_body_present() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+def f(unannotated):
+    return unannotated
+";
+    let diagnostics = run(source)?;
+    let count = e0001_count(&diagnostics);
+    assert_eq!(
+        count, 1,
+        "E0001 must fire exactly once for unannotated param, got {count}"
+    );
+    Ok(())
+}
+
+/// Kills mutant: e0001.rs:38 `replace make_diagnostic -> Diagnostic with Default::default()`.
+/// `Default::default()` produces an empty Diagnostic (empty code, empty message).
+/// Asserting both code AND message content kills the mutant — `Default` cannot
+/// produce `BSK-E0001` and a parameter-named message simultaneously.
+#[mutation_safe(rule = "e0001", fns = "make_diagnostic")]
+#[test]
+fn mutant_e0001_diagnostic_payload() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+def f(specific_name):
+    return specific_name
+";
+    let diagnostics = run(source)?;
+    let e0001: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0001")
+        .collect();
+    let [only] = e0001.as_slice() else {
+        return Err(format!("exactly one E0001 expected: {e0001:?}").into());
+    };
+    assert_eq!(only.code.code, "BSK-E0001");
+    assert!(
+        only.message.contains("specific_name"),
+        "message must name the parameter, got: {}",
+        only.message
+    );
+    Ok(())
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Rule-coverage smoke tests — expand mutation-testing scope across rules.
+// Each test triggers a rule on a minimal source and asserts at least one
+// diagnostic. The goal is to expose mutants per rule, not to kill all of
+// them. Survivors are intentional and inform where assertions are weak.
+// ═══════════════════════════════════════════════════════════════════════
+
+fn count_code(diagnostics: &[basilisk_checker::Diagnostic], code: &str) -> usize {
+    diagnostics.iter().filter(|d| d.code.code == code).count()
+}
+
+#[mutation_safe(rule = "e0002")]
+#[test]
+fn mutant_e0002_smoke() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+def no_return_annotation(x: int):
+    return x
+";
+    let diagnostics = run(source)?;
+    assert!(
+        count_code(&diagnostics, "BSK-E0002") >= 1,
+        "E0002 must fire for missing return annotation: {diagnostics:?}"
+    );
+    Ok(())
+}
+
+#[mutation_safe(rule = "e0003")]
+#[test]
+fn mutant_e0003_smoke() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+empty_list = []
+empty_dict = {}
+nothing = None
+";
+    let diagnostics = run(source)?;
+    assert!(
+        count_code(&diagnostics, "BSK-E0003") >= 1,
+        "E0003 must fire for unannotated empty-collection vars: {diagnostics:?}"
+    );
+    Ok(())
+}
+
+#[mutation_safe(rule = "e0023")]
+#[test]
+fn mutant_e0023_smoke() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+def classify(x: int) -> str:
+    match x:
+        case 1:
+            return 'one'
+        case 2:
+            return 'two'
+    return 'other'
+";
+    let diagnostics = run(source)?;
+    assert!(
+        count_code(&diagnostics, "BSK-E0023") >= 1,
+        "E0023 must fire for non-exhaustive match: {diagnostics:?}"
+    );
+    Ok(())
+}
+
+#[mutation_safe(rule = "e0027")]
+#[test]
+fn mutant_e0027_smoke() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Generic, TypeVar
+
+T = TypeVar('T')
+
+class Dup(Generic[T, T]):
+    pass
+";
+    let diagnostics = run(source)?;
+    assert!(
+        count_code(&diagnostics, "BSK-E0027") >= 1,
+        "E0027 must fire for duplicate TypeVar in Generic: {diagnostics:?}"
+    );
+    Ok(())
+}
+
+#[mutation_safe(rule = "e0029")]
+#[test]
+fn mutant_e0029_smoke() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import TypedDict
+
+class Movie(TypedDict):
+    name: str
+    year: int
+
+    def title(self) -> str:
+        return self['name']
+";
+    let diagnostics = run(source)?;
+    assert!(
+        count_code(&diagnostics, "BSK-E0029") >= 1,
+        "E0029 must fire for TypedDict method: {diagnostics:?}"
+    );
+    Ok(())
+}
+
+#[mutation_safe(rule = "e0033")]
+#[test]
+fn mutant_e0033_smoke() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+reveal_type()
+reveal_type(1, 2)
+";
+    let diagnostics = run(source)?;
+    assert!(
+        count_code(&diagnostics, "BSK-E0033") >= 1,
+        "E0033 must fire for invalid reveal_type call: {diagnostics:?}"
+    );
+    Ok(())
+}
+
+#[mutation_safe(rule = "e0039")]
+#[test]
+fn mutant_e0039_smoke() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+assert_type(1)
+assert_type(1, int, 'extra')
+";
+    let diagnostics = run(source)?;
+    assert!(
+        count_code(&diagnostics, "BSK-E0039") >= 1,
+        "E0039 must fire for invalid assert_type call: {diagnostics:?}"
+    );
+    Ok(())
+}
+
+#[mutation_safe(rule = "e0049")]
+#[test]
+fn mutant_e0049_smoke() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import TypeVarTuple
+
+Ts = TypeVarTuple('Ts')
+
+def f(t: tuple[*tuple[str, ...], *tuple[int, ...]]) -> None:
+    pass
+";
+    let diagnostics = run(source)?;
+    assert!(
+        count_code(&diagnostics, "BSK-E0049") >= 1,
+        "E0049 must fire for multiple unbounded tuple components: {diagnostics:?}"
+    );
+    Ok(())
+}
+
+#[mutation_safe(rule = "e0088")]
+#[test]
+fn mutant_e0088_smoke() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import TypedDict
+
+class TD(TypedDict):
+    name: str
+
+x: object = {}
+isinstance(x, TD)
+";
+    let diagnostics = run(source)?;
+    assert!(
+        count_code(&diagnostics, "BSK-E0088") >= 1,
+        "E0088 must fire for isinstance() with TypedDict: {diagnostics:?}"
+    );
+    Ok(())
+}
+
+#[mutation_safe(rule = "e0105")]
+#[test]
+fn mutant_e0105_smoke() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+class C[T: str]:
+    def method(self, x: T) -> None:
+        x.is_integer()
+";
+    let diagnostics = run(source)?;
+    assert!(
+        count_code(&diagnostics, "BSK-E0105") >= 1,
+        "E0105 must fire for invalid attr on bounded TypeVar: {diagnostics:?}"
     );
     Ok(())
 }

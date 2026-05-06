@@ -4,6 +4,7 @@
 use basilisk_checker::check;
 use basilisk_parser::parse_source;
 use basilisk_resolver::resolve;
+use basilisk_test_macros::mutation_safe;
 use std::io::Write;
 
 fn run(source: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::error::Error>> {
@@ -554,9 +555,9 @@ cfg.setting = 42
 /// When the `&&` is flipped to `||`, unannotated variables leak through and
 /// would cause downstream panics or false diagnostics. We assert that
 /// EXACTLY the annotated-with-RHS mismatches are flagged and nothing else.
+#[mutation_safe(rule = "e0014", fns = "check_vars")]
 #[test]
-fn mutation_safe_e0014_mutant_annotation_and_rhs_required() -> Result<(), Box<dyn std::error::Error>>
-{
+fn e0014_mutant_annotation_and_rhs_required() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 # Has annotation, has RHS → should fire
 bad: int = "hello"
@@ -589,9 +590,9 @@ good: int = 42
 
 /// Kills mutant: line 126 `.ends_with(".typealias")` → `&&`.
 /// `typing.TypeAlias` annotation must be skipped by e0014 (handled by e0048).
+#[mutation_safe(rule = "e0014", fns = "check_vars")]
 #[test]
-fn mutation_safe_e0014_mutant_typing_dot_typealias_skipped(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn e0014_mutant_typing_dot_typealias_skipped() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 import typing
 
@@ -624,8 +625,9 @@ x: int = "hello"
 
 /// Kills mutant: line 127 `InferredType::Named` check for "ta".
 /// `TypeAlias as TA` must be skipped by e0014.
+#[mutation_safe(rule = "e0014", fns = "check_vars")]
 #[test]
-fn mutation_safe_e0014_mutant_ta_alias_skipped() -> Result<(), Box<dyn std::error::Error>> {
+fn e0014_mutant_ta_alias_skipped() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias as TA
 
@@ -650,9 +652,9 @@ x: int = "hello"
 
 /// Kills mutant: line 220 `!param.has_annotation` → removing `!`.
 /// Annotated params must be included in `param_type_map` for local var checks.
+#[mutation_safe(rule = "e0014", fns = "build_param_type_map")]
 #[test]
-fn mutation_safe_e0014_mutant_annotated_param_type_used() -> Result<(), Box<dyn std::error::Error>>
-{
+fn e0014_mutant_annotated_param_type_used() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def func(x: int, y: str) -> None:
     # Local var assigned from param — type should propagate
@@ -677,9 +679,9 @@ def func(x: int, y: str) -> None:
 
 /// Kills mutants in `has_top_level_token` depth tracking.
 /// Nested brackets must NOT trigger `if`/`or`/`and` detection inside them.
+#[mutation_safe(rule = "e0048", fns = "has_top_level_token")]
 #[test]
-fn mutation_safe_e0048_mutant_nested_brackets_not_flagged() -> Result<(), Box<dyn std::error::Error>>
-{
+fn e0048_mutant_nested_brackets_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias
 
@@ -736,9 +738,9 @@ BadTernary: TypeAlias = int if True else str
 /// but `0*1=0` (wrong: includes the newline char). We test with a variable
 /// on the second line where the annotation text would be corrupted by the
 /// off-by-one and assert the diagnostic message contains the correct type.
+#[mutation_safe(rule = "e0014", fns = "extract_annotation")]
 #[test]
-fn mutation_safe_e0014_mutant_multiline_annotation_extraction(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn e0014_mutant_multiline_annotation_extraction() -> Result<(), Box<dyn std::error::Error>> {
     // The `\n` at position 0 means rfind returns Some(0).
     // Correct: line_start = 0 + 1 = 1 (skip newline)
     // Mutant:  line_start = 0 * 1 = 0 (include newline → corrupts annotation)
@@ -761,6 +763,221 @@ fn mutation_safe_e0014_mutant_multiline_annotation_extraction(
     assert!(
         has_int_mismatch && has_str_mismatch,
         "should correctly extract both `int` and `str` annotations: {messages:?}"
+    );
+    Ok(())
+}
+
+/// Kills mutant: e0048.rs line 69 `import.kind != ImportKind::From` → `==`.
+/// With the mutant, `From` imports are skipped, so `TypeAlias as TA` is never
+/// registered and `BadAlias: TA = [int, str]` would not be detected as E0048.
+#[mutation_safe(rule = "e0048", fns = "collect_type_alias_names")]
+#[test]
+fn e0048_mutant_from_import_kind_guard() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import TypeAlias as TA
+
+BadAlias: TA = [int, str]
+";
+    let diagnostics = run(source)?;
+    let e0048: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0048")
+        .collect();
+    assert!(
+        !e0048.is_empty(),
+        "BSK-E0048 must fire for `TA = [int, str]` where TA is aliased from TypeAlias: {diagnostics:?}"
+    );
+    Ok(())
+}
+
+/// Kills mutant: e0048.rs line 86 `|| *c == '_'` → `&&`.
+/// With the mutant, underscore chars break alias extraction, so `My_Alias`
+/// would be truncated to `My` and `Bad: My_Alias = [int]` would not fire E0048.
+#[mutation_safe(rule = "e0048", fns = "collect_type_alias_names")]
+#[test]
+fn e0048_mutant_alias_underscore_accepted() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import TypeAlias as My_Alias
+
+Bad: My_Alias = [int, str]
+";
+    let diagnostics = run(source)?;
+    let e0048: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0048")
+        .collect();
+    assert!(
+        !e0048.is_empty(),
+        "BSK-E0048 must fire when TypeAlias alias contains underscore: {diagnostics:?}"
+    );
+    Ok(())
+}
+
+/// Kills mutant: e0048.rs line 88 `!alias.is_empty() && alias != "TypeAlias"` → `||`.
+/// With the mutant, a non-aliased `from typing import TypeAlias` adds a second
+/// "`TypeAlias`" entry. The outer check `alias != "TypeAlias"` guards against this.
+/// We verify that `TypeAlias`-annotated bad RHS is still caught exactly once.
+#[mutation_safe(rule = "e0048", fns = "collect_type_alias_names")]
+#[test]
+fn e0048_mutant_typealias_self_alias_not_duplicated() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import TypeAlias
+
+Bad: TypeAlias = [int, str]
+Good: TypeAlias = int | str
+";
+    let diagnostics = run(source)?;
+    let e0048: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0048")
+        .collect();
+    assert_eq!(
+        e0048.len(),
+        1,
+        "exactly one E0048 expected for `Bad: TypeAlias = [int, str]`, got {}: {e0048:?}",
+        e0048.len()
+    );
+    Ok(())
+}
+
+/// Kills mutant: e0014 line 129 `&& var.rhs_span.is_some()` → `||`.
+/// With `||`, unannotated vars or vars without RHS would be incorrectly checked.
+/// A var with annotation but no RHS (bare declaration) must NOT fire E0014.
+#[mutation_safe(rule = "e0014", fns = "check_vars")]
+#[test]
+fn e0014_mutant_bare_declaration_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+declared: int
+assigned: int = "wrong"
+"#;
+    let diagnostics = run(source)?;
+    let e0014: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0014")
+        .collect();
+    assert_eq!(
+        e0014.len(),
+        1,
+        "only `assigned: int = \"wrong\"` should fire, bare `declared: int` must not: {e0014:?}"
+    );
+    Ok(())
+}
+
+/// Kills mutant: e0014 line 304 `pos + 1` → `pos * 1` in `extract_annotation`.
+/// With the mutant, `line_start = pos` includes the preceding `\n` char, so
+/// the annotation is extracted from a shifted offset and may be wrong or None.
+/// We use a name on line 2 (rfind gives pos > 0) with a type annotation
+/// and assert the diagnostic message contains the correct type name.
+#[mutation_safe(rule = "e0014", fns = "extract_annotation")]
+#[test]
+fn e0014_mutant_line_start_off_by_one_second_var() -> Result<(), Box<dyn std::error::Error>> {
+    let source = "first: str = 42\nsecond: int = \"hello\"\n";
+    let diagnostics = run(source)?;
+    let e0014: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0014")
+        .collect();
+    assert!(
+        e0014.iter().any(|d| d.message.contains("int")),
+        "annotation `int` must be correctly extracted for `second` on line 2: {e0014:?}"
+    );
+    Ok(())
+}
+
+/// Kills mutant: e0048 line 72 second `!=` → `==` (`import.module != "typing_extensions"`).
+/// With the mutant, only `typing_extensions` is processed; plain `typing` is skipped.
+/// An aliased import from `typing` must still be detected.
+#[mutation_safe(rule = "e0048", fns = "collect_type_alias_names")]
+#[test]
+fn e0048_mutant_typing_module_guard() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import TypeAlias as Alias
+
+Bad: Alias = [int, str]
+";
+    let diagnostics = run(source)?;
+    let e0048: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0048")
+        .collect();
+    assert!(
+        !e0048.is_empty(),
+        "E0048 must fire for alias from `typing` (not just `typing_extensions`): {diagnostics:?}"
+    );
+    Ok(())
+}
+
+/// Kills mutants in `has_top_level_token` depth/bracket tracking (lines 178-181).
+/// `< with <=` on the loop guard makes the last byte reachable even past end.
+/// Deleting open/close bracket arms means depth is never tracked.
+/// `+= with -=` or `*=` on depth means brackets increase instead of tracking.
+/// All these mutants break the nested-bracket guard, causing false positives
+/// on type expressions that contain `or`/`if` inside subscript brackets.
+#[mutation_safe(rule = "e0048", fns = "has_top_level_token")]
+#[test]
+fn e0048_mutant_depth_tracking_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import TypeAlias
+
+GoodUnion: TypeAlias = dict[str, int] | list[str]
+GoodOptional: TypeAlias = tuple[int, str, float]
+GoodDeep: TypeAlias = dict[str, tuple[int, list[str]]]
+";
+    let diagnostics = run(source)?;
+    let e0048: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0048")
+        .collect();
+    assert!(
+        e0048.is_empty(),
+        "no E0048 for valid type expressions with brackets: {e0048:?}"
+    );
+    Ok(())
+}
+
+/// Kills mutants in `has_top_level_token` where closing bracket arm is deleted
+/// (lines 181) — without it, depth goes up but never comes down, so tokens
+/// after the first bracket pair are never visible at depth 0, hiding real errors.
+#[mutation_safe(rule = "e0048", fns = "has_top_level_token")]
+#[test]
+fn e0048_mutant_depth_decrement_catches_after_bracket() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import TypeAlias
+
+BadAfterBracket: TypeAlias = tuple[int] or list[str]
+";
+    let diagnostics = run(source)?;
+    let e0048: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0048")
+        .collect();
+    assert!(
+        !e0048.is_empty(),
+        "E0048 must fire for `or` at depth 0 after a closing bracket: {e0048:?}"
+    );
+    Ok(())
+}
+
+/// Kills mutant: e0048.rs line 72 second `!=` → `==` in module guard.
+/// Mutant: `module != "typing" && module == "typing_extensions"` → skips
+/// `typing_extensions` imports. `from typing_extensions import TypeAlias as TEA`
+/// would not register TEA, so `Bad: TEA = [int]` fires no E0048.
+#[mutation_safe(rule = "e0048", fns = "collect_type_alias_names")]
+#[test]
+fn e0048_mutant_typing_extensions_module_guard() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing_extensions import TypeAlias as TEA
+
+Bad: TEA = [int, str]
+";
+    let diagnostics = run(source)?;
+    let e0048: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0048")
+        .collect();
+    assert!(
+        !e0048.is_empty(),
+        "E0048 must fire for alias from `typing_extensions`: {diagnostics:?}"
     );
     Ok(())
 }

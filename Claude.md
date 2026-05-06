@@ -6,6 +6,7 @@
 ⚠️ IDE EXTENSIONS LISTEN FOR THINGS LIKE COMMANDS FROM THE LSP STATE CHANGE AND ADJUST ACCORDINGLY
 ⚠️ THE IDE EXTENSIONS NEVER REGISTERS COMMANDS ETC THAT THE LSP DOESN'T ADVERTISE
 ⚠️ KILLING A VSCODE PROCESS - EVEN IN THE BROWSER WILL BE MET WITH INSTANT, EXTREME VIOLENCE!
+⚠️ Use Deslop MCP to check for existing similar code with find-similar when creating new code, and top-offenders after modifying code ⚠️
 
 Target: 100% PEP conformance. Canonical version: **Python 3.12**. Read the PEP conformance readme carefully.
 

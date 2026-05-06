@@ -579,7 +579,7 @@ fn recheck_with_cross_module_symbols(
 /// layouts and add those as source roots.
 ///
 /// Returns an empty vec if no workspace members are found.
-fn discover_workspace_members(roots: &[std::path::PathBuf]) -> Vec<std::path::PathBuf> {
+pub(crate) fn discover_workspace_members(roots: &[std::path::PathBuf]) -> Vec<std::path::PathBuf> {
     let mut members = Vec::new();
 
     for root in roots {

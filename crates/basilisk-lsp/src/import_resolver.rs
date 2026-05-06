@@ -142,6 +142,31 @@ pub fn resolve_module(
     None
 }
 
+/// Resolve an absolute import, also searching the importing file's own directory.
+///
+/// Python adds the directory of the script being run to `sys.path[0]`, so a
+/// bare `import foo` in `scripts/test.py` can resolve to `scripts/foo.py` even
+/// when `scripts/` is not listed as a workspace root.  This function replicates
+/// that behaviour by checking the importer's directory after the normal PEP 561
+/// search order but before concluding that the import is unresolved.
+///
+/// Use this in place of [`resolve_module`] whenever the path of the importing
+/// file is known (i.e. everywhere in the workspace resolver loop).
+#[must_use]
+pub fn resolve_module_with_importer(
+    module_name: &str,
+    search_paths: &ImportSearchPaths,
+    importing_file: Option<&Path>,
+) -> Option<ResolvedImport> {
+    // Standard PEP 561 search first.
+    if let Some(resolved) = resolve_module(module_name, search_paths) {
+        return Some(resolved);
+    }
+    // Fall back to the importer's own directory — mirrors Python's sys.path[0].
+    let importer_dir = importing_file?.parent()?;
+    try_resolve_in_dir(module_name, importer_dir)
+}
+
 /// Try resolving a module in a stub-only directory (only `.pyi` files).
 fn try_resolve_stub_only(module_name: &str, stub_dir: &Path) -> Option<ResolvedImport> {
     let parts: Vec<&str> = module_name.split('.').collect();
@@ -316,15 +341,42 @@ pub fn has_stub_package(module_name: &str, site_packages: &Path) -> bool {
 
 /// Detect site-packages directory from venv config, then fall back to
 /// `python3 -c "import sys; ..."` subprocess for system Python discovery.
+///
+/// Reads the `VIRTUAL_ENV` environment variable as the highest-priority
+/// override — `source .venv/bin/activate` (and CI scripts that install
+/// dependencies into a venv outside the workspace tree) set this to the
+/// active venv root.
 fn resolve_site_packages(
     roots: &[PathBuf],
     config: &crate::config::WorkspaceConfig,
 ) -> Option<PathBuf> {
-    // 1. Try venv-based discovery first.
+    let virtual_env = std::env::var_os("VIRTUAL_ENV").map(PathBuf::from);
+    resolve_site_packages_with_env(roots, config, virtual_env.as_deref())
+}
+
+/// `resolve_site_packages` with the `VIRTUAL_ENV` value injected.
+///
+/// Split out so tests can exercise the env-var path without mutating process
+/// state (which is `unsafe` under the project's `unsafe_code = "deny"` lint).
+fn resolve_site_packages_with_env(
+    roots: &[PathBuf],
+    config: &crate::config::WorkspaceConfig,
+    virtual_env: Option<&Path>,
+) -> Option<PathBuf> {
+    // 1. Honour an active venv signalled by `VIRTUAL_ENV` — the standard
+    //    Python convention. Issue #25.
+    if let Some(venv) = virtual_env {
+        if venv.is_dir() {
+            if let Some(sp) = site_packages_in_dir(venv) {
+                return Some(sp);
+            }
+        }
+    }
+    // 2. Try venv-based discovery from workspace roots / explicit config.
     if let Some(sp) = resolve_venv_site_packages(roots, config) {
         return Some(sp);
     }
-    // 2. Fall back to Python subprocess discovery.
+    // 3. Fall back to Python subprocess discovery.
     detect_python_site_packages()
 }
 
@@ -427,10 +479,17 @@ pub fn resolve_workspace_imports(index: &WorkspaceIndex, search_paths: &ImportSe
         };
         let mut resolved = Arc::try_unwrap(resolved_arc).unwrap_or_else(|arc| (*arc).clone());
 
+        // The file's own path, used to search its directory for sibling modules.
+        let importing_file = PathBuf::from(&resolved.path);
+
         for import in &mut resolved.imports {
             let result = match import.kind {
                 ImportKind::Plain | ImportKind::From | ImportKind::Star => {
-                    resolve_module(&import.module, search_paths)
+                    resolve_module_with_importer(
+                        &import.module,
+                        search_paths,
+                        Some(&importing_file),
+                    )
                 }
             };
             if let Some(r) = result {
@@ -731,6 +790,67 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
+    // BSK-E0010 false positive: sibling-module import — issue #22
+    // `import configure_agent_backend` in scripts/configure_agent_backend_test.py
+    // should resolve to the sibling configure_agent_backend.py even when the
+    // scripts/ directory is not listed as a workspace root.
+    #[test]
+    fn test_sibling_module_resolved_when_importer_dir_not_in_roots() {
+        let scripts_dir = unique_tmp("bsk_ir_sibling");
+        let workspace_root = unique_tmp("bsk_ir_sibling_root");
+        fs::create_dir_all(&scripts_dir).unwrap();
+        fs::create_dir_all(&workspace_root).unwrap();
+        fs::write(scripts_dir.join("configure_agent_backend.py"), "x = 1\n").unwrap();
+        let importing_file = scripts_dir.join("configure_agent_backend_test.py");
+
+        // Workspace root does NOT include scripts_dir — only the project root is listed.
+        let paths = make_search_paths(vec![workspace_root.clone()]);
+
+        // A bare `import configure_agent_backend` from a file inside scripts_dir must
+        // resolve to the sibling .py file.  The fix is resolve_module_with_importer().
+        let result =
+            resolve_module_with_importer("configure_agent_backend", &paths, Some(&importing_file));
+        assert!(
+            result.is_some(),
+            "BSK-E0010 false positive: sibling module in the same directory as the importing \
+             file should resolve without the directory being listed as a workspace root"
+        );
+        let r = result.unwrap();
+        assert_eq!(r.resolution, ImportResolution::SourcePy);
+        assert!(r.path.ends_with("configure_agent_backend.py"));
+
+        let _ = fs::remove_dir_all(&scripts_dir);
+        let _ = fs::remove_dir_all(&workspace_root);
+    }
+
+    /// Regression for issue #24: a `tests/` directory that does NOT contain
+    /// `__init__.py` (PEP 420 implicit namespace package) must still resolve
+    /// `from tests.helpers import X` when the workspace root is on the
+    /// search path. pytest enables this layout by adding the project root
+    /// to `sys.path`; Basilisk needs to mirror that behaviour.
+    #[test]
+    fn test_resolve_tests_namespace_package_without_init() {
+        let root = unique_tmp("bsk_ir_tests_ns");
+        let tests = root.join("tests");
+        fs::create_dir_all(&tests).unwrap();
+        // No __init__.py — PEP 420 namespace package layout.
+        fs::write(tests.join("helpers.py"), "TEST_BUNDLE = 1\n").unwrap();
+
+        let paths = make_search_paths(vec![root.clone()]);
+        let result = resolve_module("tests.helpers", &paths);
+
+        assert!(
+            result.is_some(),
+            "BSK-E0010 false positive: PEP 420 namespace package `tests/` (no __init__.py) \
+             must resolve when the project root is on the search path"
+        );
+        let r = result.unwrap();
+        assert_eq!(r.resolution, ImportResolution::SourcePy);
+        assert!(r.path.ends_with("helpers.py"));
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
     #[test]
     fn test_resolve_relative_import_too_many_levels() {
         let dir = unique_tmp("bsk_ir_rel_deep");
@@ -792,6 +912,73 @@ mod tests {
         assert!(result.unwrap().ends_with("site-packages"));
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Regression for issue #25: when the user activates a venv outside the
+    /// workspace (e.g. CI installs to `/tmp/nap-ci-prep-py312`), Basilisk
+    /// could not locate site-packages and reported BSK-E0010 `NeedsSync` for
+    /// every installed dep. Honour the `VIRTUAL_ENV` environment variable —
+    /// the standard Python convention set by `source .venv/bin/activate`.
+    #[test]
+    fn test_resolve_site_packages_uses_virtual_env_var() {
+        let venv = unique_tmp("bsk_ir_external_venv");
+        let sp = venv.join("lib").join("python3.12").join("site-packages");
+        fs::create_dir_all(&sp).unwrap();
+
+        // Workspace root is intentionally empty (no .venv inside it).
+        let workspace = unique_tmp("bsk_ir_workspace_no_venv");
+        fs::create_dir_all(&workspace).unwrap();
+
+        let config = crate::config::WorkspaceConfig::default();
+        let result =
+            resolve_site_packages_with_env(std::slice::from_ref(&workspace), &config, Some(&venv));
+
+        assert!(
+            result.is_some(),
+            "issue #25: VIRTUAL_ENV must be honoured when workspace has no venv"
+        );
+        let resolved = result.unwrap();
+        assert!(
+            resolved.ends_with("site-packages"),
+            "expected site-packages dir, got {resolved:?}"
+        );
+        assert!(
+            resolved.starts_with(&venv),
+            "expected resolved path under {venv:?}, got {resolved:?}"
+        );
+
+        let _ = fs::remove_dir_all(&venv);
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    /// `VIRTUAL_ENV` pointing at a non-existent path must not crash and must
+    /// fall through to the normal workspace-root scan.
+    #[test]
+    fn test_virtual_env_var_invalid_falls_through_to_workspace_scan() {
+        let workspace = unique_tmp("bsk_ir_ws_with_venv");
+        let sp = workspace
+            .join(".venv")
+            .join("lib")
+            .join("python3.12")
+            .join("site-packages");
+        fs::create_dir_all(&sp).unwrap();
+
+        let bogus = std::path::PathBuf::from("/definitely/does/not/exist");
+        let config = crate::config::WorkspaceConfig::default();
+        let result =
+            resolve_site_packages_with_env(std::slice::from_ref(&workspace), &config, Some(&bogus));
+
+        assert!(
+            result.is_some(),
+            "bogus VIRTUAL_ENV must not block fallback to workspace .venv scan"
+        );
+        let resolved = result.unwrap();
+        assert!(
+            resolved.starts_with(&workspace),
+            "expected workspace .venv site-packages, got {resolved:?}"
+        );
+
+        let _ = fs::remove_dir_all(&workspace);
     }
 
     // ── Stub-path resolution (Phase 1.2) ────────────────────────────────

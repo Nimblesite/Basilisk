@@ -76,11 +76,11 @@ fn collect_type_alias_names(module: &ResolvedModule) -> Vec<String> {
         let Some(import_text) = slice_span(&module.source, import.span) else {
             continue;
         };
-        // Find all occurrences of `TypeAlias as <identifier>`
-        let mut search = import_text;
-        while let Some(pos) = search.find("TypeAlias as ") {
-            let after = &search[pos + "TypeAlias as ".len()..];
-            // Extract the identifier following `TypeAlias as `
+        // Find all occurrences of `TypeAlias as <identifier>`. `match_indices`
+        // advances structurally past each match, so the loop cannot be turned
+        // into an infinite loop by mutating an arithmetic advance step.
+        for (pos, marker) in import_text.match_indices("TypeAlias as ") {
+            let after = &import_text[pos + marker.len()..];
             let alias: String = after
                 .chars()
                 .take_while(|c| c.is_alphanumeric() || *c == '_')
@@ -88,7 +88,6 @@ fn collect_type_alias_names(module: &ResolvedModule) -> Vec<String> {
             if !alias.is_empty() && alias != "TypeAlias" {
                 names.push(alias);
             }
-            search = &search[pos + 1..];
         }
     }
     names
@@ -174,17 +173,17 @@ fn has_top_level_token(s: &str, token: &str) -> bool {
     let bytes = s.as_bytes();
     let tok = token.as_bytes();
     let tok_len = tok.len();
-    let mut i = 0;
-    while i < bytes.len() {
-        match bytes.get(i).copied() {
-            Some(b'[' | b'(' | b'{') => depth += 1,
-            Some(b']' | b')' | b'}') => depth -= 1,
-            Some(_) if depth == 0 && bytes.get(i..i + tok_len) == Some(tok) => {
+    // `enumerate` yields each index exactly once — forward progress is
+    // structural, so mutating the loop counter is impossible.
+    for (i, &byte) in bytes.iter().enumerate() {
+        match byte {
+            b'[' | b'(' | b'{' => depth += 1,
+            b']' | b')' | b'}' => depth -= 1,
+            _ if depth == 0 && bytes.get(i..i + tok_len) == Some(tok) => {
                 return true;
             }
             _ => {}
         }
-        i += 1;
     }
     false
 }
