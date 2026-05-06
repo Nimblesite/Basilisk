@@ -119,15 +119,15 @@ mutation-test:
 		[ -s "$$caught_file" ] && caught="$$(wc -l < "$$caught_file" | tr -d " ")" || true; \
 		[ -s "$$timeout_file" ] && timed_out="$$(wc -l < "$$timeout_file" | tr -d " ")" || true; \
 		echo -e "\033[1m\033[0;36m▶ Results: $$mutants_count mutants — $$caught caught, $$missed missed, $$unviable unviable, $$timed_out timeout\033[0m"; \
+		report="$(_MUTATION_DIR)/mutants_report.html"; \
+		python3 "$(_MUTATION_DIR)/mutants_report.py" "$$results_dir/outcomes.json" "$$report"; \
+		echo -e "\033[0;36m  Report: $$report\033[0m"; \
 		if [ "$$missed" -gt 0 ]; then \
 			echo -e "\033[0;31m  Missed mutants:\033[0m"; \
 			cat "$$missed_file"; \
 			echo -e "\033[0;31m✗ $$missed mutant(s) survived — add tests to kill them\033[0m"; \
 			exit 1; \
 		fi; \
-		report="$(_MUTATION_DIR)/mutants_report.html"; \
-		python3 "$(_MUTATION_DIR)/mutants_report.py" "$$results_dir/outcomes.json" "$$report"; \
-		echo -e "\033[0;36m  Report: $$report\033[0m"; \
 		echo -e "\033[0;32m✓ Mutation testing complete: all viable mutants caught\033[0m"; \
 	'
 

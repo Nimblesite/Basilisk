@@ -653,3 +653,190 @@ def f(specific_name):
     );
     Ok(())
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// Rule-coverage smoke tests — expand mutation-testing scope across rules.
+// Each test triggers a rule on a minimal source and asserts at least one
+// diagnostic. The goal is to expose mutants per rule, not to kill all of
+// them. Survivors are intentional and inform where assertions are weak.
+// ═══════════════════════════════════════════════════════════════════════
+
+fn count_code(diagnostics: &[basilisk_checker::Diagnostic], code: &str) -> usize {
+    diagnostics.iter().filter(|d| d.code.code == code).count()
+}
+
+#[mutation_safe(rule = "e0002")]
+#[test]
+fn mutant_e0002_smoke() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+def no_return_annotation(x: int):
+    return x
+";
+    let diagnostics = run(source)?;
+    assert!(
+        count_code(&diagnostics, "BSK-E0002") >= 1,
+        "E0002 must fire for missing return annotation: {diagnostics:?}"
+    );
+    Ok(())
+}
+
+#[mutation_safe(rule = "e0003")]
+#[test]
+fn mutant_e0003_smoke() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+empty_list = []
+empty_dict = {}
+nothing = None
+";
+    let diagnostics = run(source)?;
+    assert!(
+        count_code(&diagnostics, "BSK-E0003") >= 1,
+        "E0003 must fire for unannotated empty-collection vars: {diagnostics:?}"
+    );
+    Ok(())
+}
+
+#[mutation_safe(rule = "e0023")]
+#[test]
+fn mutant_e0023_smoke() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+def classify(x: int) -> str:
+    match x:
+        case 1:
+            return 'one'
+        case 2:
+            return 'two'
+    return 'other'
+";
+    let diagnostics = run(source)?;
+    assert!(
+        count_code(&diagnostics, "BSK-E0023") >= 1,
+        "E0023 must fire for non-exhaustive match: {diagnostics:?}"
+    );
+    Ok(())
+}
+
+#[mutation_safe(rule = "e0027")]
+#[test]
+fn mutant_e0027_smoke() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Generic, TypeVar
+
+T = TypeVar('T')
+
+class Dup(Generic[T, T]):
+    pass
+";
+    let diagnostics = run(source)?;
+    assert!(
+        count_code(&diagnostics, "BSK-E0027") >= 1,
+        "E0027 must fire for duplicate TypeVar in Generic: {diagnostics:?}"
+    );
+    Ok(())
+}
+
+#[mutation_safe(rule = "e0029")]
+#[test]
+fn mutant_e0029_smoke() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import TypedDict
+
+class Movie(TypedDict):
+    name: str
+    year: int
+
+    def title(self) -> str:
+        return self['name']
+";
+    let diagnostics = run(source)?;
+    assert!(
+        count_code(&diagnostics, "BSK-E0029") >= 1,
+        "E0029 must fire for TypedDict method: {diagnostics:?}"
+    );
+    Ok(())
+}
+
+#[mutation_safe(rule = "e0033")]
+#[test]
+fn mutant_e0033_smoke() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+reveal_type()
+reveal_type(1, 2)
+";
+    let diagnostics = run(source)?;
+    assert!(
+        count_code(&diagnostics, "BSK-E0033") >= 1,
+        "E0033 must fire for invalid reveal_type call: {diagnostics:?}"
+    );
+    Ok(())
+}
+
+#[mutation_safe(rule = "e0039")]
+#[test]
+fn mutant_e0039_smoke() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+assert_type(1)
+assert_type(1, int, 'extra')
+";
+    let diagnostics = run(source)?;
+    assert!(
+        count_code(&diagnostics, "BSK-E0039") >= 1,
+        "E0039 must fire for invalid assert_type call: {diagnostics:?}"
+    );
+    Ok(())
+}
+
+#[mutation_safe(rule = "e0049")]
+#[test]
+fn mutant_e0049_smoke() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import TypeVarTuple
+
+Ts = TypeVarTuple('Ts')
+
+def f(t: tuple[*tuple[str, ...], *tuple[int, ...]]) -> None:
+    pass
+";
+    let diagnostics = run(source)?;
+    assert!(
+        count_code(&diagnostics, "BSK-E0049") >= 1,
+        "E0049 must fire for multiple unbounded tuple components: {diagnostics:?}"
+    );
+    Ok(())
+}
+
+#[mutation_safe(rule = "e0088")]
+#[test]
+fn mutant_e0088_smoke() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import TypedDict
+
+class TD(TypedDict):
+    name: str
+
+x: object = {}
+isinstance(x, TD)
+";
+    let diagnostics = run(source)?;
+    assert!(
+        count_code(&diagnostics, "BSK-E0088") >= 1,
+        "E0088 must fire for isinstance() with TypedDict: {diagnostics:?}"
+    );
+    Ok(())
+}
+
+#[mutation_safe(rule = "e0105")]
+#[test]
+fn mutant_e0105_smoke() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+class C[T: str]:
+    def method(self, x: T) -> None:
+        x.is_integer()
+";
+    let diagnostics = run(source)?;
+    assert!(
+        count_code(&diagnostics, "BSK-E0105") >= 1,
+        "E0105 must fire for invalid attr on bounded TypeVar: {diagnostics:?}"
+    );
+    Ok(())
+}
