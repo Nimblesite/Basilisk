@@ -9,6 +9,7 @@ tsconfig.json
 .eslintrc*
 eslint-rules.cjs
 eslint.config.mjs
+scripts/**
 **/*.ts
 **/*.map
 .gitignore

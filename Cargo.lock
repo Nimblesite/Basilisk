@@ -242,6 +242,7 @@ name = "basilisk-cli"
 version = "0.1.0"
 dependencies = [
  "basilisk-checker",
+ "basilisk-common",
  "basilisk-config",
  "basilisk-lsp",
  "basilisk-parser",
@@ -335,6 +336,7 @@ version = "0.1.0"
 name = "basilisk-profiler-helper"
 version = "0.1.0"
 dependencies = [
+ "basilisk-common",
  "py-spy",
  "serde",
  "serde_json",

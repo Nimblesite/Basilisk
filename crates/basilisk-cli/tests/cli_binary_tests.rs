@@ -21,6 +21,8 @@
 use std::path::Path;
 use std::process::{Command, Output};
 
+use serde_json::Value;
+
 fn binary() -> Command {
     Command::new(env!("CARGO_BIN_EXE_basilisk"))
 }
@@ -54,6 +56,46 @@ fn run_check_with_args(
 
 fn stdout(output: &Output) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
+}
+
+// ── Shipwright version contract ─────────────────────────────────────────────
+
+#[test]
+fn version_plain_matches_shipwright_contract() -> Result<(), Box<dyn std::error::Error>> {
+    let out = binary().arg("--version").output()?;
+    assert_eq!(out.status.code(), Some(0), "--version must exit 0");
+    assert_eq!(
+        stdout(&out).trim(),
+        concat!("basilisk ", env!("CARGO_PKG_VERSION")),
+        "--version must emit '<component-id> <semver>'"
+    );
+    assert!(
+        out.stderr.is_empty(),
+        "--version must not emit diagnostics to stderr"
+    );
+    Ok(())
+}
+
+#[test]
+fn version_json_matches_shipwright_contract() -> Result<(), Box<dyn std::error::Error>> {
+    let out = binary().args(["--version", "--json"]).output()?;
+    assert_eq!(out.status.code(), Some(0), "--version --json must exit 0");
+
+    let value: Value = serde_json::from_slice(&out.stdout)?;
+    assert_eq!(value["manifestVersion"], 1);
+    assert_eq!(value["name"], "basilisk");
+    assert_eq!(value["binaryName"], "basilisk");
+    assert_eq!(value["version"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(value["kind"], "lsp");
+    assert_eq!(value["language"], "rust");
+    assert_eq!(value["product"], "basilisk");
+    assert!(value.get("buildTime").is_some(), "buildTime must be present");
+    assert!(value.get("gitDirty").is_some(), "gitDirty must be present");
+    assert!(
+        out.stderr.is_empty(),
+        "--version --json must not emit diagnostics to stderr"
+    );
+    Ok(())
 }
 
 // ── Exit codes ───────────────────────────────────────────────────────────────

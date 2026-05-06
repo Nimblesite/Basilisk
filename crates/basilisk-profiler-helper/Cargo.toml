@@ -1,9 +1,11 @@
 [package]
 name = "basilisk-profiler-helper"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 description = "Elevated helper binary for py-spy memory reading on macOS"
-license = "MIT OR Apache-2.0"
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 publish = false
 
 [[bin]]
@@ -11,6 +13,7 @@ name = "basilisk-profiler-helper"
 path = "src/main.rs"
 
 [dependencies]
+basilisk-common.workspace = true
 py-spy = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -33,6 +33,8 @@ node_modules/
 vscode-extension/out/
 vscode-extension/.vscode-test/
 vscode-extension/coverage/
+vscode-extension/bin/
+vscode-extension/shipwright.json
 *.vsix
 *.tgz
 .npm/

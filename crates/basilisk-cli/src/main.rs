@@ -9,6 +9,7 @@
 use std::collections::HashSet;
 use std::process::ExitCode;
 
+use basilisk_common::shipwright_version::{self, VersionOutput};
 use clap::{Parser, Subcommand};
 use colored::Colorize as _;
 use tracing::{error, info, warn};
@@ -129,6 +130,19 @@ enum StubGenModeArg {
 }
 
 fn main() -> ExitCode {
+    let args = std::env::args().skip(1).collect::<Vec<_>>();
+    if shipwright_version::print_if_requested(
+        &args,
+        VersionOutput {
+            name: "basilisk",
+            kind: "lsp",
+            product: "basilisk",
+            capabilities: &["cli", "lsp", "dap", "profiler", "test-explorer"],
+        },
+    ) {
+        return ExitCode::SUCCESS;
+    }
+
     // Initialize tracing. Controlled via BASILISK_LOG env var (defaults to info).
     // Examples: BASILISK_LOG=debug, BASILISK_LOG=basilisk_lsp::debug=trace
     tracing_subscriber::fmt()

@@ -278,6 +278,118 @@ pub mod release {
     }
 }
 
+/// Shipwright binary version output helpers.
+pub mod shipwright_version {
+    /// Metadata needed to emit Shipwright-compatible version output.
+    #[derive(Clone, Copy, Debug)]
+    pub struct VersionOutput<'a> {
+        /// Component id and binary name.
+        pub name: &'a str,
+        /// Shipwright component kind.
+        pub kind: &'a str,
+        /// Product id this component belongs to.
+        pub product: &'a str,
+        /// Extra capability labels for diagnostics.
+        pub capabilities: &'a [&'a str],
+    }
+
+    /// Workspace product version.
+    pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+    /// Print plain or JSON version output when the argument list requests it.
+    ///
+    /// Returns `true` when the caller should exit immediately.
+    pub fn print_if_requested(args: &[String], output: VersionOutput<'_>) -> bool {
+        if !is_version_request(args) {
+            return false;
+        }
+        if args.iter().any(|arg| arg == "--json") {
+            println!("{}", json(output));
+        } else {
+            println!("{}", plain(output.name));
+        }
+        true
+    }
+
+    /// Plain Shipwright version line.
+    #[must_use]
+    pub fn plain(name: &str) -> String {
+        format!("{name} {VERSION}")
+    }
+
+    /// JSON Shipwright version document.
+    #[must_use]
+    pub fn json(output: VersionOutput<'_>) -> String {
+        let mut fields = vec![
+            "\"manifestVersion\":1".to_owned(),
+            string_field("name", output.name),
+            string_field("binaryName", output.name),
+            string_field("version", VERSION),
+            string_field("kind", output.kind),
+            string_field("language", "rust"),
+            string_field("product", output.product),
+        ];
+        push_optional_field(&mut fields, "buildTime", option_env!("BASILISK_BUILD_TIME"));
+        push_optional_field(&mut fields, "buildDate", option_env!("BASILISK_BUILD_TIME"));
+        push_optional_field(&mut fields, "gitSha", option_env!("BASILISK_GIT_SHA"));
+        push_optional_field(&mut fields, "gitCommit", option_env!("BASILISK_GIT_SHA"));
+        push_optional_field(&mut fields, "target", option_env!("BASILISK_TARGET"));
+        push_optional_field(&mut fields, "toolchain", option_env!("BASILISK_RUSTC_VERSION"));
+        fields.push(format!(
+            "\"gitDirty\":{}",
+            option_env!("BASILISK_GIT_DIRTY").unwrap_or("false")
+        ));
+        if !output.capabilities.is_empty() {
+            fields.push(array_field("capabilities", output.capabilities));
+        }
+        format!("{{{}}}", fields.join(","))
+    }
+
+    fn is_version_request(args: &[String]) -> bool {
+        args.iter()
+            .all(|arg| matches!(arg.as_str(), "--version" | "-V" | "--json"))
+            && args.iter().any(|arg| matches!(arg.as_str(), "--version" | "-V"))
+    }
+
+    fn push_optional_field(fields: &mut Vec<String>, key: &str, value: Option<&str>) {
+        if let Some(value) = value {
+            if !value.is_empty() {
+                fields.push(string_field(key, value));
+            }
+        }
+    }
+
+    fn array_field(key: &str, values: &[&str]) -> String {
+        let items = values
+            .iter()
+            .map(|value| json_string(value))
+            .collect::<Vec<_>>()
+            .join(",");
+        format!("{}:[{}]", json_string(key), items)
+    }
+
+    fn string_field(key: &str, value: &str) -> String {
+        format!("{}:{}", json_string(key), json_string(value))
+    }
+
+    fn json_string(value: &str) -> String {
+        let mut output = String::with_capacity(value.len() + 2);
+        output.push('"');
+        for ch in value.chars() {
+            match ch {
+                '"' => output.push_str("\\\""),
+                '\\' => output.push_str("\\\\"),
+                '\n' => output.push_str("\\n"),
+                '\r' => output.push_str("\\r"),
+                '\t' => output.push_str("\\t"),
+                _ => output.push(ch),
+            }
+        }
+        output.push('"');
+        output
+    }
+}
+
 /// Custom LSP notification method names.
 pub mod notifications {
     /// Notification sent when a module's symbol table changes after re-analysis.

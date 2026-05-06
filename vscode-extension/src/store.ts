@@ -25,6 +25,14 @@ import { POLL_INTERVAL_MS, WAIT_MS } from "./timeouts";
 /** LSP lifecycle states exposed to consumers. */
 export type LspState = "idle" | "starting" | "running" | "stopped";
 
+/** Runtime binary selected by Shipwright during activation. */
+export interface RuntimeResolution {
+  readonly componentId: string;
+  readonly path: string;
+  readonly source: string;
+  readonly version: string | undefined;
+}
+
 /** Lifecycle promise handle for LSP client ready signaling. */
 interface ReadyHandle {
   promise: Promise<void>;
@@ -41,6 +49,7 @@ export interface Store {
   readonly logSink: ReadonlySignal<LogSink | undefined>;
   readonly lspState: ReadonlySignal<LspState>;
   readonly isServerReady: ReadonlySignal<boolean>;
+  readonly runtimeResolution: ReadonlySignal<RuntimeResolution | undefined>;
 
   // Read-only access to the ready handle (for whenReady callers).
   readonly lspReadyPromise: ReadonlySignal<Promise<void> | undefined>;
@@ -50,6 +59,7 @@ export interface Store {
   setStatusBarItem(item: vscode.StatusBarItem): void;
   setOutputChannel(ch: vscode.OutputChannel): void;
   setLogSink(sink: LogSink): void;
+  setRuntimeResolution(resolution: RuntimeResolution): void;
   isClientCommandRegistered(id: string): boolean;
   isServerCommandAdvertised(id: string): boolean;
   ensureLspReadyPromise(timeoutMs?: number): Promise<Result<LanguageClient>>;
@@ -65,6 +75,7 @@ interface StoreSignals {
   outputChannel: Signal<vscode.OutputChannel | undefined>;
   logSink: Signal<LogSink | undefined>;
   lspState: Signal<LspState>;
+  runtimeResolution: Signal<RuntimeResolution | undefined>;
   readyHandle: Signal<ReadyHandle | undefined>;
   /** Disposables for client-registered commands — disposed on LSP stop/restart. */
   commandDisposables: vscode.Disposable[];
@@ -286,6 +297,7 @@ function resetSignals(signals: StoreSignals): void {
   signals.outputChannel.value = undefined;
   signals.logSink.value = undefined;
   signals.lspState.value = "idle";
+  signals.runtimeResolution.value = undefined;
   signals.readyHandle.value = undefined;
 }
 
@@ -300,6 +312,7 @@ export function createStore(onReset?: () => void): Store {
     outputChannel: signal<vscode.OutputChannel | undefined>(undefined),
     logSink: signal<LogSink | undefined>(undefined),
     lspState: signal<LspState>("idle"),
+    runtimeResolution: signal<RuntimeResolution | undefined>(undefined),
     readyHandle: signal<ReadyHandle | undefined>(undefined),
     commandDisposables: [],
     serverCommandDisposables: [],
@@ -316,6 +329,7 @@ export function createStore(onReset?: () => void): Store {
     outputChannel: signals.outputChannel as ReadonlySignal<vscode.OutputChannel | undefined>,
     logSink: signals.logSink as ReadonlySignal<LogSink | undefined>,
     lspState: signals.lspState as ReadonlySignal<LspState>,
+    runtimeResolution: signals.runtimeResolution as ReadonlySignal<RuntimeResolution | undefined>,
     lspReadyPromise,
     isServerReady,
 
@@ -331,6 +345,9 @@ export function createStore(onReset?: () => void): Store {
     },
     setLogSink(sink: LogSink): void {
       signals.logSink.value = sink;
+    },
+    setRuntimeResolution(resolution: RuntimeResolution): void {
+      signals.runtimeResolution.value = resolution;
     },
     isClientCommandRegistered(id: string): boolean {
       return signals.clientCommands.value.has(id);

@@ -1,0 +1,91 @@
+{
+  "manifestVersion": 1,
+  "product": {
+    "id": "basilisk",
+    "displayName": "Basilisk",
+    "version": "0.1.0",
+    "repository": "https://github.com/MelbourneDeveloper/Basilisk",
+    "homepage": "https://www.basilisk-python.dev"
+  },
+  "components": [
+    {
+      "id": "basilisk",
+      "kind": "lsp",
+      "language": "rust",
+      "binaryName": "basilisk",
+      "expectedVersion": "${PRODUCT_VERSION}",
+      "platforms": ["darwin-arm64", "darwin-x64", "linux-x64", "linux-arm64", "win32-x64", "win32-arm64"],
+      "bundled": {
+        "bundlePath": "bin/${platform}/${binaryName}${exe}",
+        "perPlatformArtifact": true
+      },
+      "sources": ["user-setting", "env", "bundled", "pkgmgr", "cargo-bin", "path", "lsp-initialize"],
+      "userSetting": "basilisk.executablePath",
+      "env": {
+        "pathVar": "BASILISK_EXECUTABLE_PATH",
+        "dirVar": "BASILISK_BINARY_DIR"
+      },
+      "pkgmgr": {
+        "brew": "basilisk",
+        "scoop": "basilisk"
+      },
+      "githubRelease": {
+        "repo": "MelbourneDeveloper/Basilisk",
+        "assetPattern": "basilisk-${version}-${platform}.tar.gz",
+        "checksum": true
+      },
+      "verifyStartup": true,
+      "versionCheckStrategy": "version-flag",
+      "required": true
+    },
+    {
+      "id": "basilisk-profiler-helper",
+      "kind": "tool",
+      "language": "rust",
+      "binaryName": "basilisk-profiler-helper",
+      "expectedVersion": "${PRODUCT_VERSION}",
+      "platforms": ["darwin-arm64", "darwin-x64"],
+      "bundled": {
+        "bundlePath": "bin/${platform}/${binaryName}${exe}",
+        "perPlatformArtifact": true
+      },
+      "sources": ["user-setting", "env", "bundled", "cargo-bin", "path"],
+      "userSetting": "basilisk.binaries.basilisk-profiler-helper",
+      "env": {
+        "pathVar": "BASILISK_PROFILER_HELPER_PATH",
+        "dirVar": "BASILISK_BINARY_DIR"
+      },
+      "verifyStartup": false,
+      "versionCheckStrategy": "version-flag",
+      "required": false
+    },
+    {
+      "id": "basilisk-zed",
+      "kind": "extension-zed",
+      "language": "rust",
+      "platforms": ["all"]
+    }
+  ],
+  "hosts": {
+    "vscode": {
+      "artifact": "vsix-per-platform",
+      "activationVerifies": ["basilisk"],
+      "onMismatch": "error"
+    },
+    "zed": {
+      "artifact": "zed-wasm",
+      "activationVerifies": ["basilisk"],
+      "onMismatch": "error"
+    },
+    "cli": {
+      "artifact": "archive",
+      "activationVerifies": ["basilisk"],
+      "onMismatch": "error"
+    },
+    "pkgmgr": {
+      "artifact": "brew-formula",
+      "activationVerifies": ["basilisk"],
+      "onMismatch": "error"
+    }
+  }
+}

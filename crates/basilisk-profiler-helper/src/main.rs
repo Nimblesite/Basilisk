@@ -23,6 +23,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+use basilisk_common::shipwright_version::{self, VersionOutput};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
@@ -93,11 +94,22 @@ struct FrameData {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> ExitCode {
+    let args = std::env::args().skip(1).collect::<Vec<_>>();
+    if shipwright_version::print_if_requested(
+        &args,
+        VersionOutput {
+            name: "basilisk-profiler-helper",
+            kind: "tool",
+            product: "basilisk",
+            capabilities: &["profiler-helper"],
+        },
+    ) {
+        return ExitCode::SUCCESS;
+    }
+
     init_tracing();
 
-    let args: Vec<String> = std::env::args().collect();
-
-    let Some(path) = args.get(1) else {
+    let Some(path) = args.first() else {
         error!("usage: basilisk-profiler-helper <socket-path>");
         return ExitCode::FAILURE;
     };
