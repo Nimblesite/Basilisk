@@ -213,10 +213,49 @@ jobs:
           export PATH="$HOME/.luarocks/bin:$PATH"
           ./scripts/test-nvim.sh
 
+  # ── Mutation testing (runs in parallel) ────────────────────────────────────
+  mutation-test:
+    name: Mutation Testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install lld
+        run: sudo apt-get update && sudo apt-get install -y lld
+
+      - name: Install cargo-mutants
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-mutants
+
+      - name: Run mutation tests against baseline
+        run: make mutation-test
+
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-report
+          path: |
+            mutation_testing/mutants_report.html
+            mutation_testing/mutants.out.working/mutants.out/
+          retention-days: 14
+
   # ── Build gate (standard job name per repo standards) ──────────────────────
   build:
     name: Build
-    needs: [test-rust, test-vscode, test-nvim, zed]
+    needs: [test-rust, test-vscode, test-nvim, zed, mutation-test]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

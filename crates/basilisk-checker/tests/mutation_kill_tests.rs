@@ -509,16 +509,17 @@ def missing(unannotated, annotated: int) -> int:
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
         .collect();
-    assert_eq!(
-        e0001.len(),
-        1,
-        "exactly one E0001 expected for `unannotated` only, got {}: {e0001:?}",
-        e0001.len()
-    );
+    let [only] = e0001.as_slice() else {
+        return Err(format!(
+            "exactly one E0001 expected for `unannotated` only, got {}: {e0001:?}",
+            e0001.len()
+        )
+        .into());
+    };
     assert!(
-        e0001[0].message.contains("unannotated"),
+        only.message.contains("unannotated"),
         "diagnostic must name `unannotated`, got: {}",
-        e0001[0].message
+        only.message
     );
     Ok(())
 }
@@ -565,7 +566,9 @@ class Foo:
         "E0001 must fire for `y`, got: {names:?}"
     );
     assert!(
-        !names.iter().any(|m| m.contains("`self`") || m.contains("`cls`")),
+        !names
+            .iter()
+            .any(|m| m.contains("`self`") || m.contains("`cls`")),
         "E0001 must NOT fire for `self` or `cls`, got: {names:?}"
     );
     Ok(())
@@ -596,16 +599,18 @@ def regular(unannotated):
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
         .collect();
-    assert_eq!(
-        e0001.len(),
-        1,
-        "exactly one E0001 expected (for `unannotated` in regular fn), got {}: {e0001:?}",
-        e0001.len()
-    );
+    let [only] = e0001.as_slice() else {
+        return Err(format!(
+            "exactly one E0001 expected (for `unannotated` in regular fn), \
+             got {}: {e0001:?}",
+            e0001.len()
+        )
+        .into());
+    };
     assert!(
-        e0001[0].message.contains("unannotated"),
+        only.message.contains("unannotated"),
         "diagnostic must name `unannotated`, not the Protocol param: {}",
-        e0001[0].message
+        only.message
     );
     Ok(())
 }
@@ -644,12 +649,14 @@ def f(specific_name):
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
         .collect();
-    assert_eq!(e0001.len(), 1, "exactly one E0001 expected: {e0001:?}");
-    assert_eq!(e0001[0].code.code, "BSK-E0001");
+    let [only] = e0001.as_slice() else {
+        return Err(format!("exactly one E0001 expected: {e0001:?}").into());
+    };
+    assert_eq!(only.code.code, "BSK-E0001");
     assert!(
-        e0001[0].message.contains("specific_name"),
+        only.message.contains("specific_name"),
         "message must name the parameter, got: {}",
-        e0001[0].message
+        only.message
     );
     Ok(())
 }

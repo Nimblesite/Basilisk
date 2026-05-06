@@ -1,9 +1,62 @@
 #!/usr/bin/env python3
-"""Generate an HTML report from cargo-mutants outcomes.json."""
+"""Generate a cargo-mutants HTML report and enforce the score ratchet."""
 
+from __future__ import annotations
+
+import argparse
+import datetime as dt
 import json
 import sys
+from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Any
+
+
+SCORE_FILE_VERSION = 1
+
+
+@dataclass(frozen=True)
+class MutationScore:
+    date: str
+    total: int
+    caught: int
+    missed: int
+    timeout: int
+    unviable: int
+    kill_rate: float
+
+    @classmethod
+    def from_counts(cls, counts: dict[str, int], date: str) -> "MutationScore":
+        return cls(
+            date=date,
+            total=counts["total"],
+            caught=counts["caught"],
+            missed=counts["missed"],
+            timeout=counts["timeout"],
+            unviable=counts["unviable"],
+            kill_rate=score_percentage(counts),
+        )
+
+    @classmethod
+    def from_json(cls, raw: dict[str, Any]) -> "MutationScore":
+        return cls(
+            date=str(raw["date"]),
+            total=int(raw["total"]),
+            caught=int(raw["caught"]),
+            missed=int(raw["missed"]),
+            timeout=int(raw["timeout"]),
+            unviable=int(raw["unviable"]),
+            kill_rate=float(raw["kill_rate"]),
+        )
+
+    def to_json(self) -> dict[str, int | float | str]:
+        return asdict(self)
+
+
+class MutationScoreRegression(Exception):
+    def __init__(self, regressions: list[str]) -> None:
+        super().__init__("Mutation score regression detected")
+        self.regressions = regressions
 
 
 def load_diff(mutants_out: Path, diff_path: str | None) -> str:
@@ -93,10 +146,141 @@ def _esc(s: str) -> str:
     )
 
 
-def generate(outcomes_path: Path, output_path: Path) -> None:
-    data = json.loads(outcomes_path.read_text())
-    mutants_out = outcomes_path.parent
+def load_outcomes(outcomes_path: Path) -> dict[str, Any]:
+    return json.loads(outcomes_path.read_text(encoding="utf-8"))
 
+
+def is_mutant_outcome(outcome: dict[str, Any]) -> bool:
+    scenario = outcome.get("scenario")
+    return isinstance(scenario, dict) and "Mutant" in scenario
+
+
+def tally_outcomes(data: dict[str, Any]) -> dict[str, int]:
+    counts = {"caught": 0, "missed": 0, "timeout": 0, "unviable": 0, "total": 0}
+    for outcome in data.get("outcomes", []):
+        if not is_mutant_outcome(outcome):
+            continue
+        counts["total"] += 1
+        match outcome.get("summary"):
+            case "CaughtMutant":
+                counts["caught"] += 1
+            case "MissedMutant":
+                counts["missed"] += 1
+            case "Timeout":
+                counts["timeout"] += 1
+            case "Unviable":
+                counts["unviable"] += 1
+    return counts
+
+
+def mutation_counts(data: dict[str, Any]) -> dict[str, int]:
+    if "total_mutants" not in data:
+        return tally_outcomes(data)
+    return {
+        "total": int(data["total_mutants"]),
+        "caught": int(data["caught"]),
+        "missed": int(data["missed"]),
+        "timeout": int(data.get("timeout", 0)),
+        "unviable": int(data.get("unviable", 0)),
+    }
+
+
+def score_percentage(counts: dict[str, int]) -> float:
+    viable = counts["caught"] + counts["missed"] + counts["timeout"]
+    return round(100.0 * counts["caught"] / viable, 2) if viable > 0 else 0.0
+
+
+def load_score_book(scores_path: Path) -> dict[str, Any]:
+    if scores_path.suffix != ".json":
+        raise ValueError(f"mutation score baseline must be JSON: {scores_path}")
+    if not scores_path.exists():
+        return {"version": SCORE_FILE_VERSION, "scores": {}}
+    raw = json.loads(scores_path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict) or not isinstance(raw.get("scores"), dict):
+        raise ValueError(f"invalid mutation score baseline: {scores_path}")
+    return raw
+
+
+def write_score_book(scores_path: Path, score_book: dict[str, Any]) -> None:
+    scores_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = scores_path.with_suffix(f"{scores_path.suffix}.tmp")
+    content = json.dumps(score_book, indent=2, sort_keys=True) + "\n"
+    tmp_path.write_text(content, encoding="utf-8")
+    tmp_path.replace(scores_path)
+
+
+def baseline_for_scope(score_book: dict[str, Any], scope: str) -> MutationScore | None:
+    raw_score = score_book["scores"].get(scope)
+    if raw_score is None:
+        return None
+    if not isinstance(raw_score, dict):
+        raise ValueError(f"invalid mutation score entry for scope={scope!r}")
+    return MutationScore.from_json(raw_score)
+
+
+def regression_messages(fresh: MutationScore, baseline: MutationScore) -> list[str]:
+    regressions: list[str] = []
+    if fresh.caught < baseline.caught:
+        regressions.append(f"caught dropped {baseline.caught} -> {fresh.caught}")
+    if fresh.missed > baseline.missed:
+        regressions.append(f"missed increased {baseline.missed} -> {fresh.missed}")
+    if fresh.timeout > baseline.timeout:
+        regressions.append(f"timeout increased {baseline.timeout} -> {fresh.timeout}")
+    if fresh.unviable > baseline.unviable:
+        regressions.append(
+            f"unviable increased {baseline.unviable} -> {fresh.unviable}"
+        )
+    if fresh.kill_rate < baseline.kill_rate:
+        regressions.append(
+            f"kill_rate dropped {baseline.kill_rate}% -> {fresh.kill_rate}%"
+        )
+    return regressions
+
+
+def score_summary(score: MutationScore) -> str:
+    return (
+        f"total={score.total} caught={score.caught} missed={score.missed} "
+        f"timeout={score.timeout} unviable={score.unviable} "
+        f"kill_rate={score.kill_rate}%"
+    )
+
+
+def record_score(data: dict[str, Any], scores_path: Path, scope: str) -> MutationScore:
+    score_book = load_score_book(scores_path)
+    fresh = MutationScore.from_counts(
+        mutation_counts(data), dt.date.today().isoformat()
+    )
+    baseline = baseline_for_scope(score_book, scope)
+    print(f"Fresh mutation score ({scope}): {score_summary(fresh)}", file=sys.stderr)
+    if baseline is not None:
+        print(
+            f"Baseline ({baseline.date}, {scope}): {score_summary(baseline)}",
+            file=sys.stderr,
+        )
+        regressions = regression_messages(fresh, baseline)
+        if regressions:
+            raise MutationScoreRegression(regressions)
+    score_book["version"] = SCORE_FILE_VERSION
+    score_book["scores"][scope] = fresh.to_json()
+    write_score_book(scores_path, score_book)
+    print(f"Mutation score baseline overwritten: {scores_path}", file=sys.stderr)
+    return fresh
+
+
+def emit_regression_error(error: MutationScoreRegression) -> None:
+    print("Mutation score regression detected:", file=sys.stderr)
+    for regression in error.regressions:
+        print(f"  - {regression}", file=sys.stderr)
+    print(
+        "Baseline was not overwritten. Add tests until the mutation score "
+        "holds or improves.",
+        file=sys.stderr,
+    )
+
+
+def generate_from_data(
+    data: dict[str, Any], mutants_out: Path, output_path: Path
+) -> None:
     total = data["total_mutants"]
     missed = data["missed"]
     caught = data["caught"]
@@ -105,7 +289,7 @@ def generate(outcomes_path: Path, output_path: Path) -> None:
     version = data.get("cargo_mutants_version", "?")
     start = data.get("start_time", "")
     end = data.get("end_time", "")
-    score = round(caught / (caught + missed) * 100, 1) if (caught + missed) > 0 else 0
+    score = round(score_percentage(mutation_counts(data)), 1)
 
     score_class = "good" if score >= 80 else "warn" if score >= 60 else "bad"
 
@@ -274,13 +458,41 @@ function filterTable(tableId, query) {{
 </body>
 </html>"""
 
-    output_path.write_text(html)
+    output_path.write_text(html, encoding="utf-8")
     print(f"Report written to {output_path}")
 
 
-if __name__ == "__main__":
-    outcomes = (
-        Path(sys.argv[1]) if len(sys.argv) > 1 else Path("mutants.out/outcomes.json")
+def generate(outcomes_path: Path, output_path: Path) -> None:
+    data = load_outcomes(outcomes_path)
+    generate_from_data(data, outcomes_path.parent, output_path)
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "outcomes", nargs="?", type=Path, default=Path("mutants.out/outcomes.json")
     )
-    output = Path(sys.argv[2]) if len(sys.argv) > 2 else Path("mutants_report.html")
-    generate(outcomes, output)
+    parser.add_argument(
+        "output", nargs="?", type=Path, default=Path("mutants_report.html")
+    )
+    parser.add_argument("--scores", type=Path, help="JSON baseline to ratchet")
+    parser.add_argument("--scope", default="working")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(sys.argv[1:] if argv is None else argv)
+    data = load_outcomes(args.outcomes)
+    generate_from_data(data, args.outcomes.parent, args.output)
+    if args.scores is None:
+        return 0
+    try:
+        record_score(data, args.scores, args.scope)
+    except MutationScoreRegression as error:
+        emit_regression_error(error)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
