@@ -1,0 +1,5 @@
+[defaults]
+report_hide = [
+  "**/benchmarks/fixtures/**",
+  "**/crates/basilisk-cli/tests/e2e_e*.rs",
+]

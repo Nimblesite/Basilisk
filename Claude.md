@@ -98,6 +98,7 @@ Testing is absolutely critical. We aim for 100% test coverage and a high mutatio
 
 - Logging is critical. Can't see what's happening? Add more logging immediately
 - DRY, DRY, DRY
+- Use deslop:find-similar before creating new code and deslop:top_offenders after changing code
 - 100% test coverage is only the start
 - No unit tests. Only COARSE e2e tests
 
