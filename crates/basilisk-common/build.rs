@@ -32,8 +32,7 @@ fn build_time() -> String {
 fn current_unix_time() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|duration| i64::try_from(duration.as_secs()).unwrap_or(0))
-        .unwrap_or(0)
+        .map_or(0, |duration| i64::try_from(duration.as_secs()).unwrap_or(0))
 }
 
 fn format_unix_time(seconds: i64) -> String {
@@ -83,8 +82,7 @@ fn git_dirty() -> bool {
     Command::new("git")
         .args(["diff", "--quiet", "--ignore-submodules", "--"])
         .status()
-        .map(|status| !status.success())
-        .unwrap_or(false)
+        .is_ok_and(|status| !status.success())
 }
 
 fn command_stdout(command: &str, args: &[&str]) -> Option<String> {

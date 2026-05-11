@@ -1,3 +1,10 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic
+)]
 //! Shipwright version contract tests for the profiler helper binary.
 
 use std::process::Command;

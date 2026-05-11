@@ -299,6 +299,7 @@ pub mod shipwright_version {
     /// Print plain or JSON version output when the argument list requests it.
     ///
     /// Returns `true` when the caller should exit immediately.
+    #[must_use]
     pub fn print_if_requested(args: &[String], output: VersionOutput<'_>) -> bool {
         if !is_version_request(args) {
             return false;
