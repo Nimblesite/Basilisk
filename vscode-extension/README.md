@@ -156,7 +156,9 @@ All rules are **on by default**. There is no way to relax them globally.
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `basilisk.enabled` | `true` | Enable/disable the type checker |
-| `basilisk.executablePath` | `"basilisk"` | Path to the basilisk binary |
+| `basilisk.executablePath` | `""` | Explicit path to the basilisk binary. Empty uses the bundled VSIX binary |
+| `basilisk.binaries.path` | `""` | Directory containing Basilisk runtime binaries |
+| `basilisk.binaries.basilisk` | `""` | Explicit path to the Basilisk language server binary |
 | `basilisk.useLsp` | `true` | Use LSP server (disable for subprocess fallback) |
 | `basilisk.trace.server` | `"off"` | LSP trace level: `off`, `messages`, `verbose` |
 | `basilisk.inlayHints.parameterNames` | `true` | Show parameter name hints at call sites |

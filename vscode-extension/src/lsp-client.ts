@@ -129,7 +129,7 @@ export function startLspClient(
     const errorMessage = error instanceof Error ? error.message : String(error);
     const msg =
       `Basilisk: Failed to start language server. ` +
-      `Is '${executablePath}' installed and on PATH? ${errorMessage}`;
+      `Shipwright selected '${executablePath}'. ${errorMessage}`;
     vscode.window.showErrorMessage(msg);
     Logger.error(msg);
     updateStatusBar("error");

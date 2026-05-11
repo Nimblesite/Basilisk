@@ -91,9 +91,38 @@ suite('Basilisk Extension E2E Tests', () => {
         assert.ok(inspected, 'basilisk.executablePath should be a contributed setting');
         assert.strictEqual(
             inspected.defaultValue,
-            'basilisk',
-            'Default executablePath should be "basilisk"'
+            '',
+            'Default executablePath should be empty so Shipwright uses the bundled binary'
         );
+    });
+
+    test('Shipwright resolves basilisk from the bundled VSIX binary by default', () => {
+        const store = getStore();
+        assert.ok(store, 'Store should be available after activation');
+        const resolution = store.runtimeResolution.value;
+        assert.ok(resolution, 'Shipwright runtime resolution should be recorded');
+        assert.strictEqual(resolution.componentId, 'basilisk');
+        assert.strictEqual(resolution.source, 'bundled');
+        const normalized = resolution.path.split(path.sep).join('/');
+        assert.ok(normalized.includes('/bin/'), `Expected bundled bin path, got ${resolution.path}`);
+        assert.ok(
+            normalized.endsWith('/basilisk') || normalized.endsWith('/basilisk.exe'),
+            `Expected basilisk executable path, got ${resolution.path}`
+        );
+    });
+
+    test('Extension contributes Shipwright binary directory setting', () => {
+        const cfg = vscode.workspace.getConfiguration('basilisk');
+        const inspected = cfg.inspect<string>('binaries.path');
+        assert.ok(inspected, 'basilisk.binaries.path should be a contributed setting');
+        assert.strictEqual(inspected.defaultValue, '');
+    });
+
+    test('Extension contributes Shipwright per-component basilisk setting', () => {
+        const cfg = vscode.workspace.getConfiguration('basilisk');
+        const inspected = cfg.inspect<string>('binaries.basilisk');
+        assert.ok(inspected, 'basilisk.binaries.basilisk should be a contributed setting');
+        assert.strictEqual(inspected.defaultValue, '');
     });
 
     test('Extension contributes basilisk.enabled setting', () => {

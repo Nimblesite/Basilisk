@@ -208,14 +208,9 @@ suite('Command Registration (VS Code API Compliance)', () => {
     // ----------------------------------------------------------------
     // 1. Every manifest command is known to VS Code's command registry
     // ----------------------------------------------------------------
-    test('all manifest commands exist in the VS Code command registry', async function () {
-
-        const allCommands = await vscode.commands.getCommands(true);
+    test('all manifest commands exist in the VS Code command registry', function () {
         for (const cmd of MANIFEST_COMMANDS) {
-            assert.ok(
-                allCommands.includes(cmd),
-                `Manifest command "${cmd}" should exist in the VS Code command registry`
-            );
+            assertCannotRegister(cmd, 'Manifest command registration');
         }
     });
 

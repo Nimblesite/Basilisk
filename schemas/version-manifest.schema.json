@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nimblesite.dev/schemas/version-manifest/v1.json",
+  "title": "Nimblesite binary --version --json output",
+  "description": "Stdout JSON emitted by any Nimblesite binary when invoked with `--version --json`.",
+  "type": "object",
+  "required": ["manifestVersion", "name", "version", "kind", "language"],
+  "additionalProperties": true,
+  "properties": {
+    "manifestVersion": { "type": "integer", "const": 1 },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{1,63}$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["cli", "lsp", "mcp", "sidecar", "dap", "tool"]
+    },
+    "language": {
+      "type": "string",
+      "enum": ["rust", "dotnet", "dart", "typescript", "kotlin", "javascript"]
+    },
+    "buildTime": { "type": "string", "format": "date-time" },
+    "gitSha": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+    "gitDirty": { "type": "boolean" },
+    "target": {
+      "type": "string",
+      "description": "Rust target triple or equivalent runtime id."
+    },
+    "toolchain": { "type": "string" },
+    "capabilities": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "product": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{1,63}$"
+    }
+  }
+}

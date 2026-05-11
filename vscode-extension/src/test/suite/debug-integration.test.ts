@@ -139,11 +139,24 @@ const CLASS_INSTANCE_START_LINE = 119;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/**
- * Resolves the absolute path to the basilisk binary built from Cargo.
- */
+function detectShipwrightPlatform(): string {
+    if (process.platform === 'darwin' && process.arch === 'arm64') { return 'darwin-arm64'; }
+    if (process.platform === 'linux' && process.arch === 'arm64') { return 'linux-arm64'; }
+    if (process.platform === 'linux') { return 'linux-x64'; }
+    if (process.platform === 'win32' && process.arch === 'arm64') { return 'win32-arm64'; }
+    if (process.platform === 'win32') { return 'win32-x64'; }
+    return 'linux-x64';
+}
+
+/** Resolve the bundled VSIX binary staged by the test bootstrap. */
 function findBasiliskBinary(): string | undefined {
-    // Check BASILISK_EXECUTABLE_PATH env var first (set by test.sh / CI).
+    const extensionRoot = path.resolve(__dirname, '../../..');
+    const exe = process.platform === 'win32' ? '.exe' : '';
+    const bundled = path.join(extensionRoot, 'bin', detectShipwrightPlatform(), `basilisk${exe}`);
+    if (fs.existsSync(bundled)) {
+        return bundled;
+    }
+
     const envPath = process.env.BASILISK_EXECUTABLE_PATH;
     if (envPath !== undefined && envPath !== '' && fs.existsSync(envPath)) {
         return envPath;

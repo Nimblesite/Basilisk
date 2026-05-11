@@ -13,33 +13,38 @@ env:
 
 jobs:
   build:
-    name: Build — ${{ matrix.target }}
+    name: Build binary - ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         include:
-          - target: x86_64-unknown-linux-gnu
+          - platform: linux-x64
+            target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             binary: basilisk
-            archive: basilisk-linux-x86_64.tar.gz
-          - target: aarch64-unknown-linux-gnu
+            archive: basilisk-x86_64-unknown-linux-gnu.tar.gz
+          - platform: linux-arm64
+            target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             binary: basilisk
-            archive: basilisk-linux-aarch64.tar.gz
-          - target: x86_64-apple-darwin
-            os: macos-latest
+            archive: basilisk-aarch64-unknown-linux-gnu.tar.gz
+          - platform: darwin-arm64
+            target: aarch64-apple-darwin
+            os: macos-15
             binary: basilisk
-            archive: basilisk-darwin-x86_64.tar.gz
-          - target: aarch64-apple-darwin
-            os: macos-latest
-            binary: basilisk
-            archive: basilisk-darwin-aarch64.tar.gz
-          - target: x86_64-pc-windows-msvc
+            archive: basilisk-aarch64-apple-darwin.zip
+          - platform: win32-x64
+            target: x86_64-pc-windows-msvc
             os: windows-latest
             binary: basilisk.exe
-            archive: basilisk-windows-x86_64.zip
+            archive: basilisk-x86_64-pc-windows-msvc.zip
+          - platform: win32-arm64
+            target: aarch64-pc-windows-msvc
+            os: windows-latest
+            binary: basilisk.exe
+            archive: basilisk-aarch64-pc-windows-msvc.zip
 
     steps:
       - uses: actions/checkout@v4
@@ -48,7 +53,7 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install cross-compilation tools (aarch64-linux)
+      - name: Install cross-compilation tools
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
           sudo apt-get update
@@ -57,56 +62,245 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.target }}
+          key: release-${{ matrix.target }}
           cache-on-failure: true
 
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }} --bin basilisk
 
-      - name: Package (unix)
-        if: runner.os != 'Windows'
+      - name: Import Developer ID certificate
+        if: startsWith(matrix.platform, 'darwin-')
+        run: |
+          echo "$APPLE_DEVELOPER_ID_CERT_P12" | base64 --decode > cert.p12
+          security create-keychain -p "" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "" build.keychain
+          security import cert.p12 -k build.keychain -P "$APPLE_DEVELOPER_ID_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+          identity="$(security find-identity -v -p codesigning build.keychain | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -1)"
+          test -n "$identity"
+          echo "APPLE_CODESIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
+        env:
+          APPLE_DEVELOPER_ID_CERT_P12: ${{ secrets.APPLE_DEVELOPER_ID_CERT_P12 }}
+          APPLE_DEVELOPER_ID_CERT_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERT_PASSWORD }}
+
+      - name: Decode notarization API key
+        if: startsWith(matrix.platform, 'darwin-')
+        run: echo "$NOTARIZATION_API_KEY_P8" | base64 --decode > AuthKey.p8
+        env:
+          NOTARIZATION_API_KEY_P8: ${{ secrets.NOTARIZATION_API_KEY_P8 }}
+
+      - name: Sign, notarize, and staple macOS binary archive
+        if: startsWith(matrix.platform, 'darwin-')
+        run: |
+          set -euo pipefail
+          binary_path="target/${{ matrix.target }}/release/${{ matrix.binary }}"
+          codesign --sign "$APPLE_CODESIGN_IDENTITY" --options runtime --timestamp --force "$binary_path"
+          codesign --verify --strict --verbose=4 "$binary_path"
+          ditto -c -k --keepParent "$binary_path" "${{ matrix.archive }}"
+          xcrun notarytool submit "${{ matrix.archive }}" \
+            --key AuthKey.p8 \
+            --key-id "$NOTARIZATION_KEY_ID" \
+            --issuer "$NOTARIZATION_ISSUER_ID" \
+            --wait
+          xcrun stapler staple "${{ matrix.archive }}"
+          xcrun stapler validate "${{ matrix.archive }}"
+          spctl --assess --verbose --type execute "$binary_path"
+        env:
+          NOTARIZATION_KEY_ID: ${{ secrets.NOTARIZATION_KEY_ID }}
+          NOTARIZATION_ISSUER_ID: ${{ secrets.NOTARIZATION_ISSUER_ID }}
+
+      - name: Package Linux archive
+        if: startsWith(matrix.platform, 'linux-')
         run: |
           cd target/${{ matrix.target }}/release
           tar czf ../../../${{ matrix.archive }} ${{ matrix.binary }}
 
-      - name: Package (windows)
-        if: runner.os == 'Windows'
+      - name: Package Windows archive
+        if: startsWith(matrix.platform, 'win32-')
         shell: pwsh
         run: |
           Compress-Archive -Path "target/${{ matrix.target }}/release/${{ matrix.binary }}" -DestinationPath "${{ matrix.archive }}"
 
-      - name: Upload artifact
+      - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.archive }}
           path: ${{ matrix.archive }}
 
   vsix:
-    name: Package VSIX
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    name: VSIX - ${{ matrix.platform }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            platform: darwin
+            arch: arm64
+            rust_target: aarch64-apple-darwin
+            npm_config_arch: arm64
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+            rust_target: x86_64-unknown-linux-gnu
+            npm_config_arch: x64
+          - os: ubuntu-latest
+            platform: linux
+            arch: arm64
+            rust_target: aarch64-unknown-linux-gnu
+            npm_config_arch: arm64
+          - os: windows-latest
+            platform: win32
+            arch: x64
+            rust_target: x86_64-pc-windows-msvc
+            npm_config_arch: x64
+          - os: windows-latest
+            platform: win32
+            arch: arm64
+            rust_target: aarch64-pc-windows-msvc
+            npm_config_arch: arm64
+
     steps:
       - uses: actions/checkout@v4
 
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Install cross-compilation tools
+        if: matrix.rust_target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: vsix-${{ matrix.rust_target }}
+          cache-on-failure: true
+
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22.x
           cache: npm
           cache-dependency-path: vscode-extension/package-lock.json
 
-      - name: Install dependencies and package VSIX
+      - name: Install dependencies
         working-directory: vscode-extension
-        run: |
-          npm ci
-          npx vsce package --no-dependencies
+        run: npm ci
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          npm_config_arch: ${{ matrix.npm_config_arch }}
 
-      - name: Upload VSIX artifact
-        uses: actions/upload-artifact@v4
+      - name: Validate Shipwright manifest
+        working-directory: vscode-extension
+        run: npm run test:shipwright
+
+      - name: Build VSIX runtime binaries
+        shell: bash
+        run: |
+          cargo build --release --target ${{ matrix.rust_target }} --bin basilisk
+          if [ "${{ matrix.platform }}" = "darwin" ]; then
+            cargo build --release --target ${{ matrix.rust_target }} --bin basilisk-profiler-helper
+          fi
+
+      - name: Import Developer ID certificate
+        if: matrix.platform == 'darwin'
+        run: |
+          echo "$APPLE_DEVELOPER_ID_CERT_P12" | base64 --decode > cert.p12
+          security create-keychain -p "" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "" build.keychain
+          security import cert.p12 -k build.keychain -P "$APPLE_DEVELOPER_ID_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+          identity="$(security find-identity -v -p codesigning build.keychain | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -1)"
+          test -n "$identity"
+          echo "APPLE_CODESIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
+        env:
+          APPLE_DEVELOPER_ID_CERT_P12: ${{ secrets.APPLE_DEVELOPER_ID_CERT_P12 }}
+          APPLE_DEVELOPER_ID_CERT_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERT_PASSWORD }}
+
+      - name: Sign macOS VSIX binaries
+        if: matrix.platform == 'darwin'
+        run: |
+          set -euo pipefail
+          codesign --sign "$APPLE_CODESIGN_IDENTITY" --options runtime --timestamp --force "target/${{ matrix.rust_target }}/release/basilisk"
+          codesign --sign "$APPLE_CODESIGN_IDENTITY" --options runtime --timestamp --force "target/${{ matrix.rust_target }}/release/basilisk-profiler-helper"
+          codesign --verify --strict --verbose=4 "target/${{ matrix.rust_target }}/release/basilisk"
+          codesign --verify --strict --verbose=4 "target/${{ matrix.rust_target }}/release/basilisk-profiler-helper"
+
+      - name: Set vsce target
+        shell: pwsh
+        run: echo "target=${{ matrix.platform }}-${{ matrix.arch }}" >> $env:GITHUB_ENV
+
+      - name: Stage Shipwright manifest and runtime binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe=""
+          if [ "${{ matrix.platform }}" = "win32" ]; then exe=".exe"; fi
+          rm -rf vscode-extension/bin
+          mkdir -p "vscode-extension/bin/${{ env.target }}"
+          cp "target/${{ matrix.rust_target }}/release/basilisk${exe}" "vscode-extension/bin/${{ env.target }}/"
+          if [ "${{ matrix.platform }}" = "darwin" ]; then
+            cp "target/${{ matrix.rust_target }}/release/basilisk-profiler-helper" "vscode-extension/bin/${{ env.target }}/"
+          fi
+          cp shipwright.json vscode-extension/shipwright.json
+
+      - name: Verify runtime version contracts
+        working-directory: vscode-extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe=""
+          if [ "${{ matrix.platform }}" = "win32" ]; then exe=".exe"; fi
+          args=("bin/${{ env.target }}/basilisk${exe}")
+          if [ "${{ matrix.platform }}" = "darwin" ]; then
+            args+=("bin/${{ env.target }}/basilisk-profiler-helper")
+          fi
+          node scripts/verify-shipwright.mjs versions "${args[@]}"
+
+      - name: Package VSIX
+        working-directory: vscode-extension
+        shell: bash
+        run: npx vsce package --target "${{ env.target }}" --ignore-other-target-folders --out "basilisk-${{ env.target }}.vsix"
+
+      - name: Verify VSIX contents
+        working-directory: vscode-extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe=""
+          if [ "${{ matrix.platform }}" = "win32" ]; then exe=".exe"; fi
+          unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "bin/${{ env.target }}/basilisk${exe}"
+          unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "shipwright.json"
+          if [ "${{ matrix.platform }}" = "darwin" ]; then
+            unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "bin/${{ env.target }}/basilisk-profiler-helper"
+          fi
+          node scripts/verify-shipwright.mjs vsix "basilisk-${{ env.target }}.vsix" "${{ env.target }}"
+
+      - uses: actions/upload-artifact@v4
         with:
-          name: basilisk-vsix
+          name: ${{ env.target }}
           path: vscode-extension/*.vsix
 
-  release:
+  publish-vsix:
+    name: Publish VSIX
+    needs: vsix
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: success() && startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/download-artifact@v4
+
+      - name: Publish to VS Code Marketplace
+        run: npx --yes @vscode/vsce publish --packagePath $(find . -iname *.vsix)
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+  github-release:
     name: Create GitHub Release
     needs: [build, vsix]
     runs-on: ubuntu-latest

@@ -139,7 +139,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22.x
           cache: npm
           cache-dependency-path: vscode-extension/package-lock.json
 
@@ -173,6 +173,43 @@ jobs:
 
       - name: Run VS Code extension tests
         run: make _test_vsix
+
+  verify-binaries:
+    name: Shipwright Binary Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: vscode-extension/package-lock.json
+
+      - name: Install lld
+        run: sudo apt-get update && sudo apt-get install -y lld
+
+      - name: Build Shipwright binaries
+        run: cargo build --release --bin basilisk --bin basilisk-profiler-helper
+
+      - name: Install VSIX verifier dependencies
+        working-directory: vscode-extension
+        run: npm ci
+
+      - name: Verify manifest and binary version contracts
+        working-directory: vscode-extension
+        run: |
+          npm run test:shipwright
+          node scripts/verify-shipwright.mjs versions \
+            ../target/release/basilisk \
+            ../target/release/basilisk-profiler-helper
 
   # ── Neovim extension (runs in parallel) ────────────────────────────────────
   test-nvim:
@@ -308,7 +345,7 @@ jobs:
   # ── Build gate (standard job name per repo standards) ──────────────────────
   build:
     name: Build
-    needs: [test-rust, test-vscode, test-nvim, zed, mutation-test]
+    needs: [test-rust, test-vscode, test-nvim, zed, mutation-test, verify-binaries]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

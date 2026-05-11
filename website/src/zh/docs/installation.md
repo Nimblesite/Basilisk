@@ -19,7 +19,7 @@ Basilisk 是一个单一的 Rust 二进制文件，没有运行时依赖。无�
 3. 搜索 **Basilisk**
 4. 点击**安装**
 
-**扩展在首次激活时自动下载适合您平台的正确 Basilisk 二进制文件。** 无需手动设置。二进制文件从 [GitHub Releases](https://github.com/MelbourneDeveloper/Basilisk/releases) 下载并存储在扩展的全局存储目录中。
+**扩展会捆绑适合您平台的 Basilisk 二进制文件。** 默认 VSIX 安装无需手动设置。
 
 ```bash
 git clone https://github.com/MelbourneDeveloper/Basilisk
@@ -35,7 +35,7 @@ cargo build --release
 | Linux | aarch64 |
 | Windows | x86_64 |
 
-如果二进制文件已在您的 PATH 中（例如来自 `cargo install`），扩展将使用它而不是下载。
+仅当您明确想覆盖 VSIX 中捆绑的二进制文件时，才需要设置 `basilisk.executablePath`、`basilisk.binaries.basilisk` 或 `basilisk.binaries.path`。
 
 ## 预构建二进制文件
 
@@ -192,7 +192,7 @@ Zed 自动重新编译 WASM 并重新加载扩展。
 
 Basilisk 实现了语言服务器协议。任何支持 LSP 的编辑器都可以使用它：
 
-- **VS Code** — 通过官方 Basilisk 扩展（自动下载二进制文件）
+- **VS Code** — 通过官方 Basilisk 扩展（捆绑匹配的二进制文件）
 - **Zed** — 通过 Basilisk Zed 扩展（见上文）
 - **Neovim** — 通过 nvim-lspconfig
 - **Helix** — 原生 LSP 支持
@@ -202,7 +202,9 @@ Basilisk 实现了语言服务器协议。任何支持 LSP 的编辑器都可以
 
 扩展按以下顺序解析 Basilisk 二进制文件：
 
-1. **`basilisk.executablePath` 设置** — 如果您设置了显式路径，则直接使用
-2. **系统 PATH** — 检查 `~/.cargo/bin/`、`/usr/local/bin/`、`/opt/homebrew/bin/`
-3. **扩展存储** — 检查之前下载的二进制文件
-4. **下载提示** — 提供从 GitHub Releases 下载匹配版本
+1. **显式组件路径** — `basilisk.binaries.basilisk` 或 `basilisk.executablePath`
+2. **显式二进制目录** — `basilisk.binaries.path`
+3. **捆绑的 VSIX 二进制文件** — `bin/<platform>/basilisk`
+4. **外部安装** — Cargo、Homebrew、Scoop 或 PATH，前提是版本匹配
+
+Homebrew 和 Scoop 是外部覆盖或修复来源。默认 VSIX 安装会运行 VSIX 内捆绑的二进制文件。

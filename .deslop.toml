@@ -1,0 +1,5 @@
+[defaults]
+exclude = [
+  "benchmarks/fixtures/**",
+  "crates/*/tests/**",
+]
