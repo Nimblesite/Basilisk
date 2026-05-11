@@ -212,6 +212,7 @@ fn check_windows_permissions() -> Result<PermissionStatus, String> {
 ///
 /// If the target was spawned by the Basilisk debug session manager, the LSP
 /// is the parent and can trace it without elevation on both macOS and Linux.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 fn is_child_process(pid: u32) -> bool {
     let our_pid = std::process::id();
     parent_pid_of(pid).is_some_and(|ppid| ppid == our_pid)
@@ -233,19 +234,6 @@ fn parent_pid_of(pid: u32) -> Option<u32> {
 #[cfg(target_os = "linux")]
 fn parent_pid_of(pid: u32) -> Option<u32> {
     read_ppid_from_proc(pid).or_else(|| read_ppid_via_ps(pid))
-}
-
-/// Get the parent PID of a process (platform-specific).
-#[cfg(target_os = "windows")]
-fn parent_pid_of(_pid: u32) -> Option<u32> {
-    // On Windows, parent-child tracing is not needed for privilege checks.
-    None
-}
-
-/// Fallback for unsupported platforms.
-#[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-fn parent_pid_of(_pid: u32) -> Option<u32> {
-    None
 }
 
 /// Read parent PID from `/proc/<pid>/status` on Linux.
@@ -296,12 +284,6 @@ fn is_running_as_root() -> bool {
                 .ok()
         })
         .is_some_and(|uid| uid == 0)
-}
-
-/// On Windows, root check is not applicable.
-#[cfg(target_os = "windows")]
-fn is_running_as_root() -> bool {
-    false
 }
 
 // ── Elevation ──────────────────────────────────────────────────────────────
@@ -475,12 +457,14 @@ mod tests {
         );
     }
 
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     #[test]
     fn child_process_check_returns_false_for_nonexistent_pid() {
         // PID 0 is the kernel, not our child.
         assert!(!is_child_process(0));
     }
 
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     #[test]
     fn child_process_check_returns_false_for_random_pid() {
         // Very unlikely to be our child.
