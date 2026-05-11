@@ -14,7 +14,7 @@
       "language": "rust",
       "binaryName": "basilisk",
       "expectedVersion": "${PRODUCT_VERSION}",
-      "platforms": ["darwin-arm64", "darwin-x64", "linux-x64", "linux-arm64", "win32-x64", "win32-arm64"],
+      "platforms": ["darwin-arm64", "linux-x64", "linux-arm64", "win32-x64", "win32-arm64"],
       "bundled": {
         "bundlePath": "bin/${platform}/${binaryName}${exe}",
         "perPlatformArtifact": true
@@ -44,7 +44,7 @@
       "language": "rust",
       "binaryName": "basilisk-profiler-helper",
       "expectedVersion": "${PRODUCT_VERSION}",
-      "platforms": ["darwin-arm64", "darwin-x64"],
+      "platforms": ["darwin-arm64"],
       "bundled": {
         "bundlePath": "bin/${platform}/${binaryName}${exe}",
         "perPlatformArtifact": true

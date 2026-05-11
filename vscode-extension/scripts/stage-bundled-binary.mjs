@@ -13,7 +13,6 @@ function usage() {
 
 function detectPlatform() {
   if (process.platform === "darwin" && process.arch === "arm64") return "darwin-arm64";
-  if (process.platform === "darwin") return "darwin-x64";
   if (process.platform === "linux" && process.arch === "arm64") return "linux-arm64";
   if (process.platform === "linux") return "linux-x64";
   if (process.platform === "win32" && process.arch === "arm64") return "win32-arm64";

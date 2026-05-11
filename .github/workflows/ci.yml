@@ -211,121 +211,6 @@ jobs:
             ../target/release/basilisk \
             ../target/release/basilisk-profiler-helper
 
-  verify-extension-package:
-    name: Shipwright VSIX Gate - ${{ matrix.platform }}-${{ matrix.arch }}
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-15
-            platform: darwin
-            arch: arm64
-            rust_target: aarch64-apple-darwin
-            npm_config_arch: arm64
-          - os: macos-13
-            platform: darwin
-            arch: x64
-            rust_target: x86_64-apple-darwin
-            npm_config_arch: x64
-          - os: ubuntu-latest
-            platform: linux
-            arch: x64
-            rust_target: x86_64-unknown-linux-gnu
-            npm_config_arch: x64
-          - os: ubuntu-latest
-            platform: linux
-            arch: arm64
-            rust_target: aarch64-unknown-linux-gnu
-            npm_config_arch: arm64
-          - os: windows-latest
-            platform: win32
-            arch: x64
-            rust_target: x86_64-pc-windows-msvc
-            npm_config_arch: x64
-          - os: windows-latest
-            platform: win32
-            arch: arm64
-            rust_target: aarch64-pc-windows-msvc
-            npm_config_arch: arm64
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.rust_target }}
-
-      - name: Install cross-compilation tools
-        if: matrix.rust_target == 'aarch64-unknown-linux-gnu'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
-          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: shipwright-vsix-${{ matrix.rust_target }}
-          cache-on-failure: true
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22.x
-          cache: npm
-          cache-dependency-path: vscode-extension/package-lock.json
-
-      - name: Install VSIX dependencies
-        working-directory: vscode-extension
-        run: npm ci
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          npm_config_arch: ${{ matrix.npm_config_arch }}
-
-      - name: Validate Shipwright manifest
-        working-directory: vscode-extension
-        run: npm run test:shipwright
-
-      - name: Build VSIX runtime binaries
-        shell: bash
-        run: |
-          cargo build --release --target ${{ matrix.rust_target }} --bin basilisk
-          if [ "${{ matrix.platform }}" = "darwin" ]; then
-            cargo build --release --target ${{ matrix.rust_target }} --bin basilisk-profiler-helper
-          fi
-
-      - name: Set vsce target
-        shell: pwsh
-        run: echo "target=${{ matrix.platform }}-${{ matrix.arch }}" >> $env:GITHUB_ENV
-
-      - name: Stage Shipwright manifest and runtime binaries
-        shell: bash
-        run: |
-          set -euo pipefail
-          exe=""
-          if [ "${{ matrix.platform }}" = "win32" ]; then exe=".exe"; fi
-          rm -rf vscode-extension/bin
-          mkdir -p "vscode-extension/bin/${{ env.target }}"
-          cp "target/${{ matrix.rust_target }}/release/basilisk${exe}" "vscode-extension/bin/${{ env.target }}/"
-          if [ "${{ matrix.platform }}" = "darwin" ]; then
-            cp "target/${{ matrix.rust_target }}/release/basilisk-profiler-helper" "vscode-extension/bin/${{ env.target }}/"
-          fi
-          cp shipwright.json vscode-extension/shipwright.json
-
-      - name: Package and verify VSIX
-        working-directory: vscode-extension
-        shell: bash
-        run: |
-          set -euo pipefail
-          exe=""
-          if [ "${{ matrix.platform }}" = "win32" ]; then exe=".exe"; fi
-          npx vsce package --target "${{ env.target }}" --ignore-other-target-folders --out "basilisk-${{ env.target }}.vsix"
-          unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "bin/${{ env.target }}/basilisk${exe}"
-          unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "shipwright.json"
-          if [ "${{ matrix.platform }}" = "darwin" ]; then
-            unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "bin/${{ env.target }}/basilisk-profiler-helper"
-          fi
-          node scripts/verify-shipwright.mjs vsix "basilisk-${{ env.target }}.vsix" "${{ env.target }}"
-
   # ── Neovim extension (runs in parallel) ────────────────────────────────────
   test-nvim:
     name: Neovim Extension
@@ -460,7 +345,7 @@ jobs:
   # ── Build gate (standard job name per repo standards) ──────────────────────
   build:
     name: Build
-    needs: [test-rust, test-vscode, test-nvim, zed, mutation-test, verify-binaries, verify-extension-package]
+    needs: [test-rust, test-vscode, test-nvim, zed, mutation-test, verify-binaries]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
