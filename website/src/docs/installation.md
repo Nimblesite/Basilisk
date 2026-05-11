@@ -24,7 +24,7 @@ The fastest way to get started. Install the **Basilisk** extension from the VS C
 3. Search for **Basilisk**
 4. Click **Install**
 
-**The extension automatically downloads the correct Basilisk binary for your platform** on first activation. No manual setup required. The binary is downloaded from [GitHub Releases](https://github.com/MelbourneDeveloper/Basilisk/releases) and stored in the extension's global storage directory.
+**The extension bundles the matching Basilisk binary for your platform.** No manual setup is required for a default VSIX install.
 
 ```bash
 git clone https://github.com/MelbourneDeveloper/Basilisk
@@ -40,7 +40,7 @@ cargo build --release
 | Linux | aarch64 |
 | Windows | x86_64 |
 
-If the binary is already on your PATH (e.g. from `cargo install`), the extension uses that instead of downloading.
+Use `basilisk.executablePath`, `basilisk.binaries.basilisk`, or `basilisk.binaries.path` only when you intentionally want to override the bundled VSIX binary.
 
 ## Pre-built binaries
 
@@ -197,7 +197,7 @@ Zed recompiles the WASM and reloads the extension automatically.
 
 Basilisk implements the Language Server Protocol. Any editor with LSP support can use it:
 
-- **VS Code** — via the official Basilisk extension (auto-downloads the binary)
+- **VS Code** — via the official Basilisk extension (bundles the matching binary)
 - **Zed** — via the Basilisk Zed extension (see above)
 - **Neovim** — via nvim-lspconfig
 - **Helix** — native LSP support
@@ -207,7 +207,9 @@ Basilisk implements the Language Server Protocol. Any editor with LSP support ca
 
 The extension resolves the Basilisk binary in this order:
 
-1. **`basilisk.executablePath` setting** — if you set an explicit path, it's used directly
-2. **System PATH** — checks `~/.cargo/bin/`, `/usr/local/bin/`, `/opt/homebrew/bin/`
-3. **Extension storage** — checks for a previously downloaded binary
-4. **Download prompt** — offers to download the matching version from GitHub Releases
+1. **Explicit component path** — `basilisk.binaries.basilisk` or `basilisk.executablePath`
+2. **Explicit binary directory** — `basilisk.binaries.path`
+3. **Bundled VSIX binary** — `bin/<platform>/basilisk`
+4. **External install** — Cargo, Homebrew, Scoop, or PATH if the version matches
+
+Homebrew and Scoop are external override or repair sources. A default VSIX install runs the binary bundled inside the VSIX.

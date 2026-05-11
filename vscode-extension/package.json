@@ -19,7 +19,7 @@
     "url": "https://github.com/MelbourneDeveloper/Basilisk/issues"
   },
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.99.0"
   },
   "categories": [
     "Programming Languages",
@@ -449,8 +449,23 @@
         },
         "basilisk.executablePath": {
           "type": "string",
-          "default": "basilisk",
-          "description": "Path to the basilisk binary. Defaults to 'basilisk' (must be on PATH)."
+          "default": "",
+          "description": "Explicit path to the basilisk binary. Empty uses the bundled VSIX binary."
+        },
+        "basilisk.binaries.path": {
+          "type": "string",
+          "default": "",
+          "description": "Directory containing Basilisk runtime binaries. Empty uses the bundled VSIX binaries."
+        },
+        "basilisk.binaries.basilisk": {
+          "type": "string",
+          "default": "",
+          "description": "Explicit path to the basilisk language server binary. Empty uses the bundled VSIX binary."
+        },
+        "basilisk.binaries.basilisk-profiler-helper": {
+          "type": "string",
+          "default": "",
+          "description": "Explicit path to the optional macOS profiler helper binary. Empty uses the bundled helper when present."
         },
         "basilisk.enabled": {
           "type": "boolean",
@@ -676,22 +691,27 @@
     ]
   },
   "scripts": {
+    "sync:shipwright": "node scripts/sync-shipwright-manifest.mjs",
     "compile": "tsc -p ./ && node -e \"const fs=require('fs');fs.mkdirSync('out/src/test/fixtures',{recursive:true});fs.readdirSync('src/test/fixtures').forEach(f=>fs.copyFileSync('src/test/fixtures/'+f,'out/src/test/fixtures/'+f));\"",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "test": "vscode-test",
-    "vscode:prepublish": "npm run compile",
-    "package": "vsce package"
+    "test:shipwright": "node scripts/verify-shipwright.mjs manifest",
+    "vscode:prepublish": "npm run sync:shipwright && npm run compile",
+    "package": "npm run sync:shipwright && vsce package"
   },
   "dependencies": {
+    "@nimblesite/shipwright-vscode": "^0.1.0",
     "@preact/signals-core": "^1.14.0",
     "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
     "@types/mocha": "^10.0.10",
     "@types/node": "^20.0.0",
-    "@types/vscode": "^1.85.0",
+    "@types/vscode": "^1.99.0",
     "@typescript-eslint/eslint-plugin": "^8.56.1",
     "@typescript-eslint/parser": "^8.56.1",
     "@vscode/test-cli": "^0.0.12",

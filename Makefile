@@ -270,6 +270,10 @@ _test_vsix:
 	echo -e "\033[0;32m✓ basilisk binary: $$BASILISK_BIN\033[0m"; \
 	echo -e '\033[1m\033[0;36m▶ VS Code extension — compile\033[0m'; \
 	cd $(_EXTENSION_DIR) && npm ci && npm run compile; \
+	echo -e '\033[1m\033[0;36m▶ VS Code extension — stage bundled binary\033[0m'; \
+	node scripts/sync-shipwright-manifest.mjs; \
+	node scripts/stage-bundled-binary.mjs "$$BASILISK_BIN"; \
+	node scripts/verify-shipwright.mjs manifest; \
 	echo -e '\033[1m\033[0;36m▶ VS Code extension — ESLint\033[0m'; \
 	npm run lint; \
 	echo -e '\033[1m\033[0;36m▶ VS Code E2E tests\033[0m'; \
@@ -277,7 +281,7 @@ _test_vsix:
 	if [ -z "$${DISPLAY:-}" ] && command -v xvfb-run >/dev/null 2>&1; then \
 	    VSCODE_TEST_CMD="xvfb-run -a $$VSCODE_TEST_CMD"; \
 	fi; \
-	BASILISK_EXECUTABLE_PATH="$$BASILISK_BIN" $$VSCODE_TEST_CMD; \
+	$$VSCODE_TEST_CMD; \
 	echo -e '\033[1m\033[0;36m▶ VS Code extension — coverage threshold\033[0m'; \
 	VSIX_LCOV="$$REPO_ROOT/$(_EXTENSION_DIR)/coverage/lcov.info"; \
 	VSIX_THRESHOLD=$$(python3 -c 'import json; print(json.load(open("'"$$REPO_ROOT"'/$(_COVERAGE_THRESHOLDS_FILE)"))["projects"]["vsix"]["threshold"])'); \

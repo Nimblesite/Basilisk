@@ -42,11 +42,24 @@ export const DEFAULT_POLL_INTERVAL_MS = 100;
 const SERVER_READINESS_POLL_INTERVAL_MS = 200;
 
 
-/**
- * Resolves the absolute path to the basilisk binary built from Cargo.
- * Returns undefined if the binary does not exist.
- */
+function detectShipwrightPlatform(): string {
+    if (process.platform === 'darwin' && process.arch === 'arm64') { return 'darwin-arm64'; }
+    if (process.platform === 'linux' && process.arch === 'arm64') { return 'linux-arm64'; }
+    if (process.platform === 'linux') { return 'linux-x64'; }
+    if (process.platform === 'win32' && process.arch === 'arm64') { return 'win32-arm64'; }
+    if (process.platform === 'win32') { return 'win32-x64'; }
+    return 'linux-x64';
+}
+
+/** Resolve the bundled VSIX binary staged by the test bootstrap. */
 export function findBasiliskBinary(): string | undefined {
+    const extensionRoot = path.resolve(__dirname, '../../..');
+    const exe = process.platform === 'win32' ? '.exe' : '';
+    const bundled = path.join(extensionRoot, 'bin', detectShipwrightPlatform(), `basilisk${exe}`);
+    if (fs.existsSync(bundled)) {
+        return bundled;
+    }
+
     const envPath = process.env.BASILISK_EXECUTABLE_PATH;
     if (envPath !== undefined && envPath !== '' && fs.existsSync(envPath)) {
         return envPath;

@@ -4,6 +4,8 @@ import * as os from 'os';
 import { runTests } from '@vscode/test-electron';
 import { execSync } from 'child_process';
 
+const EXECUTABLE_MODE = 0o755;
+
 /**
  * Find the system VS Code Electron binary on macOS.
  * Returns the path to the Electron binary inside the .app bundle,
@@ -53,6 +55,37 @@ function findBinary(): string | undefined {
     return undefined;
 }
 
+function detectShipwrightPlatform(): string {
+    if (process.platform === 'darwin' && process.arch === 'arm64') { return 'darwin-arm64'; }
+    if (process.platform === 'linux' && process.arch === 'arm64') { return 'linux-arm64'; }
+    if (process.platform === 'linux') { return 'linux-x64'; }
+    if (process.platform === 'win32' && process.arch === 'arm64') { return 'win32-arm64'; }
+    if (process.platform === 'win32') { return 'win32-x64'; }
+    throw new Error(`Unsupported VSIX test platform: ${process.platform}-${process.arch}`);
+}
+
+function syncShipwrightManifest(extensionDevelopmentPath: string): void {
+    const repoRoot = path.resolve(extensionDevelopmentPath, '..');
+    const source = path.join(repoRoot, 'shipwright.json');
+    const target = path.join(extensionDevelopmentPath, 'shipwright.json');
+    if (!fs.existsSync(source)) {
+        throw new Error(`Missing Shipwright manifest: ${source}`);
+    }
+    fs.copyFileSync(source, target);
+}
+
+function stageBundledBinary(extensionDevelopmentPath: string, binary: string): void {
+    const binRoot = path.join(extensionDevelopmentPath, 'bin');
+    const targetDir = path.join(binRoot, detectShipwrightPlatform());
+    fs.rmSync(binRoot, { recursive: true, force: true });
+    fs.mkdirSync(targetDir, { recursive: true });
+    const target = path.join(targetDir, path.basename(binary));
+    fs.copyFileSync(binary, target);
+    if (process.platform !== 'win32') {
+        fs.chmodSync(target, EXECUTABLE_MODE);
+    }
+}
+
 async function main(): Promise<void> {
     try {
         const extensionDevelopmentPath = path.resolve(__dirname, '../../');
@@ -60,17 +93,22 @@ async function main(): Promise<void> {
 
         const systemElectron = findSystemVSCodeElectron();
 
-        // Create a temp workspace with settings pointing to the debug binary
-        // so the extension uses the latest build, not a stale installed version.
+        const debugBinary = process.env.BASILISK_EXECUTABLE_PATH ?? findBinary();
+        if (debugBinary === undefined || debugBinary === '') {
+            throw new Error('Basilisk binary not found. Build with: cargo build -p basilisk-cli');
+        }
+        syncShipwrightManifest(extensionDevelopmentPath);
+        stageBundledBinary(extensionDevelopmentPath, debugBinary);
+        delete process.env.BASILISK_EXECUTABLE_PATH;
+        delete process.env.BASILISK_BINARY_DIR;
+
+        // Create a temp workspace with empty binary settings so activation must
+        // prove the bundled VSIX path instead of a developer-machine override.
         const tmpWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), 'basilisk-test-ws-'));
         const vscodeDir = path.join(tmpWorkspace, '.vscode');
         fs.mkdirSync(vscodeDir, { recursive: true });
 
-        const debugBinary = process.env.BASILISK_EXECUTABLE_PATH ?? findBinary();
         const settings: Record<string, unknown> = {};
-        if (debugBinary !== undefined && debugBinary !== '') {
-            settings['basilisk.executablePath'] = debugBinary;
-        }
         fs.writeFileSync(
             path.join(vscodeDir, 'settings.json'),
             JSON.stringify(settings, null, 2),

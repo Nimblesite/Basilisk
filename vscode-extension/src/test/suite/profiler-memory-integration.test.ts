@@ -54,6 +54,19 @@ import {
 
 let tmpDir = '';
 
+function assertCommandRegistered(commandId: string, label: string): void {
+    let threw = false;
+    let disposable: vscode.Disposable | undefined;
+    try {
+        disposable = vscode.commands.registerCommand(commandId, () => { /* probe */ });
+    } catch {
+        threw = true;
+    } finally {
+        disposable?.dispose();
+    }
+    assert.ok(threw, `${label} "${commandId}" should be registered after activation`);
+}
+
 suite('Profiler — Start/Stop Lifecycle', () => {
     suiteSetup(async function () {
         const result = await setupLspTestSuite('basilisk-profiler-lc-');
@@ -198,14 +211,9 @@ suite('Memory Profiler — Command Registration', () => {
         await closeAllEditors();
     });
 
-    test('all memory client commands are registered', async () => {
-        const allCommands = await vscode.commands.getCommands(true);
-
+    test('all memory client commands are registered', () => {
         for (const cmd of MEMORY_CLIENT_COMMANDS) {
-            assert.ok(
-                allCommands.includes(cmd),
-                `Memory command "${cmd}" should be registered after activation`,
-            );
+            assertCommandRegistered(cmd, 'Memory command');
         }
     });
 

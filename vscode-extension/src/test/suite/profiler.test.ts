@@ -33,6 +33,19 @@ import {
 
 let tmpDir = '';
 
+function assertCommandRegistered(commandId: string, label: string): void {
+    let threw = false;
+    let disposable: vscode.Disposable | undefined;
+    try {
+        disposable = vscode.commands.registerCommand(commandId, () => { /* probe */ });
+    } catch {
+        threw = true;
+    } finally {
+        disposable?.dispose();
+    }
+    assert.ok(threw, `${label} "${commandId}" should be registered after activation`);
+}
+
 suite('Profiler — Command Registration', () => {
     suiteSetup(async function () {
         const result = await setupLspTestSuite('basilisk-profiler-test-');
@@ -47,26 +60,19 @@ suite('Profiler — Command Registration', () => {
         await closeAllEditors();
     });
 
-    test('all profiler client commands are registered', async () => {
-        const allCommands = await vscode.commands.getCommands(true);
-
+    test('all profiler client commands are registered', () => {
         for (const cmd of PROFILER_CLIENT_COMMANDS) {
-            assert.ok(
-                allCommands.includes(cmd),
-                `Client command "${cmd}" should be registered after activation`,
-            );
+            assertCommandRegistered(cmd, 'Client command');
         }
     });
 
-    test('profiler server commands are advertised by LSP', async () => {
+    test('profiler server commands are advertised by LSP', () => {
         const store = getStore();
         assert.ok(store, 'Store should be initialized');
 
-        const allCommands = await vscode.commands.getCommands(true);
-
         for (const cmd of PROFILER_SERVER_COMMANDS) {
             assert.ok(
-                allCommands.includes(cmd),
+                store.isServerCommandAdvertised(cmd),
                 `Server command "${cmd}" should be advertised by LSP`,
             );
         }

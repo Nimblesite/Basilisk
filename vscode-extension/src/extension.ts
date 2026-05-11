@@ -8,7 +8,6 @@
 import * as vscode from "vscode";
 import { execFile } from "child_process";
 import * as path from "path";
-import * as fs from "fs";
 import * as os from "os";
 import { Logger, bindLogger, CompositeSink, FileLogSink, nullSink } from "./logger";
 import type { LogSink } from "./logger";
@@ -21,6 +20,7 @@ import { registerInfoPanel } from "./info-panel";
 import { createStore, type Store } from "./store";
 import { registerProfiler, disposeProfiler } from "./profiler";
 import { registerMemoryProfiler, disposeMemoryProfiler } from "./memory-profiler";
+import { reportRuntimeFailure, resolveBasiliskRuntime } from "./shipwright-runtime";
 
 /** Priority for the Basilisk status bar item (higher = further left). */
 const STATUS_BAR_PRIORITY = 100;
@@ -114,12 +114,7 @@ function initExtension(context: vscode.ExtensionContext): void {
     // LSP client so commands get re-registered when the server reaches
     // Running state. This keeps the same store object alive.
     if (store !== undefined && savedContext !== undefined) {
-      const ep = resolveExecutablePath(resolveConfiguredPath());
-      startLspClient(
-        { context: savedContext, executablePath: ep, outputChannel: store.outputChannel.value },
-        store,
-        updateStatusBar
-      );
+      void startRuntime(savedContext, store);
     }
   });
 
@@ -128,16 +123,13 @@ function initExtension(context: vscode.ExtensionContext): void {
     initStatusBar(context, store);
   }
 
-  const executablePath = resolveExecutablePath(resolveConfiguredPath());
   const useLsp = vscode.workspace.getConfiguration("basilisk").get<boolean>("useLsp") ?? true;
-  Logger.info(`Basilisk executable: ${executablePath}`);
 
   if (firstInit) {
     registerPanelsAndCommands(context, store);
   }
 
   if (useLsp) {
-    startLspClient({ context, executablePath, outputChannel: store.outputChannel.value }, store, updateStatusBar);
     if (firstInit) {
       // Debug adapter factories and test controller can only be registered
       // once. On re-init they are disposed+re-created via singletonDisposables.
@@ -146,9 +138,10 @@ function initExtension(context: vscode.ExtensionContext): void {
       singletonDisposables.push(testController);
     }
   } else {
-    startSubprocessMode(context, executablePath);
-    updateStatusBar("ready");
+    updateStatusBar("starting");
   }
+
+  void startRuntime(context, store);
 
   if (firstInit) {
     context.subscriptions.push(
@@ -249,13 +242,6 @@ function initStatusBar(context: vscode.ExtensionContext, s: Store): void {
   item.command = "basilisk.showOutput";
   s.setStatusBarItem(item);
   context.subscriptions.push(item);
-}
-
-function resolveConfiguredPath(): string {
-  const cfg = vscode.workspace.getConfiguration("basilisk");
-  return process.env.BASILISK_EXECUTABLE_PATH ??
-    cfg.get<string>("executablePath") ??
-    "basilisk";
 }
 
 function registerDebugSupport(context: vscode.ExtensionContext, s: Store): void {
@@ -359,34 +345,35 @@ function updateStatusBarDiagnostics(): void {
   }
 }
 
-// ── Executable resolution ─────────────────────────────────────────────────
+// ── Runtime resolution ────────────────────────────────────────────────────
 
-function resolveExecutablePath(configured: string): string {
-  if (path.isAbsolute(configured)) {
-    return configured;
-  }
-
-  if (configured.includes(path.sep) || configured.includes("/")) {
-    const wsRoot = workspaceRoot();
-    return wsRoot !== undefined && wsRoot !== "" ? path.resolve(wsRoot, configured) : configured;
-  }
-
-  const candidates = [
-    path.join(os.homedir(), ".cargo", "bin", configured),
-    `/usr/local/bin/${configured}`,
-    `/opt/homebrew/bin/${configured}`,
-  ];
-
-  for (const candidate of candidates) {
-    try {
-      fs.accessSync(candidate, fs.constants.X_OK);
-      return candidate;
-    } catch {
-      // Not found or not executable — try next.
+async function startRuntime(context: vscode.ExtensionContext, s: Store): Promise<void> {
+  try {
+    const runtime = await resolveBasiliskRuntime(context);
+    s.setRuntimeResolution({
+      componentId: runtime.componentId,
+      path: runtime.executablePath,
+      source: runtime.source,
+      version: runtime.version,
+    });
+    Logger.info(
+      `Basilisk executable: ${runtime.executablePath} ` +
+      `(source=${runtime.source}, version=${runtime.version ?? "unknown"})`
+    );
+    if (vscode.workspace.getConfiguration("basilisk").get<boolean>("useLsp") ?? true) {
+      startLspClient(
+        { context, executablePath: runtime.executablePath, outputChannel: s.outputChannel.value },
+        s,
+        updateStatusBar
+      );
+    } else {
+      startSubprocessMode(context, runtime.executablePath);
+      updateStatusBar("ready");
     }
+  } catch (error: unknown) {
+    reportRuntimeFailure(error);
+    updateStatusBar("error");
   }
-
-  return configured;
 }
 
 function workspaceRoot(): string | undefined {
