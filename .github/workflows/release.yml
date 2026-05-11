@@ -170,7 +170,7 @@ jobs:
             platform: win32
             arch: arm64
             rust_target: aarch64-pc-windows-msvc
-            npm_config_arch: arm
+            npm_config_arch: arm64
 
     steps:
       - uses: actions/checkout@v4
