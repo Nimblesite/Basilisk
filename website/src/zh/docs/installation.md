@@ -22,7 +22,7 @@ Basilisk 是一个单一的 Rust 二进制文件，没有运行时依赖。无�
 **扩展会捆绑适合您平台的 Basilisk 二进制文件。** 默认 VSIX 安装无需手动设置。
 
 ```bash
-git clone https://github.com/MelbourneDeveloper/Basilisk
+git clone https://github.com/Nimblesite/Basilisk
 cd basilisk
 cargo build --release
 ```
@@ -39,19 +39,19 @@ cargo build --release
 
 ## 预构建二进制文件
 
-从 [GitHub Releases](https://github.com/MelbourneDeveloper/Basilisk/releases) 下载适合您平台的最新版本：
+从 [GitHub Releases](https://github.com/Nimblesite/Basilisk/releases) 下载适合您平台的最新版本：
 
 ```bash
 # macOS (Apple Silicon)
-curl -sSfL https://github.com/MelbourneDeveloper/Basilisk/releases/latest/download/basilisk-darwin-aarch64.tar.gz | tar xz
+curl -sSfL https://github.com/Nimblesite/Basilisk/releases/latest/download/basilisk-darwin-aarch64.tar.gz | tar xz
 sudo mv basilisk /usr/local/bin/
 
 # macOS (Intel)
-curl -sSfL https://github.com/MelbourneDeveloper/Basilisk/releases/latest/download/basilisk-darwin-x86_64.tar.gz | tar xz
+curl -sSfL https://github.com/Nimblesite/Basilisk/releases/latest/download/basilisk-darwin-x86_64.tar.gz | tar xz
 sudo mv basilisk /usr/local/bin/
 
 # Linux (x86_64)
-curl -sSfL https://github.com/MelbourneDeveloper/Basilisk/releases/latest/download/basilisk-linux-x86_64.tar.gz | tar xz
+curl -sSfL https://github.com/Nimblesite/Basilisk/releases/latest/download/basilisk-linux-x86_64.tar.gz | tar xz
 sudo mv basilisk /usr/local/bin/
 ```
 
@@ -74,7 +74,7 @@ cargo install basilisk
 ## 从源代码构建
 
 ```bash
-git clone https://github.com/MelbourneDeveloper/Basilisk
+git clone https://github.com/Nimblesite/Basilisk
 cd Basilisk
 cargo build --release
 ```
@@ -87,7 +87,7 @@ cp target/release/basilisk /usr/local/bin/
 
 需要 Rust 1.87+。
 
-在 [github.com/MelbourneDeveloper/Basilisk](https://github.com/MelbourneDeveloper/Basilisk) 跟踪进度。
+在 [github.com/Nimblesite/Basilisk](https://github.com/Nimblesite/Basilisk) 跟踪进度。
 
 ## CI 集成
 
@@ -97,7 +97,7 @@ Basilisk 自然地集成到任何 CI 管道中。在您的工作流程中下载�
 # GitHub Actions 示例
 - name: 安装 Basilisk
   run: |
-    curl -sSfL https://github.com/MelbourneDeveloper/Basilisk/releases/latest/download/basilisk-linux-x86_64.tar.gz | tar xz
+    curl -sSfL https://github.com/Nimblesite/Basilisk/releases/latest/download/basilisk-linux-x86_64.tar.gz | tar xz
     sudo mv basilisk /usr/local/bin/
 
 - name: 类型检查

@@ -248,7 +248,7 @@ pub mod coverage_notifications {
 /// GitHub release asset naming for binary distribution.
 pub mod release {
     /// GitHub owner/repo for release downloads.
-    pub const GITHUB_REPO: &str = "MelbourneDeveloper/Basilisk";
+    pub const GITHUB_REPO: &str = "Nimblesite/Basilisk";
 
     /// Well-known filesystem locations where the basilisk binary might live.
     pub const WELL_KNOWN_PATHS: &[&str] = &[

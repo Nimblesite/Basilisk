@@ -14,7 +14,7 @@
   <a href="https://www.basilisk-python.dev">Website</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/docs/quick-start/">Quick Start</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/docs/rules/">Rules</a> &nbsp;&bull;&nbsp;
-  <a href="https://github.com/MelbourneDeveloper/Basilisk">GitHub</a>
+  <a href="https://github.com/Nimblesite/Basilisk">GitHub</a>
 </p>
 
 ---
@@ -202,7 +202,7 @@ Rust 1.87+ required for building from source.
 
 ## Part of Basilisk
 
-This is the VS Code extension for the [Basilisk](https://github.com/MelbourneDeveloper/Basilisk) project. Basilisk also supports [Neovim](https://github.com/MelbourneDeveloper/Basilisk/tree/main/basilisk.nvim) and [Zed](https://github.com/MelbourneDeveloper/Basilisk/tree/main/basilisk-zed).
+This is the VS Code extension for the [Basilisk](https://github.com/Nimblesite/Basilisk) project. Basilisk also supports [Neovim](https://github.com/Nimblesite/Basilisk/tree/main/basilisk.nvim) and [Zed](https://github.com/Nimblesite/Basilisk/tree/main/basilisk-zed).
 
 ## License
 

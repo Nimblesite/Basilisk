@@ -68,47 +68,60 @@ jobs:
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }} --bin basilisk
 
-      - name: Import Developer ID certificate
-        if: startsWith(matrix.platform, 'darwin-')
-        run: |
-          echo "$APPLE_DEVELOPER_ID_CERT_P12" | base64 --decode > cert.p12
-          security create-keychain -p "" build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p "" build.keychain
-          security import cert.p12 -k build.keychain -P "$APPLE_DEVELOPER_ID_CERT_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
-          identity="$(security find-identity -v -p codesigning build.keychain | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -1)"
-          test -n "$identity"
-          echo "APPLE_CODESIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
-        env:
-          APPLE_DEVELOPER_ID_CERT_P12: ${{ secrets.APPLE_DEVELOPER_ID_CERT_P12 }}
-          APPLE_DEVELOPER_ID_CERT_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERT_PASSWORD }}
+      # ── macOS signing + notarization (disabled for alpha) ────────────────
+      # Re-enable once APPLE_DEVELOPER_ID_CERT_P12, APPLE_DEVELOPER_ID_CERT_PASSWORD,
+      # NOTARIZATION_API_KEY_P8, NOTARIZATION_KEY_ID, NOTARIZATION_ISSUER_ID
+      # are configured. Until then, ship the raw unsigned binary; Gatekeeper
+      # will require users to right-click → Open the first time.
+      #
+      # - name: Import Developer ID certificate
+      #   if: startsWith(matrix.platform, 'darwin-')
+      #   run: |
+      #     echo "$APPLE_DEVELOPER_ID_CERT_P12" | base64 --decode > cert.p12
+      #     security create-keychain -p "" build.keychain
+      #     security default-keychain -s build.keychain
+      #     security unlock-keychain -p "" build.keychain
+      #     security import cert.p12 -k build.keychain -P "$APPLE_DEVELOPER_ID_CERT_PASSWORD" -T /usr/bin/codesign
+      #     security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+      #     identity="$(security find-identity -v -p codesigning build.keychain | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -1)"
+      #     test -n "$identity"
+      #     echo "APPLE_CODESIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
+      #   env:
+      #     APPLE_DEVELOPER_ID_CERT_P12: ${{ secrets.APPLE_DEVELOPER_ID_CERT_P12 }}
+      #     APPLE_DEVELOPER_ID_CERT_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERT_PASSWORD }}
+      #
+      # - name: Decode notarization API key
+      #   if: startsWith(matrix.platform, 'darwin-')
+      #   run: echo "$NOTARIZATION_API_KEY_P8" | base64 --decode > AuthKey.p8
+      #   env:
+      #     NOTARIZATION_API_KEY_P8: ${{ secrets.NOTARIZATION_API_KEY_P8 }}
+      #
+      # - name: Sign, notarize, and staple macOS binary archive
+      #   if: startsWith(matrix.platform, 'darwin-')
+      #   run: |
+      #     set -euo pipefail
+      #     binary_path="target/${{ matrix.target }}/release/${{ matrix.binary }}"
+      #     codesign --sign "$APPLE_CODESIGN_IDENTITY" --options runtime --timestamp --force "$binary_path"
+      #     codesign --verify --strict --verbose=4 "$binary_path"
+      #     ditto -c -k --keepParent "$binary_path" "${{ matrix.archive }}"
+      #     xcrun notarytool submit "${{ matrix.archive }}" \
+      #       --key AuthKey.p8 \
+      #       --key-id "$NOTARIZATION_KEY_ID" \
+      #       --issuer "$NOTARIZATION_ISSUER_ID" \
+      #       --wait
+      #     xcrun stapler staple "${{ matrix.archive }}"
+      #     xcrun stapler validate "${{ matrix.archive }}"
+      #     spctl --assess --verbose --type execute "$binary_path"
+      #   env:
+      #     NOTARIZATION_KEY_ID: ${{ secrets.NOTARIZATION_KEY_ID }}
+      #     NOTARIZATION_ISSUER_ID: ${{ secrets.NOTARIZATION_ISSUER_ID }}
 
-      - name: Decode notarization API key
-        if: startsWith(matrix.platform, 'darwin-')
-        run: echo "$NOTARIZATION_API_KEY_P8" | base64 --decode > AuthKey.p8
-        env:
-          NOTARIZATION_API_KEY_P8: ${{ secrets.NOTARIZATION_API_KEY_P8 }}
-
-      - name: Sign, notarize, and staple macOS binary archive
+      - name: Package macOS archive
         if: startsWith(matrix.platform, 'darwin-')
         run: |
           set -euo pipefail
           binary_path="target/${{ matrix.target }}/release/${{ matrix.binary }}"
-          codesign --sign "$APPLE_CODESIGN_IDENTITY" --options runtime --timestamp --force "$binary_path"
-          codesign --verify --strict --verbose=4 "$binary_path"
           ditto -c -k --keepParent "$binary_path" "${{ matrix.archive }}"
-          xcrun notarytool submit "${{ matrix.archive }}" \
-            --key AuthKey.p8 \
-            --key-id "$NOTARIZATION_KEY_ID" \
-            --issuer "$NOTARIZATION_ISSUER_ID" \
-            --wait
-          xcrun stapler staple "${{ matrix.archive }}"
-          xcrun stapler validate "${{ matrix.archive }}"
-          spctl --assess --verbose --type execute "$binary_path"
-        env:
-          NOTARIZATION_KEY_ID: ${{ secrets.NOTARIZATION_KEY_ID }}
-          NOTARIZATION_ISSUER_ID: ${{ secrets.NOTARIZATION_ISSUER_ID }}
 
       - name: Package Linux archive
         if: startsWith(matrix.platform, 'linux-')
@@ -206,30 +219,34 @@ jobs:
             cargo build --release --target ${{ matrix.rust_target }} --bin basilisk-profiler-helper
           fi
 
-      - name: Import Developer ID certificate
-        if: matrix.platform == 'darwin'
-        run: |
-          echo "$APPLE_DEVELOPER_ID_CERT_P12" | base64 --decode > cert.p12
-          security create-keychain -p "" build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p "" build.keychain
-          security import cert.p12 -k build.keychain -P "$APPLE_DEVELOPER_ID_CERT_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
-          identity="$(security find-identity -v -p codesigning build.keychain | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -1)"
-          test -n "$identity"
-          echo "APPLE_CODESIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
-        env:
-          APPLE_DEVELOPER_ID_CERT_P12: ${{ secrets.APPLE_DEVELOPER_ID_CERT_P12 }}
-          APPLE_DEVELOPER_ID_CERT_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERT_PASSWORD }}
-
-      - name: Sign macOS VSIX binaries
-        if: matrix.platform == 'darwin'
-        run: |
-          set -euo pipefail
-          codesign --sign "$APPLE_CODESIGN_IDENTITY" --options runtime --timestamp --force "target/${{ matrix.rust_target }}/release/basilisk"
-          codesign --sign "$APPLE_CODESIGN_IDENTITY" --options runtime --timestamp --force "target/${{ matrix.rust_target }}/release/basilisk-profiler-helper"
-          codesign --verify --strict --verbose=4 "target/${{ matrix.rust_target }}/release/basilisk"
-          codesign --verify --strict --verbose=4 "target/${{ matrix.rust_target }}/release/basilisk-profiler-helper"
+      # ── macOS VSIX signing (disabled for alpha) ──────────────────────────
+      # Re-enable alongside the build-job signing block once Apple secrets
+      # are configured. For alpha, VSIX bundles the raw unsigned binary.
+      #
+      # - name: Import Developer ID certificate
+      #   if: matrix.platform == 'darwin'
+      #   run: |
+      #     echo "$APPLE_DEVELOPER_ID_CERT_P12" | base64 --decode > cert.p12
+      #     security create-keychain -p "" build.keychain
+      #     security default-keychain -s build.keychain
+      #     security unlock-keychain -p "" build.keychain
+      #     security import cert.p12 -k build.keychain -P "$APPLE_DEVELOPER_ID_CERT_PASSWORD" -T /usr/bin/codesign
+      #     security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+      #     identity="$(security find-identity -v -p codesigning build.keychain | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -1)"
+      #     test -n "$identity"
+      #     echo "APPLE_CODESIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
+      #   env:
+      #     APPLE_DEVELOPER_ID_CERT_P12: ${{ secrets.APPLE_DEVELOPER_ID_CERT_P12 }}
+      #     APPLE_DEVELOPER_ID_CERT_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERT_PASSWORD }}
+      #
+      # - name: Sign macOS VSIX binaries
+      #   if: matrix.platform == 'darwin'
+      #   run: |
+      #     set -euo pipefail
+      #     codesign --sign "$APPLE_CODESIGN_IDENTITY" --options runtime --timestamp --force "target/${{ matrix.rust_target }}/release/basilisk"
+      #     codesign --sign "$APPLE_CODESIGN_IDENTITY" --options runtime --timestamp --force "target/${{ matrix.rust_target }}/release/basilisk-profiler-helper"
+      #     codesign --verify --strict --verbose=4 "target/${{ matrix.rust_target }}/release/basilisk"
+      #     codesign --verify --strict --verbose=4 "target/${{ matrix.rust_target }}/release/basilisk-profiler-helper"
 
       - name: Set vsce target
         shell: pwsh

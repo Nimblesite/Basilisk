@@ -6,7 +6,7 @@
   "keywords": "basilisk, python type checker, pylance replacement, pyright alternative, language server, lsp, strict typing, rust, vs code, open source",
   "themeColor": "#e8500a",
   "stylesheet": "/assets/css/styles.css",
-  "github": "https://github.com/MelbourneDeveloper/Basilisk",
+  "github": "https://github.com/Nimblesite/Basilisk",
   "ogImage": "/assets/images/og-image.png",
   "ogImageWidth": "1200",
   "ogImageHeight": "630",
@@ -15,7 +15,7 @@
     "url": "https://www.basilisk-python.dev",
     "logo": "/assets/images/logo.svg",
     "sameAs": [
-      "https://github.com/MelbourneDeveloper/Basilisk"
+      "https://github.com/Nimblesite/Basilisk"
     ]
   },
   "version": "0.1.0"

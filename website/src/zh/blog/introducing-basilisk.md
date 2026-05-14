@@ -113,7 +113,7 @@ Basilisk v0.1.0 实现了七阶段路线图的第 1 阶段。
 ## 试用
 
 ```bash
-git clone https://github.com/MelbourneDeveloper/Basilisk
+git clone https://github.com/Nimblesite/Basilisk
 cd basilisk
 cargo build --release
 ./target/release/basilisk check examples/bad.py
@@ -121,6 +121,6 @@ cargo build --release
 
 如果您想看到诊断的实际效果，存储库包含 `examples/bad.py`（含有意的错误）、`examples/good.py`（干净的）和 `examples/mixed.py`（现实的混合情况）。
 
-在 [GitHub](https://github.com/MelbourneDeveloper/Basilisk/issues) 上提交问题。如果您想了解完整设计，规范在 `SPEC.md` 中。
+在 [GitHub](https://github.com/Nimblesite/Basilisk/issues) 上提交问题。如果您想了解完整设计，规范在 `SPEC.md` 中。
 
 Python 类型注解已经是可选的十年了。是时候改变了。

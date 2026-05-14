@@ -822,7 +822,7 @@ basilisk init                     # Generate starter pyproject.toml config
 
 **pre-commit**:
 ```yaml
-- repo: https://github.com/MelbourneDeveloper/Basilisk
+- repo: https://github.com/Nimblesite/Basilisk
   rev: v0.1.0
   hooks:
     - id: basilisk-check

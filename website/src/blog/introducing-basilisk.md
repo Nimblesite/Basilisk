@@ -116,7 +116,7 @@ Basilisk v0.1.0 implements Phase 1 of a seven-phase roadmap.
 ## Try it
 
 ```bash
-git clone https://github.com/MelbourneDeveloper/Basilisk
+git clone https://github.com/Nimblesite/Basilisk
 cd basilisk
 cargo build --release
 ./target/release/basilisk check examples/bad.py
@@ -124,6 +124,6 @@ cargo build --release
 
 If you want to see the diagnostics in action, the repository includes `examples/bad.py` (with intentional errors), `examples/good.py` (clean), and `examples/mixed.py` (realistic mixed case).
 
-File issues on [GitHub](https://github.com/MelbourneDeveloper/Basilisk/issues). The specification is in `SPEC.md` if you want to understand the full design.
+File issues on [GitHub](https://github.com/Nimblesite/Basilisk/issues). The specification is in `SPEC.md` if you want to understand the full design.
 
 Python type annotations have been optional for ten years. It's time they weren't.

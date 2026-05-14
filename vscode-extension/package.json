@@ -12,11 +12,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/MelbourneDeveloper/Basilisk"
+    "url": "https://github.com/Nimblesite/Basilisk"
   },
   "homepage": "https://www.basilisk-python.dev",
   "bugs": {
-    "url": "https://github.com/MelbourneDeveloper/Basilisk/issues"
+    "url": "https://github.com/Nimblesite/Basilisk/issues"
   },
   "engines": {
     "vscode": "^1.99.0"
