@@ -49,6 +49,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Stamp release version
+        shell: bash
+        run: scripts/stamp-version.sh
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -177,6 +181,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Stamp release version
+        shell: bash
+        run: scripts/stamp-version.sh
 
       - uses: dtolnay/rust-toolchain@stable
         with:

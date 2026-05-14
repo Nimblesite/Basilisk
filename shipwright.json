@@ -3,7 +3,7 @@
   "product": {
     "id": "basilisk",
     "displayName": "Basilisk",
-    "version": "0.1.0",
+    "version": "0.0.0-PLACEHOLDER",
     "repository": "https://github.com/Nimblesite/Basilisk",
     "homepage": "https://www.basilisk-python.dev"
   },

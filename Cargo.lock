@@ -224,7 +224,7 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
 name = "basilisk-checker"
-version = "0.1.0"
+version = "0.0.0-PLACEHOLDER"
 dependencies = [
  "basilisk-config",
  "basilisk-parser",
@@ -239,7 +239,7 @@ dependencies = [
 
 [[package]]
 name = "basilisk-cli"
-version = "0.1.0"
+version = "0.0.0-PLACEHOLDER"
 dependencies = [
  "basilisk-checker",
  "basilisk-common",
@@ -263,11 +263,11 @@ dependencies = [
 
 [[package]]
 name = "basilisk-common"
-version = "0.1.0"
+version = "0.0.0-PLACEHOLDER"
 
 [[package]]
 name = "basilisk-compiler"
-version = "0.1.0"
+version = "0.0.0-PLACEHOLDER"
 dependencies = [
  "basilisk-checker",
  "basilisk-parser",
@@ -279,7 +279,7 @@ dependencies = [
 
 [[package]]
 name = "basilisk-config"
-version = "0.1.0"
+version = "0.0.0-PLACEHOLDER"
 dependencies = [
  "serde",
  "serde_json",
@@ -289,11 +289,11 @@ dependencies = [
 
 [[package]]
 name = "basilisk-db"
-version = "0.1.0"
+version = "0.0.0-PLACEHOLDER"
 
 [[package]]
 name = "basilisk-lsp"
-version = "0.1.0"
+version = "0.0.0-PLACEHOLDER"
 dependencies = [
  "basilisk-checker",
  "basilisk-common",
@@ -317,11 +317,11 @@ dependencies = [
 
 [[package]]
 name = "basilisk-mojo"
-version = "0.1.0"
+version = "0.0.0-PLACEHOLDER"
 
 [[package]]
 name = "basilisk-parser"
-version = "0.1.0"
+version = "0.0.0-PLACEHOLDER"
 dependencies = [
  "ruff_python_ast",
  "ruff_python_parser",
@@ -330,11 +330,11 @@ dependencies = [
 
 [[package]]
 name = "basilisk-plugin"
-version = "0.1.0"
+version = "0.0.0-PLACEHOLDER"
 
 [[package]]
 name = "basilisk-profiler-helper"
-version = "0.1.0"
+version = "0.0.0-PLACEHOLDER"
 dependencies = [
  "basilisk-common",
  "py-spy",
@@ -347,7 +347,7 @@ dependencies = [
 
 [[package]]
 name = "basilisk-resolver"
-version = "0.1.0"
+version = "0.0.0-PLACEHOLDER"
 dependencies = [
  "basilisk-parser",
  "basilisk-stubs",
@@ -359,7 +359,7 @@ dependencies = [
 
 [[package]]
 name = "basilisk-stubs"
-version = "0.1.0"
+version = "0.0.0-PLACEHOLDER"
 dependencies = [
  "phf",
  "phf_codegen",
@@ -374,7 +374,7 @@ dependencies = [
 
 [[package]]
 name = "basilisk-test-macros"
-version = "0.1.0"
+version = "0.0.0-PLACEHOLDER"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -383,7 +383,7 @@ dependencies = [
 
 [[package]]
 name = "basilisk-test-utils"
-version = "0.1.0"
+version = "0.0.0-PLACEHOLDER"
 dependencies = [
  "basilisk-checker",
  "basilisk-parser",
@@ -393,7 +393,7 @@ dependencies = [
 
 [[package]]
 name = "basilisk-uv"
-version = "0.1.0"
+version = "0.0.0-PLACEHOLDER"
 dependencies = [
  "serde",
  "serde_json",
@@ -405,7 +405,7 @@ dependencies = [
 
 [[package]]
 name = "basilisk-zed"
-version = "0.1.0"
+version = "0.0.0-PLACEHOLDER"
 dependencies = [
  "basilisk-common",
  "serde_json",
