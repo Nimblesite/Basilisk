@@ -27,7 +27,7 @@ The fastest way to get started. Install the **Basilisk** extension from the VS C
 **The extension bundles the matching Basilisk binary for your platform.** No manual setup is required for a default VSIX install.
 
 ```bash
-git clone https://github.com/MelbourneDeveloper/Basilisk
+git clone https://github.com/Nimblesite/Basilisk
 cd basilisk
 cargo build --release
 ```
@@ -44,19 +44,19 @@ Use `basilisk.executablePath`, `basilisk.binaries.basilisk`, or `basilisk.binari
 
 ## Pre-built binaries
 
-Download the latest release for your platform from [GitHub Releases](https://github.com/MelbourneDeveloper/Basilisk/releases):
+Download the latest release for your platform from [GitHub Releases](https://github.com/Nimblesite/Basilisk/releases):
 
 ```bash
 # macOS (Apple Silicon)
-curl -sSfL https://github.com/MelbourneDeveloper/Basilisk/releases/latest/download/basilisk-darwin-aarch64.tar.gz | tar xz
+curl -sSfL https://github.com/Nimblesite/Basilisk/releases/latest/download/basilisk-darwin-aarch64.tar.gz | tar xz
 sudo mv basilisk /usr/local/bin/
 
 # macOS (Intel)
-curl -sSfL https://github.com/MelbourneDeveloper/Basilisk/releases/latest/download/basilisk-darwin-x86_64.tar.gz | tar xz
+curl -sSfL https://github.com/Nimblesite/Basilisk/releases/latest/download/basilisk-darwin-x86_64.tar.gz | tar xz
 sudo mv basilisk /usr/local/bin/
 
 # Linux (x86_64)
-curl -sSfL https://github.com/MelbourneDeveloper/Basilisk/releases/latest/download/basilisk-linux-x86_64.tar.gz | tar xz
+curl -sSfL https://github.com/Nimblesite/Basilisk/releases/latest/download/basilisk-linux-x86_64.tar.gz | tar xz
 sudo mv basilisk /usr/local/bin/
 ```
 
@@ -79,7 +79,7 @@ This installs the binary to `~/.cargo/bin/`, which is typically already on your 
 ## Build from source
 
 ```bash
-git clone https://github.com/MelbourneDeveloper/Basilisk
+git clone https://github.com/Nimblesite/Basilisk
 cd Basilisk
 cargo build --release
 ```
@@ -92,7 +92,7 @@ cp target/release/basilisk /usr/local/bin/
 
 Rust 1.87+ required.
 
-Track progress at [github.com/MelbourneDeveloper/Basilisk](https://github.com/MelbourneDeveloper/Basilisk).
+Track progress at [github.com/Nimblesite/Basilisk](https://github.com/Nimblesite/Basilisk).
 
 ## CI integration
 
@@ -102,7 +102,7 @@ Basilisk integrates naturally into any CI pipeline. Download the binary in your 
 # GitHub Actions example
 - name: Install Basilisk
   run: |
-    curl -sSfL https://github.com/MelbourneDeveloper/Basilisk/releases/latest/download/basilisk-linux-x86_64.tar.gz | tar xz
+    curl -sSfL https://github.com/Nimblesite/Basilisk/releases/latest/download/basilisk-linux-x86_64.tar.gz | tar xz
     sudo mv basilisk /usr/local/bin/
 
 - name: Type check

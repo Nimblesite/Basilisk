@@ -3,7 +3,7 @@
     { "text": "Docs", "url": "/docs/" },
     { "text": "Rules", "url": "/docs/rules/" },
     { "text": "Blog", "url": "/blog/" },
-    { "text": "GitHub", "url": "https://github.com/MelbourneDeveloper/Basilisk", "external": true }
+    { "text": "GitHub", "url": "https://github.com/Nimblesite/Basilisk", "external": true }
   ],
   "docs": [
     {
@@ -71,15 +71,15 @@
     {
       "title": "Community",
       "items": [
-        { "text": "GitHub", "url": "https://github.com/MelbourneDeveloper/Basilisk" },
-        { "text": "Issues", "url": "https://github.com/MelbourneDeveloper/Basilisk/issues" },
-        { "text": "Discussions", "url": "https://github.com/MelbourneDeveloper/Basilisk/discussions" }
+        { "text": "GitHub", "url": "https://github.com/Nimblesite/Basilisk" },
+        { "text": "Issues", "url": "https://github.com/Nimblesite/Basilisk/issues" },
+        { "text": "Discussions", "url": "https://github.com/Nimblesite/Basilisk/discussions" }
       ]
     },
     {
       "title": "Legal",
       "items": [
-        { "text": "MIT / Apache-2.0", "url": "https://github.com/MelbourneDeveloper/Basilisk/blob/main/LICENSE" }
+        { "text": "MIT / Apache-2.0", "url": "https://github.com/Nimblesite/Basilisk/blob/main/LICENSE" }
       ]
     }
   ]

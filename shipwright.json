@@ -4,7 +4,7 @@
     "id": "basilisk",
     "displayName": "Basilisk",
     "version": "0.1.0",
-    "repository": "https://github.com/MelbourneDeveloper/Basilisk",
+    "repository": "https://github.com/Nimblesite/Basilisk",
     "homepage": "https://www.basilisk-python.dev"
   },
   "components": [
@@ -30,7 +30,7 @@
         "scoop": "basilisk"
       },
       "githubRelease": {
-        "repo": "MelbourneDeveloper/Basilisk",
+        "repo": "Nimblesite/Basilisk",
         "assetPattern": "basilisk-${version}-${platform}.tar.gz",
         "checksum": true
       },

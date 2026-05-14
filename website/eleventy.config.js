@@ -29,7 +29,7 @@ export default function (eleventyConfig) {
         url: "https://www.basilisk-python.dev",
         logo: "/assets/images/logo.svg",
         sameAs: [
-          "https://github.com/MelbourneDeveloper/Basilisk",
+          "https://github.com/Nimblesite/Basilisk",
         ],
       },
     },

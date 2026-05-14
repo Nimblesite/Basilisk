@@ -14,7 +14,7 @@ local log = require("basilisk.log")
 local M = {}
 
 --- GitHub repo for release downloads.
-local GITHUB_REPO = "MelbourneDeveloper/Basilisk"
+local GITHUB_REPO = "Nimblesite/Basilisk"
 
 --- GitHub API URL for latest release.
 local RELEASES_API = "https://api.github.com/repos/" .. GITHUB_REPO .. "/releases/latest"
