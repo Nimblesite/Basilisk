@@ -323,7 +323,7 @@ jobs:
       - name: Publish to VS Code Marketplace
         run: npx --yes @vscode/vsce publish --packagePath $(find . -iname *.vsix)
         env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          VSCE_PAT: ${{ secrets.VSCODE_MARKETPLACE_PAT }}
 
   github-release:
     name: Create GitHub Release
