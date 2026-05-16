@@ -321,7 +321,21 @@ jobs:
       - uses: actions/download-artifact@v4
 
       - name: Publish to VS Code Marketplace
-        run: npx --yes @vscode/vsce publish --packagePath $(find . -iname *.vsix)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Tags like v0.1.0-alpha / v0.1.0-beta / v0.1.0-rc.1 are prerelease.
+          # Plain vX.Y.Z is a stable release. Marketplace requires the
+          # --pre-release flag for any SemVer prerelease suffix; without it,
+          # vsce rejects the publish.
+          flag=""
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            flag="--pre-release"
+            echo "Detected prerelease tag ${GITHUB_REF_NAME}; publishing with --pre-release"
+          else
+            echo "Detected stable tag ${GITHUB_REF_NAME}; publishing to stable channel"
+          fi
+          npx --yes @vscode/vsce publish $flag --packagePath $(find . -iname '*.vsix')
         env:
           VSCE_PAT: ${{ secrets.VSCODE_MARKETPLACE_PAT }}
 
@@ -351,6 +365,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
+          # Any tag with a SemVer prerelease suffix (v0.1.0-alpha,
+          # v0.1.0-beta, v0.1.0-rc.1, …) marks the GitHub release as
+          # prerelease so it does not become the "Latest release".
+          prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
             artifacts/**/*.tar.gz
             artifacts/**/*.zip
