@@ -1,7 +1,10 @@
 [alias]
 c = "clippy --all-targets"
 
-# Use lld for faster linking on Linux (CI runners).
-# macOS uses the system linker (already fast); this cfg gate is Linux-only.
-[target.'cfg(target_os = "linux")']
+# Use lld for faster linking on native x86_64 Linux (CI runners).
+# Scoped to x86_64 only because the aarch64 cross toolchain
+# (aarch64-linux-gnu-gcc) doesn't pick up the host's /usr/bin/ld.lld —
+# `collect2: cannot find 'ld'`. Cross builds use the bfd ld that ships with
+# gcc-aarch64-linux-gnu. macOS uses the system linker.
+[target.x86_64-unknown-linux-gnu]
 rustflags = ["-C", "link-arg=-fuse-ld=lld"]
