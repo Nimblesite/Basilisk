@@ -22,7 +22,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{ClassInfo, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 use crate::span_util::slice_span;
 
 use super::{guards::is_enum_class, Rule};
@@ -168,25 +168,23 @@ fn is_non_member(cls: &ClassInfo, member_name: &str) -> bool {
 }
 
 fn make_diagnostic(span: Span, class_name: &str, member_name: &str, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "`{class_name}.{member_name}` is not an enum member and cannot be used in \
              `Literal[{class_name}.{member_name}]`"
         ),
         span,
-        path: path.to_owned(),
-        help: Some(format!(
+        path,
+        Some(format!(
             "`{member_name}` is a non-member attribute of `{class_name}` — only actual enum \
              members can appear inside `Literal[...]`"
         )),
-        note: Some(
+        Some(
             "PEP 435 / typing spec: Methods, properties, descriptors, nested classes, \
              private attributes, and `nonmember()`-wrapped attributes are not enum members \
              and cannot be used in `Literal[EnumClass.X]` type expressions"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }

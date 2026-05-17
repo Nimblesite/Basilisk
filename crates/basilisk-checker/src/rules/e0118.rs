@@ -26,7 +26,7 @@ use ruff_text_size::Ranged;
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 
 use super::Rule;
 
@@ -252,30 +252,25 @@ fn check_expr_for_super_call(
                 if is_super_call(&attr.value) {
                     let method_name = attr.attr.as_str();
                     if parent_stubs.contains(method_name) {
-                        let span = Span {
-                            start: call.range().start().to_u32(),
-                            end: call.range().end().to_u32(),
-                        };
-                        diagnostics.push(Diagnostic {
-                            code: CODE.clone(),
-                            severity: Severity::Error,
-                            message: format!(
+                        let span = Span::from(call.range());
+                        diagnostics.push(error_diagnostic_owned(
+                            CODE.clone(),
+                            format!(
                                 "Cannot call `super().{method_name}()`: the method is abstract \
                                  with no default implementation"
                             ),
                             span,
-                            path: path.to_owned(),
-                            help: Some(format!(
+                            path,
+                            Some(format!(
                                 "Provide a concrete implementation of `{method_name}` \
                                  instead of delegating to `super()`"
                             )),
-                            note: Some(
+                            Some(
                                 "Abstract methods with only `...` or `pass` as their body \
                                  have no implementation to call via super()"
                                     .to_owned(),
                             ),
-                            provenance: None,
-                        });
+                        ));
                     }
                 }
             }

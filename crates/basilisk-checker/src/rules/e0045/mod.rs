@@ -32,7 +32,7 @@ use std::collections::HashSet;
 
 use basilisk_resolver::{CallSite, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic};
 
 use super::Rule;
 
@@ -47,21 +47,16 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
+    error_diagnostic(
+        CODE.clone(),
         message,
         span,
-        path: path.to_owned(),
-        help: Some(
-            "The first argument to `Annotated[...]` must be a valid type expression".to_owned(),
+        path,
+        Some("The first argument to `Annotated[...]` must be a valid type expression"),
+        Some(
+            "PEP 593: `Annotated[T, metadata...]` requires T to be a type, not a literal or expression",
         ),
-        note: Some(
-            "PEP 593: `Annotated[T, metadata...]` requires T to be a type, not a literal or expression"
-                .to_owned(),
-        ),
-        provenance: None,
-    }
+    )
 }
 
 /// Emits BSK-E0045 when `Annotated[...]` has an invalid first argument, too few args,

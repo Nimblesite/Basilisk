@@ -38,7 +38,7 @@ use std::collections::HashSet;
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -64,21 +64,14 @@ fn span_text(source: &str, span: Option<Span>) -> Option<&str> {
 }
 
 fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
+    error_diagnostic(
+        CODE.clone(),
         message,
         span,
-        path: path.to_owned(),
-        help: Some(
-            "Type annotations must be valid type expressions (class names, subscripts, unions)"
-                .to_owned(),
-        ),
-        note: Some(
-            "PEP 484: annotations should be types, not arbitrary runtime expressions".to_owned(),
-        ),
-        provenance: None,
-    }
+        path,
+        Some("Type annotations must be valid type expressions (class names, subscripts, unions)"),
+        Some("PEP 484: annotations should be types, not arbitrary runtime expressions"),
+    )
 }
 
 /// Emits BSK-E0047 when an annotation contains an invalid type expression.

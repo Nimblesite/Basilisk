@@ -206,10 +206,7 @@ fn check_expr_for_call(expr: &Expr, cp: &[CallableParam], path: &str, diag: &mut
 }
 
 fn validate_call(call: &ast::ExprCall, cp: &CallableParam, path: &str, diag: &mut Vec<Diagnostic>) {
-    let span = Span {
-        start: call.range().start().to_u32(),
-        end: call.range().end().to_u32(),
-    };
+    let span = Span::from(call.range());
     let positional_count = call.arguments.args.len();
     let has_kwargs = !call.arguments.keywords.is_empty();
 
@@ -293,10 +290,7 @@ fn check_arg_types(
     {
         if let Some(actual) = infer_expr_literal_type(arg_expr) {
             if !is_type_compatible(actual, expected_type) {
-                let span = Span {
-                    start: arg_expr.range().start().to_u32(),
-                    end: arg_expr.range().end().to_u32(),
-                };
+                let span = Span::from(arg_expr.range());
                 diag.push(Diagnostic {
                     code: CODE.clone(),
                     severity: Severity::Error,

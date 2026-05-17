@@ -29,7 +29,7 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic};
 use crate::span_util::slice_span;
 
 use super::shared::extract_callee_name;
@@ -41,20 +41,16 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
+    error_diagnostic(
+        CODE.clone(),
         message,
         span,
-        path: path.to_owned(),
-        help: Some(
-            "`InitVar` fields are constructor-only parameters, not instance attributes".to_owned(),
+        path,
+        Some("`InitVar` fields are constructor-only parameters, not instance attributes"),
+        Some(
+            "PEP 557: `InitVar[T]` fields are passed to `__post_init__` and not stored on the instance",
         ),
-        note: Some(
-            "PEP 557: `InitVar[T]` fields are passed to `__post_init__` and not stored on the instance".to_owned(),
-        ),
-        provenance: None,
-    }
+    )
 }
 
 fn span_text(source: &str, span: Option<Span>) -> Option<&str> {

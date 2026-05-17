@@ -22,7 +22,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 use crate::rules::shared::infer_expr_literal_type;
 use crate::span_util::slice_span;
 
@@ -201,28 +201,26 @@ fn check_stmt_for_tvt_mismatch(
                 end: range.end().to_u32(),
             };
             let _ = &tvt_name;
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Tuple element at index {idx} has type `{actual}` but \
                      `{callable_param_name}` expects `{expected}` (inferred via \
                      `TypeVarTuple`)"
                 ),
                 span,
-                path: path.to_owned(),
-                help: Some(format!(
+                path,
+                Some(format!(
                     "The `{tuple_param_name}` argument must match the parameter \
                      types of the function passed as `{callable_param_name}`"
                 )),
-                note: Some(
+                Some(
                     "When `Callable[[*Ts], R]` and `tuple[*Ts]` share the same \
                      `TypeVarTuple`, the tuple elements must match the callable's \
                      parameter types in order"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
             return; // One diagnostic per call is enough.
         }
     }

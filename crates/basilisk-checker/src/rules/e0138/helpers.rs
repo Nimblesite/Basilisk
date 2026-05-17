@@ -227,10 +227,7 @@ pub(super) fn build_class_desc_from_meta(
     let kw_only = kw_only_kw.unwrap_or(false);
     let kw_only_effective = kw_only || desc.kw_only_default;
 
-    let def_span = Span {
-        start: cls.range().start().to_u32(),
-        end: cls.range().end().to_u32(),
-    };
+    let def_span = Span::from(cls.range());
 
     TransformClassDesc {
         name: cls.name.to_string(),
@@ -312,10 +309,7 @@ fn collect_inherited_transform_classes(
         let kw_only = kw_only_kw.unwrap_or(parent_desc.kw_only);
         let kw_only_effective = kw_only || meta_desc.kw_only_default;
 
-        let def_span = Span {
-            start: cls.range().start().to_u32(),
-            end: cls.range().end().to_u32(),
-        };
+        let def_span = Span::from(cls.range());
 
         out.push(TransformClassDesc {
             name: cls.name.to_string(),
@@ -395,10 +389,7 @@ pub(super) fn check_call_expr(
     if call.arguments.args.is_empty() {
         return;
     }
-    let span = Span {
-        start: call.range().start().to_u32(),
-        end: call.range().end().to_u32(),
-    };
+    let span = Span::from(call.range());
     diag.push(Diagnostic {
         code: CODE.clone(),
         severity: Severity::Error,

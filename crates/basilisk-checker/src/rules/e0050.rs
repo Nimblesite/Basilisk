@@ -15,7 +15,7 @@
 
 use basilisk_resolver::{NewTypeCallInfo, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, Severity, error_diagnostic};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -26,21 +26,14 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
+    error_diagnostic(
+        CODE.clone(),
         message,
         span,
-        path: path.to_owned(),
-        help: Some(
-            "`NewType` requires exactly two arguments: a string name and a concrete base class"
-                .to_owned(),
-        ),
-        note: Some(
-            "PEP 484: `NewType` accepts only proper concrete classes as the base type".to_owned(),
-        ),
-        provenance: None,
-    }
+        path,
+        Some("`NewType` requires exactly two arguments: a string name and a concrete base class"),
+        Some("PEP 484: `NewType` accepts only proper concrete classes as the base type"),
+    )
 }
 
 fn span_text(source: &str, span: Option<Span>) -> Option<&str> {

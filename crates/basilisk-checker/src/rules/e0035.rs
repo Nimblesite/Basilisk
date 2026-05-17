@@ -25,7 +25,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{ClassInfo, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -53,22 +53,14 @@ fn annotation_text(source: &str, span: Option<Span>) -> Option<&str> {
 }
 
 fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
+    error_diagnostic(
+        CODE.clone(),
         message,
         span,
-        path: path.to_owned(),
-        help: Some(
-            "`Required` and `NotRequired` may only be used in `TypedDict` field annotations"
-                .to_owned(),
-        ),
-        note: Some(
-            "PEP 655: `Required` and `NotRequired` are special forms for `TypedDict` keys only"
-                .to_owned(),
-        ),
-        provenance: None,
-    }
+        path,
+        Some("`Required` and `NotRequired` may only be used in `TypedDict` field annotations"),
+        Some("PEP 655: `Required` and `NotRequired` are special forms for `TypedDict` keys only"),
+    )
 }
 
 /// Returns `true` when this class or any same-module ancestor is a `TypedDict`.

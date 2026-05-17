@@ -417,10 +417,7 @@ pub(super) fn check_subscript(
     };
 
     if !is_type_compatible(idx_ty, key_ty) {
-        let span = Span {
-            start: sub.range().start().to_u32(),
-            end: sub.range().end().to_u32(),
-        };
+        let span = Span::from(sub.range());
         diag.push(Diagnostic {
             code: CODE.clone(),
             severity: Severity::Error,
@@ -461,10 +458,7 @@ pub(super) fn check_class_def(cls: &ast::StmtClassDef, path: &str, diag: &mut Ve
             continue;
         }
         if matches!(&kw.value, Expr::Subscript(_)) {
-            let span = Span {
-                start: cls.range().start().to_u32(),
-                end: cls.range().end().to_u32(),
-            };
+            let span = Span::from(cls.range());
             diag.push(Diagnostic {
                 code: CODE.clone(),
                 severity: Severity::Error,
@@ -498,8 +492,5 @@ fn infer_arg_type<'a>(arg: &'a Expr, var_types: &'a HashMap<String, String>) -> 
 
 /// Build a span for a call expression.
 pub(super) fn call_span(call: &ast::ExprCall) -> Span {
-    Span {
-        start: call.range().start().to_u32(),
-        end: call.range().end().to_u32(),
-    }
+    Span::from(call.range())
 }

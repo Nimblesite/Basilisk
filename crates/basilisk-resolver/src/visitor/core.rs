@@ -299,10 +299,7 @@ pub(super) fn classify_rhs(expr: &Expr) -> RhsKind {
 // ---------------------------------------------------------------------------
 
 pub(super) fn text_range_to_span(range: TextRange) -> Span {
-    Span {
-        start: range.start().to_u32(),
-        end: range.end().to_u32(),
-    }
+    Span::from(range)
 }
 
 /// Slice `source` using a [`TextRange`] without `as` conversions.

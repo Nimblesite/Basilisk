@@ -307,10 +307,7 @@ fn check_type_call(
     typevar_bounds: &HashMap<&str, &str>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let span = Span {
-        start: call.range().start().to_u32(),
-        end: call.range().end().to_u32(),
-    };
+    let span = Span::from(call.range());
 
     let total_args = call.arguments.args.len() + call.arguments.keywords.len();
 

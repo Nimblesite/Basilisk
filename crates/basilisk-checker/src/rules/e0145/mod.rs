@@ -235,10 +235,7 @@ fn check_module_expr(expr: &Expr, ctx: &ModuleCtx, path: &str, diag: &mut Vec<Di
         Expr::Attribute(attr) => {
             if let Some(obj_name) = expr_simple_name(&attr.value) {
                 if ctx.is_type_alias(obj_name) && !is_known_type_attr(attr.attr.as_str()) {
-                    let span = Span {
-                        start: attr.range().start().to_u32(),
-                        end: attr.range().end().to_u32(),
-                    };
+                    let span = Span::from(attr.range());
                     diag.push(Diagnostic {
                         code: CODE.clone(),
                         severity: Severity::Error,
@@ -336,10 +333,7 @@ fn check_func_expr(
             if let Some(obj_name) = expr_simple_name(&attr.value) {
                 if let Some(ann) = param_anns.get(obj_name) {
                     if is_concrete_type_annotation(ann) && !is_known_type_attr(attr.attr.as_str()) {
-                        let span = Span {
-                            start: attr.range().start().to_u32(),
-                            end: attr.range().end().to_u32(),
-                        };
+                        let span = Span::from(attr.range());
                         diag.push(Diagnostic {
                             code: CODE.clone(),
                             severity: Severity::Error,
@@ -384,10 +378,7 @@ fn check_type_arg(
     path: &str,
     diag: &mut Vec<Diagnostic>,
 ) {
-    let span = Span {
-        start: arg_expr.range().start().to_u32(),
-        end: arg_expr.range().end().to_u32(),
-    };
+    let span = Span::from(arg_expr.range());
 
     if SPECIAL_FORMS.contains(&arg_name) {
         let inner = strip_type_bracket(param_ann).unwrap_or("T");

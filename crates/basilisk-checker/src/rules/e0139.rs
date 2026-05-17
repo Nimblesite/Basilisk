@@ -34,7 +34,7 @@ use basilisk_resolver::{ResolvedModule, Span};
 use ruff_python_ast::{Expr, Stmt};
 use ruff_text_size::Ranged;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, Severity, error_diagnostic_owned};
 use crate::rules::shared::split_top_level_commas;
 
 use super::Rule;
@@ -267,10 +267,7 @@ fn check_expr(
                 return;
             };
 
-            let span = Span {
-                start: sub.range().start().to_u32(),
-                end: sub.range().end().to_u32(),
-            };
+            let span = Span::from(sub.range());
 
             // Determine the provided type arguments from the slice.
             let provided_args = collect_type_args(&sub.slice);
@@ -360,49 +357,45 @@ fn check_unpack_in_plain_generic(
     for arg in args {
         match arg {
             SliceArg::StarredName(name) if typevartuple_names.contains(&name.as_str()) => {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Cannot use unpacked `TypeVarTuple` `*{name}` as a type argument \
                          to `{alias_name}`, which has no `TypeVarTuple` parameter"
                     ),
                     span,
-                    path: path.to_owned(),
-                    help: Some(format!(
+                    path,
+                    Some(format!(
                         "`{alias_name}` is parameterised with regular `TypeVar`s only; \
                          use a plain type instead of `*{name}`"
                     )),
-                    note: Some(
+                    Some(
                         "PEP 646: a `TypeVarTuple` unpack `*Ts` may only be used to \
                          specialise a generic that contains a `TypeVarTuple` parameter"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
                 return;
             }
             SliceArg::StarredTuple => {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Cannot use unpacked tuple `*tuple[...]` as a type argument \
                          to `{alias_name}`, which has no `TypeVarTuple` parameter"
                     ),
                     span,
-                    path: path.to_owned(),
-                    help: Some(format!(
+                    path,
+                    Some(format!(
                         "`{alias_name}` is parameterised with regular `TypeVar`s only; \
                          provide plain type arguments instead of `*tuple[...]`"
                     )),
-                    note: Some(
+                    Some(
                         "PEP 646: `*tuple[T, ...]` may only appear in the argument list \
                          of a generic that contains a `TypeVarTuple` parameter"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
                 return;
             }
             _ => {}

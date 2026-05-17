@@ -15,7 +15,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{AttributeInfo, ClassInfo, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -26,18 +26,14 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
+    error_diagnostic(
+        CODE.clone(),
         message,
         span,
-        path: path.to_owned(),
-        help: None,
-        note: Some(
-            "PEP 589: TypedDict subclassing has strict field-compatibility requirements".to_owned(),
-        ),
-        provenance: None,
-    }
+        path,
+        None,
+        Some("PEP 589: TypedDict subclassing has strict field-compatibility requirements"),
+    )
 }
 
 /// Returns `true` if this class is in a `TypedDict` hierarchy (directly or transitively).

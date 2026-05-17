@@ -286,10 +286,7 @@ fn check_stmts(stmts: &[Stmt], ctx: &ModuleCtx, path: &str, diag: &mut Vec<Diagn
     for stmt in stmts {
         match stmt {
             Stmt::AnnAssign(ann) => {
-                let span = Span {
-                    start: ann.range().start().to_u32(),
-                    end: ann.range().end().to_u32(),
-                };
+                let span = Span::from(ann.range());
 
                 // Track `var: type[Proto]` declarations.
                 if let Some(proto_name) = extract_type_proto_name(&ann.annotation) {
@@ -314,10 +311,7 @@ fn check_stmts(stmts: &[Stmt], ctx: &ModuleCtx, path: &str, diag: &mut Vec<Diagn
                             if let Some(value_name) = expr_name(&assign.value) {
                                 if value_name == proto_name.as_str() && ctx.is_protocol(proto_name)
                                 {
-                                    let span = Span {
-                                        start: assign.range().start().to_u32(),
-                                        end: assign.range().end().to_u32(),
-                                    };
+                                    let span = Span::from(assign.range());
                                     diag.push(make_type_proto_diag(proto_name, path, span));
                                 }
                             }
@@ -334,10 +328,7 @@ fn check_stmts_with_funcs(stmts: &[Stmt], ctx: &ModuleCtx, path: &str, diag: &mu
     for stmt in stmts {
         if let Stmt::Expr(expr_stmt) = stmt {
             if let Expr::Call(call) = &*expr_stmt.value {
-                let span = Span {
-                    start: expr_stmt.range().start().to_u32(),
-                    end: expr_stmt.range().end().to_u32(),
-                };
+                let span = Span::from(expr_stmt.range());
                 check_call_with_sigs(call, &ctx.func_sigs, ctx, path, diag, span);
             }
         }

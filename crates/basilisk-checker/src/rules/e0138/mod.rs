@@ -224,10 +224,7 @@ impl MetaTransformCtx {
                 if !frozen_classes.contains(class_name.as_str()) {
                     continue;
                 }
-                let span = Span {
-                    start: target.range().start().to_u32(),
-                    end: target.range().end().to_u32(),
-                };
+                let span = Span::from(target.range());
                 diag.push(crate::diagnostic::Diagnostic {
                     code: CODE.clone(),
                     severity: crate::diagnostic::Severity::Error,
@@ -354,10 +351,7 @@ impl MetaTransformCtx {
                 continue;
             }
 
-            let span = Span {
-                start: cmp.range().start().to_u32(),
-                end: cmp.range().end().to_u32(),
-            };
+            let span = Span::from(cmp.range());
             diag.push(crate::diagnostic::Diagnostic {
                 code: CODE.clone(),
                 severity: crate::diagnostic::Severity::Error,

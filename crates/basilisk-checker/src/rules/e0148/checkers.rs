@@ -221,10 +221,7 @@ fn check_subscript(
     };
 
     if !is_type_compatible(idx_ty, key_ty) {
-        let span = Span {
-            start: sub.range().start().to_u32(),
-            end: sub.range().end().to_u32(),
-        };
+        let span = Span::from(sub.range());
         diag.push(Diagnostic {
             code: CODE.clone(),
             severity: Severity::Error,
@@ -267,10 +264,7 @@ pub(super) fn check_class_def(cls: &ast::StmtClassDef, path: &str, diag: &mut Ve
 
         // Check if the metaclass value is a subscript (i.e. `Generic[T]`).
         if matches!(&kw.value, Expr::Subscript(_)) {
-            let span = Span {
-                start: cls.range().start().to_u32(),
-                end: cls.range().end().to_u32(),
-            };
+            let span = Span::from(cls.range());
             diag.push(Diagnostic {
                 code: CODE.clone(),
                 severity: Severity::Error,

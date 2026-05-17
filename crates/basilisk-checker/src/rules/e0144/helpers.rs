@@ -267,10 +267,7 @@ pub(super) fn check_positional_arg_types(
             continue;
         };
         if !is_type_compatible(arg_type, expected_type) {
-            let arg_span = Span {
-                start: arg_expr.range().start().to_u32(),
-                end: arg_expr.range().end().to_u32(),
-            };
+            let arg_span = Span::from(arg_expr.range());
             diagnostics.push(Diagnostic {
                 code: CODE.clone(),
                 severity: Severity::Error,

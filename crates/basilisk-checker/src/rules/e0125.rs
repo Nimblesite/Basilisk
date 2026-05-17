@@ -24,7 +24,7 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -367,23 +367,21 @@ fn is_assignment_target(trimmed: &str, dot_prefix: &str, attr_name: &str) -> boo
 
 /// Build a diagnostic for instance attribute access on a class object.
 fn make_diagnostic(object_name: &str, attr_name: &str, span: Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Cannot access instance attribute `{attr_name}` on class object `{object_name}`"
         ),
         span,
-        path: path.to_owned(),
-        help: Some(format!(
+        path,
+        Some(format!(
             "`{attr_name}` is an instance attribute and can only be accessed on instances, \
              not on the class itself"
         )),
-        note: Some(
+        Some(
             "Instance attributes (non-ClassVar annotations) exist only on instances. \
              Use an instance to access them, e.g. `Node[int]().label`"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }

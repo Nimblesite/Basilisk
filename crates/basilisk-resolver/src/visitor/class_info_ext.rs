@@ -509,10 +509,7 @@ pub(super) fn extract_base_subscripts(class: &StmtClassDef) -> Vec<BaseSubscript
             base_name,
             type_arg_names,
             type_args,
-            span: Span {
-                start: sub.range().start().to_u32(),
-                end: sub.range().end().to_u32(),
-            },
+            span: Span::from(sub.range()),
         });
     }
     entries

@@ -206,10 +206,7 @@ fn check_func_body(
                 continue;
             };
 
-            let span = Span {
-                start: ann.range().start().to_u32(),
-                end: ann.range().end().to_u32(),
-            };
+            let span = Span::from(ann.range());
 
             // Check return type covariance.
             if !return_type_compat(&source_sig.return_type, &target_sig.return_type) {

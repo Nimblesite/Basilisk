@@ -31,7 +31,7 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, Severity, error_diagnostic_owned};
 use crate::span_util::slice_span;
 
 use super::shared::extract_callee_name;
@@ -230,33 +230,27 @@ fn check_stmt_for_violations(
                             continue;
                         };
                         if is_parent_not_subclass(&value_class, &constructor_class, parent_class) {
-                            let range = assign.value.range();
-                            let span = basilisk_resolver::Span {
-                                start: range.start().to_u32(),
-                                end: range.end().to_u32(),
-                            };
-                            diagnostics.push(Diagnostic {
-                                code: CODE.clone(),
-                                severity: Severity::Error,
-                                message: format!(
+                            let span = basilisk_resolver::Span::from(assign.value.range());
+                            diagnostics.push(error_diagnostic_owned(
+                                CODE.clone(),
+                                format!(
                                     "Argument `{kw_name}` is typed as `Self` in \
                                      `{parent_class}`, which resolves to \
                                      `{constructor_class}` here, but got \
                                      `{value_class}` instance"
                                 ),
                                 span,
-                                path: path.to_owned(),
-                                help: Some(format!(
+                                path,
+                                Some(format!(
                                     "Pass a `{constructor_class}` instance instead \
                                      of `{value_class}`"
                                 )),
-                                note: Some(
+                                Some(
                                     "`Self` in attribute annotations binds to the \
                                      concrete subclass, not the parent class"
                                         .to_owned(),
                                 ),
-                                provenance: None,
-                            });
+                            ));
                         }
                     }
                 }

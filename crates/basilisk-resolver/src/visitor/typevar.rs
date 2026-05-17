@@ -350,10 +350,7 @@ pub(super) fn collect_typevar_bound_typeddict_violations(stmts: &[Stmt]) -> Vec<
                 Expr::Name(n) if n.id.as_str() == "TypedDict"
             );
             if is_typeddict {
-                out.push(Span {
-                    start: call.range().start().to_u32(),
-                    end: call.range().end().to_u32(),
-                });
+                out.push(Span::from(call.range()));
             }
         }
     }

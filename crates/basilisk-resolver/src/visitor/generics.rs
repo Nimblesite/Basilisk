@@ -130,10 +130,7 @@ pub(super) fn collect_generic_subscript_sites(stmts: &[Stmt]) -> Vec<GenericSubs
                         out.push(GenericSubscriptSite {
                             base_name,
                             arg_count,
-                            span: Span {
-                                start: sub.range().start().to_u32(),
-                                end: sub.range().end().to_u32(),
-                            },
+                            span: Span::from(sub.range()),
                         });
                     }
                 }
@@ -149,10 +146,7 @@ pub(super) fn collect_generic_subscript_sites(stmts: &[Stmt]) -> Vec<GenericSubs
                         out.push(GenericSubscriptSite {
                             base_name,
                             arg_count,
-                            span: Span {
-                                start: sub.range().start().to_u32(),
-                                end: sub.range().end().to_u32(),
-                            },
+                            span: Span::from(sub.range()),
                         });
                     }
                 }
@@ -176,10 +170,7 @@ pub(super) fn collect_generic_subscript_sites(stmts: &[Stmt]) -> Vec<GenericSubs
                                 out.push(GenericSubscriptSite {
                                     base_name,
                                     arg_count,
-                                    span: Span {
-                                        start: sub.range().start().to_u32(),
-                                        end: sub.range().end().to_u32(),
-                                    },
+                                    span: Span::from(sub.range()),
                                 });
                             }
                         }

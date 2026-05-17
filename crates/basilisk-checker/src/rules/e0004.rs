@@ -5,7 +5,7 @@
 
 use basilisk_resolver::{FunctionInfo, ParameterInfo, ResolvedModule};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 
 use super::{guards::is_stub_context, Rule};
 
@@ -44,33 +44,29 @@ fn check_function(func: &FunctionInfo, path: &str, out: &mut Vec<Diagnostic>) {
 }
 
 fn make_vararg_diagnostic(param: &ParameterInfo, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Missing type annotation for `{}` (`*{}` parameter)",
             param.name, param.name
         ),
-        span: param.name_span,
-        path: path.to_owned(),
-        help: Some(format!("Add a type annotation: `*{}: <type>`", param.name)),
-        note: Some("In Basilisk, `*args` parameters require an explicit element type".to_owned()),
-        provenance: None,
-    }
+        param.name_span,
+        path,
+        Some(format!("Add a type annotation: `*{}: <type>`", param.name)),
+        Some("In Basilisk, `*args` parameters require an explicit element type".to_owned()),
+    )
 }
 
 fn make_kwarg_diagnostic(param: &ParameterInfo, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Missing type annotation for `{}` (`**{}` parameter)",
             param.name, param.name
         ),
-        span: param.name_span,
-        path: path.to_owned(),
-        help: Some(format!("Add a type annotation: `**{}: <type>`", param.name)),
-        note: Some("In Basilisk, `**kwargs` parameters require an explicit value type".to_owned()),
-        provenance: None,
-    }
+        param.name_span,
+        path,
+        Some(format!("Add a type annotation: `**{}: <type>`", param.name)),
+        Some("In Basilisk, `**kwargs` parameters require an explicit value type".to_owned()),
+    )
 }

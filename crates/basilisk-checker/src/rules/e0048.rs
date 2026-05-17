@@ -24,7 +24,7 @@
 
 use basilisk_resolver::{ImportKind, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, Severity, error_diagnostic};
 use crate::rules::shared::split_top_level_commas;
 use crate::span_util::slice_span;
 
@@ -40,21 +40,14 @@ fn span_text(source: &str, span: Option<Span>) -> Option<&str> {
 }
 
 fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
+    error_diagnostic(
+        CODE.clone(),
         message,
         span,
-        path: path.to_owned(),
-        help: Some(
-            "The RHS of a `TypeAlias` annotation must be a valid type expression".to_owned(),
-        ),
-        note: Some(
-            "PEP 613: `x: TypeAlias = T` requires T to be a type, not a literal or expression"
-                .to_owned(),
-        ),
-        provenance: None,
-    }
+        path,
+        Some("The RHS of a `TypeAlias` annotation must be a valid type expression"),
+        Some("PEP 613: `x: TypeAlias = T` requires T to be a type, not a literal or expression"),
+    )
 }
 
 /// Collect all local names that refer to `typing.TypeAlias` in this module.

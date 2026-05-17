@@ -70,6 +70,75 @@ pub struct ErrorCode {
     pub docs_url: &'static str,
 }
 
+/// Build an `Error`-severity diagnostic with optional static `help`/`note` text.
+///
+/// Used by per-rule `make_diag` helpers whose only per-call inputs are the
+/// message, span and path, with `code`/`help`/`note` fixed per rule.
+pub(crate) fn error_diagnostic(
+    code: ErrorCode,
+    message: String,
+    span: Span,
+    path: &str,
+    help: Option<&'static str>,
+    note: Option<&'static str>,
+) -> Diagnostic {
+    error_diagnostic_owned(
+        code,
+        message,
+        span,
+        path,
+        help.map(str::to_owned),
+        note.map(str::to_owned),
+    )
+}
+
+/// Build an `Error`-severity diagnostic with `String`-owned `help`/`note` text.
+///
+/// Used by call sites whose `help`/`note` are produced via `format!(...)`.
+pub(crate) fn error_diagnostic_owned(
+    code: ErrorCode,
+    message: String,
+    span: Span,
+    path: &str,
+    help: Option<String>,
+    note: Option<String>,
+) -> Diagnostic {
+    diagnostic_owned(code, Severity::Error, message, span, path, help, note)
+}
+
+/// Build a `Warning`-severity diagnostic with `String`-owned `help`/`note` text.
+pub(crate) fn warning_diagnostic_owned(
+    code: ErrorCode,
+    message: String,
+    span: Span,
+    path: &str,
+    help: Option<String>,
+    note: Option<String>,
+) -> Diagnostic {
+    diagnostic_owned(code, Severity::Warning, message, span, path, help, note)
+}
+
+fn diagnostic_owned(
+    code: ErrorCode,
+    severity: Severity,
+    message: String,
+    span: Span,
+    path: &str,
+    help: Option<String>,
+    note: Option<String>,
+) -> Diagnostic {
+    Diagnostic {
+        code,
+        severity,
+        message,
+        span,
+        path: path.to_owned(),
+        help,
+        note,
+        provenance: None,
+    }
+}
+
 /// A single diagnostic emitted by the checker.
 #[derive(Debug, Clone)]
 pub struct Diagnostic {

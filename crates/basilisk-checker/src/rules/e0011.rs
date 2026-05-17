@@ -32,7 +32,7 @@ use crate::span_util::slice_span;
 use crate::types::InferredType;
 use basilisk_resolver::{FunctionInfo, ParameterInfo, ResolvedModule, ReturnAnnotationKind};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned, warning_diagnostic_owned};
 
 use super::{guards::is_stub_context, Rule};
 
@@ -86,43 +86,39 @@ fn check_explicit_any(func: &FunctionInfo, path: &str, out: &mut Vec<Diagnostic>
 }
 
 fn make_return_any_diagnostic(func: &FunctionInfo, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Warning,
-        message: format!(
+    warning_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Function `{}` has `Any` as its return annotation — prefer a concrete type",
             func.name
         ),
-        span: func.name_span,
-        path: path.to_owned(),
-        help: Some("Replace `Any` with the actual return type of this function".to_owned()),
-        note: Some(
+        func.name_span,
+        path,
+        Some("Replace `Any` with the actual return type of this function".to_owned()),
+        Some(
             "`Any` disables type checking for this return value; use only when unavoidable"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }
 
 fn make_param_any_diagnostic(param: &ParameterInfo, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Warning,
-        message: format!(
+    warning_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Parameter `{}` is annotated `Any` — prefer a concrete type",
             param.name
         ),
-        span: param.name_span,
-        path: path.to_owned(),
-        help: Some(format!(
+        param.name_span,
+        path,
+        Some(format!(
             "Replace `Any` on `{}` with the actual expected type",
             param.name
         )),
-        note: Some(
+        Some(
             "`Any` disables type checking for this parameter; use only when unavoidable".to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -176,18 +172,16 @@ fn check_return_type_mismatch(
 
         // Check assignability using inference system
         if !inferred_type.is_assignable_to(&declared_type) {
-            out.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            out.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "return type mismatch: {inferred_type} is not assignable to {declared_type}"
                 ),
-                span: func.name_span,
-                path: module.path.clone(),
-                help: Some("Check the return type annotation and return statements".to_owned()),
-                note: None,
-                provenance: None,
-            });
+                func.name_span,
+                &module.path,
+                Some("Check the return type annotation and return statements".to_owned()),
+                None,
+            ));
         }
     }
 }

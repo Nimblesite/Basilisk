@@ -21,7 +21,7 @@ use std::collections::HashSet;
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -32,21 +32,14 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 fn make_diag(message: String, span: Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
+    error_diagnostic(
+        CODE.clone(),
         message,
         span,
-        path: path.to_owned(),
-        help: Some(
-            "A `tuple[...]` type may contain at most one unpacked `TypeVarTuple` (`*Ts`)"
-                .to_owned(),
-        ),
-        note: Some(
-            "PEP 646: only a single TypeVarTuple is permitted per generic or tuple type".to_owned(),
-        ),
-        provenance: None,
-    }
+        path,
+        Some("A `tuple[...]` type may contain at most one unpacked `TypeVarTuple` (`*Ts`)"),
+        Some("PEP 646: only a single TypeVarTuple is permitted per generic or tuple type"),
+    )
 }
 
 /// Count the number of starred (unpack) elements in a `tuple[...]` subscript string.
