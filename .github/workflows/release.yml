@@ -168,6 +168,7 @@ jobs:
             arch: arm64
             rust_target: aarch64-unknown-linux-gnu
             npm_config_arch: arm64
+            cross: true
           - os: windows-latest
             platform: win32
             arch: x64
@@ -178,6 +179,7 @@ jobs:
             arch: arm64
             rust_target: aarch64-pc-windows-msvc
             npm_config_arch: arm64
+            cross: true
 
     steps:
       - uses: actions/checkout@v4
@@ -274,7 +276,11 @@ jobs:
           fi
           cp shipwright.json vscode-extension/shipwright.json
 
+      # Skip on cross-compiled targets: the runner's CPU arch can't execute
+      # the produced binary (x64 host -> aarch64 target). The VSIX contents
+      # check below still runs and validates the zipped layout.
       - name: Verify runtime version contracts
+        if: ${{ !matrix.cross }}
         working-directory: vscode-extension
         shell: bash
         run: |
@@ -290,7 +296,16 @@ jobs:
       - name: Package VSIX
         working-directory: vscode-extension
         shell: bash
-        run: npx vsce package --target "${{ env.target }}" --ignore-other-target-folders --out "basilisk-${{ env.target }}.vsix"
+        run: |
+          set -euo pipefail
+          # vsce refuses to publish with `--pre-release` unless the VSIX was
+          # also *packaged* with `--pre-release` (it sets preRelease=true in
+          # the embedded manifest). Pass it here for any SemVer prerelease tag.
+          flag=""
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            flag="--pre-release"
+          fi
+          npx vsce package $flag --target "${{ env.target }}" --ignore-other-target-folders --out "basilisk-${{ env.target }}.vsix"
 
       - name: Verify VSIX contents
         working-directory: vscode-extension
@@ -351,15 +366,14 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          # Flatten: each upload's `name:` is the file itself, so without
+          # merging, download-artifact@v4 creates artifacts/<file>/<file>
+          # — `mv *.tar.gz artifacts/` then collides with the directory.
+          merge-multiple: true
 
       - name: Generate checksums
-        run: |
-          cd artifacts
-          find . -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.vsix' \) -exec cp {} .. \;
-          cd ..
-          sha256sum *.tar.gz *.zip *.vsix > checksums-sha256.txt
-          mv *.tar.gz *.zip *.vsix artifacts/
-          mv checksums-sha256.txt artifacts/
+        working-directory: artifacts
+        run: sha256sum *.tar.gz *.zip *.vsix > checksums-sha256.txt
 
       - name: Create release
         uses: softprops/action-gh-release@v2
@@ -370,7 +384,7 @@ jobs:
           # prerelease so it does not become the "Latest release".
           prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
-            artifacts/**/*.tar.gz
-            artifacts/**/*.zip
-            artifacts/**/*.vsix
+            artifacts/*.tar.gz
+            artifacts/*.zip
+            artifacts/*.vsix
             artifacts/checksums-sha256.txt

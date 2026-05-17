@@ -6,7 +6,7 @@
 ⚠️ IDE EXTENSIONS LISTEN FOR THINGS LIKE COMMANDS FROM THE LSP STATE CHANGE AND ADJUST ACCORDINGLY
 ⚠️ THE IDE EXTENSIONS NEVER REGISTERS COMMANDS ETC THAT THE LSP DOESN'T ADVERTISE
 ⚠️ KILLING A VSCODE PROCESS - EVEN IN THE BROWSER WILL BE MET WITH INSTANT, EXTREME VIOLENCE!
-⚠️ Use Deslop MCP to check for existing similar code with find-similar when creating new code, and top-offenders after modifying code ⚠️
+⚠️ Use Deslop MCP to check for existing similar code with find-similar before creating new code, and top-offenders after modifying code. Always merge duplicate code ⚠️
 
 Target: 100% PEP conformance. Canonical version: **Python 3.12**. Read the PEP conformance readme carefully.
 
@@ -162,3 +162,24 @@ Strict-by-default Python type checker and comprehensive LSP built in **Rust**. O
 Diagnostic codes: `BSK-E####` / `BSK-W####`. Pyright is the gold standard to compare against — NEVER copy from the Pyright codebase.
 
 See `docs/specs/CHECKER-ARCHITECTURE-SPEC.md` for full architecture, diagnostic ranges, and testing strategy.
+
+## Migration to `lspkit`
+
+The cross-cutting LSP scaffolding in this repo (tower-lsp setup, workspace index, file watcher + debouncer, diagnostics publication, capability builder, config loader) is being distilled into the generic `lspkit-*` workspace at `/Users/christianfindlay/Documents/Code/lsp_toolkit`.
+
+**For new LSP infrastructure work:** prefer `lspkit-*` crates over reinventing it here.
+**For changes to existing scaffolding in this repo:** flag in the PR description if the patch duplicates `lspkit` functionality, and reference the upstream crate.
+
+Mapping (current → toolkit crate):
+
+| Current path | Toolkit crate |
+|---|---|
+| `crates/basilisk-lsp/src/server/mod.rs:96` tower-lsp `Server` setup | `lspkit-server` (hand-rolled JSON-RPC + `Dispatcher` + `Capabilities`) — **note:** toolkit does not depend on `tower-lsp` (unmaintained) |
+| `crates/basilisk-lsp/src/workspace.rs:39–116` `WorkspaceIndex` + import-graph invalidation | `lspkit-vfs` (`Vfs`, `DocumentUri`, incremental edits) + consumer-side index |
+| `crates/basilisk-lsp/src/server/handlers/{navigation,features}.rs` handler split | `lspkit-server::Dispatcher::register` per method name |
+| `crates/basilisk-lsp/src/server/init.rs:224–242` diagnostic publication | `lspkit-server::diagnostics::DiagnosticsBus` |
+| `crates/basilisk-lsp/src/server/mod.rs:61,64` debounce constants + file-watcher loop | `lspkit-live::watcher::FileWatcher` + `lspkit-live::scheduler::spawn` |
+| `crates/basilisk-lsp/src/config.rs:35–100` `WorkspaceConfig` loader | `lspkit-config::load_from_ancestor` (consumer supplies the file name + struct) |
+| `crates/basilisk-lsp/tests/lsp/ws_test_common.rs` E2E fixture | (not yet in toolkit; harness crate is a v0.1 follow-up) |
+
+Code in this repo is **not** being removed — it stays canonical until the toolkit matures. This note exists so future agents reuse `lspkit` for new servers and avoid widening this repo's scaffolding.

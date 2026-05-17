@@ -2,6 +2,12 @@ name: Deploy GitHub Pages
 
 on:
   workflow_dispatch:
+  # Auto-deploy when a stable GitHub Release is published by release.yml.
+  # Prereleases (v*-alpha, v*-beta, v*-rc.*) are skipped via the job-level
+  # `if` below — release.yml flags them via `prerelease: true` on the
+  # release payload.
+  release:
+    types: [published]
 
 permissions:
   contents: read
@@ -17,6 +23,7 @@ jobs:
     name: Build and deploy
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    if: github.event_name == 'workflow_dispatch' || github.event.release.prerelease == false
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
