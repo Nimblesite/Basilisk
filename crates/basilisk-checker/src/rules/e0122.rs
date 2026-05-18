@@ -10,7 +10,7 @@ use ruff_text_size::Ranged;
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 use crate::rules::shared::{infer_expr_literal_type, is_type_compatible};
 
 use super::Rule;
@@ -211,19 +211,17 @@ fn validate_call(call: &ast::ExprCall, cp: &CallableParam, path: &str, diag: &mu
     let has_kwargs = !call.arguments.keywords.is_empty();
 
     if has_kwargs {
-        diag.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diag.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "`Callable` parameter `{}` does not accept keyword arguments",
                 cp.name
             ),
             span,
-            path: path.to_owned(),
-            help: Some("Callable parameters are positional-only".to_owned()),
-            note: None,
-            provenance: None,
-        });
+            path,
+            Some("Callable parameters are positional-only".to_owned()),
+            None,
+        ));
         return;
     }
 
@@ -232,42 +230,38 @@ fn validate_call(call: &ast::ExprCall, cp: &CallableParam, path: &str, diag: &mu
     };
     match positional_count.cmp(&expected) {
         std::cmp::Ordering::Less => {
-            diag.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diag.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Too few arguments for `{}`: expected {} but got {}",
                     cp.name, expected, positional_count
                 ),
                 span,
-                path: path.to_owned(),
-                help: Some(format!(
+                path,
+                Some(format!(
                     "`{}` is typed as `Callable[[{}], ...]`",
                     cp.name,
                     cp.arg_types.join(", ")
                 )),
-                note: None,
-                provenance: None,
-            });
+                None,
+            ));
         }
         std::cmp::Ordering::Greater => {
-            diag.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diag.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Too many arguments for `{}`: expected {} but got {}",
                     cp.name, expected, positional_count
                 ),
                 span,
-                path: path.to_owned(),
-                help: Some(format!(
+                path,
+                Some(format!(
                     "`{}` is typed as `Callable[[{}], ...]`",
                     cp.name,
                     cp.arg_types.join(", ")
                 )),
-                note: None,
-                provenance: None,
-            });
+                None,
+            ));
         }
         std::cmp::Ordering::Equal => {
             check_arg_types(call, cp, path, diag);
@@ -291,10 +285,9 @@ fn check_arg_types(
         if let Some(actual) = infer_expr_literal_type(arg_expr) {
             if !is_type_compatible(actual, expected_type) {
                 let span = Span::from(arg_expr.range());
-                diag.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diag.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Argument {} to `{}` has incompatible type `{}`; expected `{}`",
                         idx + 1,
                         cp.name,
@@ -302,11 +295,10 @@ fn check_arg_types(
                         expected_type
                     ),
                     span,
-                    path: path.to_owned(),
-                    help: None,
-                    note: None,
-                    provenance: None,
-                });
+                    path,
+                    None,
+                    None,
+                ));
             }
         }
     }

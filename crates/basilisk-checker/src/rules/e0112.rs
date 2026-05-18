@@ -18,7 +18,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 use crate::span_util::slice_span;
 
 use super::guards::is_protocol_class;
@@ -301,16 +301,14 @@ impl Rule for TypeGuardCallableReturnMismatch {
                     &call.callee,
                 );
 
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: msg,
-                    span: *arg_span,
-                    path: module.path.clone(),
-                    help: Some(help_text),
-                    note: Some(note_text),
-                    provenance: None,
-                });
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    msg,
+                    *arg_span,
+                    &module.path,
+                    Some(help_text),
+                    Some(note_text),
+                ));
             }
         }
     }

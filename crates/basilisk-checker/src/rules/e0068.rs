@@ -19,7 +19,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 
 use super::Rule;
 
@@ -35,29 +35,27 @@ pub(crate) struct LiteralStringEnumMismatch;
 impl Rule for LiteralStringEnumMismatch {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         for mismatch in &module.literal_string_enum_mismatches {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Variable `{}` is annotated as `{}` (a string literal), \
                      but `{}` is an enum member reference, not a string",
                     mismatch.var_name, mismatch.annotation, mismatch.enum_form
                 ),
-                span: mismatch.span,
-                path: module.path.clone(),
-                help: Some(format!(
+                mismatch.span,
+                &module.path,
+                Some(format!(
                     "Change the annotation from `Literal[\"{}\"]` to `Literal[{}]` \
                      to reference the enum member directly",
                     mismatch.enum_form, mismatch.enum_form
                 )),
-                note: Some(
+                Some(
                     "PEP 586 / typing spec: `Literal[\"Color.RED\"]` is a string literal \
                      type; `Literal[Color.RED]` is the enum member type. \
                      These are distinct and incompatible types."
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }

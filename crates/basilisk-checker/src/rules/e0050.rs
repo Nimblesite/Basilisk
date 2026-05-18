@@ -15,7 +15,7 @@
 
 use basilisk_resolver::{NewTypeCallInfo, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity, error_diagnostic};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic, error_diagnostic_owned};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -461,23 +461,21 @@ fn check_newtype_call_arg_types(
             let Some(arg_text) = slice_span(source, *arg_span) else {
                 continue;
             };
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Argument to `{}` ({}) is not compatible with its base type `{base_type}`",
                     call.callee,
                     arg_text.trim()
                 ),
-                span: call.span,
-                path: path.to_owned(),
-                help: Some(format!(
+                call.span,
+                path,
+                Some(format!(
                     "Pass a value of type `{base_type}` to the `{}` constructor",
                     call.callee
                 )),
-                note: Some("NewType constructors accept only values of the base type".to_owned()),
-                provenance: None,
-            });
+                Some("NewType constructors accept only values of the base type".to_owned()),
+            ));
         }
     }
 }
@@ -530,22 +528,20 @@ fn check_newtype_var_literal_assignments(
         );
 
         if is_bare_literal {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Cannot assign a literal value directly to `{ann}`; \
                      use `{ann}(value)` to create a `{ann}` instance"
                 ),
-                span: var.name_span,
-                path: path.to_owned(),
-                help: Some(format!("Replace the literal with `{ann}(value)`")),
-                note: Some(
+                var.name_span,
+                path,
+                Some(format!("Replace the literal with `{ann}(value)`")),
+                Some(
                     "NewType creates a distinct type; only the constructor call is valid"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }

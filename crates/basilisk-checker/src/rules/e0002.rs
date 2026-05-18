@@ -2,7 +2,7 @@
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::{guards::is_stub_context, Rule};
 
@@ -29,23 +29,21 @@ impl Rule for MissingReturnAnnotation {
 }
 
 fn make_diagnostic(func: &FunctionInfo, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Missing return type annotation for function `{}`",
             func.name
         ),
-        span: Span {
+        Span {
             start: func.name_span.start,
             end: func.params_end,
         },
-        path: path.to_owned(),
-        help: Some(format!(
+        path,
+        Some(format!(
             "Add a return type: `def {}(...) -> <type>:`",
             func.name
         )),
-        note: Some("In Basilisk, all functions require an explicit return type".to_owned()),
-        provenance: None,
-    }
+        Some("In Basilisk, all functions require an explicit return type".to_owned()),
+    )
 }

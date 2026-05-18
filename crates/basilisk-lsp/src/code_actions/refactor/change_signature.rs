@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 
 use tower_lsp::lsp_types::{
-    CodeAction, CodeActionKind, Position, Range, TextEdit, Url, WorkspaceEdit,
+    CodeAction, CodeActionKind, Position, Range, TextEdit, Url,
 };
 
 /// Offer to remove the parameter under the cursor from a function and all
@@ -53,17 +53,12 @@ pub(in crate::code_actions) fn remove_parameter(
     let mut changes = HashMap::new();
     let _ = changes.insert(uri.clone(), edits);
 
-    Some(CodeAction {
-        title: format!("Remove parameter '{}' (basilisk)", param.name),
-        kind: Some(CodeActionKind::new("refactor.rewrite.signature")),
-        diagnostics: None,
-        edit: Some(WorkspaceEdit {
-            changes: Some(changes),
-            ..Default::default()
-        }),
-        is_preferred: Some(false),
-        ..Default::default()
-    })
+    Some(super::super::code_action_with_changes(
+        format!("Remove parameter '{}' (basilisk)", param.name),
+        CodeActionKind::new("refactor.rewrite.signature"),
+        changes,
+        false,
+    ))
 }
 
 /// Find which function and parameter index the cursor is on.
@@ -269,17 +264,12 @@ pub(in crate::code_actions) fn add_parameter(
     let mut changes = HashMap::new();
     let _ = changes.insert(uri.clone(), vec![edit]);
 
-    Some(CodeAction {
-        title: "Add parameter (basilisk)".to_owned(),
-        kind: Some(CodeActionKind::new("refactor.rewrite.signature")),
-        diagnostics: None,
-        edit: Some(WorkspaceEdit {
-            changes: Some(changes),
-            ..Default::default()
-        }),
-        is_preferred: Some(false),
-        ..Default::default()
-    })
+    Some(super::super::code_action_with_changes(
+        "Add parameter (basilisk)".to_owned(),
+        CodeActionKind::new("refactor.rewrite.signature"),
+        changes,
+        false,
+    ))
 }
 
 /// Offer to sort parameters alphabetically (excluding self/cls).
@@ -322,17 +312,12 @@ pub(in crate::code_actions) fn reorder_parameters(
     let mut changes = HashMap::new();
     let _ = changes.insert(uri.clone(), vec![edit]);
 
-    Some(CodeAction {
-        title: "Sort parameters alphabetically (basilisk)".to_owned(),
-        kind: Some(CodeActionKind::new("refactor.rewrite.signature")),
-        diagnostics: None,
-        edit: Some(WorkspaceEdit {
-            changes: Some(changes),
-            ..Default::default()
-        }),
-        is_preferred: Some(false),
-        ..Default::default()
-    })
+    Some(super::super::code_action_with_changes(
+        "Sort parameters alphabetically (basilisk)".to_owned(),
+        CodeActionKind::new("refactor.rewrite.signature"),
+        changes,
+        false,
+    ))
 }
 
 /// Find the function whose `def_span` contains the given offset.

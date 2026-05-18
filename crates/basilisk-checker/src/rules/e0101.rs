@@ -8,7 +8,7 @@
 use basilisk_resolver::ResolvedModule;
 
 use super::Rule;
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 use crate::span_util::slice_span;
 
 const CODE: ErrorCode = ErrorCode {
@@ -69,26 +69,24 @@ impl Rule for TypeGuardNoNarrowingParam {
                 "TypeGuard"
             };
 
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Method `{}` returns `{guard_kind}` but has no parameter to narrow",
                     func.name
                 ),
-                span: ann_span,
-                path: module.path.clone(),
-                help: Some(format!(
+                ann_span,
+                &module.path,
+                Some(format!(
                     "Add a parameter to narrow: `def {}(self, value: object) -> {ann_text}:`",
                     func.name
                 )),
-                note: Some(
+                Some(
                     "A `TypeGuard` or `TypeIs` function must have at least one user-facing \
                      parameter to narrow; `self` and `cls` do not count"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }

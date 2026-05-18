@@ -17,8 +17,6 @@
 //! TA1 = tuple[*Ts, T1, T2]  # OK — single unpack
 //! ```
 
-use std::collections::HashSet;
-
 use basilisk_resolver::{ResolvedModule, Span};
 
 use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic};
@@ -126,12 +124,7 @@ impl Rule for MultipleTypeVarTuplesInGeneric {
 /// patterns that contain multiple unpack operators.
 fn check_tuple_type_multiple_unpacks(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
     // Collect TypeVarTuple names so we know which names are TVTs.
-    let tvt_names: HashSet<&str> = module
-        .typevar_calls
-        .iter()
-        .filter(|tv| tv.is_typevartuple)
-        .map(|tv| tv.name.as_str())
-        .collect();
+    let tvt_names = super::shared::typevar_tuple_names(&module.typevar_calls);
 
     if tvt_names.is_empty() {
         return;

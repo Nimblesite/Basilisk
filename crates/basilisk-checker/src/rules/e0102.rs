@@ -33,7 +33,7 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 
 use super::Rule;
 
@@ -80,27 +80,25 @@ fn check_ordering(
         order_index.get(tv.name.as_str()),
     ) {
         if default_pos >= tv_pos {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "`TypeVar` `{}` has `default={default_name}` but `{default_name}` \
                      must appear before `{}` in the parameter list",
                     tv.name, tv.name
                 ),
-                span: tv.span,
-                path: path.to_owned(),
-                help: Some(format!(
+                tv.span,
+                path,
+                Some(format!(
                     "Reorder the type parameters so that `{default_name}` comes before `{}`",
                     tv.name
                 )),
-                note: Some(
+                Some(
                     "When a TypeVar's default references another TypeVar, \
                      the referenced TypeVar must appear earlier in the parameter list"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }
@@ -120,26 +118,24 @@ fn check_bound_compatibility(
         (&tv.bound_type_name, &default_tv.bound_type_name)
     {
         if !is_subtype_for_bound(default_bound, tv_bound) {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "`TypeVar` `{}` has `default={default_name}` but \
                      `{default_name}`'s bound `{default_bound}` is not a subtype \
                      of `{}`'s bound `{tv_bound}`",
                     tv.name, tv.name
                 ),
-                span: tv.span,
-                path: path.to_owned(),
-                help: Some(format!(
+                tv.span,
+                path,
+                Some(format!(
                     "The default TypeVar's bound must be a subtype of this TypeVar's bound; \
                      `{default_bound}` is not a subtype of `{tv_bound}`"
                 )),
-                note: Some(
+                Some(
                     "When T2 has default=T1, T1's bound must be a subtype of T2's bound".to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }
@@ -159,28 +155,26 @@ fn check_constraint_compatibility(
     {
         let default_constraints = format_constraints(&default_tv.constraint_type_names);
         let tv_constraints = format_constraints(&tv.constraint_type_names);
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "`TypeVar` `{}` has `default={default_name}` but \
                  `{default_name}`'s constraints {{{default_constraints}}} are not a \
                  subset of `{}`'s constraints {{{tv_constraints}}}",
                 tv.name, tv.name
             ),
-            span: tv.span,
-            path: path.to_owned(),
-            help: Some(
+            tv.span,
+            path,
+            Some(
                 "The default TypeVar's constraints must be a subset of this TypeVar's constraints"
                     .to_owned(),
             ),
-            note: Some(
+            Some(
                 "When T2 has default=T1 and T2 has constraints, \
                  T1's constraints must be a subset of T2's constraints"
                     .to_owned(),
             ),
-            provenance: None,
-        });
+        ));
     }
 
     // Case 3b: Default has bound, this TypeVar has constraints
@@ -212,28 +206,26 @@ fn check_default_bound_vs_constraints(
 
     if !is_compatible {
         let tv_constraints = format_constraints(&tv.constraint_type_names);
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "`TypeVar` `{}` has `default={default_name}` but \
                  `{default_name}`'s bound `{default_bound}` is incompatible with \
                  `{}`'s constraints {{{tv_constraints}}}",
                 tv.name, tv.name
             ),
-            span: tv.span,
-            path: path.to_owned(),
-            help: Some(
+            tv.span,
+            path,
+            Some(
                 "The default TypeVar's bound must be compatible with at least one of this TypeVar's constraints"
                     .to_owned(),
             ),
-            note: Some(
+            Some(
                 "When T2 has default=T1 and T2 has constraints, \
                  T1's bound must be compatible with at least one constraint of T2"
                     .to_owned(),
             ),
-            provenance: None,
-        });
+        ));
     }
 }
 
@@ -255,28 +247,26 @@ fn check_default_constraints_vs_bound(
 
     if !all_compatible {
         let default_constraints = format_constraints(&default_tv.constraint_type_names);
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "`TypeVar` `{}` has `default={default_name}` but \
                  `{default_name}`'s constraints {{{default_constraints}}} are not all \
                  subtypes of `{}`'s bound `{tv_bound}`",
                 tv.name, tv.name
             ),
-            span: tv.span,
-            path: path.to_owned(),
-            help: Some(
+            tv.span,
+            path,
+            Some(
                 "All of the default TypeVar's constraints must be subtypes of this TypeVar's bound"
                     .to_owned(),
             ),
-            note: Some(
+            Some(
                 "When T2 has default=T1 and T2 has a bound, \
                  all of T1's constraints must be subtypes of T2's bound"
                     .to_owned(),
             ),
-            provenance: None,
-        });
+        ));
     }
 }
 

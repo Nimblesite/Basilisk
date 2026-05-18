@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{FunctionInfo, Span};
 
-use crate::diagnostic::{Diagnostic, Severity};
+use crate::diagnostic::{Diagnostic, error_diagnostic_owned};
 use crate::rules::shared::{is_type_compatible, split_top_level_commas};
 
 use super::annotation::{parse_generator_annotation, GeneratorAnnotation};
@@ -144,28 +144,26 @@ pub(super) fn check_yield_value(
     };
 
     if is_mismatch {
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "Incompatible yield type in `{}`: expected `{expected}`, got `{expr_text}`",
                 func.name
             ),
-            span: Span {
+            Span {
                 start: yield_expr.offset,
                 end: yield_expr.offset + 5,
             },
-            path: path.to_owned(),
-            help: Some(format!(
+            path,
+            Some(format!(
                 "The generator `{}` is annotated to yield `{expected}`",
                 func.name
             )),
-            note: Some(
+            Some(
                 "The yield expression must produce a value compatible with the declared yield type"
                     .to_owned(),
             ),
-            provenance: None,
-        });
+        ));
     }
 }
 
@@ -190,25 +188,23 @@ pub(super) fn check_yield_from(
             if let Some(callee_gen) = parse_generator_annotation(callee_ann) {
                 // Check yield type compatibility
                 if !is_type_compatible(&callee_gen.yield_type, &gen_ann.yield_type) {
-                    diagnostics.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
+                    diagnostics.push(error_diagnostic_owned(
+                        CODE.clone(),
+                        format!(
                             "Incompatible `yield from` in `{}`: `{callee_name}` yields `{}` but `{}` expected",
                             func.name, callee_gen.yield_type, gen_ann.yield_type
                         ),
-                        span: yield_from_span,
-                        path: path.to_owned(),
-                        help: Some(format!(
+                        yield_from_span,
+                        path,
+                        Some(format!(
                             "The generator `{}` expects yield type `{}`",
                             func.name, gen_ann.yield_type
                         )),
-                        note: Some(
+                        Some(
                             "The delegated generator must yield values compatible with the outer generator's yield type"
                                 .to_owned(),
                         ),
-                        provenance: None,
-                    });
+                    ));
                 }
 
                 // Check send type compatibility
@@ -216,27 +212,25 @@ pub(super) fn check_yield_from(
                     (&gen_ann.send_type, &callee_gen.send_type)
                 {
                     if !is_send_type_compatible(outer_send, inner_send) {
-                        diagnostics.push(Diagnostic {
-                            code: CODE.clone(),
-                            severity: Severity::Error,
-                            message: format!(
+                        diagnostics.push(error_diagnostic_owned(
+                            CODE.clone(),
+                            format!(
                                 "Incompatible send type in `yield from` in `{}`: \
                                  `{callee_name}` expects send type `{inner_send}` but outer generator sends `{outer_send}`",
                                 func.name
                             ),
-                            span: yield_from_span,
-                            path: path.to_owned(),
-                            help: Some(format!(
+                            yield_from_span,
+                            path,
+                            Some(format!(
                                 "The generator `{}` sends `{outer_send}` which is not compatible with `{callee_name}`'s send type `{inner_send}`",
                                 func.name
                             )),
-                            note: Some(
+                            Some(
                                 "When using `yield from`, the outer generator's send type must be \
                                  compatible with the inner generator's send type"
                                     .to_owned(),
                             ),
-                            provenance: None,
-                        });
+                        ));
                     }
                 }
                 return;
@@ -247,25 +241,23 @@ pub(super) fn check_yield_from(
     // Case 2: yield from [literal_list]
     if let Some(elem_type) = infer_list_element_type(expr_text) {
         if !is_type_compatible(elem_type, &gen_ann.yield_type) {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Incompatible `yield from` in `{}`: list elements are `{elem_type}` but `{}` expected",
                     func.name, gen_ann.yield_type
                 ),
-                span: yield_from_span,
-                path: path.to_owned(),
-                help: Some(format!(
+                yield_from_span,
+                path,
+                Some(format!(
                     "The generator `{}` expects yield type `{}`",
                     func.name, gen_ann.yield_type
                 )),
-                note: Some(
+                Some(
                     "The iterable in `yield from` must produce values compatible with the generator's yield type"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }
@@ -322,24 +314,22 @@ pub(super) fn check_missing_generator_return(
     });
 
     if !has_valid_return && !func.return_stmts.is_empty() {
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "Generator `{}` is annotated to return `{return_type}` but has no valid return path",
                 func.name
             ),
-            span: func.def_span,
-            path: path.to_owned(),
-            help: Some(format!(
+            func.def_span,
+            path,
+            Some(format!(
                 "Add a `return {return_type}(...)` statement or change the return type to `None`"
             )),
-            note: Some(
+            Some(
                 "A Generator[Y, S, R] function must have a `return` statement \
                  producing a value of type R"
                     .to_owned(),
             ),
-            provenance: None,
-        });
+        ));
     }
 }

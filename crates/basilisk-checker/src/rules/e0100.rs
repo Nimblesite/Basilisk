@@ -17,7 +17,7 @@ use ruff_python_ast::{Expr, Stmt};
 use ruff_text_size::Ranged as _;
 
 use super::Rule;
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0100",
@@ -166,20 +166,18 @@ fn check_body_for_aug_assign(
 }
 
 fn make_diagnostic(var_name: &str, span: Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!("Augmented assignment to `{var_name}` widens its `Literal` type"),
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!("Augmented assignment to `{var_name}` widens its `Literal` type"),
         span,
-        path: path.to_owned(),
-        help: Some(format!(
+        path,
+        Some(format!(
             "Use a separate variable instead: `result = {var_name} + ...`"
         )),
-        note: Some(
+        Some(
             "`a += x` is equivalent to `a = a + x`, which changes the type of `a` \
              from `Literal[...]` to the wider base type"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }

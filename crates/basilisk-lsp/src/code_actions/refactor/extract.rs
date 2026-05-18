@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use tower_lsp::lsp_types::{
-    CodeAction, CodeActionKind, Position, Range, TextEdit, Url, WorkspaceEdit,
+    CodeAction, CodeActionKind, Position, Range, TextEdit, Url,
 };
 
 use super::helpers::{last_import_line, leading_indent_of_line, selected_text};
@@ -84,17 +84,12 @@ fn build_single_action(
     let mut changes = HashMap::new();
     let _ = changes.insert(uri.clone(), edits);
 
-    CodeAction {
-        title: "Extract variable (basilisk)".to_owned(),
-        kind: Some(CodeActionKind::new("refactor.extract.variable")),
-        diagnostics: None,
-        edit: Some(WorkspaceEdit {
-            changes: Some(changes),
-            ..Default::default()
-        }),
-        is_preferred: Some(false),
-        ..Default::default()
-    }
+    super::super::code_action_with_changes(
+        "Extract variable (basilisk)".to_owned(),
+        CodeActionKind::new("refactor.extract.variable"),
+        changes,
+        false,
+    )
 }
 
 /// Build the "replace all" extract variable action when multiple occurrences
@@ -151,17 +146,12 @@ fn build_replace_all_action(
     let mut changes = HashMap::new();
     let _ = changes.insert(uri.clone(), edits);
 
-    Some(CodeAction {
-        title: "Extract variable \u{2014} replace all (basilisk)".to_owned(),
-        kind: Some(CodeActionKind::new("refactor.extract.variable")),
-        diagnostics: None,
-        edit: Some(WorkspaceEdit {
-            changes: Some(changes),
-            ..Default::default()
-        }),
-        is_preferred: Some(false),
-        ..Default::default()
-    })
+    Some(super::super::code_action_with_changes(
+        "Extract variable \u{2014} replace all (basilisk)".to_owned(),
+        CodeActionKind::new("refactor.extract.variable"),
+        changes,
+        false,
+    ))
 }
 
 /// Find all byte-offset ranges where `needle` appears in `source`.
@@ -243,15 +233,10 @@ pub(in crate::code_actions) fn extract_constant(
     let mut changes = HashMap::new();
     let _ = changes.insert(uri.clone(), edits);
 
-    Some(CodeAction {
-        title: "Extract constant (basilisk)".to_owned(),
-        kind: Some(CodeActionKind::new("refactor.extract.constant")),
-        diagnostics: None,
-        edit: Some(WorkspaceEdit {
-            changes: Some(changes),
-            ..Default::default()
-        }),
-        is_preferred: Some(false),
-        ..Default::default()
-    })
+    Some(super::super::code_action_with_changes(
+        "Extract constant (basilisk)".to_owned(),
+        CodeActionKind::new("refactor.extract.constant"),
+        changes,
+        false,
+    ))
 }

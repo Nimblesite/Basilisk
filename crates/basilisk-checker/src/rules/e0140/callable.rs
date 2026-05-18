@@ -2,7 +2,7 @@
 
 use basilisk_resolver::Span;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 use crate::rules::shared::split_top_level_commas;
 
 use super::context::FuncSig;
@@ -128,55 +128,49 @@ fn check_concatenate_prefix(
     let req = ci.concatenate_prefix.len();
     let fpos = func.positional_params.len();
     if fpos == 0 && !func.kw_only_params.is_empty() {
-        diag.push(Diagnostic {
-            code: code.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diag.push(error_diagnostic_owned(
+            code.clone(),
+            format!(
                 "Function `{}` incompatible with `{ann}`: Concatenate requires positional params",
                 func.name
             ),
             span,
-            path: path.to_owned(),
-            help: None,
-            note: None,
-            provenance: None,
-        });
+            path,
+            None,
+            None,
+        ));
         return;
     }
     if fpos < req {
-        diag.push(Diagnostic {
-            code: code.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diag.push(error_diagnostic_owned(
+            code.clone(),
+            format!(
                 "Function `{}` incompatible with `{ann}`: needs at least {req} positional param(s) but has {fpos}",
                 func.name
             ),
             span,
-            path: path.to_owned(),
-            help: None,
-            note: None,
-        provenance: None,
-        });
+            path,
+            None,
+            None,
+        ));
         return;
     }
     for (idx, exp) in ci.concatenate_prefix.iter().enumerate() {
         if let Some(param) = func.positional_params.get(idx) {
             let act = &param.type_annotation;
             if !act.is_empty() && !types_compat(exp, act) {
-                diag.push(Diagnostic {
-                    code: code.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diag.push(error_diagnostic_owned(
+                    code.clone(),
+                    format!(
                         "Function `{}` incompatible with `{ann}`: param {} type `{act}` vs required `{exp}`",
                         func.name,
                         idx + 1
                     ),
                     span,
-                    path: path.to_owned(),
-                    help: None,
-                    note: None,
-            provenance: None,
-                });
+                    path,
+                    None,
+                    None,
+                ));
             }
         }
     }
@@ -200,33 +194,29 @@ fn check_param_count_compat(
         .count();
     let max = func.positional_params.len();
     if exp < min {
-        diag.push(Diagnostic {
-            code: code.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diag.push(error_diagnostic_owned(
+            code.clone(),
+            format!(
                 "Function `{}` incompatible with `{ann}`: callable provides {exp} args but function requires {min}",
                 func.name
             ),
             span,
-            path: path.to_owned(),
-            help: None,
-            note: None,
-        provenance: None,
-        });
+            path,
+            None,
+            None,
+        ));
     } else if exp > max && !func.has_varargs {
-        diag.push(Diagnostic {
-            code: code.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diag.push(error_diagnostic_owned(
+            code.clone(),
+            format!(
                 "Function `{}` incompatible with `{ann}`: callable provides {exp} args but function accepts {max}",
                 func.name
             ),
             span,
-            path: path.to_owned(),
-            help: None,
-            note: None,
-        provenance: None,
-        });
+            path,
+            None,
+            None,
+        ));
     }
 }
 

@@ -20,7 +20,7 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 
 use super::Rule;
 
@@ -153,22 +153,20 @@ impl Rule for CyclicalTypeAliasReference {
             if has_container_wrapper(alias) {
                 continue;
             }
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!("Type alias `{}` creates a cyclical reference", alias.name),
-                span: alias.span,
-                path: module.path.clone(),
-                help: Some(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!("Type alias `{}` creates a cyclical reference", alias.name),
+                alias.span,
+                &module.path,
+                Some(
                     "Remove the self-reference or break the mutual reference cycle".to_owned(),
                 ),
-                note: Some(
+                Some(
                     "A TypeAlias whose RHS forward-references itself (directly or \
                      through another alias) produces an infinite type that cannot be resolved"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }

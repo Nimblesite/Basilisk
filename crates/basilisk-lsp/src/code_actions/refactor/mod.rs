@@ -45,21 +45,25 @@ mod tests {
         Url::parse("file:///test.py").unwrap()
     }
 
+    fn range(start_line: u32, start_char: u32, end_line: u32, end_char: u32) -> Range {
+        Range {
+            start: Position {
+                line: start_line,
+                character: start_char,
+            },
+            end: Position {
+                line: end_line,
+                character: end_char,
+            },
+        }
+    }
+
     // ── Extract Variable ────────────────────────────────────────────────────
 
     #[test]
     fn test_extract_variable_produces_correct_edits() {
         let source = "result = some_func(42) + other_func(7)\n";
-        let range = Range {
-            start: Position {
-                line: 0,
-                character: 9,
-            },
-            end: Position {
-                line: 0,
-                character: 22,
-            },
-        };
+        let range = range(0, 9, 0, 22);
         let uri = test_uri();
         let actions = extract_variable(&uri, source, &range);
         assert!(!actions.is_empty(), "should produce at least one action");
@@ -90,32 +94,14 @@ mod tests {
     #[test]
     fn test_extract_variable_empty_selection_returns_empty() {
         let source = "x = 1\n";
-        let range = Range {
-            start: Position {
-                line: 0,
-                character: 2,
-            },
-            end: Position {
-                line: 0,
-                character: 2,
-            },
-        };
+        let range = range(0, 2, 0, 2);
         assert!(extract_variable(&test_uri(), source, &range).is_empty());
     }
 
     #[test]
     fn test_extract_variable_multiline_returns_empty() {
         let source = "x = (\n    1 + 2\n)\n";
-        let range = Range {
-            start: Position {
-                line: 0,
-                character: 4,
-            },
-            end: Position {
-                line: 2,
-                character: 1,
-            },
-        };
+        let range = range(0, 4, 2, 1);
         assert!(extract_variable(&test_uri(), source, &range).is_empty());
     }
 
@@ -123,16 +109,7 @@ mod tests {
     fn test_extract_variable_replace_all_with_multiple_occurrences() {
         let source = "a = foo(1) + foo(1)\nb = foo(1)\n";
         // Select the first "foo(1)" at line 0, chars 4..10.
-        let range = Range {
-            start: Position {
-                line: 0,
-                character: 4,
-            },
-            end: Position {
-                line: 0,
-                character: 10,
-            },
-        };
+        let range = range(0, 4, 0, 10);
         let uri = test_uri();
         let actions = extract_variable(&uri, source, &range);
 
@@ -159,16 +136,7 @@ mod tests {
     #[test]
     fn test_extract_variable_replace_all_not_offered_for_single_occurrence() {
         let source = "a = unique_expr()\n";
-        let range = Range {
-            start: Position {
-                line: 0,
-                character: 4,
-            },
-            end: Position {
-                line: 0,
-                character: 17,
-            },
-        };
+        let range = range(0, 4, 0, 17);
         let actions = extract_variable(&test_uri(), source, &range);
 
         assert_eq!(actions.len(), 1, "should only have single action");
@@ -180,16 +148,7 @@ mod tests {
     #[test]
     fn test_extract_constant_places_at_top_of_file() {
         let source = "import os\n\ndef f():\n    return 42\n";
-        let range = Range {
-            start: Position {
-                line: 3,
-                character: 11,
-            },
-            end: Position {
-                line: 3,
-                character: 13,
-            },
-        };
+        let range = range(3, 11, 3, 13);
         let uri = test_uri();
         let action = extract_constant(&uri, source, &range).expect("should produce action");
 
@@ -214,16 +173,7 @@ mod tests {
     #[test]
     fn test_convert_union_to_pipe() {
         let source = "x: Union[int, str] = 1\n";
-        let range = Range {
-            start: Position {
-                line: 0,
-                character: 3,
-            },
-            end: Position {
-                line: 0,
-                character: 3,
-            },
-        };
+        let range = range(0, 3, 0, 3);
         let uri = test_uri();
         let actions = convert_union_syntax(&uri, source, &range);
 
@@ -241,16 +191,7 @@ mod tests {
     #[test]
     fn test_convert_pipe_to_union() {
         let source = "x: int | str = 1\n";
-        let range = Range {
-            start: Position {
-                line: 0,
-                character: 3,
-            },
-            end: Position {
-                line: 0,
-                character: 3,
-            },
-        };
+        let range = range(0, 3, 0, 3);
         let uri = test_uri();
         let actions = convert_union_syntax(&uri, source, &range);
 
@@ -270,16 +211,7 @@ mod tests {
     #[test]
     fn test_convert_optional_to_pipe_none() {
         let source = "x: Optional[int] = None\n";
-        let range = Range {
-            start: Position {
-                line: 0,
-                character: 3,
-            },
-            end: Position {
-                line: 0,
-                character: 3,
-            },
-        };
+        let range = range(0, 3, 0, 3);
         let uri = test_uri();
         let actions = convert_optional_syntax(&uri, source, &range);
         assert_eq!(actions.len(), 1);
@@ -299,16 +231,7 @@ mod tests {
     fn test_extract_function_simple() {
         let source = "def main() -> None:\n    x: int = 1\n    y: int = x + 1\n    print(y)\n";
         // Select lines 1-2 (the two assignments).
-        let range = Range {
-            start: Position {
-                line: 1,
-                character: 0,
-            },
-            end: Position {
-                line: 3,
-                character: 0,
-            },
-        };
+        let range = range(1, 0, 3, 0);
         let uri = test_uri();
         let action = extract_function(&uri, source, &range).expect("should produce action");
 
@@ -327,16 +250,7 @@ mod tests {
     #[test]
     fn test_extract_function_empty_selection_returns_none() {
         let source = "x = 1\n";
-        let range = Range {
-            start: Position {
-                line: 0,
-                character: 0,
-            },
-            end: Position {
-                line: 0,
-                character: 0,
-            },
-        };
+        let range = range(0, 0, 0, 0);
         assert!(extract_function(&test_uri(), source, &range).is_none());
     }
 
@@ -345,16 +259,7 @@ mod tests {
     #[test]
     fn test_convert_fstring_to_format() {
         let source = "x = f\"hello {name}\"\n";
-        let range = Range {
-            start: Position {
-                line: 0,
-                character: 4,
-            },
-            end: Position {
-                line: 0,
-                character: 4,
-            },
-        };
+        let range = range(0, 4, 0, 4);
         let uri = test_uri();
         let actions = convert_fstring(&uri, source, &range);
 
@@ -365,16 +270,7 @@ mod tests {
     #[test]
     fn test_convert_format_to_fstring() {
         let source = "x = \"hello {}\".format(name)\n";
-        let range = Range {
-            start: Position {
-                line: 0,
-                character: 4,
-            },
-            end: Position {
-                line: 0,
-                character: 4,
-            },
-        };
+        let range = range(0, 4, 0, 4);
         let uri = test_uri();
         let actions = convert_fstring(&uri, source, &range);
 
@@ -387,16 +283,7 @@ mod tests {
     #[test]
     fn test_convert_dict_to_literal() {
         let source = "x = dict(a=1, b=2)\n";
-        let range = Range {
-            start: Position {
-                line: 0,
-                character: 4,
-            },
-            end: Position {
-                line: 0,
-                character: 4,
-            },
-        };
+        let range = range(0, 4, 0, 4);
         let uri = test_uri();
         let actions = convert_literals(&uri, source, &range);
 
@@ -407,16 +294,7 @@ mod tests {
     #[test]
     fn test_convert_list_to_literal() {
         let source = "x = list()\n";
-        let range = Range {
-            start: Position {
-                line: 0,
-                character: 4,
-            },
-            end: Position {
-                line: 0,
-                character: 4,
-            },
-        };
+        let range = range(0, 4, 0, 4);
         let uri = test_uri();
         let actions = convert_literals(&uri, source, &range);
 
@@ -429,16 +307,7 @@ mod tests {
     #[test]
     fn test_convert_ternary_to_if_else() {
         let source = "    x = val_a if condition else val_b\n";
-        let range = Range {
-            start: Position {
-                line: 0,
-                character: 4,
-            },
-            end: Position {
-                line: 0,
-                character: 4,
-            },
-        };
+        let range = range(0, 4, 0, 4);
         let uri = test_uri();
         let actions = convert_ternary(&uri, source, &range);
 
@@ -451,16 +320,7 @@ mod tests {
     #[test]
     fn test_inline_variable_simple() {
         let source = "temp = calculate()\nresult = temp + 1\n";
-        let range = Range {
-            start: Position {
-                line: 0,
-                character: 0,
-            },
-            end: Position {
-                line: 0,
-                character: 0,
-            },
-        };
+        let range = range(0, 0, 0, 0);
         let uri = test_uri();
         let action = inline_variable(&uri, source, &range);
         assert!(
@@ -475,16 +335,7 @@ mod tests {
     #[test]
     fn test_inline_variable_no_usages_returns_none() {
         let source = "temp = calculate()\n";
-        let range = Range {
-            start: Position {
-                line: 0,
-                character: 0,
-            },
-            end: Position {
-                line: 0,
-                character: 0,
-            },
-        };
+        let range = range(0, 0, 0, 0);
         assert!(inline_variable(&test_uri(), source, &range).is_none());
     }
 

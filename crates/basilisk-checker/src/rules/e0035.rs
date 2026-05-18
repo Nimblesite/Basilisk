@@ -87,11 +87,7 @@ impl Rule for RequiredNotRequiredContext {
         let path = &module.path;
 
         // Build class map for transitive TypedDict detection.
-        let class_map: HashMap<&str, &ClassInfo> = module
-            .classes
-            .iter()
-            .map(|cls| (cls.name.as_str(), cls))
-            .collect();
+        let class_map = super::shared::class_name_map(&module.classes);
 
         // Check class attributes.
         for cls in &module.classes {

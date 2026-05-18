@@ -21,7 +21,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 
 use super::Rule;
 
@@ -36,29 +36,27 @@ pub(crate) struct FloatParamIntAttrAccess;
 impl Rule for FloatParamIntAttrAccess {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         for access in &module.float_param_int_attr_accesses {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Attribute `{}` is not defined on `float`; \
                      parameter `{}` is typed as `float`, not `int`",
                     access.attr_name, access.param_name
                 ),
-                span: access.span,
-                path: module.path.clone(),
-                help: Some(format!(
+                access.span,
+                &module.path,
+                Some(format!(
                     "`{}.{}` is only valid when the value is known to be `int`. \
                      Use an `isinstance(f, int)` guard or change the annotation to `int`.",
                     access.param_name, access.attr_name
                 )),
-                note: Some(
+                Some(
                     "PEP 484 / typing spec: `int` is NOT a subtype of `float` for \
                      static type-checking. Attributes like `numerator` and `denominator` \
                      are `int`-only and are not available on `float`."
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }

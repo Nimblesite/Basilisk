@@ -24,7 +24,7 @@
 
 use basilisk_resolver::{ImportKind, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity, error_diagnostic};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic, error_diagnostic_owned};
 use crate::rules::shared::split_top_level_commas;
 use crate::span_util::slice_span;
 
@@ -631,35 +631,31 @@ fn check_single_annotation(
     if let Some(arg_count) = count_type_args(ann_text) {
         if info.typevar_count == 0 {
             // Alias is not generic — cannot be parameterized
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!("Type alias `{base}` is not generic and cannot be parameterized"),
-                span: ann_span,
-                path: path.to_owned(),
-                help: Some(format!("Remove the type arguments from `{ann_text}`")),
-                note: Some(format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!("Type alias `{base}` is not generic and cannot be parameterized"),
+                ann_span,
+                path,
+                Some(format!("Remove the type arguments from `{ann_text}`")),
+                Some(format!(
                     "`{base}` does not use any TypeVar parameters in its definition"
                 )),
-                provenance: None,
-            });
+            ));
         } else if arg_count > info.typevar_count {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Too many type arguments for `{base}`: expected {}, got {arg_count}",
                     info.typevar_count
                 ),
-                span: ann_span,
-                path: path.to_owned(),
-                help: Some(format!(
+                ann_span,
+                path,
+                Some(format!(
                     "`{base}` accepts {} type parameter(s)",
                     info.typevar_count
                 )),
-                note: None,
-                provenance: None,
-            });
+                None,
+            ));
         } else if info.has_paramspec && arg_count == info.typevar_count {
             // Check if a simple type is used where a ParamSpec expects a
             // parameter specification (list of types or `...`).
@@ -676,22 +672,20 @@ fn check_single_annotation(
                     !trimmed.contains('[') && trimmed != "..."
                 });
                 if all_simple && args.len() > 1 {
-                    diagnostics.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
+                    diagnostics.push(error_diagnostic_owned(
+                        CODE.clone(),
+                        format!(
                             "Invalid type argument for `ParamSpec` parameter in `{base}`"
                         ),
-                        span: ann_span,
-                        path: path.to_owned(),
-                        help: Some(
+                        ann_span,
+                        path,
+                        Some(
                             "ParamSpec arguments must be a list of parameter types \
                              (e.g. `[int, str]`) or `...`"
                                 .to_owned(),
                         ),
-                        note: None,
-                        provenance: None,
-                    });
+                        None,
+                    ));
                 }
             }
         }
@@ -706,22 +700,20 @@ fn check_single_annotation(
                     if let Some((tv_name, Some(bound))) = info.typevar_bounds.get(idx) {
                         let arg_trimmed = arg.trim();
                         if !is_assignable_to_bound(arg_trimmed, bound) {
-                            diagnostics.push(Diagnostic {
-                                code: CODE.clone(),
-                                severity: Severity::Error,
-                                message: format!(
+                            diagnostics.push(error_diagnostic_owned(
+                                CODE.clone(),
+                                format!(
                                     "Type argument `{arg_trimmed}` does not satisfy \
                                      bound `{bound}` of TypeVar `{tv_name}` in `{base}`"
                                 ),
-                                span: ann_span,
-                                path: path.to_owned(),
-                                help: Some(format!(
+                                ann_span,
+                                path,
+                                Some(format!(
                                     "TypeVar `{tv_name}` requires a type that is a \
                                      subtype of `{bound}`"
                                 )),
-                                note: None,
-                                provenance: None,
-                            });
+                                None,
+                            ));
                         }
                     }
                 }
@@ -763,19 +755,17 @@ fn check_union_alias_instantiation(
             continue;
         };
         if info.is_union {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!("Cannot instantiate union type alias `{}`", call.callee),
-                span: call.span,
-                path: module.path.clone(),
-                help: Some(format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!("Cannot instantiate union type alias `{}`", call.callee),
+                call.span,
+                &module.path,
+                Some(format!(
                     "`{}` is a union of types; instantiate one of the union members directly",
                     call.callee
                 )),
-                note: None,
-                provenance: None,
-            });
+                None,
+            ));
         }
     }
 }
@@ -807,25 +797,23 @@ fn check_runtime_name_annotations(
             let ann_text = ann_text.trim();
             // Simple name reference to a runtime variable
             if runtime_var_names.contains(ann_text) {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Variable `{ann_text}` is not a valid type and \
                          cannot be used as an annotation"
                     ),
-                    span: ann_span,
-                    path: path.to_owned(),
-                    help: Some(format!(
+                    ann_span,
+                    path,
+                    Some(format!(
                         "`{ann_text}` is assigned a runtime value, not a type expression"
                     )),
-                    note: Some(
+                    Some(
                         "Only type expressions (classes, type aliases, typing constructs) \
                          are valid annotations"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
             }
         }
     }

@@ -29,7 +29,7 @@ use std::collections::HashMap;
 use basilisk_resolver::ResolvedModule;
 
 use super::Rule;
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 use crate::span_util::slice_span;
 
 const CODE: ErrorCode = ErrorCode {
@@ -158,28 +158,26 @@ impl Rule for ProtocolAssignmentConformance {
                     // a Protocol. No structural subtyping — flag it.
                     let inherits_protocol = class_inherits_protocol(ann_name, &class_map);
                     if inherits_protocol {
-                        diagnostics.push(Diagnostic {
-                            code: CODE.clone(),
-                            severity: Severity::Error,
-                            message: format!(
+                        diagnostics.push(error_diagnostic_owned(
+                            CODE.clone(),
+                            format!(
                                 "Cannot assign `{rhs_class_name}()` to type `{ann_name}`: \
                                  `{ann_name}` is not a protocol and does not support structural subtyping"
                             ),
-                            span: var.name_span,
-                            path: path.to_owned(),
-                            help: Some(format!(
+                            var.name_span,
+                            path,
+                            Some(format!(
                                 "`{ann_name}` inherits from a protocol but does not include \
                                  `Protocol` in its bases, so it is a concrete class; \
                                  `{rhs_class_name}` is not a subclass of `{ann_name}`"
                             )),
-                            note: Some(
+                            Some(
                                 "Without `Protocol` in the base class list, a class that \
                                  inherits from a protocol is downgraded to a regular ABC \
                                  that cannot be used with structural subtyping"
                                     .to_owned(),
                             ),
-                            provenance: None,
-                        });
+                        ));
                     }
                 }
             }
@@ -321,26 +319,24 @@ fn check_protocol_conformance(
 
     if !missing.is_empty() {
         let missing_list = missing.join("`, `");
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "Class `{rhs_class_name}` is incompatible with protocol `{protocol_name}`: \
                  missing method{} `{missing_list}`",
                 if missing.len() == 1 { "" } else { "s" }
             ),
-            span: var.name_span,
-            path: path.to_owned(),
-            help: Some(format!(
+            var.name_span,
+            path,
+            Some(format!(
                 "Add the missing method{} to `{rhs_class_name}` or use a compatible class",
                 if missing.len() == 1 { "" } else { "s" }
             )),
-            note: Some(
+            Some(
                 "Protocol classes use structural subtyping: the assigned class must \
                  implement all methods declared by the protocol"
                     .to_owned(),
             ),
-            provenance: None,
-        });
+        ));
     }
 }

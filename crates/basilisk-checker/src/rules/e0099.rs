@@ -16,7 +16,7 @@
 use basilisk_resolver::ResolvedModule;
 
 use super::Rule;
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0099",
@@ -42,23 +42,21 @@ impl Rule for ProtocolInstantiation {
                 )
             };
 
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
                 message,
-                span: violation.span,
-                path: module.path.clone(),
-                help: Some(
+                violation.span,
+                &module.path,
+                Some(
                     "Create a concrete class that implements the Protocol, then instantiate that"
                         .to_owned(),
                 ),
-                note: Some(
+                Some(
                     "PEP 544: Protocol classes are structural type definitions \
                      and cannot be instantiated directly"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }

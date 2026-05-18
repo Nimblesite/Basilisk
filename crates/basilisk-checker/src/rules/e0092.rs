@@ -41,7 +41,7 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 
 use super::Rule;
 
@@ -74,12 +74,7 @@ fn compute_arities<'a>(module: &'a ResolvedModule) -> HashMap<&'a str, TypeArity
         .map(|tv| tv.name.as_str())
         .collect();
 
-    let tvt_names: HashSet<&str> = module
-        .typevar_calls
-        .iter()
-        .filter(|tv| tv.is_typevartuple)
-        .map(|tv| tv.name.as_str())
-        .collect();
+    let tvt_names = super::shared::typevar_tuple_names(&module.typevar_calls);
 
     let mut arities: HashMap<&'a str, TypeArity> = HashMap::new();
 
@@ -184,21 +179,19 @@ impl Rule for TooFewTypeArguments {
             // Check built-in types with fixed arity (e.g. `type[int, str]` is invalid).
             for &(builtin, exact) in BUILTIN_EXACT_ARITY {
                 if site.base_name == builtin && site.arg_count > exact {
-                    diagnostics.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
+                    diagnostics.push(error_diagnostic_owned(
+                        CODE.clone(),
+                        format!(
                             "`{}` accepts exactly {exact} type argument, but {} {} provided",
                             site.base_name,
                             site.arg_count,
                             if site.arg_count == 1 { "was" } else { "were" }
                         ),
-                        span: site.span,
-                        path: module.path.clone(),
-                        help: Some("`type` takes exactly one type argument: `type[T]`".to_string()),
-                        note: None,
-                        provenance: None,
-                    });
+                        site.span,
+                        &module.path,
+                        Some("`type` takes exactly one type argument: `type[T]`".to_string()),
+                        None,
+                    ));
                 }
             }
 
@@ -208,24 +201,22 @@ impl Rule for TooFewTypeArguments {
 
             if let Some(min_args) = arity.min {
                 if site.arg_count < min_args {
-                    diagnostics.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
+                    diagnostics.push(error_diagnostic_owned(
+                        CODE.clone(),
+                        format!(
                             "Too few type arguments for `{}`; expected at least {min_args}, \
                              got {}",
                             site.base_name, site.arg_count
                         ),
-                        span: site.span,
-                        path: module.path.clone(),
-                        help: Some(format!(
+                        site.span,
+                        &module.path,
+                        Some(format!(
                             "Supply at least {min_args} type argument{} for `{}`",
                             if min_args == 1 { "" } else { "s" },
                             site.base_name
                         )),
-                        note: None,
-                        provenance: None,
-                    });
+                        None,
+                    ));
                 }
             }
 
@@ -255,16 +246,14 @@ impl Rule for TooFewTypeArguments {
                             site.base_name
                         )
                     };
-                    diagnostics.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
+                    diagnostics.push(error_diagnostic_owned(
+                        CODE.clone(),
                         message,
-                        span: site.span,
-                        path: module.path.clone(),
-                        help: Some(help),
-                        note: None,
-                        provenance: None,
-                    });
+                        site.span,
+                        &module.path,
+                        Some(help),
+                        None,
+                    ));
                 }
             }
         }

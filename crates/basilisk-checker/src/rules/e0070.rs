@@ -25,7 +25,7 @@
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -311,25 +311,23 @@ fn make_assignment_diagnostic(
     source_type: &str,
     path: &str,
 ) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Cannot assign `{source_type}` to `{var_name}` annotated `{annotation}`: \
              `Never` is only compatible with `Never` and `Any` in invariant contexts"
         ),
         span,
-        path: path.to_owned(),
-        help: Some(
+        path,
+        Some(
             "Change the annotation to `Never` or `Any`, or change the assigned value".to_owned(),
         ),
-        note: Some(
+        Some(
             "PEP 484: `Never` is a bottom type and cannot be assigned to other types \
              except in covariant contexts or when the target is `Any`"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }
 
 fn make_return_diagnostic(
@@ -339,22 +337,20 @@ fn make_return_diagnostic(
     return_expr: &str,
     path: &str,
 ) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Cannot return `{return_expr}` from `{func_name}` annotated \
              `-> {return_annotation}`: `Never` is only compatible with `Never` \
              and `Any` in invariant contexts"
         ),
         span,
-        path: path.to_owned(),
-        help: Some("Change the return type annotation or the returned value".to_owned()),
-        note: Some(
+        path,
+        Some("Change the return type annotation or the returned value".to_owned()),
+        Some(
             "PEP 484: `Never` is a bottom type and cannot substitute for invariant \
              type parameters"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }

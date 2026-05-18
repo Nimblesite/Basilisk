@@ -17,7 +17,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 
 use super::Rule;
 
@@ -32,21 +32,19 @@ pub(crate) struct MultipleUnboundedTupleTypes;
 impl Rule for MultipleUnboundedTupleTypes {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         for &span in &module.multiple_unbounded_tuple_spans {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: "tuple type contains more than one unbounded component".to_owned(),
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                "tuple type contains more than one unbounded component".to_owned(),
                 span,
-                path: module.path.clone(),
-                help: Some(
+                &module.path,
+                Some(
                     "Only one `*tuple[T, ...]` or `*Ts` component is allowed per tuple type"
                         .to_owned(),
                 ),
-                note: Some(
+                Some(
                     "PEP 646: a tuple type may contain at most one unbounded unpack".to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }

@@ -29,7 +29,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 use crate::rules::shared::{infer_expr_literal_type, is_type_compatible};
 use crate::span_util::slice_span;
 
@@ -350,28 +350,26 @@ fn check_new_method_args(
                 start: range.start().to_u32(),
                 end: range.end().to_u32(),
             };
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Argument type `{arg_type}` is incompatible with parameter `{}` \
                      of type `{resolved_type}` in `{class_name}.__new__`",
                     param.name
                 ),
                 span,
-                path: path.to_owned(),
-                help: Some(format!(
+                path,
+                Some(format!(
                     "Pass a value of type `{resolved_type}` for parameter `{}`",
                     param.name
                 )),
-                note: Some(format!(
+                Some(format!(
                     "`{class_name}` is specialized with type arguments `[{}]`, \
                      binding `{}` to `{resolved_type}`",
                     type_args.join(", "),
                     ann_trimmed
                 )),
-                provenance: None,
-            });
+            ));
         }
     }
 }
@@ -459,26 +457,24 @@ fn check_cls_param_mismatch(
             start: range.start().to_u32(),
             end: range.end().to_u32(),
         };
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "`{class_name}[{}]()` is incompatible: `__new__` expects \
                  `cls: {cls_annotation}` but received `type[{class_name}[{}]]`",
                 type_args.join(", "),
                 type_args.join(", ")
             ),
             span,
-            path: path.to_owned(),
-            help: Some(format!(
+            path,
+            Some(format!(
                 "Use `{class_name}[{}]()` to match the expected `cls` parameter type",
                 ann_type_args.join(", ")
             )),
-            note: Some(format!(
+            Some(format!(
                 "The `__new__` method constrains `cls` to `{cls_annotation}`"
             )),
-            provenance: None,
-        });
+        ));
     }
 }
 

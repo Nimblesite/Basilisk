@@ -34,7 +34,7 @@ use basilisk_resolver::{ResolvedModule, Span};
 use ruff_python_ast::{Expr, Stmt};
 use ruff_text_size::Ranged;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity, error_diagnostic_owned};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 use crate::rules::shared::split_top_level_commas;
 
 use super::Rule;
@@ -421,10 +421,9 @@ fn check_too_few_args_for_tvt_alias(
     let provided = args.len();
 
     if plain_count < min_required {
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "`{alias_name}` requires at least {min_required} plain type argument{} \
                  (one per regular `TypeVar`), but {plain_count} {} provided \
                  (out of {provided} total)",
@@ -432,20 +431,19 @@ fn check_too_few_args_for_tvt_alias(
                 if plain_count == 1 { "was" } else { "were" },
             ),
             span,
-            path: path.to_owned(),
-            help: Some(format!(
+            path,
+            Some(format!(
                 "Supply at least {min_required} type argument{} to satisfy the \
                  regular `TypeVar` parameter{} of `{alias_name}`",
                 if min_required == 1 { "" } else { "s" },
                 if min_required == 1 { "" } else { "s" },
             )),
-            note: Some(
+            Some(
                 "PEP 646: when a generic alias contains both a `TypeVarTuple` and \
                  regular `TypeVar`s, every specialisation must provide at least as \
                  many arguments as there are regular `TypeVar`s"
                     .to_owned(),
             ),
-            provenance: None,
-        });
+        ));
     }
 }

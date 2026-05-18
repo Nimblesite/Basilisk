@@ -21,7 +21,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{ClassInfo, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -181,26 +181,24 @@ impl Rule for ProtocolVarianceMismatch {
                     InferredVariance::Invariant => continue,
                 };
 
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "TypeVar `{tv_name}` in protocol `{}` should be {suggested}",
                         class.name,
                     ),
-                    span: class.name_span,
-                    path: path.clone(),
-                    help: Some(format!(
+                    class.name_span,
+                    path,
+                    Some(format!(
                         "Declare `{tv_name}` with `{suggested}=True` to match its usage in \
                          this protocol"
                     )),
-                    note: Some(
+                    Some(
                         "PEP 544: type checkers warn when inferred variance differs from \
                          declared variance"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
             }
         }
     }

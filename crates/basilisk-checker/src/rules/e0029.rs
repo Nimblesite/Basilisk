@@ -5,7 +5,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 
 use super::Rule;
 
@@ -32,24 +32,22 @@ impl Rule for TypedDictMethodNotAllowed {
                     f.class_name.as_deref() == Some(&class.name) && &f.name == method_name
                 });
                 if let Some(f) = func {
-                    diagnostics.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
+                    diagnostics.push(error_diagnostic_owned(
+                        CODE.clone(),
+                        format!(
                             "Method `{}` is not allowed in TypedDict class `{}`",
                             method_name, class.name
                         ),
-                        span: f.name_span,
-                        path: module.path.clone(),
-                        help: Some(
+                        f.name_span,
+                        &module.path,
+                        Some(
                             "TypedDict classes may only declare typed fields, not methods"
                                 .to_owned(),
                         ),
-                        note: Some(
+                        Some(
                             "PEP 589: TypedDict does not support method definitions".to_owned(),
                         ),
-                        provenance: None,
-                    });
+                    ));
                 }
             }
         }

@@ -12,7 +12,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 
 use super::Rule;
 
@@ -27,10 +27,9 @@ pub(crate) struct BoundedTypeVarAttrAccess;
 impl Rule for BoundedTypeVarAttrAccess {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         for violation in &module.bounded_typevar_attr_violations {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Attribute `{}` is not defined on `{}`; \
                      parameter `{}` is typed as `{}` (bound to `{}`)",
                     violation.attr_name,
@@ -39,9 +38,9 @@ impl Rule for BoundedTypeVarAttrAccess {
                     violation.typevar_name,
                     violation.bound_type,
                 ),
-                span: violation.span,
-                path: module.path.clone(),
-                help: Some(format!(
+                violation.span,
+                &module.path,
+                Some(format!(
                     "`{}.{}` is not a method of `{}`. \
                      Only attributes defined on the bound type `{}` are accessible.",
                     violation.param_name,
@@ -49,13 +48,12 @@ impl Rule for BoundedTypeVarAttrAccess {
                     violation.bound_type,
                     violation.bound_type,
                 )),
-                note: Some(
+                Some(
                     "PEP 695: When a type parameter has a bound, only attributes \
                      defined on the bound type are accessible on the type variable."
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }

@@ -33,7 +33,7 @@
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule, ReturnAnnotationKind};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -95,23 +95,21 @@ fn is_noreturn_or_never(ann: &str) -> bool {
 }
 
 fn make_diagnostic(func: &FunctionInfo, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Function `{}` is declared `-> NoReturn` / `-> Never` but may return implicitly",
             func.name
         ),
-        span: func.name_span,
-        path: path.to_owned(),
-        help: Some(
+        func.name_span,
+        path,
+        Some(
             "Ensure all code paths raise an exception or call a NoReturn function".to_owned(),
         ),
-        note: Some(
+        Some(
             "A `NoReturn`/`Never` function must never return normally — add a `raise` \
              or unconditional call to a NoReturn function on every exit path"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }

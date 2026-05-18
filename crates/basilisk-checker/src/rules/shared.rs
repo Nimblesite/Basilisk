@@ -3,7 +3,36 @@
 //! Consolidated from duplicated implementations in individual rule modules
 //! to eliminate code duplication and improve maintainability.
 
+use std::collections::{HashMap, HashSet};
+
+use basilisk_resolver::{ClassInfo, TypeVarCallInfo};
 use ruff_python_ast::{self as ast, Expr};
+
+// ---------------------------------------------------------------------------
+// Class lookup
+// ---------------------------------------------------------------------------
+
+/// Build a `&str -> &ClassInfo` lookup map for every class in the module.
+///
+/// The returned map borrows from the slice; both must outlive the map.
+pub(crate) fn class_name_map(classes: &[ClassInfo]) -> HashMap<&str, &ClassInfo> {
+    classes.iter().map(|c| (c.name.as_str(), c)).collect()
+}
+
+// ---------------------------------------------------------------------------
+// TypeVar helpers
+// ---------------------------------------------------------------------------
+
+/// Collect the names of every `TypeVarTuple` declared in the module.
+///
+/// The returned set borrows from the slice; both must outlive the set.
+pub(crate) fn typevar_tuple_names(typevar_calls: &[TypeVarCallInfo]) -> HashSet<&str> {
+    typevar_calls
+        .iter()
+        .filter(|tv| tv.is_typevartuple)
+        .map(|tv| tv.name.as_str())
+        .collect()
+}
 
 // ---------------------------------------------------------------------------
 // String splitting

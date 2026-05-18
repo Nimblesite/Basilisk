@@ -21,7 +21,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::rules::shared::{extract_literal_inner, split_top_level_commas};
 use crate::span_util::slice_span;
 
@@ -33,22 +33,20 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 fn make_diag(message: String, span: basilisk_resolver::Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
+    error_diagnostic_owned(
+        CODE.clone(),
         message,
         span,
-        path: path.to_owned(),
-        help: Some(
+        path,
+        Some(
             "Literal[] only accepts int, str, bytes, bool, None, enum members, or nested Literal"
                 .to_owned(),
         ),
-        note: Some(
+        Some(
             "PEP 586: expressions, floats, type objects, ellipsis, and variables are forbidden"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }
 
 // ---------------------------------------------------------------------------

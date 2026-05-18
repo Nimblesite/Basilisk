@@ -17,7 +17,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 use crate::rules::shared::split_top_level_commas;
 use crate::span_util::slice_span;
 
@@ -336,10 +336,9 @@ fn emit_diagnostic(
         start: range.start().to_u32(),
         end: range.end().to_u32(),
     };
-    diagnostics.push(Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    diagnostics.push(error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Argument `{param_name}` of `{callee_name}` expects \
              `{param_ann}` but received `{arg_type}` \
              (subclass of `{class_base_generic}[{}]`) -- \
@@ -348,18 +347,17 @@ fn emit_diagnostic(
             class_type_args.join(", ")
         ),
         span,
-        path: path.to_owned(),
-        help: Some(format!(
+        path,
+        Some(format!(
             "`{invariant_container}` is invariant: \
              `{class_arg}` is not a subtype of `{param_arg}`"
         )),
-        note: Some(
+        Some(
             "Mutable generic containers like `list`, `dict`, `set` \
              are invariant in their type parameters."
                 .to_owned(),
         ),
-        provenance: None,
-    });
+    ));
 }
 
 /// Parse a generic annotation like `dict[str, list[object]]`.

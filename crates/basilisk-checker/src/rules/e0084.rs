@@ -15,7 +15,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 
 use super::Rule;
 
@@ -53,21 +53,19 @@ impl Rule for TypeVarTupleInvalidParams {
             };
 
             if let Some(msg) = error_msg {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!("Invalid `TypeVarTuple` parameters: {msg}"),
-                    span: call.span,
-                    path: module.path.clone(),
-                    help: Some(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!("Invalid `TypeVarTuple` parameters: {msg}"),
+                    call.span,
+                    &module.path,
+                    Some(
                         "Use `TypeVarTuple(\"Ts\")` without additional parameters".to_owned(),
                     ),
-                    note: Some(
+                    Some(
                         "`TypeVarTuple` does not support variance, bounds, or constraints"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
             }
         }
     }

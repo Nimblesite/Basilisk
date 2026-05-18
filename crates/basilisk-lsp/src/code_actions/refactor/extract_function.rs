@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 
 use tower_lsp::lsp_types::{
-    CodeAction, CodeActionKind, Position, Range, TextEdit, Url, WorkspaceEdit,
+    CodeAction, CodeActionKind, Position, Range, TextEdit, Url,
 };
 
 use super::helpers::{leading_indent_of_line, selected_text};
@@ -135,17 +135,12 @@ pub(in crate::code_actions) fn extract_function(
     let mut changes = HashMap::new();
     let _ = changes.insert(uri.clone(), edits);
 
-    Some(CodeAction {
-        title: "Extract function (basilisk)".to_owned(),
-        kind: Some(CodeActionKind::new("refactor.extract.function")),
-        diagnostics: None,
-        edit: Some(WorkspaceEdit {
-            changes: Some(changes),
-            ..Default::default()
-        }),
-        is_preferred: Some(false),
-        ..Default::default()
-    })
+    Some(super::super::code_action_with_changes(
+        "Extract function (basilisk)".to_owned(),
+        CodeActionKind::new("refactor.extract.function"),
+        changes,
+        false,
+    ))
 }
 
 /// Build the text edits for an extract-function refactoring.

@@ -22,7 +22,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, Severity};
+use crate::diagnostic::{Diagnostic, error_diagnostic_owned};
 use crate::rules::shared::{infer_expr_literal_type, is_type_compatible};
 
 use super::Rule;
@@ -174,30 +174,28 @@ fn check_class_scoped_typevars_in_self(
                     .zip(class_param_names.iter())
                     .any(|(a, b)| a != b)
             {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Class-scoped type variables should not be used in the `self` \
                          annotation of `__init__` in class `{}`",
                         class.name
                     ),
-                    span: init_func.def_span,
-                    path: module.path.clone(),
-                    help: Some(
+                    init_func.def_span,
+                    &module.path,
+                    Some(
                         "Use function-scoped type variables instead of class-scoped ones \
                          in the `self` annotation"
                             .to_owned(),
                     ),
-                    note: Some(format!(
+                    Some(format!(
                         "Class `{}` declares generic params `[{}]` but `self` annotation \
                          uses `[{}]`",
                         class.name,
                         class_param_names.join(", "),
                         ann_args.join(", ")
                     )),
-                    provenance: None,
-                });
+                ));
             }
         }
     }
@@ -517,21 +515,19 @@ fn check_no_init_with_args(
         end: range.end().to_u32(),
     };
 
-    diagnostics.push(Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    diagnostics.push(error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Class `{class_name}` does not define `__init__` or `__new__` and inherits \
              only from `object`; constructor does not accept arguments"
         ),
         span,
-        path: path.to_owned(),
-        help: Some(format!(
+        path,
+        Some(format!(
             "Define an `__init__` method on `{class_name}` or one of its base classes"
         )),
-        note: None,
-        provenance: None,
-    });
+        None,
+    ));
 }
 
 /// Check 7: `NamedTuple` constructor arg count and type validation.
@@ -586,21 +582,20 @@ fn check_nt_arg_count(
 
     if positional_args > total_fields {
         let range = call.range();
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "`{class_name}` accepts at most {total_fields} positional \
                  argument{}, but {positional_args} {} given",
                 if total_fields == 1 { "" } else { "s" },
                 if positional_args == 1 { "was" } else { "were" },
             ),
-            span: Span {
+            Span {
                 start: range.start().to_u32(),
                 end: range.end().to_u32(),
             },
-            path: path.to_owned(),
-            help: Some(format!(
+            path,
+            Some(format!(
                 "`{class_name}` has {total_fields} field{}: {}",
                 if total_fields == 1 { "" } else { "s" },
                 fields
@@ -609,30 +604,28 @@ fn check_nt_arg_count(
                     .collect::<Vec<_>>()
                     .join(", "),
             )),
-            note: None,
-            provenance: None,
-        });
+            None,
+        ));
         return true;
     }
 
     let covered = positional_args + keyword_args;
     if covered < required_fields {
         let range = call.range();
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "`{class_name}` requires at least {required_fields} argument{}, \
                  but {covered} {} given",
                 if required_fields == 1 { "" } else { "s" },
                 if covered == 1 { "was" } else { "were" },
             ),
-            span: Span {
+            Span {
                 start: range.start().to_u32(),
                 end: range.end().to_u32(),
             },
-            path: path.to_owned(),
-            help: Some(format!(
+            path,
+            Some(format!(
                 "Required fields: {}",
                 fields
                     .iter()
@@ -641,9 +634,8 @@ fn check_nt_arg_count(
                     .collect::<Vec<_>>()
                     .join(", "),
             )),
-            note: None,
-            provenance: None,
-        });
+            None,
+        ));
         return true;
     }
 
@@ -666,16 +658,15 @@ fn check_nt_unknown_kwargs(
         if let Some(ref arg_name) = kw.arg {
             if !field_names.contains(arg_name.as_str()) {
                 let range = call.range();
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!("`{class_name}` has no field `{arg_name}`"),
-                    span: Span {
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!("`{class_name}` has no field `{arg_name}`"),
+                    Span {
                         start: range.start().to_u32(),
                         end: range.end().to_u32(),
                     },
-                    path: path.to_owned(),
-                    help: Some(format!(
+                    path,
+                    Some(format!(
                         "Valid fields: {}",
                         fields
                             .iter()
@@ -683,9 +674,8 @@ fn check_nt_unknown_kwargs(
                             .collect::<Vec<_>>()
                             .join(", "),
                     )),
-                    note: None,
-                    provenance: None,
-                });
+                    None,
+                ));
             }
         }
     }
@@ -718,20 +708,18 @@ fn check_nt_arg_types(
             continue;
         };
         if !is_type_compatible(&arg_type_name, ann) {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Argument {idx} to `{class_name}()` has type `{arg_type_name}`, \
                      expected `{ann}` for field `{}`",
                     field.name
                 ),
-                span: crate::span_util::text_range_to_span(arg.range()),
-                path: path.to_owned(),
-                help: None,
-                note: None,
-                provenance: None,
-            });
+                crate::span_util::text_range_to_span(arg.range()),
+                path,
+                None,
+                None,
+            ));
         }
     }
 }
@@ -766,19 +754,17 @@ fn check_nt_kwarg_types(
             continue;
         };
         if !is_type_compatible(&arg_type_name, ann) {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Keyword argument `{arg_name}` to `{class_name}()` has type \
                      `{arg_type_name}`, expected `{ann}`",
                 ),
-                span: crate::span_util::text_range_to_span(kw.range()),
-                path: path.to_owned(),
-                help: None,
-                note: None,
-                provenance: None,
-            });
+                crate::span_util::text_range_to_span(kw.range()),
+                path,
+                None,
+                None,
+            ));
         }
     }
 }
@@ -818,21 +804,19 @@ fn check_dataclass_unknown_kwargs(
             continue; // **kwargs unpacking
         };
         if !known_fields.contains(arg_name.as_str()) {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Unknown field `{arg_name}` in constructor of dataclass `{class_name}`"
                 ),
-                span: crate::span_util::text_range_to_span(kw.range()),
-                path: path.to_owned(),
-                help: Some(format!(
+                crate::span_util::text_range_to_span(kw.range()),
+                path,
+                Some(format!(
                     "`{class_name}` has fields: {}",
                     known_fields.iter().copied().collect::<Vec<_>>().join(", ")
                 )),
-                note: None,
-                provenance: None,
-            });
+                None,
+            ));
         }
     }
 }
@@ -901,20 +885,18 @@ fn check_generic_nt_arg_types(
             continue;
         };
         if !is_type_compatible(&arg_type_name, resolved_ann) {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Argument {idx} to `{class_name}[...]()` has type `{arg_type_name}`, \
                      expected `{resolved_ann}` for field `{}`",
                     field.name
                 ),
-                span: crate::span_util::text_range_to_span(arg.range()),
-                path: path.to_owned(),
-                help: None,
-                note: None,
-                provenance: None,
-            });
+                crate::span_util::text_range_to_span(arg.range()),
+                path,
+                None,
+                None,
+            ));
         }
     }
 }

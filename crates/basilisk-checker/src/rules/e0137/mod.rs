@@ -33,7 +33,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -57,11 +57,7 @@ impl Rule for GenericProtocolViolation {
         let path = &module.path;
 
         // Build a lookup map from class name to ClassInfo.
-        let class_map: HashMap<&str, &ClassInfo> = module
-            .classes
-            .iter()
-            .map(|cls| (cls.name.as_str(), cls))
-            .collect();
+        let class_map = super::shared::class_name_map(&module.classes);
 
         // Build a map from class name -> list of methods.
         let class_methods: HashMap<&str, Vec<&FunctionInfo>> = module
@@ -152,27 +148,25 @@ fn check_protocol_generic_combined(
                 .any(|bs| bs.base_name == "Generic");
 
         if has_generic_base {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Protocol class `{}` combines `Protocol[T]` shorthand with explicit `Generic[T]` base",
                     class.name
                 ),
-                span: class.name_span,
-                path: path.to_owned(),
-                help: Some(
+                class.name_span,
+                path,
+                Some(
                     "Remove the explicit `Generic[T]` base; `Protocol[T]` already implies \
                      `Generic[T]`"
                         .to_owned(),
                 ),
-                note: Some(
+                Some(
                     "PEP 544: `Protocol[T, S, ...]` is shorthand for `Protocol, Generic[T, S, ...]`. \
                      Combining the two is redundant and invalid."
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }
@@ -280,25 +274,23 @@ fn check_generic_protocol_assignments(
             &substitution,
             typevar_info,
         ) {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Class `{rhs_class_name}` is incompatible with `{ann_text}`: {mismatch_details}"
                 ),
-                span: var.name_span,
-                path: path.to_owned(),
-                help: Some(format!(
+                var.name_span,
+                path,
+                Some(format!(
                     "The concrete class `{rhs_class_name}` does not satisfy the \
                      type constraints of `{ann_text}`"
                 )),
-                note: Some(
+                Some(
                     "Generic protocols require that the implementing class's method signatures \
                      are compatible with the substituted type arguments"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }
@@ -451,27 +443,25 @@ fn check_self_typed_methods(ctx: &SelfTypedCtx<'_>, diagnostics: &mut Vec<Diagno
             tv,
             ctx.source,
         ) {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Class `{}` is incompatible with protocol `{}`: {detail}",
                     ctx.rhs_class_name, ctx.ann_name
                 ),
-                span: ctx.name_span,
-                path: ctx.path.to_owned(),
-                help: Some(format!(
+                ctx.name_span,
+                ctx.path,
+                Some(format!(
                     "All methods in `{}` referencing TypeVar `{tv}` \
                      must use consistent types matching the protocol `{}`",
                     ctx.rhs_class_name, ctx.ann_name
                 )),
-                note: Some(
+                Some(
                     "PEP 544: when a protocol binds `self: T`, all uses of `T` in \
                      other methods must be satisfied by the implementing class"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }
@@ -483,25 +473,23 @@ fn emit_self_typed_diagnostic(
     ctx: &SelfTypedCtx<'_>,
     method_name: &str,
 ) {
-    diagnostics.push(Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    diagnostics.push(error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Class `{}` is incompatible with protocol `{}`: {detail}",
             ctx.rhs_class_name, ctx.ann_name
         ),
-        span: ctx.name_span,
-        path: ctx.path.to_owned(),
-        help: Some(format!(
+        ctx.name_span,
+        ctx.path,
+        Some(format!(
             "Method `{method_name}` in `{}` must match the self-typed \
              signature declared in protocol `{}`",
             ctx.rhs_class_name, ctx.ann_name
         )),
-        note: Some(
+        Some(
             "PEP 544: methods with `self: T` annotations in protocols require \
              that implementing classes use compatible self-typed or `Self` signatures"
                 .to_owned(),
         ),
-        provenance: None,
-    });
+    ));
 }

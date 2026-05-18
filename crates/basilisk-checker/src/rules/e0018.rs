@@ -11,7 +11,7 @@
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -228,22 +228,20 @@ fn check_function(
 }
 
 fn make_diagnostic(func: &FunctionInfo, name: &str, span: Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Function `{}` returns `{name}` but `{name}` is not defined in this scope",
             func.name
         ),
         span,
-        path: path.to_owned(),
-        help: Some(format!(
+        path,
+        Some(format!(
             "Define `{name}` before returning it, or check for a typo"
         )),
-        note: Some(
+        Some(
             "Basilisk detects names in return expressions that have no visible definition"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }

@@ -7,7 +7,7 @@
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, Severity};
+use crate::diagnostic::{Diagnostic, error_diagnostic_owned};
 
 use super::helpers::{is_ident_char, make_diagnostic, span_text, CODE};
 
@@ -167,25 +167,23 @@ pub(super) fn check_instance_classvar_assignments(
         });
 
         if is_classvar_attr {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Cannot assign to `ClassVar` attribute `{}` through an instance of `{}`",
                     assignment.attr_name, class_name
                 ),
-                span: assignment.target_span,
-                path: path.to_owned(),
-                help: Some(
+                assignment.target_span,
+                path,
+                Some(
                     "Assign to the class directly instead: `ClassName.attr = value`".to_owned(),
                 ),
-                note: Some(
+                Some(
                     "PEP 526: ClassVar attributes can only be assigned on the class itself, \
                      not through instances"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }

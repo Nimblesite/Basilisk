@@ -22,7 +22,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -169,26 +169,24 @@ fn check_subscript_expr(
             start: range.start().to_u32(),
             end: range.end().to_u32(),
         };
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "No matching overload for `{var_name}[...]`: argument type `{slice_type}` \
                  does not match any `@overload` signature of `{class_name}.__getitem__`"
             ),
             span,
-            path: path.to_owned(),
-            help: Some(format!(
+            path,
+            Some(format!(
                 "Expected one of: {}",
                 overload_annotations.join(", ")
             )),
-            note: Some(
+            Some(
                 "Each `@overload` variant specifies which argument types are accepted; \
                  no variant matches the provided argument"
                     .to_owned(),
             ),
-            provenance: None,
-        });
+        ));
     }
 }
 

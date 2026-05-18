@@ -26,7 +26,7 @@ use ruff_text_size::Ranged as _;
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, Severity};
+use crate::diagnostic::{Diagnostic, error_diagnostic_owned};
 
 use super::Rule;
 
@@ -353,21 +353,19 @@ fn check_unbound_typevar_call(
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     if total_args > 0 {
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "Cannot pass arguments to constructor of unbound type variable `{inner_type}`; \
                  its constructor signature is unknown"
             ),
             span,
-            path: path.to_owned(),
-            help: Some(format!(
+            path,
+            Some(format!(
                 "Add a `bound=` constraint to TypeVar `{inner_type}` if arguments are required"
             )),
-            note: None,
-            provenance: None,
-        });
+            None,
+        ));
     }
 }
 
@@ -390,19 +388,17 @@ fn check_constructor_call(
     match constructor_sig {
         ConstructorSig::NoArgs => {
             if total_args > 0 {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "`{class_name}` constructor takes no arguments \
                          but {total_args} argument(s) were provided via `type[{class_name}]`"
                     ),
                     span,
-                    path: path.to_owned(),
-                    help: Some(format!("Call `{class_name}()` with no arguments")),
-                    note: None,
-                    provenance: None,
-                });
+                    path,
+                    Some(format!("Call `{class_name}()` with no arguments")),
+                    None,
+                ));
             }
         }
         ConstructorSig::Required { min, max } => {
@@ -414,37 +410,33 @@ fn check_constructor_call(
                 .collect();
 
             if total_args < *min {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "`{class_name}` constructor requires at least {min} argument(s) \
                          but {total_args} were provided via `type[{class_name}]`"
                     ),
                     span,
-                    path: path.to_owned(),
-                    help: Some(format!(
+                    path,
+                    Some(format!(
                         "Provide at least {min} argument(s) when calling `{class_name}` via a `type[{class_name}]` variable"
                     )),
-                    note: None,
-            provenance: None,
-                });
+                    None,
+                ));
             } else if total_args > *max {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "`{class_name}` constructor accepts at most {max} argument(s) \
                          but {total_args} were provided via `type[{class_name}]`"
                     ),
                     span,
-                    path: path.to_owned(),
-                    help: Some(format!(
+                    path,
+                    Some(format!(
                         "Pass at most {max} argument(s) when calling `{class_name}` via a `type[{class_name}]` variable"
                     )),
-                    note: None,
-            provenance: None,
-                });
+                    None,
+                ));
             } else {
                 check_kwarg_types(
                     call,

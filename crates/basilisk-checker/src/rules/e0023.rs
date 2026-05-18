@@ -7,7 +7,7 @@
 
 use basilisk_resolver::{MatchStmtInfo, ResolvedModule};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -30,18 +30,16 @@ impl Rule for NonExhaustiveMatch {
 }
 
 fn make_diagnostic(stmt: &MatchStmtInfo, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: "Non-exhaustive `match` statement — no wildcard `case _:` branch".to_owned(),
-        span: stmt.span,
-        path: path.to_owned(),
-        help: Some("Add a `case _: ...` branch to handle all remaining cases".to_owned()),
-        note: Some(
+    error_diagnostic_owned(
+        CODE.clone(),
+        "Non-exhaustive `match` statement — no wildcard `case _:` branch".to_owned(),
+        stmt.span,
+        path,
+        Some("Add a `case _: ...` branch to handle all remaining cases".to_owned()),
+        Some(
             "Python does not raise an error for unmatched subjects; \
              a wildcard branch makes exhaustiveness explicit"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }

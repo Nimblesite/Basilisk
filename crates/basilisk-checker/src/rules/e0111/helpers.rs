@@ -9,7 +9,7 @@ use basilisk_resolver::Span;
 use crate::rules::shared::{infer_expr_literal_type, is_type_compatible};
 use crate::span_util::slice_span;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 
 /// Error code for BSK-E0111 diagnostics.
 pub(super) const CODE: ErrorCode = ErrorCode {
@@ -287,24 +287,22 @@ pub(super) fn check_self_type_incompatibility(
                     end: range.end().to_u32(),
                 };
 
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "`{arg_class_name}` instance is not compatible with `Self` type \
                          of `{class_name}` in `__init__`"
                     ),
                     span,
-                    path: path.to_owned(),
-                    help: Some(format!(
+                    path,
+                    Some(format!(
                         "Pass an instance of `{class_name}` (or a subclass) instead of `{arg_class_name}`"
                     )),
-                    note: Some(format!(
+                    Some(format!(
                         "`Self` in `__init__` of `{class_name}` refers to `{class_name}`, \
                          not the base class `{arg_class_name}`"
                     )),
-                    provenance: None,
-                });
+                ));
             }
         }
     }
@@ -396,28 +394,26 @@ pub(super) fn check_init_method_args(
                 start: range.start().to_u32(),
                 end: range.end().to_u32(),
             };
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Argument type `{arg_type}` is incompatible with parameter `{}` \
                      of type `{resolved_type}` in `{class_name}.__init__`",
                     param.name
                 ),
                 span,
-                path: path.to_owned(),
-                help: Some(format!(
+                path,
+                Some(format!(
                     "Pass a value of type `{resolved_type}` for parameter `{}`",
                     param.name
                 )),
-                note: Some(format!(
+                Some(format!(
                     "`{class_name}` is specialized with type arguments `[{}]`, \
                      binding `{}` to `{resolved_type}`",
                     type_args.join(", "),
                     ann_trimmed
                 )),
-                provenance: None,
-            });
+            ));
         }
     }
 }
@@ -488,25 +484,23 @@ pub(super) fn check_self_param_init_mismatch(
             start: range.start().to_u32(),
             end: range.end().to_u32(),
         };
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "`{class_name}[{}]()` is incompatible: `__init__` expects \
                  `self: {self_annotation}` but received `{class_name}[{}]`",
                 type_args.join(", "),
                 type_args.join(", ")
             ),
             span,
-            path: path.to_owned(),
-            help: Some(format!(
+            path,
+            Some(format!(
                 "Use `{class_name}[{}]()` to match the expected `self` parameter type",
                 ann_type_args.join(", ")
             )),
-            note: Some(format!(
+            Some(format!(
                 "The `__init__` method constrains `self` to `{self_annotation}`"
             )),
-            provenance: None,
-        });
+        ));
     }
 }

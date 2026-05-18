@@ -30,7 +30,7 @@ use super::e0120_helpers::{
     infer_yield_type, ASYNC_GENERATOR_TYPES, CODE, SYNC_GENERATOR_TYPES,
 };
 use super::Rule;
-use crate::diagnostic::{Diagnostic, Severity};
+use crate::diagnostic::{Diagnostic, error_diagnostic_owned};
 use crate::inference::infer_rhs;
 use crate::span_util::slice_span;
 use crate::types::InferredType;
@@ -98,16 +98,14 @@ impl Rule for GeneratorReturnTypeViolation {
                 ),
             };
 
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
                 message,
-                span: violation.span,
-                path: module.path.clone(),
+                violation.span,
+                &module.path,
                 help,
                 note,
-                provenance: None,
-            });
+            ));
         }
 
         // Check yield type mismatches for generator functions with valid return types.
@@ -179,23 +177,21 @@ fn check_yield_types(func: &FunctionInfo, module: &ResolvedModule, out: &mut Vec
         }
 
         if !inferred.is_assignable_to(&declared_yield_type) {
-            out.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            out.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Incompatible yield type in `{}`: `{inferred}` is not assignable to \
                      `{declared_yield_type}`",
                     func.name
                 ),
-                span: yield_expr.span,
-                path: module.path.clone(),
-                help: Some(format!(
+                yield_expr.span,
+                &module.path,
+                Some(format!(
                     "Change the yielded value to match `{declared_yield_type}`, or update \
                      the generator annotation"
                 )),
-                note: None,
-                provenance: None,
-            });
+                None,
+            ));
         }
     }
 }
@@ -239,27 +235,25 @@ fn check_return_in_generator(
         && !func.body_ends_with_return
         && !func.body_last_stmt_terminates
     {
-        out.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        out.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "Generator function `{}` is missing a return statement; declared return \
                  type is `{declared_return_type}`",
                 func.name
             ),
-            span: func.def_span,
-            path: module.path.clone(),
-            help: Some(format!(
+            func.def_span,
+            &module.path,
+            Some(format!(
                 "Add a `return` statement that produces a value of type `{declared_return_type}` \
                  on all code paths"
             )),
-            note: Some(
+            Some(
                 "In `Generator[Y, S, R]`, the third parameter `R` is the return type; \
                  the function must return `R` on every code path"
                     .to_owned(),
             ),
-            provenance: None,
-        });
+        ));
     }
 
     for ret_stmt in &func.return_stmts {
@@ -278,26 +272,24 @@ fn check_return_in_generator(
         }
 
         if !inferred.is_assignable_to(&declared_return_type) {
-            out.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            out.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Incompatible return type in generator `{}`: `{inferred}` is not assignable \
                      to `{declared_return_type}`",
                     func.name
                 ),
-                span: ret_stmt.span,
-                path: module.path.clone(),
-                help: Some(format!(
+                ret_stmt.span,
+                &module.path,
+                Some(format!(
                     "Change the return value to match `{declared_return_type}`, or update \
                      the Generator return type parameter"
                 )),
-                note: Some(
+                Some(
                     "In `Generator[Y, S, R]`, the third parameter `R` is the return type"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }

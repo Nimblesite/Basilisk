@@ -24,7 +24,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -40,11 +40,7 @@ pub(crate) struct SuperCallOnAbstractProtocolMethod;
 
 impl Rule for SuperCallOnAbstractProtocolMethod {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let class_map: HashMap<&str, &ClassInfo> = module
-            .classes
-            .iter()
-            .map(|c| (c.name.as_str(), c))
-            .collect();
+        let class_map = super::shared::class_name_map(&module.classes);
 
         let method_map: HashMap<(&str, &str), &FunctionInfo> = module
             .functions
@@ -123,27 +119,25 @@ fn check_class(
                     is_abstract_method(protocol_base, called_method) && base_func.is_stub_body;
 
                 if is_abstract {
-                    out.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
+                    out.push(error_diagnostic_owned(
+                        CODE.clone(),
+                        format!(
                             "Method `{called_method}` in `{}` calls `super().{called_method}()` \
                              but `{}` declares it as abstract with no default implementation",
                             class.name, protocol_base.name
                         ),
-                        span: ret_stmt.span,
-                        path: path.to_owned(),
-                        help: Some(format!(
+                        ret_stmt.span,
+                        path,
+                        Some(format!(
                             "Provide a concrete implementation instead of calling \
                              `super().{called_method}()`"
                         )),
-                        note: Some(
+                        Some(
                             "Abstract protocol methods with stub bodies (`...` or `pass`) \
                              have no default implementation to call via `super()`"
                                 .to_owned(),
                         ),
-                        provenance: None,
-                    });
+                    ));
                 }
             }
         }

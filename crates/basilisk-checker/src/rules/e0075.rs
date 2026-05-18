@@ -31,7 +31,7 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity, error_diagnostic_owned};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 use crate::span_util::slice_span;
 
 use super::shared::extract_callee_name;
@@ -336,25 +336,23 @@ fn check_attr_assignment(
             start: range.start().to_u32(),
             end: range.end().to_u32(),
         };
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "Cannot assign `{value_class}` to attribute `{attr_name}`: \
                  `Self` resolves to `{var_class}` here, not `{value_class}`"
             ),
             span,
-            path: path.to_owned(),
-            help: Some(format!(
+            path,
+            Some(format!(
                 "Assign a `{var_class}` instance instead of `{value_class}`"
             )),
-            note: Some(
+            Some(
                 "`Self` in attribute annotations binds to the concrete subclass, \
                  not the parent class"
                     .to_owned(),
             ),
-            provenance: None,
-        });
+        ));
     }
 }
 

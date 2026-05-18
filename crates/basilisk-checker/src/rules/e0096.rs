@@ -16,7 +16,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -61,28 +61,26 @@ impl Rule for DataclassFieldDefaultFactoryMismatch {
                 };
 
                 if is_factory_incompatible_with_annotation(factory_type, ann_text.trim()) {
-                    diagnostics.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
+                    diagnostics.push(error_diagnostic_owned(
+                        CODE.clone(),
+                        format!(
                             "Field `{}` is annotated as `{}` but \
                              `default_factory={factory_type}` produces `{factory_type}` values",
                             attr.name,
                             ann_text.trim(),
                         ),
-                        span: attr.name_span,
-                        path: path.clone(),
-                        help: Some(format!(
+                        attr.name_span,
+                        path,
+                        Some(format!(
                             "Change the annotation to `{factory_type}` or use a compatible \
                              `default_factory`"
                         )),
-                        note: Some(
+                        Some(
                             "PEP 557: `default_factory` must be a zero-argument callable \
                              compatible with the field's declared type"
                                 .to_owned(),
                         ),
-                        provenance: None,
-                    });
+                    ));
                 }
             }
         }

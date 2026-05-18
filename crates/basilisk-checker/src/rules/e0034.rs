@@ -13,9 +13,9 @@
 
 use std::collections::{HashMap, HashSet};
 
-use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule};
+use basilisk_resolver::{FunctionInfo, ResolvedModule};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 
 use super::Rule;
 
@@ -35,11 +35,7 @@ pub(crate) struct FinalViolation;
 impl Rule for FinalViolation {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         // Build a map of class name → ClassInfo for fast lookup.
-        let class_map: HashMap<&str, &ClassInfo> = module
-            .classes
-            .iter()
-            .map(|cls| (cls.name.as_str(), cls))
-            .collect();
+        let class_map = super::shared::class_name_map(&module.classes);
 
         // Build a map of (class_name, method_name) → FunctionInfo for span lookup.
         let method_map: HashMap<(&str, &str), &FunctionInfo> = module
@@ -57,19 +53,17 @@ impl Rule for FinalViolation {
             for base_name in &child.bases {
                 if let Some(base_cls) = class_map.get(base_name.as_str()) {
                     if base_cls.is_final {
-                        diagnostics.push(Diagnostic {
-                            code: CODE.clone(),
-                            severity: Severity::Error,
-                            message: format!("Cannot inherit from final class `{}`", base_cls.name),
-                            span: child.name_span,
-                            path: module.path.clone(),
-                            help: Some(format!(
+                        diagnostics.push(error_diagnostic_owned(
+                            CODE.clone(),
+                            format!("Cannot inherit from final class `{}`", base_cls.name),
+                            child.name_span,
+                            &module.path,
+                            Some(format!(
                                 "Remove `{}` from the base classes of `{}`",
                                 base_cls.name, child.name
                             )),
-                            note: Some("`@final` (PEP 591) prohibits subclassing".to_owned()),
-                            provenance: None,
-                        });
+                            Some("`@final` (PEP 591) prohibits subclassing".to_owned()),
+                        ));
                     }
                 }
             }
@@ -78,21 +72,19 @@ impl Rule for FinalViolation {
         // Check 2: @final on a module-level (non-method) function.
         for func in &module.functions {
             if func.class_name.is_none() && func.decorators.iter().any(|d| is_final_decorator(d)) {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "`@final` is not allowed on non-method function `{}`",
                         func.name
                     ),
-                    span: func.name_span,
-                    path: module.path.clone(),
-                    help: Some(
+                    func.name_span,
+                    &module.path,
+                    Some(
                         "`@final` may only be applied to methods inside a class body".to_owned(),
                     ),
-                    note: Some("PEP 591: `@final` on a non-method function is an error".to_owned()),
-                    provenance: None,
-                });
+                    Some("PEP 591: `@final` on a non-method function is an error".to_owned()),
+                ));
             }
         }
 
@@ -125,23 +117,21 @@ impl Rule for FinalViolation {
                     let span = method_map
                         .get(&(child.name.as_str(), method_name.as_str()))
                         .map_or(child.name_span, |f| f.name_span);
-                    diagnostics.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
+                    diagnostics.push(error_diagnostic_owned(
+                        CODE.clone(),
+                        format!(
                             "Method `{method_name}` in `{}` overrides a `@final` method",
                             child.name
                         ),
                         span,
-                        path: module.path.clone(),
-                        help: Some(format!(
+                        &module.path,
+                        Some(format!(
                             "Remove or rename `{method_name}` — it overrides a `@final` method in a base class"
                         )),
-                        note: Some(
+                        Some(
                             "`@final` (PEP 591) prohibits overriding this method".to_owned(),
                         ),
-                        provenance: None,
-                    });
+                    ));
                 }
             }
         }

@@ -5,7 +5,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 
 use super::Rule;
 
@@ -24,24 +24,22 @@ impl Rule for DuplicateTypeVarInGeneric {
             let mut seen: Vec<&str> = Vec::new();
             for param in params {
                 if seen.contains(&param.name.as_str()) {
-                    diagnostics.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
+                    diagnostics.push(error_diagnostic_owned(
+                        CODE.clone(),
+                        format!(
                             "TypeVar `{}` appears more than once in `Generic[...]` for `{}`",
                             param.name, class.name
                         ),
-                        span: param.span,
-                        path: module.path.clone(),
-                        help: Some(
+                        param.span,
+                        &module.path,
+                        Some(
                             "Each TypeVar must appear exactly once in the Generic base".to_owned(),
                         ),
-                        note: Some(
+                        Some(
                             "PEP 484: duplicate TypeVar parameters in Generic are invalid"
                                 .to_owned(),
                         ),
-                        provenance: None,
-                    });
+                    ));
                 } else {
                     seen.push(&param.name);
                 }

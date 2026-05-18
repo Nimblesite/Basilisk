@@ -17,7 +17,7 @@
 use basilisk_resolver::ResolvedModule;
 
 use super::Rule;
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0098",
@@ -97,26 +97,24 @@ impl Rule for NonProtocolBaseInProtocol {
                     continue;
                 }
 
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Non-protocol class `{base_name}` cannot be a base of protocol `{}`",
                         class.name
                     ),
-                    span: class.def_span,
-                    path: module.path.clone(),
-                    help: Some(format!(
+                    class.def_span,
+                    &module.path,
+                    Some(format!(
                         "All bases of a Protocol class must also be protocols; \
                          `{base_name}` does not inherit from `Protocol`"
                     )),
-                    note: Some(
+                    Some(
                         "Per PEP 544, a Protocol class may only inherit from other \
                          Protocol classes (aside from `object`)"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
             }
         }
     }

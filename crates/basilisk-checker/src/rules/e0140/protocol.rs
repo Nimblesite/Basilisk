@@ -2,7 +2,7 @@
 
 use basilisk_resolver::Span;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 
 use super::callable::types_compat;
 use super::context::{FuncSig, ProtocolInfo};
@@ -18,19 +18,17 @@ pub(super) fn check_protocol_func_compat(
     span: Span,
 ) {
     if proto.has_extra_attrs {
-        diag.push(Diagnostic {
-            code: code.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diag.push(error_diagnostic_owned(
+            code.clone(),
+            format!(
                 "Function `{}` cannot satisfy protocol `{}`: protocol has extra attributes",
                 func.name, proto.name
             ),
             span,
-            path: path.to_owned(),
-            help: None,
-            note: None,
-            provenance: None,
-        });
+            path,
+            None,
+            None,
+        ));
         return;
     }
     let Some(target) = &proto.call_sig else {
@@ -72,19 +70,17 @@ fn check_overload_compat(
                     && !fp.type_annotation.is_empty()
                     && !types_compat(&op.type_annotation, &fp.type_annotation)
                 {
-                    diag.push(Diagnostic {
-                        code: code.clone(),
-                        severity: Severity::Error,
-                        message: format!(
+                    diag.push(error_diagnostic_owned(
+                        code.clone(),
+                        format!(
                             "Function `{}` incompatible with `{}`: overload param `{}` type `{}` not accepted by `{}`",
                             func.name, proto.name, op.name, op.type_annotation, fp.type_annotation
                         ),
                         span,
-                        path: path.to_owned(),
-                        help: None,
-                        note: None,
-            provenance: None,
-                    });
+                        path,
+                        None,
+                        None,
+                    ));
                     return;
                 }
             }
@@ -105,35 +101,31 @@ fn check_protocol_varargs_kwargs(
     span: Span,
 ) -> bool {
     if target.has_varargs && !func.has_varargs && target.positional_params.is_empty() {
-        diag.push(Diagnostic {
-            code: code.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diag.push(error_diagnostic_owned(
+            code.clone(),
+            format!(
                 "Function `{}` incompatible with `{}`: missing `*args`",
                 func.name, proto.name
             ),
             span,
-            path: path.to_owned(),
-            help: None,
-            note: None,
-            provenance: None,
-        });
+            path,
+            None,
+            None,
+        ));
         return true;
     }
     if target.has_kwargs && !func.has_kwargs {
-        diag.push(Diagnostic {
-            code: code.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diag.push(error_diagnostic_owned(
+            code.clone(),
+            format!(
                 "Function `{}` incompatible with `{}`: missing `**kwargs`",
                 func.name, proto.name
             ),
             span,
-            path: path.to_owned(),
-            help: None,
-            note: None,
-            provenance: None,
-        });
+            path,
+            None,
+            None,
+        ));
         return true;
     }
     false
@@ -172,19 +164,17 @@ fn check_protocol_param_counts(
             src_req.saturating_sub(target.positional_params.len())
         };
     if src_excess_positional > 0 && !target.has_varargs {
-        diag.push(Diagnostic {
-            code: code.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diag.push(error_diagnostic_owned(
+            code.clone(),
+            format!(
                 "Function `{}` incompatible with `{}`: too many required params",
                 func.name, proto.name
             ),
             span,
-            path: path.to_owned(),
-            help: None,
-            note: None,
-            provenance: None,
-        });
+            path,
+            None,
+            None,
+        ));
         return true;
     }
     let tgt_req = target
@@ -193,19 +183,17 @@ fn check_protocol_param_counts(
         .filter(|p| !p.has_default)
         .count();
     if tgt_req > func.positional_params.len() && !func.has_varargs {
-        diag.push(Diagnostic {
-            code: code.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diag.push(error_diagnostic_owned(
+            code.clone(),
+            format!(
                 "Function `{}` incompatible with `{}`: missing required params",
                 func.name, proto.name
             ),
             span,
-            path: path.to_owned(),
-            help: None,
-            note: None,
-            provenance: None,
-        });
+            path,
+            None,
+            None,
+        ));
         return true;
     }
     false
@@ -242,19 +230,17 @@ fn check_positional_defaults(
         if tp.has_default {
             if let Some(sp) = func.positional_params.get(idx) {
                 if !sp.has_default && !func.has_varargs {
-                    diag.push(Diagnostic {
-                        code: code.clone(),
-                        severity: Severity::Error,
-                        message: format!(
+                    diag.push(error_diagnostic_owned(
+                        code.clone(),
+                        format!(
                             "Function `{}` incompatible with `{}`: param `{}` needs default",
                             func.name, proto.name, sp.name
                         ),
                         span,
-                        path: path.to_owned(),
-                        help: None,
-                        note: None,
-                        provenance: None,
-                    });
+                        path,
+                        None,
+                        None,
+                    ));
                 }
             }
         }
@@ -278,38 +264,34 @@ fn check_kw_only_presence_and_defaults(
             .iter()
             .find(|sp| sp.name == tkw.name && !sp.is_positional_only);
         if matching_kw.is_none() && matching_reg.is_none() && !func.has_kwargs {
-            diag.push(Diagnostic {
-                code: code.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diag.push(error_diagnostic_owned(
+                code.clone(),
+                format!(
                     "Function `{}` incompatible with `{}`: missing keyword param `{}`",
                     func.name, proto.name, tkw.name
                 ),
                 span,
-                path: path.to_owned(),
-                help: None,
-                note: None,
-                provenance: None,
-            });
+                path,
+                None,
+                None,
+            ));
             continue;
         }
         if tkw.has_default {
             let source_has_default = matching_kw.is_some_and(|p| p.has_default)
                 || matching_reg.is_some_and(|p| p.has_default);
             if !source_has_default && !func.has_kwargs {
-                diag.push(Diagnostic {
-                    code: code.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diag.push(error_diagnostic_owned(
+                    code.clone(),
+                    format!(
                         "Function `{}` incompatible with `{}`: keyword param `{}` needs default",
                         func.name, proto.name, tkw.name
                     ),
                     span,
-                    path: path.to_owned(),
-                    help: None,
-                    note: None,
-                    provenance: None,
-                });
+                    path,
+                    None,
+                    None,
+                ));
             }
         }
     }
@@ -335,19 +317,17 @@ fn check_source_required_kw(
             .iter()
             .any(|tp| tp.name == skw.name);
         if !in_target_kw && !in_target_pos && !target.has_kwargs {
-            diag.push(Diagnostic {
-                code: code.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diag.push(error_diagnostic_owned(
+                code.clone(),
+                format!(
                     "Function `{}` incompatible with `{}`: requires keyword `{}` not in protocol",
                     func.name, proto.name, skw.name
                 ),
                 span,
-                path: path.to_owned(),
-                help: None,
-                note: None,
-                provenance: None,
-            });
+                path,
+                None,
+                None,
+            ));
         }
     }
 }
@@ -366,19 +346,17 @@ fn check_positional_only_mismatch(
         if !tp.is_positional_only {
             if let Some(sp) = func.positional_params.get(idx) {
                 if sp.is_positional_only {
-                    diag.push(Diagnostic {
-                        code: code.clone(),
-                        severity: Severity::Error,
-                        message: format!(
+                    diag.push(error_diagnostic_owned(
+                        code.clone(),
+                        format!(
                             "Function `{}` incompatible with `{}`: param `{}` is pos-only but must accept keyword",
                             func.name, proto.name, sp.name
                         ),
                         span,
-                        path: path.to_owned(),
-                        help: None,
-                        note: None,
-            provenance: None,
-                    });
+                        path,
+                        None,
+                        None,
+                    ));
                 }
             }
         }
@@ -403,19 +381,17 @@ fn check_protocol_param_types(
                 && !sp.type_annotation.is_empty()
                 && !types_compat(&tp.type_annotation, &sp.type_annotation)
             {
-                diag.push(Diagnostic {
-                    code: code.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diag.push(error_diagnostic_owned(
+                    code.clone(),
+                    format!(
                         "Function `{}` incompatible with `{}`: param `{}` type `{}` vs `{}`",
                         func.name, proto.name, sp.name, sp.type_annotation, tp.type_annotation
                     ),
                     span,
-                    path: path.to_owned(),
-                    help: None,
-                    note: None,
-                    provenance: None,
-                });
+                    path,
+                    None,
+                    None,
+                ));
             }
         }
     }
@@ -435,19 +411,17 @@ fn check_protocol_param_types(
                 && !sp.type_annotation.is_empty()
                 && !types_compat(&tkw.type_annotation, &sp.type_annotation)
             {
-                diag.push(Diagnostic {
-                    code: code.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diag.push(error_diagnostic_owned(
+                    code.clone(),
+                    format!(
                         "Function `{}` incompatible with `{}`: keyword param `{}` type `{}` vs `{}`",
                         func.name, proto.name, sp.name, sp.type_annotation, tkw.type_annotation
                     ),
                     span,
-                    path: path.to_owned(),
-                    help: None,
-                    note: None,
-            provenance: None,
-                });
+                    path,
+                    None,
+                    None,
+                ));
             }
         }
     }
@@ -458,19 +432,17 @@ fn check_protocol_param_types(
         && !func.varargs_type.is_empty()
         && !types_compat(&target.varargs_type, &func.varargs_type)
     {
-        diag.push(Diagnostic {
-            code: code.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diag.push(error_diagnostic_owned(
+            code.clone(),
+            format!(
                 "Function `{}` incompatible with `{}`: *args type `{}` vs `{}`",
                 func.name, proto.name, func.varargs_type, target.varargs_type
             ),
             span,
-            path: path.to_owned(),
-            help: None,
-            note: None,
-            provenance: None,
-        });
+            path,
+            None,
+            None,
+        ));
     }
     // **kwargs type compat
     if target.has_kwargs
@@ -479,18 +451,16 @@ fn check_protocol_param_types(
         && !func.kwargs_type.is_empty()
         && !types_compat(&target.kwargs_type, &func.kwargs_type)
     {
-        diag.push(Diagnostic {
-            code: code.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diag.push(error_diagnostic_owned(
+            code.clone(),
+            format!(
                 "Function `{}` incompatible with `{}`: **kwargs type `{}` vs `{}`",
                 func.name, proto.name, func.kwargs_type, target.kwargs_type
             ),
             span,
-            path: path.to_owned(),
-            help: None,
-            note: None,
-            provenance: None,
-        });
+            path,
+            None,
+            None,
+        ));
     }
 }

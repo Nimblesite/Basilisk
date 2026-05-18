@@ -10,7 +10,7 @@ use ruff_text_size::Ranged as _;
 
 use basilisk_resolver::Span;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 
 pub(super) const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0138",
@@ -390,23 +390,21 @@ pub(super) fn check_call_expr(
         return;
     }
     let span = Span::from(call.range());
-    diag.push(Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    diag.push(error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Positional argument(s) passed to `{callee}` whose constructor is \
              keyword-only (dataclass_transform `kw_only_default=True`)"
         ),
         span,
-        path: path.to_owned(),
-        help: Some(format!(
+        path,
+        Some(format!(
             "All arguments to `{callee}` must be passed as keyword arguments"
         )),
-        note: Some(
+        Some(
             "PEP 681: when `kw_only_default=True` on the transform metaclass, \
              all fields are keyword-only unless explicitly overridden"
                 .to_owned(),
         ),
-        provenance: None,
-    });
+    ));
 }

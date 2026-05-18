@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 
 use crate::rules::shared::{
     is_type_compatible, parse_subscript_annotation, split_top_level_commas,
@@ -140,10 +140,9 @@ pub(super) fn check_generic_instance_method_calls(
                 };
 
                 if !is_type_compatible(actual_type, expected_type) {
-                    diagnostics.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
+                    diagnostics.push(error_diagnostic_owned(
+                        CODE.clone(),
+                        format!(
                             "Argument `{arg_trimmed}` of type `{actual_type}` is not compatible \
                              with parameter `{param_name}: {expected_type}` \
                              (TypeVar `{typevar_name}` is bound to `{expected_type}` \
@@ -157,20 +156,19 @@ pub(super) fn check_generic_instance_method_calls(
                                 .collect::<Vec<_>>()
                                 .join(", ")
                         ),
-                        span: span_for_line(source, line_number),
-                        path: path.to_owned(),
-                        help: Some(format!(
+                        span_for_line(source, line_number),
+                        path,
+                        Some(format!(
                             "Parameter `{param_name}` expects `{expected_type}` \
                              because `{typevar_name}` is bound to `{expected_type}` \
                              for this instance"
                         )),
-                        note: Some(
+                        Some(
                             "PEP 484: type variables in methods of generic classes \
                              are bound to the class's type arguments"
                                 .to_owned(),
                         ),
-                        provenance: None,
-                    });
+                    ));
                 }
             }
         }
@@ -364,28 +362,26 @@ fn check_constructor_args(ctx: &ConstructorCheckCtx<'_>, diagnostics: &mut Vec<D
         };
 
         if !is_type_compatible(actual_type, expected_type) {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Argument `{arg_name}` of type `{actual_type}` is not compatible \
                      with parameter `{param_name}: {expected_type}` in \
                      `{class_name}.__init__` (`TypeVar` default propagation)",
                     class_name = ctx.class_def.name
                 ),
-                span: span_for_line(ctx.source, ctx.line_number),
-                path: ctx.path.to_owned(),
-                help: Some(format!(
+                span_for_line(ctx.source, ctx.line_number),
+                ctx.path,
+                Some(format!(
                     "`TypeVar` `{typevar_name}` resolves to `{expected_type}` \
                      via default propagation"
                 )),
-                note: Some(
+                Some(
                     "PEP 696: `TypeVar` defaults propagate when fewer type \
                      arguments are provided than type parameters"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }

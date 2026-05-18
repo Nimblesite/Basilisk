@@ -13,7 +13,7 @@ use std::collections::HashSet;
 
 use basilisk_resolver::{ResolvedModule, RhsKind, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -24,18 +24,16 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 fn make_diag(name: &str, span: Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!("Invalid type expression in `type {name}` alias"),
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!("Invalid type expression in `type {name}` alias"),
         span,
-        path: path.to_owned(),
-        help: Some("The RHS of a `type` statement must be a valid type expression".to_owned()),
-        note: Some(
+        path,
+        Some("The RHS of a `type` statement must be a valid type expression".to_owned()),
+        Some(
             "PEP 695: `type X = T` requires T to be a type, not a literal or expression".to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }
 
 fn span_text(source: &str, span: Span) -> Option<&str> {

@@ -17,7 +17,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 use crate::rules::shared::split_top_level_commas;
 
 use super::Rule;
@@ -172,25 +172,23 @@ fn check_class(
         let first_args = &first_mapping.0;
         for other in mappings.get(1..).unwrap_or_default() {
             if other.0 != *first_args {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Inconsistent TypeVar ordering for `{}` in base classes of `{}`",
                         ancestor_name, class.name
                     ),
-                    span: class.name_span,
-                    path: path.to_owned(),
-                    help: Some(
+                    class.name_span,
+                    path,
+                    Some(
                         "All paths to a shared generic ancestor must use the same TypeVar ordering"
                             .to_owned(),
                     ),
-                    note: Some(
+                    Some(
                         "PEP 484: type variable ordering must be consistent across base classes"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
                 return; // One diagnostic per class is enough.
             }
         }

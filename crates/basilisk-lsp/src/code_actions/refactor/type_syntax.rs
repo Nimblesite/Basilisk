@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use tower_lsp::lsp_types::{
-    CodeAction, CodeActionKind, Position, Range, TextEdit, Url, WorkspaceEdit,
+    CodeAction, CodeActionKind, Position, Range, TextEdit, Url,
 };
 
 use super::helpers::{
@@ -84,17 +84,12 @@ fn union_to_pipe(uri: &Url, line: &str, line_num: u32) -> Option<CodeAction> {
         }],
     );
 
-    Some(CodeAction {
-        title: "Convert Union[X, Y] to X | Y (basilisk)".to_owned(),
-        kind: Some(CodeActionKind::REFACTOR_REWRITE),
-        diagnostics: None,
-        edit: Some(WorkspaceEdit {
-            changes: Some(changes),
-            ..Default::default()
-        }),
-        is_preferred: Some(false),
-        ..Default::default()
-    })
+    Some(super::super::code_action_with_changes(
+        "Convert Union[X, Y] to X | Y (basilisk)".to_owned(),
+        CodeActionKind::REFACTOR_REWRITE,
+        changes,
+        false,
+    ))
 }
 
 /// Convert `X | Y` in an annotation context to `Union[X, Y]`.
@@ -150,17 +145,12 @@ fn pipe_to_union(uri: &Url, line: &str, line_num: u32) -> Option<CodeAction> {
         }],
     );
 
-    Some(CodeAction {
-        title: "Convert X | Y to Union[X, Y] (basilisk)".to_owned(),
-        kind: Some(CodeActionKind::REFACTOR_REWRITE),
-        diagnostics: None,
-        edit: Some(WorkspaceEdit {
-            changes: Some(changes),
-            ..Default::default()
-        }),
-        is_preferred: Some(false),
-        ..Default::default()
-    })
+    Some(super::super::code_action_with_changes(
+        "Convert X | Y to Union[X, Y] (basilisk)".to_owned(),
+        CodeActionKind::REFACTOR_REWRITE,
+        changes,
+        false,
+    ))
 }
 
 // ── Convert Optional syntax ─────────────────────────────────────────────────
@@ -221,15 +211,10 @@ fn optional_to_pipe_none(uri: &Url, line: &str, line_num: u32) -> Option<CodeAct
         }],
     );
 
-    Some(CodeAction {
-        title: "Convert Optional[X] to X | None (basilisk)".to_owned(),
-        kind: Some(CodeActionKind::REFACTOR_REWRITE),
-        diagnostics: None,
-        edit: Some(WorkspaceEdit {
-            changes: Some(changes),
-            ..Default::default()
-        }),
-        is_preferred: Some(false),
-        ..Default::default()
-    })
+    Some(super::super::code_action_with_changes(
+        "Convert Optional[X] to X | None (basilisk)".to_owned(),
+        CodeActionKind::REFACTOR_REWRITE,
+        changes,
+        false,
+    ))
 }

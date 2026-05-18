@@ -13,7 +13,7 @@ use std::collections::HashSet;
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -23,20 +23,18 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 fn make_diagnostic(message: String, span: basilisk_resolver::Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
+    error_diagnostic_owned(
+        CODE.clone(),
         message,
         span,
-        path: path.to_owned(),
-        help: Some(
+        path,
+        Some(
             "All arguments to `Generic[...]` must be TypeVar, TypeVarTuple, \
              or ParamSpec instances"
                 .to_owned(),
         ),
-        note: Some("PEP 484: `Generic[int]` is invalid; use a TypeVar instead".to_owned()),
-        provenance: None,
-    }
+        Some("PEP 484: `Generic[int]` is invalid; use a TypeVar instead".to_owned()),
+    )
 }
 
 /// Emits BSK-E0043 when a non-TypeVar appears in `Generic[...]` or `Protocol[...]`.

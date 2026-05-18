@@ -25,7 +25,7 @@
 
 use basilisk_resolver::{scope::HistoricalPositionalViolationKind, ResolvedModule};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -42,48 +42,48 @@ impl Rule for HistoricalPositionalViolation {
         let path = &module.path;
         for violation in &module.historical_positional_violations {
             let diagnostic = match violation.kind {
-                HistoricalPositionalViolationKind::KeywordPassedToPositionalOnly => Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
-                        "`{}` is a positional-only parameter and cannot be passed as a keyword argument",
-                        violation.name
-                    ),
-                    span: violation.span,
-                    path: path.clone(),
-                    help: Some(format!(
-                        "Pass `{}` positionally instead of as a keyword argument",
-                        violation.name
-                    )),
-                    note: Some(
-                        "Parameters prefixed with `__` (but not ending with `__`) are positional-only \
-                         by the historical convention (pre-PEP 570)"
-                            .to_owned(),
-                    ),
-                    provenance: None,
-                },
-                HistoricalPositionalViolationKind::PositionalOnlyAfterKeyword => Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
-                        "Positional-only parameter `{}` appears after a positional-or-keyword parameter",
-                        violation.name
-                    ),
-                    span: violation.span,
-                    path: path.clone(),
-                    help: Some(
-                        "Move positional-only (`__`-prefixed) parameters before any \
-                         positional-or-keyword parameters, or use PEP 570 `/` syntax"
-                            .to_owned(),
-                    ),
-                    note: Some(
-                        "Parameters prefixed with `__` (but not ending with `__`) are treated as \
-                         positional-only by the historical convention; they cannot follow \
-                         positional-or-keyword parameters"
-                            .to_owned(),
-                    ),
-                    provenance: None,
-                },
+                HistoricalPositionalViolationKind::KeywordPassedToPositionalOnly => {
+                    error_diagnostic_owned(
+                        CODE.clone(),
+                        format!(
+                            "`{}` is a positional-only parameter and cannot be passed as a keyword argument",
+                            violation.name
+                        ),
+                        violation.span,
+                        path,
+                        Some(format!(
+                            "Pass `{}` positionally instead of as a keyword argument",
+                            violation.name
+                        )),
+                        Some(
+                            "Parameters prefixed with `__` (but not ending with `__`) are positional-only \
+                             by the historical convention (pre-PEP 570)"
+                                .to_owned(),
+                        ),
+                    )
+                }
+                HistoricalPositionalViolationKind::PositionalOnlyAfterKeyword => {
+                    error_diagnostic_owned(
+                        CODE.clone(),
+                        format!(
+                            "Positional-only parameter `{}` appears after a positional-or-keyword parameter",
+                            violation.name
+                        ),
+                        violation.span,
+                        path,
+                        Some(
+                            "Move positional-only (`__`-prefixed) parameters before any \
+                             positional-or-keyword parameters, or use PEP 570 `/` syntax"
+                                .to_owned(),
+                        ),
+                        Some(
+                            "Parameters prefixed with `__` (but not ending with `__`) are treated as \
+                             positional-only by the historical convention; they cannot follow \
+                             positional-or-keyword parameters"
+                                .to_owned(),
+                        ),
+                    )
+                }
             };
             diagnostics.push(diagnostic);
         }

@@ -31,7 +31,7 @@ use ruff_python_ast::{self as ast, Expr, Stmt};
 use ruff_text_size::Ranged;
 
 use super::Rule;
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0119",
@@ -228,47 +228,43 @@ fn check_single_protocol(
 
     // Check 1: Not runtime_checkable.
     if !is_runtime_checkable(proto_name, module) {
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "Protocol `{proto_name}` cannot be used with `{call_name}()` \
                  because it is not decorated with `@runtime_checkable`"
             ),
-            span: call_span,
-            path: module.path.clone(),
-            help: Some(format!(
+            call_span,
+            &module.path,
+            Some(format!(
                 "Add `@runtime_checkable` to the definition of `{proto_name}`"
             )),
-            note: Some(
+            Some(
                 "PEP 544: a Protocol can only be used as the second argument in \
                  isinstance() or issubclass() if it has the @runtime_checkable decorator"
                     .to_owned(),
             ),
-            provenance: None,
-        });
+        ));
         return true;
     }
 
     // Check 2: issubclass with data protocol.
     if call_name == "issubclass" && is_data_protocol(proto_name, module) {
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!("`issubclass()` cannot be used with data protocol `{proto_name}`"),
-            span: call_span,
-            path: module.path.clone(),
-            help: Some(format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!("`issubclass()` cannot be used with data protocol `{proto_name}`"),
+            call_span,
+            &module.path,
+            Some(format!(
                 "Remove the data attributes from `{proto_name}` or \
                  use `isinstance()` instead"
             )),
-            note: Some(
+            Some(
                 "PEP 544: issubclass() can only be used with non-data protocols \
                  (protocols that define only methods, not data attributes)"
                     .to_owned(),
             ),
-            provenance: None,
-        });
+        ));
         return true;
     }
 
@@ -277,27 +273,25 @@ fn check_single_protocol(
         if let Some(concrete_class) = extract_class_name(first) {
             let concrete_exists = module.classes.iter().any(|c| c.name == concrete_class);
             if concrete_exists && has_unsafe_overlap(concrete_class, proto_name, module) {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Unsafe overlap: `{concrete_class}` has members incompatible with \
                          protocol `{proto_name}` in `{call_name}()` call"
                     ),
-                    span: call_span,
-                    path: module.path.clone(),
-                    help: Some(format!(
+                    call_span,
+                    &module.path,
+                    Some(format!(
                         "Ensure `{concrete_class}` correctly implements all members of \
                          `{proto_name}` with compatible signatures"
                     )),
-                    note: Some(
+                    Some(
                         "PEP 544: type checkers should reject isinstance()/issubclass() \
                          calls where there is an unsafe overlap between the first \
                          argument's type and the protocol"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
                 return true;
             }
         }

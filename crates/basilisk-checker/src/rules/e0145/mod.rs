@@ -27,7 +27,7 @@ use ruff_text_size::Ranged;
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 
 use super::Rule;
 
@@ -236,28 +236,26 @@ fn check_module_expr(expr: &Expr, ctx: &ModuleCtx, path: &str, diag: &mut Vec<Di
             if let Some(obj_name) = expr_simple_name(&attr.value) {
                 if ctx.is_type_alias(obj_name) && !is_known_type_attr(attr.attr.as_str()) {
                     let span = Span::from(attr.range());
-                    diag.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
+                    diag.push(error_diagnostic_owned(
+                        CODE.clone(),
+                        format!(
                             "Attribute `{}` is not defined on `{obj_name}` \
                              (a `TypeAlias` of `type`/`Type`)",
                             attr.attr
                         ),
                         span,
-                        path: path.to_owned(),
-                        help: Some(format!(
+                        path,
+                        Some(format!(
                             "`{obj_name}` is a `TypeAlias` for a `type` annotation; \
                              it does not expose `{}`",
                             attr.attr
                         )),
-                        note: Some(
+                        Some(
                             "A `TypeAlias` binding to `type` or `Type` \
                              does not expose arbitrary attributes."
                                 .to_owned(),
                         ),
-                        provenance: None,
-                    });
+                    ));
                 }
             }
         }
@@ -334,27 +332,25 @@ fn check_func_expr(
                 if let Some(ann) = param_anns.get(obj_name) {
                     if is_concrete_type_annotation(ann) && !is_known_type_attr(attr.attr.as_str()) {
                         let span = Span::from(attr.range());
-                        diag.push(Diagnostic {
-                            code: CODE.clone(),
-                            severity: Severity::Error,
-                            message: format!(
+                        diag.push(error_diagnostic_owned(
+                            CODE.clone(),
+                            format!(
                                 "Attribute `{}` is not defined on `{ann}`; \
                                  `{ann}` only exposes attributes of its type argument",
                                 attr.attr
                             ),
                             span,
-                            path: path.to_owned(),
-                            help: Some(format!(
+                            path,
+                            Some(format!(
                                 "Only attributes defined on `object` (e.g. `__name__`, `__mro__`) \
                                  are accessible on `{ann}`"
                             )),
-                            note: Some(
+                            Some(
                                 "Per the typing spec, `type[X]` where X is a concrete type \
                                  only exposes attributes defined on X."
                                     .to_owned(),
                             ),
-                            provenance: None,
-                        });
+                        ));
                     }
                 }
             }
@@ -383,25 +379,23 @@ fn check_type_arg(
     if SPECIAL_FORMS.contains(&arg_name) {
         let inner = strip_type_bracket(param_ann).unwrap_or("T");
         if is_any_type_annotation(param_ann) {
-            diag.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diag.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Argument `{arg_name}` is a special typing form, not a class object; \
                      `type[{inner}]` requires a real class"
                 ),
                 span,
-                path: path.to_owned(),
-                help: Some(format!(
+                path,
+                Some(format!(
                     "`{arg_name}` is a special form and cannot be used as `type[{inner}]`"
                 )),
-                note: Some(
+                Some(
                     "Per the typing spec, only actual class objects satisfy `type[T]`; \
                      special forms like `Callable` are not class objects."
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
         return;
     }
@@ -418,26 +412,24 @@ fn check_type_arg(
     }
 
     if ctx.is_class(arg_name) {
-        diag.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diag.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "Argument `{arg_name}` is not assignable to `{param_ann}`; \
                  `{arg_name}` is not one of `{}`",
                 members.join(" | ")
             ),
             span,
-            path: path.to_owned(),
-            help: Some(format!(
+            path,
+            Some(format!(
                 "Pass a class that is one of `{}`",
                 members.join(" | ")
             )),
-            note: Some(
+            Some(
                 "Per the typing spec, `type[A | B]` only accepts classes that \
                  are subtypes of `A` or `B`."
                     .to_owned(),
             ),
-            provenance: None,
-        });
+        ));
     }
 }

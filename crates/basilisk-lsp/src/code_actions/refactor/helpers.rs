@@ -2,9 +2,7 @@
 
 use std::collections::HashMap;
 
-use tower_lsp::lsp_types::{
-    CodeAction, CodeActionKind, Position, Range, TextEdit, Url, WorkspaceEdit,
-};
+use tower_lsp::lsp_types::{CodeAction, CodeActionKind, Position, Range, TextEdit, Url};
 
 /// Extract the selected text from the source using an LSP range.
 pub(super) fn selected_text(source: &str, range: &Range) -> Option<String> {
@@ -250,17 +248,12 @@ impl WorkspaceEditBuilder {
         if self.changes.is_empty() {
             return None;
         }
-        Some(CodeAction {
-            title: self.title,
-            kind: Some(self.kind),
-            diagnostics: None,
-            edit: Some(WorkspaceEdit {
-                changes: Some(self.changes),
-                ..Default::default()
-            }),
-            is_preferred: Some(false),
-            ..Default::default()
-        })
+        Some(super::super::code_action_with_changes(
+            self.title,
+            self.kind,
+            self.changes,
+            false,
+        ))
     }
 }
 

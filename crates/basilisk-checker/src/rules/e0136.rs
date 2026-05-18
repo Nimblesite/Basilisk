@@ -26,7 +26,7 @@ use ruff_text_size::Ranged;
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 use crate::rules::shared::{ann_str, expr_name, is_numeric_subtype, split_top_level_commas};
 
 use super::Rule;
@@ -210,56 +210,52 @@ fn check_func_body(
 
             // Check return type covariance.
             if !return_type_compat(&source_sig.return_type, &target_sig.return_type) {
-                diag.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diag.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Callable subtyping violation: return type `{}` is not a subtype \
                          of `{}` (return types must be covariant)",
                         source_sig.return_type, target_sig.return_type,
                     ),
                     span,
-                    path: path.to_owned(),
-                    help: Some(format!(
+                    path,
+                    Some(format!(
                         "The source callable returns `{}` but the target expects a subtype \
                          of `{}`",
                         source_sig.return_type, target_sig.return_type,
                     )),
-                    note: Some(
+                    Some(
                         "Callable types are covariant with respect to their return types \
                          (PEP 484)"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
                 // Report at most one violation per assignment.
                 continue;
             }
 
             // Check parameter type contravariance.
             if !param_types_compat(&source_sig.param_types, &target_sig.param_types) {
-                diag.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diag.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Callable subtyping violation: parameter type(s) of `{rhs_name}` \
                          are not supertypes of `{ann_text}` parameter types (parameters must be \
                          contravariant)",
                     ),
                     span,
-                    path: path.to_owned(),
-                    help: Some(
+                    path,
+                    Some(
                         "The source callable must accept at least every argument the \
                          target callable accepts (contravariance)"
                             .to_owned(),
                     ),
-                    note: Some(
+                    Some(
                         "Callable types are contravariant with respect to their parameter \
                          types (PEP 484)"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
             }
         }
     }

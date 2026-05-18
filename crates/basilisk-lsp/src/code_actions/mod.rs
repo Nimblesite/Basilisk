@@ -1,10 +1,11 @@
 //! Code Actions handler: quick fixes for diagnostics.
 
+use std::collections::HashMap;
 use std::sync::atomic::AtomicU64;
 
 use tower_lsp::lsp_types::{
     CodeAction, CodeActionKind, CodeActionOrCommand, Command, Diagnostic, NumberOrString, Range,
-    Url,
+    TextEdit, Url, WorkspaceEdit,
 };
 
 mod fixes;
@@ -15,6 +16,31 @@ mod suppress;
 
 /// Monotonic counter for unique temp-file names.
 pub(super) static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+/// Construct a [`CodeAction`] whose edit is a precomputed `changes` map.
+///
+/// Many code-action builders construct a `HashMap<Url, Vec<TextEdit>>` and
+/// wrap it in `WorkspaceEdit { changes: Some(changes), ..Default::default() }`.
+/// This helper deduplicates that boilerplate for actions that carry no
+/// associated diagnostic (`diagnostics: None`).
+pub(super) fn code_action_with_changes(
+    title: String,
+    kind: CodeActionKind,
+    changes: HashMap<Url, Vec<TextEdit>>,
+    is_preferred: bool,
+) -> CodeAction {
+    CodeAction {
+        title,
+        kind: Some(kind),
+        diagnostics: None,
+        edit: Some(WorkspaceEdit {
+            changes: Some(changes),
+            ..Default::default()
+        }),
+        is_preferred: Some(is_preferred),
+        ..Default::default()
+    }
+}
 
 // Re-export pub(crate) items that the server module calls directly.
 pub(crate) use imports::organize_imports;

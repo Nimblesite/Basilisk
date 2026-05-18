@@ -1334,6 +1334,18 @@ mod tests {
         WorkspaceIndex::new(vec![], AnalysisMode::WholeModule, config)
     }
 
+    /// Helper: build a `WorkspaceIndex` whose config overrides exactly one rule's severity.
+    fn make_index_with_rule_override(
+        code: &str,
+        severity: basilisk_config::RuleSeverity,
+    ) -> WorkspaceIndex {
+        let config = BasiliskConfig {
+            rules: std::collections::HashMap::from([(code.to_owned(), severity)]),
+            ..Default::default()
+        };
+        make_index_with_config(config)
+    }
+
     /// Helper: extract LSP diagnostic codes for a URI.
     fn lsp_codes(diags: &[tower_lsp::lsp_types::Diagnostic]) -> Vec<String> {
         diags
@@ -1453,14 +1465,7 @@ mod tests {
 
     #[test]
     fn config_override_demotes_e0001_to_warning_in_checker() {
-        let config = BasiliskConfig {
-            rules: std::collections::HashMap::from([(
-                "BSK-E0001".to_owned(),
-                basilisk_config::RuleSeverity::Warning,
-            )]),
-            ..Default::default()
-        };
-        let idx = make_index_with_config(config);
+        let idx = make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Warning);
         let uri = make_uri("/tmp/cfg_demote_e0001.py");
         let _ = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
 
@@ -1490,14 +1495,7 @@ mod tests {
 
     #[test]
     fn config_override_demotes_e0001_to_warning_in_lsp() {
-        let config = BasiliskConfig {
-            rules: std::collections::HashMap::from([(
-                "BSK-E0001".to_owned(),
-                basilisk_config::RuleSeverity::Warning,
-            )]),
-            ..Default::default()
-        };
-        let idx = make_index_with_config(config);
+        let idx = make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Warning);
         let uri = make_uri("/tmp/cfg_demote_e0001_lsp.py");
         let lsp_diags = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
 
@@ -1530,14 +1528,7 @@ mod tests {
 
     #[test]
     fn config_override_demotes_e0001_to_info_in_checker() {
-        let config = BasiliskConfig {
-            rules: std::collections::HashMap::from([(
-                "BSK-E0001".to_owned(),
-                basilisk_config::RuleSeverity::Info,
-            )]),
-            ..Default::default()
-        };
-        let idx = make_index_with_config(config);
+        let idx = make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Info);
         let uri = make_uri("/tmp/cfg_info_e0001.py");
         let _ = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
 
@@ -1562,14 +1553,7 @@ mod tests {
 
     #[test]
     fn config_override_demotes_e0001_to_info_in_lsp() {
-        let config = BasiliskConfig {
-            rules: std::collections::HashMap::from([(
-                "BSK-E0001".to_owned(),
-                basilisk_config::RuleSeverity::Info,
-            )]),
-            ..Default::default()
-        };
-        let idx = make_index_with_config(config);
+        let idx = make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Info);
         let uri = make_uri("/tmp/cfg_info_e0001_lsp.py");
         let lsp_diags = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
 
@@ -1591,14 +1575,7 @@ mod tests {
 
     #[test]
     fn config_override_disables_e0001_removes_from_checker() {
-        let config = BasiliskConfig {
-            rules: std::collections::HashMap::from([(
-                "BSK-E0001".to_owned(),
-                basilisk_config::RuleSeverity::Disabled,
-            )]),
-            ..Default::default()
-        };
-        let idx = make_index_with_config(config);
+        let idx = make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Disabled);
         let uri = make_uri("/tmp/cfg_disable_e0001.py");
         let _ = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
 
@@ -1612,14 +1589,7 @@ mod tests {
 
     #[test]
     fn config_override_disables_e0001_removes_from_lsp() {
-        let config = BasiliskConfig {
-            rules: std::collections::HashMap::from([(
-                "BSK-E0001".to_owned(),
-                basilisk_config::RuleSeverity::Disabled,
-            )]),
-            ..Default::default()
-        };
-        let idx = make_index_with_config(config);
+        let idx = make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Disabled);
         let uri = make_uri("/tmp/cfg_disable_e0001_lsp.py");
         let lsp_diags = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
 
@@ -1636,14 +1606,7 @@ mod tests {
     fn config_override_promotes_w0050_to_error_in_lsp() {
         // This is the EXACT bug scenario: user has a config that should
         // control W-code severity but the LSP was ignoring it.
-        let config = BasiliskConfig {
-            rules: std::collections::HashMap::from([(
-                "BSK-W0050".to_owned(),
-                basilisk_config::RuleSeverity::Error,
-            )]),
-            ..Default::default()
-        };
-        let idx = make_index_with_config(config);
+        let idx = make_index_with_rule_override("BSK-W0050", basilisk_config::RuleSeverity::Error);
         let uri = make_uri("/tmp/cfg_promote_w0050.py");
         let lsp_diags = idx.set_open(&uri, SRC_REDUNDANT_ANNOTATION, 1);
 
@@ -1677,14 +1640,7 @@ mod tests {
 
     #[test]
     fn config_override_disables_w0050() {
-        let config = BasiliskConfig {
-            rules: std::collections::HashMap::from([(
-                "BSK-W0050".to_owned(),
-                basilisk_config::RuleSeverity::Disabled,
-            )]),
-            ..Default::default()
-        };
-        let idx = make_index_with_config(config);
+        let idx = make_index_with_rule_override("BSK-W0050", basilisk_config::RuleSeverity::Disabled);
         let uri = make_uri("/tmp/cfg_disable_w0050.py");
         let lsp_diags = idx.set_open(&uri, SRC_REDUNDANT_ANNOTATION, 1);
 
@@ -1755,14 +1711,7 @@ mod tests {
 
     #[test]
     fn config_applies_to_set_open() {
-        let config = BasiliskConfig {
-            rules: std::collections::HashMap::from([(
-                "BSK-E0001".to_owned(),
-                basilisk_config::RuleSeverity::Disabled,
-            )]),
-            ..Default::default()
-        };
-        let idx = make_index_with_config(config);
+        let idx = make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Disabled);
         let uri = make_uri("/tmp/cfg_set_open.py");
         let lsp_diags = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
 
@@ -1780,14 +1729,7 @@ mod tests {
         let file_path = dir.join("reload_cfg.py");
         std::fs::write(&file_path, SRC_MISSING_ANNOTATION).unwrap();
 
-        let config = BasiliskConfig {
-            rules: std::collections::HashMap::from([(
-                "BSK-E0001".to_owned(),
-                basilisk_config::RuleSeverity::Disabled,
-            )]),
-            ..Default::default()
-        };
-        let idx = make_index_with_config(config);
+        let idx = make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Disabled);
 
         // First, set_open to get it in the index, then close to allow reload.
         let uri = Url::from_file_path(&file_path).unwrap();
@@ -1824,14 +1766,7 @@ mod tests {
         let file_path = dir.join("close_cfg.py");
         std::fs::write(&file_path, SRC_MISSING_ANNOTATION).unwrap();
 
-        let config = BasiliskConfig {
-            rules: std::collections::HashMap::from([(
-                "BSK-E0001".to_owned(),
-                basilisk_config::RuleSeverity::Disabled,
-            )]),
-            ..Default::default()
-        };
-        let idx = make_index_with_config(config);
+        let idx = make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Disabled);
 
         let uri = Url::from_file_path(&file_path).unwrap();
         let _ = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
@@ -2216,14 +2151,8 @@ mod tests {
             .collect();
 
         // Custom config: E0001 demoted to Warning.
-        let custom_config = BasiliskConfig {
-            rules: std::collections::HashMap::from([(
-                "BSK-E0001".to_owned(),
-                basilisk_config::RuleSeverity::Warning,
-            )]),
-            ..Default::default()
-        };
-        let custom_idx = make_index_with_config(custom_config);
+        let custom_idx =
+            make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Warning);
         let custom_uri = make_uri(uri_path);
         let custom_diags = custom_idx.set_open(&custom_uri, SRC_MISSING_ANNOTATION, 1);
         let custom_severities: Vec<_> = custom_diags

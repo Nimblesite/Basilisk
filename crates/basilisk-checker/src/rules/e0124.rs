@@ -22,7 +22,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{AttributeInfo, ClassInfo, FunctionInfo, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -40,11 +40,7 @@ pub(crate) struct ProtocolTupleElementMismatch;
 
 impl Rule for ProtocolTupleElementMismatch {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let class_map: HashMap<&str, &ClassInfo> = module
-            .classes
-            .iter()
-            .map(|c| (c.name.as_str(), c))
-            .collect();
+        let class_map = super::shared::class_name_map(&module.classes);
 
         let method_map: HashMap<(&str, &str), &FunctionInfo> = module
             .functions
@@ -167,27 +163,25 @@ fn check_class(
                         end: u32::try_from(absolute_offset + line.len()).unwrap_or(0),
                     };
 
-                    out.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
+                    out.push(error_diagnostic_owned(
+                        CODE.clone(),
+                        format!(
                             "Parameter `{value}` has type `{param_type}` but element {idx} of \
                              `{attr_name}` in protocol `{}` expects `{expected_type}`",
                             protocol_base.name
                         ),
                         span,
-                        path: path.to_owned(),
-                        help: Some(format!(
+                        path,
+                        Some(format!(
                             "Change parameter `{value}` to type `{expected_type}` or convert it \
                              before assigning to `self.{attr_name}`"
                         )),
-                        note: Some(format!(
+                        Some(format!(
                             "Protocol `{}` declares `{attr_name}: {ann_text}` — all tuple \
                              elements must match the declared types",
                             protocol_base.name
                         )),
-                        provenance: None,
-                    });
+                    ));
                 }
             }
         }

@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 use crate::rules::shared::{
     is_numeric_subtype, parse_subscript_annotation, split_top_level_commas,
 };
@@ -223,17 +223,16 @@ fn emit_violations(ctx: &ViolationCtx<'_>, diagnostics: &mut Vec<Diagnostic>) {
             Variance::Contravariant => "contravariant",
             Variance::Invariant => "invariant",
         };
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "Type `{}[{rhs}]` is not assignable to \
                  `{}[{lhs}]` (type parameter is {label})",
                 ctx.class_name, ctx.class_name
             ),
-            span: span_for_line(ctx.source, ctx.line_number),
-            path: ctx.path.to_owned(),
-            help: Some(format!(
+            span_for_line(ctx.source, ctx.line_number),
+            ctx.path,
+            Some(format!(
                 "{label} type parameter requires {}",
                 match var {
                     Variance::Covariant => "subtype relationship (e.g. int → float)",
@@ -241,10 +240,9 @@ fn emit_violations(ctx: &ViolationCtx<'_>, diagnostics: &mut Vec<Diagnostic>) {
                     Variance::Invariant => "exact type match",
                 }
             )),
-            note: Some(
+            Some(
                 "PEP 695: variance is inferred from type parameter usage positions".to_owned(),
             ),
-            provenance: None,
-        });
+        ));
     }
 }

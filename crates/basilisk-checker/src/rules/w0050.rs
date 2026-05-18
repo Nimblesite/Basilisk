@@ -14,7 +14,7 @@ use crate::inference::infer_rhs;
 use crate::types::InferredType;
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, warning_diagnostic_owned};
 
 use super::Rule;
 
@@ -233,20 +233,18 @@ fn make_diagnostic_for_var(
     span: basilisk_resolver::Span,
     path: &str,
 ) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Warning,
-        message: format!(
+    warning_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Redundant type annotation: `{name}` is annotated `{annotation}` but the inferred type is identical"
         ),
         span,
-        path: path.to_owned(),
-        help: Some("Remove the redundant annotation to reduce noise".to_owned()),
-        note: Some(
+        path,
+        Some("Remove the redundant annotation to reduce noise".to_owned()),
+        Some(
             "Basilisk warns about redundant annotations to encourage cleaner code".to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }
 
 /// Check if a class transitively inherits from a `NamedTuple` class.

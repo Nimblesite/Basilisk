@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use tower_lsp::lsp_types::{
-    CodeAction, CodeActionKind, Position, Range, TextEdit, Url, WorkspaceEdit,
+    CodeAction, CodeActionKind, Position, Range, TextEdit, Url,
 };
 
 /// Offer to convert `dict()` to `{}` and/or `list()` to `[]` literal syntax.
@@ -231,15 +231,10 @@ fn build_action(
         }],
     );
 
-    CodeAction {
-        title: title.to_owned(),
-        kind: Some(CodeActionKind::REFACTOR_REWRITE),
-        diagnostics: None,
-        edit: Some(WorkspaceEdit {
-            changes: Some(changes),
-            ..Default::default()
-        }),
-        is_preferred: Some(false),
-        ..Default::default()
-    }
+    super::super::code_action_with_changes(
+        title.to_owned(),
+        CodeActionKind::REFACTOR_REWRITE,
+        changes,
+        false,
+    )
 }

@@ -118,6 +118,18 @@ pub(crate) fn warning_diagnostic_owned(
     diagnostic_owned(code, Severity::Warning, message, span, path, help, note)
 }
 
+/// Build an `Info`-severity diagnostic with `String`-owned `help`/`note` text.
+pub(crate) fn info_diagnostic_owned(
+    code: ErrorCode,
+    message: String,
+    span: Span,
+    path: &str,
+    help: Option<String>,
+    note: Option<String>,
+) -> Diagnostic {
+    diagnostic_owned(code, Severity::Info, message, span, path, help, note)
+}
+
 fn diagnostic_owned(
     code: ErrorCode,
     severity: Severity,

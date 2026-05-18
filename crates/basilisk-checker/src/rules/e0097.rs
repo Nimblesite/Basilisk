@@ -20,7 +20,7 @@ use ruff_python_ast::{Expr, Stmt};
 use ruff_text_size::Ranged as _;
 
 use super::Rule;
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0097",
@@ -241,24 +241,22 @@ fn check_self_attr_target(
     let attr_name = attr.attr.as_str();
     if !declared_attrs.contains(attr_name) && !declared_methods.contains(attr_name) {
         let range = attr.range();
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!("Protocol member `{attr_name}` is not declared in the Protocol body"),
-            span: Span {
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!("Protocol member `{attr_name}` is not declared in the Protocol body"),
+            Span {
                 start: range.start().to_u32(),
                 end: range.end().to_u32(),
             },
-            path: path.to_owned(),
-            help: Some(format!(
+            path,
+            Some(format!(
                 "Add `{attr_name}: <type>` as a class-level annotation in the Protocol"
             )),
-            note: Some(
+            Some(
                 "Protocol members must be explicitly declared; assigning to undeclared \
                  self-attributes in `__init__`/`__new__` is not allowed"
                     .to_owned(),
             ),
-            provenance: None,
-        });
+        ));
     }
 }

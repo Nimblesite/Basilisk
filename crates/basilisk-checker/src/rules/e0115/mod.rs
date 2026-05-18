@@ -23,7 +23,7 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -127,15 +127,12 @@ pub(super) fn make_diagnostic(
     message: Option<&str>,
     path: &str,
 ) -> Diagnostic {
-    let primary = format!("Use of deprecated {kind} `{name}`");
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: primary,
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!("Use of deprecated {kind} `{name}`"),
         span,
-        path: path.to_owned(),
-        help: message.map(|m| format!("Deprecated: {m}")),
-        note: Some("Marked with `@deprecated` per PEP 702".to_owned()),
-        provenance: None,
-    }
+        path,
+        message.map(|m| format!("Deprecated: {m}")),
+        Some("Marked with `@deprecated` per PEP 702".to_owned()),
+    )
 }

@@ -191,11 +191,7 @@ pub(crate) struct InvalidTypedDictInheritance;
 
 impl Rule for InvalidTypedDictInheritance {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let class_map: HashMap<&str, &ClassInfo> = module
-            .classes
-            .iter()
-            .map(|cls| (cls.name.as_str(), cls))
-            .collect();
+        let class_map = super::shared::class_name_map(&module.classes);
 
         let attr_map: HashMap<(&str, &str), &AttributeInfo> = module
             .classes

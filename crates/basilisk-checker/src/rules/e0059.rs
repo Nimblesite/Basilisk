@@ -18,7 +18,7 @@ use std::collections::HashSet;
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 
 use super::Rule;
 
@@ -54,26 +54,24 @@ impl Rule for MatchArgsFalseAccess {
             if access.attr_name == "__match_args__"
                 && no_match_args.contains(access.object_name.as_str())
             {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "`{}.__match_args__` does not exist: \
                          `@dataclass(match_args=False)` suppresses `__match_args__` generation",
                         access.object_name
                     ),
-                    span: access.span,
-                    path: module.path.clone(),
-                    help: Some(
+                    access.span,
+                    &module.path,
+                    Some(
                         "Remove `match_args=False` or do not access `__match_args__`".to_owned(),
                     ),
-                    note: Some(
+                    Some(
                         "PEP 634: `__match_args__` is only generated when `match_args=True` \
                          (the default)"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
             }
         }
     }

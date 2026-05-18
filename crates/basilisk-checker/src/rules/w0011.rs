@@ -13,7 +13,7 @@
 
 use basilisk_resolver::{ImportResolution, PackageDepKind, ResolvedModule};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, warning_diagnostic_owned};
 
 use super::Rule;
 
@@ -36,22 +36,20 @@ impl Rule for UndeclaredDependencyImport {
             .filter(|import| import.package_dep_kind == Some(PackageDepKind::Transitive))
             .for_each(|import| {
                 let root_module = import.module.split('.').next().unwrap_or(&import.module);
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Warning,
-                    message: format!(
+                diagnostics.push(warning_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Import `{root_module}` is a transitive dependency, not declared in \
                          [project.dependencies]"
                     ),
-                    span: import.span,
-                    path: module.path.clone(),
-                    help: Some(format!("Add it explicitly: `uv add {root_module}`")),
-                    note: Some(
+                    import.span,
+                    &module.path,
+                    Some(format!("Add it explicitly: `uv add {root_module}`")),
+                    Some(
                         "Transitive dependencies can disappear when direct dependencies change"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
             });
     }
 }

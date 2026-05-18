@@ -26,7 +26,7 @@ use std::collections::HashSet;
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 
 use super::Rule;
 use crate::rules::shared::contains_typevar_reference;
@@ -125,27 +125,25 @@ impl Rule for TypeVarScopeViolation {
                             let bases_text = &trimmed[paren_start + 1..paren_end];
                             for typevar_name in &outer_bound {
                                 if contains_typevar_reference(bases_text, typevar_name) {
-                                    diagnostics.push(Diagnostic {
-                                        code: CODE.clone(),
-                                        severity: Severity::Error,
-                                        message: format!(
+                                    diagnostics.push(error_diagnostic_owned(
+                                        CODE.clone(),
+                                        format!(
                                             "TypeVar `{typevar_name}` from outer scope \
                                              cannot be used in nested class definition"
                                         ),
-                                        span: span_for_line(&module.source, line_number),
-                                        path: module.path.clone(),
-                                        help: Some(
+                                        span_for_line(&module.source, line_number),
+                                        &module.path,
+                                        Some(
                                             "Use a different TypeVar for the inner class, \
                                              or restructure to avoid nesting"
                                                 .to_owned(),
                                         ),
-                                        note: Some(
+                                        Some(
                                             "PEP 484: the scope of type variables of the \
                                              outer class doesn't cover the inner one"
                                                 .to_owned(),
                                         ),
-                                        provenance: None,
-                                    });
+                                    ));
                                 }
                             }
                         }
@@ -211,25 +209,23 @@ impl Rule for TypeVarScopeViolation {
                             trimmed.split_once(':').map_or(trimmed, |(_, rhs)| rhs);
                         for typevar_name in &forbidden_tvs {
                             if contains_typevar_reference(annotation_part, typevar_name) {
-                                diagnostics.push(Diagnostic {
-                                    code: CODE.clone(),
-                                    severity: Severity::Error,
-                                    message: format!(
+                                diagnostics.push(error_diagnostic_owned(
+                                    CODE.clone(),
+                                    format!(
                                         "TypeVar `{typevar_name}` from outer class \
                                          cannot be used in nested class body"
                                     ),
-                                    span: span_for_line(&module.source, line_number),
-                                    path: module.path.clone(),
-                                    help: Some(
+                                    span_for_line(&module.source, line_number),
+                                    &module.path,
+                                    Some(
                                         "Use a different TypeVar for the inner class".to_owned(),
                                     ),
-                                    note: Some(
+                                    Some(
                                         "PEP 484: the scope of type variables of the \
                                          outer class doesn't cover the inner one"
                                             .to_owned(),
                                     ),
-                                    provenance: None,
-                                });
+                                ));
                             }
                         }
                     }
@@ -260,27 +256,25 @@ impl Rule for TypeVarScopeViolation {
                         let is_def_line =
                             trimmed.starts_with("def ") || trimmed.starts_with("async def ");
                         if !is_def_line {
-                            diagnostics.push(Diagnostic {
-                                code: CODE.clone(),
-                                severity: Severity::Error,
-                                message: format!(
+                            diagnostics.push(error_diagnostic_owned(
+                                CODE.clone(),
+                                format!(
                                     "TypeVar `{typevar_name}` is not bound in \
                                      this scope"
                                 ),
-                                span: span_for_line(&module.source, line_number),
-                                path: module.path.clone(),
-                                help: Some(
+                                span_for_line(&module.source, line_number),
+                                &module.path,
+                                Some(
                                     "TypeVars can only be used where they are \
                                      bound by a Generic[...] base or function signature"
                                         .to_owned(),
                                 ),
-                                note: Some(
+                                Some(
                                     "PEP 484: unbound type variables should not \
                                      appear in function or class bodies"
                                         .to_owned(),
                                 ),
-                                provenance: None,
-                            });
+                            ));
                         }
                     }
                 }
@@ -303,27 +297,25 @@ impl Rule for TypeVarScopeViolation {
                         let rhs_part = trimmed.split_once('=').map_or("", |(_, rhs)| rhs);
                         for typevar_name in enclosing_tvs {
                             if contains_typevar_reference(rhs_part, typevar_name) {
-                                diagnostics.push(Diagnostic {
-                                    code: CODE.clone(),
-                                    severity: Severity::Error,
-                                    message: format!(
+                                diagnostics.push(error_diagnostic_owned(
+                                    CODE.clone(),
+                                    format!(
                                         "TypeVar `{typevar_name}` from enclosing class \
                                          is not accessible in a TypeAlias definition"
                                     ),
-                                    span: span_for_line(&module.source, line_number),
-                                    path: module.path.clone(),
-                                    help: Some(
+                                    span_for_line(&module.source, line_number),
+                                    &module.path,
+                                    Some(
                                         "Type aliases in class bodies cannot reference \
                                          the class's type parameters"
                                             .to_owned(),
                                     ),
-                                    note: Some(
+                                    Some(
                                         "PEP 484: TypeAlias creates its own scope and \
                                          cannot capture class-level TypeVars"
                                             .to_owned(),
                                     ),
-                                    provenance: None,
-                                });
+                                ));
                             }
                         }
                     }
@@ -358,27 +350,25 @@ impl Rule for TypeVarScopeViolation {
                     if !is_type_alias_or_def {
                         for typevar_name in &all_typevars {
                             if contains_typevar_reference(before_comment, typevar_name) {
-                                diagnostics.push(Diagnostic {
-                                    code: CODE.clone(),
-                                    severity: Severity::Error,
-                                    message: format!(
+                                diagnostics.push(error_diagnostic_owned(
+                                    CODE.clone(),
+                                    format!(
                                         "TypeVar `{typevar_name}` is not bound in \
                                          this scope"
                                     ),
-                                    span: span_for_line(&module.source, line_number),
-                                    path: module.path.clone(),
-                                    help: Some(
+                                    span_for_line(&module.source, line_number),
+                                    &module.path,
+                                    Some(
                                         "TypeVars can only be used inside generic \
                                          functions or classes that bind them"
                                             .to_owned(),
                                     ),
-                                    note: Some(
+                                    Some(
                                         "PEP 484: unbound type variables should not \
                                          appear at module scope"
                                             .to_owned(),
                                     ),
-                                    provenance: None,
-                                });
+                                ));
                             }
                         }
                     }

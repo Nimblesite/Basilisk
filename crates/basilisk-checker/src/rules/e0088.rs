@@ -19,7 +19,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 
 use super::Rule;
 
@@ -34,22 +34,20 @@ pub(crate) struct TypedDictRuntimeViolation;
 impl Rule for TypedDictRuntimeViolation {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         for span in &module.isinstance_typeddict_violations {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: "TypedDict type objects cannot be used in `isinstance()` tests"
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                "TypedDict type objects cannot be used in `isinstance()` tests"
                     .to_owned(),
-                span: *span,
-                path: module.path.clone(),
-                help: Some(
+                *span,
+                &module.path,
+                Some(
                     "Use a regular class or Protocol for isinstance checks".to_owned(),
                 ),
-                note: Some(
+                Some(
                     "PEP 589: TypedDict classes exist only at type-checking time;                      they are plain dicts at runtime"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }

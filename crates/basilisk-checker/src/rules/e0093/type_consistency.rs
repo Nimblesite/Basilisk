@@ -10,7 +10,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{ClassInfo, ResolvedModule};
 
-use crate::diagnostic::{Diagnostic, Severity};
+use crate::diagnostic::{Diagnostic, error_diagnostic_owned};
 use crate::span_util::slice_span;
 
 use super::CODE;
@@ -146,16 +146,14 @@ fn emit_td_error(
     message: &str,
     help: &str,
 ) {
-    diagnostics.push(Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: message.to_owned(),
+    diagnostics.push(error_diagnostic_owned(
+        CODE.clone(),
+        message.to_owned(),
         span,
-        path: path.to_owned(),
-        help: Some(help.to_owned()),
-        note: Some("PEP 589: TypedDict type consistency rules".to_owned()),
-        provenance: None,
-    });
+        path,
+        Some(help.to_owned()),
+        Some("PEP 589: TypedDict type consistency rules".to_owned()),
+    ));
 }
 
 /// Build a map from variable name to its `TypedDict` type name.

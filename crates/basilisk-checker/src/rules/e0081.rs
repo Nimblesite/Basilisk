@@ -21,7 +21,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -244,24 +244,22 @@ fn check_body_stmt(
                     end: range.end().to_u32(),
                 };
                 let _ = functions;
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "`{arg_type}` has {count} type argument{}, but `{callee_name}` requires at least {} for the `TypeVarTuple` unpack pattern",
                         if count == 1 { "" } else { "s" },
                         vparam.min_type_args
                     ),
                     span,
-                    path: path.to_owned(),
-                    help: Some(format!(
+                    path,
+                    Some(format!(
                         "The parameter expects `{}[...]` with at least {} fixed type argument{}",
                         vparam.base_class, vparam.min_type_args,
                         if vparam.min_type_args == 1 { "" } else { "s" }
                     )),
-                    note: Some("A `TypeVarTuple` unpack like `*tuple[Any, ...]` absorbs zero or more type arguments, but the fixed parts must be present".to_owned()),
-            provenance: None,
-                });
+                    Some("A `TypeVarTuple` unpack like `*tuple[Any, ...]` absorbs zero or more type arguments, but the fixed parts must be present".to_owned()),
+                ));
             }
         }
     }

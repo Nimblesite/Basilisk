@@ -13,7 +13,7 @@
 use basilisk_resolver::ResolvedModule;
 
 use super::Rule;
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0103",
@@ -39,28 +39,26 @@ impl Rule for TupleIndexOutOfBounds {
                 )
             };
 
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Tuple index out of range on `{}`: {}",
                     violation.tuple_var_name, detail
                 ),
-                span: violation.span,
-                path: module.path.clone(),
-                help: Some(format!(
+                violation.span,
+                &module.path,
+                Some(format!(
                     "Valid indices for a {}-element tuple are {} to {}",
                     violation.tuple_length,
                     -len,
                     len - 1
                 )),
-                note: Some(
+                Some(
                     "Fixed-length tuples only support integer indices within \
                      the range [-length, length)"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }

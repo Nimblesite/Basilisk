@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{ResolvedModule, RhsKind, Span};
 
-use crate::diagnostic::{Diagnostic, Severity};
+use crate::diagnostic::{Diagnostic, error_diagnostic_owned};
 use crate::span_util::slice_span;
 
 use super::CODE;
@@ -107,25 +107,23 @@ pub(super) fn check_dataclass_attr_assignments(
         let rhs_kind = extract_rhs_kind_from_assign(source, assign.target_span);
         if let Some(kind) = rhs_kind {
             if let Some(rhs_description) = annotation_rhs_mismatch_simple(field_type, &kind) {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Type mismatch: `{}.{}` is typed `{field_type}` but assigned {rhs_description}",
                         assign.object_name, assign.attr_name
                     ),
-                    span: assign.target_span,
-                    path: module.path.clone(),
-                    help: Some(format!(
+                    assign.target_span,
+                    &module.path,
+                    Some(format!(
                         "Field `{}` of `{class_name}` expects `{field_type}`",
                         assign.attr_name
                     )),
-                    note: Some(
+                    Some(
                         "Basilisk requires attribute assignments to be compatible with the declared field type"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
             }
         }
     }
