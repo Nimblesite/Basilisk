@@ -183,41 +183,36 @@ pub(super) fn check_typevar_bound_expr(
     outer_typeparams: &std::collections::HashSet<String>,
     out: &mut Vec<Pep695BoundViolation>,
 ) {
+    let make = |kind: Pep695BoundViolationKind, range: ruff_text_size::TextRange| {
+        Pep695BoundViolation {
+            kind,
+            class_name: class_name.to_owned(),
+            type_param_name: type_param.to_owned(),
+            span: text_range_to_span(range),
+        }
+    };
+
     match bound {
         Expr::List(list) => {
-            out.push(Pep695BoundViolation {
-                kind: Pep695BoundViolationKind::ListLiteralBound,
-                class_name: class_name.to_owned(),
-                type_param_name: type_param.to_owned(),
-                span: text_range_to_span(list.range()),
-            });
+            out.push(make(Pep695BoundViolationKind::ListLiteralBound, list.range()));
         }
         Expr::Tuple(tup) => {
             if tup.elts.is_empty() {
-                out.push(Pep695BoundViolation {
-                    kind: Pep695BoundViolationKind::EmptyTuple,
-                    class_name: class_name.to_owned(),
-                    type_param_name: type_param.to_owned(),
-                    span: text_range_to_span(tup.range()),
-                });
+                out.push(make(Pep695BoundViolationKind::EmptyTuple, tup.range()));
             } else if tup.elts.len() == 1 {
-                out.push(Pep695BoundViolation {
-                    kind: Pep695BoundViolationKind::SingleElementTuple,
-                    class_name: class_name.to_owned(),
-                    type_param_name: type_param.to_owned(),
-                    span: text_range_to_span(tup.range()),
-                });
+                out.push(make(
+                    Pep695BoundViolationKind::SingleElementTuple,
+                    tup.range(),
+                ));
             } else {
                 // Check for invalid elements and outer-scope TypeVar references.
                 let mut emitted = false;
                 for elt in &tup.elts {
                     if !is_valid_constraint_element(elt) {
-                        out.push(Pep695BoundViolation {
-                            kind: Pep695BoundViolationKind::InvalidConstraintElement,
-                            class_name: class_name.to_owned(),
-                            type_param_name: type_param.to_owned(),
-                            span: text_range_to_span(elt.range()),
-                        });
+                        out.push(make(
+                            Pep695BoundViolationKind::InvalidConstraintElement,
+                            elt.range(),
+                        ));
                         emitted = true;
                         break;
                     }
@@ -225,12 +220,10 @@ pub(super) fn check_typevar_bound_expr(
                 if !emitted {
                     for elt in &tup.elts {
                         if bound_refs_outer_typeparam(elt, current_typeparams, outer_typeparams) {
-                            out.push(Pep695BoundViolation {
-                                kind: Pep695BoundViolationKind::OuterScopeTypeVarInBound,
-                                class_name: class_name.to_owned(),
-                                type_param_name: type_param.to_owned(),
-                                span: text_range_to_span(elt.range()),
-                            });
+                            out.push(make(
+                                Pep695BoundViolationKind::OuterScopeTypeVarInBound,
+                                elt.range(),
+                            ));
                             break;
                         }
                     }
@@ -238,23 +231,19 @@ pub(super) fn check_typevar_bound_expr(
             }
         }
         Expr::Name(name) if bare_names.contains(name.id.as_str()) => {
-            out.push(Pep695BoundViolation {
-                kind: Pep695BoundViolationKind::NonLiteralConstraint,
-                class_name: class_name.to_owned(),
-                type_param_name: type_param.to_owned(),
-                span: text_range_to_span(name.range()),
-            });
+            out.push(make(
+                Pep695BoundViolationKind::NonLiteralConstraint,
+                name.range(),
+            ));
         }
         // Check if the bound itself references an outer-scope TypeVar (e.g. `T: dict[str, V]`).
         bound_expr
             if bound_refs_outer_typeparam(bound_expr, current_typeparams, outer_typeparams) =>
         {
-            out.push(Pep695BoundViolation {
-                kind: Pep695BoundViolationKind::OuterScopeTypeVarInBound,
-                class_name: class_name.to_owned(),
-                type_param_name: type_param.to_owned(),
-                span: text_range_to_span(bound_expr.range()),
-            });
+            out.push(make(
+                Pep695BoundViolationKind::OuterScopeTypeVarInBound,
+                bound_expr.range(),
+            ));
         }
         _ => {}
     }

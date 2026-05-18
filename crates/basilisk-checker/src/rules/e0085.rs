@@ -83,8 +83,7 @@ impl Rule for TypeVarTupleArgCountMismatch {
         }
 
         // Re-parse to walk the AST for call expressions.
-        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
-        else {
+        let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
 

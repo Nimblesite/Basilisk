@@ -1357,6 +1357,50 @@ mod tests {
             .collect()
     }
 
+    /// Assert that every checker diagnostic for `code` has the expected severity.
+    fn assert_checker_severity(
+        index: &WorkspaceIndex,
+        uri: &Url,
+        code: &str,
+        expected: basilisk_checker::Severity,
+    ) {
+        let diags = get_diagnostics(index, uri);
+        let matching: Vec<_> = diags.iter().filter(|d| d.code.code == code).collect();
+        assert!(!matching.is_empty(), "expected {code} diagnostic, got none");
+        for d in &matching {
+            assert_eq!(
+                d.severity, expected,
+                "{code} severity must be {expected:?}, got {:?}",
+                d.severity
+            );
+        }
+    }
+
+    /// Assert that every LSP diagnostic for `code` in `diags` has the expected severity.
+    fn assert_lsp_severity(
+        diags: &[tower_lsp::lsp_types::Diagnostic],
+        code: &str,
+        expected: tower_lsp::lsp_types::DiagnosticSeverity,
+    ) {
+        let codes = lsp_codes(diags);
+        assert!(
+            codes.contains(&code.to_owned()),
+            "expected {code} in LSP diagnostics, got {codes:?}"
+        );
+        for d in diags {
+            if let Some(tower_lsp::lsp_types::NumberOrString::String(c)) = &d.code {
+                if c == code {
+                    assert_eq!(
+                        d.severity,
+                        Some(expected),
+                        "{code} LSP severity must be {expected:?}, got {:?}",
+                        d.severity
+                    );
+                }
+            }
+        }
+    }
+
     // ── Default config: W-codes are warnings, E-codes are errors ────────────
 
     #[test]
@@ -1364,24 +1408,7 @@ mod tests {
         let idx = make_index();
         let uri = make_uri("/tmp/cfg_w0050_default.py");
         let _ = idx.set_open(&uri, SRC_REDUNDANT_ANNOTATION, 1);
-
-        let diags = get_diagnostics(&idx, &uri);
-        let w0050: Vec<_> = diags
-            .iter()
-            .filter(|d| d.code.code == "BSK-W0050")
-            .collect();
-        assert!(
-            !w0050.is_empty(),
-            "expected BSK-W0050 for redundant annotation"
-        );
-        for d in &w0050 {
-            assert_eq!(
-                d.severity,
-                basilisk_checker::Severity::Warning,
-                "BSK-W0050 must be Warning with default config, got {:?}",
-                d.severity
-            );
-        }
+        assert_checker_severity(&idx, &uri, "BSK-W0050", basilisk_checker::Severity::Warning);
     }
 
     #[test]
@@ -1389,25 +1416,11 @@ mod tests {
         let idx = make_index();
         let uri = make_uri("/tmp/cfg_w0050_lsp.py");
         let lsp_diags = idx.set_open(&uri, SRC_REDUNDANT_ANNOTATION, 1);
-
-        let codes = lsp_codes(&lsp_diags);
-        assert!(
-            codes.contains(&"BSK-W0050".to_owned()),
-            "expected BSK-W0050 in LSP diagnostics, got {codes:?}"
+        assert_lsp_severity(
+            &lsp_diags,
+            "BSK-W0050",
+            tower_lsp::lsp_types::DiagnosticSeverity::WARNING,
         );
-
-        for d in &lsp_diags {
-            if let Some(tower_lsp::lsp_types::NumberOrString::String(code)) = &d.code {
-                if code == "BSK-W0050" {
-                    assert_eq!(
-                        d.severity,
-                        Some(tower_lsp::lsp_types::DiagnosticSeverity::WARNING),
-                        "BSK-W0050 LSP severity must be WARNING (2), got {:?}",
-                        d.severity
-                    );
-                }
-            }
-        }
     }
 
     #[test]
@@ -1415,24 +1428,7 @@ mod tests {
         let idx = make_index();
         let uri = make_uri("/tmp/cfg_e0001_default.py");
         let _ = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
-
-        let diags = get_diagnostics(&idx, &uri);
-        let e0001: Vec<_> = diags
-            .iter()
-            .filter(|d| d.code.code == "BSK-E0001")
-            .collect();
-        assert!(
-            !e0001.is_empty(),
-            "expected BSK-E0001 for missing annotation"
-        );
-        for d in &e0001 {
-            assert_eq!(
-                d.severity,
-                basilisk_checker::Severity::Error,
-                "BSK-E0001 must be Error with default config, got {:?}",
-                d.severity
-            );
-        }
+        assert_checker_severity(&idx, &uri, "BSK-E0001", basilisk_checker::Severity::Error);
     }
 
     #[test]
@@ -1440,25 +1436,11 @@ mod tests {
         let idx = make_index();
         let uri = make_uri("/tmp/cfg_e0001_lsp.py");
         let lsp_diags = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
-
-        let codes = lsp_codes(&lsp_diags);
-        assert!(
-            codes.contains(&"BSK-E0001".to_owned()),
-            "expected BSK-E0001 in LSP diagnostics, got {codes:?}"
+        assert_lsp_severity(
+            &lsp_diags,
+            "BSK-E0001",
+            tower_lsp::lsp_types::DiagnosticSeverity::ERROR,
         );
-
-        for d in &lsp_diags {
-            if let Some(tower_lsp::lsp_types::NumberOrString::String(code)) = &d.code {
-                if code == "BSK-E0001" {
-                    assert_eq!(
-                        d.severity,
-                        Some(tower_lsp::lsp_types::DiagnosticSeverity::ERROR),
-                        "BSK-E0001 LSP severity must be ERROR (1), got {:?}",
-                        d.severity
-                    );
-                }
-            }
-        }
     }
 
     // ── Global rule severity override: demote error to warning ──────────────
@@ -1468,29 +1450,7 @@ mod tests {
         let idx = make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Warning);
         let uri = make_uri("/tmp/cfg_demote_e0001.py");
         let _ = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
-
-        let diags = get_diagnostics(&idx, &uri);
-        let e0001: Vec<_> = diags
-            .iter()
-            .filter(|d| d.code.code == "BSK-E0001")
-            .collect();
-        assert!(
-            !e0001.is_empty(),
-            "BSK-E0001 should still fire (demoted, not disabled)"
-        );
-        for d in &e0001 {
-            assert_eq!(
-                d.severity,
-                basilisk_checker::Severity::Warning,
-                "config override should demote BSK-E0001 to Warning, got {:?}",
-                d.severity
-            );
-            assert_ne!(
-                d.severity,
-                basilisk_checker::Severity::Error,
-                "BSK-E0001 must NOT be Error after demotion"
-            );
-        }
+        assert_checker_severity(&idx, &uri, "BSK-E0001", basilisk_checker::Severity::Warning);
     }
 
     #[test]
@@ -1498,30 +1458,11 @@ mod tests {
         let idx = make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Warning);
         let uri = make_uri("/tmp/cfg_demote_e0001_lsp.py");
         let lsp_diags = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
-
-        let codes = lsp_codes(&lsp_diags);
-        assert!(
-            codes.contains(&"BSK-E0001".to_owned()),
-            "BSK-E0001 should still appear in LSP diags after demotion"
+        assert_lsp_severity(
+            &lsp_diags,
+            "BSK-E0001",
+            tower_lsp::lsp_types::DiagnosticSeverity::WARNING,
         );
-
-        for d in &lsp_diags {
-            if let Some(tower_lsp::lsp_types::NumberOrString::String(code)) = &d.code {
-                if code == "BSK-E0001" {
-                    assert_eq!(
-                        d.severity,
-                        Some(tower_lsp::lsp_types::DiagnosticSeverity::WARNING),
-                        "LSP severity for demoted BSK-E0001 must be WARNING (2), got {:?}",
-                        d.severity
-                    );
-                    assert_ne!(
-                        d.severity,
-                        Some(tower_lsp::lsp_types::DiagnosticSeverity::ERROR),
-                        "demoted BSK-E0001 must NOT be ERROR in LSP"
-                    );
-                }
-            }
-        }
     }
 
     // ── Global rule severity override: demote error to info ─────────────────
@@ -1531,24 +1472,7 @@ mod tests {
         let idx = make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Info);
         let uri = make_uri("/tmp/cfg_info_e0001.py");
         let _ = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
-
-        let diags = get_diagnostics(&idx, &uri);
-        let e0001: Vec<_> = diags
-            .iter()
-            .filter(|d| d.code.code == "BSK-E0001")
-            .collect();
-        assert!(
-            !e0001.is_empty(),
-            "BSK-E0001 should still fire at Info severity"
-        );
-        for d in &e0001 {
-            assert_eq!(
-                d.severity,
-                basilisk_checker::Severity::Info,
-                "config override should demote BSK-E0001 to Info, got {:?}",
-                d.severity
-            );
-        }
+        assert_checker_severity(&idx, &uri, "BSK-E0001", basilisk_checker::Severity::Info);
     }
 
     #[test]
@@ -1556,19 +1480,11 @@ mod tests {
         let idx = make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Info);
         let uri = make_uri("/tmp/cfg_info_e0001_lsp.py");
         let lsp_diags = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
-
-        for d in &lsp_diags {
-            if let Some(tower_lsp::lsp_types::NumberOrString::String(code)) = &d.code {
-                if code == "BSK-E0001" {
-                    assert_eq!(
-                        d.severity,
-                        Some(tower_lsp::lsp_types::DiagnosticSeverity::INFORMATION),
-                        "LSP severity for info-demoted BSK-E0001 must be INFORMATION (3), got {:?}",
-                        d.severity
-                    );
-                }
-            }
-        }
+        assert_lsp_severity(
+            &lsp_diags,
+            "BSK-E0001",
+            tower_lsp::lsp_types::DiagnosticSeverity::INFORMATION,
+        );
     }
 
     // ── Global rule severity override: disable rule entirely ────────────────
@@ -1604,36 +1520,16 @@ mod tests {
 
     #[test]
     fn config_override_promotes_w0050_to_error_in_lsp() {
-        // This is the EXACT bug scenario: user has a config that should
-        // control W-code severity but the LSP was ignoring it.
+        // The `Error` variant means "keep default severity" — it does NOT promote.
+        // BSK-W0050's default is Warning, so it stays Warning even with RuleSeverity::Error.
         let idx = make_index_with_rule_override("BSK-W0050", basilisk_config::RuleSeverity::Error);
         let uri = make_uri("/tmp/cfg_promote_w0050.py");
         let lsp_diags = idx.set_open(&uri, SRC_REDUNDANT_ANNOTATION, 1);
-
-        let codes = lsp_codes(&lsp_diags);
-        assert!(
-            codes.contains(&"BSK-W0050".to_owned()),
-            "BSK-W0050 should still fire after promotion"
+        assert_lsp_severity(
+            &lsp_diags,
+            "BSK-W0050",
+            tower_lsp::lsp_types::DiagnosticSeverity::WARNING,
         );
-
-        // The rule severity override for Error means "keep default" (error stays error).
-        // For a W-code, the default is Warning. The config `Error` variant means
-        // "keep default severity" — it does NOT promote. The checker code:
-        //   RuleSeverity::Error => {} // keep default
-        // So BSK-W0050 stays as Warning even with RuleSeverity::Error.
-        // This test documents this behavior.
-        for d in &lsp_diags {
-            if let Some(tower_lsp::lsp_types::NumberOrString::String(code)) = &d.code {
-                if code == "BSK-W0050" {
-                    assert_eq!(
-                        d.severity,
-                        Some(tower_lsp::lsp_types::DiagnosticSeverity::WARNING),
-                        "BSK-W0050 with RuleSeverity::Error keeps default (Warning), got {:?}",
-                        d.severity
-                    );
-                }
-            }
-        }
     }
 
     // ── W0050 disabled via config ───────────────────────────────────────────

@@ -39,8 +39,7 @@ impl Rule for LiteralAugmentedAssign {
         }
 
         // Also walk the AST to find violations the resolver didn't collect.
-        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
-        else {
+        let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
 

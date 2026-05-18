@@ -122,48 +122,60 @@ pub(super) fn function_info_from(
     }
 }
 
-/// Extract the docstring from a function or class body.
+/// Walk a function body, applying `visit` to each statement and recursing into
+/// nested control-flow blocks (if/for/while/with/try). Does NOT recurse into
+/// nested `FunctionDef` or `ClassDef` — those have their own scope.
 ///
-/// The docstring is the first statement if it is a bare string literal expression.
-pub(super) fn collect_local_annotated_vars(stmts: &[Stmt]) -> Vec<VariableInfo> {
-    let mut out = Vec::new();
+/// `visit` is called for every statement, including the control-flow statements
+/// themselves; the helper handles recursion into their bodies separately.
+fn walk_function_stmts(stmts: &[Stmt], visit: &mut impl FnMut(&Stmt)) {
     for stmt in stmts {
+        visit(stmt);
         match stmt {
-            Stmt::AnnAssign(node) => {
-                if let Some(info) = ann_assign_info_from(node) {
-                    out.push(info);
-                }
-            }
             Stmt::If(node) => {
-                out.extend(collect_local_annotated_vars(&node.body));
+                walk_function_stmts(&node.body, visit);
                 for clause in &node.elif_else_clauses {
-                    out.extend(collect_local_annotated_vars(&clause.body));
+                    walk_function_stmts(&clause.body, visit);
                 }
             }
             Stmt::For(node) => {
-                out.extend(collect_local_annotated_vars(&node.body));
-                out.extend(collect_local_annotated_vars(&node.orelse));
+                walk_function_stmts(&node.body, visit);
+                walk_function_stmts(&node.orelse, visit);
             }
             Stmt::While(node) => {
-                out.extend(collect_local_annotated_vars(&node.body));
-                out.extend(collect_local_annotated_vars(&node.orelse));
+                walk_function_stmts(&node.body, visit);
+                walk_function_stmts(&node.orelse, visit);
             }
             Stmt::With(node) => {
-                out.extend(collect_local_annotated_vars(&node.body));
+                walk_function_stmts(&node.body, visit);
             }
             Stmt::Try(node) => {
-                out.extend(collect_local_annotated_vars(&node.body));
+                walk_function_stmts(&node.body, visit);
                 for handler in &node.handlers {
                     let ExceptHandler::ExceptHandler(h) = handler;
-                    out.extend(collect_local_annotated_vars(&h.body));
+                    walk_function_stmts(&h.body, visit);
                 }
-                out.extend(collect_local_annotated_vars(&node.orelse));
-                out.extend(collect_local_annotated_vars(&node.finalbody));
+                walk_function_stmts(&node.orelse, visit);
+                walk_function_stmts(&node.finalbody, visit);
             }
             // Do NOT recurse into nested function or class definitions.
             _ => {}
         }
     }
+}
+
+/// Extract the docstring from a function or class body.
+///
+/// The docstring is the first statement if it is a bare string literal expression.
+pub(super) fn collect_local_annotated_vars(stmts: &[Stmt]) -> Vec<VariableInfo> {
+    let mut out = Vec::new();
+    walk_function_stmts(stmts, &mut |stmt| {
+        if let Stmt::AnnAssign(node) = stmt {
+            if let Some(info) = ann_assign_info_from(node) {
+                out.push(info);
+            }
+        }
+    });
     out
 }
 
@@ -239,37 +251,11 @@ pub(super) fn annotation_source_text(expr: &Expr) -> String {
 /// Collect `return` statements from a function body (not into nested functions).
 pub(super) fn collect_return_stmts(stmts: &[Stmt]) -> Vec<ReturnStmtInfo> {
     let mut out = Vec::new();
-    for stmt in stmts {
-        match stmt {
-            Stmt::Return(ret) => out.push(return_stmt_info_from(ret)),
-            Stmt::If(node) => {
-                out.extend(collect_return_stmts(&node.body));
-                for clause in &node.elif_else_clauses {
-                    out.extend(collect_return_stmts(&clause.body));
-                }
-            }
-            Stmt::For(node) => {
-                out.extend(collect_return_stmts(&node.body));
-                out.extend(collect_return_stmts(&node.orelse));
-            }
-            Stmt::While(node) => {
-                out.extend(collect_return_stmts(&node.body));
-                out.extend(collect_return_stmts(&node.orelse));
-            }
-            Stmt::With(node) => out.extend(collect_return_stmts(&node.body)),
-            Stmt::Try(node) => {
-                out.extend(collect_return_stmts(&node.body));
-                for handler in &node.handlers {
-                    let ExceptHandler::ExceptHandler(h) = handler;
-                    out.extend(collect_return_stmts(&h.body));
-                }
-                out.extend(collect_return_stmts(&node.orelse));
-                out.extend(collect_return_stmts(&node.finalbody));
-            }
-            // Do NOT recurse into nested FunctionDef — those have their own return stmts.
-            _ => {}
+    walk_function_stmts(stmts, &mut |stmt| {
+        if let Stmt::Return(ret) = stmt {
+            out.push(return_stmt_info_from(ret));
         }
-    }
+    });
     out
 }
 
@@ -294,43 +280,13 @@ pub(super) fn return_stmt_info_from(ret: &StmtReturn) -> ReturnStmtInfo {
 /// Handles single names, tuples, and nested tuples (e.g. `for (x, y) in ...`).
 pub(super) fn collect_return_name_refs(stmts: &[Stmt]) -> Vec<(String, Span)> {
     let mut out = Vec::new();
-    for stmt in stmts {
-        match stmt {
-            Stmt::Return(ret) => {
-                if let Some(val) = ret.value.as_deref() {
-                    collect_name_refs_with_spans(val, &mut out);
-                }
+    walk_function_stmts(stmts, &mut |stmt| {
+        if let Stmt::Return(ret) = stmt {
+            if let Some(val) = ret.value.as_deref() {
+                collect_name_refs_with_spans(val, &mut out);
             }
-            Stmt::If(node) => {
-                out.extend(collect_return_name_refs(&node.body));
-                for clause in &node.elif_else_clauses {
-                    out.extend(collect_return_name_refs(&clause.body));
-                }
-            }
-            Stmt::For(node) => {
-                out.extend(collect_return_name_refs(&node.body));
-                out.extend(collect_return_name_refs(&node.orelse));
-            }
-            Stmt::While(node) => {
-                out.extend(collect_return_name_refs(&node.body));
-                out.extend(collect_return_name_refs(&node.orelse));
-            }
-            Stmt::With(node) => {
-                out.extend(collect_return_name_refs(&node.body));
-            }
-            Stmt::Try(node) => {
-                out.extend(collect_return_name_refs(&node.body));
-                for handler in &node.handlers {
-                    let ExceptHandler::ExceptHandler(h) = handler;
-                    out.extend(collect_return_name_refs(&h.body));
-                }
-                out.extend(collect_return_name_refs(&node.orelse));
-                out.extend(collect_return_name_refs(&node.finalbody));
-            }
-            // Do NOT recurse into nested FunctionDef.
-            _ => {}
         }
-    }
+    });
     out
 }
 

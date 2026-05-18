@@ -41,8 +41,7 @@ pub(crate) struct SuperAbstractCall;
 
 impl Rule for SuperAbstractCall {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
-        else {
+        let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
 

@@ -5,8 +5,22 @@
 
 use std::collections::{HashMap, HashSet};
 
-use basilisk_resolver::{ClassInfo, TypeVarCallInfo};
+use basilisk_parser::ParsedModule;
+use basilisk_resolver::{ClassInfo, ResolvedModule, TypeVarCallInfo};
 use ruff_python_ast::{self as ast, Expr};
+
+// ---------------------------------------------------------------------------
+// Parsing
+// ---------------------------------------------------------------------------
+
+/// Parse the resolved module's source into an AST, returning `None` on parse failure.
+///
+/// Every `Rule::check` implementation needs the AST and silently bails on parse
+/// errors (those are reported separately as `BSK-E0000`). This collapses that
+/// boilerplate into a single line at the call site.
+pub(crate) fn parse_module(module: &ResolvedModule) -> Option<ParsedModule> {
+    basilisk_parser::parse_source(module.source.clone(), module.path.clone()).ok()
+}
 
 // ---------------------------------------------------------------------------
 // Class lookup
