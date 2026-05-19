@@ -308,7 +308,9 @@ fn make_uv_add_stubs_action(diag: &Diagnostic, module: &str) -> CodeAction {
 )]
 mod tests {
     use super::*;
-    use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, NumberOrString, Position, Range, Url};
+    use tower_lsp::lsp_types::{
+        Diagnostic, DiagnosticSeverity, NumberOrString, Position, Range, Url,
+    };
 
     fn pos(line: u32, character: u32) -> Position {
         Position { line, character }
@@ -321,7 +323,12 @@ mod tests {
         }
     }
 
-    fn make_diagnostic(severity: DiagnosticSeverity, code: &str, message: &str, range: Range) -> Diagnostic {
+    fn make_diagnostic(
+        severity: DiagnosticSeverity,
+        code: &str,
+        message: &str,
+        range: Range,
+    ) -> Diagnostic {
         Diagnostic {
             range,
             severity: Some(severity),

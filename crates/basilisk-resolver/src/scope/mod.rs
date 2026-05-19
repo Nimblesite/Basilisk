@@ -31,8 +31,8 @@ pub use module_types::{
     UnhashableKeyRef,
 };
 pub use named::{
-    Named, collect_name_set, collect_name_set_where, collect_names, collect_names_where,
-    name_lookup,
+    collect_name_set, collect_name_set_where, collect_names, collect_names_where, name_lookup,
+    Named,
 };
 pub use narrowing_types::{MatchCaseNarrowing, NarrowingGuard, NarrowingGuardKind};
 pub use resolved_module::ResolvedModule;

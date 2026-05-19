@@ -5,9 +5,7 @@
 
 use std::collections::HashMap;
 
-use tower_lsp::lsp_types::{
-    CodeAction, CodeActionKind, Position, Range, TextEdit, Url,
-};
+use tower_lsp::lsp_types::{CodeAction, CodeActionKind, Position, Range, TextEdit, Url};
 
 /// Offer to remove the parameter under the cursor from a function and all
 /// call sites in the same file.

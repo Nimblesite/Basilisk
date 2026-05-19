@@ -157,18 +157,20 @@ pub(super) fn check_typevar_bound_expr(
     outer_typeparams: &std::collections::HashSet<String>,
     out: &mut Vec<Pep695BoundViolation>,
 ) {
-    let make = |kind: Pep695BoundViolationKind, range: ruff_text_size::TextRange| {
-        Pep695BoundViolation {
+    let make =
+        |kind: Pep695BoundViolationKind, range: ruff_text_size::TextRange| Pep695BoundViolation {
             kind,
             class_name: class_name.to_owned(),
             type_param_name: type_param.to_owned(),
             span: text_range_to_span(range),
-        }
-    };
+        };
 
     match bound {
         Expr::List(list) => {
-            out.push(make(Pep695BoundViolationKind::ListLiteralBound, list.range()));
+            out.push(make(
+                Pep695BoundViolationKind::ListLiteralBound,
+                list.range(),
+            ));
         }
         Expr::Tuple(tup) => {
             if tup.elts.is_empty() {

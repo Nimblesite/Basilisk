@@ -117,14 +117,7 @@ pub(crate) fn error_diag_help_note(
     help: String,
     note: &'static str,
 ) -> Diagnostic {
-    error_diagnostic_owned(
-        code,
-        message,
-        span,
-        path,
-        Some(help),
-        Some(note.to_owned()),
-    )
+    error_diagnostic_owned(code, message, span, path, Some(help), Some(note.to_owned()))
 }
 
 /// Build a `Warning`-severity diagnostic with `String`-owned `help`/`note` text.

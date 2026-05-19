@@ -2,9 +2,7 @@
 
 use std::collections::HashMap;
 
-use tower_lsp::lsp_types::{
-    CodeAction, CodeActionKind, Position, Range, TextEdit, Url,
-};
+use tower_lsp::lsp_types::{CodeAction, CodeActionKind, Position, Range, TextEdit, Url};
 
 use super::helpers::{last_import_line, leading_indent_of_line, selected_text};
 

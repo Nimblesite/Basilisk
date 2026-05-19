@@ -144,13 +144,13 @@ pub(super) fn check_protocol_violations_in_function(
     let enclosing_param_types: std::collections::HashMap<&str, &str> =
         super::walks::iter_all_params(&func.parameters)
             .filter_map(|p| {
-            p.parameter.annotation.as_deref().and_then(|ann| {
-                let range = ann.range();
-                source_slice_range(source, range)
-                    .map(|text| (p.parameter.name.as_str(), text.trim()))
+                p.parameter.annotation.as_deref().and_then(|ann| {
+                    let range = ann.range();
+                    source_slice_range(source, range)
+                        .map(|text| (p.parameter.name.as_str(), text.trim()))
+                })
             })
-        })
-        .collect();
+            .collect();
 
     if enclosing_param_types.is_empty() {
         return;

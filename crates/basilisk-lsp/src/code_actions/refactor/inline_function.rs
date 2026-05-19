@@ -3,9 +3,7 @@
 
 use std::collections::HashMap;
 
-use tower_lsp::lsp_types::{
-    CodeAction, CodeActionKind, Position, Range, TextEdit, Url,
-};
+use tower_lsp::lsp_types::{CodeAction, CodeActionKind, Position, Range, TextEdit, Url};
 
 /// Offer to inline a function call when the called function is defined in the
 /// same file and has a single `return expr` body.

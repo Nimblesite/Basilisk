@@ -54,10 +54,7 @@ pub fn collect_name_set<T: Named>(items: &[T]) -> HashSet<&str> {
 }
 
 /// Collect the names of items matching `pred` into a `Vec<&str>`.
-pub fn collect_names_where<T: Named, F: FnMut(&&T) -> bool>(
-    items: &[T],
-    pred: F,
-) -> Vec<&str> {
+pub fn collect_names_where<T: Named, F: FnMut(&&T) -> bool>(items: &[T], pred: F) -> Vec<&str> {
     items.iter().filter(pred).map(Named::name_str).collect()
 }
 

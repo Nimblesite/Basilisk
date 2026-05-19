@@ -1372,11 +1372,7 @@ mod tests {
     /// message containing `substring`. Used by tests that look for a
     /// specific (code, message-fragment) pair, e.g. unresolved-flask vs.
     /// unresolved-requests in the same E0010 firing.
-    fn has_diag(
-        diags: &[basilisk_checker::Diagnostic],
-        code: &str,
-        substring: &str,
-    ) -> bool {
+    fn has_diag(diags: &[basilisk_checker::Diagnostic], code: &str, substring: &str) -> bool {
         diags
             .iter()
             .any(|d| d.code.code == code && d.message.contains(substring))
@@ -1472,7 +1468,8 @@ mod tests {
 
     #[test]
     fn config_override_demotes_e0001_to_warning_in_checker() {
-        let idx = make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Warning);
+        let idx =
+            make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Warning);
         let uri = make_uri("/tmp/cfg_demote_e0001.py");
         let _ = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
         assert_checker_severity(&idx, &uri, "BSK-E0001", basilisk_checker::Severity::Warning);
@@ -1480,7 +1477,8 @@ mod tests {
 
     #[test]
     fn config_override_demotes_e0001_to_warning_in_lsp() {
-        let idx = make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Warning);
+        let idx =
+            make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Warning);
         let uri = make_uri("/tmp/cfg_demote_e0001_lsp.py");
         let lsp_diags = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
         assert_lsp_severity(
@@ -1516,7 +1514,8 @@ mod tests {
 
     #[test]
     fn config_override_disables_e0001_removes_from_checker() {
-        let idx = make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Disabled);
+        let idx =
+            make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Disabled);
         let uri = make_uri("/tmp/cfg_disable_e0001.py");
         let _ = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
 
@@ -1530,7 +1529,8 @@ mod tests {
 
     #[test]
     fn config_override_disables_e0001_removes_from_lsp() {
-        let idx = make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Disabled);
+        let idx =
+            make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Disabled);
         let uri = make_uri("/tmp/cfg_disable_e0001_lsp.py");
         let lsp_diags = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
 
@@ -1561,7 +1561,8 @@ mod tests {
 
     #[test]
     fn config_override_disables_w0050() {
-        let idx = make_index_with_rule_override("BSK-W0050", basilisk_config::RuleSeverity::Disabled);
+        let idx =
+            make_index_with_rule_override("BSK-W0050", basilisk_config::RuleSeverity::Disabled);
         let uri = make_uri("/tmp/cfg_disable_w0050.py");
         let lsp_diags = idx.set_open(&uri, SRC_REDUNDANT_ANNOTATION, 1);
 
@@ -1632,7 +1633,8 @@ mod tests {
 
     #[test]
     fn config_applies_to_set_open() {
-        let idx = make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Disabled);
+        let idx =
+            make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Disabled);
         let uri = make_uri("/tmp/cfg_set_open.py");
         let lsp_diags = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
 
@@ -1650,7 +1652,8 @@ mod tests {
         let file_path = dir.join("reload_cfg.py");
         std::fs::write(&file_path, SRC_MISSING_ANNOTATION).unwrap();
 
-        let idx = make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Disabled);
+        let idx =
+            make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Disabled);
 
         // First, set_open to get it in the index, then close to allow reload.
         let uri = Url::from_file_path(&file_path).unwrap();
@@ -1687,7 +1690,8 @@ mod tests {
         let file_path = dir.join("close_cfg.py");
         std::fs::write(&file_path, SRC_MISSING_ANNOTATION).unwrap();
 
-        let idx = make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Disabled);
+        let idx =
+            make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Disabled);
 
         let uri = Url::from_file_path(&file_path).unwrap();
         let _ = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
@@ -1876,7 +1880,11 @@ mod tests {
 
     #[test]
     fn bsk_to_lsp_maps_warning_to_warning_not_error() {
-        let diag = make_test_diag("BSK-W0050", basilisk_checker::Severity::Warning, "test warning");
+        let diag = make_test_diag(
+            "BSK-W0050",
+            basilisk_checker::Severity::Warning,
+            "test warning",
+        );
         let lsp_diag = crate::workspace_analysis::bsk_to_lsp(&diag, "x\n");
         assert_eq!(
             lsp_diag.severity,

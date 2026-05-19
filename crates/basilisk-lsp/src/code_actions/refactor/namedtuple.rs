@@ -4,9 +4,7 @@
 use std::collections::HashMap;
 use std::fmt::Write as _;
 
-use tower_lsp::lsp_types::{
-    CodeAction, CodeActionKind, Position, Range, TextEdit, Url,
-};
+use tower_lsp::lsp_types::{CodeAction, CodeActionKind, Position, Range, TextEdit, Url};
 
 /// Offer to convert between `NamedTuple` class syntax and `namedtuple()`
 /// functional syntax.

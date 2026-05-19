@@ -2,9 +2,7 @@
 
 use std::collections::HashMap;
 
-use tower_lsp::lsp_types::{
-    CodeAction, CodeActionKind, Position, Range, TextEdit, Url,
-};
+use tower_lsp::lsp_types::{CodeAction, CodeActionKind, Position, Range, TextEdit, Url};
 
 use super::helpers::{
     contains_bare_pipe, find_annotation_end, find_annotation_start, find_matching_bracket,

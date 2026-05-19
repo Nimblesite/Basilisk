@@ -248,8 +248,7 @@ pub(super) fn parse_dataclass_transform_decorator(expr: &Expr) -> (bool, bool, b
         }
         return (false, false, false, Vec::new());
     };
-    let is_dc =
-        super::walks::is_name_or_attr_named(call.func.as_ref(), "dataclass_transform");
+    let is_dc = super::walks::is_name_or_attr_named(call.func.as_ref(), "dataclass_transform");
     if !is_dc {
         return (false, false, false, Vec::new());
     }

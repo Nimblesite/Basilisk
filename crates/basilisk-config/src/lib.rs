@@ -228,10 +228,7 @@ disabled = ["BSK-E0010", "BSK-E0001"]
     fn json_exclude_overrides_defaults() {
         with_temp_cfg_dir(
             "bsk_cfg_json_exclude_xm",
-            &[(
-                "basilisk.json",
-                r#"{ "exclude": ["vendor", "generated"] }"#,
-            )],
+            &[("basilisk.json", r#"{ "exclude": ["vendor", "generated"] }"#)],
             |cfg| {
                 assert_eq!(cfg.exclude, vec!["vendor", "generated"]);
                 // Defaults are replaced, not merged.

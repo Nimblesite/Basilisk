@@ -16,6 +16,7 @@ pub use visitor::walks::{
 };
 
 pub use scope::{
+    collect_name_set, collect_name_set_where, collect_names, collect_names_where, name_lookup,
     AnnotatedTooFewArgs, AssertTypeCallInfo, AttributeInfo, BaseSubscriptEntry,
     BoundedTypeVarAttrViolation, CallSite, ClassInfo, CompareOp, EnumValueTypeViolationInfo,
     EnumValueTypeViolationKind, FinalViolationInfo, FinalViolationKind, FloatParamIntAttrAccess,
@@ -25,7 +26,6 @@ pub use scope::{
     LiteralStringEnumMismatch, LocalClassVarViolation, MatchCaseNarrowing, MatchStmtInfo,
     ModuleAttrAccessInfo, ModuleAttrAssignment, ModuleBareAssignment, ModuleOrderComparisonInfo,
     Named, NamedTupleDefInfo, NarrowingGuard, NarrowingGuardKind, NewTypeCallInfo, PackageDepKind,
-    collect_name_set, collect_name_set_where, collect_names, collect_names_where, name_lookup,
     ParameterInfo, Pep695BoundViolation, Pep695BoundViolationKind, ProtocolClassObjectViolation,
     ProtocolInstantiationViolation, ProtocolRtcViolation, ProtocolRtcViolationKind,
     ProtocolSelfViolation, ReadOnlyViolationInfo, ReadOnlyViolationKind, ResolvedModule,
