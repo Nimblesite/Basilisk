@@ -33,11 +33,8 @@ pub(crate) struct InconsistentTypeVarOrder;
 impl Rule for InconsistentTypeVarOrder {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         // Build a map of class_name -> ClassInfo for classes in this module.
-        let class_map: HashMap<&str, &basilisk_resolver::ClassInfo> = module
-            .classes
-            .iter()
-            .map(|cls| (cls.name.as_str(), cls))
-            .collect();
+        let class_map: HashMap<&str, &basilisk_resolver::ClassInfo> =
+            basilisk_resolver::name_lookup(&module.classes);
 
         for class in &module.classes {
             check_class(class, &class_map, &module.source, &module.path, diagnostics);

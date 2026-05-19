@@ -27,7 +27,7 @@
 
 use basilisk_resolver::scope::Span;
 use basilisk_resolver::ResolvedModule;
-use ruff_python_ast::{self as ast, Expr, Stmt};
+use ruff_python_ast::{Expr, Stmt};
 use ruff_text_size::Ranged;
 
 use super::Rule;
@@ -306,57 +306,27 @@ fn find_isinstance_calls(
     module: &ResolvedModule,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    for stmt in stmts {
-        match stmt {
-            Stmt::Expr(expr_stmt) => {
-                check_expr_for_violations(&expr_stmt.value, module, diagnostics);
-            }
-            Stmt::If(if_stmt) => {
-                check_expr_for_violations(&if_stmt.test, module, diagnostics);
-                find_isinstance_calls(&if_stmt.body, module, diagnostics);
-                for elif in &if_stmt.elif_else_clauses {
-                    if let Some(ref test) = elif.test {
-                        check_expr_for_violations(test, module, diagnostics);
-                    }
-                    find_isinstance_calls(&elif.body, module, diagnostics);
+    basilisk_resolver::walk_all_stmts(stmts, &mut |stmt| match stmt {
+        Stmt::Expr(expr_stmt) => check_expr_for_violations(&expr_stmt.value, module, diagnostics),
+        Stmt::If(if_stmt) => {
+            check_expr_for_violations(&if_stmt.test, module, diagnostics);
+            for elif in &if_stmt.elif_else_clauses {
+                if let Some(ref test) = elif.test {
+                    check_expr_for_violations(test, module, diagnostics);
                 }
             }
-            Stmt::FunctionDef(func) => {
-                find_isinstance_calls(&func.body, module, diagnostics);
-            }
-            Stmt::ClassDef(cls) => {
-                find_isinstance_calls(&cls.body, module, diagnostics);
-            }
-            Stmt::While(while_stmt) => {
-                check_expr_for_violations(&while_stmt.test, module, diagnostics);
-                find_isinstance_calls(&while_stmt.body, module, diagnostics);
-            }
-            Stmt::For(for_stmt) => {
-                find_isinstance_calls(&for_stmt.body, module, diagnostics);
-            }
-            Stmt::With(with_stmt) => {
-                find_isinstance_calls(&with_stmt.body, module, diagnostics);
-            }
-            Stmt::Try(try_stmt) => {
-                find_isinstance_calls(&try_stmt.body, module, diagnostics);
-                find_isinstance_calls(&try_stmt.finalbody, module, diagnostics);
-                find_isinstance_calls(&try_stmt.orelse, module, diagnostics);
-                for handler in &try_stmt.handlers {
-                    let ast::ExceptHandler::ExceptHandler(h) = handler;
-                    find_isinstance_calls(&h.body, module, diagnostics);
-                }
-            }
-            Stmt::Return(ret) => {
-                if let Some(ref value) = ret.value {
-                    check_expr_for_violations(value, module, diagnostics);
-                }
-            }
-            Stmt::Assign(assign) => {
-                check_expr_for_violations(&assign.value, module, diagnostics);
-            }
-            _ => {}
         }
-    }
+        Stmt::While(while_stmt) => {
+            check_expr_for_violations(&while_stmt.test, module, diagnostics);
+        }
+        Stmt::Return(ret) => {
+            if let Some(ref value) = ret.value {
+                check_expr_for_violations(value, module, diagnostics);
+            }
+        }
+        Stmt::Assign(assign) => check_expr_for_violations(&assign.value, module, diagnostics),
+        _ => {}
+    });
 }
 
 /// Check an expression for isinstance/issubclass protocol violations.

@@ -145,11 +145,7 @@ fn is_enum_member(arg: &str) -> bool {
 }
 
 fn is_ident(s: &str) -> bool {
-    !s.is_empty()
-        && s.chars()
-            .next()
-            .is_some_and(|c| c.is_alphabetic() || c == '_')
-        && s.chars().all(|c| c.is_alphanumeric() || c == '_')
+    basilisk_resolver::is_simple_python_identifier(s)
 }
 
 /// Returns `true` when `arg` is a *complete* string literal — i.e. it starts and ends

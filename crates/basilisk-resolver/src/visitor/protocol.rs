@@ -141,13 +141,9 @@ pub(super) fn check_protocol_violations_in_function(
     out: &mut Vec<ProtocolSelfViolation>,
 ) {
     // Build a map from this function's parameter names to their annotation text.
-    let enclosing_param_types: std::collections::HashMap<&str, &str> = func
-        .parameters
-        .posonlyargs
-        .iter()
-        .chain(func.parameters.args.iter())
-        .chain(func.parameters.kwonlyargs.iter())
-        .filter_map(|p| {
+    let enclosing_param_types: std::collections::HashMap<&str, &str> =
+        super::walks::iter_all_params(&func.parameters)
+            .filter_map(|p| {
             p.parameter.annotation.as_deref().and_then(|ann| {
                 let range = ann.range();
                 source_slice_range(source, range)

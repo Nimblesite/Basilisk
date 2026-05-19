@@ -3,162 +3,28 @@
 //! Each rule is a zero-size struct implementing [`Rule`]. Rules are
 //! registered in [`run_all`] and executed in order against a resolved module.
 
-pub(crate) mod e0001;
-pub(crate) mod e0002;
-pub(crate) mod e0003;
-pub(crate) mod e0004;
-pub(crate) mod e0005;
-pub(crate) mod e0010;
-pub(crate) mod e0011;
-pub(crate) mod e0012;
-pub(crate) mod e0013;
-pub(crate) mod e0014;
-pub(crate) mod e0015;
-pub(crate) mod e0016;
-pub(crate) mod e0017;
-pub(crate) mod e0018;
-pub(crate) mod e0019;
-pub(crate) mod e0020;
-pub(crate) mod e0021;
-pub(crate) mod e0022;
-pub(crate) mod e0023;
-pub(crate) mod e0024;
-pub(crate) mod e0025;
-pub(crate) mod e0026;
-pub(crate) mod e0027;
-pub(crate) mod e0029;
-pub(crate) mod e0030;
-pub(crate) mod e0031;
-pub(crate) mod e0032;
-pub(crate) mod e0033;
-pub(crate) mod e0034;
-pub(crate) mod e0035;
-pub(crate) mod e0036;
-pub(crate) mod e0037;
-pub(crate) mod e0038;
-pub(crate) mod e0039;
-pub(crate) mod e0040;
-pub(crate) mod e0041;
-pub(crate) mod e0042;
-pub(crate) mod e0043;
-pub(crate) mod e0044;
-pub(crate) mod e0045;
-pub(crate) mod e0046;
-pub(crate) mod e0047;
-pub(crate) mod e0048;
-pub(crate) mod e0049;
-pub(crate) mod e0050;
-pub(crate) mod e0051;
-pub(crate) mod e0052;
-pub(crate) mod e0053;
-pub(crate) mod e0054;
-pub(crate) mod e0055;
-pub(crate) mod e0056;
-pub(crate) mod e0057;
-pub(crate) mod e0058;
-pub(crate) mod e0059;
-pub(crate) mod e0060;
-pub(crate) mod e0061;
-pub(crate) mod e0062;
-pub(crate) mod e0063;
-pub(crate) mod e0064;
-pub(crate) mod e0065;
-pub(crate) mod e0066;
-pub(crate) mod e0067;
-pub(crate) mod e0068;
-pub(crate) mod e0069;
-pub(crate) mod e0070;
-pub(crate) mod e0071;
-pub(crate) mod e0072;
-pub(crate) mod e0073;
-pub(crate) mod e0074;
-pub(crate) mod e0075;
-pub(crate) mod e0076;
-pub(crate) mod e0077;
-pub(crate) mod e0078;
-pub(crate) mod e0079;
-pub(crate) mod e0080;
-pub(crate) mod e0081;
-pub(crate) mod e0082;
-pub(crate) mod e0083;
-pub(crate) mod e0084;
-pub(crate) mod e0085;
-pub(crate) mod e0086;
-pub(crate) mod e0087;
-pub(crate) mod e0088;
-pub(crate) mod e0089;
-pub(crate) mod e0090;
-pub(crate) mod e0091;
-pub(crate) mod e0092;
-pub(crate) mod e0093;
-pub(crate) mod e0094;
-pub(crate) mod e0095;
-pub(crate) mod e0096;
-pub(crate) mod e0097;
-pub(crate) mod e0098;
-pub(crate) mod e0099;
-pub(crate) mod e0100;
-pub(crate) mod e0101;
-pub(crate) mod e0102;
-pub(crate) mod e0103;
-pub(crate) mod e0104;
-pub(crate) mod e0105;
-pub(crate) mod e0106;
-pub(crate) mod e0107;
-pub(crate) mod e0108;
-pub(crate) mod e0109;
-pub(crate) mod e0110;
-pub(crate) mod e0111;
-pub(crate) mod e0112;
-pub(crate) mod e0113;
-pub(crate) mod e0114;
-pub(crate) mod e0115;
-pub(crate) mod e0116;
-pub(crate) mod e0117;
-pub(crate) mod e0118;
-pub(crate) mod e0119;
-pub(crate) mod e0120;
-pub(crate) mod e0120_helpers;
-pub(crate) mod e0121;
-pub(crate) mod e0122;
-pub(crate) mod e0123;
-pub(crate) mod e0124;
-pub(crate) mod e0125;
-pub(crate) mod e0126;
-pub(crate) mod e0126_helpers;
-pub(crate) mod e0127;
-pub(crate) mod e0128;
-pub(crate) mod e0128_helpers;
-pub(crate) mod e0129;
-pub(crate) mod e0130;
-pub(crate) mod e0131;
-pub(crate) mod e0132;
-pub(crate) mod e0133;
-pub(crate) mod e0134;
-pub(crate) mod e0136;
-pub(crate) mod e0137;
-pub(crate) mod e0138;
-pub(crate) mod e0139;
-pub(crate) mod e0140;
-pub(crate) mod e0141;
-pub(crate) mod e0142;
-pub(crate) mod e0143;
-pub(crate) mod e0144;
-pub(crate) mod e0145;
-pub(crate) mod e0146;
-pub(crate) mod e0147;
-pub(crate) mod e0148;
-pub(crate) mod e0149;
-pub(crate) mod e0150;
-pub(crate) mod e0151;
-pub(crate) mod guards;
-pub(crate) mod shared;
-pub(crate) mod w0010;
-pub(crate) mod w0011;
-pub(crate) mod w0012;
-pub(crate) mod w0013;
-pub(crate) mod w0040;
-pub(crate) mod w0050;
+/// Declare a list of crate-private submodules in one go.
+macro_rules! rule_modules {
+    ($($name:ident),* $(,)?) => {
+        $( pub(crate) mod $name; )*
+    };
+}
+
+rule_modules!(
+    e0001, e0002, e0003, e0004, e0005, e0010, e0011, e0012, e0013, e0014, e0015, e0016, e0017,
+    e0018, e0019, e0020, e0021, e0022, e0023, e0024, e0025, e0026, e0027, e0029, e0030, e0031,
+    e0032, e0033, e0034, e0035, e0036, e0037, e0038, e0039, e0040, e0041, e0042, e0043, e0044,
+    e0045, e0046, e0047, e0048, e0049, e0050, e0051, e0052, e0053, e0054, e0055, e0056, e0057,
+    e0058, e0059, e0060, e0061, e0062, e0063, e0064, e0065, e0066, e0067, e0068, e0069, e0070,
+    e0071, e0072, e0073, e0074, e0075, e0076, e0077, e0078, e0079, e0080, e0081, e0082, e0083,
+    e0084, e0085, e0086, e0087, e0088, e0089, e0090, e0091, e0092, e0093, e0094, e0095, e0096,
+    e0097, e0098, e0099, e0100, e0101, e0102, e0103, e0104, e0105, e0106, e0107, e0108, e0109,
+    e0110, e0111, e0112, e0113, e0114, e0115, e0116, e0117, e0118, e0119, e0120, e0120_helpers,
+    e0121, e0122, e0123, e0124, e0125, e0126, e0126_helpers, e0127, e0128, e0128_helpers, e0129,
+    e0130, e0131, e0132, e0133, e0134, e0136, e0137, e0138, e0139, e0140, e0141, e0142, e0143,
+    e0144, e0145, e0146, e0147, e0148, e0149, e0150, e0151, guards, shared, w0010, w0011, w0012,
+    w0013, w0040, w0050,
+);
 
 use basilisk_resolver::ResolvedModule;
 

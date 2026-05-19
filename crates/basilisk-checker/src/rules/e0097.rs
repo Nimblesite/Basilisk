@@ -50,11 +50,8 @@ impl Rule for ProtocolNewSelfAttrViolation {
 
         for cls_info in &protocol_classes {
             // Collect declared attribute names for this protocol.
-            let declared_attrs: HashSet<&str> = cls_info
-                .attributes
-                .iter()
-                .map(|a| a.name.as_str())
-                .collect();
+            let declared_attrs: HashSet<&str> =
+                basilisk_resolver::collect_name_set(&cls_info.attributes);
 
             // Also include method names as declared members.
             let declared_methods: HashSet<&str> =

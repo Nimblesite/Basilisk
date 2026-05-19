@@ -311,11 +311,7 @@ pub(super) fn is_enum_member_form(s: &str) -> bool {
 }
 
 pub(super) fn is_simple_ident(s: &str) -> bool {
-    !s.is_empty()
-        && s.chars()
-            .next()
-            .is_some_and(|c| c.is_alphabetic() || c == '_')
-        && s.chars().all(|c| c.is_alphanumeric() || c == '_')
+    crate::is_simple_python_identifier(s)
 }
 
 /// Returns `true` when `s` is a quoted string whose body equals `enum_form`.
@@ -339,12 +335,7 @@ pub(super) fn collect_literal_mismatches_in_function(
 ) {
     // Build a list of (param_name, enum_form) pairs for parameters annotated as
     // `Literal[X.Y]` where X.Y is an enum member (e.g. `Literal[Color.RED]`).
-    let param_enum_literals: Vec<(&str, &str)> = func
-        .parameters
-        .posonlyargs
-        .iter()
-        .chain(func.parameters.args.iter())
-        .chain(func.parameters.kwonlyargs.iter())
+    let param_enum_literals: Vec<(&str, &str)> = super::walks::iter_all_params(&func.parameters)
         .filter_map(|p| {
             let ann_expr = p.parameter.annotation.as_deref()?;
             let range = ann_expr.range();

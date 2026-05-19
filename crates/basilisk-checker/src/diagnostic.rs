@@ -106,6 +106,27 @@ pub(crate) fn error_diagnostic_owned(
     diagnostic_owned(code, Severity::Error, message, span, path, help, note)
 }
 
+/// Convenience: build an `Error` diagnostic with a `format!`-produced `help`
+/// and a static `&'static str` note. Many rules pair a dynamic help string
+/// with an immutable PEP/spec reference note; this collapses that pattern.
+pub(crate) fn error_diag_help_note(
+    code: ErrorCode,
+    message: String,
+    span: Span,
+    path: &str,
+    help: String,
+    note: &'static str,
+) -> Diagnostic {
+    error_diagnostic_owned(
+        code,
+        message,
+        span,
+        path,
+        Some(help),
+        Some(note.to_owned()),
+    )
+}
+
 /// Build a `Warning`-severity diagnostic with `String`-owned `help`/`note` text.
 pub(crate) fn warning_diagnostic_owned(
     code: ErrorCode,

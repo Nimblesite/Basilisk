@@ -186,17 +186,7 @@ fn paren_has_top_level_comma(s: &str) -> bool {
     if s.len() < 2 {
         return false;
     }
-    let inner = &s[1..s.len() - 1];
-    let mut depth = 0i32;
-    for ch in inner.chars() {
-        match ch {
-            '[' | '(' | '{' => depth += 1,
-            ']' | ')' | '}' => depth -= 1,
-            ',' if depth == 0 => return true,
-            _ => {}
-        }
-    }
-    false
+    crate::rules::shared::contains_top_level_comma(&s[1..s.len() - 1])
 }
 
 /// Emits BSK-E0048 when a `TypeAlias`-annotated variable has an invalid RHS type expression.

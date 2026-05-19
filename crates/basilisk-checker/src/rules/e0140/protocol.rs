@@ -7,6 +7,36 @@ use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
 use super::callable::types_compat;
 use super::context::{FuncSig, ProtocolInfo};
 
+/// Bundle of `(target, func, proto, path, code, diag, span)` shared by every
+/// protocol-compatibility sub-check. The original signatures repeated all
+/// seven parameters; threading the context through one struct collapses the
+/// duplication and keeps call sites short.
+struct ProtoCheckCtx<'a> {
+    target: &'a FuncSig,
+    func: &'a FuncSig,
+    proto: &'a ProtocolInfo,
+    path: &'a str,
+    code: &'a ErrorCode,
+    span: Span,
+    diag: &'a mut Vec<Diagnostic>,
+}
+
+impl ProtoCheckCtx<'_> {
+    /// Push a no-help/no-note error diagnostic using this context's `code`,
+    /// `span` and `path`. All E0140 protocol diagnostics share that triple
+    /// and pass `None, None` for help/note.
+    fn push_err(&mut self, message: String) {
+        self.diag.push(error_diagnostic_owned(
+            self.code.clone(),
+            message,
+            self.span,
+            self.path,
+            None,
+            None,
+        ));
+    }
+}
+
 /// Check whether `func` satisfies the `proto` Protocol contract. Emits
 /// diagnostics for any incompatibility found.
 pub(super) fn check_protocol_func_compat(
@@ -41,14 +71,23 @@ pub(super) fn check_protocol_func_compat(
         return;
     }
 
-    if check_protocol_varargs_kwargs(target, func, proto, path, code, diag, span) {
+    let mut ctx = ProtoCheckCtx {
+        target,
+        func,
+        proto,
+        path,
+        code,
+        span,
+        diag,
+    };
+    if check_protocol_varargs_kwargs(&mut ctx) {
         return;
     }
-    if check_protocol_param_counts(target, func, proto, path, code, diag, span) {
+    if check_protocol_param_counts(&mut ctx) {
         return;
     }
-    check_protocol_defaults_and_kw(target, func, proto, path, code, diag, span);
-    check_protocol_param_types(target, func, proto, path, code, diag, span);
+    check_protocol_defaults_and_kw(&mut ctx);
+    check_protocol_param_types(&mut ctx);
 }
 
 /// Check that a source function can handle all overloaded `__call__` signatures.
@@ -91,40 +130,19 @@ fn check_overload_compat(
 /// Check `*args` and `**kwargs` compatibility.
 ///
 /// Returns `true` if a fatal mismatch was found and further checks should stop.
-fn check_protocol_varargs_kwargs(
-    target: &FuncSig,
-    func: &FuncSig,
-    proto: &ProtocolInfo,
-    path: &str,
-    code: &ErrorCode,
-    diag: &mut Vec<Diagnostic>,
-    span: Span,
-) -> bool {
+fn check_protocol_varargs_kwargs(ctx: &mut ProtoCheckCtx<'_>) -> bool {
+    let (target, func, proto) = (ctx.target, ctx.func, ctx.proto);
     if target.has_varargs && !func.has_varargs && target.positional_params.is_empty() {
-        diag.push(error_diagnostic_owned(
-            code.clone(),
-            format!(
-                "Function `{}` incompatible with `{}`: missing `*args`",
-                func.name, proto.name
-            ),
-            span,
-            path,
-            None,
-            None,
+        ctx.push_err(format!(
+            "Function `{}` incompatible with `{}`: missing `*args`",
+            func.name, proto.name
         ));
         return true;
     }
     if target.has_kwargs && !func.has_kwargs {
-        diag.push(error_diagnostic_owned(
-            code.clone(),
-            format!(
-                "Function `{}` incompatible with `{}`: missing `**kwargs`",
-                func.name, proto.name
-            ),
-            span,
-            path,
-            None,
-            None,
+        ctx.push_err(format!(
+            "Function `{}` incompatible with `{}`: missing `**kwargs`",
+            func.name, proto.name
         ));
         return true;
     }
@@ -134,15 +152,8 @@ fn check_protocol_varargs_kwargs(
 /// Check positional parameter count compatibility.
 ///
 /// Returns `true` if a fatal mismatch was found.
-fn check_protocol_param_counts(
-    target: &FuncSig,
-    func: &FuncSig,
-    proto: &ProtocolInfo,
-    path: &str,
-    code: &ErrorCode,
-    diag: &mut Vec<Diagnostic>,
-    span: Span,
-) -> bool {
+fn check_protocol_param_counts(ctx: &mut ProtoCheckCtx<'_>) -> bool {
+    let (target, func, proto) = (ctx.target, ctx.func, ctx.proto);
     let src_req = func
         .positional_params
         .iter()
@@ -164,16 +175,9 @@ fn check_protocol_param_counts(
             src_req.saturating_sub(target.positional_params.len())
         };
     if src_excess_positional > 0 && !target.has_varargs {
-        diag.push(error_diagnostic_owned(
-            code.clone(),
-            format!(
-                "Function `{}` incompatible with `{}`: too many required params",
-                func.name, proto.name
-            ),
-            span,
-            path,
-            None,
-            None,
+        ctx.push_err(format!(
+            "Function `{}` incompatible with `{}`: too many required params",
+            func.name, proto.name
         ));
         return true;
     }
@@ -183,16 +187,9 @@ fn check_protocol_param_counts(
         .filter(|p| !p.has_default)
         .count();
     if tgt_req > func.positional_params.len() && !func.has_varargs {
-        diag.push(error_diagnostic_owned(
-            code.clone(),
-            format!(
-                "Function `{}` incompatible with `{}`: missing required params",
-                func.name, proto.name
-            ),
-            span,
-            path,
-            None,
-            None,
+        ctx.push_err(format!(
+            "Function `{}` incompatible with `{}`: missing required params",
+            func.name, proto.name
         ));
         return true;
     }
@@ -201,45 +198,23 @@ fn check_protocol_param_counts(
 
 /// Check default-argument requirements, keyword-only params, and positional-only
 /// mismatches.
-fn check_protocol_defaults_and_kw(
-    target: &FuncSig,
-    func: &FuncSig,
-    proto: &ProtocolInfo,
-    path: &str,
-    code: &ErrorCode,
-    diag: &mut Vec<Diagnostic>,
-    span: Span,
-) {
-    check_positional_defaults(target, func, proto, path, code, diag, span);
-    check_kw_only_presence_and_defaults(target, func, proto, path, code, diag, span);
-    check_source_required_kw(target, func, proto, path, code, diag, span);
-    check_positional_only_mismatch(target, func, proto, path, code, diag, span);
+fn check_protocol_defaults_and_kw(ctx: &mut ProtoCheckCtx<'_>) {
+    check_positional_defaults(ctx);
+    check_kw_only_presence_and_defaults(ctx);
+    check_source_required_kw(ctx);
+    check_positional_only_mismatch(ctx);
 }
 
 /// Check positional parameter default requirements.
-fn check_positional_defaults(
-    target: &FuncSig,
-    func: &FuncSig,
-    proto: &ProtocolInfo,
-    path: &str,
-    code: &ErrorCode,
-    diag: &mut Vec<Diagnostic>,
-    span: Span,
-) {
+fn check_positional_defaults(ctx: &mut ProtoCheckCtx<'_>) {
+    let (target, func, proto) = (ctx.target, ctx.func, ctx.proto);
     for (idx, tp) in target.positional_params.iter().enumerate() {
         if tp.has_default {
             if let Some(sp) = func.positional_params.get(idx) {
                 if !sp.has_default && !func.has_varargs {
-                    diag.push(error_diagnostic_owned(
-                        code.clone(),
-                        format!(
-                            "Function `{}` incompatible with `{}`: param `{}` needs default",
-                            func.name, proto.name, sp.name
-                        ),
-                        span,
-                        path,
-                        None,
-                        None,
+                    ctx.push_err(format!(
+                        "Function `{}` incompatible with `{}`: param `{}` needs default",
+                        func.name, proto.name, sp.name
                     ));
                 }
             }
@@ -248,15 +223,8 @@ fn check_positional_defaults(
 }
 
 /// Check keyword-only param presence and defaults against the protocol.
-fn check_kw_only_presence_and_defaults(
-    target: &FuncSig,
-    func: &FuncSig,
-    proto: &ProtocolInfo,
-    path: &str,
-    code: &ErrorCode,
-    diag: &mut Vec<Diagnostic>,
-    span: Span,
-) {
+fn check_kw_only_presence_and_defaults(ctx: &mut ProtoCheckCtx<'_>) {
+    let (target, func, proto) = (ctx.target, ctx.func, ctx.proto);
     for tkw in &target.kw_only_params {
         let matching_kw = func.kw_only_params.iter().find(|sk| sk.name == tkw.name);
         let matching_reg = func
@@ -264,16 +232,9 @@ fn check_kw_only_presence_and_defaults(
             .iter()
             .find(|sp| sp.name == tkw.name && !sp.is_positional_only);
         if matching_kw.is_none() && matching_reg.is_none() && !func.has_kwargs {
-            diag.push(error_diagnostic_owned(
-                code.clone(),
-                format!(
-                    "Function `{}` incompatible with `{}`: missing keyword param `{}`",
-                    func.name, proto.name, tkw.name
-                ),
-                span,
-                path,
-                None,
-                None,
+            ctx.push_err(format!(
+                "Function `{}` incompatible with `{}`: missing keyword param `{}`",
+                func.name, proto.name, tkw.name
             ));
             continue;
         }
@@ -281,16 +242,9 @@ fn check_kw_only_presence_and_defaults(
             let source_has_default = matching_kw.is_some_and(|p| p.has_default)
                 || matching_reg.is_some_and(|p| p.has_default);
             if !source_has_default && !func.has_kwargs {
-                diag.push(error_diagnostic_owned(
-                    code.clone(),
-                    format!(
-                        "Function `{}` incompatible with `{}`: keyword param `{}` needs default",
-                        func.name, proto.name, tkw.name
-                    ),
-                    span,
-                    path,
-                    None,
-                    None,
+                ctx.push_err(format!(
+                    "Function `{}` incompatible with `{}`: keyword param `{}` needs default",
+                    func.name, proto.name, tkw.name
                 ));
             }
         }
@@ -298,15 +252,8 @@ fn check_kw_only_presence_and_defaults(
 }
 
 /// Check source required kw-only params not present in the target protocol.
-fn check_source_required_kw(
-    target: &FuncSig,
-    func: &FuncSig,
-    proto: &ProtocolInfo,
-    path: &str,
-    code: &ErrorCode,
-    diag: &mut Vec<Diagnostic>,
-    span: Span,
-) {
+fn check_source_required_kw(ctx: &mut ProtoCheckCtx<'_>) {
+    let (target, func, proto) = (ctx.target, ctx.func, ctx.proto);
     for skw in &func.kw_only_params {
         if skw.has_default {
             continue;
@@ -317,45 +264,24 @@ fn check_source_required_kw(
             .iter()
             .any(|tp| tp.name == skw.name);
         if !in_target_kw && !in_target_pos && !target.has_kwargs {
-            diag.push(error_diagnostic_owned(
-                code.clone(),
-                format!(
-                    "Function `{}` incompatible with `{}`: requires keyword `{}` not in protocol",
-                    func.name, proto.name, skw.name
-                ),
-                span,
-                path,
-                None,
-                None,
+            ctx.push_err(format!(
+                "Function `{}` incompatible with `{}`: requires keyword `{}` not in protocol",
+                func.name, proto.name, skw.name
             ));
         }
     }
 }
 
 /// Check positional-only parameter mismatches.
-fn check_positional_only_mismatch(
-    target: &FuncSig,
-    func: &FuncSig,
-    proto: &ProtocolInfo,
-    path: &str,
-    code: &ErrorCode,
-    diag: &mut Vec<Diagnostic>,
-    span: Span,
-) {
+fn check_positional_only_mismatch(ctx: &mut ProtoCheckCtx<'_>) {
+    let (target, func, proto) = (ctx.target, ctx.func, ctx.proto);
     for (idx, tp) in target.positional_params.iter().enumerate() {
         if !tp.is_positional_only {
             if let Some(sp) = func.positional_params.get(idx) {
                 if sp.is_positional_only {
-                    diag.push(error_diagnostic_owned(
-                        code.clone(),
-                        format!(
-                            "Function `{}` incompatible with `{}`: param `{}` is pos-only but must accept keyword",
-                            func.name, proto.name, sp.name
-                        ),
-                        span,
-                        path,
-                        None,
-                        None,
+                    ctx.push_err(format!(
+                        "Function `{}` incompatible with `{}`: param `{}` is pos-only but must accept keyword",
+                        func.name, proto.name, sp.name
                     ));
                 }
             }
@@ -365,15 +291,8 @@ fn check_positional_only_mismatch(
 
 /// Check parameter type compatibility (contravariant), `*args` type, and
 /// `**kwargs` type.
-fn check_protocol_param_types(
-    target: &FuncSig,
-    func: &FuncSig,
-    proto: &ProtocolInfo,
-    path: &str,
-    code: &ErrorCode,
-    diag: &mut Vec<Diagnostic>,
-    span: Span,
-) {
+fn check_protocol_param_types(ctx: &mut ProtoCheckCtx<'_>) {
+    let (target, func, proto) = (ctx.target, ctx.func, ctx.proto);
     // Param type compat (contravariant)
     for (idx, tp) in target.positional_params.iter().enumerate() {
         if let Some(sp) = func.positional_params.get(idx) {
@@ -381,16 +300,9 @@ fn check_protocol_param_types(
                 && !sp.type_annotation.is_empty()
                 && !types_compat(&tp.type_annotation, &sp.type_annotation)
             {
-                diag.push(error_diagnostic_owned(
-                    code.clone(),
-                    format!(
-                        "Function `{}` incompatible with `{}`: param `{}` type `{}` vs `{}`",
-                        func.name, proto.name, sp.name, sp.type_annotation, tp.type_annotation
-                    ),
-                    span,
-                    path,
-                    None,
-                    None,
+                ctx.push_err(format!(
+                    "Function `{}` incompatible with `{}`: param `{}` type `{}` vs `{}`",
+                    func.name, proto.name, sp.name, sp.type_annotation, tp.type_annotation
                 ));
             }
         }
@@ -411,16 +323,9 @@ fn check_protocol_param_types(
                 && !sp.type_annotation.is_empty()
                 && !types_compat(&tkw.type_annotation, &sp.type_annotation)
             {
-                diag.push(error_diagnostic_owned(
-                    code.clone(),
-                    format!(
-                        "Function `{}` incompatible with `{}`: keyword param `{}` type `{}` vs `{}`",
-                        func.name, proto.name, sp.name, sp.type_annotation, tkw.type_annotation
-                    ),
-                    span,
-                    path,
-                    None,
-                    None,
+                ctx.push_err(format!(
+                    "Function `{}` incompatible with `{}`: keyword param `{}` type `{}` vs `{}`",
+                    func.name, proto.name, sp.name, sp.type_annotation, tkw.type_annotation
                 ));
             }
         }
@@ -432,16 +337,9 @@ fn check_protocol_param_types(
         && !func.varargs_type.is_empty()
         && !types_compat(&target.varargs_type, &func.varargs_type)
     {
-        diag.push(error_diagnostic_owned(
-            code.clone(),
-            format!(
-                "Function `{}` incompatible with `{}`: *args type `{}` vs `{}`",
-                func.name, proto.name, func.varargs_type, target.varargs_type
-            ),
-            span,
-            path,
-            None,
-            None,
+        ctx.push_err(format!(
+            "Function `{}` incompatible with `{}`: *args type `{}` vs `{}`",
+            func.name, proto.name, func.varargs_type, target.varargs_type
         ));
     }
     // **kwargs type compat
@@ -451,16 +349,9 @@ fn check_protocol_param_types(
         && !func.kwargs_type.is_empty()
         && !types_compat(&target.kwargs_type, &func.kwargs_type)
     {
-        diag.push(error_diagnostic_owned(
-            code.clone(),
-            format!(
-                "Function `{}` incompatible with `{}`: **kwargs type `{}` vs `{}`",
-                func.name, proto.name, func.kwargs_type, target.kwargs_type
-            ),
-            span,
-            path,
-            None,
-            None,
+        ctx.push_err(format!(
+            "Function `{}` incompatible with `{}`: **kwargs type `{}` vs `{}`",
+            func.name, proto.name, func.kwargs_type, target.kwargs_type
         ));
     }
 }

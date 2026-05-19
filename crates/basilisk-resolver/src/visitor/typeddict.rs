@@ -210,7 +210,7 @@ pub(super) fn collect_typeddict_key_violations<'a>(
         .iter()
         .filter(|c| c.is_typed_dict)
         .map(|c| {
-            let all_fields: Vec<&str> = c.attributes.iter().map(|a| a.name.as_str()).collect();
+            let all_fields: Vec<&str> = crate::collect_names(&c.attributes);
             let field_types: HashMap<&str, String> = c
                 .attributes
                 .iter()

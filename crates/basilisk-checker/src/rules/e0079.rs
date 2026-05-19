@@ -23,7 +23,7 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diag_help_note};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -237,7 +237,7 @@ fn check_annotated_assign(
     let Some(mod_interface) = load_module_interface(module_name, module_dir) else {
         // Module interface could not be loaded (e.g. stdlib module like `sys`).
         // We cannot verify compatibility, so flag the assignment.
-        diagnostics.push(error_diagnostic_owned(
+        diagnostics.push(error_diag_help_note(
             CODE.clone(),
             format!(
                 "Module `{module_name}` assigned to protocol `{protocol_name}` \
@@ -245,15 +245,12 @@ fn check_annotated_assign(
             ),
             span,
             path,
-            Some(format!(
+            format!(
                 "Ensure module `{module_name}` provides all members required \
                  by `{protocol_name}` with compatible types"
-            )),
-            Some(
-                "A module can be used where a protocol is expected only if its \
-                 public interface is compatible with the protocol"
-                    .to_owned(),
             ),
+            "A module can be used where a protocol is expected only if its \
+             public interface is compatible with the protocol",
         ));
         return;
     };
@@ -268,7 +265,7 @@ fn check_annotated_assign(
     );
 
     if let Some(reason) = incompatibility {
-        diagnostics.push(error_diagnostic_owned(
+        diagnostics.push(error_diag_help_note(
             CODE.clone(),
             format!(
                 "Module `{module_name}` is not compatible with protocol \
@@ -276,15 +273,12 @@ fn check_annotated_assign(
             ),
             span,
             path,
-            Some(format!(
+            format!(
                 "Ensure module `{module_name}` provides all members required \
                  by `{protocol_name}` with compatible types"
-            )),
-            Some(
-                "A module can be used where a protocol is expected only if its \
-                 public interface is compatible with the protocol"
-                    .to_owned(),
             ),
+            "A module can be used where a protocol is expected only if its \
+             public interface is compatible with the protocol",
         ));
     }
 }

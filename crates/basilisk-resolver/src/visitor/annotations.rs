@@ -210,13 +210,7 @@ pub(super) fn collect_multi_unbounded_from_stmt(stmt: &Stmt, out: &mut Vec<Span>
         }
         Stmt::FunctionDef(func) => {
             // Check parameter annotations
-            let all_params = func
-                .parameters
-                .posonlyargs
-                .iter()
-                .chain(func.parameters.args.iter())
-                .chain(func.parameters.kwonlyargs.iter());
-            for param in all_params {
+            for param in super::walks::iter_all_params(&func.parameters) {
                 if let Some(ann) = param.parameter.annotation.as_ref() {
                     if annotation_has_multiple_unbounded(ann) {
                         out.push(text_range_to_span(ann.range()));

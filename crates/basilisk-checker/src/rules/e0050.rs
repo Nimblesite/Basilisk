@@ -232,12 +232,8 @@ impl Rule for InvalidNewType {
         let source = &module.source;
         let path = &module.path;
 
-        let typeddict_names: Vec<&str> = module
-            .classes
-            .iter()
-            .filter(|c| c.is_typed_dict)
-            .map(|c| c.name.as_str())
-            .collect();
+        let typeddict_names: Vec<&str> =
+            basilisk_resolver::collect_names_where(&module.classes, |c| c.is_typed_dict);
 
         for info in &module.newtype_calls {
             check_newtype_call(info, source, path, &typeddict_names, diagnostics);

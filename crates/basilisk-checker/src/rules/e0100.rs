@@ -49,49 +49,15 @@ impl Rule for LiteralAugmentedAssign {
 
 /// Walk statements looking for function definitions with `Literal`-annotated parameters.
 fn walk_stmts(stmts: &[Stmt], path: &str, diagnostics: &mut Vec<Diagnostic>) {
-    for stmt in stmts {
-        match stmt {
-            Stmt::FunctionDef(func_def) => {
-                // Collect parameter names annotated with `Literal[...]`.
-                let literal_params = collect_literal_params(func_def);
-                if !literal_params.is_empty() {
-                    check_body_for_aug_assign(&func_def.body, &literal_params, path, diagnostics);
-                }
-                // Recurse into nested functions.
-                walk_stmts(&func_def.body, path, diagnostics);
-            }
-            Stmt::ClassDef(class_def) => {
-                walk_stmts(&class_def.body, path, diagnostics);
-            }
-            Stmt::If(if_stmt) => {
-                walk_stmts(&if_stmt.body, path, diagnostics);
-                for clause in &if_stmt.elif_else_clauses {
-                    walk_stmts(&clause.body, path, diagnostics);
-                }
-            }
-            Stmt::For(for_stmt) => {
-                walk_stmts(&for_stmt.body, path, diagnostics);
-                walk_stmts(&for_stmt.orelse, path, diagnostics);
-            }
-            Stmt::While(while_stmt) => {
-                walk_stmts(&while_stmt.body, path, diagnostics);
-                walk_stmts(&while_stmt.orelse, path, diagnostics);
-            }
-            Stmt::Try(try_stmt) => {
-                walk_stmts(&try_stmt.body, path, diagnostics);
-                for handler in &try_stmt.handlers {
-                    let ruff_python_ast::ExceptHandler::ExceptHandler(h) = handler;
-                    walk_stmts(&h.body, path, diagnostics);
-                }
-                walk_stmts(&try_stmt.orelse, path, diagnostics);
-                walk_stmts(&try_stmt.finalbody, path, diagnostics);
-            }
-            Stmt::With(with_stmt) => {
-                walk_stmts(&with_stmt.body, path, diagnostics);
-            }
-            _ => {}
+    basilisk_resolver::walk_all_stmts(stmts, &mut |stmt| {
+        let Stmt::FunctionDef(func_def) = stmt else {
+            return;
+        };
+        let literal_params = collect_literal_params(func_def);
+        if !literal_params.is_empty() {
+            check_body_for_aug_assign(&func_def.body, &literal_params, path, diagnostics);
         }
-    }
+    });
 }
 
 /// Collect parameter names that are annotated with `Literal[...]`.

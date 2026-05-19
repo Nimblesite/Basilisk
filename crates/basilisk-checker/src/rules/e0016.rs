@@ -48,7 +48,7 @@ impl Rule for IncompatibleOverride {
             .collect();
 
         // Build set of class names for same-module lookup.
-        let class_names: Vec<&str> = module.classes.iter().map(|c| c.name.as_str()).collect();
+        let class_names: Vec<&str> = basilisk_resolver::collect_names(&module.classes);
 
         module.classes.iter().for_each(|child| {
             check_class(

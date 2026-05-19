@@ -226,11 +226,8 @@ fn check_generic_protocol_assignments(
         }
 
         // Get the protocol's type parameters in order.
-        let proto_type_params: Vec<&str> = proto_class
-            .generic_params
-            .iter()
-            .map(|p| p.name.as_str())
-            .collect();
+        let proto_type_params: Vec<&str> =
+            basilisk_resolver::collect_names(&proto_class.generic_params);
 
         if proto_type_params.is_empty() || type_args.len() != proto_type_params.len() {
             continue;

@@ -63,7 +63,7 @@ pub(super) fn check_protocol_classvar_conformance(
         .iter()
         .filter(|cls| !cls.bases.iter().any(|b| b == "Protocol"))
         .map(|cls| {
-            let attr_names: Vec<&str> = cls.attributes.iter().map(|a| a.name.as_str()).collect();
+            let attr_names: Vec<&str> = basilisk_resolver::collect_names(&cls.attributes);
             (cls.name.as_str(), attr_names)
         })
         .collect();

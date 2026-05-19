@@ -82,11 +82,8 @@ fn parse_callable_annotation(param_name: &str, annotation: &Expr) -> Option<Call
     let Expr::Subscript(subscript) = annotation else {
         return None;
     };
-    let is_callable = match subscript.value.as_ref() {
-        Expr::Name(name) => name.id.as_str() == "Callable",
-        Expr::Attribute(attr) => attr.attr.as_str() == "Callable",
-        _ => false,
-    };
+    let is_callable =
+        basilisk_resolver::is_name_or_attr_named(subscript.value.as_ref(), "Callable");
     if !is_callable {
         return None;
     }
@@ -147,13 +144,7 @@ fn annotation_to_string(expr: &Expr) -> String {
 }
 
 fn check_body_calls(stmts: &[Stmt], cp: &[CallableParam], path: &str, diag: &mut Vec<Diagnostic>) {
-    for stmt in stmts {
-        check_stmt_calls(stmt, cp, path, diag);
-    }
-}
-
-fn check_stmt_calls(stmt: &Stmt, cp: &[CallableParam], path: &str, diag: &mut Vec<Diagnostic>) {
-    match stmt {
+    basilisk_resolver::walk_function_stmts(stmts, &mut |stmt| match stmt {
         Stmt::Expr(node) => check_expr_for_call(&node.value, cp, path, diag),
         Stmt::Assign(node) => check_expr_for_call(&node.value, cp, path, diag),
         Stmt::AnnAssign(node) => {
@@ -166,26 +157,8 @@ fn check_stmt_calls(stmt: &Stmt, cp: &[CallableParam], path: &str, diag: &mut Ve
                 check_expr_for_call(v, cp, path, diag);
             }
         }
-        Stmt::If(node) => {
-            check_body_calls(&node.body, cp, path, diag);
-            for clause in &node.elif_else_clauses {
-                check_body_calls(&clause.body, cp, path, diag);
-            }
-        }
-        Stmt::For(node) => check_body_calls(&node.body, cp, path, diag),
-        Stmt::While(node) => check_body_calls(&node.body, cp, path, diag),
-        Stmt::Try(node) => {
-            check_body_calls(&node.body, cp, path, diag);
-            for h in &node.handlers {
-                let ast::ExceptHandler::ExceptHandler(eh) = h;
-                check_body_calls(&eh.body, cp, path, diag);
-            }
-            check_body_calls(&node.orelse, cp, path, diag);
-            check_body_calls(&node.finalbody, cp, path, diag);
-        }
-        Stmt::With(node) => check_body_calls(&node.body, cp, path, diag),
-        _ => {} // Don't recurse into nested functions (FunctionDef, ClassDef, etc.)
-    }
+        _ => {}
+    });
 }
 
 fn check_expr_for_call(expr: &Expr, cp: &[CallableParam], path: &str, diag: &mut Vec<Diagnostic>) {

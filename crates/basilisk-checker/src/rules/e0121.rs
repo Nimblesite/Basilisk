@@ -71,11 +71,8 @@ impl Rule for ProtocolAssignmentConformance {
         let path = &module.path;
 
         // Build class lookup: name -> ClassInfo
-        let class_map: HashMap<&str, &basilisk_resolver::ClassInfo> = module
-            .classes
-            .iter()
-            .map(|cls| (cls.name.as_str(), cls))
-            .collect();
+        let class_map: HashMap<&str, &basilisk_resolver::ClassInfo> =
+            basilisk_resolver::name_lookup(&module.classes);
 
         // Build class method lookup: class_name -> set of method names
         let class_methods: HashMap<&str, Vec<&str>> = module

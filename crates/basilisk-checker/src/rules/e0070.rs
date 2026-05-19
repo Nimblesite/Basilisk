@@ -44,12 +44,8 @@ impl Rule for NeverTypeCompatibility {
         let path = &module.path;
 
         // Collect covariant TypeVar names so we can exclude covariant contexts.
-        let covariant_tvars: Vec<&str> = module
-            .typevar_calls
-            .iter()
-            .filter(|tv| tv.is_covariant)
-            .map(|tv| tv.name.as_str())
-            .collect();
+        let covariant_tvars: Vec<&str> =
+            basilisk_resolver::collect_names_where(&module.typevar_calls, |tv| tv.is_covariant);
 
         // Check function bodies for annotated local assignments and return stmts.
         for func in &module.functions {
@@ -284,12 +280,7 @@ fn strip_call_parens(text: &str) -> &str {
 
 /// Check if a string looks like a simple Python identifier.
 fn is_simple_identifier(text: &str) -> bool {
-    !text.is_empty()
-        && text.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-        && text
-            .chars()
-            .next()
-            .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+    basilisk_resolver::is_simple_ascii_python_identifier(text)
 }
 
 /// Get the byte offset of the start of line number `line_idx` (0-indexed).

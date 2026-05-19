@@ -62,7 +62,7 @@ impl Rule for IncompatibleVariableOverride {
             })
             .collect();
 
-        let class_names: Vec<&str> = module.classes.iter().map(|c| c.name.as_str()).collect();
+        let class_names: Vec<&str> = basilisk_resolver::collect_names(&module.classes);
 
         module.classes.iter().for_each(|child| {
             // TypedDict hierarchies have their own subtyping rules — skip.

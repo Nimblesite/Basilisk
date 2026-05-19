@@ -33,7 +33,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diag_help_note};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -156,7 +156,7 @@ fn make_diagnostic(
     path: &str,
 ) -> Diagnostic {
     let _ = class_name_span; // span is available for future use in multi-span diagnostics
-    error_diagnostic_owned(
+    error_diag_help_note(
         CODE.clone(),
         format!(
             "Cannot assign `{class_name}` instance to `Hashable`-annotated variable `{var_name}`: \
@@ -164,15 +164,12 @@ fn make_diagnostic(
         ),
         var_span,
         path,
-        Some(format!(
+        format!(
             "Make `{class_name}` hashable by adding `frozen=True`, `unsafe_hash=True`, \
              or defining a `__hash__` method"
-        )),
-        Some(
-            "PEP 557: a `@dataclass` with `eq=True` (the default) sets `__hash__ = None` \
-             unless the class is frozen or uses `unsafe_hash=True`"
-                .to_owned(),
         ),
+        "PEP 557: a `@dataclass` with `eq=True` (the default) sets `__hash__ = None` \
+         unless the class is frozen or uses `unsafe_hash=True`",
     )
 }
 
@@ -181,7 +178,7 @@ fn make_hash_call_diagnostic(
     class_name: &str,
     path: &str,
 ) -> Diagnostic {
-    error_diagnostic_owned(
+    error_diag_help_note(
         CODE.clone(),
         format!(
             "Cannot call `.__hash__()` on `{class_name}` instance: \
@@ -189,14 +186,11 @@ fn make_hash_call_diagnostic(
         ),
         call_span,
         path,
-        Some(format!(
+        format!(
             "Make `{class_name}` hashable by adding `frozen=True`, `unsafe_hash=True`, \
              or defining a `__hash__` method"
-        )),
-        Some(
-            "PEP 557: a `@dataclass` with `eq=True` (the default) sets `__hash__ = None` \
-             unless the class is frozen or uses `unsafe_hash=True`"
-                .to_owned(),
         ),
+        "PEP 557: a `@dataclass` with `eq=True` (the default) sets `__hash__ = None` \
+         unless the class is frozen or uses `unsafe_hash=True`",
     )
 }

@@ -98,11 +98,8 @@ pub(super) fn parse_dataclass_transform_expr(expr: &Expr) -> (bool, bool, bool) 
         return (false, false, false);
     };
 
-    let is_dt = match call.func.as_ref() {
-        Expr::Name(n) => n.id.as_str() == "dataclass_transform",
-        Expr::Attribute(a) => a.attr.as_str() == "dataclass_transform",
-        _ => false,
-    };
+    let is_dt =
+        basilisk_resolver::is_name_or_attr_named(call.func.as_ref(), "dataclass_transform");
     if !is_dt {
         return (false, false, false);
     }

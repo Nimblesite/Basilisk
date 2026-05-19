@@ -37,7 +37,7 @@ pub(super) use type_syntax::{convert_optional_syntax, convert_union_syntax};
     reason = "test-only code: unwrap/expect/indexing acceptable in unit tests"
 )]
 mod tests {
-    use tower_lsp::lsp_types::{CodeActionKind, Position, Range, Url};
+    use tower_lsp::lsp_types::{CodeAction, CodeActionKind, Position, Range, Url};
 
     use super::*;
 
@@ -56,6 +56,27 @@ mod tests {
                 character: end_char,
             },
         }
+    }
+
+    /// Run `refactor` against `source` at `cursor_line:cursor_col` and assert
+    /// the result includes a code action whose title contains `substring`.
+    /// Collapses the `(uri, range, fn, find, assert)` boilerplate that every
+    /// simple "is this refactor offered?" test repeats.
+    fn assert_refactor_offered(
+        refactor: fn(&Url, &str, &Range) -> Vec<CodeAction>,
+        source: &str,
+        cursor_line: u32,
+        cursor_col: u32,
+        title_substring: &str,
+        message: &str,
+    ) {
+        let uri = test_uri();
+        let r = range(cursor_line, cursor_col, cursor_line, cursor_col);
+        let actions = refactor(&uri, source, &r);
+        assert!(
+            actions.iter().any(|a| a.title.contains(title_substring)),
+            "{message}"
+        );
     }
 
     // ── Extract Variable ────────────────────────────────────────────────────
@@ -258,61 +279,66 @@ mod tests {
 
     #[test]
     fn test_convert_fstring_to_format() {
-        let source = "x = f\"hello {name}\"\n";
-        let range = range(0, 4, 0, 4);
-        let uri = test_uri();
-        let actions = convert_fstring(&uri, source, &range);
-
-        let to_format = actions.iter().find(|a| a.title.contains(".format()"));
-        assert!(to_format.is_some(), "should offer f-string to .format()");
+        assert_refactor_offered(
+            convert_fstring,
+            "x = f\"hello {name}\"\n",
+            0,
+            4,
+            ".format()",
+            "should offer f-string to .format()",
+        );
     }
 
     #[test]
     fn test_convert_format_to_fstring() {
-        let source = "x = \"hello {}\".format(name)\n";
-        let range = range(0, 4, 0, 4);
-        let uri = test_uri();
-        let actions = convert_fstring(&uri, source, &range);
-
-        let to_fstring = actions.iter().find(|a| a.title.contains("f-string"));
-        assert!(to_fstring.is_some(), "should offer .format() to f-string");
+        assert_refactor_offered(
+            convert_fstring,
+            "x = \"hello {}\".format(name)\n",
+            0,
+            4,
+            "f-string",
+            "should offer .format() to f-string",
+        );
     }
 
     // ── Literal conversions ─────────────────────────────────────────────────
 
     #[test]
     fn test_convert_dict_to_literal() {
-        let source = "x = dict(a=1, b=2)\n";
-        let range = range(0, 4, 0, 4);
-        let uri = test_uri();
-        let actions = convert_literals(&uri, source, &range);
-
-        let dict_action = actions.iter().find(|a| a.title.contains("dict"));
-        assert!(dict_action.is_some(), "should offer dict() to literal");
+        assert_refactor_offered(
+            convert_literals,
+            "x = dict(a=1, b=2)\n",
+            0,
+            4,
+            "dict",
+            "should offer dict() to literal",
+        );
     }
 
     #[test]
     fn test_convert_list_to_literal() {
-        let source = "x = list()\n";
-        let range = range(0, 4, 0, 4);
-        let uri = test_uri();
-        let actions = convert_literals(&uri, source, &range);
-
-        let list_action = actions.iter().find(|a| a.title.contains("list"));
-        assert!(list_action.is_some(), "should offer list() to literal");
+        assert_refactor_offered(
+            convert_literals,
+            "x = list()\n",
+            0,
+            4,
+            "list",
+            "should offer list() to literal",
+        );
     }
 
     // ── Ternary conversion ──────────────────────────────────────────────────
 
     #[test]
     fn test_convert_ternary_to_if_else() {
-        let source = "    x = val_a if condition else val_b\n";
-        let range = range(0, 4, 0, 4);
-        let uri = test_uri();
-        let actions = convert_ternary(&uri, source, &range);
-
-        let to_block = actions.iter().find(|a| a.title.contains("if/else"));
-        assert!(to_block.is_some(), "should offer ternary to if/else block");
+        assert_refactor_offered(
+            convert_ternary,
+            "    x = val_a if condition else val_b\n",
+            0,
+            4,
+            "if/else",
+            "should offer ternary to if/else block",
+        );
     }
 
     // ── Inline variable ─────────────────────────────────────────────────────

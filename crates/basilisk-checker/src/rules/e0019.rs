@@ -35,7 +35,7 @@ impl Rule for UnboundVariable {
 }
 
 fn check_function(func: &FunctionInfo, path: &str, out: &mut Vec<Diagnostic>) {
-    let param_names: Vec<&str> = func.parameters.iter().map(|p| p.name.as_str()).collect();
+    let param_names: Vec<&str> = basilisk_resolver::collect_names(&func.parameters);
 
     // Use top_level_return_name_refs to avoid false positives where a `return name`
     // is inside the same conditional branch that assigned `name`.

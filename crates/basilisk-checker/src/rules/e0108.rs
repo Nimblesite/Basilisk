@@ -56,12 +56,8 @@ fn check_self_attr_assignments(module: &ResolvedModule, diagnostics: &mut Vec<Di
         .iter()
         .filter(|c| c.is_dataclass_slots || (c.is_dataclass && c.has_manual_slots))
         .map(|c| {
-            let fields: HashSet<&str> = c
-                .attributes
-                .iter()
-                .filter(|a| a.has_annotation)
-                .map(|a| a.name.as_str())
-                .collect();
+            let fields: HashSet<&str> =
+                basilisk_resolver::collect_name_set_where(&c.attributes, |a| a.has_annotation);
             (c.name.as_str(), fields)
         })
         .collect();

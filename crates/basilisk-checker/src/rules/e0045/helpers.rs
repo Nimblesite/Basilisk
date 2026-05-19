@@ -164,22 +164,7 @@ fn is_subscript_expression(s: &str) -> bool {
 
 /// Returns `true` when the expression looks like a tuple literal.
 fn is_tuple_literal(s: &str) -> bool {
-    // A tuple literal has a trailing comma before the closing paren,
-    // or contains commas at depth 0 inside parens.
-    if !s.starts_with('(') || !s.ends_with(')') {
-        return false;
-    }
-    let inner = &s[1..s.len() - 1];
-    let mut depth = 0i32;
-    for ch in inner.chars() {
-        match ch {
-            '[' | '(' | '{' => depth += 1,
-            ']' | ')' | '}' => depth -= 1,
-            ',' if depth == 0 => return true,
-            _ => {}
-        }
-    }
-    false
+    crate::rules::shared::paren_has_top_level_comma(s)
 }
 
 /// Returns `true` when the expression has an `if` keyword at depth 0 — a conditional expr.

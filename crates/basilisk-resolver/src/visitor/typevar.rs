@@ -42,58 +42,32 @@ pub(super) fn typevar_call_info_from(
     use ruff_text_size::Ranged as _;
     let positional_args = call.arguments.args.len();
     let constraint_count = positional_args.saturating_sub(1);
-    let has_default = call
-        .arguments
-        .keywords
-        .iter()
-        .any(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "default"));
-    let has_bound = call
-        .arguments
-        .keywords
-        .iter()
-        .any(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "bound"));
-    let has_parameterized_bound = call
-        .arguments
-        .keywords
-        .iter()
-        .find(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "bound"))
-        .is_some_and(|kw| expr_is_parameterized(&kw.value));
+    let find_kw = |name: &str| {
+        call.arguments
+            .keywords
+            .iter()
+            .find(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == name))
+    };
+    let kw_is_true = |name: &str| {
+        find_kw(name).is_some_and(|kw| matches!(&kw.value, Expr::BooleanLiteral(b) if b.value))
+    };
+    let has_default = find_kw("default").is_some();
+    let has_bound = find_kw("bound").is_some();
+    let has_parameterized_bound =
+        find_kw("bound").is_some_and(|kw| expr_is_parameterized(&kw.value));
     let has_parameterized_constraint = call
         .arguments
         .args
         .iter()
         .skip(1)
         .any(expr_is_parameterized);
-    let is_covariant = call.arguments.keywords.iter().any(|kw| {
-        kw.arg.as_ref().is_some_and(|a| a.as_str() == "covariant")
-            && matches!(&kw.value, Expr::BooleanLiteral(b) if b.value)
-    });
-    let is_contravariant = call.arguments.keywords.iter().any(|kw| {
-        kw.arg
-            .as_ref()
-            .is_some_and(|a| a.as_str() == "contravariant")
-            && matches!(&kw.value, Expr::BooleanLiteral(b) if b.value)
-    });
-    let has_infer_variance = call.arguments.keywords.iter().any(|kw| {
-        kw.arg
-            .as_ref()
-            .is_some_and(|a| a.as_str() == "infer_variance")
-            && matches!(&kw.value, Expr::BooleanLiteral(b) if b.value)
-    });
+    let is_covariant = kw_is_true("covariant");
+    let is_contravariant = kw_is_true("contravariant");
+    let has_infer_variance = kw_is_true("infer_variance");
     // Simple name from the `bound=` keyword argument (if present and a plain Name).
-    let bound_type_name = call
-        .arguments
-        .keywords
-        .iter()
-        .find(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "bound"))
-        .and_then(|kw| expr_simple_name(&kw.value));
+    let bound_type_name = find_kw("bound").and_then(|kw| expr_simple_name(&kw.value));
     // Simple name from the `default=` keyword argument (if present and a plain Name).
-    let default_type_name = call
-        .arguments
-        .keywords
-        .iter()
-        .find(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "default"))
-        .and_then(|kw| expr_simple_name(&kw.value));
+    let default_type_name = find_kw("default").and_then(|kw| expr_simple_name(&kw.value));
     // Constraint type names from positional args (skip the first arg which is the TypeVar name).
     let constraint_type_names: Vec<String> = call
         .arguments

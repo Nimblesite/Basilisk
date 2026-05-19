@@ -15,7 +15,7 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
+use crate::diagnostic::{Diagnostic, ErrorCode, error_diag_help_note, error_diagnostic_owned};
 
 use super::Rule;
 
@@ -72,7 +72,7 @@ impl Rule for FinalViolation {
         // Check 2: @final on a module-level (non-method) function.
         for func in &module.functions {
             if func.class_name.is_none() && func.decorators.iter().any(|d| is_final_decorator(d)) {
-                diagnostics.push(error_diagnostic_owned(
+                diagnostics.push(error_diag_help_note(
                     CODE.clone(),
                     format!(
                         "`@final` is not allowed on non-method function `{}`",
@@ -80,10 +80,8 @@ impl Rule for FinalViolation {
                     ),
                     func.name_span,
                     &module.path,
-                    Some(
-                        "`@final` may only be applied to methods inside a class body".to_owned(),
-                    ),
-                    Some("PEP 591: `@final` on a non-method function is an error".to_owned()),
+                    "`@final` may only be applied to methods inside a class body".to_owned(),
+                    "PEP 591: `@final` on a non-method function is an error",
                 ));
             }
         }

@@ -148,12 +148,8 @@ fn build_init_false_fields(classes: &[ClassInfo]) -> HashMap<&str, HashSet<&str>
         .iter()
         .filter(|c| c.is_dataclass)
         .filter_map(|c| {
-            let init_false: HashSet<&str> = c
-                .attributes
-                .iter()
-                .filter(|a| a.is_init_false)
-                .map(|a| a.name.as_str())
-                .collect();
+            let init_false: HashSet<&str> =
+                basilisk_resolver::collect_name_set_where(&c.attributes, |a| a.is_init_false);
             if init_false.is_empty() {
                 None
             } else {

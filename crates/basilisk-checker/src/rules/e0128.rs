@@ -53,11 +53,8 @@ pub(crate) struct TypeVarDefaultReferential;
 
 impl Rule for TypeVarDefaultReferential {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let typevar_names: HashSet<&str> = module
-            .typevar_calls
-            .iter()
-            .map(|tv| tv.name.as_str())
-            .collect();
+        let typevar_names: HashSet<&str> =
+            basilisk_resolver::collect_name_set(&module.typevar_calls);
 
         let typevar_info_list = parse_typevar_info_from_source(&module.source, &typevar_names);
 
@@ -68,11 +65,8 @@ impl Rule for TypeVarDefaultReferential {
             .collect();
 
         // Build lookup from name to resolver TypeVarCallInfo for spans
-        let span_map: HashMap<&str, &basilisk_resolver::TypeVarCallInfo> = module
-            .typevar_calls
-            .iter()
-            .map(|tv| (tv.name.as_str(), tv))
-            .collect();
+        let span_map: HashMap<&str, &basilisk_resolver::TypeVarCallInfo> =
+            basilisk_resolver::name_lookup(&module.typevar_calls);
 
         // Check 1: Forward references in Generic[...] params (ordering)
         check_ordering(module, &info_map, &typevar_names, diagnostics);
@@ -108,11 +102,7 @@ fn check_ordering(
             continue;
         }
 
-        let param_names: Vec<&str> = class
-            .generic_params
-            .iter()
-            .map(|p| p.name.as_str())
-            .collect();
+        let param_names: Vec<&str> = basilisk_resolver::collect_names(&class.generic_params);
 
         for (idx, param) in class.generic_params.iter().enumerate() {
             let Some(info) = info_map.get(param.name.as_str()) else {
@@ -408,11 +398,8 @@ fn check_subscripted_class_calls(
     info_map: &HashMap<&str, &TypeVarInfo>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let class_map: HashMap<&str, &basilisk_resolver::ClassInfo> = module
-        .classes
-        .iter()
-        .map(|c| (c.name.as_str(), c))
-        .collect();
+    let class_map: HashMap<&str, &basilisk_resolver::ClassInfo> =
+        basilisk_resolver::name_lookup(&module.classes);
     let init_map: HashMap<&str, &basilisk_resolver::FunctionInfo> = module
         .functions
         .iter()

@@ -897,19 +897,13 @@ mod tests {
         let _ = idx.set_open(&uri, "import flask\n", 1);
 
         // Resolve with registry that does NOT have flask.
-        let registry = build_registry_from_roots(&roots);
-        let search_paths =
-            crate::import_resolver::ImportSearchPaths::from_config(&roots, &config, registry);
-        crate::import_resolver::resolve_workspace_imports(&idx, &search_paths);
+        rebuild_and_resolve_imports(&idx, &roots, &config);
 
         // Re-check: flask import should be unresolved (E0010).
         recheck_all(&idx);
         let diags_before = get_diagnostics(&idx, &uri);
-        let has_e0010_flask = diags_before
-            .iter()
-            .any(|d| d.code.code == "BSK-E0010" && d.message.contains("flask"));
         assert!(
-            has_e0010_flask,
+            has_diag(&diags_before, "BSK-E0010", "flask"),
             "expected BSK-E0010 for unresolved flask import, got: {diags_before:?}"
         );
 
@@ -919,21 +913,15 @@ mod tests {
         let pyproject = "[project]\nname = \"test-project\"\nversion = \"0.1.0\"\ndependencies = [\"requests\", \"flask\"]\n\n[tool.uv]\n";
         std::fs::write(dir.join("pyproject.toml"), pyproject).unwrap();
 
-        let registry2 = build_registry_from_roots(&roots);
-        let search_paths2 =
-            crate::import_resolver::ImportSearchPaths::from_config(&roots, &config, registry2);
-        crate::import_resolver::resolve_workspace_imports(&idx, &search_paths2);
+        rebuild_and_resolve_imports(&idx, &roots, &config);
         recheck_all(&idx);
 
         // After adding flask to the registry, classify_unresolved should now
         // return NeedsSync (in registry but not on filesystem) instead of
         // NotInstalled. The diagnostic message changes accordingly.
         let diags_after = get_diagnostics(&idx, &uri);
-        let still_has_not_installed = diags_after
-            .iter()
-            .any(|d| d.code.code == "BSK-E0010" && d.message.contains("not a dependency"));
         assert!(
-            !still_has_not_installed,
+            !has_diag(&diags_after, "BSK-E0010", "not a dependency"),
             "flask should no longer show 'not a dependency' after being added to lock: {diags_after:?}"
         );
 
@@ -958,10 +946,7 @@ mod tests {
         let _ = idx.set_open(&uri, "import flask\n", 1);
 
         // Resolve with registry that HAS flask.
-        let registry = build_registry_from_roots(&roots);
-        let search_paths =
-            crate::import_resolver::ImportSearchPaths::from_config(&roots, &config, registry);
-        crate::import_resolver::resolve_workspace_imports(&idx, &search_paths);
+        rebuild_and_resolve_imports(&idx, &roots, &config);
         recheck_all(&idx);
 
         // Now remove flask from the lock file.
@@ -969,18 +954,12 @@ mod tests {
         let pyproject = "[project]\nname = \"test-project\"\nversion = \"0.1.0\"\ndependencies = [\"requests\"]\n\n[tool.uv]\n";
         std::fs::write(dir.join("pyproject.toml"), pyproject).unwrap();
 
-        let registry2 = build_registry_from_roots(&roots);
-        let search_paths2 =
-            crate::import_resolver::ImportSearchPaths::from_config(&roots, &config, registry2);
-        crate::import_resolver::resolve_workspace_imports(&idx, &search_paths2);
+        rebuild_and_resolve_imports(&idx, &roots, &config);
         recheck_all(&idx);
 
         let diags = get_diagnostics(&idx, &uri);
-        let has_e0010_flask = diags
-            .iter()
-            .any(|d| d.code.code == "BSK-E0010" && d.message.contains("flask"));
         assert!(
-            has_e0010_flask,
+            has_diag(&diags, "BSK-E0010", "flask"),
             "expected BSK-E0010 for flask after removal from lock, got: {diags:?}"
         );
 
@@ -1029,11 +1008,8 @@ mod tests {
         recheck_all(&idx);
 
         let diags = get_diagnostics(&idx, &uri);
-        let has_e0010 = diags
-            .iter()
-            .any(|d| d.code.code == "BSK-E0010" && d.message.contains("configure_agent_backend"));
         assert!(
-            !has_e0010,
+            !has_diag(&diags, "BSK-E0010", "configure_agent_backend"),
             "sibling-module import in a script directory must resolve via sys.path[0] \
              fallback; got BSK-E0010: {diags:?}"
         );
@@ -1126,22 +1102,16 @@ mod tests {
 
         // tests/helpers.py — imports agent_backend.db.models (via src/).
         let helpers_diags = get_diagnostics(&idx, &helpers_uri);
-        let helpers_e0010 = helpers_diags
-            .iter()
-            .any(|d| d.code.code == "BSK-E0010" && d.message.contains("agent_backend"));
         assert!(
-            !helpers_e0010,
+            !has_diag(&helpers_diags, "BSK-E0010", "agent_backend"),
             "BSK-E0010 false positive: src-layout production import from a test \
              helper must resolve via src/ on the search path; got: {helpers_diags:?}"
         );
 
         // tests/test_foo.py — imports tests.helpers (via workspace root).
         let test_diags = get_diagnostics(&idx, &test_uri);
-        let test_e0010 = test_diags
-            .iter()
-            .any(|d| d.code.code == "BSK-E0010" && d.message.contains("tests.helpers"));
         assert!(
-            !test_e0010,
+            !has_diag(&test_diags, "BSK-E0010", "tests.helpers"),
             "BSK-E0010 false positive: `tests.helpers` import must resolve when the \
              workspace root is on the search path; got: {test_diags:?}"
         );
@@ -1296,6 +1266,20 @@ mod tests {
         Some(Arc::new(registry))
     }
 
+    /// Build the registry from `roots`, derive `ImportSearchPaths`, and run
+    /// `resolve_workspace_imports` against `idx`. Collapses the three-line
+    /// import-resolution dance that every workspace test repeats.
+    fn rebuild_and_resolve_imports(
+        idx: &WorkspaceIndex,
+        roots: &[std::path::PathBuf],
+        config: &crate::config::WorkspaceConfig,
+    ) {
+        let registry = build_registry_from_roots(roots);
+        let search_paths =
+            crate::import_resolver::ImportSearchPaths::from_config(roots, config, registry);
+        crate::import_resolver::resolve_workspace_imports(idx, &search_paths);
+    }
+
     /// Re-check all files in the workspace index and update their diagnostics.
     fn recheck_all(index: &WorkspaceIndex) {
         for mut entry in index.files.iter_mut() {
@@ -1355,6 +1339,47 @@ mod tests {
                 _ => None,
             })
             .collect()
+    }
+
+    /// Count diagnostics with `code` in `diags`.
+    fn count_code(diags: &[basilisk_checker::Diagnostic], code: &str) -> usize {
+        diags.iter().filter(|d| d.code.code == code).count()
+    }
+
+    /// Build a minimal `basilisk_checker::Diagnostic` for severity-mapping
+    /// tests where only `code`, `severity`, and `message` are interesting.
+    fn make_test_diag(
+        code: &'static str,
+        severity: basilisk_checker::Severity,
+        message: &str,
+    ) -> basilisk_checker::Diagnostic {
+        basilisk_checker::Diagnostic {
+            code: basilisk_checker::ErrorCode {
+                code,
+                docs_url: "https://www.basilisk-python.dev/errors/test",
+            },
+            severity,
+            message: message.to_owned(),
+            span: basilisk_resolver::Span::new(0, 1),
+            path: "test.py".to_owned(),
+            help: None,
+            note: None,
+            provenance: None,
+        }
+    }
+
+    /// Returns `true` when at least one diagnostic in `diags` has `code` and a
+    /// message containing `substring`. Used by tests that look for a
+    /// specific (code, message-fragment) pair, e.g. unresolved-flask vs.
+    /// unresolved-requests in the same E0010 firing.
+    fn has_diag(
+        diags: &[basilisk_checker::Diagnostic],
+        code: &str,
+        substring: &str,
+    ) -> bool {
+        diags
+            .iter()
+            .any(|d| d.code.code == code && d.message.contains(substring))
     }
 
     /// Assert that every checker diagnostic for `code` has the expected severity.
@@ -1496,7 +1521,7 @@ mod tests {
         let _ = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
 
         let diags = get_diagnostics(&idx, &uri);
-        let e0001_count = diags.iter().filter(|d| d.code.code == "BSK-E0001").count();
+        let e0001_count = count_code(&diags, "BSK-E0001");
         assert_eq!(
             e0001_count, 0,
             "disabled rule BSK-E0001 must produce zero diagnostics, got {e0001_count}"
@@ -1547,7 +1572,7 @@ mod tests {
         );
 
         let diags = get_diagnostics(&idx, &uri);
-        let w0050_count = diags.iter().filter(|d| d.code.code == "BSK-W0050").count();
+        let w0050_count = count_code(&diags, "BSK-W0050");
         assert_eq!(
             w0050_count, 0,
             "disabled BSK-W0050 must produce zero checker diagnostics"
@@ -1570,7 +1595,7 @@ mod tests {
         let _ = idx.set_open(&uri, src, 1);
 
         let diags = get_diagnostics(&idx, &uri);
-        let w0010_count = diags.iter().filter(|d| d.code.code == "BSK-W0010").count();
+        let w0010_count = count_code(&diags, "BSK-W0010");
         assert_eq!(
             w0010_count, 0,
             "BSK-W0010 should be suppressed when uv_stub_suggestions is false"
@@ -1824,7 +1849,7 @@ mod tests {
 
         // Also verify the raw checker diagnostics match.
         let diags = get_diagnostics(&idx, &uri);
-        let w0050_count = diags.iter().filter(|d| d.code.code == "BSK-W0050").count();
+        let w0050_count = count_code(&diags, "BSK-W0050");
         assert_eq!(w0050_count, 0, "W0050 disabled in checker too");
         for d in diags.iter().filter(|d| d.code.code == "BSK-E0001") {
             assert_eq!(d.severity, basilisk_checker::Severity::Warning);
@@ -1851,22 +1876,8 @@ mod tests {
 
     #[test]
     fn bsk_to_lsp_maps_warning_to_warning_not_error() {
-        // Directly tests the bsk_to_lsp conversion for Warning severity.
-        let diag = basilisk_checker::Diagnostic {
-            code: basilisk_checker::ErrorCode {
-                code: "BSK-W0050",
-                docs_url: "https://www.basilisk-python.dev/errors/BSK-W0050",
-            },
-            severity: basilisk_checker::Severity::Warning,
-            message: "test warning".to_owned(),
-            span: basilisk_resolver::Span::new(0, 1),
-            path: "test.py".to_owned(),
-            help: None,
-            note: None,
-            provenance: None,
-        };
+        let diag = make_test_diag("BSK-W0050", basilisk_checker::Severity::Warning, "test warning");
         let lsp_diag = crate::workspace_analysis::bsk_to_lsp(&diag, "x\n");
-
         assert_eq!(
             lsp_diag.severity,
             Some(tower_lsp::lsp_types::DiagnosticSeverity::WARNING),
@@ -1881,21 +1892,8 @@ mod tests {
 
     #[test]
     fn bsk_to_lsp_maps_error_to_error() {
-        let diag = basilisk_checker::Diagnostic {
-            code: basilisk_checker::ErrorCode {
-                code: "BSK-E0001",
-                docs_url: "https://www.basilisk-python.dev/errors/BSK-E0001",
-            },
-            severity: basilisk_checker::Severity::Error,
-            message: "test error".to_owned(),
-            span: basilisk_resolver::Span::new(0, 1),
-            path: "test.py".to_owned(),
-            help: None,
-            note: None,
-            provenance: None,
-        };
+        let diag = make_test_diag("BSK-E0001", basilisk_checker::Severity::Error, "test error");
         let lsp_diag = crate::workspace_analysis::bsk_to_lsp(&diag, "x\n");
-
         assert_eq!(
             lsp_diag.severity,
             Some(tower_lsp::lsp_types::DiagnosticSeverity::ERROR),
@@ -1905,21 +1903,8 @@ mod tests {
 
     #[test]
     fn bsk_to_lsp_maps_info_to_information() {
-        let diag = basilisk_checker::Diagnostic {
-            code: basilisk_checker::ErrorCode {
-                code: "BSK-I0001",
-                docs_url: "https://www.basilisk-python.dev/errors/BSK-I0001",
-            },
-            severity: basilisk_checker::Severity::Info,
-            message: "test info".to_owned(),
-            span: basilisk_resolver::Span::new(0, 1),
-            path: "test.py".to_owned(),
-            help: None,
-            note: None,
-            provenance: None,
-        };
+        let diag = make_test_diag("BSK-I0001", basilisk_checker::Severity::Info, "test info");
         let lsp_diag = crate::workspace_analysis::bsk_to_lsp(&diag, "x\n");
-
         assert_eq!(
             lsp_diag.severity,
             Some(tower_lsp::lsp_types::DiagnosticSeverity::INFORMATION),

@@ -116,11 +116,8 @@ fn has_container_wrapper(alias: &basilisk_resolver::TypeAliasDefInfo) -> bool {
 impl Rule for CyclicalTypeAliasReference {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         // Build a set of all TypeAlias names for quick membership tests.
-        let alias_names: HashSet<&str> = module
-            .type_alias_defs
-            .iter()
-            .map(|a| a.name.as_str())
-            .collect();
+        let alias_names: HashSet<&str> =
+            basilisk_resolver::collect_name_set(&module.type_alias_defs);
 
         // Build a directed graph: alias name -> list of other alias names it
         // forward-references via string literals.

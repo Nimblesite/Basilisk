@@ -114,10 +114,6 @@ fn format_reason(import: &ImportInfo, root_module: &str) -> (String, String) {
 }
 
 #[cfg(test)]
-#[expect(
-    clippy::indexing_slicing,
-    reason = "test-only code: indexing acceptable in unit tests"
-)]
 mod tests {
     use super::*;
     use basilisk_resolver::scope::ImportKind;
@@ -156,9 +152,9 @@ mod tests {
     /// Run the rule on a single import with `reason` and assert a single diagnostic was emitted.
     /// Returns that diagnostic for further inspection.
     fn check_single(name: &str, reason: Option<UnresolvedReason>) -> crate::Diagnostic {
-        let diagnostics = run_check(make_import(name, reason));
+        let mut diagnostics = run_check(make_import(name, reason));
         assert_eq!(diagnostics.len(), 1);
-        diagnostics.into_iter().next().expect("checked len above")
+        diagnostics.remove(0)
     }
 
     #[test]

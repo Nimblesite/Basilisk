@@ -6,8 +6,14 @@
 //! [`ResolvedModule`] without touching the raw AST.
 
 mod bounded_typevar;
+mod ident;
 pub mod scope;
 mod visitor;
+
+pub use ident::{is_simple_ascii_python_identifier, is_simple_python_identifier};
+pub use visitor::walks::{
+    is_name_or_attr_named, iter_all_params, visit_calls, walk_all_stmts, walk_function_stmts,
+};
 
 pub use scope::{
     AnnotatedTooFewArgs, AssertTypeCallInfo, AttributeInfo, BaseSubscriptEntry,
@@ -18,7 +24,8 @@ pub use scope::{
     InvalidStringAnnotation, InvalidStringAnnotationKind, LiteralAugmentedAssignViolation,
     LiteralStringEnumMismatch, LocalClassVarViolation, MatchCaseNarrowing, MatchStmtInfo,
     ModuleAttrAccessInfo, ModuleAttrAssignment, ModuleBareAssignment, ModuleOrderComparisonInfo,
-    NamedTupleDefInfo, NarrowingGuard, NarrowingGuardKind, NewTypeCallInfo, PackageDepKind,
+    Named, NamedTupleDefInfo, NarrowingGuard, NarrowingGuardKind, NewTypeCallInfo, PackageDepKind,
+    collect_name_set, collect_name_set_where, collect_names, collect_names_where, name_lookup,
     ParameterInfo, Pep695BoundViolation, Pep695BoundViolationKind, ProtocolClassObjectViolation,
     ProtocolInstantiationViolation, ProtocolRtcViolation, ProtocolRtcViolationKind,
     ProtocolSelfViolation, ReadOnlyViolationInfo, ReadOnlyViolationKind, ResolvedModule,

@@ -91,8 +91,7 @@ impl Rule for VarianceIncompatibleBase {
             .iter()
             .filter(|cls| !cls.generic_params.is_empty())
             .map(|cls| {
-                let params: Vec<&str> =
-                    cls.generic_params.iter().map(|p| p.name.as_str()).collect();
+                let params: Vec<&str> = basilisk_resolver::collect_names(&cls.generic_params);
                 (cls.name.as_str(), params)
             })
             .collect();

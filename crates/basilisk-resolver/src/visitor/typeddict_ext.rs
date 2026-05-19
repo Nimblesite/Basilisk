@@ -32,7 +32,16 @@ fn is_field_required(
     is_total
 }
 
-/// Validate a dict literal against the TypedDict spec for `class_name`.
+/// Resolved `TypedDict` class metadata used to validate a dict literal.
+struct TdSpec<'a> {
+    class_name: &'a str,
+    all_fields: &'a [&'a str],
+    field_types: &'a std::collections::HashMap<&'a str, String>,
+    is_total: bool,
+    has_extra_items: bool,
+}
+
+/// Validate a dict literal against the `TypedDict` spec.
 ///
 /// Emits diagnostics for non-literal keys, invalid keys, missing required keys,
 /// and value-type mismatches. `span_range` is the range used for emitted spans;
@@ -40,15 +49,18 @@ fn is_field_required(
 /// points at the whole assignment.
 fn check_dict_against_typeddict(
     dict: &ruff_python_ast::ExprDict,
-    class_name: &str,
-    all_fields: &[&str],
-    field_types: &std::collections::HashMap<&str, String>,
-    is_total: bool,
-    has_extra_items: bool,
+    spec: &TdSpec<'_>,
     span_range: ruff_text_size::TextRange,
     fields: &TdFieldMap<'_>,
     out: &mut Vec<TypedDictKeyViolation>,
 ) {
+    let TdSpec {
+        class_name,
+        all_fields,
+        field_types,
+        is_total,
+        has_extra_items,
+    } = *spec;
     // Flag any non-literal (variable) key in the dict — if found, return early
     // (the literal-key checks below assume every key is a string literal).
     let has_non_literal = dict.items.iter().any(|item| {
@@ -139,11 +151,13 @@ pub(super) fn td_check_regular_assign(
         };
         check_dict_against_typeddict(
             dict,
-            class_name,
-            all_fields,
-            field_types,
-            *is_total,
-            *has_extra_items,
+            &TdSpec {
+                class_name,
+                all_fields,
+                field_types,
+                is_total: *is_total,
+                has_extra_items: *has_extra_items,
+            },
             node.range(),
             fields,
             out,
@@ -171,11 +185,13 @@ pub(super) fn td_check_ann_assign(
     };
     check_dict_against_typeddict(
         dict,
-        class_name,
-        all_fields,
-        field_types,
-        *is_total,
-        *has_extra_items,
+        &TdSpec {
+            class_name,
+            all_fields,
+            field_types,
+            is_total: *is_total,
+            has_extra_items: *has_extra_items,
+        },
         node.range(),
         fields,
         out,
@@ -364,45 +380,27 @@ pub(super) fn collect_isinstance_typeddict_in_stmts(
     typeddict_names: &std::collections::HashSet<&str>,
     out: &mut Vec<Span>,
 ) {
-    for stmt in stmts {
-        match stmt {
-            Stmt::If(node) => {
-                collect_isinstance_typeddict_in_expr(&node.test, typeddict_names, out);
-                collect_isinstance_typeddict_in_stmts(&node.body, typeddict_names, out);
-                for clause in &node.elif_else_clauses {
-                    if let Some(test) = &clause.test {
-                        collect_isinstance_typeddict_in_expr(test, typeddict_names, out);
-                    }
-                    collect_isinstance_typeddict_in_stmts(&clause.body, typeddict_names, out);
+    crate::walk_all_stmts(stmts, &mut |stmt| match stmt {
+        Stmt::If(node) => {
+            collect_isinstance_typeddict_in_expr(&node.test, typeddict_names, out);
+            for clause in &node.elif_else_clauses {
+                if let Some(test) = &clause.test {
+                    collect_isinstance_typeddict_in_expr(test, typeddict_names, out);
                 }
             }
-            Stmt::Expr(node) => {
-                collect_isinstance_typeddict_in_expr(&node.value, typeddict_names, out);
-            }
-            Stmt::Assign(node) => {
-                collect_isinstance_typeddict_in_expr(&node.value, typeddict_names, out);
-            }
-            Stmt::AnnAssign(node) => {
-                if let Some(val) = &node.value {
-                    collect_isinstance_typeddict_in_expr(val, typeddict_names, out);
-                }
-            }
-            Stmt::While(node) => {
-                collect_isinstance_typeddict_in_expr(&node.test, typeddict_names, out);
-                collect_isinstance_typeddict_in_stmts(&node.body, typeddict_names, out);
-            }
-            Stmt::For(node) => {
-                collect_isinstance_typeddict_in_stmts(&node.body, typeddict_names, out);
-            }
-            Stmt::FunctionDef(node) => {
-                collect_isinstance_typeddict_in_stmts(&node.body, typeddict_names, out);
-            }
-            Stmt::ClassDef(node) => {
-                collect_isinstance_typeddict_in_stmts(&node.body, typeddict_names, out);
-            }
-            _ => {}
         }
-    }
+        Stmt::Expr(node) => collect_isinstance_typeddict_in_expr(&node.value, typeddict_names, out),
+        Stmt::Assign(node) => {
+            collect_isinstance_typeddict_in_expr(&node.value, typeddict_names, out);
+        }
+        Stmt::AnnAssign(node) => {
+            if let Some(val) = &node.value {
+                collect_isinstance_typeddict_in_expr(val, typeddict_names, out);
+            }
+        }
+        Stmt::While(node) => collect_isinstance_typeddict_in_expr(&node.test, typeddict_names, out),
+        _ => {}
+    });
 }
 
 pub(super) fn collect_isinstance_typeddict_in_expr(

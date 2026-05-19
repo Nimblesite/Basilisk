@@ -453,11 +453,8 @@ pub(super) fn check_self_param_init_mismatch(
     let ann_type_args: Vec<&str> = args_str.split(',').map(str::trim).collect();
 
     // Check if annotation args contain class-scoped or function-scoped type vars.
-    let generic_param_names: Vec<&str> = class_info
-        .generic_params
-        .iter()
-        .map(|p| p.name.as_str())
-        .collect();
+    let generic_param_names: Vec<&str> =
+        basilisk_resolver::collect_names(&class_info.generic_params);
 
     // If all annotation args are fixed (not type variables), check for mismatch.
     let all_fixed = ann_type_args

@@ -303,7 +303,8 @@ fn make_uv_add_stubs_action(diag: &Diagnostic, module: &str) -> CodeAction {
     clippy::unwrap_used,
     clippy::expect_used,
     clippy::indexing_slicing,
-    reason = "test-only code: unwrap/expect/indexing acceptable in unit tests"
+    clippy::panic,
+    reason = "test-only code: unwrap/expect/indexing/panic acceptable in unit tests"
 )]
 mod tests {
     use super::*;

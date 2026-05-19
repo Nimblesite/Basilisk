@@ -476,13 +476,7 @@ fn find_top_level_eq(text: &str) -> Option<usize> {
 
 /// Simple identifier check.
 fn is_simple_identifier(source: &str) -> bool {
-    let trimmed = source.trim();
-    !trimmed.is_empty()
-        && trimmed
-            .chars()
-            .next()
-            .is_some_and(|c| c.is_alphabetic() || c == '_')
-        && trimmed.chars().all(|c| c.is_alphanumeric() || c == '_')
+    basilisk_resolver::is_simple_python_identifier(source.trim())
 }
 
 /// Find the byte offset of a variable name within a line at a given base offset.

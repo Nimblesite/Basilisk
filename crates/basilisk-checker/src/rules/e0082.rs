@@ -67,7 +67,7 @@ impl Rule for TypeVarTupleCallableMismatch {
             .collect();
 
         // Class names for constructor detection.
-        let class_names: Vec<&str> = module.classes.iter().map(|c| c.name.as_str()).collect();
+        let class_names: Vec<&str> = basilisk_resolver::collect_names(&module.classes);
 
         // Step 3: Walk module-level statements for calls.
         for stmt in &parsed.ast.body {
@@ -312,12 +312,7 @@ fn extract_tvt_from_tuple(ann: &str) -> Option<String> {
 
 /// Check if a string is a valid Python identifier.
 fn is_identifier(text: &str) -> bool {
-    !text.is_empty()
-        && text.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-        && text
-            .chars()
-            .next()
-            .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+    basilisk_resolver::is_simple_ascii_python_identifier(text)
 }
 
 /// Check basic type compatibility.

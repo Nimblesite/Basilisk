@@ -42,11 +42,8 @@ pub(crate) struct UnboundTypeVarScope;
 impl Rule for UnboundTypeVarScope {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         // Collect all known TypeVar names from module-level TypeVar() calls.
-        let typevar_names: HashSet<&str> = module
-            .typevar_calls
-            .iter()
-            .map(|tv| tv.name.as_str())
-            .collect();
+        let typevar_names: HashSet<&str> =
+            basilisk_resolver::collect_name_set(&module.typevar_calls);
 
         if typevar_names.is_empty() {
             return;

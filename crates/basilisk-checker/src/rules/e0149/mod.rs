@@ -69,11 +69,7 @@ impl Rule for Pep695TypeParamScopingViolation {
 
         // Collect old-style TypeVar names (from TypeVar() calls) for
         // old/new mixing detection.
-        let old_typevar_names: Vec<&str> = module
-            .typevar_calls
-            .iter()
-            .map(|tv| tv.name.as_str())
-            .collect();
+        let old_typevar_names: Vec<&str> = basilisk_resolver::collect_names(&module.typevar_calls);
 
         // Track multi-line def/class signatures so continuation lines at
         // indent 0 are not treated as module-level code.

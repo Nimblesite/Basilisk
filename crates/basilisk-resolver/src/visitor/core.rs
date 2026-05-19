@@ -449,13 +449,7 @@ pub(super) fn check_td_stmts(
                 let mut local_vars = var_type.clone();
                 local_vars.extend(td_var_type_from_stmts(&func.body, fields));
                 // Add parameter types that are TypedDict classes.
-                for param in func
-                    .parameters
-                    .args
-                    .iter()
-                    .chain(func.parameters.posonlyargs.iter())
-                    .chain(func.parameters.kwonlyargs.iter())
-                {
+                for param in super::walks::iter_all_params(&func.parameters) {
                     if let Some(ann) = &param.parameter.annotation {
                         if let Some(type_name) = expr_simple_name(ann) {
                             if fields.contains_key(type_name.as_str()) {

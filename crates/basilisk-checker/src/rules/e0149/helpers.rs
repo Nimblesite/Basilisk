@@ -1,50 +1,10 @@
 //! Span/indent/name utility helpers for BSK-E0149.
+//!
+//! The geometry helpers (`leading_indent`, `span_for_line`,
+//! `line_to_byte_offset`) live in [`crate::rules::shared`]; this module
+//! re-exports them so existing call sites continue to work.
 
-use basilisk_resolver::Span;
-
-/// Compute the leading whitespace (indentation) of a line.
-pub(super) fn leading_indent(line: &str) -> usize {
-    line.len() - line.trim_start().len()
-}
-
-/// Return the byte offset (as u32) of the start of the given 1-based line.
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::as_conversions,
-    reason = "byte offsets fit u32 for source files"
-)]
-pub(super) fn line_start_offset(source: &str, target_line: usize) -> u32 {
-    let mut current = 1usize;
-    for (byte_idx, ch) in source.char_indices() {
-        if current == target_line {
-            return byte_idx as u32;
-        }
-        if ch == '\n' {
-            current += 1;
-        }
-    }
-    source.len() as u32
-}
-
-/// Build a `Span` covering the trimmed content of a given 1-based line.
-#[expect(
-    clippy::as_conversions,
-    clippy::cast_possible_truncation,
-    reason = "u32<->usize safe on 32-bit+"
-)]
-pub(super) fn span_for_line(source: &str, line_number: usize) -> Span {
-    let start = line_start_offset(source, line_number) as usize;
-    let line_text = source
-        .get(start..)
-        .and_then(|s| s.lines().next())
-        .unwrap_or("");
-    let trimmed_start = start + (line_text.len() - line_text.trim_start().len());
-    let trimmed_end = start + line_text.trim_end().len();
-    Span {
-        start: trimmed_start as u32,
-        end: trimmed_end as u32,
-    }
-}
+pub(super) use crate::rules::shared::{leading_indent, span_for_line};
 
 /// Check whether `name` appears as a whole identifier in `text`.
 pub(super) fn contains_name(text: &str, name: &str) -> bool {

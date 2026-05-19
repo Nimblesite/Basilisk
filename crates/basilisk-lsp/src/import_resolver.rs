@@ -570,6 +570,19 @@ mod tests {
         dir
     }
 
+    /// Create `<parent>/<pkg_name>/` and populate it with empty files named in
+    /// `files`. Returns the package directory path. Collapses the
+    /// `create_dir_all` + `fs::write(empty)` boilerplate that every package
+    /// resolution test repeats.
+    fn make_pkg(parent: &Path, pkg_name: &str, files: &[&str]) -> PathBuf {
+        let pkg = parent.join(pkg_name);
+        fs::create_dir_all(&pkg).unwrap();
+        for f in files {
+            fs::write(pkg.join(f), "").unwrap();
+        }
+        pkg
+    }
+
     fn make_search_paths(roots: Vec<PathBuf>) -> ImportSearchPaths {
         ImportSearchPaths {
             roots,
@@ -613,9 +626,7 @@ mod tests {
     #[test]
     fn test_resolve_package_init() {
         let dir = unique_tmp("bsk_ir_pkg");
-        let pkg = dir.join("mypkg");
-        fs::create_dir_all(&pkg).unwrap();
-        fs::write(pkg.join("__init__.py"), "").unwrap();
+        let _pkg = make_pkg(&dir, "mypkg", &["__init__.py"]);
 
         let paths = make_search_paths(vec![dir.clone()]);
         let result = resolve_module("mypkg", &paths).unwrap();
@@ -762,10 +773,7 @@ mod tests {
     #[test]
     fn test_package_init_pyi_preferred() {
         let dir = unique_tmp("bsk_ir_pkg_pyi");
-        let pkg = dir.join("mypkg");
-        fs::create_dir_all(&pkg).unwrap();
-        fs::write(pkg.join("__init__.py"), "").unwrap();
-        fs::write(pkg.join("__init__.pyi"), "").unwrap();
+        let _pkg = make_pkg(&dir, "mypkg", &["__init__.py", "__init__.pyi"]);
 
         let paths = make_search_paths(vec![dir.clone()]);
         let result = resolve_module("mypkg", &paths).unwrap();
@@ -1028,9 +1036,7 @@ mod tests {
     fn test_stub_package_resolution() {
         let root = make_tmp_dir("bsk_ir_pep561_root");
         let sp = unique_tmp("bsk_ir_pep561_sp");
-        let stubs_dir = sp.join("requests-stubs");
-        fs::create_dir_all(&stubs_dir).unwrap();
-        fs::write(stubs_dir.join("__init__.pyi"), "").unwrap();
+        let _stubs_dir = make_pkg(&sp, "requests-stubs", &["__init__.pyi"]);
 
         let paths = ImportSearchPaths {
             roots: vec![root.clone()],
@@ -1051,9 +1057,7 @@ mod tests {
     #[test]
     fn test_stub_package_submodule() {
         let sp = unique_tmp("bsk_ir_pep561_sub");
-        let stubs_dir = sp.join("requests-stubs");
-        fs::create_dir_all(&stubs_dir).unwrap();
-        fs::write(stubs_dir.join("__init__.pyi"), "").unwrap();
+        let stubs_dir = make_pkg(&sp, "requests-stubs", &["__init__.pyi"]);
         fs::write(stubs_dir.join("api.pyi"), "def get() -> None: ...\n").unwrap();
 
         let paths = ImportSearchPaths {
@@ -1074,10 +1078,7 @@ mod tests {
     #[test]
     fn test_py_typed_detection() {
         let sp = unique_tmp("bsk_ir_pytyped");
-        let pkg = sp.join("rich");
-        fs::create_dir_all(&pkg).unwrap();
-        fs::write(pkg.join("py.typed"), "").unwrap();
-        fs::write(pkg.join("__init__.py"), "").unwrap();
+        let _pkg = make_pkg(&sp, "rich", &["py.typed", "__init__.py"]);
 
         assert!(is_inline_typed_package("rich", &sp));
         assert!(!is_inline_typed_package("flask", &sp));

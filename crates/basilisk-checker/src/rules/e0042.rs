@@ -82,11 +82,8 @@ pub(crate) struct Pep695TraditionalTypeVarMix;
 impl Rule for Pep695TraditionalTypeVarMix {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         // Build a set of all module-level traditional TypeVar names.
-        let traditional_typevars: HashSet<&str> = module
-            .typevar_calls
-            .iter()
-            .map(|tv| tv.name.as_str())
-            .collect();
+        let traditional_typevars: HashSet<&str> =
+            basilisk_resolver::collect_name_set(&module.typevar_calls);
 
         // Check classes: if a class uses PEP 695 syntax and references a traditional
         // TypeVar in its base expressions that is NOT one of its own PEP 695 params.

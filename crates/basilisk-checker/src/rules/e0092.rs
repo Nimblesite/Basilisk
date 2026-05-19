@@ -68,11 +68,8 @@ fn compute_arities<'a>(module: &'a ResolvedModule) -> HashMap<&'a str, TypeArity
         .map(|tv| (tv.name.as_str(), tv.has_default))
         .collect();
 
-    let all_typevar_names: HashSet<&str> = module
-        .typevar_calls
-        .iter()
-        .map(|tv| tv.name.as_str())
-        .collect();
+    let all_typevar_names: HashSet<&str> =
+        basilisk_resolver::collect_name_set(&module.typevar_calls);
 
     let tvt_names = super::shared::typevar_tuple_names(&module.typevar_calls);
 

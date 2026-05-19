@@ -123,12 +123,8 @@ fn check_frozen_instance_assigns(module: &ResolvedModule, diagnostics: &mut Vec<
 
     let transform_classes = super::guards::collect_transform_classes(module);
 
-    let mut frozen_classes: HashSet<&str> = module
-        .classes
-        .iter()
-        .filter(|c| c.is_dataclass_frozen)
-        .map(|c| c.name.as_str())
-        .collect();
+    let mut frozen_classes: HashSet<&str> =
+        basilisk_resolver::collect_name_set_where(&module.classes, |c| c.is_dataclass_frozen);
 
     // Also include dataclass_transform classes that are frozen
     for (name, info) in &transform_classes {

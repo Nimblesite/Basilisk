@@ -87,12 +87,8 @@ fn check_invalid_type_annotations(module: &ResolvedModule, diagnostics: &mut Vec
     let non_type_names = collect_non_type_names(module);
     let module_scope_names = build_module_scope_names(module);
     let builtin_type_names: HashSet<&str> = PYTHON_BUILTIN_TYPE_NAMES.iter().copied().collect();
-    let paramspec_names: HashSet<&str> = module
-        .typevar_calls
-        .iter()
-        .filter(|tv| tv.is_paramspec)
-        .map(|tv| tv.name.as_str())
-        .collect();
+    let paramspec_names: HashSet<&str> =
+        basilisk_resolver::collect_name_set_where(&module.typevar_calls, |tv| tv.is_paramspec);
 
     check_function_param_annotations(module, &non_type_names, &paramspec_names, diagnostics);
     check_module_var_annotations(module, &non_type_names, &paramspec_names, diagnostics);

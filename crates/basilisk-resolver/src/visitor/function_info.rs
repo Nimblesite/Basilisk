@@ -1,8 +1,6 @@
 //! Function Info visitor functions.
 
-use ruff_python_ast::{
-    ExceptHandler, Expr, Parameter, ParameterWithDefault, Stmt, StmtFunctionDef, StmtReturn,
-};
+use ruff_python_ast::{Expr, Parameter, ParameterWithDefault, Stmt, StmtFunctionDef, StmtReturn};
 use ruff_text_size::Ranged;
 
 use crate::scope::{
@@ -122,47 +120,7 @@ pub(super) fn function_info_from(
     }
 }
 
-/// Walk a function body, applying `visit` to each statement and recursing into
-/// nested control-flow blocks (if/for/while/with/try). Does NOT recurse into
-/// nested `FunctionDef` or `ClassDef` — those have their own scope.
-///
-/// `visit` is called for every statement, including the control-flow statements
-/// themselves; the helper handles recursion into their bodies separately.
-fn walk_function_stmts(stmts: &[Stmt], visit: &mut impl FnMut(&Stmt)) {
-    for stmt in stmts {
-        visit(stmt);
-        match stmt {
-            Stmt::If(node) => {
-                walk_function_stmts(&node.body, visit);
-                for clause in &node.elif_else_clauses {
-                    walk_function_stmts(&clause.body, visit);
-                }
-            }
-            Stmt::For(node) => {
-                walk_function_stmts(&node.body, visit);
-                walk_function_stmts(&node.orelse, visit);
-            }
-            Stmt::While(node) => {
-                walk_function_stmts(&node.body, visit);
-                walk_function_stmts(&node.orelse, visit);
-            }
-            Stmt::With(node) => {
-                walk_function_stmts(&node.body, visit);
-            }
-            Stmt::Try(node) => {
-                walk_function_stmts(&node.body, visit);
-                for handler in &node.handlers {
-                    let ExceptHandler::ExceptHandler(h) = handler;
-                    walk_function_stmts(&h.body, visit);
-                }
-                walk_function_stmts(&node.orelse, visit);
-                walk_function_stmts(&node.finalbody, visit);
-            }
-            // Do NOT recurse into nested function or class definitions.
-            _ => {}
-        }
-    }
-}
+use super::walks::walk_function_stmts;
 
 /// Extract the docstring from a function or class body.
 ///
@@ -445,11 +403,7 @@ pub(super) fn build_param_scope_owned(
     parameters: &ruff_python_ast::Parameters,
     source: &str,
 ) -> Vec<(String, String)> {
-    parameters
-        .posonlyargs
-        .iter()
-        .chain(parameters.args.iter())
-        .chain(parameters.kwonlyargs.iter())
+    super::walks::iter_all_params(parameters)
         .filter_map(|p| {
             let name = p.parameter.name.to_string();
             let ann = p.parameter.annotation.as_deref()?;

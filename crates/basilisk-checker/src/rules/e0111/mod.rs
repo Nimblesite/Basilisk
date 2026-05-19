@@ -43,11 +43,8 @@ impl Rule for ConstructorCallError {
         let path = &module.path;
 
         // Build class info map.
-        let class_map: HashMap<&str, &basilisk_resolver::ClassInfo> = module
-            .classes
-            .iter()
-            .map(|c| (c.name.as_str(), c))
-            .collect();
+        let class_map: HashMap<&str, &basilisk_resolver::ClassInfo> =
+            basilisk_resolver::name_lookup(&module.classes);
 
         // Build method map: (class_name, method_name) -> Vec<&FunctionInfo>
         let mut method_map: HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>> =
@@ -62,11 +59,7 @@ impl Rule for ConstructorCallError {
         }
 
         // Collect module-level TypeVar names for class-scoped TypeVar detection.
-        let typevar_names: Vec<&str> = module
-            .typevar_calls
-            .iter()
-            .map(|tv| tv.name.as_str())
-            .collect();
+        let typevar_names: Vec<&str> = basilisk_resolver::collect_names(&module.typevar_calls);
 
         // Check 4: Class-scoped `TypeVar`s in self annotation of __init__.
         check_class_scoped_typevars_in_self(
@@ -83,17 +76,16 @@ impl Rule for ConstructorCallError {
             return;
         };
 
-        for stmt in &parsed.ast.body {
-            check_stmt(
-                stmt,
-                source,
-                path,
-                &class_map,
-                &method_map,
-                &typevar_names,
-                diagnostics,
-            );
-        }
+        let ctx = Ctx {
+            source,
+            path,
+            class_map: &class_map,
+            method_map: &method_map,
+            typevar_names: &typevar_names,
+        };
+        basilisk_resolver::visit_calls(&parsed.ast.body, &mut |call| {
+            check_constructor_call(call, &ctx, diagnostics);
+        });
     }
 }
 
@@ -112,11 +104,8 @@ fn check_class_scoped_typevars_in_self(
             continue;
         }
 
-        let class_param_names: Vec<&str> = class
-            .generic_params
-            .iter()
-            .map(|p| p.name.as_str())
-            .collect();
+        let class_param_names: Vec<&str> =
+            basilisk_resolver::collect_names(&class.generic_params);
 
         let Some(init_funcs) = method_map.get(&(class.name.as_str(), "__init__")) else {
             continue;
@@ -201,136 +190,30 @@ fn check_class_scoped_typevars_in_self(
     }
 }
 
-/// Walk a statement looking for constructor call expressions.
-fn check_stmt(
-    stmt: &ruff_python_ast::Stmt,
-    source: &str,
-    path: &str,
-    class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
-    method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
-    typevar_names: &[&str],
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    use ruff_python_ast::Stmt;
-
-    match stmt {
-        Stmt::Expr(node) => {
-            check_expr_recursive(
-                &node.value,
-                source,
-                path,
-                class_map,
-                method_map,
-                typevar_names,
-                diagnostics,
-            );
-        }
-        Stmt::Assign(node) => {
-            check_expr_recursive(
-                &node.value,
-                source,
-                path,
-                class_map,
-                method_map,
-                typevar_names,
-                diagnostics,
-            );
-        }
-        Stmt::AnnAssign(node) => {
-            if let Some(val) = node.value.as_deref() {
-                check_expr_recursive(
-                    val,
-                    source,
-                    path,
-                    class_map,
-                    method_map,
-                    typevar_names,
-                    diagnostics,
-                );
-            }
-        }
-        Stmt::Try(try_stmt) => {
-            for body in [&try_stmt.body, &try_stmt.orelse, &try_stmt.finalbody] {
-                for s in body {
-                    check_stmt(
-                        s,
-                        source,
-                        path,
-                        class_map,
-                        method_map,
-                        typevar_names,
-                        diagnostics,
-                    );
-                }
-            }
-            for handler in &try_stmt.handlers {
-                let ruff_python_ast::ExceptHandler::ExceptHandler(h) = handler;
-                for s in &h.body {
-                    check_stmt(
-                        s,
-                        source,
-                        path,
-                        class_map,
-                        method_map,
-                        typevar_names,
-                        diagnostics,
-                    );
-                }
-            }
-        }
-        _ => {}
-    }
+/// Bundle of state threaded through all E0111 statement/expression walkers.
+struct Ctx<'a> {
+    source: &'a str,
+    path: &'a str,
+    class_map: &'a HashMap<&'a str, &'a basilisk_resolver::ClassInfo>,
+    method_map: &'a HashMap<(&'a str, &'a str), Vec<&'a basilisk_resolver::FunctionInfo>>,
+    typevar_names: &'a [&'a str],
 }
 
-/// Recursively check expressions for constructor call errors.
-fn check_expr_recursive(
-    expr: &ruff_python_ast::Expr,
-    source: &str,
-    path: &str,
-    class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
-    method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
-    typevar_names: &[&str],
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    use ruff_python_ast::Expr;
-
-    if let Expr::Call(call) = expr {
-        // Recurse into arguments first.
-        for arg in &call.arguments.args {
-            check_expr_recursive(
-                arg,
-                source,
-                path,
-                class_map,
-                method_map,
-                typevar_names,
-                diagnostics,
-            );
-        }
-
-        check_constructor_call(
-            call,
-            source,
-            path,
-            class_map,
-            method_map,
-            typevar_names,
-            diagnostics,
-        );
-    }
-}
 
 /// Check a single call expression for constructor call errors.
 fn check_constructor_call(
     call: &ruff_python_ast::ExprCall,
-    source: &str,
-    path: &str,
-    class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
-    method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
-    typevar_names: &[&str],
+    ctx: &Ctx<'_>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     use ruff_python_ast::Expr;
+    let Ctx {
+        source,
+        path,
+        class_map,
+        method_map,
+        ..
+    } = *ctx;
 
     match call.func.as_ref() {
         // Case A: Simple class call like `Class11(1)` or `Class3(Class2(None))`
@@ -385,64 +268,77 @@ fn check_constructor_call(
             );
         }
         // Case B: Specialized call like `Class1[int](1.0)` or `Class4[str]()`
-        Expr::Subscript(sub) => {
-            let Expr::Name(class_name_node) = sub.value.as_ref() else {
-                return;
-            };
-            let class_name = class_name_node.id.as_str();
-            let Some(class_info) = class_map.get(class_name) else {
-                return;
-            };
+        Expr::Subscript(sub) => check_subscript_constructor(call, sub, ctx, diagnostics),
+        _ => {}
+    }
+}
 
-            if class_info.generic_params.is_empty() {
-                return;
+/// Handles the `ClassName[TypeArgs](args)` form of constructor call.
+fn check_subscript_constructor(
+    call: &ruff_python_ast::ExprCall,
+    sub: &ruff_python_ast::ExprSubscript,
+    ctx: &Ctx<'_>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    use ruff_python_ast::Expr;
+    let Ctx {
+        source,
+        path,
+        class_map,
+        method_map,
+        typevar_names,
+    } = *ctx;
+
+    let Expr::Name(class_name_node) = sub.value.as_ref() else {
+        return;
+    };
+    let class_name = class_name_node.id.as_str();
+    let Some(class_info) = class_map.get(class_name) else {
+        return;
+    };
+    if class_info.generic_params.is_empty() {
+        return;
+    }
+
+    let type_args = extract_type_args_text(&sub.slice, source);
+
+    let mut substitutions: HashMap<&str, &str> = HashMap::new();
+    for (idx, param) in class_info.generic_params.iter().enumerate() {
+        if let Some(arg) = type_args.get(idx) {
+            let _ = substitutions.insert(param.name.as_str(), arg.as_str());
+        }
+    }
+
+    if let Some(init_funcs) = method_map.get(&(class_name, "__init__")) {
+        for init_func in init_funcs {
+            if init_func.decorators.iter().any(|d| d == "overload") {
+                continue;
             }
-
-            let type_args = extract_type_args_text(&sub.slice, source);
-
-            // Build substitution map.
-            let mut substitutions: HashMap<&str, &str> = HashMap::new();
-            for (idx, param) in class_info.generic_params.iter().enumerate() {
-                if let Some(arg) = type_args.get(idx) {
-                    let _ = substitutions.insert(param.name.as_str(), arg.as_str());
-                }
-            }
-
-            // Check 1: Argument type mismatch after substitution (__init__).
-            if let Some(init_funcs) = method_map.get(&(class_name, "__init__")) {
-                for init_func in init_funcs {
-                    if init_func.decorators.iter().any(|d| d == "overload") {
-                        continue;
-                    }
-                    check_init_method_args(
-                        init_func,
-                        &substitutions,
-                        call,
-                        class_name,
-                        &type_args,
-                        source,
-                        path,
-                        class_info,
-                        typevar_names,
-                        diagnostics,
-                    );
-                }
-            }
-
-            // Check generic NamedTuple constructor arg types with substitution.
-            check_generic_nt_arg_types(
+            check_init_method_args(
+                init_func,
+                &substitutions,
                 call,
                 class_name,
-                class_info,
-                class_map,
-                &substitutions,
+                &type_args,
                 source,
                 path,
+                class_info,
+                typevar_names,
                 diagnostics,
             );
         }
-        _ => {}
     }
+
+    check_generic_nt_arg_types(
+        call,
+        class_name,
+        class_info,
+        class_map,
+        &substitutions,
+        source,
+        path,
+        diagnostics,
+    );
 }
 
 /// Check 5: Classes without custom `__init__` that receive arguments.

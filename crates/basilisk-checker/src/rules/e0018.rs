@@ -40,11 +40,7 @@ impl Rule for UndefinedVariable {
             .collect();
 
         // Collect module-level variable names so functions can reference them.
-        let module_var_names: Vec<&str> = module
-            .module_vars
-            .iter()
-            .map(|var| var.name.as_str())
-            .collect();
+        let module_var_names: Vec<&str> = basilisk_resolver::collect_names(&module.module_vars);
 
         module.functions.iter().for_each(|func| {
             check_function(
@@ -207,7 +203,7 @@ fn check_function(
     path: &str,
     out: &mut Vec<Diagnostic>,
 ) {
-    let param_names: Vec<&str> = func.parameters.iter().map(|p| p.name.as_str()).collect();
+    let param_names: Vec<&str> = basilisk_resolver::collect_names(&func.parameters);
 
     for (name, span) in &func.return_name_refs {
         let name_str = name.as_str();

@@ -393,19 +393,10 @@ fn split_first_top_level_arg(args: &str) -> &str {
 /// Returns `true` if the argument text looks like a keyword arg (`name=value`).
 fn is_keyword_arg(arg: &str) -> bool {
     let arg = arg.trim();
-    let eq_pos = arg.find('=');
-    let Some(eq_pos) = eq_pos else {
+    let Some(eq_pos) = arg.find('=') else {
         return false;
     };
-    let before = arg[..eq_pos].trim();
-    !before.is_empty()
-        && before
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_')
-        && before
-            .chars()
-            .next()
-            .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+    basilisk_resolver::is_simple_ascii_python_identifier(arg[..eq_pos].trim())
 }
 
 /// Check 3: Positional arguments to a `kw_only` transform-class constructor.

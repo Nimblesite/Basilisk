@@ -6,8 +6,85 @@
 use std::collections::{HashMap, HashSet};
 
 use basilisk_parser::ParsedModule;
-use basilisk_resolver::{ClassInfo, ResolvedModule, TypeVarCallInfo};
+use basilisk_resolver::{ClassInfo, ResolvedModule, Span, TypeVarCallInfo};
 use ruff_python_ast::{self as ast, Expr};
+
+// ---------------------------------------------------------------------------
+// Source-text geometry
+// ---------------------------------------------------------------------------
+
+/// Number of leading whitespace bytes on `line`. Identical to what every rule
+/// re-implemented as `line.len() - line.trim_start().len()`.
+pub(crate) fn leading_indent(line: &str) -> usize {
+    line.len() - line.trim_start().len()
+}
+
+/// Return the byte offset (as `u32`) of the start of the given 1-based line.
+/// If `target_line` is past the end of `source`, returns `source.len()`.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::as_conversions,
+    reason = "byte offsets fit u32 for source files"
+)]
+pub(crate) fn line_to_byte_offset(source: &str, target_line: usize) -> u32 {
+    let mut current = 1usize;
+    for (byte_idx, ch) in source.char_indices() {
+        if current == target_line {
+            return byte_idx as u32;
+        }
+        if ch == '\n' {
+            current += 1;
+        }
+    }
+    source.len() as u32
+}
+
+/// Returns `true` when `inner` contains a comma at bracket-depth zero.
+///
+/// Bracket-depth tracks `[`/`(`/`{` openers and their matching closers. Used
+/// by rules that need to decide whether a parenthesised expression like
+/// `(a, b)` is a tuple at top level versus a single bracketed group.
+pub(crate) fn contains_top_level_comma(inner: &str) -> bool {
+    let mut depth = 0i32;
+    for ch in inner.chars() {
+        match ch {
+            '[' | '(' | '{' => depth += 1,
+            ']' | ')' | '}' => depth -= 1,
+            ',' if depth == 0 => return true,
+            _ => {}
+        }
+    }
+    false
+}
+
+/// Returns `true` when `s` is a `(...)` parenthesised expression whose
+/// contents contain a top-level comma (i.e. a tuple expression).
+pub(crate) fn paren_has_top_level_comma(s: &str) -> bool {
+    if s.len() < 2 || !s.starts_with('(') || !s.ends_with(')') {
+        return false;
+    }
+    contains_top_level_comma(&s[1..s.len() - 1])
+}
+
+/// Build a `Span` covering the trimmed content of a given 1-based line.
+#[expect(
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    reason = "u32<->usize safe on 32-bit+"
+)]
+pub(crate) fn span_for_line(source: &str, line_number: usize) -> Span {
+    let start = line_to_byte_offset(source, line_number) as usize;
+    let line_text = source
+        .get(start..)
+        .and_then(|s| s.lines().next())
+        .unwrap_or("");
+    let trimmed_start = start + (line_text.len() - line_text.trim_start().len());
+    let trimmed_end = start + line_text.trim_end().len();
+    Span {
+        start: trimmed_start as u32,
+        end: trimmed_end as u32,
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Parsing
