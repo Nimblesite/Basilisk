@@ -27,11 +27,11 @@
 
 use basilisk_resolver::scope::Span;
 use basilisk_resolver::ResolvedModule;
-use ruff_python_ast::{self as ast, Expr, Stmt};
+use ruff_python_ast::{Expr, Stmt};
 use ruff_text_size::Ranged;
 
 use super::Rule;
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0119",
@@ -228,47 +228,43 @@ fn check_single_protocol(
 
     // Check 1: Not runtime_checkable.
     if !is_runtime_checkable(proto_name, module) {
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "Protocol `{proto_name}` cannot be used with `{call_name}()` \
                  because it is not decorated with `@runtime_checkable`"
             ),
-            span: call_span,
-            path: module.path.clone(),
-            help: Some(format!(
+            call_span,
+            &module.path,
+            Some(format!(
                 "Add `@runtime_checkable` to the definition of `{proto_name}`"
             )),
-            note: Some(
+            Some(
                 "PEP 544: a Protocol can only be used as the second argument in \
                  isinstance() or issubclass() if it has the @runtime_checkable decorator"
                     .to_owned(),
             ),
-            provenance: None,
-        });
+        ));
         return true;
     }
 
     // Check 2: issubclass with data protocol.
     if call_name == "issubclass" && is_data_protocol(proto_name, module) {
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!("`issubclass()` cannot be used with data protocol `{proto_name}`"),
-            span: call_span,
-            path: module.path.clone(),
-            help: Some(format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!("`issubclass()` cannot be used with data protocol `{proto_name}`"),
+            call_span,
+            &module.path,
+            Some(format!(
                 "Remove the data attributes from `{proto_name}` or \
                  use `isinstance()` instead"
             )),
-            note: Some(
+            Some(
                 "PEP 544: issubclass() can only be used with non-data protocols \
                  (protocols that define only methods, not data attributes)"
                     .to_owned(),
             ),
-            provenance: None,
-        });
+        ));
         return true;
     }
 
@@ -277,27 +273,25 @@ fn check_single_protocol(
         if let Some(concrete_class) = extract_class_name(first) {
             let concrete_exists = module.classes.iter().any(|c| c.name == concrete_class);
             if concrete_exists && has_unsafe_overlap(concrete_class, proto_name, module) {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Unsafe overlap: `{concrete_class}` has members incompatible with \
                          protocol `{proto_name}` in `{call_name}()` call"
                     ),
-                    span: call_span,
-                    path: module.path.clone(),
-                    help: Some(format!(
+                    call_span,
+                    &module.path,
+                    Some(format!(
                         "Ensure `{concrete_class}` correctly implements all members of \
                          `{proto_name}` with compatible signatures"
                     )),
-                    note: Some(
+                    Some(
                         "PEP 544: type checkers should reject isinstance()/issubclass() \
                          calls where there is an unsafe overlap between the first \
                          argument's type and the protocol"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
                 return true;
             }
         }
@@ -312,57 +306,27 @@ fn find_isinstance_calls(
     module: &ResolvedModule,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    for stmt in stmts {
-        match stmt {
-            Stmt::Expr(expr_stmt) => {
-                check_expr_for_violations(&expr_stmt.value, module, diagnostics);
-            }
-            Stmt::If(if_stmt) => {
-                check_expr_for_violations(&if_stmt.test, module, diagnostics);
-                find_isinstance_calls(&if_stmt.body, module, diagnostics);
-                for elif in &if_stmt.elif_else_clauses {
-                    if let Some(ref test) = elif.test {
-                        check_expr_for_violations(test, module, diagnostics);
-                    }
-                    find_isinstance_calls(&elif.body, module, diagnostics);
+    basilisk_resolver::walk_all_stmts(stmts, &mut |stmt| match stmt {
+        Stmt::Expr(expr_stmt) => check_expr_for_violations(&expr_stmt.value, module, diagnostics),
+        Stmt::If(if_stmt) => {
+            check_expr_for_violations(&if_stmt.test, module, diagnostics);
+            for elif in &if_stmt.elif_else_clauses {
+                if let Some(ref test) = elif.test {
+                    check_expr_for_violations(test, module, diagnostics);
                 }
             }
-            Stmt::FunctionDef(func) => {
-                find_isinstance_calls(&func.body, module, diagnostics);
-            }
-            Stmt::ClassDef(cls) => {
-                find_isinstance_calls(&cls.body, module, diagnostics);
-            }
-            Stmt::While(while_stmt) => {
-                check_expr_for_violations(&while_stmt.test, module, diagnostics);
-                find_isinstance_calls(&while_stmt.body, module, diagnostics);
-            }
-            Stmt::For(for_stmt) => {
-                find_isinstance_calls(&for_stmt.body, module, diagnostics);
-            }
-            Stmt::With(with_stmt) => {
-                find_isinstance_calls(&with_stmt.body, module, diagnostics);
-            }
-            Stmt::Try(try_stmt) => {
-                find_isinstance_calls(&try_stmt.body, module, diagnostics);
-                find_isinstance_calls(&try_stmt.finalbody, module, diagnostics);
-                find_isinstance_calls(&try_stmt.orelse, module, diagnostics);
-                for handler in &try_stmt.handlers {
-                    let ast::ExceptHandler::ExceptHandler(h) = handler;
-                    find_isinstance_calls(&h.body, module, diagnostics);
-                }
-            }
-            Stmt::Return(ret) => {
-                if let Some(ref value) = ret.value {
-                    check_expr_for_violations(value, module, diagnostics);
-                }
-            }
-            Stmt::Assign(assign) => {
-                check_expr_for_violations(&assign.value, module, diagnostics);
-            }
-            _ => {}
         }
-    }
+        Stmt::While(while_stmt) => {
+            check_expr_for_violations(&while_stmt.test, module, diagnostics);
+        }
+        Stmt::Return(ret) => {
+            if let Some(ref value) = ret.value {
+                check_expr_for_violations(value, module, diagnostics);
+            }
+        }
+        Stmt::Assign(assign) => check_expr_for_violations(&assign.value, module, diagnostics),
+        _ => {}
+    });
 }
 
 /// Check an expression for isinstance/issubclass protocol violations.
@@ -446,8 +410,7 @@ fn check_expr_for_violations(
 
 impl Rule for ProtocolUnsafeOverlap {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
-        else {
+        let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
 

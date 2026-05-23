@@ -21,7 +21,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -186,25 +186,23 @@ fn check_function_call(
                 func.name.clone()
             };
 
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Argument of type `{lit_type}` does not satisfy \
                      `TypeVar` bound `{bound_text}` for `{func_name}`"
                 ),
-                span: call.span,
-                path: module_path.to_string(),
-                help: Some(format!(
+                call.span,
+                module_path,
+                Some(format!(
                     "Pass a value that satisfies `{bound_text}` \
                      (e.g. a type implementing `__len__`)"
                 )),
-                note: Some(format!(
+                Some(format!(
                     "TypeVar bound `{bound_text}` requires the argument type to \
                      be a subtype of `{bound_text}`"
                 )),
-                provenance: None,
-            });
+            ));
             // Only one diagnostic per call.
             break;
         }

@@ -3,7 +3,7 @@
 
 use basilisk_resolver::Span;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 /// The error code for this rule.
@@ -48,20 +48,18 @@ pub(super) fn has_nested_classvar(ann: &str) -> bool {
 
 /// Construct a BSK-E0036 diagnostic with standard help and note text.
 pub(super) fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
+    error_diagnostic_owned(
+        CODE.clone(),
         message,
         span,
-        path: path.to_owned(),
-        help: Some("`ClassVar` is only valid as a class body attribute annotation".to_owned()),
-        note: Some(
+        path,
+        Some("`ClassVar` is only valid as a class body attribute annotation".to_owned()),
+        Some(
             "PEP 526: `ClassVar` cannot appear in function signatures, local variables, \
              or module-level annotations, and cannot be nested inside another type"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }
 
 /// Returns the text slice for an optional span within the source.

@@ -22,7 +22,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::rules::shared::{extract_literal_inner, split_top_level_commas};
 use crate::span_util::slice_span;
 
@@ -196,24 +196,20 @@ fn check_annotated_assignment(
             return;
         };
 
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "Type mismatch: `{var_name}` is annotated `{annotation}` but assigned \
                  parameter `{rhs}` with type `{param_ann}`"
             ),
-            span: basilisk_resolver::Span {
+            basilisk_resolver::Span {
                 start: span_start,
                 end: span_end,
             },
-            path: path.to_owned(),
-            help: Some("`Literal[0]` and `Literal[False]` are not equivalent (PEP 586)".to_owned()),
-            note: Some(
-                "int and bool Literal values are distinct even when numerically equal".to_owned(),
-            ),
-            provenance: None,
-        });
+            path,
+            Some("`Literal[0]` and `Literal[False]` are not equivalent (PEP 586)".to_owned()),
+            Some("int and bool Literal values are distinct even when numerically equal".to_owned()),
+        ));
     }
 }
 
@@ -267,29 +263,27 @@ fn check_augmented_assignment(
         return;
     };
 
-    diagnostics.push(Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    diagnostics.push(error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Augmented assignment `{target_name} {op} ...` is incompatible with \
              declared type `{param_ann}`"
         ),
-        span: basilisk_resolver::Span {
+        basilisk_resolver::Span {
             start: span_start,
             end: span_end,
         },
-        path: path.to_owned(),
-        help: Some(format!(
+        path,
+        Some(format!(
             "The result of `{op}` on `{param_ann}` widens to `int`, which is not \
              assignable back to `{param_ann}`"
         )),
-        note: Some(
+        Some(
             "Augmented assignment re-assigns the target, so the result type must be \
              compatible with the declared Literal type"
                 .to_owned(),
         ),
-        provenance: None,
-    });
+    ));
 }
 
 // ---------------------------------------------------------------------------
@@ -480,13 +474,7 @@ fn find_top_level_eq(text: &str) -> Option<usize> {
 
 /// Simple identifier check.
 fn is_simple_identifier(source: &str) -> bool {
-    let trimmed = source.trim();
-    !trimmed.is_empty()
-        && trimmed
-            .chars()
-            .next()
-            .is_some_and(|c| c.is_alphabetic() || c == '_')
-        && trimmed.chars().all(|c| c.is_alphanumeric() || c == '_')
+    basilisk_resolver::is_simple_python_identifier(source.trim())
 }
 
 /// Find the byte offset of a variable name within a line at a given base offset.

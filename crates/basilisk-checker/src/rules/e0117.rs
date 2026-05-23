@@ -26,7 +26,7 @@ use std::collections::HashSet;
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -42,11 +42,8 @@ pub(crate) struct UnboundTypeVarScope;
 impl Rule for UnboundTypeVarScope {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         // Collect all known TypeVar names from module-level TypeVar() calls.
-        let typevar_names: HashSet<&str> = module
-            .typevar_calls
-            .iter()
-            .map(|tv| tv.name.as_str())
-            .collect();
+        let typevar_names: HashSet<&str> =
+            basilisk_resolver::collect_name_set(&module.typevar_calls);
 
         if typevar_names.is_empty() {
             return;
@@ -153,22 +150,20 @@ fn check_module_vars(
                 &empty,
             );
             for tv_name in unbound {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!("Type variable `{tv_name}` is not bound in the current scope"),
-                    span: *ann_span,
-                    path: module.path.clone(),
-                    help: Some(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!("Type variable `{tv_name}` is not bound in the current scope"),
+                    *ann_span,
+                    &module.path,
+                    Some(
                         "Type variables cannot be used in module-level variable annotations"
                             .to_owned(),
                     ),
-                    note: Some(
+                    Some(
                         "A TypeVar must be bound by a Generic class or function signature"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
             }
         }
     }
@@ -248,25 +243,23 @@ fn check_function_locals(
                     &in_scope,
                 );
                 for tv_name in unbound {
-                    diagnostics.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
+                    diagnostics.push(error_diagnostic_owned(
+                        CODE.clone(),
+                        format!(
                             "Type variable `{tv_name}` is not bound in function `{}`",
                             func.name
                         ),
-                        span: *ann_span,
-                        path: module.path.clone(),
-                        help: Some(format!(
+                        *ann_span,
+                        &module.path,
+                        Some(format!(
                             "Use `{tv_name}` in a parameter annotation to bind it, \
                              or remove it from the local variable annotation"
                         )),
-                        note: Some(
+                        Some(
                             "Unbound type variables should not appear in function bodies"
                                 .to_owned(),
                         ),
-                        provenance: None,
-                    });
+                    ));
                 }
             }
         }
@@ -305,26 +298,24 @@ fn check_class_attributes(
                     &bound_params,
                 );
                 for tv_name in unbound {
-                    diagnostics.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
+                    diagnostics.push(error_diagnostic_owned(
+                        CODE.clone(),
+                        format!(
                             "Type variable `{tv_name}` is not bound in class `{}`",
                             cls.name,
                         ),
-                        span: *ann_span,
-                        path: module.path.clone(),
-                        help: Some(format!(
+                        *ann_span,
+                        &module.path,
+                        Some(format!(
                             "Add `{tv_name}` to `Generic[...]` in the class bases, \
                              or use it in a method signature instead"
                         )),
-                        note: Some(
+                        Some(
                             "Unbound type variables should not appear in class body \
                              annotations outside method definitions"
                                 .to_owned(),
                         ),
-                        provenance: None,
-                    });
+                    ));
                 }
             }
         }
@@ -387,28 +378,26 @@ fn check_inner_class_typevars(
                         );
                         for tv_name in &unbound {
                             if class_params.contains(tv_name) {
-                                diagnostics.push(Diagnostic {
-                                    code: CODE.clone(),
-                                    severity: Severity::Error,
-                                    message: format!(
+                                diagnostics.push(error_diagnostic_owned(
+                                    CODE.clone(),
+                                    format!(
                                         "Type variable `{tv_name}` from class `{}` \
                                          cannot be used in a TypeAlias definition",
                                         cls.name,
                                     ),
-                                    span: *rhs_span,
-                                    path: module.path.clone(),
-                                    help: Some(
+                                    *rhs_span,
+                                    &module.path,
+                                    Some(
                                         "Class-scoped type variables are not accessible \
                                          in TypeAlias definitions"
                                             .to_owned(),
                                     ),
-                                    note: Some(
+                                    Some(
                                         "TypeAlias definitions create module-level aliases \
                                          and cannot capture class-scoped type variables"
                                             .to_owned(),
                                     ),
-                                    provenance: None,
-                                });
+                                ));
                             }
                         }
                     }

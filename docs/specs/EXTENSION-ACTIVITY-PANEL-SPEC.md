@@ -21,36 +21,25 @@ Every panel must pass the bar: **"Would I leave this open while coding?"** If no
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│  Editor (VS Code / Zed / Neovim)                             │
-│                                                              │
-│  ┌── Activity Sidebar ────────────────────────────────────┐  │
-│  │                                                        │  │
-│  │  ┌── Module Explorer ──────────────────────────────┐   │  │
-│  │  │  Semantic tree of workspace Python modules      │   │  │
-│  │  │  with classes, functions, variables, types       │   │  │
-│  │  └─────────────────────────────────────────────────┘   │  │
-│  │                                                        │  │
-│  │  ┌── Type Health ──────────────────────────────────┐   │  │
-│  │  │  Coverage %, adoption status, diagnostics       │   │  │
-│  │  │  per-file and per-module rollup                 │   │  │
-│  │  └─────────────────────────────────────────────────┘   │  │
-│  │                                                        │  │
-│  │  ┌── Basilisk ─────────────────────────────────────┐   │  │
-│  │  │  What is this? Feature status. Quick actions.   │   │  │
-│  │  │  Getting started. Toggle features.              │   │  │
-│  │  └─────────────────────────────────────────────────┘   │  │
-│  └────────────────────────────────────────────────────────┘  │
-│                                                              │
-│       ▲ all data via LSP custom commands ▼                   │
-│                                                              │
-│  ┌── basilisk lsp (Rust) ─────────────────────────────────┐  │
-│  │  basilisk/workspaceModules                             │  │
-│  │  basilisk/moduleChanged                                │  │
-│  │  basilisk/typeHealth                                   │  │
-│  └────────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Editor["Editor (VS Code / Zed / Neovim)"]
+        direction TB
+        subgraph Sidebar["Activity Sidebar"]
+            direction TB
+            ME["Module Explorer<br/>Semantic tree of workspace Python modules<br/>with classes, functions, variables, types"]
+            TH["Type Health<br/>Coverage %, adoption status, diagnostics<br/>per-file and per-module rollup"]
+            BK["Basilisk<br/>What is this? Feature status. Quick actions.<br/>Getting started. Toggle features."]
+        end
+        subgraph LSP["basilisk lsp (Rust)"]
+            direction TB
+            C1["basilisk/workspaceModules"]
+            C2["basilisk/moduleChanged"]
+            C3["basilisk/typeHealth"]
+        end
+    end
+
+    Sidebar <-->|"all data via LSP custom commands"| LSP
 ```
 
 All data flows from the LSP server via custom commands. The editor extension is a **thin rendering layer**.

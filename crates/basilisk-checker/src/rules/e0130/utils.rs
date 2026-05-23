@@ -1,7 +1,5 @@
 //! Utility functions for BSK-E0130.
 
-use basilisk_resolver::Span;
-
 use crate::rules::shared::contains_typevar_reference;
 
 /// Check if `line` is a simple assignment (e.g. `X = list[T]`), excluding
@@ -105,49 +103,7 @@ pub(super) fn extract_typevars_from_function_sig(
     result
 }
 
-/// Compute the leading whitespace count of a line.
-pub(super) fn leading_indent(line: &str) -> usize {
-    line.len() - line.trim_start().len()
-}
-
-/// Find the byte offset of a given 1-based line number in source text.
-#[expect(
-    clippy::as_conversions,
-    clippy::cast_possible_truncation,
-    reason = "byte offsets fit u32 for source files"
-)]
-pub(super) fn line_to_byte_offset(source: &str, target_line: usize) -> u32 {
-    let mut current_line = 1usize;
-    for (byte_idx, ch) in source.char_indices() {
-        if current_line == target_line {
-            return byte_idx as u32;
-        }
-        if ch == '\n' {
-            current_line += 1;
-        }
-    }
-    source.len() as u32
-}
-
-/// Build a span covering the trimmed content of the given 1-based line.
-#[expect(
-    clippy::as_conversions,
-    clippy::cast_possible_truncation,
-    reason = "u32<->usize safe on 32-bit+"
-)]
-pub(super) fn span_for_line(source: &str, line_number: usize) -> Span {
-    let start = line_to_byte_offset(source, line_number) as usize;
-    let line_text = source
-        .get(start..)
-        .and_then(|s| s.lines().next())
-        .unwrap_or("");
-    let trimmed_start = start + (line_text.len() - line_text.trim_start().len());
-    let trimmed_end = start + line_text.trim_end().len();
-    Span {
-        start: trimmed_start as u32,
-        end: trimmed_end as u32,
-    }
-}
+pub(super) use crate::rules::shared::{leading_indent, span_for_line};
 
 /// Extract PEP 695 type parameters from a class definition like `class Foo[T, S](bases):`.
 ///

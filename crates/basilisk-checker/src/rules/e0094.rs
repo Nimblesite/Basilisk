@@ -36,7 +36,7 @@ use std::collections::HashSet;
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -52,23 +52,21 @@ fn span_text(source: &str, span: Option<Span>) -> Option<&str> {
 }
 
 fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
+    error_diagnostic_owned(
+        CODE.clone(),
         message,
         span,
-        path: path.to_owned(),
-        help: Some(
+        path,
+        Some(
             "`Self` is only valid inside class method annotations and class variable annotations"
                 .to_owned(),
         ),
-        note: Some(
+        Some(
             "PEP 673: `Self` binds to the class in which it is defined; \
              it cannot be used at module scope, in staticmethods, or in metaclass methods"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }
 
 /// Returns `true` when `text` contains the word `Self` as a standalone identifier.

@@ -24,7 +24,7 @@
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -39,22 +39,16 @@ fn span_text(source: &str, span: Option<Span>) -> Option<&str> {
 }
 
 fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
+    error_diagnostic(
+        CODE.clone(),
         message,
         span,
-        path: path.to_owned(),
-        help: Some(
-            "`Final` is only valid as the outermost qualifier in variable or attribute annotations"
-                .to_owned(),
+        path,
+        Some(
+            "`Final` is only valid as the outermost qualifier in variable or attribute annotations",
         ),
-        note: Some(
-            "PEP 591: `Final` cannot be nested, used in parameters, or combined with `ClassVar`"
-                .to_owned(),
-        ),
-        provenance: None,
-    }
+        Some("PEP 591: `Final` cannot be nested, used in parameters, or combined with `ClassVar`"),
+    )
 }
 
 /// Returns `true` when an annotation text contains `Final` nested inside another

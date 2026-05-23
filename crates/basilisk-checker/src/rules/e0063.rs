@@ -33,7 +33,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diag_help_note, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -156,26 +156,21 @@ fn make_diagnostic(
     path: &str,
 ) -> Diagnostic {
     let _ = class_name_span; // span is available for future use in multi-span diagnostics
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diag_help_note(
+        CODE.clone(),
+        format!(
             "Cannot assign `{class_name}` instance to `Hashable`-annotated variable `{var_name}`: \
              `{class_name}` is not hashable"
         ),
-        span: var_span,
-        path: path.to_owned(),
-        help: Some(format!(
+        var_span,
+        path,
+        format!(
             "Make `{class_name}` hashable by adding `frozen=True`, `unsafe_hash=True`, \
              or defining a `__hash__` method"
-        )),
-        note: Some(
-            "PEP 557: a `@dataclass` with `eq=True` (the default) sets `__hash__ = None` \
-             unless the class is frozen or uses `unsafe_hash=True`"
-                .to_owned(),
         ),
-        provenance: None,
-    }
+        "PEP 557: a `@dataclass` with `eq=True` (the default) sets `__hash__ = None` \
+         unless the class is frozen or uses `unsafe_hash=True`",
+    )
 }
 
 fn make_hash_call_diagnostic(
@@ -183,24 +178,19 @@ fn make_hash_call_diagnostic(
     class_name: &str,
     path: &str,
 ) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diag_help_note(
+        CODE.clone(),
+        format!(
             "Cannot call `.__hash__()` on `{class_name}` instance: \
              `{class_name}.__hash__` is `None`"
         ),
-        span: call_span,
-        path: path.to_owned(),
-        help: Some(format!(
+        call_span,
+        path,
+        format!(
             "Make `{class_name}` hashable by adding `frozen=True`, `unsafe_hash=True`, \
              or defining a `__hash__` method"
-        )),
-        note: Some(
-            "PEP 557: a `@dataclass` with `eq=True` (the default) sets `__hash__ = None` \
-             unless the class is frozen or uses `unsafe_hash=True`"
-                .to_owned(),
         ),
-        provenance: None,
-    }
+        "PEP 557: a `@dataclass` with `eq=True` (the default) sets `__hash__ = None` \
+         unless the class is frozen or uses `unsafe_hash=True`",
+    )
 }

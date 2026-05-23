@@ -338,63 +338,57 @@ mod tests {
 
     // ── format_snippet: colour assertions ────────────────────────────────────
 
+    /// Format the standard sample snippet under forced colour mode.
+    /// All `format_snippet_*_is_*` tests share this fixture.
+    fn snippet_sample(severity: Severity) -> String {
+        force_colors();
+        format_snippet("def foo(x): pass", 8, 9, severity)
+    }
+
+    fn assert_contains_colour(out: &str, expected: &str, label: &str) {
+        assert!(
+            out.contains(expected),
+            "{label} must contain {expected:?}, got:\n{out}"
+        );
+    }
+
     #[test]
     fn format_snippet_pipe_is_bold_blue() {
-        force_colors();
-        let out = format_snippet("def foo(x): pass", 8, 9, Severity::Error);
-        assert!(
-            out.contains(&format!("{BOLD_BLUE}|{RESET}")),
-            "pipe must be bold blue, got:\n{out}"
-        );
+        let out = snippet_sample(Severity::Error);
+        assert_contains_colour(&out, &format!("{BOLD_BLUE}|{RESET}"), "pipe");
     }
 
     #[test]
     fn format_snippet_line_number_is_bold_blue() {
-        force_colors();
-        let out = format_snippet("def foo(x): pass", 8, 9, Severity::Error);
-        assert!(
-            out.contains(&format!("{BOLD_BLUE}1{RESET}")),
-            "line number must be bold blue, got:\n{out}"
-        );
+        let out = snippet_sample(Severity::Error);
+        assert_contains_colour(&out, &format!("{BOLD_BLUE}1{RESET}"), "line number");
     }
 
     #[test]
     fn format_snippet_error_underline_is_bold_red() {
-        force_colors();
-        let out = format_snippet("def foo(x): pass", 8, 9, Severity::Error);
-        assert!(
-            out.contains(&format!("{BOLD_RED}^{RESET}")),
-            "error underline must be bold red, got:\n{out}"
-        );
+        let out = snippet_sample(Severity::Error);
+        assert_contains_colour(&out, &format!("{BOLD_RED}^{RESET}"), "error underline");
     }
 
     #[test]
     fn format_snippet_warning_underline_is_bold_yellow() {
-        force_colors();
-        let out = format_snippet("def foo(x): pass", 8, 9, Severity::Warning);
-        assert!(
-            out.contains(&format!("{BOLD_YELLOW}^{RESET}")),
-            "warning underline must be bold yellow, got:\n{out}"
-        );
+        let out = snippet_sample(Severity::Warning);
+        assert_contains_colour(&out, &format!("{BOLD_YELLOW}^{RESET}"), "warning underline");
     }
 
     #[test]
     fn format_snippet_info_underline_is_bold_blue() {
-        force_colors();
-        let out = format_snippet("def foo(x): pass", 8, 9, Severity::Info);
-        assert!(
-            out.contains(&format!("{BOLD_BLUE}^{RESET}")),
-            "info underline must be bold blue, got:\n{out}"
-        );
+        let out = snippet_sample(Severity::Info);
+        assert_contains_colour(&out, &format!("{BOLD_BLUE}^{RESET}"), "info underline");
     }
 
     #[test]
     fn format_snippet_safety_violation_underline_is_bold_red() {
-        force_colors();
-        let out = format_snippet("def foo(x): pass", 8, 9, Severity::SafetyViolation);
-        assert!(
-            out.contains(&format!("{BOLD_RED}^{RESET}")),
-            "safety violation underline must be bold red, got:\n{out}"
+        let out = snippet_sample(Severity::SafetyViolation);
+        assert_contains_colour(
+            &out,
+            &format!("{BOLD_RED}^{RESET}"),
+            "safety violation underline",
         );
     }
 
@@ -403,10 +397,7 @@ mod tests {
         force_colors();
         // span covers "foo" at bytes 4..7 → 3 carets
         let out = format_snippet("def foo(x): pass", 4, 7, Severity::Error);
-        assert!(
-            out.contains(&format!("{BOLD_RED}^^^{RESET}")),
-            "underline must be 3 carets for a 3-byte span, got:\n{out}"
-        );
+        assert_contains_colour(&out, &format!("{BOLD_RED}^^^{RESET}"), "3-caret underline");
     }
 
     #[test]

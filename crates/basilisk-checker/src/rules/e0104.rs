@@ -20,7 +20,7 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -116,11 +116,8 @@ fn has_container_wrapper(alias: &basilisk_resolver::TypeAliasDefInfo) -> bool {
 impl Rule for CyclicalTypeAliasReference {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         // Build a set of all TypeAlias names for quick membership tests.
-        let alias_names: HashSet<&str> = module
-            .type_alias_defs
-            .iter()
-            .map(|a| a.name.as_str())
-            .collect();
+        let alias_names: HashSet<&str> =
+            basilisk_resolver::collect_name_set(&module.type_alias_defs);
 
         // Build a directed graph: alias name -> list of other alias names it
         // forward-references via string literals.
@@ -153,22 +150,18 @@ impl Rule for CyclicalTypeAliasReference {
             if has_container_wrapper(alias) {
                 continue;
             }
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!("Type alias `{}` creates a cyclical reference", alias.name),
-                span: alias.span,
-                path: module.path.clone(),
-                help: Some(
-                    "Remove the self-reference or break the mutual reference cycle".to_owned(),
-                ),
-                note: Some(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!("Type alias `{}` creates a cyclical reference", alias.name),
+                alias.span,
+                &module.path,
+                Some("Remove the self-reference or break the mutual reference cycle".to_owned()),
+                Some(
                     "A TypeAlias whose RHS forward-references itself (directly or \
                      through another alias) produces an infinite type that cannot be resolved"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }

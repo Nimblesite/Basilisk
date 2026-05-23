@@ -32,7 +32,7 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use crate::rules::shared::{is_numeric_subtype, split_top_level_commas};
@@ -53,11 +53,8 @@ pub(crate) struct TypeVarDefaultReferential;
 
 impl Rule for TypeVarDefaultReferential {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let typevar_names: HashSet<&str> = module
-            .typevar_calls
-            .iter()
-            .map(|tv| tv.name.as_str())
-            .collect();
+        let typevar_names: HashSet<&str> =
+            basilisk_resolver::collect_name_set(&module.typevar_calls);
 
         let typevar_info_list = parse_typevar_info_from_source(&module.source, &typevar_names);
 
@@ -68,11 +65,8 @@ impl Rule for TypeVarDefaultReferential {
             .collect();
 
         // Build lookup from name to resolver TypeVarCallInfo for spans
-        let span_map: HashMap<&str, &basilisk_resolver::TypeVarCallInfo> = module
-            .typevar_calls
-            .iter()
-            .map(|tv| (tv.name.as_str(), tv))
-            .collect();
+        let span_map: HashMap<&str, &basilisk_resolver::TypeVarCallInfo> =
+            basilisk_resolver::name_lookup(&module.typevar_calls);
 
         // Check 1: Forward references in Generic[...] params (ordering)
         check_ordering(module, &info_map, &typevar_names, diagnostics);
@@ -108,11 +102,7 @@ fn check_ordering(
             continue;
         }
 
-        let param_names: Vec<&str> = class
-            .generic_params
-            .iter()
-            .map(|p| p.name.as_str())
-            .collect();
+        let param_names: Vec<&str> = basilisk_resolver::collect_names(&class.generic_params);
 
         for (idx, param) in class.generic_params.iter().enumerate() {
             let Some(info) = info_map.get(param.name.as_str()) else {
@@ -134,28 +124,26 @@ fn check_ordering(
             };
 
             if is_violation {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "TypeVar `{}` has default `{}` which is not properly ordered \
                          in `Generic[...]` for `{}`",
                         param.name, default_name, class.name
                     ),
-                    span: class.name_span,
-                    path: module.path.clone(),
-                    help: Some(
+                    class.name_span,
+                    &module.path,
+                    Some(
                         "The referenced TypeVar must appear before the TypeVar \
                          that defaults to it in the same Generic parameter list"
                             .to_owned(),
                     ),
-                    note: Some(
+                    Some(
                         "PEP 696: a TypeVar default must reference a TypeVar that \
                          appears earlier in the same Generic parameter list"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
             }
         }
     }
@@ -229,30 +217,28 @@ fn check_outer_scope(
                                 .unwrap_or(u32::MAX);
                             let line_len = u32::try_from(line.len()).unwrap_or(u32::MAX);
 
-                            diagnostics.push(Diagnostic {
-                                code: CODE.clone(),
-                                severity: Severity::Error,
-                                message: format!(
+                            diagnostics.push(error_diagnostic_owned(
+                                CODE.clone(),
+                                format!(
                                     "TypeVar `{nested_param}` has default `{default_name}` which references an \
                                      outer-scope TypeVar",
                                 ),
-                                span: basilisk_resolver::Span {
+                                basilisk_resolver::Span {
                                     start: byte_offset,
                                     end: byte_offset + line_len,
                                 },
-                                path: module.path.clone(),
-                                help: Some(
+                                &module.path,
+                                Some(
                                     "TypeVar defaults cannot reference TypeVars from an \
                                      enclosing class scope"
                                         .to_owned(),
                                 ),
-                                note: Some(
+                                Some(
                                     "PEP 696: using a type parameter from an outer scope \
                                      as a default is not supported"
                                         .to_owned(),
                                 ),
-                                provenance: None,
-                            });
+                            ));
                         }
                     }
                 }
@@ -306,26 +292,24 @@ fn check_one_bound_compat(
     if let Some(ref info_bound) = info.bound_name {
         if let Some(ref ref_bound) = ref_info.bound_name {
             if !is_numeric_subtype(ref_bound, info_bound) {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "TypeVar `{}` has default `{}` with bound `{}` which is not a \
                          subtype of `{}`'s bound `{}`",
                         info.name, default_name, ref_bound, info.name, info_bound
                     ),
                     span,
-                    path: path.to_owned(),
-                    help: Some(
+                    path,
+                    Some(
                         "The referenced TypeVar's bound must be a subtype of this TypeVar's bound"
                             .to_owned(),
                     ),
-                    note: Some(
+                    Some(
                         "PEP 696: T1's bound must be a subtype of T2's bound when T2 defaults to T1"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
             }
         }
     }
@@ -347,10 +331,9 @@ fn check_constraint_compat(
     if let Some(ref ref_bound) = ref_info.bound_name {
         let compatible = info.constraint_names.iter().any(|c| c == ref_bound);
         if !compatible {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "TypeVar `{}` has default `{}` with upper bound `{}` which is \
                      incompatible with constraints `{}`",
                     info.name,
@@ -359,17 +342,16 @@ fn check_constraint_compat(
                     info.constraint_names.join(", ")
                 ),
                 span,
-                path: path.to_owned(),
-                help: Some(
+                path,
+                Some(
                     "The referenced TypeVar's bound must be compatible with this TypeVar's constraints"
                         .to_owned(),
                 ),
-                note: Some(
+                Some(
                     "PEP 696: the upper bound of the default TypeVar must be compatible with the constrained TypeVar's constraint types"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
     if ref_info.constraint_names.is_empty() {
@@ -382,10 +364,9 @@ fn check_constraint_compat(
         .map(String::as_str)
         .collect();
     if !ref_set.is_subset(&info_set) {
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "TypeVar `{}`'s constraints `{{{}}}` are not a superset of \
                  default TypeVar `{}`'s constraints `{{{}}}`",
                 info.name,
@@ -394,17 +375,16 @@ fn check_constraint_compat(
                 ref_info.constraint_names.join(", ")
             ),
             span,
-            path: path.to_owned(),
-            help: Some(
+            path,
+            Some(
                 "The constrained TypeVar's constraints must include all of the default TypeVar's constraints"
                     .to_owned(),
             ),
-            note: Some(
+            Some(
                 "PEP 696: the constraints of T2 must be a superset of the constraints of T1 when T2 defaults to T1"
                     .to_owned(),
             ),
-            provenance: None,
-        });
+        ));
     }
 }
 
@@ -418,11 +398,8 @@ fn check_subscripted_class_calls(
     info_map: &HashMap<&str, &TypeVarInfo>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let class_map: HashMap<&str, &basilisk_resolver::ClassInfo> = module
-        .classes
-        .iter()
-        .map(|c| (c.name.as_str(), c))
-        .collect();
+    let class_map: HashMap<&str, &basilisk_resolver::ClassInfo> =
+        basilisk_resolver::name_lookup(&module.classes);
     let init_map: HashMap<&str, &basilisk_resolver::FunctionInfo> = module
         .functions
         .iter()
@@ -527,26 +504,24 @@ fn check_subscripted_class_on_line(
             )
             .unwrap_or(u32::MAX);
             let line_len = u32::try_from(line.len()).unwrap_or(u32::MAX);
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "{class_name}[{type_args_str}].__init__ parameter `{}` expects \
                      `{resolved_type}` but received {mismatch}",
                     param.name
                 ),
-                span: basilisk_resolver::Span { start: byte_offset, end: byte_offset + line_len },
-                path: module.path.clone(),
-                help: Some(format!(
+                basilisk_resolver::Span { start: byte_offset, end: byte_offset + line_len },
+                &module.path,
+                Some(format!(
                     "Pass a value of type `{resolved_type}` for parameter `{}`",
                     param.name
                 )),
-                note: Some(
+                Some(
                     "PEP 696: TypeVar defaults are resolved when the class is subscripted with fewer type arguments"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }

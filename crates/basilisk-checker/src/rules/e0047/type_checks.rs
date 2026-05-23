@@ -195,17 +195,7 @@ pub(super) fn has_top_level_token(s: &str, token: &str) -> bool {
 
 /// Returns `true` when `(...)` contains a comma at depth 0 inside the parens.
 pub(super) fn paren_contains_top_level_comma(s: &str) -> bool {
-    let inner = &s[1..s.len() - 1];
-    let mut depth = 0i32;
-    for ch in inner.chars() {
-        match ch {
-            '[' | '(' | '{' => depth += 1,
-            ']' | ')' | '}' => depth -= 1,
-            ',' if depth == 0 => return true,
-            _ => {}
-        }
-    }
-    false
+    crate::rules::shared::contains_top_level_comma(&s[1..s.len() - 1])
 }
 
 // ---------------------------------------------------------------------------

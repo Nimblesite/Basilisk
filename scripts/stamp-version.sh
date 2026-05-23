@@ -17,14 +17,36 @@ set -euo pipefail
 
 readonly PLACEHOLDER="0.0.0-PLACEHOLDER"
 
+# Files that take the full SemVer (including any -alpha / -rc.N suffix).
+# Used by git tags, Cargo, our own binaries, the shipwright contract, and
+# the GitHub release.
 readonly FILES=(
     "Cargo.toml"
     "basilisk-zed/Cargo.toml"
     "basilisk-zed/extension.toml"
-    "vscode-extension/package.json"
     "shipwright.json"
     "website/src/_data/site.json"
 )
+
+# Files that take a Marketplace-legal MAJOR.MINOR.PATCH (suffix stripped).
+# The VS Marketplace flatly rejects SemVer pre-release suffixes in the
+# extension version; pre-release status is conveyed via the --pre-release
+# flag to vsce + the odd-minor convention (see VERSION_CONVENTION below),
+# never via the version string itself.
+readonly MARKETPLACE_FILES=(
+    "vscode-extension/package.json"
+)
+
+# VS Marketplace convention: even MINOR for stable, odd MINOR for
+# pre-release. Stable users auto-upgrade across this boundary, so mixing
+# them on the same MINOR will yank pre-release users onto stable
+# unexpectedly. We refuse to stamp a tag that violates the convention.
+#
+# Examples:
+#   v0.1.0       -> reject: stable tag on odd minor
+#   v0.1.0-alpha -> ok:     pre-release tag on odd minor
+#   v0.2.0       -> ok:     stable tag on even minor
+#   v0.2.0-rc.1  -> reject: pre-release tag on even minor
 
 resolve_version() {
     if [[ $# -ge 1 && -n "$1" ]]; then

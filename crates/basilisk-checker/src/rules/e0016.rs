@@ -21,7 +21,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -48,7 +48,7 @@ impl Rule for IncompatibleOverride {
             .collect();
 
         // Build set of class names for same-module lookup.
-        let class_names: Vec<&str> = module.classes.iter().map(|c| c.name.as_str()).collect();
+        let class_names: Vec<&str> = basilisk_resolver::collect_names(&module.classes);
 
         module.classes.iter().for_each(|child| {
             check_class(
@@ -147,23 +147,21 @@ fn make_diagnostic(
     class_name: &str,
     path: &str,
 ) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Method `{method_name}` in `{class_name}` has an incompatible signature with the \
              base-class method it overrides"
         ),
-        span: func.name_span,
-        path: path.to_owned(),
-        help: Some(format!(
+        func.name_span,
+        path,
+        Some(format!(
             "Update `{method_name}` to have the same parameter types and return type as the \
              base-class definition, or remove the `@override` decorator"
         )),
-        note: Some(
+        Some(
             "An `@override` method must be type-compatible with its base-class counterpart"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }

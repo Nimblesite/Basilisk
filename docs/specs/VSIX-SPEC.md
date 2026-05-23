@@ -20,23 +20,23 @@ All LSP features, DAP integration, custom commands, configuration settings, and 
 
 ## Architecture
 
-```
-┌──────────────────────────┐         ┌──────────────────────────┐
-│   VS Code                │         │  basilisk binary (Rust)  │
-│                          │         │                          │
-│  LanguageClient          │◄───────►│  basilisk lsp            │
-│  (vscode-languageclient) │  stdio  │  (JSON-RPC)              │
-│                          │  JSON   │                          │
-│  All 21 LSP features     │  RPC    │  See LSP-ARCHITECTURE-SPEC.md   │
-│  via LanguageClient      │         │  for all features        │
-│                          │         │                          │
-│  DAP Proxy (TypeScript)  │◄───────►│  debugpy (spawned by     │
-│  DebugAdapterInline      │  TCP    │  basilisk/startDebug)    │
-│                          │         │                          │
-│  TestController          │         │                          │
-│  Status Bar Item         │         │                          │
-│  Output Channels         │         │                          │
-└──────────────────────────┘         └──────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph VSCode["VS Code"]
+        LC["LanguageClient<br/>(vscode-languageclient)<br/><br/>All 21 LSP features<br/>via LanguageClient"]
+        DAP["DAP Proxy (TypeScript)<br/>DebugAdapterInline"]
+        TC["TestController"]
+        SB["Status Bar Item"]
+        OC["Output Channels"]
+    end
+
+    subgraph Basilisk["basilisk binary (Rust)"]
+        LSP["basilisk lsp<br/>(JSON-RPC)<br/><br/>See LSP-ARCHITECTURE-SPEC.md<br/>for all features"]
+        DBG["debugpy<br/>(spawned by<br/>basilisk/startDebug)"]
+    end
+
+    LC <-->|"stdio<br/>JSON-RPC"| LSP
+    DAP <-->|"TCP"| DBG
 ```
 
 - VSIX bundles a pre-compiled LSP server binary per platform
@@ -240,10 +240,11 @@ Additional indicators (future):
 
 ### VS Code-Specific DAP Architecture
 
-```
-VS Code  <-->  DAP Proxy (TypeScript, in-process)  <-->  debugpy.adapter (TCP)
-                   |
-          DebugAdapterInlineImplementation
+```mermaid
+flowchart LR
+    VSC["VS Code"] <--> Proxy["DAP Proxy<br/>(TypeScript, in-process)"]
+    Proxy <-->|"TCP"| Debugpy["debugpy.adapter"]
+    Proxy -.-> Impl["DebugAdapterInlineImplementation"]
 ```
 
 The LSP server spawns `debugpy.adapter --port <free-port>` via `basilisk/startDebugSession`. The proxy connects to that port and relays DAP messages bidirectionally, intercepting specific message patterns.

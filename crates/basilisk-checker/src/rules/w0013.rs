@@ -9,7 +9,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{warning_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -40,19 +40,17 @@ impl StaleLockFile {
     /// Available for use when the workspace layer provides lock-file staleness
     /// data.
     pub(crate) fn make_diagnostic(path: &str, span: basilisk_resolver::Span) -> Diagnostic {
-        Diagnostic {
-            code: Self::CODE.clone(),
-            severity: Severity::Warning,
-            message: "uv.lock is older than pyproject.toml — dependencies may be stale".to_owned(),
+        warning_diagnostic_owned(
+            Self::CODE.clone(),
+            "uv.lock is older than pyproject.toml — dependencies may be stale".to_owned(),
             span,
-            path: path.to_owned(),
-            help: Some("Lock file is out of date with pyproject.toml".to_owned()),
-            note: Some(
+            path,
+            Some("Lock file is out of date with pyproject.toml".to_owned()),
+            Some(
                 "Stale lock files can cause incorrect import resolution and missing packages"
                     .to_owned(),
             ),
-            provenance: None,
-        }
+        )
     }
 }
 
@@ -68,6 +66,7 @@ impl Rule for StaleLockFile {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::diagnostic::Severity;
     use basilisk_resolver::Span;
 
     fn make_module() -> ResolvedModule {

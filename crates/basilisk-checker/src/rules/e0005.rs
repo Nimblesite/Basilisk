@@ -10,7 +10,7 @@
 
 use basilisk_resolver::{AttributeInfo, ClassInfo, ResolvedModule, RhsKind};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::{
     guards::{is_enum_class, is_namedtuple_class, is_protocol_class},
@@ -107,19 +107,15 @@ fn parent_has_annotated_attr(
 }
 
 fn make_diagnostic(attr: &AttributeInfo, class_name: &str, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Missing type annotation for attribute `{}` in class `{}`",
             attr.name, class_name
         ),
-        span: attr.name_span,
-        path: path.to_owned(),
-        help: Some(format!("Add a type annotation: `{}: <type>`", attr.name)),
-        note: Some(
-            "In Basilisk, all class attributes require explicit type annotations".to_owned(),
-        ),
-        provenance: None,
-    }
+        attr.name_span,
+        path,
+        Some(format!("Add a type annotation: `{}: <type>`", attr.name)),
+        Some("In Basilisk, all class attributes require explicit type annotations".to_owned()),
+    )
 }

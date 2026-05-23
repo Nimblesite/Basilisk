@@ -6,7 +6,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
 use crate::span_util::slice_span;
 
 use super::CODE;
@@ -66,22 +66,20 @@ pub(super) fn check_tuple_reassignments(
         }
 
         if let Some(msg) = check_tuple_literal_mismatch(rhs_trimmed, ann_text) {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Type mismatch: `{}` is annotated `{ann_text}` but assigned {msg}",
                     var.name
                 ),
-                span: var.name_span,
-                path: path.to_owned(),
-                help: Some("Ensure the tuple literal matches the annotated tuple type".to_owned()),
-                note: Some(
+                var.name_span,
+                path,
+                Some("Ensure the tuple literal matches the annotated tuple type".to_owned()),
+                Some(
                     "Basilisk checks that tuple literals are compatible with the declared tuple type"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }

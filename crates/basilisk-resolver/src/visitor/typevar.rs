@@ -42,58 +42,32 @@ pub(super) fn typevar_call_info_from(
     use ruff_text_size::Ranged as _;
     let positional_args = call.arguments.args.len();
     let constraint_count = positional_args.saturating_sub(1);
-    let has_default = call
-        .arguments
-        .keywords
-        .iter()
-        .any(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "default"));
-    let has_bound = call
-        .arguments
-        .keywords
-        .iter()
-        .any(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "bound"));
-    let has_parameterized_bound = call
-        .arguments
-        .keywords
-        .iter()
-        .find(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "bound"))
-        .is_some_and(|kw| expr_is_parameterized(&kw.value));
+    let find_kw = |name: &str| {
+        call.arguments
+            .keywords
+            .iter()
+            .find(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == name))
+    };
+    let kw_is_true = |name: &str| {
+        find_kw(name).is_some_and(|kw| matches!(&kw.value, Expr::BooleanLiteral(b) if b.value))
+    };
+    let has_default = find_kw("default").is_some();
+    let has_bound = find_kw("bound").is_some();
+    let has_parameterized_bound =
+        find_kw("bound").is_some_and(|kw| expr_is_parameterized(&kw.value));
     let has_parameterized_constraint = call
         .arguments
         .args
         .iter()
         .skip(1)
         .any(expr_is_parameterized);
-    let is_covariant = call.arguments.keywords.iter().any(|kw| {
-        kw.arg.as_ref().is_some_and(|a| a.as_str() == "covariant")
-            && matches!(&kw.value, Expr::BooleanLiteral(b) if b.value)
-    });
-    let is_contravariant = call.arguments.keywords.iter().any(|kw| {
-        kw.arg
-            .as_ref()
-            .is_some_and(|a| a.as_str() == "contravariant")
-            && matches!(&kw.value, Expr::BooleanLiteral(b) if b.value)
-    });
-    let has_infer_variance = call.arguments.keywords.iter().any(|kw| {
-        kw.arg
-            .as_ref()
-            .is_some_and(|a| a.as_str() == "infer_variance")
-            && matches!(&kw.value, Expr::BooleanLiteral(b) if b.value)
-    });
+    let is_covariant = kw_is_true("covariant");
+    let is_contravariant = kw_is_true("contravariant");
+    let has_infer_variance = kw_is_true("infer_variance");
     // Simple name from the `bound=` keyword argument (if present and a plain Name).
-    let bound_type_name = call
-        .arguments
-        .keywords
-        .iter()
-        .find(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "bound"))
-        .and_then(|kw| expr_simple_name(&kw.value));
+    let bound_type_name = find_kw("bound").and_then(|kw| expr_simple_name(&kw.value));
     // Simple name from the `default=` keyword argument (if present and a plain Name).
-    let default_type_name = call
-        .arguments
-        .keywords
-        .iter()
-        .find(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "default"))
-        .and_then(|kw| expr_simple_name(&kw.value));
+    let default_type_name = find_kw("default").and_then(|kw| expr_simple_name(&kw.value));
     // Constraint type names from positional args (skip the first arg which is the TypeVar name).
     let constraint_type_names: Vec<String> = call
         .arguments
@@ -183,41 +157,38 @@ pub(super) fn check_typevar_bound_expr(
     outer_typeparams: &std::collections::HashSet<String>,
     out: &mut Vec<Pep695BoundViolation>,
 ) {
+    let make =
+        |kind: Pep695BoundViolationKind, range: ruff_text_size::TextRange| Pep695BoundViolation {
+            kind,
+            class_name: class_name.to_owned(),
+            type_param_name: type_param.to_owned(),
+            span: text_range_to_span(range),
+        };
+
     match bound {
         Expr::List(list) => {
-            out.push(Pep695BoundViolation {
-                kind: Pep695BoundViolationKind::ListLiteralBound,
-                class_name: class_name.to_owned(),
-                type_param_name: type_param.to_owned(),
-                span: text_range_to_span(list.range()),
-            });
+            out.push(make(
+                Pep695BoundViolationKind::ListLiteralBound,
+                list.range(),
+            ));
         }
         Expr::Tuple(tup) => {
             if tup.elts.is_empty() {
-                out.push(Pep695BoundViolation {
-                    kind: Pep695BoundViolationKind::EmptyTuple,
-                    class_name: class_name.to_owned(),
-                    type_param_name: type_param.to_owned(),
-                    span: text_range_to_span(tup.range()),
-                });
+                out.push(make(Pep695BoundViolationKind::EmptyTuple, tup.range()));
             } else if tup.elts.len() == 1 {
-                out.push(Pep695BoundViolation {
-                    kind: Pep695BoundViolationKind::SingleElementTuple,
-                    class_name: class_name.to_owned(),
-                    type_param_name: type_param.to_owned(),
-                    span: text_range_to_span(tup.range()),
-                });
+                out.push(make(
+                    Pep695BoundViolationKind::SingleElementTuple,
+                    tup.range(),
+                ));
             } else {
                 // Check for invalid elements and outer-scope TypeVar references.
                 let mut emitted = false;
                 for elt in &tup.elts {
                     if !is_valid_constraint_element(elt) {
-                        out.push(Pep695BoundViolation {
-                            kind: Pep695BoundViolationKind::InvalidConstraintElement,
-                            class_name: class_name.to_owned(),
-                            type_param_name: type_param.to_owned(),
-                            span: text_range_to_span(elt.range()),
-                        });
+                        out.push(make(
+                            Pep695BoundViolationKind::InvalidConstraintElement,
+                            elt.range(),
+                        ));
                         emitted = true;
                         break;
                     }
@@ -225,12 +196,10 @@ pub(super) fn check_typevar_bound_expr(
                 if !emitted {
                     for elt in &tup.elts {
                         if bound_refs_outer_typeparam(elt, current_typeparams, outer_typeparams) {
-                            out.push(Pep695BoundViolation {
-                                kind: Pep695BoundViolationKind::OuterScopeTypeVarInBound,
-                                class_name: class_name.to_owned(),
-                                type_param_name: type_param.to_owned(),
-                                span: text_range_to_span(elt.range()),
-                            });
+                            out.push(make(
+                                Pep695BoundViolationKind::OuterScopeTypeVarInBound,
+                                elt.range(),
+                            ));
                             break;
                         }
                     }
@@ -238,23 +207,19 @@ pub(super) fn check_typevar_bound_expr(
             }
         }
         Expr::Name(name) if bare_names.contains(name.id.as_str()) => {
-            out.push(Pep695BoundViolation {
-                kind: Pep695BoundViolationKind::NonLiteralConstraint,
-                class_name: class_name.to_owned(),
-                type_param_name: type_param.to_owned(),
-                span: text_range_to_span(name.range()),
-            });
+            out.push(make(
+                Pep695BoundViolationKind::NonLiteralConstraint,
+                name.range(),
+            ));
         }
         // Check if the bound itself references an outer-scope TypeVar (e.g. `T: dict[str, V]`).
         bound_expr
             if bound_refs_outer_typeparam(bound_expr, current_typeparams, outer_typeparams) =>
         {
-            out.push(Pep695BoundViolation {
-                kind: Pep695BoundViolationKind::OuterScopeTypeVarInBound,
-                class_name: class_name.to_owned(),
-                type_param_name: type_param.to_owned(),
-                span: text_range_to_span(bound_expr.range()),
-            });
+            out.push(make(
+                Pep695BoundViolationKind::OuterScopeTypeVarInBound,
+                bound_expr.range(),
+            ));
         }
         _ => {}
     }
@@ -350,10 +315,7 @@ pub(super) fn collect_typevar_bound_typeddict_violations(stmts: &[Stmt]) -> Vec<
                 Expr::Name(n) if n.id.as_str() == "TypedDict"
             );
             if is_typeddict {
-                out.push(Span {
-                    start: call.range().start().to_u32(),
-                    end: call.range().end().to_u32(),
-                });
+                out.push(Span::from(call.range()));
             }
         }
     }

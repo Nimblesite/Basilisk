@@ -20,7 +20,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -273,30 +273,22 @@ fn check_expr_for_overload_call(
             });
 
             if !matches_any {
-                let range = call.range();
-                let span = Span {
-                    start: range.start().to_u32(),
-                    end: range.end().to_u32(),
-                };
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
-                        "No overload of `{callee_name}` matches when argument is `{member}`"
-                    ),
+                let span = Span::from(call.range());
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!("No overload of `{callee_name}` matches when argument is `{member}`"),
                     span,
-                    path: path.to_owned(),
-                    help: Some(format!(
+                    path,
+                    Some(format!(
                         "The union member `{member}` is not compatible with \
                          parameter at position {arg_idx} in any `@overload` signature"
                     )),
-                    note: Some(
+                    Some(
                         "When calling an overloaded function with a union-typed argument, \
                          each member of the union must match at least one overload"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
                 // Only report once per call (not per member).
                 return;
             }

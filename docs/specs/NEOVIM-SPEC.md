@@ -37,24 +37,21 @@ All LSP features, DAP integration, custom commands, configuration settings, and 
 
 ## Architecture
 
-```
-┌──────────────────────────┐         ┌──────────────────────────┐
-│   Neovim                 │         │  basilisk binary (Rust)  │
-│                          │         │                          │
-│  vim.lsp (built-in)      │◄───────►│  basilisk lsp            │
-│  ─────────────────────   │  stdio  │  (JSON-RPC)              │
-│  All 21 LSP features     │  JSON   │                          │
-│  native in Neovim 0.10+  │  RPC    │  See LSP-ARCHITECTURE-SPEC.md   │
-│                          │         │  for all features        │
-│  nvim-dap (optional)     │◄───────►│                          │
-│  ─────────────────────   │  TCP    │  debugpy (spawned by     │
-│  DAP via DapTcpProxy     │  DAP    │  basilisk/startDebug)    │
-│                          │         │                          │
-│  basilisk.nvim (Lua)     │         │                          │
-│  ─────────────────────   │         │                          │
-│  Config, keymaps, UI,    │         │                          │
-│  commands, status line   │         │                          │
-└──────────────────────────┘         └──────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph Neovim["Neovim"]
+        VL["vim.lsp (built-in)<br/>All 21 LSP features<br/>native in Neovim 0.10+"]
+        DAP["nvim-dap (optional)<br/>DAP via DapTcpProxy"]
+        NV["basilisk.nvim (Lua)<br/>Config, keymaps, UI,<br/>commands, status line"]
+    end
+
+    subgraph Basilisk["basilisk binary (Rust)"]
+        LSP["basilisk lsp<br/>(JSON-RPC)<br/><br/>See LSP-ARCHITECTURE-SPEC.md<br/>for all features"]
+        DBG["debugpy<br/>(spawned by<br/>basilisk/startDebug)"]
+    end
+
+    VL <-->|"stdio<br/>JSON-RPC"| LSP
+    DAP <-->|"TCP<br/>DAP"| DBG
 ```
 
 ---

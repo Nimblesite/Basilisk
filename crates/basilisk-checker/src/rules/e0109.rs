@@ -18,7 +18,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -107,23 +107,21 @@ impl Rule for TypeVarBoundCallViolation {
 
                 if let Some(arg_type_str) = arg_type {
                     if bound_incompatible(bound_type, arg_type_str) {
-                        diagnostics.push(Diagnostic {
-                            code: CODE.clone(),
-                            severity: Severity::Error,
-                            message: format!(
+                        diagnostics.push(error_diagnostic_owned(
+                            CODE.clone(),
+                            format!(
                                 "Argument `{arg_name}` has type `{arg_type_str}` which is not \
                                  compatible with TypeVar bound `{bound_type}`"
                             ),
-                            span: *arg_span,
-                            path: module.path.clone(),
-                            help: Some(format!(
+                            *arg_span,
+                            &module.path,
+                            Some(format!(
                                 "Pass a value of type `{bound_type}` or a subtype thereof"
                             )),
-                            note: Some(format!(
+                            Some(format!(
                                 "TypeVar `{ann_trimmed}` requires its argument to be a subtype of `{bound_type}`"
                             )),
-                            provenance: None,
-                        });
+                        ));
                     }
                 }
             }

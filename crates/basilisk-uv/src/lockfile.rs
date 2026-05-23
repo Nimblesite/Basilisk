@@ -131,6 +131,11 @@ pub fn parse_lock_file(path: &Path) -> Result<LockFile, UvError> {
 mod tests {
     use super::*;
 
+    /// Find a package by name in a lock file, panicking if absent.
+    fn pkg<'a>(lock: &'a LockFile, name: &str) -> &'a LockPackage {
+        lock.packages.iter().find(|p| p.name == name).unwrap()
+    }
+
     const REALISTIC_LOCK: &str = r#"
 version = 1
 requires-python = ">=3.12"
@@ -198,47 +203,28 @@ source = { editable = "../my-editable" }
     #[test]
     fn parses_source_registry() {
         let lock: LockFile = toml::from_str(REALISTIC_LOCK).unwrap();
-
-        let requests = lock.packages.iter().find(|p| p.name == "requests").unwrap();
-
-        let source = requests.source.as_ref().unwrap();
+        let source = pkg(&lock, "requests").source.as_ref().unwrap();
         assert_eq!(source.registry.as_deref(), Some("https://pypi.org/simple"));
     }
 
     #[test]
     fn parses_editable_source() {
         let lock: LockFile = toml::from_str(REALISTIC_LOCK).unwrap();
-
-        let editable = lock
-            .packages
-            .iter()
-            .find(|p| p.name == "my-editable")
-            .unwrap();
-
-        let source = editable.source.as_ref().unwrap();
+        let source = pkg(&lock, "my-editable").source.as_ref().unwrap();
         assert_eq!(source.editable.as_deref(), Some("../my-editable"));
     }
 
     #[test]
     fn parses_virtual_source() {
         let lock: LockFile = toml::from_str(REALISTIC_LOCK).unwrap();
-
-        let project = lock
-            .packages
-            .iter()
-            .find(|p| p.name == "my-project")
-            .unwrap();
-
-        let source = project.source.as_ref().unwrap();
+        let source = pkg(&lock, "my-project").source.as_ref().unwrap();
         assert_eq!(source.virtual_field.as_deref(), Some("."));
     }
 
     #[test]
     fn parses_dependencies() {
         let lock: LockFile = toml::from_str(REALISTIC_LOCK).unwrap();
-
-        let requests = lock.packages.iter().find(|p| p.name == "requests").unwrap();
-
+        let requests = pkg(&lock, "requests");
         assert_eq!(requests.dependencies.len(), 1);
         assert_eq!(requests.dependencies[0].name, "urllib3");
     }
@@ -246,13 +232,7 @@ source = { editable = "../my-editable" }
     #[test]
     fn parses_dev_dependencies() {
         let lock: LockFile = toml::from_str(REALISTIC_LOCK).unwrap();
-
-        let project = lock
-            .packages
-            .iter()
-            .find(|p| p.name == "my-project")
-            .unwrap();
-
+        let project = pkg(&lock, "my-project");
         assert_eq!(project.dev_dependencies.len(), 1);
         let dev_group = project.dev_dependencies.get("dev").unwrap();
         assert_eq!(dev_group.len(), 1);
@@ -308,7 +288,7 @@ dependencies = [
 ]
 "#;
         let lock: LockFile = toml::from_str(content).unwrap();
-        let click = lock.packages.iter().find(|p| p.name == "click").unwrap();
+        let click = pkg(&lock, "click");
 
         assert_eq!(
             click.dependencies[0].marker.as_deref(),

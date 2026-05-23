@@ -89,12 +89,10 @@ fn isinstance_typeddict_in_while_body() -> Result<(), Box<dyn std::error::Error>
 }
 
 #[test]
-fn isinstance_typeddict_not_detected_in_try_body() -> Result<(), Box<dyn std::error::Error>> {
-    // Note: the isinstance TypedDict detection does not currently walk into
-    // try/except blocks. This test documents that limitation.
+fn isinstance_typeddict_detected_in_try_body() -> Result<(), Box<dyn std::error::Error>> {
     let src = "from typing import TypedDict\nclass TD(TypedDict):\n    name: str\ntry:\n    isinstance({}, TD)\nexcept Exception:\n    pass\n".to_owned();
     let resolved = resolve_src(&src)?;
-    assert!(resolved.isinstance_typeddict_violations.is_empty());
+    assert!(!resolved.isinstance_typeddict_violations.is_empty());
     Ok(())
 }
 

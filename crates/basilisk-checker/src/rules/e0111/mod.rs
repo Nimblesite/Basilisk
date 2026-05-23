@@ -22,7 +22,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
 use crate::rules::shared::{infer_expr_literal_type, is_type_compatible};
 
 use super::Rule;
@@ -43,11 +43,8 @@ impl Rule for ConstructorCallError {
         let path = &module.path;
 
         // Build class info map.
-        let class_map: HashMap<&str, &basilisk_resolver::ClassInfo> = module
-            .classes
-            .iter()
-            .map(|c| (c.name.as_str(), c))
-            .collect();
+        let class_map: HashMap<&str, &basilisk_resolver::ClassInfo> =
+            basilisk_resolver::name_lookup(&module.classes);
 
         // Build method map: (class_name, method_name) -> Vec<&FunctionInfo>
         let mut method_map: HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>> =
@@ -62,11 +59,7 @@ impl Rule for ConstructorCallError {
         }
 
         // Collect module-level TypeVar names for class-scoped TypeVar detection.
-        let typevar_names: Vec<&str> = module
-            .typevar_calls
-            .iter()
-            .map(|tv| tv.name.as_str())
-            .collect();
+        let typevar_names: Vec<&str> = basilisk_resolver::collect_names(&module.typevar_calls);
 
         // Check 4: Class-scoped `TypeVar`s in self annotation of __init__.
         check_class_scoped_typevars_in_self(
@@ -83,17 +76,16 @@ impl Rule for ConstructorCallError {
             return;
         };
 
-        for stmt in &parsed.ast.body {
-            check_stmt(
-                stmt,
-                source,
-                path,
-                &class_map,
-                &method_map,
-                &typevar_names,
-                diagnostics,
-            );
-        }
+        let ctx = Ctx {
+            source,
+            path,
+            class_map: &class_map,
+            method_map: &method_map,
+            typevar_names: &typevar_names,
+        };
+        basilisk_resolver::visit_calls(&parsed.ast.body, &mut |call| {
+            check_constructor_call(call, &ctx, diagnostics);
+        });
     }
 }
 
@@ -112,11 +104,7 @@ fn check_class_scoped_typevars_in_self(
             continue;
         }
 
-        let class_param_names: Vec<&str> = class
-            .generic_params
-            .iter()
-            .map(|p| p.name.as_str())
-            .collect();
+        let class_param_names: Vec<&str> = basilisk_resolver::collect_names(&class.generic_params);
 
         let Some(init_funcs) = method_map.get(&(class.name.as_str(), "__init__")) else {
             continue;
@@ -174,165 +162,56 @@ fn check_class_scoped_typevars_in_self(
                     .zip(class_param_names.iter())
                     .any(|(a, b)| a != b)
             {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Class-scoped type variables should not be used in the `self` \
                          annotation of `__init__` in class `{}`",
                         class.name
                     ),
-                    span: init_func.def_span,
-                    path: module.path.clone(),
-                    help: Some(
+                    init_func.def_span,
+                    &module.path,
+                    Some(
                         "Use function-scoped type variables instead of class-scoped ones \
                          in the `self` annotation"
                             .to_owned(),
                     ),
-                    note: Some(format!(
+                    Some(format!(
                         "Class `{}` declares generic params `[{}]` but `self` annotation \
                          uses `[{}]`",
                         class.name,
                         class_param_names.join(", "),
                         ann_args.join(", ")
                     )),
-                    provenance: None,
-                });
+                ));
             }
         }
     }
 }
 
-/// Walk a statement looking for constructor call expressions.
-fn check_stmt(
-    stmt: &ruff_python_ast::Stmt,
-    source: &str,
-    path: &str,
-    class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
-    method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
-    typevar_names: &[&str],
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    use ruff_python_ast::Stmt;
-
-    match stmt {
-        Stmt::Expr(node) => {
-            check_expr_recursive(
-                &node.value,
-                source,
-                path,
-                class_map,
-                method_map,
-                typevar_names,
-                diagnostics,
-            );
-        }
-        Stmt::Assign(node) => {
-            check_expr_recursive(
-                &node.value,
-                source,
-                path,
-                class_map,
-                method_map,
-                typevar_names,
-                diagnostics,
-            );
-        }
-        Stmt::AnnAssign(node) => {
-            if let Some(val) = node.value.as_deref() {
-                check_expr_recursive(
-                    val,
-                    source,
-                    path,
-                    class_map,
-                    method_map,
-                    typevar_names,
-                    diagnostics,
-                );
-            }
-        }
-        Stmt::Try(try_stmt) => {
-            for body in [&try_stmt.body, &try_stmt.orelse, &try_stmt.finalbody] {
-                for s in body {
-                    check_stmt(
-                        s,
-                        source,
-                        path,
-                        class_map,
-                        method_map,
-                        typevar_names,
-                        diagnostics,
-                    );
-                }
-            }
-            for handler in &try_stmt.handlers {
-                let ruff_python_ast::ExceptHandler::ExceptHandler(h) = handler;
-                for s in &h.body {
-                    check_stmt(
-                        s,
-                        source,
-                        path,
-                        class_map,
-                        method_map,
-                        typevar_names,
-                        diagnostics,
-                    );
-                }
-            }
-        }
-        _ => {}
-    }
-}
-
-/// Recursively check expressions for constructor call errors.
-fn check_expr_recursive(
-    expr: &ruff_python_ast::Expr,
-    source: &str,
-    path: &str,
-    class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
-    method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
-    typevar_names: &[&str],
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    use ruff_python_ast::Expr;
-
-    if let Expr::Call(call) = expr {
-        // Recurse into arguments first.
-        for arg in &call.arguments.args {
-            check_expr_recursive(
-                arg,
-                source,
-                path,
-                class_map,
-                method_map,
-                typevar_names,
-                diagnostics,
-            );
-        }
-
-        check_constructor_call(
-            call,
-            source,
-            path,
-            class_map,
-            method_map,
-            typevar_names,
-            diagnostics,
-        );
-    }
+/// Bundle of state threaded through all E0111 statement/expression walkers.
+struct Ctx<'a> {
+    source: &'a str,
+    path: &'a str,
+    class_map: &'a HashMap<&'a str, &'a basilisk_resolver::ClassInfo>,
+    method_map: &'a HashMap<(&'a str, &'a str), Vec<&'a basilisk_resolver::FunctionInfo>>,
+    typevar_names: &'a [&'a str],
 }
 
 /// Check a single call expression for constructor call errors.
 fn check_constructor_call(
     call: &ruff_python_ast::ExprCall,
-    source: &str,
-    path: &str,
-    class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
-    method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
-    typevar_names: &[&str],
+    ctx: &Ctx<'_>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     use ruff_python_ast::Expr;
+    let Ctx {
+        source,
+        path,
+        class_map,
+        method_map,
+        ..
+    } = *ctx;
 
     match call.func.as_ref() {
         // Case A: Simple class call like `Class11(1)` or `Class3(Class2(None))`
@@ -387,64 +266,77 @@ fn check_constructor_call(
             );
         }
         // Case B: Specialized call like `Class1[int](1.0)` or `Class4[str]()`
-        Expr::Subscript(sub) => {
-            let Expr::Name(class_name_node) = sub.value.as_ref() else {
-                return;
-            };
-            let class_name = class_name_node.id.as_str();
-            let Some(class_info) = class_map.get(class_name) else {
-                return;
-            };
+        Expr::Subscript(sub) => check_subscript_constructor(call, sub, ctx, diagnostics),
+        _ => {}
+    }
+}
 
-            if class_info.generic_params.is_empty() {
-                return;
+/// Handles the `ClassName[TypeArgs](args)` form of constructor call.
+fn check_subscript_constructor(
+    call: &ruff_python_ast::ExprCall,
+    sub: &ruff_python_ast::ExprSubscript,
+    ctx: &Ctx<'_>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    use ruff_python_ast::Expr;
+    let Ctx {
+        source,
+        path,
+        class_map,
+        method_map,
+        typevar_names,
+    } = *ctx;
+
+    let Expr::Name(class_name_node) = sub.value.as_ref() else {
+        return;
+    };
+    let class_name = class_name_node.id.as_str();
+    let Some(class_info) = class_map.get(class_name) else {
+        return;
+    };
+    if class_info.generic_params.is_empty() {
+        return;
+    }
+
+    let type_args = extract_type_args_text(&sub.slice, source);
+
+    let mut substitutions: HashMap<&str, &str> = HashMap::new();
+    for (idx, param) in class_info.generic_params.iter().enumerate() {
+        if let Some(arg) = type_args.get(idx) {
+            let _ = substitutions.insert(param.name.as_str(), arg.as_str());
+        }
+    }
+
+    if let Some(init_funcs) = method_map.get(&(class_name, "__init__")) {
+        for init_func in init_funcs {
+            if init_func.decorators.iter().any(|d| d == "overload") {
+                continue;
             }
-
-            let type_args = extract_type_args_text(&sub.slice, source);
-
-            // Build substitution map.
-            let mut substitutions: HashMap<&str, &str> = HashMap::new();
-            for (idx, param) in class_info.generic_params.iter().enumerate() {
-                if let Some(arg) = type_args.get(idx) {
-                    let _ = substitutions.insert(param.name.as_str(), arg.as_str());
-                }
-            }
-
-            // Check 1: Argument type mismatch after substitution (__init__).
-            if let Some(init_funcs) = method_map.get(&(class_name, "__init__")) {
-                for init_func in init_funcs {
-                    if init_func.decorators.iter().any(|d| d == "overload") {
-                        continue;
-                    }
-                    check_init_method_args(
-                        init_func,
-                        &substitutions,
-                        call,
-                        class_name,
-                        &type_args,
-                        source,
-                        path,
-                        class_info,
-                        typevar_names,
-                        diagnostics,
-                    );
-                }
-            }
-
-            // Check generic NamedTuple constructor arg types with substitution.
-            check_generic_nt_arg_types(
+            check_init_method_args(
+                init_func,
+                &substitutions,
                 call,
                 class_name,
-                class_info,
-                class_map,
-                &substitutions,
+                &type_args,
                 source,
                 path,
+                class_info,
+                typevar_names,
                 diagnostics,
             );
         }
-        _ => {}
     }
+
+    check_generic_nt_arg_types(
+        call,
+        class_name,
+        class_info,
+        class_map,
+        &substitutions,
+        source,
+        path,
+        diagnostics,
+    );
 }
 
 /// Check 5: Classes without custom `__init__` that receive arguments.
@@ -517,21 +409,19 @@ fn check_no_init_with_args(
         end: range.end().to_u32(),
     };
 
-    diagnostics.push(Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    diagnostics.push(error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Class `{class_name}` does not define `__init__` or `__new__` and inherits \
              only from `object`; constructor does not accept arguments"
         ),
         span,
-        path: path.to_owned(),
-        help: Some(format!(
+        path,
+        Some(format!(
             "Define an `__init__` method on `{class_name}` or one of its base classes"
         )),
-        note: None,
-        provenance: None,
-    });
+        None,
+    ));
 }
 
 /// Check 7: `NamedTuple` constructor arg count and type validation.
@@ -586,21 +476,20 @@ fn check_nt_arg_count(
 
     if positional_args > total_fields {
         let range = call.range();
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "`{class_name}` accepts at most {total_fields} positional \
                  argument{}, but {positional_args} {} given",
                 if total_fields == 1 { "" } else { "s" },
                 if positional_args == 1 { "was" } else { "were" },
             ),
-            span: Span {
+            Span {
                 start: range.start().to_u32(),
                 end: range.end().to_u32(),
             },
-            path: path.to_owned(),
-            help: Some(format!(
+            path,
+            Some(format!(
                 "`{class_name}` has {total_fields} field{}: {}",
                 if total_fields == 1 { "" } else { "s" },
                 fields
@@ -609,30 +498,28 @@ fn check_nt_arg_count(
                     .collect::<Vec<_>>()
                     .join(", "),
             )),
-            note: None,
-            provenance: None,
-        });
+            None,
+        ));
         return true;
     }
 
     let covered = positional_args + keyword_args;
     if covered < required_fields {
         let range = call.range();
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "`{class_name}` requires at least {required_fields} argument{}, \
                  but {covered} {} given",
                 if required_fields == 1 { "" } else { "s" },
                 if covered == 1 { "was" } else { "were" },
             ),
-            span: Span {
+            Span {
                 start: range.start().to_u32(),
                 end: range.end().to_u32(),
             },
-            path: path.to_owned(),
-            help: Some(format!(
+            path,
+            Some(format!(
                 "Required fields: {}",
                 fields
                     .iter()
@@ -641,9 +528,8 @@ fn check_nt_arg_count(
                     .collect::<Vec<_>>()
                     .join(", "),
             )),
-            note: None,
-            provenance: None,
-        });
+            None,
+        ));
         return true;
     }
 
@@ -666,16 +552,15 @@ fn check_nt_unknown_kwargs(
         if let Some(ref arg_name) = kw.arg {
             if !field_names.contains(arg_name.as_str()) {
                 let range = call.range();
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!("`{class_name}` has no field `{arg_name}`"),
-                    span: Span {
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!("`{class_name}` has no field `{arg_name}`"),
+                    Span {
                         start: range.start().to_u32(),
                         end: range.end().to_u32(),
                     },
-                    path: path.to_owned(),
-                    help: Some(format!(
+                    path,
+                    Some(format!(
                         "Valid fields: {}",
                         fields
                             .iter()
@@ -683,9 +568,8 @@ fn check_nt_unknown_kwargs(
                             .collect::<Vec<_>>()
                             .join(", "),
                     )),
-                    note: None,
-                    provenance: None,
-                });
+                    None,
+                ));
             }
         }
     }
@@ -718,20 +602,18 @@ fn check_nt_arg_types(
             continue;
         };
         if !is_type_compatible(&arg_type_name, ann) {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Argument {idx} to `{class_name}()` has type `{arg_type_name}`, \
                      expected `{ann}` for field `{}`",
                     field.name
                 ),
-                span: crate::span_util::text_range_to_span(arg.range()),
-                path: path.to_owned(),
-                help: None,
-                note: None,
-                provenance: None,
-            });
+                crate::span_util::text_range_to_span(arg.range()),
+                path,
+                None,
+                None,
+            ));
         }
     }
 }
@@ -766,19 +648,17 @@ fn check_nt_kwarg_types(
             continue;
         };
         if !is_type_compatible(&arg_type_name, ann) {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Keyword argument `{arg_name}` to `{class_name}()` has type \
                      `{arg_type_name}`, expected `{ann}`",
                 ),
-                span: crate::span_util::text_range_to_span(kw.range()),
-                path: path.to_owned(),
-                help: None,
-                note: None,
-                provenance: None,
-            });
+                crate::span_util::text_range_to_span(kw.range()),
+                path,
+                None,
+                None,
+            ));
         }
     }
 }
@@ -818,21 +698,17 @@ fn check_dataclass_unknown_kwargs(
             continue; // **kwargs unpacking
         };
         if !known_fields.contains(arg_name.as_str()) {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
-                    "Unknown field `{arg_name}` in constructor of dataclass `{class_name}`"
-                ),
-                span: crate::span_util::text_range_to_span(kw.range()),
-                path: path.to_owned(),
-                help: Some(format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!("Unknown field `{arg_name}` in constructor of dataclass `{class_name}`"),
+                crate::span_util::text_range_to_span(kw.range()),
+                path,
+                Some(format!(
                     "`{class_name}` has fields: {}",
                     known_fields.iter().copied().collect::<Vec<_>>().join(", ")
                 )),
-                note: None,
-                provenance: None,
-            });
+                None,
+            ));
         }
     }
 }
@@ -901,20 +777,18 @@ fn check_generic_nt_arg_types(
             continue;
         };
         if !is_type_compatible(&arg_type_name, resolved_ann) {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Argument {idx} to `{class_name}[...]()` has type `{arg_type_name}`, \
                      expected `{resolved_ann}` for field `{}`",
                     field.name
                 ),
-                span: crate::span_util::text_range_to_span(arg.range()),
-                path: path.to_owned(),
-                help: None,
-                note: None,
-                provenance: None,
-            });
+                crate::span_util::text_range_to_span(arg.range()),
+                path,
+                None,
+                None,
+            ));
         }
     }
 }

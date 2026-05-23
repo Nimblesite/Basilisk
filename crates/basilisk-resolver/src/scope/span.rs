@@ -1,5 +1,7 @@
 //! Byte-offset span type for source location tracking.
 
+use ruff_text_size::TextRange;
+
 /// A byte-offset span within a source file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
@@ -7,6 +9,15 @@ pub struct Span {
     pub start: u32,
     /// Byte offset of the end (exclusive).
     pub end: u32,
+}
+
+impl From<TextRange> for Span {
+    fn from(range: TextRange) -> Self {
+        Self {
+            start: range.start().to_u32(),
+            end: range.end().to_u32(),
+        }
+    }
 }
 
 impl Span {

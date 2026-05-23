@@ -76,34 +76,42 @@ mod tests {
     use super::*;
     use std::fs;
 
-    #[test]
-    fn load_default_when_no_config() {
-        let dir = std::env::temp_dir().join("bsk_cfg_empty_xm");
+    fn with_temp_cfg_dir(unique: &str, files: &[(&str, &str)], check: impl FnOnce(BasiliskConfig)) {
+        let dir = std::env::temp_dir().join(unique);
         fs::create_dir_all(&dir).unwrap();
-        let cfg = load_basilisk_config(&dir);
-        assert!(!cfg.exclude.is_empty(), "defaults must include excludes");
-        assert!(
-            cfg.exclude.iter().any(|e| e == "site-packages"),
-            "default excludes must contain site-packages"
-        );
-        assert!(
-            cfg.exclude.iter().any(|e| e == "__pycache__"),
-            "default excludes must contain __pycache__"
-        );
-        assert!(cfg.stub_paths.is_empty());
-        assert!(cfg.rules.is_empty());
-        assert!(cfg.per_module_overrides.is_empty());
-        assert!(cfg.per_path_overrides.is_empty());
+        for (name, contents) in files {
+            fs::write(dir.join(name), contents).unwrap();
+        }
+        check(load_basilisk_config(&dir));
         let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
+    fn load_default_when_no_config() {
+        with_temp_cfg_dir("bsk_cfg_empty_xm", &[], |cfg| {
+            assert!(!cfg.exclude.is_empty(), "defaults must include excludes");
+            assert!(
+                cfg.exclude.iter().any(|e| e == "site-packages"),
+                "default excludes must contain site-packages"
+            );
+            assert!(
+                cfg.exclude.iter().any(|e| e == "__pycache__"),
+                "default excludes must contain __pycache__"
+            );
+            assert!(cfg.stub_paths.is_empty());
+            assert!(cfg.rules.is_empty());
+            assert!(cfg.per_module_overrides.is_empty());
+            assert!(cfg.per_path_overrides.is_empty());
+        });
+    }
+
+    #[test]
     fn load_from_pyproject_toml() {
-        let dir = std::env::temp_dir().join("bsk_cfg_pyproject_xm");
-        fs::create_dir_all(&dir).unwrap();
-        fs::write(
-            dir.join("pyproject.toml"),
-            r#"
+        with_temp_cfg_dir(
+            "bsk_cfg_pyproject_xm",
+            &[(
+                "pyproject.toml",
+                r#"
 [tool.basilisk]
 stub-paths = ["stubs/", "typings/"]
 
@@ -120,34 +128,32 @@ ignore-missing-stubs = true
 [tool.basilisk.per-path-overrides."vendor/**"]
 disabled = ["BSK-E0010", "BSK-E0001"]
 "#,
-        )
-        .unwrap();
-
-        let cfg = load_basilisk_config(&dir);
-        assert_eq!(cfg.stub_paths.len(), 2);
-        assert_eq!(cfg.rules.len(), 2);
-        assert_eq!(
-            cfg.rules.get("BSK-E0010").copied(),
-            Some(RuleSeverity::Warning)
+            )],
+            |cfg| {
+                assert_eq!(cfg.stub_paths.len(), 2);
+                assert_eq!(cfg.rules.len(), 2);
+                assert_eq!(
+                    cfg.rules.get("BSK-E0010").copied(),
+                    Some(RuleSeverity::Warning)
+                );
+                assert_eq!(
+                    cfg.rules.get("BSK-E0001").copied(),
+                    Some(RuleSeverity::Disabled)
+                );
+                assert!(cfg.per_module_overrides.contains_key("fastmcp"));
+                assert!(cfg.per_module_overrides.contains_key("django.*"));
+                assert!(cfg.per_path_overrides.contains_key("vendor/**"));
+            },
         );
-        assert_eq!(
-            cfg.rules.get("BSK-E0001").copied(),
-            Some(RuleSeverity::Disabled)
-        );
-        assert!(cfg.per_module_overrides.contains_key("fastmcp"));
-        assert!(cfg.per_module_overrides.contains_key("django.*"));
-        assert!(cfg.per_path_overrides.contains_key("vendor/**"));
-
-        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn load_from_basilisk_json() {
-        let dir = std::env::temp_dir().join("bsk_cfg_json_xm");
-        fs::create_dir_all(&dir).unwrap();
-        fs::write(
-            dir.join("basilisk.json"),
-            r#"{
+        with_temp_cfg_dir(
+            "bsk_cfg_json_xm",
+            &[(
+                "basilisk.json",
+                r#"{
                 "stubPaths": ["stubs/"],
                 "rules": {
                     "BSK-E0010": "info"
@@ -156,40 +162,34 @@ disabled = ["BSK-E0010", "BSK-E0001"]
                     "requests": { "ignoreMissingStubs": true }
                 }
             }"#,
-        )
-        .unwrap();
-
-        let cfg = load_basilisk_config(&dir);
-        assert_eq!(cfg.stub_paths.len(), 1);
-        assert_eq!(
-            cfg.rules.get("BSK-E0010").copied(),
-            Some(RuleSeverity::Info)
+            )],
+            |cfg| {
+                assert_eq!(cfg.stub_paths.len(), 1);
+                assert_eq!(
+                    cfg.rules.get("BSK-E0010").copied(),
+                    Some(RuleSeverity::Info)
+                );
+                assert!(cfg.per_module_overrides.contains_key("requests"));
+            },
         );
-        assert!(cfg.per_module_overrides.contains_key("requests"));
-
-        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn basilisk_json_takes_priority() {
-        let dir = std::env::temp_dir().join("bsk_cfg_priority_xm");
-        fs::create_dir_all(&dir).unwrap();
-        fs::write(
-            dir.join("basilisk.json"),
-            r#"{ "stubPaths": ["from_json/"] }"#,
-        )
-        .unwrap();
-        fs::write(
-            dir.join("pyproject.toml"),
-            "[tool.basilisk]\nstub-paths = [\"from_toml/\"]\n",
-        )
-        .unwrap();
-
-        let cfg = load_basilisk_config(&dir);
-        assert_eq!(cfg.stub_paths.len(), 1);
-        assert_eq!(cfg.stub_paths.first().unwrap().to_str(), Some("from_json/"));
-
-        let _ = fs::remove_dir_all(&dir);
+        with_temp_cfg_dir(
+            "bsk_cfg_priority_xm",
+            &[
+                ("basilisk.json", r#"{ "stubPaths": ["from_json/"] }"#),
+                (
+                    "pyproject.toml",
+                    "[tool.basilisk]\nstub-paths = [\"from_toml/\"]\n",
+                ),
+            ],
+            |cfg| {
+                assert_eq!(cfg.stub_paths.len(), 1);
+                assert_eq!(cfg.stub_paths.first().unwrap().to_str(), Some("from_json/"));
+            },
+        );
     }
 
     #[test]
@@ -226,134 +226,121 @@ disabled = ["BSK-E0010", "BSK-E0001"]
 
     #[test]
     fn json_exclude_overrides_defaults() {
-        let dir = std::env::temp_dir().join("bsk_cfg_json_exclude_xm");
-        fs::create_dir_all(&dir).unwrap();
-        fs::write(
-            dir.join("basilisk.json"),
-            r#"{ "exclude": ["vendor", "generated"] }"#,
-        )
-        .unwrap();
-
-        let cfg = load_basilisk_config(&dir);
-        assert_eq!(cfg.exclude, vec!["vendor", "generated"]);
-        // Defaults are replaced, not merged.
-        assert!(
-            !cfg.exclude.iter().any(|e| e == "__pycache__"),
-            "custom exclude must replace defaults entirely"
+        with_temp_cfg_dir(
+            "bsk_cfg_json_exclude_xm",
+            &[("basilisk.json", r#"{ "exclude": ["vendor", "generated"] }"#)],
+            |cfg| {
+                assert_eq!(cfg.exclude, vec!["vendor", "generated"]);
+                // Defaults are replaced, not merged.
+                assert!(
+                    !cfg.exclude.iter().any(|e| e == "__pycache__"),
+                    "custom exclude must replace defaults entirely"
+                );
+            },
         );
-
-        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn toml_exclude_overrides_defaults() {
-        let dir = std::env::temp_dir().join("bsk_cfg_toml_exclude_xm");
-        fs::create_dir_all(&dir).unwrap();
-        fs::write(
-            dir.join("pyproject.toml"),
-            r#"
+        with_temp_cfg_dir(
+            "bsk_cfg_toml_exclude_xm",
+            &[(
+                "pyproject.toml",
+                r#"
 [tool.basilisk]
 exclude = ["legacy", "third_party"]
 "#,
-        )
-        .unwrap();
-
-        let cfg = load_basilisk_config(&dir);
-        assert_eq!(cfg.exclude, vec!["legacy", "third_party"]);
-
-        let _ = fs::remove_dir_all(&dir);
+            )],
+            |cfg| {
+                assert_eq!(cfg.exclude, vec!["legacy", "third_party"]);
+            },
+        );
     }
 
     #[test]
     fn json_uv_stub_suggestions_and_dependency_diagnostics() {
-        let dir = std::env::temp_dir().join("bsk_cfg_json_uv_xm");
-        fs::create_dir_all(&dir).unwrap();
-        fs::write(
-            dir.join("basilisk.json"),
-            r#"{
+        with_temp_cfg_dir(
+            "bsk_cfg_json_uv_xm",
+            &[(
+                "basilisk.json",
+                r#"{
                 "uv": {
                     "stubSuggestions": false,
                     "dependencyDiagnostics": true
                 }
             }"#,
-        )
-        .unwrap();
-
-        let cfg = load_basilisk_config(&dir);
-        assert!(
-            !cfg.uv_stub_suggestions,
-            "stubSuggestions should be parsed as false"
+            )],
+            |cfg| {
+                assert!(
+                    !cfg.uv_stub_suggestions,
+                    "stubSuggestions should be parsed as false"
+                );
+                assert!(
+                    cfg.uv_dependency_diagnostics,
+                    "dependencyDiagnostics should be parsed as true"
+                );
+            },
         );
-        assert!(
-            cfg.uv_dependency_diagnostics,
-            "dependencyDiagnostics should be parsed as true"
-        );
-
-        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn json_uv_kebab_case_alternatives() {
-        let dir = std::env::temp_dir().join("bsk_cfg_json_uv_kebab_xm");
-        fs::create_dir_all(&dir).unwrap();
-        fs::write(
-            dir.join("basilisk.json"),
-            r#"{
+        with_temp_cfg_dir(
+            "bsk_cfg_json_uv_kebab_xm",
+            &[(
+                "basilisk.json",
+                r#"{
                 "uv": {
                     "stub-suggestions": false,
                     "dependency-diagnostics": true
                 }
             }"#,
-        )
-        .unwrap();
-
-        let cfg = load_basilisk_config(&dir);
-        assert!(
-            !cfg.uv_stub_suggestions,
-            "stub-suggestions kebab key should be accepted"
+            )],
+            |cfg| {
+                assert!(
+                    !cfg.uv_stub_suggestions,
+                    "stub-suggestions kebab key should be accepted"
+                );
+                assert!(
+                    cfg.uv_dependency_diagnostics,
+                    "dependency-diagnostics kebab key should be accepted"
+                );
+            },
         );
-        assert!(
-            cfg.uv_dependency_diagnostics,
-            "dependency-diagnostics kebab key should be accepted"
-        );
-
-        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn toml_uv_stub_suggestions_and_dependency_diagnostics() {
-        let dir = std::env::temp_dir().join("bsk_cfg_toml_uv_xm");
-        fs::create_dir_all(&dir).unwrap();
-        fs::write(
-            dir.join("pyproject.toml"),
-            r"
+        with_temp_cfg_dir(
+            "bsk_cfg_toml_uv_xm",
+            &[(
+                "pyproject.toml",
+                r"
 [tool.basilisk.uv]
 stub-suggestions = false
 dependency-diagnostics = true
 ",
-        )
-        .unwrap();
-
-        let cfg = load_basilisk_config(&dir);
-        assert!(
-            !cfg.uv_stub_suggestions,
-            "stub-suggestions should be parsed as false"
+            )],
+            |cfg| {
+                assert!(
+                    !cfg.uv_stub_suggestions,
+                    "stub-suggestions should be parsed as false"
+                );
+                assert!(
+                    cfg.uv_dependency_diagnostics,
+                    "dependency-diagnostics should be parsed as true"
+                );
+            },
         );
-        assert!(
-            cfg.uv_dependency_diagnostics,
-            "dependency-diagnostics should be parsed as true"
-        );
-
-        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn toml_per_path_overrides_with_rules() {
-        let dir = std::env::temp_dir().join("bsk_cfg_toml_path_rules_xm");
-        fs::create_dir_all(&dir).unwrap();
-        fs::write(
-            dir.join("pyproject.toml"),
-            r#"
+        with_temp_cfg_dir(
+            "bsk_cfg_toml_path_rules_xm",
+            &[(
+                "pyproject.toml",
+                r#"
 [tool.basilisk.per-path-overrides."tests/**"]
 disabled = ["BSK-E0001"]
 
@@ -361,32 +348,30 @@ disabled = ["BSK-E0001"]
 "BSK-E0010" = "warning"
 "BSK-E0005" = "info"
 "#,
-        )
-        .unwrap();
-
-        let cfg = load_basilisk_config(&dir);
-        assert!(
-            cfg.per_path_overrides.contains_key("tests/**"),
-            "per-path-overrides should contain tests/** key"
+            )],
+            |cfg| {
+                assert!(
+                    cfg.per_path_overrides.contains_key("tests/**"),
+                    "per-path-overrides should contain tests/** key"
+                );
+                let tests_override = cfg.per_path_overrides.get("tests/**").unwrap();
+                assert_eq!(
+                    tests_override.disabled_rules,
+                    vec!["BSK-E0001"],
+                    "disabled rules should be parsed"
+                );
+                assert_eq!(
+                    tests_override.rule_overrides.get("BSK-E0010").copied(),
+                    Some(RuleSeverity::Warning),
+                    "rule overrides should contain BSK-E0010 as warning"
+                );
+                assert_eq!(
+                    tests_override.rule_overrides.get("BSK-E0005").copied(),
+                    Some(RuleSeverity::Info),
+                    "rule overrides should contain BSK-E0005 as info"
+                );
+            },
         );
-        let tests_override = cfg.per_path_overrides.get("tests/**").unwrap();
-        assert_eq!(
-            tests_override.disabled_rules,
-            vec!["BSK-E0001"],
-            "disabled rules should be parsed"
-        );
-        assert_eq!(
-            tests_override.rule_overrides.get("BSK-E0010").copied(),
-            Some(RuleSeverity::Warning),
-            "rule overrides should contain BSK-E0010 as warning"
-        );
-        assert_eq!(
-            tests_override.rule_overrides.get("BSK-E0005").copied(),
-            Some(RuleSeverity::Info),
-            "rule overrides should contain BSK-E0005 as info"
-        );
-
-        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -445,109 +430,104 @@ disabled = ["BSK-E0001"]
 
     #[test]
     fn json_kebab_case_stub_paths() {
-        let dir = std::env::temp_dir().join("bsk_cfg_json_kebab_stubs_xm");
-        fs::create_dir_all(&dir).unwrap();
-        fs::write(
-            dir.join("basilisk.json"),
-            r#"{
+        with_temp_cfg_dir(
+            "bsk_cfg_json_kebab_stubs_xm",
+            &[(
+                "basilisk.json",
+                r#"{
                 "stub-paths": ["typings/", "custom-stubs/"]
             }"#,
-        )
-        .unwrap();
-
-        let cfg = load_basilisk_config(&dir);
-        assert_eq!(
-            cfg.stub_paths.len(),
-            2,
-            "stub-paths kebab key should be accepted"
+            )],
+            |cfg| {
+                assert_eq!(
+                    cfg.stub_paths.len(),
+                    2,
+                    "stub-paths kebab key should be accepted"
+                );
+                assert_eq!(
+                    cfg.stub_paths.first().and_then(|p| p.to_str()),
+                    Some("typings/")
+                );
+                assert_eq!(
+                    cfg.stub_paths.get(1).and_then(|p| p.to_str()),
+                    Some("custom-stubs/")
+                );
+            },
         );
-        assert_eq!(
-            cfg.stub_paths.first().and_then(|p| p.to_str()),
-            Some("typings/")
-        );
-        assert_eq!(
-            cfg.stub_paths.get(1).and_then(|p| p.to_str()),
-            Some("custom-stubs/")
-        );
-
-        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn json_kebab_case_per_module_overrides() {
-        let dir = std::env::temp_dir().join("bsk_cfg_json_kebab_pmo_xm");
-        fs::create_dir_all(&dir).unwrap();
-        fs::write(
-            dir.join("basilisk.json"),
-            r#"{
+        with_temp_cfg_dir(
+            "bsk_cfg_json_kebab_pmo_xm",
+            &[(
+                "basilisk.json",
+                r#"{
                 "per-module-overrides": {
                     "numpy": { "ignore-missing-stubs": true }
                 }
             }"#,
-        )
-        .unwrap();
-
-        let cfg = load_basilisk_config(&dir);
-        assert!(
-            cfg.per_module_overrides.contains_key("numpy"),
-            "per-module-overrides kebab key should be accepted"
+            )],
+            |cfg| {
+                assert!(
+                    cfg.per_module_overrides.contains_key("numpy"),
+                    "per-module-overrides kebab key should be accepted"
+                );
+                assert!(
+                    cfg.per_module_overrides
+                        .get("numpy")
+                        .unwrap()
+                        .ignore_missing_stubs,
+                    "ignore-missing-stubs kebab key should be accepted"
+                );
+            },
         );
-        assert!(
-            cfg.per_module_overrides
-                .get("numpy")
-                .unwrap()
-                .ignore_missing_stubs,
-            "ignore-missing-stubs kebab key should be accepted"
-        );
-
-        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn fallback_to_pyproject_when_json_is_invalid() {
-        let dir = std::env::temp_dir().join("bsk_cfg_invalid_json_xm");
-        fs::create_dir_all(&dir).unwrap();
-        // Write invalid JSON so load_from_json returns None.
-        fs::write(dir.join("basilisk.json"), "{ not valid json !!!").unwrap();
-        fs::write(
-            dir.join("pyproject.toml"),
-            r#"
+        with_temp_cfg_dir(
+            "bsk_cfg_invalid_json_xm",
+            &[
+                // Write invalid JSON so load_from_json returns None.
+                ("basilisk.json", "{ not valid json !!!"),
+                (
+                    "pyproject.toml",
+                    r#"
 [tool.basilisk]
 stub-paths = ["fallback-stubs/"]
 "#,
-        )
-        .unwrap();
-
-        let cfg = load_basilisk_config(&dir);
-        assert_eq!(
-            cfg.stub_paths.len(),
-            1,
-            "should fall back to pyproject.toml when JSON is invalid"
+                ),
+            ],
+            |cfg| {
+                assert_eq!(
+                    cfg.stub_paths.len(),
+                    1,
+                    "should fall back to pyproject.toml when JSON is invalid"
+                );
+                assert_eq!(
+                    cfg.stub_paths.first().unwrap().to_str(),
+                    Some("fallback-stubs/")
+                );
+            },
         );
-        assert_eq!(
-            cfg.stub_paths.first().unwrap().to_str(),
-            Some("fallback-stubs/")
-        );
-
-        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn uv_defaults_when_not_configured() {
-        let dir = std::env::temp_dir().join("bsk_cfg_uv_defaults_xm");
-        fs::create_dir_all(&dir).unwrap();
-        fs::write(dir.join("basilisk.json"), r#"{ "stubPaths": [] }"#).unwrap();
-
-        let cfg = load_basilisk_config(&dir);
-        assert!(
-            cfg.uv_stub_suggestions,
-            "uv_stub_suggestions should default to true"
+        with_temp_cfg_dir(
+            "bsk_cfg_uv_defaults_xm",
+            &[("basilisk.json", r#"{ "stubPaths": [] }"#)],
+            |cfg| {
+                assert!(
+                    cfg.uv_stub_suggestions,
+                    "uv_stub_suggestions should default to true"
+                );
+                assert!(
+                    !cfg.uv_dependency_diagnostics,
+                    "uv_dependency_diagnostics should default to false"
+                );
+            },
         );
-        assert!(
-            !cfg.uv_dependency_diagnostics,
-            "uv_dependency_diagnostics should default to false"
-        );
-
-        let _ = fs::remove_dir_all(&dir);
     }
 }

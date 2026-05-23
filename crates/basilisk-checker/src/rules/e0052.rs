@@ -22,7 +22,7 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -77,45 +77,41 @@ fn check_inheritance(
                 continue;
             }
             if cls.is_dataclass_frozen && !base_is_frozen {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Frozen dataclass `{}` cannot inherit from non-frozen dataclass `{}`",
                         cls.name, base_name
                     ),
-                    span: cls.def_span,
-                    path: path.clone(),
-                    help: Some(
+                    cls.def_span,
+                    path,
+                    Some(
                         "A frozen dataclass can only inherit from other frozen dataclasses"
                             .to_owned(),
                     ),
-                    note: Some(
+                    Some(
                         "PEP 557: mixing frozen and non-frozen dataclasses is not allowed"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
             } else if !cls.is_dataclass_frozen && base_is_frozen {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Non-frozen dataclass `{}` cannot inherit from frozen dataclass `{}`",
                         cls.name, base_name
                     ),
-                    span: cls.def_span,
-                    path: path.clone(),
-                    help: Some(
+                    cls.def_span,
+                    path,
+                    Some(
                         "A non-frozen dataclass can only inherit from other non-frozen dataclasses"
                             .to_owned(),
                     ),
-                    note: Some(
+                    Some(
                         "PEP 557: mixing frozen and non-frozen dataclasses is not allowed"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
             }
         }
     }
@@ -127,12 +123,8 @@ fn check_frozen_instance_assigns(module: &ResolvedModule, diagnostics: &mut Vec<
 
     let transform_classes = super::guards::collect_transform_classes(module);
 
-    let mut frozen_classes: HashSet<&str> = module
-        .classes
-        .iter()
-        .filter(|c| c.is_dataclass_frozen)
-        .map(|c| c.name.as_str())
-        .collect();
+    let mut frozen_classes: HashSet<&str> =
+        basilisk_resolver::collect_name_set_where(&module.classes, |c| c.is_dataclass_frozen);
 
     // Also include dataclass_transform classes that are frozen
     for (name, info) in &transform_classes {
@@ -167,20 +159,16 @@ fn check_frozen_instance_assigns(module: &ResolvedModule, diagnostics: &mut Vec<
         let Some(&class_name) = instance_class.get(assign.object_name.as_str()) else {
             continue;
         };
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "Cannot assign to attribute `{}` of frozen dataclass `{}` instance `{}`",
                 assign.attr_name, class_name, assign.object_name
             ),
-            span: assign.target_span,
-            path: path.clone(),
-            help: Some("Frozen dataclass instances are immutable after construction".to_owned()),
-            note: Some(
-                "PEP 557: `@dataclass(frozen=True)` prohibits attribute assignment".to_owned(),
-            ),
-            provenance: None,
-        });
+            assign.target_span,
+            path,
+            Some("Frozen dataclass instances are immutable after construction".to_owned()),
+            Some("PEP 557: `@dataclass(frozen=True)` prohibits attribute assignment".to_owned()),
+        ));
     }
 }

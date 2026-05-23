@@ -116,111 +116,85 @@ mod tests {
         }
     }
 
-    #[test]
-    fn fires_for_site_packages_source_py() {
-        let import = ImportInfo {
-            module: "flask".to_owned(),
+    /// Build an `ImportInfo` with the given module name, resolution, and resolved path.
+    /// All other fields default to safe blanks for these tests.
+    fn make_import(
+        module: &str,
+        span_end: u32,
+        resolution: ImportResolution,
+        resolved_path: Option<&str>,
+    ) -> ImportInfo {
+        ImportInfo {
+            module: module.to_owned(),
             names: vec![],
-            span: Span::new(0, 12),
+            span: Span::new(0, span_end),
             kind: ImportKind::Plain,
-            resolution: ImportResolution::SourcePy,
-            resolved_path: Some(PathBuf::from(
-                "/venv/lib/python3.12/site-packages/flask/__init__.py",
-            )),
+            resolution,
+            resolved_path: resolved_path.map(PathBuf::from),
             package_dep_kind: None,
             package_version: None,
             package_name: None,
             unresolved_reason: None,
-        };
+        }
+    }
+
+    fn run_check(import: ImportInfo) -> Vec<crate::Diagnostic> {
         let module = make_module(vec![import]);
         let mut diagnostics = Vec::new();
         MissingTypeStubs.check(&module, &mut diagnostics);
+        diagnostics
+    }
+
+    #[test]
+    fn fires_for_site_packages_source_py() {
+        let import = make_import(
+            "flask",
+            12,
+            ImportResolution::SourcePy,
+            Some("/venv/lib/python3.12/site-packages/flask/__init__.py"),
+        );
+        let diagnostics = run_check(import);
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].code.code, "BSK-W0010");
     }
 
     #[test]
     fn skips_workspace_source_py() {
-        let import = ImportInfo {
-            module: "myapp".to_owned(),
-            names: vec![],
-            span: Span::new(0, 12),
-            kind: ImportKind::Plain,
-            resolution: ImportResolution::SourcePy,
-            resolved_path: Some(PathBuf::from("/workspace/myapp/__init__.py")),
-            package_dep_kind: None,
-            package_version: None,
-            package_name: None,
-            unresolved_reason: None,
-        };
-        let module = make_module(vec![import]);
-        let mut diagnostics = Vec::new();
-        MissingTypeStubs.check(&module, &mut diagnostics);
-        assert!(diagnostics.is_empty());
+        let import = make_import(
+            "myapp",
+            12,
+            ImportResolution::SourcePy,
+            Some("/workspace/myapp/__init__.py"),
+        );
+        assert!(run_check(import).is_empty());
     }
 
     #[test]
     fn skips_stdlib_modules() {
-        let import = ImportInfo {
-            module: "os".to_owned(),
-            names: vec![],
-            span: Span::new(0, 9),
-            kind: ImportKind::Plain,
-            resolution: ImportResolution::SourcePy,
-            resolved_path: Some(PathBuf::from(
-                "/venv/lib/python3.12/site-packages/os/__init__.py",
-            )),
-            package_dep_kind: None,
-            package_version: None,
-            package_name: None,
-            unresolved_reason: None,
-        };
-        let module = make_module(vec![import]);
-        let mut diagnostics = Vec::new();
-        MissingTypeStubs.check(&module, &mut diagnostics);
-        assert!(diagnostics.is_empty());
+        let import = make_import(
+            "os",
+            9,
+            ImportResolution::SourcePy,
+            Some("/venv/lib/python3.12/site-packages/os/__init__.py"),
+        );
+        assert!(run_check(import).is_empty());
     }
 
     #[test]
     fn skips_stub_pyi_resolution() {
-        let import = ImportInfo {
-            module: "requests".to_owned(),
-            names: vec![],
-            span: Span::new(0, 15),
-            kind: ImportKind::Plain,
-            resolution: ImportResolution::StubPyi,
-            resolved_path: Some(PathBuf::from(
-                "/venv/lib/python3.12/site-packages/requests-stubs/__init__.pyi",
-            )),
-            package_dep_kind: None,
-            package_version: None,
-            package_name: None,
-            unresolved_reason: None,
-        };
-        let module = make_module(vec![import]);
-        let mut diagnostics = Vec::new();
-        MissingTypeStubs.check(&module, &mut diagnostics);
-        assert!(diagnostics.is_empty());
+        let import = make_import(
+            "requests",
+            15,
+            ImportResolution::StubPyi,
+            Some("/venv/lib/python3.12/site-packages/requests-stubs/__init__.pyi"),
+        );
+        assert!(run_check(import).is_empty());
     }
 
     #[test]
     fn skips_unresolved_imports() {
-        let import = ImportInfo {
-            module: "nonexistent".to_owned(),
-            names: vec![],
-            span: Span::new(0, 18),
-            kind: ImportKind::Plain,
-            resolution: ImportResolution::Unresolved,
-            resolved_path: None,
-            package_dep_kind: None,
-            package_version: None,
-            package_name: None,
-            unresolved_reason: None,
-        };
-        let module = make_module(vec![import]);
-        let mut diagnostics = Vec::new();
-        MissingTypeStubs.check(&module, &mut diagnostics);
-        assert!(diagnostics.is_empty());
+        let import = make_import("nonexistent", 18, ImportResolution::Unresolved, None);
+        assert!(run_check(import).is_empty());
     }
 
     #[test]

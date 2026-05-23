@@ -32,6 +32,101 @@ fn is_field_required(
     is_total
 }
 
+/// Resolved `TypedDict` class metadata used to validate a dict literal.
+struct TdSpec<'a> {
+    class_name: &'a str,
+    all_fields: &'a [&'a str],
+    field_types: &'a std::collections::HashMap<&'a str, String>,
+    is_total: bool,
+    has_extra_items: bool,
+}
+
+/// Validate a dict literal against the `TypedDict` spec.
+///
+/// Emits diagnostics for non-literal keys, invalid keys, missing required keys,
+/// and value-type mismatches. `span_range` is the range used for emitted spans;
+/// callers typically pass the enclosing statement's range so the diagnostic
+/// points at the whole assignment.
+fn check_dict_against_typeddict(
+    dict: &ruff_python_ast::ExprDict,
+    spec: &TdSpec<'_>,
+    span_range: ruff_text_size::TextRange,
+    fields: &TdFieldMap<'_>,
+    out: &mut Vec<TypedDictKeyViolation>,
+) {
+    let TdSpec {
+        class_name,
+        all_fields,
+        field_types,
+        is_total,
+        has_extra_items,
+    } = *spec;
+    // Flag any non-literal (variable) key in the dict — if found, return early
+    // (the literal-key checks below assume every key is a string literal).
+    let has_non_literal = dict.items.iter().any(|item| {
+        item.key
+            .as_ref()
+            .is_some_and(|k| !matches!(k, Expr::StringLiteral(_)))
+    });
+    if has_non_literal {
+        out.push(TypedDictKeyViolation {
+            span: text_range_to_span(span_range),
+            class_name: class_name.to_owned(),
+            kind: TypedDictKeyViolationKind::NonLiteralDictKey,
+        });
+        return;
+    }
+
+    let literal_keys: Vec<String> = dict
+        .items
+        .iter()
+        .filter_map(|item| {
+            let Expr::StringLiteral(s) = item.key.as_ref()? else {
+                return None;
+            };
+            Some(s.value.to_string())
+        })
+        .collect();
+
+    // When `extra_items` is set, unknown keys are allowed.
+    let invalid_keys: Vec<String> = if has_extra_items {
+        Vec::new()
+    } else {
+        literal_keys
+            .iter()
+            .filter(|k| !all_fields.contains(&k.as_str()))
+            .cloned()
+            .collect()
+    };
+    let missing_keys: Vec<String> = all_fields
+        .iter()
+        .filter(|&&f| !literal_keys.iter().any(|k| k == f))
+        .filter(|&&f| is_field_required(f, field_types, is_total))
+        .map(|s| (*s).to_owned())
+        .collect();
+
+    if !invalid_keys.is_empty() || !missing_keys.is_empty() {
+        out.push(TypedDictKeyViolation {
+            span: text_range_to_span(span_range),
+            class_name: class_name.to_owned(),
+            kind: TypedDictKeyViolationKind::InvalidDictLiteral {
+                invalid_keys,
+                missing_keys,
+            },
+        });
+    }
+
+    check_dict_value_types(
+        dict,
+        field_types,
+        all_fields,
+        class_name,
+        span_range,
+        fields,
+        out,
+    );
+}
+
 pub(super) fn td_check_regular_assign(
     node: &StmtAssign,
     var_type: &std::collections::HashMap<String, String>,
@@ -54,86 +149,19 @@ pub(super) fn td_check_regular_assign(
         let Expr::Dict(dict) = node.value.as_ref() else {
             continue;
         };
-
-        // Flag any non-literal (variable) key in the dict
-        let has_non_literal = dict.items.iter().any(|item| {
-            item.key
-                .as_ref()
-                .is_some_and(|k| !matches!(k, Expr::StringLiteral(_)))
-        });
-        if has_non_literal {
-            out.push(TypedDictKeyViolation {
-                span: text_range_to_span(node.range()),
-                class_name: class_name.clone(),
-                kind: TypedDictKeyViolationKind::NonLiteralDictKey,
-            });
-            continue;
-        }
-
-        let literal_keys: Vec<String> = dict
-            .items
-            .iter()
-            .filter_map(|item| {
-                let Expr::StringLiteral(s) = item.key.as_ref()? else {
-                    return None;
-                };
-                Some(s.value.to_string())
-            })
-            .collect();
-
-        // When `extra_items` is set, unknown keys are allowed.
-        let invalid_keys: Vec<String> = if *has_extra_items {
-            Vec::new()
-        } else {
-            literal_keys
-                .iter()
-                .filter(|k| !all_fields.contains(&k.as_str()))
-                .cloned()
-                .collect()
-        };
-        let missing_keys: Vec<String> = all_fields
-            .iter()
-            .filter(|&&f| !literal_keys.iter().any(|k| k == f))
-            .filter(|&&f| is_field_required(f, field_types, *is_total))
-            .map(|s| (*s).to_owned())
-            .collect();
-
-        if !invalid_keys.is_empty() || !missing_keys.is_empty() {
-            out.push(TypedDictKeyViolation {
-                span: text_range_to_span(node.range()),
-                class_name: class_name.clone(),
-                kind: TypedDictKeyViolationKind::InvalidDictLiteral {
-                    invalid_keys,
-                    missing_keys,
-                },
-            });
-        }
-
-        // Check value types for each key-value pair
-        for item in &dict.items {
-            let Some(key_expr) = &item.key else { continue };
-            let Expr::StringLiteral(s) = key_expr else {
-                continue;
-            };
-            let key = s.value.to_string();
-            if !all_fields.contains(&key.as_str()) {
-                continue; // Already flagged as invalid key
-            }
-            if let Some(expected) = field_types.get(key.as_str()) {
-                if let Some(actual) = expr_literal_type_name(&item.value) {
-                    if !typeddict_field_type_compatible(actual, expected) {
-                        out.push(TypedDictKeyViolation {
-                            span: text_range_to_span(node.range()),
-                            class_name: class_name.clone(),
-                            kind: TypedDictKeyViolationKind::WrongSubscriptValueType {
-                                key,
-                                expected: expected.clone(),
-                            },
-                        });
-                    }
-                }
-            }
-        }
+        check_dict_against_typeddict(
+            dict,
+            &TdSpec {
+                class_name,
+                all_fields,
+                field_types,
+                is_total: *is_total,
+                has_extra_items: *has_extra_items,
+            },
+            node.range(),
+            fields,
+            out,
+        );
     }
 }
 
@@ -155,70 +183,15 @@ pub(super) fn td_check_ann_assign(
     let Expr::Dict(dict) = value.as_ref() else {
         return;
     };
-
-    // Flag any non-literal (variable) key
-    let has_non_literal = dict.items.iter().any(|item| {
-        item.key
-            .as_ref()
-            .is_some_and(|k| !matches!(k, Expr::StringLiteral(_)))
-    });
-    if has_non_literal {
-        out.push(TypedDictKeyViolation {
-            span: text_range_to_span(node.range()),
-            class_name: class_name.to_owned(),
-            kind: TypedDictKeyViolationKind::NonLiteralDictKey,
-        });
-        return;
-    }
-
-    let literal_keys: Vec<String> = dict
-        .items
-        .iter()
-        .filter_map(|item| {
-            let Expr::StringLiteral(s) = item.key.as_ref()? else {
-                return None;
-            };
-            Some(s.value.to_string())
-        })
-        .collect();
-
-    // When `extra_items` is set, unknown keys are allowed.
-    let invalid_keys: Vec<String> = if *has_extra_items {
-        Vec::new()
-    } else {
-        literal_keys
-            .iter()
-            .filter(|k| !all_fields.contains(&k.as_str()))
-            .cloned()
-            .collect()
-    };
-    let missing_keys: Vec<String> = all_fields
-        .iter()
-        .filter(|&&f| !literal_keys.iter().any(|k| k == f))
-        .filter(|&&f| is_field_required(f, field_types, *is_total))
-        .map(|s| (*s).to_owned())
-        .collect();
-
-    if !invalid_keys.is_empty() || !missing_keys.is_empty() {
-        out.push(TypedDictKeyViolation {
-            span: text_range_to_span(node.range()),
-            class_name: class_name.to_owned(),
-            kind: TypedDictKeyViolationKind::InvalidDictLiteral {
-                invalid_keys,
-                missing_keys,
-            },
-        });
-    }
-
-    // Check value types in dict literal against field types.
-    let Some((_, field_types, _, _)) = fields.get(class_name) else {
-        return;
-    };
-    check_dict_value_types(
+    check_dict_against_typeddict(
         dict,
-        field_types,
-        all_fields,
-        class_name,
+        &TdSpec {
+            class_name,
+            all_fields,
+            field_types,
+            is_total: *is_total,
+            has_extra_items: *has_extra_items,
+        },
         node.range(),
         fields,
         out,
@@ -407,45 +380,27 @@ pub(super) fn collect_isinstance_typeddict_in_stmts(
     typeddict_names: &std::collections::HashSet<&str>,
     out: &mut Vec<Span>,
 ) {
-    for stmt in stmts {
-        match stmt {
-            Stmt::If(node) => {
-                collect_isinstance_typeddict_in_expr(&node.test, typeddict_names, out);
-                collect_isinstance_typeddict_in_stmts(&node.body, typeddict_names, out);
-                for clause in &node.elif_else_clauses {
-                    if let Some(test) = &clause.test {
-                        collect_isinstance_typeddict_in_expr(test, typeddict_names, out);
-                    }
-                    collect_isinstance_typeddict_in_stmts(&clause.body, typeddict_names, out);
+    crate::walk_all_stmts(stmts, &mut |stmt| match stmt {
+        Stmt::If(node) => {
+            collect_isinstance_typeddict_in_expr(&node.test, typeddict_names, out);
+            for clause in &node.elif_else_clauses {
+                if let Some(test) = &clause.test {
+                    collect_isinstance_typeddict_in_expr(test, typeddict_names, out);
                 }
             }
-            Stmt::Expr(node) => {
-                collect_isinstance_typeddict_in_expr(&node.value, typeddict_names, out);
-            }
-            Stmt::Assign(node) => {
-                collect_isinstance_typeddict_in_expr(&node.value, typeddict_names, out);
-            }
-            Stmt::AnnAssign(node) => {
-                if let Some(val) = &node.value {
-                    collect_isinstance_typeddict_in_expr(val, typeddict_names, out);
-                }
-            }
-            Stmt::While(node) => {
-                collect_isinstance_typeddict_in_expr(&node.test, typeddict_names, out);
-                collect_isinstance_typeddict_in_stmts(&node.body, typeddict_names, out);
-            }
-            Stmt::For(node) => {
-                collect_isinstance_typeddict_in_stmts(&node.body, typeddict_names, out);
-            }
-            Stmt::FunctionDef(node) => {
-                collect_isinstance_typeddict_in_stmts(&node.body, typeddict_names, out);
-            }
-            Stmt::ClassDef(node) => {
-                collect_isinstance_typeddict_in_stmts(&node.body, typeddict_names, out);
-            }
-            _ => {}
         }
-    }
+        Stmt::Expr(node) => collect_isinstance_typeddict_in_expr(&node.value, typeddict_names, out),
+        Stmt::Assign(node) => {
+            collect_isinstance_typeddict_in_expr(&node.value, typeddict_names, out);
+        }
+        Stmt::AnnAssign(node) => {
+            if let Some(val) = &node.value {
+                collect_isinstance_typeddict_in_expr(val, typeddict_names, out);
+            }
+        }
+        Stmt::While(node) => collect_isinstance_typeddict_in_expr(&node.test, typeddict_names, out),
+        _ => {}
+    });
 }
 
 pub(super) fn collect_isinstance_typeddict_in_expr(

@@ -17,7 +17,7 @@ use ruff_python_ast::{Expr, Stmt};
 use ruff_text_size::Ranged as _;
 
 use super::Rule;
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0100",
@@ -39,8 +39,7 @@ impl Rule for LiteralAugmentedAssign {
         }
 
         // Also walk the AST to find violations the resolver didn't collect.
-        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
-        else {
+        let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
 
@@ -50,49 +49,15 @@ impl Rule for LiteralAugmentedAssign {
 
 /// Walk statements looking for function definitions with `Literal`-annotated parameters.
 fn walk_stmts(stmts: &[Stmt], path: &str, diagnostics: &mut Vec<Diagnostic>) {
-    for stmt in stmts {
-        match stmt {
-            Stmt::FunctionDef(func_def) => {
-                // Collect parameter names annotated with `Literal[...]`.
-                let literal_params = collect_literal_params(func_def);
-                if !literal_params.is_empty() {
-                    check_body_for_aug_assign(&func_def.body, &literal_params, path, diagnostics);
-                }
-                // Recurse into nested functions.
-                walk_stmts(&func_def.body, path, diagnostics);
-            }
-            Stmt::ClassDef(class_def) => {
-                walk_stmts(&class_def.body, path, diagnostics);
-            }
-            Stmt::If(if_stmt) => {
-                walk_stmts(&if_stmt.body, path, diagnostics);
-                for clause in &if_stmt.elif_else_clauses {
-                    walk_stmts(&clause.body, path, diagnostics);
-                }
-            }
-            Stmt::For(for_stmt) => {
-                walk_stmts(&for_stmt.body, path, diagnostics);
-                walk_stmts(&for_stmt.orelse, path, diagnostics);
-            }
-            Stmt::While(while_stmt) => {
-                walk_stmts(&while_stmt.body, path, diagnostics);
-                walk_stmts(&while_stmt.orelse, path, diagnostics);
-            }
-            Stmt::Try(try_stmt) => {
-                walk_stmts(&try_stmt.body, path, diagnostics);
-                for handler in &try_stmt.handlers {
-                    let ruff_python_ast::ExceptHandler::ExceptHandler(h) = handler;
-                    walk_stmts(&h.body, path, diagnostics);
-                }
-                walk_stmts(&try_stmt.orelse, path, diagnostics);
-                walk_stmts(&try_stmt.finalbody, path, diagnostics);
-            }
-            Stmt::With(with_stmt) => {
-                walk_stmts(&with_stmt.body, path, diagnostics);
-            }
-            _ => {}
+    basilisk_resolver::walk_all_stmts(stmts, &mut |stmt| {
+        let Stmt::FunctionDef(func_def) = stmt else {
+            return;
+        };
+        let literal_params = collect_literal_params(func_def);
+        if !literal_params.is_empty() {
+            check_body_for_aug_assign(&func_def.body, &literal_params, path, diagnostics);
         }
-    }
+    });
 }
 
 /// Collect parameter names that are annotated with `Literal[...]`.
@@ -166,20 +131,18 @@ fn check_body_for_aug_assign(
 }
 
 fn make_diagnostic(var_name: &str, span: Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!("Augmented assignment to `{var_name}` widens its `Literal` type"),
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!("Augmented assignment to `{var_name}` widens its `Literal` type"),
         span,
-        path: path.to_owned(),
-        help: Some(format!(
+        path,
+        Some(format!(
             "Use a separate variable instead: `result = {var_name} + ...`"
         )),
-        note: Some(
+        Some(
             "`a += x` is equivalent to `a = a + x`, which changes the type of `a` \
              from `Literal[...]` to the wider base type"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }

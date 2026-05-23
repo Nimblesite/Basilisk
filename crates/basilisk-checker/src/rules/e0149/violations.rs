@@ -1,6 +1,6 @@
 //! The three PEP 695 scoping violation checks for BSK-E0149.
 
-use crate::diagnostic::{Diagnostic, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
 
 use super::{
     helpers::{
@@ -129,28 +129,26 @@ pub(super) fn check_pep695_bound_cross_references(
                 let Some(param_name) = all_names.get(idx) else {
                     continue;
                 };
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "PEP 695 type parameter `{param_name}` bound references \
                          `{other_name}` from the same type parameter list"
                     ),
-                    span: span_for_line(source, line_number),
-                    path: path.to_owned(),
-                    help: Some(
+                    span_for_line(source, line_number),
+                    path,
+                    Some(
                         "Type parameter bounds cannot reference other type parameters \
                          in the same list"
                             .to_owned(),
                     ),
-                    note: Some(
+                    Some(
                         "PEP 695: a compiler error is generated if the definition of \
                          a type parameter references another type parameter in the \
                          same list"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
                 // Emit one diagnostic per violating param (not per cross-ref).
                 break;
             }
@@ -252,27 +250,25 @@ pub(super) fn check_decorator_uses_class_type_param(
             continue;
         }
 
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "PEP 695 type parameter `{param_name}` is not defined at \
                  this point: it belongs to the decorated definition, not \
                  the decorator call"
             ),
-            span: span_for_line(source, decorator_line),
-            path: path.to_owned(),
-            help: Some(format!(
+            span_for_line(source, decorator_line),
+            path,
+            Some(format!(
                 "`{param_name}` is a type parameter of the class/function \
                  being decorated; it is not in scope in the decorator arguments"
             )),
-            note: Some(
+            Some(
                 "PEP 695: type parameter scopes are entered after the decorator \
                  expressions are evaluated"
                     .to_owned(),
             ),
-            provenance: None,
-        });
+        ));
     }
 }
 
@@ -325,27 +321,25 @@ pub(super) fn check_module_level_type_param_use(
                 continue;
             }
 
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "PEP 695 type parameter `{param_name}` is not defined at \
                      module scope; it is only accessible inside the generic \
                      class or function where it is declared"
                 ),
-                span: span_for_line(source, line_number),
-                path: path.to_owned(),
-                help: Some(format!(
+                span_for_line(source, line_number),
+                path,
+                Some(format!(
                     "`{param_name}` is a PEP 695 type parameter and is not \
                      bound at module scope"
                 )),
-                note: Some(
+                Some(
                     "PEP 695: type parameter names are only defined inside \
                      the body of the generic class or function"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }
@@ -415,23 +409,21 @@ pub(super) fn check_type_stmt_uses_old_typevar(
             continue;
         }
         if contains_name(rhs, old_tv_name) {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!("PEP 695 `type` statement uses old-style TypeVar `{old_tv_name}`"),
-                span: span_for_line(source, line_number),
-                path: path.to_owned(),
-                help: Some(format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!("PEP 695 `type` statement uses old-style TypeVar `{old_tv_name}`"),
+                span_for_line(source, line_number),
+                path,
+                Some(format!(
                     "Use PEP 695 type parameter syntax instead: \
                      `type Alias[{old_tv_name}] = ...`"
                 )),
-                note: Some(
+                Some(
                     "PEP 695: type aliases defined with `type` must not reference \
                      TypeVars created outside the statement's scope"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
             // One diagnostic per type statement is enough
             return;
         }
@@ -474,21 +466,18 @@ pub(super) fn check_type_stmt_in_function(
 
         if scan_indent < indent && !scan_trimmed.is_empty() {
             if scan_trimmed.starts_with("def ") || scan_trimmed.starts_with("async def ") {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: "PEP 695 `type` statement is not allowed inside a function body"
-                        .to_owned(),
-                    span: span_for_line(source, line_number),
-                    path: path.to_owned(),
-                    help: Some("Move the type alias to module or class scope".to_owned()),
-                    note: Some(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    "PEP 695 `type` statement is not allowed inside a function body".to_owned(),
+                    span_for_line(source, line_number),
+                    path,
+                    Some("Move the type alias to module or class scope".to_owned()),
+                    Some(
                         "PEP 695: type aliases defined with `type` are only valid at \
                          module or class scope"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
             }
             return;
         }
@@ -544,16 +533,14 @@ pub(super) fn check_type_stmt_circular(
 
     if !has_type_params {
         // No type params — any self-reference is circular
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!("Circular type alias definition: `{alias_name}` references itself"),
-            span: span_for_line(source, line_number),
-            path: path.to_owned(),
-            help: Some("A type alias cannot reference itself without type parameters".to_owned()),
-            note: None,
-            provenance: None,
-        });
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!("Circular type alias definition: `{alias_name}` references itself"),
+            span_for_line(source, line_number),
+            path,
+            Some("A type alias cannot reference itself without type parameters".to_owned()),
+            None,
+        ));
         return;
     }
 
@@ -596,23 +583,21 @@ pub(super) fn check_type_stmt_circular(
                         .zip(params.iter())
                         .all(|(arg, param)| arg == param);
                 if !is_identity {
-                    diagnostics.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
+                    diagnostics.push(error_diagnostic_owned(
+                        CODE.clone(),
+                        format!(
                             "Circular type alias definition: `{alias_name}` references \
                              itself with different type arguments"
                         ),
-                        span: span_for_line(source, line_number),
-                        path: path.to_owned(),
-                        help: Some(
+                        span_for_line(source, line_number),
+                        path,
+                        Some(
                             "Recursive type aliases must reference themselves with the \
                              same type parameters"
                                 .to_owned(),
                         ),
-                        note: None,
-                        provenance: None,
-                    });
+                        None,
+                    ));
                 }
             }
         }
@@ -679,27 +664,25 @@ pub(super) fn check_method_redefines_class_type_param(
         // Check if any method type param re-uses a class type param name.
         for method_param in &method_params {
             if class_params.contains(method_param) {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Method type parameter `{method_param}` shadows the enclosing \
                          class's type parameter of the same name"
                     ),
-                    span: span_for_line(source, line_number),
-                    path: path.to_owned(),
-                    help: Some(format!(
+                    span_for_line(source, line_number),
+                    path,
+                    Some(format!(
                         "Rename the method's type parameter `{method_param}` to \
                          avoid shadowing the class type parameter"
                     )),
-                    note: Some(
+                    Some(
                         "PEP 695: a method that defines its own type parameter with \
                          the same name as an enclosing class type parameter creates \
                          a scoping violation"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
             }
         }
     }

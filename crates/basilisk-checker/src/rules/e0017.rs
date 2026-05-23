@@ -16,7 +16,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{AttributeInfo, ClassInfo, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -49,11 +49,7 @@ pub(crate) struct IncompatibleVariableOverride;
 impl Rule for IncompatibleVariableOverride {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         // Build map: class_name → &ClassInfo
-        let class_map: HashMap<&str, &ClassInfo> = module
-            .classes
-            .iter()
-            .map(|cls| (cls.name.as_str(), cls))
-            .collect();
+        let class_map = super::shared::class_name_map(&module.classes);
 
         // Build map: (class_name, attr_name) → &AttributeInfo
         let attr_map: HashMap<(&str, &str), &AttributeInfo> = module
@@ -66,7 +62,7 @@ impl Rule for IncompatibleVariableOverride {
             })
             .collect();
 
-        let class_names: Vec<&str> = module.classes.iter().map(|c| c.name.as_str()).collect();
+        let class_names: Vec<&str> = basilisk_resolver::collect_names(&module.classes);
 
         module.classes.iter().for_each(|child| {
             // TypedDict hierarchies have their own subtyping rules — skip.
@@ -185,24 +181,22 @@ fn make_diagnostic(
 ) -> Diagnostic {
     let child_ann_str = child_ann.unwrap_or("unknown");
     let base_ann_str = base_ann.unwrap_or("unknown");
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Attribute `{attr_name}` in `{child_class}` has type `{child_ann_str}` but \
              base class `{base_class}` declares it as `{base_ann_str}`"
         ),
-        span: attr.name_span,
-        path: path.to_owned(),
-        help: Some(format!(
+        attr.name_span,
+        path,
+        Some(format!(
             "Change the annotation of `{attr_name}` in `{child_class}` to `{base_ann_str}` \
              to match the base class, or restructure the class hierarchy"
         )),
-        note: Some(
+        Some(
             "In Basilisk, child class attributes must have type-compatible annotations \
              with any same-name attributes in base classes"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }

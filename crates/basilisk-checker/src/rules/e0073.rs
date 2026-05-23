@@ -23,7 +23,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{ResolvedModule, RhsKind, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -149,28 +149,26 @@ fn check_variable(
     };
 
     if tuple_element_types.len() != nt_field_types.len() {
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "Incompatible tuple assignment: `{rhs_name}` is a `{nt_class_name}` \
                  with {} field(s), but `{}` expects {} element(s)",
                 nt_field_types.len(),
                 ann_text,
                 tuple_element_types.len(),
             ),
-            span: var.name_span,
-            path: path.to_owned(),
-            help: Some(format!(
+            var.name_span,
+            path,
+            Some(format!(
                 "A `{nt_class_name}` is a subtype of `tuple[{}]`",
                 nt_field_types.join(", "),
             )),
-            note: Some(
+            Some(
                 "A `NamedTuple` is a subtype of a tuple with matching element count and types"
                     .to_owned(),
             ),
-            provenance: None,
-        });
+        ));
         return;
     }
 
@@ -262,25 +260,23 @@ fn check_element_types(
 ) {
     for (idx, (tuple_ty, nt_ty)) in tuple_types.iter().zip(nt_field_types.iter()).enumerate() {
         if !is_type_compatible(nt_ty, tuple_ty) {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Incompatible tuple element type at index {idx}: `{nt_class_name}` \
                      field type is `{nt_ty}`, but `{ann_text}` expects `{tuple_ty}`",
                 ),
-                span: var.name_span,
-                path: path.to_owned(),
-                help: Some(format!(
+                var.name_span,
+                path,
+                Some(format!(
                     "Change element {idx} from `{tuple_ty}` to `{nt_ty}` \
                      or a compatible supertype of `{nt_ty}`",
                 )),
-                note: Some(format!(
+                Some(format!(
                     "`{rhs_name}` is a `{nt_class_name}` instance; named tuples are \
                      covariant in their field types",
                 )),
-                provenance: None,
-            });
+            ));
         }
     }
 }

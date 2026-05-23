@@ -10,7 +10,7 @@ use ruff_text_size::Ranged as _;
 
 use basilisk_resolver::Span;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 pub(super) const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0138",
@@ -98,11 +98,7 @@ pub(super) fn parse_dataclass_transform_expr(expr: &Expr) -> (bool, bool, bool) 
         return (false, false, false);
     };
 
-    let is_dt = match call.func.as_ref() {
-        Expr::Name(n) => n.id.as_str() == "dataclass_transform",
-        Expr::Attribute(a) => a.attr.as_str() == "dataclass_transform",
-        _ => false,
-    };
+    let is_dt = basilisk_resolver::is_name_or_attr_named(call.func.as_ref(), "dataclass_transform");
     if !is_dt {
         return (false, false, false);
     }
@@ -227,10 +223,7 @@ pub(super) fn build_class_desc_from_meta(
     let kw_only = kw_only_kw.unwrap_or(false);
     let kw_only_effective = kw_only || desc.kw_only_default;
 
-    let def_span = Span {
-        start: cls.range().start().to_u32(),
-        end: cls.range().end().to_u32(),
-    };
+    let def_span = Span::from(cls.range());
 
     TransformClassDesc {
         name: cls.name.to_string(),
@@ -312,10 +305,7 @@ fn collect_inherited_transform_classes(
         let kw_only = kw_only_kw.unwrap_or(parent_desc.kw_only);
         let kw_only_effective = kw_only || meta_desc.kw_only_default;
 
-        let def_span = Span {
-            start: cls.range().start().to_u32(),
-            end: cls.range().end().to_u32(),
-        };
+        let def_span = Span::from(cls.range());
 
         out.push(TransformClassDesc {
             name: cls.name.to_string(),
@@ -395,27 +385,22 @@ pub(super) fn check_call_expr(
     if call.arguments.args.is_empty() {
         return;
     }
-    let span = Span {
-        start: call.range().start().to_u32(),
-        end: call.range().end().to_u32(),
-    };
-    diag.push(Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    let span = Span::from(call.range());
+    diag.push(error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Positional argument(s) passed to `{callee}` whose constructor is \
              keyword-only (dataclass_transform `kw_only_default=True`)"
         ),
         span,
-        path: path.to_owned(),
-        help: Some(format!(
+        path,
+        Some(format!(
             "All arguments to `{callee}` must be passed as keyword arguments"
         )),
-        note: Some(
+        Some(
             "PEP 681: when `kw_only_default=True` on the transform metaclass, \
              all fields are keyword-only unless explicitly overridden"
                 .to_owned(),
         ),
-        provenance: None,
-    });
+    ));
 }

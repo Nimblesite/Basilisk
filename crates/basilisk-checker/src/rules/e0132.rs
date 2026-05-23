@@ -17,7 +17,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::rules::shared::split_top_level_commas;
 
 use super::Rule;
@@ -33,11 +33,8 @@ pub(crate) struct InconsistentTypeVarOrder;
 impl Rule for InconsistentTypeVarOrder {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         // Build a map of class_name -> ClassInfo for classes in this module.
-        let class_map: HashMap<&str, &basilisk_resolver::ClassInfo> = module
-            .classes
-            .iter()
-            .map(|cls| (cls.name.as_str(), cls))
-            .collect();
+        let class_map: HashMap<&str, &basilisk_resolver::ClassInfo> =
+            basilisk_resolver::name_lookup(&module.classes);
 
         for class in &module.classes {
             check_class(class, &class_map, &module.source, &module.path, diagnostics);
@@ -172,25 +169,23 @@ fn check_class(
         let first_args = &first_mapping.0;
         for other in mappings.get(1..).unwrap_or_default() {
             if other.0 != *first_args {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Inconsistent TypeVar ordering for `{}` in base classes of `{}`",
                         ancestor_name, class.name
                     ),
-                    span: class.name_span,
-                    path: path.to_owned(),
-                    help: Some(
+                    class.name_span,
+                    path,
+                    Some(
                         "All paths to a shared generic ancestor must use the same TypeVar ordering"
                             .to_owned(),
                     ),
-                    note: Some(
+                    Some(
                         "PEP 484: type variable ordering must be consistent across base classes"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
                 return; // One diagnostic per class is enough.
             }
         }

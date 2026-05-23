@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::guards::is_protocol_class;
 
@@ -122,26 +122,24 @@ fn make_diagnostic(
     overload_count: usize,
     path: &str,
 ) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Function `{}` has {} `@overload` signature{} but no implementation",
             name,
             overload_count,
             if overload_count == 1 { "" } else { "s" },
         ),
-        span: first_func.name_span,
-        path: path.to_owned(),
-        help: Some(format!(
+        first_func.name_span,
+        path,
+        Some(format!(
             "Add an implementation function `def {name}(...)` without `@overload`"
         )),
-        note: Some(
+        Some(
             "`@overload` signatures are type-only; a concrete implementation is required at runtime"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }
 
 fn make_single_overload_diagnostic(
@@ -149,21 +147,19 @@ fn make_single_overload_diagnostic(
     name: &str,
     path: &str,
 ) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Function `{name}` has only 1 `@overload` signature — at least two are required",
         ),
-        span: first_func.name_span,
-        path: path.to_owned(),
-        help: Some(format!(
+        first_func.name_span,
+        path,
+        Some(format!(
             "Add at least one more `@overload`-decorated signature for `{name}`"
         )),
-        note: Some(
+        Some(
             "Python's `@overload` protocol requires at least two type signatures before the implementation"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }

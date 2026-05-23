@@ -19,7 +19,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{ResolvedModule, TypeArg};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -91,8 +91,7 @@ impl Rule for VarianceIncompatibleBase {
             .iter()
             .filter(|cls| !cls.generic_params.is_empty())
             .map(|cls| {
-                let params: Vec<&str> =
-                    cls.generic_params.iter().map(|p| p.name.as_str()).collect();
+                let params: Vec<&str> = basilisk_resolver::collect_names(&cls.generic_params);
                 (cls.name.as_str(), params)
             })
             .collect();
@@ -151,24 +150,22 @@ impl Rule for VarianceIncompatibleBase {
                     })
                     .collect();
 
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Variance incompatibility in base class `{}`: {}",
                         entry.base_name,
                         details.join("; ")
                     ),
-                    span: entry.span,
-                    path: module.path.clone(),
-                    help: Some(
+                    entry.span,
+                    &module.path,
+                    Some(
                         "Each TypeVar argument must have the same variance \
                          as the corresponding type parameter in the base class."
                             .to_owned(),
                     ),
-                    note: None,
-                    provenance: None,
-                });
+                    None,
+                ));
             }
         }
     }

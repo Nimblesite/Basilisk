@@ -7,7 +7,7 @@
 //!
 //! Reference: <https://typing.readthedocs.io/en/latest/spec/type-forms.html>
 
-use crate::diagnostic::{Diagnostic, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
 use crate::span_util::slice_span;
 use crate::types::InferredType;
 
@@ -287,25 +287,23 @@ fn check_typeform_constructor(
     };
 
     if is_invalid {
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "Invalid TypeForm argument: `{arg_text}` is not a valid type expression"
             ),
-            span: call.span,
-            path: path.to_owned(),
-            help: Some(
+            call.span,
+            path,
+            Some(
                 "TypeForm() requires a valid type expression such as `int`, `str | None`, \
                  or `list[int]`"
                     .to_owned(),
             ),
-            note: Some(
+            Some(
                 "TypeForm acts as a function that can be called with a single valid type expression"
                     .to_owned(),
             ),
-            provenance: None,
-        });
+        ));
     }
 }
 
@@ -361,25 +359,23 @@ fn check_typeform_param_args(
         };
 
         if is_invalid {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Argument `{arg_text}` is not a valid type expression for \
                      parameter `{}` of type `{param_type}`",
                     param.name
                 ),
-                span: *arg_span,
-                path: path.to_owned(),
-                help: Some(format!(
+                *arg_span,
+                path,
+                Some(format!(
                     "Pass a valid type expression assignable to `{inner}`"
                 )),
-                note: Some(
+                Some(
                     "TypeForm parameters require valid type expressions, not runtime values"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }

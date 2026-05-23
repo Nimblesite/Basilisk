@@ -32,7 +32,7 @@ use ruff_text_size::Ranged;
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -46,8 +46,7 @@ pub(crate) struct NamedTupleUsageViolation;
 
 impl Rule for NamedTupleUsageViolation {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
-        else {
+        let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
 
@@ -216,7 +215,7 @@ fn check_stmt(stmt: &Stmt, ctx: &ModuleContext, path: &str, diag: &mut Vec<Diagn
         // `p.x = 3` or `p[0] = 3` — assignment to NamedTuple field/element.
         Stmt::Assign(assign) => {
             for target in &assign.targets {
-                check_assignment_target(target, ctx, path, diag);
+                check_mutation_target(target, Mutation::Assign, ctx, path, diag);
             }
             // Also check for wrong-count tuple unpack: `x, y = p`.
             check_tuple_unpack(assign, ctx, path, diag);
@@ -225,7 +224,7 @@ fn check_stmt(stmt: &Stmt, ctx: &ModuleContext, path: &str, diag: &mut Vec<Diagn
         // `del p.x` or `del p[0]`.
         Stmt::Delete(del) => {
             for target in &del.targets {
-                check_delete_target(target, ctx, path, diag);
+                check_mutation_target(target, Mutation::Delete, ctx, path, diag);
             }
         }
 
@@ -285,127 +284,97 @@ fn check_tuple_unpack(
             )
         };
 
-        diag.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!("NamedTuple unpack mismatch: {kind}: {detail}"),
-            span: to_span(assign.range()),
-            path: path.to_owned(),
-            help: Some(format!(
+        diag.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!("NamedTuple unpack mismatch: {kind}: {detail}"),
+            to_span(assign.range()),
+            path,
+            Some(format!(
                 "Use exactly {field_count} variable(s) when unpacking `{obj_name}`"
             )),
-            note: Some(
+            Some(
                 "NamedTuple is a fixed-length tuple; unpack must match the field count exactly"
                     .to_owned(),
             ),
-            provenance: None,
-        });
+        ));
     }
 }
 
-/// Check a delete target for `NamedTuple` violations.
-fn check_delete_target(target: &Expr, ctx: &ModuleContext, path: &str, diag: &mut Vec<Diagnostic>) {
-    match target {
-        // `del p.x`
-        Expr::Attribute(attr) => {
-            if let Some(obj_name) = expr_simple_name(&attr.value) {
-                if ctx.nt_field_count(obj_name).is_some() {
-                    diag.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
-                            "Cannot delete attribute `{}` on NamedTuple instance `{obj_name}`: \
-                             NamedTuple fields are read-only",
-                            attr.attr
-                        ),
-                        span: to_span(attr.range()),
-                        path: path.to_owned(),
-                        help: Some(
-                            "NamedTuple instances are immutable; fields cannot be deleted"
-                                .to_owned(),
-                        ),
-                        note: None,
-                        provenance: None,
-                    });
-                }
-            }
-        }
+/// What kind of mutation is being attempted on the `NamedTuple` target.
+#[derive(Clone, Copy)]
+enum Mutation {
+    Assign,
+    Delete,
+}
 
-        // `del p[0]`
-        Expr::Subscript(sub) => {
-            if let Some(obj_name) = expr_simple_name(&sub.value) {
-                if let Some(field_count) = ctx.nt_field_count(obj_name) {
-                    // Check index bounds first if a literal index is present.
-                    if let Some(idx) = parse_literal_int(&sub.slice) {
-                        if is_out_of_bounds(idx, field_count) {
-                            diag.push(out_of_bounds_diag(
-                                obj_name,
-                                idx,
-                                field_count,
-                                to_span(sub.range()),
-                                path,
-                            ));
-                            return;
-                        }
-                    }
-                    diag.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
-                            "Cannot delete element of NamedTuple instance `{obj_name}`: \
-                             NamedTuple elements are read-only"
-                        ),
-                        span: to_span(sub.range()),
-                        path: path.to_owned(),
-                        help: Some(
-                            "NamedTuple instances are immutable; elements cannot be deleted"
-                                .to_owned(),
-                        ),
-                        note: None,
-                        provenance: None,
-                    });
-                }
-            }
+impl Mutation {
+    fn attribute_message(self, field: &str, obj: &str) -> String {
+        match self {
+            Self::Assign => format!(
+                "Cannot assign to attribute `{field}` on NamedTuple instance `{obj}`: \
+                 NamedTuple fields are read-only"
+            ),
+            Self::Delete => format!(
+                "Cannot delete attribute `{field}` on NamedTuple instance `{obj}`: \
+                 NamedTuple fields are read-only"
+            ),
         }
+    }
 
-        _ => {}
+    fn attribute_hint(self) -> &'static str {
+        match self {
+            Self::Assign => "NamedTuple instances are immutable; fields cannot be reassigned",
+            Self::Delete => "NamedTuple instances are immutable; fields cannot be deleted",
+        }
+    }
+
+    fn element_message(self, obj: &str) -> String {
+        match self {
+            Self::Assign => format!(
+                "Cannot assign to element of NamedTuple instance `{obj}`: \
+                 NamedTuple elements are read-only"
+            ),
+            Self::Delete => format!(
+                "Cannot delete element of NamedTuple instance `{obj}`: \
+                 NamedTuple elements are read-only"
+            ),
+        }
+    }
+
+    fn element_hint(self) -> &'static str {
+        match self {
+            Self::Assign => "NamedTuple instances are immutable; elements cannot be reassigned",
+            Self::Delete => "NamedTuple instances are immutable; elements cannot be deleted",
+        }
     }
 }
 
-/// Check an assignment target for `NamedTuple` violations.
-fn check_assignment_target(
+/// Check a mutation target (`del` or assignment) for `NamedTuple` violations.
+fn check_mutation_target(
     target: &Expr,
+    mutation: Mutation,
     ctx: &ModuleContext,
     path: &str,
     diag: &mut Vec<Diagnostic>,
 ) {
     match target {
-        // `p.x = 3`
+        // `del p.x` or `p.x = 3`
         Expr::Attribute(attr) => {
             if let Some(obj_name) = expr_simple_name(&attr.value) {
                 if ctx.nt_field_count(obj_name).is_some() {
-                    diag.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
-                            "Cannot assign to attribute `{}` on NamedTuple instance \
-                             `{obj_name}`: NamedTuple fields are read-only",
-                            attr.attr
-                        ),
-                        span: to_span(attr.range()),
-                        path: path.to_owned(),
-                        help: Some(
-                            "NamedTuple instances are immutable; fields cannot be reassigned"
-                                .to_owned(),
-                        ),
-                        note: None,
-                        provenance: None,
-                    });
+                    diag.push(error_diagnostic_owned(
+                        CODE.clone(),
+                        mutation.attribute_message(&attr.attr, obj_name),
+                        to_span(attr.range()),
+                        path,
+                        Some(mutation.attribute_hint().to_owned()),
+                        None,
+                    ));
                 }
             }
         }
 
-        // `p[0] = 3`
+        // `del p[0]` or `p[0] = 3`
         Expr::Subscript(sub) => {
             if let Some(obj_name) = expr_simple_name(&sub.value) {
                 if let Some(field_count) = ctx.nt_field_count(obj_name) {
@@ -421,22 +390,14 @@ fn check_assignment_target(
                             return;
                         }
                     }
-                    diag.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
-                            "Cannot assign to element of NamedTuple instance `{obj_name}`: \
-                             NamedTuple elements are read-only"
-                        ),
-                        span: to_span(sub.range()),
-                        path: path.to_owned(),
-                        help: Some(
-                            "NamedTuple instances are immutable; elements cannot be reassigned"
-                                .to_owned(),
-                        ),
-                        note: None,
-                        provenance: None,
-                    });
+                    diag.push(error_diagnostic_owned(
+                        CODE.clone(),
+                        mutation.element_message(obj_name),
+                        to_span(sub.range()),
+                        path,
+                        Some(mutation.element_hint().to_owned()),
+                        None,
+                    ));
                 }
             }
         }
@@ -507,21 +468,17 @@ fn out_of_bounds_diag(
     path: &str,
 ) -> Diagnostic {
     let max_idx = field_count.saturating_sub(1);
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "NamedTuple index {idx} out of range for `{obj_name}` with {field_count} \
              field(s) (valid range: -{field_count}..{max_idx})"
         ),
         span,
-        path: path.to_owned(),
-        help: Some(format!(
+        path,
+        Some(format!(
             "Valid indices for `{obj_name}` are -{field_count}..{max_idx} (inclusive)"
         )),
-        note: Some(
-            "NamedTuple is a subtype of tuple; index access obeys the same bounds".to_owned(),
-        ),
-        provenance: None,
-    }
+        Some("NamedTuple is a subtype of tuple; index access obeys the same bounds".to_owned()),
+    )
 }

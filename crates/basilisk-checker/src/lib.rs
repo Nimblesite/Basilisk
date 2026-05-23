@@ -268,6 +268,11 @@ fn find_path_rule_severity(
 mod tests {
     use super::*;
 
+    /// Count diagnostics with code `code` in `diagnostics`.
+    fn count_code(diagnostics: &[Diagnostic], code: &str) -> usize {
+        diagnostics.iter().filter(|d| d.code.code == code).count()
+    }
+
     #[test]
     fn contains_identifier_exact_match() {
         assert!(contains_identifier("Foo", "Foo"));
@@ -306,10 +311,7 @@ mod tests {
         let diagnostics = check_with_config(&module, &config);
 
         // Should have BSK-E0010 for the unresolved import.
-        let e0010_count = diagnostics
-            .iter()
-            .filter(|d| d.code.code == "BSK-E0010")
-            .count();
+        let e0010_count = count_code(&diagnostics, "BSK-E0010");
         assert!(
             e0010_count >= 1,
             "BSK-E0010 should fire for unresolved import"
@@ -338,10 +340,7 @@ mod tests {
         let diagnostics = check_with_config(&module, &config);
 
         // os is stdlib — no BSK-E0010 should fire.
-        let e0010_count = diagnostics
-            .iter()
-            .filter(|d| d.code.code == "BSK-E0010")
-            .count();
+        let e0010_count = count_code(&diagnostics, "BSK-E0010");
         assert_eq!(e0010_count, 0, "stdlib imports should not fire BSK-E0010");
     }
 }

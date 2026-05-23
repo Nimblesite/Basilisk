@@ -25,7 +25,7 @@
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -44,12 +44,8 @@ impl Rule for NeverTypeCompatibility {
         let path = &module.path;
 
         // Collect covariant TypeVar names so we can exclude covariant contexts.
-        let covariant_tvars: Vec<&str> = module
-            .typevar_calls
-            .iter()
-            .filter(|tv| tv.is_covariant)
-            .map(|tv| tv.name.as_str())
-            .collect();
+        let covariant_tvars: Vec<&str> =
+            basilisk_resolver::collect_names_where(&module.typevar_calls, |tv| tv.is_covariant);
 
         // Check function bodies for annotated local assignments and return stmts.
         for func in &module.functions {
@@ -284,12 +280,7 @@ fn strip_call_parens(text: &str) -> &str {
 
 /// Check if a string looks like a simple Python identifier.
 fn is_simple_identifier(text: &str) -> bool {
-    !text.is_empty()
-        && text.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-        && text
-            .chars()
-            .next()
-            .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+    basilisk_resolver::is_simple_ascii_python_identifier(text)
 }
 
 /// Get the byte offset of the start of line number `line_idx` (0-indexed).
@@ -311,25 +302,21 @@ fn make_assignment_diagnostic(
     source_type: &str,
     path: &str,
 ) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Cannot assign `{source_type}` to `{var_name}` annotated `{annotation}`: \
              `Never` is only compatible with `Never` and `Any` in invariant contexts"
         ),
         span,
-        path: path.to_owned(),
-        help: Some(
-            "Change the annotation to `Never` or `Any`, or change the assigned value".to_owned(),
-        ),
-        note: Some(
+        path,
+        Some("Change the annotation to `Never` or `Any`, or change the assigned value".to_owned()),
+        Some(
             "PEP 484: `Never` is a bottom type and cannot be assigned to other types \
              except in covariant contexts or when the target is `Any`"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }
 
 fn make_return_diagnostic(
@@ -339,22 +326,20 @@ fn make_return_diagnostic(
     return_expr: &str,
     path: &str,
 ) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Cannot return `{return_expr}` from `{func_name}` annotated \
              `-> {return_annotation}`: `Never` is only compatible with `Never` \
              and `Any` in invariant contexts"
         ),
         span,
-        path: path.to_owned(),
-        help: Some("Change the return type annotation or the returned value".to_owned()),
-        note: Some(
+        path,
+        Some("Change the return type annotation or the returned value".to_owned()),
+        Some(
             "PEP 484: `Never` is a bottom type and cannot substitute for invariant \
              type parameters"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }

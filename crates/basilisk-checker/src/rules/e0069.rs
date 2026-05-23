@@ -21,7 +21,7 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::{ClassInfo, ResolvedModule};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -49,27 +49,25 @@ impl Rule for DataclassKwOnlyViolation {
                         .args
                         .get(positional_limit)
                         .map_or(call.span, |(_, s)| *s);
-                    diagnostics.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
+                    diagnostics.push(error_diagnostic_owned(
+                        CODE.clone(),
+                        format!(
                             "Too many positional arguments to `{}`: \
                              {extra} argument(s) must be passed as keyword arguments",
                             call.callee
                         ),
                         span,
-                        path: path.clone(),
-                        help: Some(format!(
+                        path,
+                        Some(format!(
                             "`{}` has keyword-only fields that cannot be passed positionally",
                             call.callee
                         )),
-                        note: Some(
+                        Some(
                             "Use keyword arguments for fields declared with `_: KW_ONLY`, \
                              `field(kw_only=True)`, or `@dataclass(kw_only=True)`"
                                 .to_owned(),
                         ),
-                        provenance: None,
-                    });
+                    ));
                 }
             }
 
@@ -77,27 +75,25 @@ impl Rule for DataclassKwOnlyViolation {
             if let Some(no_init_names) = init_false_fields.get(call.callee.as_str()) {
                 for (kw_name, _kw_kind) in &call.keywords {
                     if no_init_names.contains(kw_name.as_str()) {
-                        diagnostics.push(Diagnostic {
-                            code: CODE.clone(),
-                            severity: Severity::Error,
-                            message: format!(
+                        diagnostics.push(error_diagnostic_owned(
+                            CODE.clone(),
+                            format!(
                                 "Unexpected keyword argument `{kw_name}` for `{}`: \
                                  field `{kw_name}` is not included in `__init__`",
                                 call.callee
                             ),
-                            span: call.span,
-                            path: path.clone(),
-                            help: Some(format!(
+                            call.span,
+                            path,
+                            Some(format!(
                                 "Field `{kw_name}` has `init=False` and cannot be passed \
                                  as a constructor argument"
                             )),
-                            note: Some(
+                            Some(
                                 "Fields with `init=False` (or field specifiers that \
                                  implicitly set `init=False`) are excluded from `__init__`"
                                     .to_owned(),
                             ),
-                            provenance: None,
-                        });
+                        ));
                     }
                 }
             }
@@ -152,12 +148,8 @@ fn build_init_false_fields(classes: &[ClassInfo]) -> HashMap<&str, HashSet<&str>
         .iter()
         .filter(|c| c.is_dataclass)
         .filter_map(|c| {
-            let init_false: HashSet<&str> = c
-                .attributes
-                .iter()
-                .filter(|a| a.is_init_false)
-                .map(|a| a.name.as_str())
-                .collect();
+            let init_false: HashSet<&str> =
+                basilisk_resolver::collect_name_set_where(&c.attributes, |a| a.is_init_false);
             if init_false.is_empty() {
                 None
             } else {

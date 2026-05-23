@@ -17,11 +17,9 @@
 //! TA1 = tuple[*Ts, T1, T2]  # OK — single unpack
 //! ```
 
-use std::collections::HashSet;
-
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -32,21 +30,14 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 fn make_diag(message: String, span: Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
+    error_diagnostic(
+        CODE.clone(),
         message,
         span,
-        path: path.to_owned(),
-        help: Some(
-            "A `tuple[...]` type may contain at most one unpacked `TypeVarTuple` (`*Ts`)"
-                .to_owned(),
-        ),
-        note: Some(
-            "PEP 646: only a single TypeVarTuple is permitted per generic or tuple type".to_owned(),
-        ),
-        provenance: None,
-    }
+        path,
+        Some("A `tuple[...]` type may contain at most one unpacked `TypeVarTuple` (`*Ts`)"),
+        Some("PEP 646: only a single TypeVarTuple is permitted per generic or tuple type"),
+    )
 }
 
 /// Count the number of starred (unpack) elements in a `tuple[...]` subscript string.
@@ -133,12 +124,7 @@ impl Rule for MultipleTypeVarTuplesInGeneric {
 /// patterns that contain multiple unpack operators.
 fn check_tuple_type_multiple_unpacks(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
     // Collect TypeVarTuple names so we know which names are TVTs.
-    let tvt_names: HashSet<&str> = module
-        .typevar_calls
-        .iter()
-        .filter(|tv| tv.is_typevartuple)
-        .map(|tv| tv.name.as_str())
-        .collect();
+    let tvt_names = super::shared::typevar_tuple_names(&module.typevar_calls);
 
     if tvt_names.is_empty() {
         return;

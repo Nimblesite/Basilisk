@@ -17,7 +17,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{ClassInfo, ResolvedModule};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -53,11 +53,7 @@ pub(crate) struct EnumWithMembersFinal;
 
 impl Rule for EnumWithMembersFinal {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let class_map: HashMap<&str, &ClassInfo> = module
-            .classes
-            .iter()
-            .map(|cls| (cls.name.as_str(), cls))
-            .collect();
+        let class_map = super::shared::class_name_map(&module.classes);
 
         for child in &module.classes {
             for base_name in &child.bases {
@@ -76,25 +72,23 @@ impl Rule for EnumWithMembersFinal {
                     continue;
                 }
 
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Cannot subclass `{base_name}` because it has members and is implicitly final"
                     ),
-                    span: child.name_span,
-                    path: module.path.clone(),
-                    help: Some(
+                    child.name_span,
+                    &module.path,
+                    Some(
                         "Enum classes with members cannot be subclassed. \
                          Only memberless Enum bases can be extended."
                             .to_owned(),
                     ),
-                    note: Some(
+                    Some(
                         "PEP 435: An Enum class with one or more members cannot be subclassed"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
             }
         }
     }

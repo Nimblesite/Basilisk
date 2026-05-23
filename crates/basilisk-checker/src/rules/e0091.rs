@@ -21,7 +21,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -68,23 +68,21 @@ impl Rule for TypeVarDefaultIncompatible {
             if tv.has_bound {
                 if let Some(ref bound_name) = tv.bound_type_name {
                     if !is_numeric_subtype(default_name, bound_name) {
-                        diagnostics.push(Diagnostic {
-                            code: CODE.clone(),
-                            severity: Severity::Error,
-                            message: format!(
+                        diagnostics.push(error_diagnostic_owned(
+                            CODE.clone(),
+                            format!(
                                 "`TypeVar` `{}` has `default={default_name}` which is not a \
                                  subtype of `bound={bound_name}`",
                                 tv.name
                             ),
-                            span: tv.span,
-                            path: module.path.clone(),
-                            help: Some(format!(
+                            tv.span,
+                            &module.path,
+                            Some(format!(
                                 "The default must be a subtype of the bound; \
                                  `{default_name}` is not a subtype of `{bound_name}`"
                             )),
-                            note: None,
-                            provenance: None,
-                        });
+                            None,
+                        ));
                     }
                 }
                 continue; // A TypeVar has either bound OR constraints, not both.
@@ -100,23 +98,21 @@ impl Rule for TypeVarDefaultIncompatible {
                     .map(|c| format!("`{c}`"))
                     .collect::<Vec<_>>()
                     .join(", ");
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "`TypeVar` `{}` has `default={default_name}` which is not one of the \
                          constraints ({constraint_list})",
                         tv.name
                     ),
-                    span: tv.span,
-                    path: module.path.clone(),
-                    help: Some(format!(
+                    tv.span,
+                    &module.path,
+                    Some(format!(
                         "The default for a constrained `TypeVar` must be exactly one of its \
                          constraints; choose one of {constraint_list}"
                     )),
-                    note: None,
-                    provenance: None,
-                });
+                    None,
+                ));
             }
         }
     }

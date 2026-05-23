@@ -2,7 +2,7 @@
 
 use basilisk_resolver::{FunctionInfo, ParameterInfo, ResolvedModule};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::{guards::is_stub_context, Rule};
 
@@ -35,14 +35,12 @@ fn check_function(func: &FunctionInfo, path: &str, out: &mut Vec<Diagnostic>) {
 }
 
 fn make_diagnostic(param: &ParameterInfo, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!("Missing parameter type annotation for `{}`", param.name),
-        span: param.name_span,
-        path: path.to_owned(),
-        help: Some(format!("Add a type annotation: `{}: <type>`", param.name)),
-        note: Some("In Basilisk, all function parameters require explicit types".to_owned()),
-        provenance: None,
-    }
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!("Missing parameter type annotation for `{}`", param.name),
+        param.name_span,
+        path,
+        Some(format!("Add a type annotation: `{}: <type>`", param.name)),
+        Some("In Basilisk, all function parameters require explicit types".to_owned()),
+    )
 }

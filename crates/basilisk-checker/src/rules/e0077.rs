@@ -21,7 +21,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -37,10 +37,9 @@ pub(crate) struct ProtocolSelfViolation;
 impl Rule for ProtocolSelfViolation {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         for violation in &module.protocol_self_violations {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Class `{}` is not compatible with protocol `{}`: \
                      method `{}` returns `{}` instead of `Self`",
                     violation.class_name,
@@ -48,19 +47,18 @@ impl Rule for ProtocolSelfViolation {
                     violation.method_name,
                     violation.actual_return_type
                 ),
-                span: violation.span,
-                path: module.path.clone(),
-                help: Some(format!(
+                violation.span,
+                &module.path,
+                Some(format!(
                     "Change `{}.{}` to return `Self` or `{}`",
                     violation.class_name, violation.method_name, violation.class_name
                 )),
-                note: Some(
+                Some(
                     "Protocol methods returning `Self` require implementing classes to \
                      return `Self` or the concrete class type, not an unrelated type"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }

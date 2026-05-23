@@ -53,13 +53,7 @@ pub(super) fn collect_calls_from_stmts(stmts: &[Stmt]) -> Vec<CallSite> {
 }
 
 pub(super) fn collect_calls_from_stmts_internal(stmts: &[Stmt], out: &mut Vec<CallSite>) {
-    for stmt in stmts {
-        collect_calls_from_stmt(stmt, out);
-    }
-}
-
-pub(super) fn collect_calls_from_stmt(stmt: &Stmt, out: &mut Vec<CallSite>) {
-    match stmt {
+    crate::walk_all_stmts(stmts, &mut |stmt| match stmt {
         Stmt::AnnAssign(node) => {
             if let Some(val) = node.value.as_deref() {
                 if let Some(site) = call_site_from_expr(val) {
@@ -77,118 +71,38 @@ pub(super) fn collect_calls_from_stmt(stmt: &Stmt, out: &mut Vec<CallSite>) {
                 out.push(site);
             }
         }
-        Stmt::FunctionDef(func) => {
-            collect_calls_from_stmts_internal(&func.body, out);
-        }
-        Stmt::ClassDef(cls) => {
-            collect_calls_from_stmts_internal(&cls.body, out);
-        }
         Stmt::If(node) => {
-            // Extract calls from the `if` test expression (e.g. `isinstance(x, T)`).
             if let Some(site) = call_site_from_expr(&node.test) {
                 out.push(site);
             }
-            collect_calls_from_stmts_internal(&node.body, out);
             for clause in &node.elif_else_clauses {
                 if let Some(ref test) = clause.test {
                     if let Some(site) = call_site_from_expr(test) {
                         out.push(site);
                     }
                 }
-                collect_calls_from_stmts_internal(&clause.body, out);
-            }
-        }
-        Stmt::For(node) => {
-            collect_calls_from_stmts_internal(&node.body, out);
-            collect_calls_from_stmts_internal(&node.orelse, out);
-        }
-        Stmt::While(node) => {
-            collect_calls_from_stmts_internal(&node.body, out);
-            collect_calls_from_stmts_internal(&node.orelse, out);
-        }
-        Stmt::With(node) => {
-            collect_calls_from_stmts_internal(&node.body, out);
-        }
-        Stmt::Try(node) => {
-            collect_calls_from_stmts_internal(&node.body, out);
-            for handler in &node.handlers {
-                let ExceptHandler::ExceptHandler(h) = handler;
-                collect_calls_from_stmts_internal(&h.body, out);
-            }
-            collect_calls_from_stmts_internal(&node.orelse, out);
-            collect_calls_from_stmts_internal(&node.finalbody, out);
-        }
-        Stmt::Match(node) => {
-            for case in &node.cases {
-                collect_calls_from_stmts_internal(&case.body, out);
             }
         }
         _ => {}
-    }
+    });
 }
 
 pub(super) fn collect_reveal_type_calls_from_stmts(
     stmts: &[Stmt],
     out: &mut Vec<RevealTypeCallInfo>,
 ) {
-    for stmt in stmts {
-        collect_reveal_type_calls_from_stmt(stmt, out);
-    }
-}
-
-pub(super) fn collect_reveal_type_calls_from_stmt(stmt: &Stmt, out: &mut Vec<RevealTypeCallInfo>) {
-    match stmt {
-        Stmt::Expr(node) => {
-            if let Expr::Call(call) = node.value.as_ref() {
-                let is_reveal_type =
-                    expr_simple_name(&call.func).is_some_and(|n| n == "reveal_type");
-                if is_reveal_type {
-                    out.push(RevealTypeCallInfo {
-                        arg_count: call.arguments.args.len(),
-                        span: text_range_to_span(call.range()),
-                    });
-                }
-            }
+    crate::walk_all_stmts(stmts, &mut |stmt| {
+        let Stmt::Expr(node) = stmt else { return };
+        let Expr::Call(call) = node.value.as_ref() else {
+            return;
+        };
+        if expr_simple_name(&call.func).is_some_and(|n| n == "reveal_type") {
+            out.push(RevealTypeCallInfo {
+                arg_count: call.arguments.args.len(),
+                span: text_range_to_span(call.range()),
+            });
         }
-        Stmt::FunctionDef(func) => {
-            collect_reveal_type_calls_from_stmts(&func.body, out);
-        }
-        Stmt::ClassDef(cls) => {
-            collect_reveal_type_calls_from_stmts(&cls.body, out);
-        }
-        Stmt::If(node) => {
-            collect_reveal_type_calls_from_stmts(&node.body, out);
-            for elif_else in &node.elif_else_clauses {
-                collect_reveal_type_calls_from_stmts(&elif_else.body, out);
-            }
-        }
-        Stmt::For(node) => {
-            collect_reveal_type_calls_from_stmts(&node.body, out);
-            collect_reveal_type_calls_from_stmts(&node.orelse, out);
-        }
-        Stmt::While(node) => {
-            collect_reveal_type_calls_from_stmts(&node.body, out);
-            collect_reveal_type_calls_from_stmts(&node.orelse, out);
-        }
-        Stmt::With(node) => {
-            collect_reveal_type_calls_from_stmts(&node.body, out);
-        }
-        Stmt::Try(node) => {
-            collect_reveal_type_calls_from_stmts(&node.body, out);
-            for handler in &node.handlers {
-                let ExceptHandler::ExceptHandler(h) = handler;
-                collect_reveal_type_calls_from_stmts(&h.body, out);
-            }
-            collect_reveal_type_calls_from_stmts(&node.orelse, out);
-            collect_reveal_type_calls_from_stmts(&node.finalbody, out);
-        }
-        Stmt::Match(node) => {
-            for case in &node.cases {
-                collect_reveal_type_calls_from_stmts(&case.body, out);
-            }
-        }
-        _ => {}
-    }
+    });
 }
 
 /// Extract `Generic[T, ...]` or `Protocol[T, ...]` type parameter names and

@@ -29,7 +29,7 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::shared::extract_callee_name;
@@ -41,20 +41,16 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
+    error_diagnostic(
+        CODE.clone(),
         message,
         span,
-        path: path.to_owned(),
-        help: Some(
-            "`InitVar` fields are constructor-only parameters, not instance attributes".to_owned(),
+        path,
+        Some("`InitVar` fields are constructor-only parameters, not instance attributes"),
+        Some(
+            "PEP 557: `InitVar[T]` fields are passed to `__post_init__` and not stored on the instance",
         ),
-        note: Some(
-            "PEP 557: `InitVar[T]` fields are passed to `__post_init__` and not stored on the instance".to_owned(),
-        ),
-        provenance: None,
-    }
+    )
 }
 
 fn span_text(source: &str, span: Option<Span>) -> Option<&str> {
@@ -179,12 +175,8 @@ fn check_initvar_attribute_access(module: &ResolvedModule, diagnostics: &mut Vec
         .iter()
         .filter(|c| c.is_dataclass)
         .filter_map(|c| {
-            let names: HashSet<&str> = c
-                .attributes
-                .iter()
-                .filter(|a| a.is_init_var)
-                .map(|a| a.name.as_str())
-                .collect();
+            let names: HashSet<&str> =
+                basilisk_resolver::collect_name_set_where(&c.attributes, |a| a.is_init_var);
             if names.is_empty() {
                 None
             } else {

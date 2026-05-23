@@ -38,7 +38,7 @@ mod violations;
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -69,11 +69,7 @@ impl Rule for Pep695TypeParamScopingViolation {
 
         // Collect old-style TypeVar names (from TypeVar() calls) for
         // old/new mixing detection.
-        let old_typevar_names: Vec<&str> = module
-            .typevar_calls
-            .iter()
-            .map(|tv| tv.name.as_str())
-            .collect();
+        let old_typevar_names: Vec<&str> = basilisk_resolver::collect_names(&module.typevar_calls);
 
         // Track multi-line def/class signatures so continuation lines at
         // indent 0 are not treated as module-level code.
@@ -195,19 +191,17 @@ fn check_type_alias_misuse(module: &ResolvedModule, diagnostics: &mut Vec<Diagno
             if call.callee == "isinstance" || call.callee == "issubclass" {
                 continue; // Handled below via argument checking
             }
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Cannot call type alias `{}`: type aliases are not callable",
                     call.callee
                 ),
-                span: call.span,
-                path: path.to_owned(),
-                help: Some("Type aliases created with `type` cannot be instantiated".to_owned()),
-                note: None,
-                provenance: None,
-            });
+                call.span,
+                path,
+                Some("Type aliases created with `type` cannot be instantiated".to_owned()),
+                None,
+            ));
         }
 
         // Check isinstance/issubclass with alias as second arg
@@ -216,22 +210,17 @@ fn check_type_alias_misuse(module: &ResolvedModule, diagnostics: &mut Vec<Diagno
                 if let Some(arg_text) = crate::span_util::slice_span(source, *arg_span) {
                     let arg_trimmed = arg_text.trim();
                     if alias_names.contains(arg_trimmed) {
-                        diagnostics.push(Diagnostic {
-                            code: CODE.clone(),
-                            severity: Severity::Error,
-                            message: format!(
-                                "Cannot use type alias `{arg_trimmed}` in `{}`",
-                                call.callee
-                            ),
-                            span: *arg_span,
-                            path: path.to_owned(),
-                            help: Some(format!(
+                        diagnostics.push(error_diagnostic_owned(
+                            CODE.clone(),
+                            format!("Cannot use type alias `{arg_trimmed}` in `{}`", call.callee),
+                            *arg_span,
+                            path,
+                            Some(format!(
                                 "Type aliases created with `type` cannot be used with `{}`",
                                 call.callee
                             )),
-                            note: None,
-                            provenance: None,
-                        });
+                            None,
+                        ));
                     }
                 }
             }
@@ -243,16 +232,14 @@ fn check_type_alias_misuse(module: &ResolvedModule, diagnostics: &mut Vec<Diagno
         for base in &class.bases {
             let base_name = base.split('[').next().unwrap_or(base).trim();
             if alias_names.contains(base_name) {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!("Cannot use type alias `{base_name}` as a base class"),
-                    span: class.name_span,
-                    path: path.to_owned(),
-                    help: Some("Type aliases created with `type` cannot be subclassed".to_owned()),
-                    note: None,
-                    provenance: None,
-                });
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!("Cannot use type alias `{base_name}` as a base class"),
+                    class.name_span,
+                    path,
+                    Some("Type aliases created with `type` cannot be subclassed".to_owned()),
+                    None,
+                ));
             }
         }
     }
@@ -530,25 +517,23 @@ fn check_annotation_bounds(
                 .filter(|&c| c == '\n')
                 .count()
                 + 1;
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Type argument `{arg_trimmed}` is not compatible with type parameter \
                      `{}` bound `{bound}` in type alias `{base_name}`",
                     param.name
                 ),
-                span: helpers::span_for_line(source, line_number),
-                path: path.to_owned(),
-                help: Some(format!(
+                helpers::span_for_line(source, line_number),
+                path,
+                Some(format!(
                     "Type parameter `{}` requires a subtype of `{bound}`",
                     param.name
                 )),
-                note: Some(format!(
+                Some(format!(
                     "PEP 695: `{arg_trimmed}` is not a subtype of `{bound}`"
                 )),
-                provenance: None,
-            });
+            ));
         }
     }
 }
@@ -583,22 +568,18 @@ fn check_alias_attribute_access(
                 }
 
                 if !attr.is_empty() {
-                    diagnostics.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
-                            "Cannot access attribute `{attr}` on type alias `{alias_name}`"
-                        ),
-                        span: helpers::span_for_line(source, line_number),
-                        path: path.to_owned(),
-                        help: Some(
+                    diagnostics.push(error_diagnostic_owned(
+                        CODE.clone(),
+                        format!("Cannot access attribute `{attr}` on type alias `{alias_name}`"),
+                        helpers::span_for_line(source, line_number),
+                        path,
+                        Some(
                             "Type aliases only support `__value__` and `__type_params__` \
                              attributes"
                                 .to_string(),
                         ),
-                        note: None,
-                        provenance: None,
-                    });
+                        None,
+                    ));
                 }
             }
         }

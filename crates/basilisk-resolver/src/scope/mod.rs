@@ -5,6 +5,7 @@ mod external_symbol;
 mod function_types;
 mod import_types;
 mod module_types;
+mod named;
 pub(crate) mod narrowing_types;
 mod resolved_module;
 mod rhs;
@@ -28,6 +29,10 @@ pub use module_types::{
     TypeStatementInfo, TypeVarCallInfo, TypedDictCallInfo, TypedDictKeyViolation,
     TypedDictKeyViolationKind, TypedDictSecondArgKind, UnhashableHashCallViolation,
     UnhashableKeyRef,
+};
+pub use named::{
+    collect_name_set, collect_name_set_where, collect_names, collect_names_where, name_lookup,
+    Named,
 };
 pub use narrowing_types::{MatchCaseNarrowing, NarrowingGuard, NarrowingGuardKind};
 pub use resolved_module::ResolvedModule;

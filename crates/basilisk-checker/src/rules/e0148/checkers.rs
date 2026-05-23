@@ -7,7 +7,7 @@ use ruff_text_size::Ranged;
 
 use basilisk_resolver::Span;
 
-use crate::diagnostic::{Diagnostic, Severity};
+use crate::diagnostic::{Diagnostic, error_diagnostic_owned};
 
 use crate::rules::shared::{infer_expr_literal_type, is_type_compatible};
 
@@ -168,27 +168,25 @@ fn check_call(call: &ast::ExprCall, ctx: &ModuleContext, path: &str, diag: &mut 
             Some(&(existing_group, ref _existing_type)) => {
                 if existing_group != group {
                     let span = call_span(call);
-                    diag.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
+                    diag.push(error_diagnostic_owned(
+                        CODE.clone(),
+                        format!(
                             "Constraint mismatch for TypeVar `{tv_name}` in call to `{callee_name}`: \
                              argument types belong to different constraint groups"
                         ),
                         span,
-                        path: path.to_owned(),
-                        help: Some(format!(
+                        path,
+                        Some(format!(
                             "TypeVar `{tv_name}` is constrained to `{}`; all arguments bound to \
                              the same TypeVar must use the same constraint",
                             constrained_tv.constraints.join("` or `")
                         )),
-                        note: Some(
+                        Some(
                             "PEP 484: arguments for a constrained TypeVar must all match the \
                              same constraint alternative"
                                 .to_owned(),
                         ),
-                        provenance: None,
-                    });
+                    ));
                     return; // One diagnostic per call.
                 }
             }
@@ -221,28 +219,23 @@ fn check_subscript(
     };
 
     if !is_type_compatible(idx_ty, key_ty) {
-        let span = Span {
-            start: sub.range().start().to_u32(),
-            end: sub.range().end().to_u32(),
-        };
-        diag.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        let span = Span::from(sub.range());
+        diag.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "Invalid subscript key type `{idx_ty}` for `{obj_name}` which expects key type `{key_ty}`"
             ),
             span,
-            path: path.to_owned(),
-            help: Some(format!(
+            path,
+            Some(format!(
                 "`{obj_name}` is parameterized with key type `{key_ty}`; \
                  use a `{key_ty}` value as the subscript key"
             )),
-            note: Some(
+            Some(
                 "PEP 484: subscript key must be compatible with the declared key type parameter"
                     .to_owned(),
             ),
-            provenance: None,
-        });
+        ));
     }
 }
 
@@ -267,25 +260,20 @@ pub(super) fn check_class_def(cls: &ast::StmtClassDef, path: &str, diag: &mut Ve
 
         // Check if the metaclass value is a subscript (i.e. `Generic[T]`).
         if matches!(&kw.value, Expr::Subscript(_)) {
-            let span = Span {
-                start: cls.range().start().to_u32(),
-                end: cls.range().end().to_u32(),
-            };
-            diag.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            let span = Span::from(cls.range());
+            diag.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Class `{}` uses a parameterized generic type as its metaclass",
                     cls.name
                 ),
                 span,
-                path: path.to_owned(),
-                help: Some(
+                path,
+                Some(
                     "Generic metaclasses are not supported by the Python type system".to_owned(),
                 ),
-                note: Some("PEP 484: generic metaclass instances are not supported".to_owned()),
-            provenance: None,
-            });
+                Some("PEP 484: generic metaclass instances are not supported".to_owned()),
+            ));
         }
     }
 }

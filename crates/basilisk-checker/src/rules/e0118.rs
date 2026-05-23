@@ -26,7 +26,7 @@ use ruff_text_size::Ranged;
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diag_help_note, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -41,8 +41,7 @@ pub(crate) struct SuperAbstractCall;
 
 impl Rule for SuperAbstractCall {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
-        else {
+        let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
 
@@ -194,47 +193,25 @@ fn find_super_calls(
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    for stmt in stmts {
-        match stmt {
-            Stmt::Return(ret) => {
-                if let Some(value) = &ret.value {
-                    check_expr_for_super_call(value, parent_stubs, path, diagnostics);
-                }
+    basilisk_resolver::walk_function_stmts(stmts, &mut |stmt| match stmt {
+        Stmt::Return(ret) => {
+            if let Some(value) = &ret.value {
+                check_expr_for_super_call(value, parent_stubs, path, diagnostics);
             }
-            Stmt::Expr(expr_stmt) => {
-                check_expr_for_super_call(&expr_stmt.value, parent_stubs, path, diagnostics);
-            }
-            Stmt::Assign(assign) => {
-                check_expr_for_super_call(&assign.value, parent_stubs, path, diagnostics);
-            }
-            Stmt::AnnAssign(ann) => {
-                if let Some(value) = &ann.value {
-                    check_expr_for_super_call(value, parent_stubs, path, diagnostics);
-                }
-            }
-            Stmt::If(if_stmt) => {
-                find_super_calls(&if_stmt.body, parent_stubs, path, diagnostics);
-                for clause in &if_stmt.elif_else_clauses {
-                    find_super_calls(&clause.body, parent_stubs, path, diagnostics);
-                }
-            }
-            Stmt::For(for_stmt) => {
-                find_super_calls(&for_stmt.body, parent_stubs, path, diagnostics);
-            }
-            Stmt::While(while_stmt) => {
-                find_super_calls(&while_stmt.body, parent_stubs, path, diagnostics);
-            }
-            Stmt::Try(try_stmt) => {
-                find_super_calls(&try_stmt.body, parent_stubs, path, diagnostics);
-                find_super_calls(&try_stmt.orelse, parent_stubs, path, diagnostics);
-                find_super_calls(&try_stmt.finalbody, parent_stubs, path, diagnostics);
-            }
-            Stmt::With(with_stmt) => {
-                find_super_calls(&with_stmt.body, parent_stubs, path, diagnostics);
-            }
-            _ => {}
         }
-    }
+        Stmt::Expr(expr_stmt) => {
+            check_expr_for_super_call(&expr_stmt.value, parent_stubs, path, diagnostics);
+        }
+        Stmt::Assign(assign) => {
+            check_expr_for_super_call(&assign.value, parent_stubs, path, diagnostics);
+        }
+        Stmt::AnnAssign(ann) => {
+            if let Some(value) = &ann.value {
+                check_expr_for_super_call(value, parent_stubs, path, diagnostics);
+            }
+        }
+        _ => {}
+    });
 }
 
 /// Check if an expression is `super().method_name(...)` where `method_name` is
@@ -252,30 +229,22 @@ fn check_expr_for_super_call(
                 if is_super_call(&attr.value) {
                     let method_name = attr.attr.as_str();
                     if parent_stubs.contains(method_name) {
-                        let span = Span {
-                            start: call.range().start().to_u32(),
-                            end: call.range().end().to_u32(),
-                        };
-                        diagnostics.push(Diagnostic {
-                            code: CODE.clone(),
-                            severity: Severity::Error,
-                            message: format!(
+                        let span = Span::from(call.range());
+                        diagnostics.push(error_diag_help_note(
+                            CODE.clone(),
+                            format!(
                                 "Cannot call `super().{method_name}()`: the method is abstract \
                                  with no default implementation"
                             ),
                             span,
-                            path: path.to_owned(),
-                            help: Some(format!(
+                            path,
+                            format!(
                                 "Provide a concrete implementation of `{method_name}` \
                                  instead of delegating to `super()`"
-                            )),
-                            note: Some(
-                                "Abstract methods with only `...` or `pass` as their body \
-                                 have no implementation to call via super()"
-                                    .to_owned(),
                             ),
-                            provenance: None,
-                        });
+                            "Abstract methods with only `...` or `pass` as their body \
+                             have no implementation to call via super()",
+                        ));
                     }
                 }
             }

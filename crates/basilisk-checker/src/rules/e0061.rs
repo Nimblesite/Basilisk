@@ -19,7 +19,7 @@
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::{guards::is_enum_class, Rule};
 
@@ -139,22 +139,20 @@ fn is_valid_enum_member(class_info: &basilisk_resolver::ClassInfo, member_name: 
 }
 
 fn make_diagnostic(span: Span, class_name: &str, member_name: &str, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Redundant `assert_type` with `Literal[{class_name}.{member_name}]` on enum-typed parameter"
         ),
         span,
-        path: path.to_owned(),
-        help: Some(format!(
+        path,
+        Some(format!(
             "Use `assert_type(param, {class_name})` instead — enum parameters already have the correct type"
         )),
-        note: Some(
+        Some(
             "Narrowing an enum-typed parameter to a specific member with `Literal[Enum.MEMBER]` \
              is redundant and indicates a misunderstanding of enum typing semantics"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }

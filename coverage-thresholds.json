@@ -7,7 +7,7 @@
       "threshold": 93
     },
     "basilisk-cli": {
-      "threshold": 85
+      "threshold": 88
     },
     "basilisk-db": {
       "threshold": 100
@@ -31,7 +31,7 @@
       "threshold": 85
     },
     "basilisk-config": {
-      "threshold": 93
+      "threshold": 96
     },
     "vsix": {
       "threshold": 84

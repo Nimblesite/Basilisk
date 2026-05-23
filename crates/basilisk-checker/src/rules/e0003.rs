@@ -6,7 +6,7 @@
 
 use basilisk_resolver::{ResolvedModule, RhsKind, VariableInfo};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -69,16 +69,14 @@ fn make_diagnostic(var: &VariableInfo, path: &str) -> Diagnostic {
         ),
     };
 
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
+    error_diagnostic_owned(
+        CODE.clone(),
         message,
-        span: var.name_span,
-        path: path.to_owned(),
-        help: Some(format!("Add a type annotation: `{help}`")),
-        note: Some(
+        var.name_span,
+        path,
+        Some(format!("Add a type annotation: `{help}`")),
+        Some(
             "In Basilisk, all module-level variables require explicit type annotations".to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }

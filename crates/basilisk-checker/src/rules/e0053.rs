@@ -13,7 +13,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -37,24 +37,22 @@ impl Rule for AssertTypeMismatch {
         {
             let actual = call.actual_type.as_deref().unwrap_or("unknown");
             let expected = call.expected_type.as_deref().unwrap_or("unknown");
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Type mismatch in `assert_type()`: expression has type `{actual}` but expected `{expected}`"
                 ),
-                span: call.span,
-                path: module.path.clone(),
-                help: Some(
+                call.span,
+                &module.path,
+                Some(
                     "The type of the expression does not match the declared expected type"
                         .to_owned(),
                 ),
-                note: Some(
+                Some(
                     "assert_type(expr, T) requires the inferred type of expr to be exactly T"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }

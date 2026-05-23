@@ -34,7 +34,7 @@ use basilisk_resolver::{ResolvedModule, Span};
 use ruff_python_ast::{Expr, Stmt};
 use ruff_text_size::Ranged;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diag_help_note, error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::rules::shared::split_top_level_commas;
 
 use super::Rule;
@@ -53,12 +53,8 @@ impl Rule for TypeVarTupleSpecializationViolation {
         let path = &module.path;
 
         // Collect the names of all TypeVarTuple definitions in this module.
-        let typevartuple_names: Vec<&str> = module
-            .typevar_calls
-            .iter()
-            .filter(|tv| tv.is_typevartuple)
-            .map(|tv| tv.name.as_str())
-            .collect();
+        let typevartuple_names: Vec<&str> =
+            basilisk_resolver::collect_names_where(&module.typevar_calls, |tv| tv.is_typevartuple);
 
         // Collect the names of all regular TypeVar definitions.
         let typevar_names: Vec<&str> = module
@@ -267,10 +263,7 @@ fn check_expr(
                 return;
             };
 
-            let span = Span {
-                start: sub.range().start().to_u32(),
-                end: sub.range().end().to_u32(),
-            };
+            let span = Span::from(sub.range());
 
             // Determine the provided type arguments from the slice.
             let provided_args = collect_type_args(&sub.slice);
@@ -360,49 +353,39 @@ fn check_unpack_in_plain_generic(
     for arg in args {
         match arg {
             SliceArg::StarredName(name) if typevartuple_names.contains(&name.as_str()) => {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diag_help_note(
+                    CODE.clone(),
+                    format!(
                         "Cannot use unpacked `TypeVarTuple` `*{name}` as a type argument \
                          to `{alias_name}`, which has no `TypeVarTuple` parameter"
                     ),
                     span,
-                    path: path.to_owned(),
-                    help: Some(format!(
+                    path,
+                    format!(
                         "`{alias_name}` is parameterised with regular `TypeVar`s only; \
                          use a plain type instead of `*{name}`"
-                    )),
-                    note: Some(
-                        "PEP 646: a `TypeVarTuple` unpack `*Ts` may only be used to \
-                         specialise a generic that contains a `TypeVarTuple` parameter"
-                            .to_owned(),
                     ),
-                    provenance: None,
-                });
+                    "PEP 646: a `TypeVarTuple` unpack `*Ts` may only be used to \
+                     specialise a generic that contains a `TypeVarTuple` parameter",
+                ));
                 return;
             }
             SliceArg::StarredTuple => {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diag_help_note(
+                    CODE.clone(),
+                    format!(
                         "Cannot use unpacked tuple `*tuple[...]` as a type argument \
                          to `{alias_name}`, which has no `TypeVarTuple` parameter"
                     ),
                     span,
-                    path: path.to_owned(),
-                    help: Some(format!(
+                    path,
+                    format!(
                         "`{alias_name}` is parameterised with regular `TypeVar`s only; \
                          provide plain type arguments instead of `*tuple[...]`"
-                    )),
-                    note: Some(
-                        "PEP 646: `*tuple[T, ...]` may only appear in the argument list \
-                         of a generic that contains a `TypeVarTuple` parameter"
-                            .to_owned(),
                     ),
-                    provenance: None,
-                });
+                    "PEP 646: `*tuple[T, ...]` may only appear in the argument list \
+                     of a generic that contains a `TypeVarTuple` parameter",
+                ));
                 return;
             }
             _ => {}
@@ -428,10 +411,9 @@ fn check_too_few_args_for_tvt_alias(
     let provided = args.len();
 
     if plain_count < min_required {
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "`{alias_name}` requires at least {min_required} plain type argument{} \
                  (one per regular `TypeVar`), but {plain_count} {} provided \
                  (out of {provided} total)",
@@ -439,20 +421,19 @@ fn check_too_few_args_for_tvt_alias(
                 if plain_count == 1 { "was" } else { "were" },
             ),
             span,
-            path: path.to_owned(),
-            help: Some(format!(
+            path,
+            Some(format!(
                 "Supply at least {min_required} type argument{} to satisfy the \
                  regular `TypeVar` parameter{} of `{alias_name}`",
                 if min_required == 1 { "" } else { "s" },
                 if min_required == 1 { "" } else { "s" },
             )),
-            note: Some(
+            Some(
                 "PEP 646: when a generic alias contains both a `TypeVarTuple` and \
                  regular `TypeVar`s, every specialisation must provide at least as \
                  many arguments as there are regular `TypeVar`s"
                     .to_owned(),
             ),
-            provenance: None,
-        });
+        ));
     }
 }

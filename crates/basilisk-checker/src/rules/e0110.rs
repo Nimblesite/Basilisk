@@ -16,7 +16,7 @@ use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule};
 
 use super::guards::is_protocol_class;
 use super::Rule;
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 const CODE: ErrorCode = ErrorCode {
@@ -231,44 +231,40 @@ impl VarianceContext<'_> {
                 self.emit_invariant_violations(tv_name, in_input, in_output, diagnostics);
             }
             Variance::Covariant if in_input => {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Covariant TypeVar `{tv_name}` is used in input position \
                          in protocol `{}`",
                         self.cls.name
                     ),
-                    span: self.cls.def_span,
-                    path: self.path.to_owned(),
-                    help: Some(
+                    self.cls.def_span,
+                    self.path,
+                    Some(
                         "Covariant TypeVars should only appear in output \
                          (return type) positions"
                             .to_owned(),
                     ),
-                    note: None,
-                    provenance: None,
-                });
+                    None,
+                ));
             }
             Variance::Contravariant if in_output => {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Contravariant TypeVar `{tv_name}` is used in output \
                          position in protocol `{}`",
                         self.cls.name
                     ),
-                    span: self.cls.def_span,
-                    path: self.path.to_owned(),
-                    help: Some(
+                    self.cls.def_span,
+                    self.path,
+                    Some(
                         "Contravariant TypeVars should only appear in input \
                          (parameter) positions"
                             .to_owned(),
                     ),
-                    note: None,
-                    provenance: None,
-                });
+                    None,
+                ));
             }
             _ => {}
         }
@@ -283,36 +279,32 @@ impl VarianceContext<'_> {
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         if in_output && !in_input {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "TypeVar `{tv_name}` in protocol `{}` is only used in \
                      output positions and should be covariant",
                     self.cls.name
                 ),
-                span: self.cls.def_span,
-                path: self.path.to_owned(),
-                help: Some(format!("Declare `{tv_name}` with `covariant=True`")),
-                note: None,
-                provenance: None,
-            });
+                self.cls.def_span,
+                self.path,
+                Some(format!("Declare `{tv_name}` with `covariant=True`")),
+                None,
+            ));
         }
         if in_input && !in_output {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "TypeVar `{tv_name}` in protocol `{}` is only used in \
                      input positions and should be contravariant",
                     self.cls.name
                 ),
-                span: self.cls.def_span,
-                path: self.path.to_owned(),
-                help: Some(format!("Declare `{tv_name}` with `contravariant=True`")),
-                note: None,
-                provenance: None,
-            });
+                self.cls.def_span,
+                self.path,
+                Some(format!("Declare `{tv_name}` with `contravariant=True`")),
+                None,
+            ));
         }
         // All methods are exempt (e.g. only __init__): TypeVar is effectively covariant.
         if !in_input && !in_output {
@@ -321,20 +313,18 @@ impl VarianceContext<'_> {
                 .iter()
                 .any(|m| !EXEMPT_METHODS.contains(&m.name.as_str()));
             if !has_non_exempt && !self.methods.is_empty() {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "TypeVar `{tv_name}` in protocol `{}` is only used in \
                          output positions and should be covariant",
                         self.cls.name
                     ),
-                    span: self.cls.def_span,
-                    path: self.path.to_owned(),
-                    help: Some(format!("Declare `{tv_name}` with `covariant=True`")),
-                    note: None,
-                    provenance: None,
-                });
+                    self.cls.def_span,
+                    self.path,
+                    Some(format!("Declare `{tv_name}` with `covariant=True`")),
+                    None,
+                ));
             }
         }
     }

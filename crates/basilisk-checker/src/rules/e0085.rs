@@ -13,14 +13,14 @@
 //! Array[Height, Width](Height(1))              # E: expected 2 arguments, got 1
 //! ```
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use basilisk_resolver::{ResolvedModule, Span};
 use ruff_python_ast::{Expr, Stmt};
 use ruff_text_size::Ranged as _;
 
 use super::Rule;
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 const CODE: ErrorCode = ErrorCode {
@@ -34,12 +34,7 @@ pub(crate) struct TypeVarTupleArgCountMismatch;
 impl Rule for TypeVarTupleArgCountMismatch {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         // Collect TypeVarTuple names.
-        let tvt_names: HashSet<&str> = module
-            .typevar_calls
-            .iter()
-            .filter(|tv| tv.is_typevartuple)
-            .map(|tv| tv.name.as_str())
-            .collect();
+        let tvt_names = super::shared::typevar_tuple_names(&module.typevar_calls);
 
         if tvt_names.is_empty() {
             return;
@@ -88,8 +83,7 @@ impl Rule for TypeVarTupleArgCountMismatch {
         }
 
         // Re-parse to walk the AST for call expressions.
-        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
-        else {
+        let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
 
@@ -241,28 +235,26 @@ fn check_expr_for_tvt_call(
     // flag it.
     if call_arg_count < type_arg_count && call_arg_count > 0 {
         let range = call.range();
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "TypeVarTuple argument count mismatch: `{class_name}` specialized with \
                  {type_arg_count} type arguments, but constructor received {call_arg_count}"
             ),
-            span: Span {
+            Span {
                 start: range.start().to_u32(),
                 end: range.end().to_u32(),
             },
-            path: path.to_owned(),
-            help: Some(format!(
+            path,
+            Some(format!(
                 "Provide {type_arg_count} arguments matching the type specialization"
             )),
-            note: Some(
+            Some(
                 "When a class uses `TypeVarTuple`, the constructor arguments must match \
                  the number of type arguments in the specialization"
                     .to_owned(),
             ),
-            provenance: None,
-        });
+        ));
     }
 }
 

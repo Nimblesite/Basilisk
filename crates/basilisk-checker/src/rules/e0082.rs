@@ -22,7 +22,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::rules::shared::infer_expr_literal_type;
 use crate::span_util::slice_span;
 
@@ -67,7 +67,7 @@ impl Rule for TypeVarTupleCallableMismatch {
             .collect();
 
         // Class names for constructor detection.
-        let class_names: Vec<&str> = module.classes.iter().map(|c| c.name.as_str()).collect();
+        let class_names: Vec<&str> = basilisk_resolver::collect_names(&module.classes);
 
         // Step 3: Walk module-level statements for calls.
         for stmt in &parsed.ast.body {
@@ -201,28 +201,26 @@ fn check_stmt_for_tvt_mismatch(
                 end: range.end().to_u32(),
             };
             let _ = &tvt_name;
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Tuple element at index {idx} has type `{actual}` but \
                      `{callable_param_name}` expects `{expected}` (inferred via \
                      `TypeVarTuple`)"
                 ),
                 span,
-                path: path.to_owned(),
-                help: Some(format!(
+                path,
+                Some(format!(
                     "The `{tuple_param_name}` argument must match the parameter \
                      types of the function passed as `{callable_param_name}`"
                 )),
-                note: Some(
+                Some(
                     "When `Callable[[*Ts], R]` and `tuple[*Ts]` share the same \
                      `TypeVarTuple`, the tuple elements must match the callable's \
                      parameter types in order"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
             return; // One diagnostic per call is enough.
         }
     }
@@ -314,12 +312,7 @@ fn extract_tvt_from_tuple(ann: &str) -> Option<String> {
 
 /// Check if a string is a valid Python identifier.
 fn is_identifier(text: &str) -> bool {
-    !text.is_empty()
-        && text.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-        && text
-            .chars()
-            .next()
-            .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+    basilisk_resolver::is_simple_ascii_python_identifier(text)
 }
 
 /// Check basic type compatibility.

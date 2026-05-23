@@ -23,7 +23,7 @@ use basilisk_resolver::{
     AttributeInfo, ClassInfo, FunctionInfo, NamedTupleDefInfo, ResolvedModule, RhsKind, Span,
 };
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -96,20 +96,18 @@ fn check_plain_function_calls(module: &ResolvedModule, diagnostics: &mut Vec<Dia
         if !has_matching_overload && funcs.len() > 1 {
             let func_name = &call.callee;
             let missing = min_required_args - provided_count;
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Call to `{func_name}` is missing {missing} required argument{} \
                      (no overload matches — expected at least {min_required_args}, got {provided_count})",
                     if missing == 1 { "" } else { "s" },
                 ),
-                span: call.span,
-                path: module.path.clone(),
-                help: None,
-                note: None,
-            provenance: None,
-            });
+                call.span,
+                &module.path,
+                None,
+                None,
+            ));
         } else if !has_matching_overload {
             // Single function case (no overloads)
             let Some(func) = funcs.first() else {
@@ -123,20 +121,18 @@ fn check_plain_function_calls(module: &ResolvedModule, diagnostics: &mut Vec<Dia
             if provided_count < required_count {
                 let missing = required_count - provided_count;
                 let func_name = &func.name;
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Call to `{func_name}` is missing {missing} required argument{} \
                          (expected {required_count}, got {provided_count})",
                         if missing == 1 { "" } else { "s" },
                     ),
-                    span: call.span,
-                    path: module.path.clone(),
-                    help: None,
-                    note: None,
-                    provenance: None,
-                });
+                    call.span,
+                    &module.path,
+                    None,
+                    None,
+                ));
             }
         }
     }
@@ -288,22 +284,20 @@ fn check_dataclass_arg_types(
             continue;
         };
         if is_clearly_incompatible(arg_type, ann_text) {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Argument {} to `{}()` has type `{arg_type}` but field `{}` expects `{}`",
                     idx + 1,
                     class_info.name,
                     field.name,
                     ann_text.trim(),
                 ),
-                span: *arg_span,
-                path: path.to_owned(),
-                help: None,
-                note: None,
-                provenance: None,
-            });
+                *arg_span,
+                path,
+                None,
+                None,
+            ));
         }
     }
 }
@@ -315,11 +309,7 @@ fn check_dataclass_arg_types(
 /// passes arguments through (uses `*args, **kwargs`).
 fn check_constructor_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
     // Build a map of class names for quick lookup.
-    let class_map: HashMap<&str, &ClassInfo> = module
-        .classes
-        .iter()
-        .map(|c| (c.name.as_str(), c))
-        .collect();
+    let class_map = super::shared::class_name_map(&module.classes);
 
     // Build a map of (class_name, method_name) → FunctionInfo for methods.
     let mut method_map: HashMap<(&str, &str), Vec<&FunctionInfo>> = HashMap::new();
@@ -375,20 +365,18 @@ fn check_constructor_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagno
                 let missing = required_count - provided_count;
                 let class_name = &class_info.name;
                 let method_name = &constructor.name;
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Call to `{class_name}()` is missing {missing} required argument{} \
                          for `{method_name}` (expected {required_count}, got {provided_count})",
                         if missing == 1 { "" } else { "s" },
                     ),
-                    span: call.span,
-                    path: module.path.clone(),
-                    help: None,
-                    note: None,
-                    provenance: None,
-                });
+                    call.span,
+                    &module.path,
+                    None,
+                    None,
+                ));
             }
         } else if class_info.is_dataclass {
             check_dataclass_no_explicit_constructor(
@@ -424,23 +412,21 @@ fn check_dataclass_no_explicit_constructor(
     if class_info.is_dataclass_init_false {
         // init=False with no custom __init__: object.__init__ accepts 0 args.
         if provided_count > 0 {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Cannot pass arguments to `{}()`: `@dataclass(init=False)` is set \
                      with no explicit `__init__` method defined",
                     class_info.name
                 ),
-                span: call.span,
-                path: path.to_owned(),
-                help: Some(
+                call.span,
+                path,
+                Some(
                     "Define an explicit `__init__` method or remove the `init=False` flag"
                         .to_owned(),
                 ),
-                note: None,
-                provenance: None,
-            });
+                None,
+            ));
         }
         return;
     }
@@ -450,21 +436,19 @@ fn check_dataclass_no_explicit_constructor(
 
     if provided_count < required_count {
         let missing = required_count - provided_count;
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "Call to `{}()` is missing {missing} required field argument{} \
                  (expected at least {required_count}, got {provided_count})",
                 class_info.name,
                 if missing == 1 { "" } else { "s" },
             ),
-            span: call.span,
-            path: path.to_owned(),
-            help: None,
-            note: None,
-            provenance: None,
-        });
+            call.span,
+            path,
+            None,
+            None,
+        ));
     }
 
     // Also check argument types for literal arguments.
@@ -539,38 +523,34 @@ fn check_namedtuple_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagnos
 
         if total_provided < required_fields {
             let missing = required_fields - total_provided;
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Call to `{}()` is missing {missing} required argument{} \
                      (expected at least {required_fields}, got {positional_count})",
                     nt.lhs_name,
                     if missing == 1 { "" } else { "s" },
                 ),
-                span: call.span,
-                path: module.path.clone(),
-                help: None,
-                note: None,
-                provenance: None,
-            });
+                call.span,
+                &module.path,
+                None,
+                None,
+            ));
         } else if positional_count > total_fields {
             let extra = positional_count - total_fields;
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Call to `{}()` has {extra} too many positional argument{} \
                      (expected at most {total_fields}, got {positional_count})",
                     nt.lhs_name,
                     if extra == 1 { "" } else { "s" },
                 ),
-                span: call.span,
-                path: module.path.clone(),
-                help: None,
-                note: None,
-                provenance: None,
-            });
+                call.span,
+                &module.path,
+                None,
+                None,
+            ));
         }
     }
 }

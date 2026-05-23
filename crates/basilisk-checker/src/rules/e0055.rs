@@ -24,7 +24,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -34,24 +34,22 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 fn make_diag(msg: &str, span: basilisk_resolver::Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: msg.to_owned(),
+    error_diagnostic_owned(
+        CODE.clone(),
+        msg.to_owned(),
         span,
-        path: path.to_owned(),
-        help: Some(
+        path,
+        Some(
             "TypeVar variance flags are mutually exclusive: use at most one of \
              covariant/contravariant/infer_variance, and not both constraints and bound"
                 .to_owned(),
         ),
-        note: Some(
+        Some(
             "PEP 484: TypeVar cannot be both covariant and contravariant; \
              PEP 695: infer_variance is incompatible with explicit variance flags"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }
 
 /// Emits BSK-E0055 for invalid `TypeVar` / `TypeVarTuple` / `ParamSpec` keyword combinations.

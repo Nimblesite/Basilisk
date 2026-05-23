@@ -248,11 +248,7 @@ pub(super) fn parse_dataclass_transform_decorator(expr: &Expr) -> (bool, bool, b
         }
         return (false, false, false, Vec::new());
     };
-    let is_dc = match call.func.as_ref() {
-        Expr::Name(n) => n.id.as_str() == "dataclass_transform",
-        Expr::Attribute(a) => a.attr.as_str() == "dataclass_transform",
-        _ => false,
-    };
+    let is_dc = super::walks::is_name_or_attr_named(call.func.as_ref(), "dataclass_transform");
     if !is_dc {
         return (false, false, false, Vec::new());
     }
@@ -509,10 +505,7 @@ pub(super) fn extract_base_subscripts(class: &StmtClassDef) -> Vec<BaseSubscript
             base_name,
             type_arg_names,
             type_args,
-            span: Span {
-                start: sub.range().start().to_u32(),
-                end: sub.range().end().to_u32(),
-            },
+            span: Span::from(sub.range()),
         });
     }
     entries

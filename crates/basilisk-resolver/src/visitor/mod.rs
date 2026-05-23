@@ -24,6 +24,7 @@ mod typeddict;
 mod typeddict_ext;
 mod typevar;
 mod unhashable;
+pub(crate) mod walks;
 mod yield_exprs;
 
 use basilisk_parser::ParsedModule;

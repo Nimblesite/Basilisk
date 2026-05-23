@@ -389,10 +389,7 @@ pub(super) fn build_type_alias_info(name: String, rhs: &Expr, stmt: &Stmt) -> Ty
     let mut rhs_string_refs = Vec::new();
     collect_string_refs_from_expr(rhs, &mut rhs_string_refs);
 
-    let span = Span {
-        start: stmt.range().start().to_u32(),
-        end: stmt.range().end().to_u32(),
-    };
+    let span = Span::from(stmt.range());
 
     TypeAliasDefInfo {
         name,
