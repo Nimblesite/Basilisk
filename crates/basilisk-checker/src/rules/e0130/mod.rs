@@ -26,7 +26,7 @@ use std::collections::HashSet;
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 use crate::rules::shared::contains_typevar_reference;
@@ -217,9 +217,7 @@ impl Rule for TypeVarScopeViolation {
                                     ),
                                     span_for_line(&module.source, line_number),
                                     &module.path,
-                                    Some(
-                                        "Use a different TypeVar for the inner class".to_owned(),
-                                    ),
+                                    Some("Use a different TypeVar for the inner class".to_owned()),
                                     Some(
                                         "PEP 484: the scope of type variables of the \
                                          outer class doesn't cover the inner one"

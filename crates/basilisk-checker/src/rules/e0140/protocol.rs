@@ -2,7 +2,7 @@
 
 use basilisk_resolver::Span;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::callable::types_compat;
 use super::context::{FuncSig, ProtocolInfo};

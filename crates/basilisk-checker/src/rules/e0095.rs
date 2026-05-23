@@ -29,7 +29,7 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic};
+use crate::diagnostic::{error_diagnostic, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::shared::extract_callee_name;

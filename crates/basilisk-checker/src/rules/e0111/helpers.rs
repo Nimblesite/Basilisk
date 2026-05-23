@@ -9,7 +9,7 @@ use basilisk_resolver::Span;
 use crate::rules::shared::{infer_expr_literal_type, is_type_compatible};
 use crate::span_util::slice_span;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 /// Error code for BSK-E0111 diagnostics.
 pub(super) const CODE: ErrorCode = ErrorCode {

@@ -166,7 +166,9 @@ mod tests {
     #[test]
     fn not_installed_message() {
         let diag = check_single("requests", Some(UnresolvedReason::NotInstalled));
-        assert!(diag.message.contains("is not a dependency in pyproject.toml"));
+        assert!(diag
+            .message
+            .contains("is not a dependency in pyproject.toml"));
         assert!(diag
             .help
             .as_ref()
@@ -184,7 +186,10 @@ mod tests {
     fn needs_sync_message() {
         let diag = check_single("flask", Some(UnresolvedReason::NeedsSync));
         assert!(diag.message.contains("not synced"));
-        assert!(diag.help.as_ref().is_some_and(|h| h.contains("out of sync")));
+        assert!(diag
+            .help
+            .as_ref()
+            .is_some_and(|h| h.contains("out of sync")));
     }
 
     #[test]

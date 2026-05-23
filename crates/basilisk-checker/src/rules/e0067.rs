@@ -22,7 +22,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{ClassInfo, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::{guards::is_enum_class, Rule};

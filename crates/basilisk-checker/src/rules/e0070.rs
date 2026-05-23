@@ -310,9 +310,7 @@ fn make_assignment_diagnostic(
         ),
         span,
         path,
-        Some(
-            "Change the annotation to `Never` or `Any`, or change the assigned value".to_owned(),
-        ),
+        Some("Change the annotation to `Never` or `Any`, or change the assigned value".to_owned()),
         Some(
             "PEP 484: `Never` is a bottom type and cannot be assigned to other types \
              except in covariant contexts or when the target is `Any`"

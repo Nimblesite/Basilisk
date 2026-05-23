@@ -19,7 +19,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{ResolvedModule, TypeArg};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 

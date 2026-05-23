@@ -14,7 +14,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::rules::shared::split_top_level_commas;
 use crate::span_util::slice_span;
 
@@ -192,9 +192,7 @@ fn check_subscript_on_line(
 
                 diagnostics.push(error_diagnostic_owned(
                     CODE.clone(),
-                    format!(
-                        "Tuple index {idx} is out of range for `tuple` of length {tuple_len}"
-                    ),
+                    format!("Tuple index {idx} is out of range for `tuple` of length {tuple_len}"),
                     basilisk_resolver::Span {
                         start: span_start,
                         end: span_end,

@@ -17,7 +17,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -41,9 +41,7 @@ impl Rule for MultipleUnboundedTupleTypes {
                     "Only one `*tuple[T, ...]` or `*Ts` component is allowed per tuple type"
                         .to_owned(),
                 ),
-                Some(
-                    "PEP 646: a tuple type may contain at most one unbounded unpack".to_owned(),
-                ),
+                Some("PEP 646: a tuple type may contain at most one unbounded unpack".to_owned()),
             ));
         }
     }

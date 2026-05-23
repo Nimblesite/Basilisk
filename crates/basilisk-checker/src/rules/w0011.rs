@@ -13,7 +13,7 @@
 
 use basilisk_resolver::{ImportResolution, PackageDepKind, ResolvedModule};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, warning_diagnostic_owned};
+use crate::diagnostic::{warning_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 

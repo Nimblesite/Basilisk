@@ -11,7 +11,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, info_diagnostic_owned};
+use crate::diagnostic::{info_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -54,9 +54,7 @@ impl UnusedDependency {
             span,
             path,
             Some(format!("Remove it: `uv remove {package_name}`")),
-            Some(
-                "Unused dependencies increase install size and lock file complexity".to_owned(),
-            ),
+            Some("Unused dependencies increase install size and lock file complexity".to_owned()),
         )
     }
 }

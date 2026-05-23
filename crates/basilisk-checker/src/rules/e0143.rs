@@ -32,7 +32,7 @@ use ruff_text_size::Ranged;
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -479,8 +479,6 @@ fn out_of_bounds_diag(
         Some(format!(
             "Valid indices for `{obj_name}` are -{field_count}..{max_idx} (inclusive)"
         )),
-        Some(
-            "NamedTuple is a subtype of tuple; index access obeys the same bounds".to_owned(),
-        ),
+        Some("NamedTuple is a subtype of tuple; index access obeys the same bounds".to_owned()),
     )
 }

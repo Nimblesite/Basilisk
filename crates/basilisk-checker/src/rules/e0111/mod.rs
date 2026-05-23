@@ -22,7 +22,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
 use crate::rules::shared::{infer_expr_literal_type, is_type_compatible};
 
 use super::Rule;
@@ -104,8 +104,7 @@ fn check_class_scoped_typevars_in_self(
             continue;
         }
 
-        let class_param_names: Vec<&str> =
-            basilisk_resolver::collect_names(&class.generic_params);
+        let class_param_names: Vec<&str> = basilisk_resolver::collect_names(&class.generic_params);
 
         let Some(init_funcs) = method_map.get(&(class.name.as_str(), "__init__")) else {
             continue;
@@ -198,7 +197,6 @@ struct Ctx<'a> {
     method_map: &'a HashMap<(&'a str, &'a str), Vec<&'a basilisk_resolver::FunctionInfo>>,
     typevar_names: &'a [&'a str],
 }
-
 
 /// Check a single call expression for constructor call errors.
 fn check_constructor_call(
@@ -702,9 +700,7 @@ fn check_dataclass_unknown_kwargs(
         if !known_fields.contains(arg_name.as_str()) {
             diagnostics.push(error_diagnostic_owned(
                 CODE.clone(),
-                format!(
-                    "Unknown field `{arg_name}` in constructor of dataclass `{class_name}`"
-                ),
+                format!("Unknown field `{arg_name}` in constructor of dataclass `{class_name}`"),
                 crate::span_util::text_range_to_span(kw.range()),
                 path,
                 Some(format!(

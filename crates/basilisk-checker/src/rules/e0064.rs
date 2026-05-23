@@ -24,7 +24,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{NamedTupleDefInfo, ResolvedModule, RhsKind, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic};
+use crate::diagnostic::{error_diagnostic, Diagnostic, ErrorCode};
 
 use super::Rule;
 

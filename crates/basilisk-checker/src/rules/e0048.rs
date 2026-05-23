@@ -24,7 +24,7 @@
 
 use basilisk_resolver::{ImportKind, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic, error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::rules::shared::split_top_level_commas;
 use crate::span_util::slice_span;
 
@@ -664,9 +664,7 @@ fn check_single_annotation(
                 if all_simple && args.len() > 1 {
                     diagnostics.push(error_diagnostic_owned(
                         CODE.clone(),
-                        format!(
-                            "Invalid type argument for `ParamSpec` parameter in `{base}`"
-                        ),
+                        format!("Invalid type argument for `ParamSpec` parameter in `{base}`"),
                         ann_span,
                         path,
                         Some(

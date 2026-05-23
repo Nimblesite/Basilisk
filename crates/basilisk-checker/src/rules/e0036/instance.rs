@@ -7,7 +7,7 @@
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
 
 use super::helpers::{is_ident_char, make_diagnostic, span_text, CODE};
 
@@ -175,9 +175,7 @@ pub(super) fn check_instance_classvar_assignments(
                 ),
                 assignment.target_span,
                 path,
-                Some(
-                    "Assign to the class directly instead: `ClassName.attr = value`".to_owned(),
-                ),
+                Some("Assign to the class directly instead: `ClassName.attr = value`".to_owned()),
                 Some(
                     "PEP 526: ClassVar attributes can only be assigned on the class itself, \
                      not through instances"

@@ -38,7 +38,7 @@ mod violations;
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -212,10 +212,7 @@ fn check_type_alias_misuse(module: &ResolvedModule, diagnostics: &mut Vec<Diagno
                     if alias_names.contains(arg_trimmed) {
                         diagnostics.push(error_diagnostic_owned(
                             CODE.clone(),
-                            format!(
-                                "Cannot use type alias `{arg_trimmed}` in `{}`",
-                                call.callee
-                            ),
+                            format!("Cannot use type alias `{arg_trimmed}` in `{}`", call.callee),
                             *arg_span,
                             path,
                             Some(format!(
@@ -573,9 +570,7 @@ fn check_alias_attribute_access(
                 if !attr.is_empty() {
                     diagnostics.push(error_diagnostic_owned(
                         CODE.clone(),
-                        format!(
-                            "Cannot access attribute `{attr}` on type alias `{alias_name}`"
-                        ),
+                        format!("Cannot access attribute `{attr}` on type alias `{alias_name}`"),
                         helpers::span_for_line(source, line_number),
                         path,
                         Some(

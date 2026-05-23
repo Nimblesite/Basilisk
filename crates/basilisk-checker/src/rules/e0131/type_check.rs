@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{FunctionInfo, Span};
 
-use crate::diagnostic::{Diagnostic, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
 use crate::rules::shared::{is_type_compatible, split_top_level_commas};
 
 use super::annotation::{parse_generator_annotation, GeneratorAnnotation};

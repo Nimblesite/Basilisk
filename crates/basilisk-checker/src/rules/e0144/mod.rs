@@ -26,7 +26,7 @@ use ruff_text_size::Ranged as _;
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
 
 use super::Rule;
 
@@ -82,7 +82,6 @@ impl Rule for TypeCallConstructorViolation {
         }
     }
 }
-
 
 // ---------------------------------------------------------------------------
 // Function-level checking

@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::rules::shared::{
     is_numeric_subtype, parse_subscript_annotation, split_top_level_commas,
 };
@@ -240,9 +240,7 @@ fn emit_violations(ctx: &ViolationCtx<'_>, diagnostics: &mut Vec<Diagnostic>) {
                     Variance::Invariant => "exact type match",
                 }
             )),
-            Some(
-                "PEP 695: variance is inferred from type parameter usage positions".to_owned(),
-            ),
+            Some("PEP 695: variance is inferred from type parameter usage positions".to_owned()),
         ));
     }
 }

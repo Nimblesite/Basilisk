@@ -22,7 +22,7 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -168,9 +168,7 @@ fn check_frozen_instance_assigns(module: &ResolvedModule, diagnostics: &mut Vec<
             assign.target_span,
             path,
             Some("Frozen dataclass instances are immutable after construction".to_owned()),
-            Some(
-                "PEP 557: `@dataclass(frozen=True)` prohibits attribute assignment".to_owned(),
-            ),
+            Some("PEP 557: `@dataclass(frozen=True)` prohibits attribute assignment".to_owned()),
         ));
     }
 }

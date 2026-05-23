@@ -26,7 +26,7 @@ use ruff_text_size::Ranged;
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diag_help_note};
+use crate::diagnostic::{error_diag_help_note, Diagnostic, ErrorCode};
 
 use super::Rule;
 

@@ -15,7 +15,7 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diag_help_note, error_diagnostic_owned};
+use crate::diagnostic::{error_diag_help_note, error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 

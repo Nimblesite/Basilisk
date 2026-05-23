@@ -30,7 +30,7 @@ use super::e0120_helpers::{
     infer_yield_type, ASYNC_GENERATOR_TYPES, CODE, SYNC_GENERATOR_TYPES,
 };
 use super::Rule;
-use crate::diagnostic::{Diagnostic, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
 use crate::inference::infer_rhs;
 use crate::span_util::slice_span;
 use crate::types::InferredType;

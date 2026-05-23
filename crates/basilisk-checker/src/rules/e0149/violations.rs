@@ -1,6 +1,6 @@
 //! The three PEP 695 scoping violation checks for BSK-E0149.
 
-use crate::diagnostic::{Diagnostic, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
 
 use super::{
     helpers::{
@@ -468,8 +468,7 @@ pub(super) fn check_type_stmt_in_function(
             if scan_trimmed.starts_with("def ") || scan_trimmed.starts_with("async def ") {
                 diagnostics.push(error_diagnostic_owned(
                     CODE.clone(),
-                    "PEP 695 `type` statement is not allowed inside a function body"
-                        .to_owned(),
+                    "PEP 695 `type` statement is not allowed inside a function body".to_owned(),
                     span_for_line(source, line_number),
                     path,
                     Some("Move the type alias to module or class scope".to_owned()),

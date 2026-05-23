@@ -22,7 +22,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::rules::shared::{extract_literal_inner, split_top_level_commas};
 use crate::span_util::slice_span;
 
@@ -208,9 +208,7 @@ fn check_annotated_assignment(
             },
             path,
             Some("`Literal[0]` and `Literal[False]` are not equivalent (PEP 586)".to_owned()),
-            Some(
-                "int and bool Literal values are distinct even when numerically equal".to_owned(),
-            ),
+            Some("int and bool Literal values are distinct even when numerically equal".to_owned()),
         ));
     }
 }

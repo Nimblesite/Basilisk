@@ -26,7 +26,7 @@ use basilisk_resolver::scope::ProtocolRtcViolationKind;
 use basilisk_resolver::ResolvedModule;
 
 use super::Rule;
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0114",

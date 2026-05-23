@@ -44,12 +44,8 @@ fn make_diag(msg: String, span: basilisk_resolver::Span, path: &str) -> Diagnost
         msg,
         span,
         path,
-        Some(
-            "Unpack the `TypeVarTuple` with `*`, e.g. `Generic[*Ts]` or `*args: *Ts`".to_owned(),
-        ),
-        Some(
-            "PEP 646: TypeVarTuple must always be used with the `*` unpack operator".to_owned(),
-        ),
+        Some("Unpack the `TypeVarTuple` with `*`, e.g. `Generic[*Ts]` or `*args: *Ts`".to_owned()),
+        Some("PEP 646: TypeVarTuple must always be used with the `*` unpack operator".to_owned()),
     )
 }
 

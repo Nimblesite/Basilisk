@@ -33,7 +33,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diag_help_note};
+use crate::diagnostic::{error_diag_help_note, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;

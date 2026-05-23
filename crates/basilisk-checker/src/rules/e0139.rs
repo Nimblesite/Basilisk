@@ -34,7 +34,7 @@ use basilisk_resolver::{ResolvedModule, Span};
 use ruff_python_ast::{Expr, Stmt};
 use ruff_text_size::Ranged;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diag_help_note, error_diagnostic_owned};
+use crate::diagnostic::{error_diag_help_note, error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::rules::shared::split_top_level_commas;
 
 use super::Rule;

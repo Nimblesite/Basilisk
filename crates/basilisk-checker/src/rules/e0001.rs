@@ -2,7 +2,7 @@
 
 use basilisk_resolver::{FunctionInfo, ParameterInfo, ResolvedModule};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::{guards::is_stub_context, Rule};
 

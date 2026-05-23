@@ -14,7 +14,7 @@ use crate::inference::infer_rhs;
 use crate::types::InferredType;
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, warning_diagnostic_owned};
+use crate::diagnostic::{warning_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 

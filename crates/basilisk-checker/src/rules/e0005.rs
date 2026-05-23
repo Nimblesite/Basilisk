@@ -10,7 +10,7 @@
 
 use basilisk_resolver::{AttributeInfo, ClassInfo, ResolvedModule, RhsKind};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::{
     guards::{is_enum_class, is_namedtuple_class, is_protocol_class},

@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{ResolvedModule, RhsKind, Span};
 
-use crate::diagnostic::{Diagnostic, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
 use crate::span_util::slice_span;
 
 use super::CODE;

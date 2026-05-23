@@ -21,7 +21,7 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::{ClassInfo, ResolvedModule};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 

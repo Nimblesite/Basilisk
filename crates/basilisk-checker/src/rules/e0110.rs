@@ -16,7 +16,7 @@ use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule};
 
 use super::guards::is_protocol_class;
 use super::Rule;
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 const CODE: ErrorCode = ErrorCode {

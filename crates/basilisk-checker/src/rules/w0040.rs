@@ -14,7 +14,7 @@
 
 use basilisk_resolver::{ResolvedModule, RhsKind};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, warning_diagnostic_owned};
+use crate::diagnostic::{warning_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 

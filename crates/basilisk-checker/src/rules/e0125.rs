@@ -24,7 +24,7 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -369,9 +369,7 @@ fn is_assignment_target(trimmed: &str, dot_prefix: &str, attr_name: &str) -> boo
 fn make_diagnostic(object_name: &str, attr_name: &str, span: Span, path: &str) -> Diagnostic {
     error_diagnostic_owned(
         CODE.clone(),
-        format!(
-            "Cannot access instance attribute `{attr_name}` on class object `{object_name}`"
-        ),
+        format!("Cannot access instance attribute `{attr_name}` on class object `{object_name}`"),
         span,
         path,
         Some(format!(

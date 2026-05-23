@@ -20,7 +20,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -276,9 +276,7 @@ fn check_expr_for_overload_call(
                 let span = Span::from(call.range());
                 diagnostics.push(error_diagnostic_owned(
                     CODE.clone(),
-                    format!(
-                        "No overload of `{callee_name}` matches when argument is `{member}`"
-                    ),
+                    format!("No overload of `{callee_name}` matches when argument is `{member}`"),
                     span,
                     path,
                     Some(format!(

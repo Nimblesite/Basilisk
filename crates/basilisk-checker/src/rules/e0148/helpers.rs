@@ -7,7 +7,7 @@ use ruff_text_size::Ranged;
 
 use basilisk_resolver::Span;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 // Re-export shared helpers so sibling modules can use `helpers::ann_str` etc.
 pub(super) use crate::rules::shared::{ann_str, expr_name};
 use crate::rules::shared::{infer_expr_literal_type, is_type_compatible, split_top_level_commas};
@@ -463,9 +463,7 @@ pub(super) fn check_class_def(cls: &ast::StmtClassDef, path: &str, diag: &mut Ve
                 ),
                 span,
                 path,
-                Some(
-                    "Generic metaclasses are not supported by the Python type system".to_owned(),
-                ),
+                Some("Generic metaclasses are not supported by the Python type system".to_owned()),
                 Some("PEP 484: generic metaclass instances are not supported".to_owned()),
             ));
         }

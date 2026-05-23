@@ -7,7 +7,7 @@
 //!
 //! Reference: <https://typing.readthedocs.io/en/latest/spec/type-forms.html>
 
-use crate::diagnostic::{Diagnostic, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
 use crate::span_util::slice_span;
 use crate::types::InferredType;
 

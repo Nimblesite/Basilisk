@@ -6,7 +6,7 @@
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule, RhsKind, YieldExprInfo};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::inference::infer_rhs;
 use crate::rules::shared::split_top_level_commas;
 use crate::span_util::slice_span;

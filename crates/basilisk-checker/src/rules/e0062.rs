@@ -103,9 +103,7 @@ fn make_diagnostic(func: &FunctionInfo, path: &str) -> Diagnostic {
         ),
         func.name_span,
         path,
-        Some(
-            "Ensure all code paths raise an exception or call a NoReturn function".to_owned(),
-        ),
+        Some("Ensure all code paths raise an exception or call a NoReturn function".to_owned()),
         Some(
             "A `NoReturn`/`Never` function must never return normally — add a `raise` \
              or unconditional call to a NoReturn function on every exit path"

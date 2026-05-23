@@ -5,7 +5,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -44,9 +44,7 @@ impl Rule for TypedDictMethodNotAllowed {
                             "TypedDict classes may only declare typed fields, not methods"
                                 .to_owned(),
                         ),
-                        Some(
-                            "PEP 589: TypedDict does not support method definitions".to_owned(),
-                        ),
+                        Some("PEP 589: TypedDict does not support method definitions".to_owned()),
                     ));
                 }
             }

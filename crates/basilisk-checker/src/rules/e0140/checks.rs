@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::Span;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use crate::rules::shared::infer_expr_literal_type;
 
@@ -272,9 +272,7 @@ fn check_attr_access_in_expr(
                         if !proto.attrs.iter().any(|a| a.name == attr_name) {
                             diag.push(error_diagnostic_owned(
                                 code.clone(),
-                                format!(
-                                    "Protocol `{proto_name}` has no attribute `{attr_name}`"
-                                ),
+                                format!("Protocol `{proto_name}` has no attribute `{attr_name}`"),
                                 mk_span(attr.range()),
                                 path,
                                 None,
@@ -330,9 +328,7 @@ fn check_assignment(
             if ctx.find_func(fname).is_some() {
                 diag.push(error_diagnostic_owned(
                     code.clone(),
-                    format!(
-                        "Cannot assign function `{fname}` to non-protocol type `{base}`"
-                    ),
+                    format!("Cannot assign function `{fname}` to non-protocol type `{base}`"),
                     span,
                     path,
                     None,

@@ -10,7 +10,7 @@ use ruff_text_size::Ranged as _;
 
 use basilisk_resolver::Span;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 pub(super) const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0138",
@@ -98,8 +98,7 @@ pub(super) fn parse_dataclass_transform_expr(expr: &Expr) -> (bool, bool, bool) 
         return (false, false, false);
     };
 
-    let is_dt =
-        basilisk_resolver::is_name_or_attr_named(call.func.as_ref(), "dataclass_transform");
+    let is_dt = basilisk_resolver::is_name_or_attr_named(call.func.as_ref(), "dataclass_transform");
     if !is_dt {
         return (false, false, false);
     }

@@ -18,7 +18,7 @@ use std::collections::HashSet;
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic_owned};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -63,9 +63,7 @@ impl Rule for MatchArgsFalseAccess {
                     ),
                     access.span,
                     &module.path,
-                    Some(
-                        "Remove `match_args=False` or do not access `__match_args__`".to_owned(),
-                    ),
+                    Some("Remove `match_args=False` or do not access `__match_args__`".to_owned()),
                     Some(
                         "PEP 634: `__match_args__` is only generated when `match_args=True` \
                          (the default)"

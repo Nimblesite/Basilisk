@@ -230,9 +230,7 @@ pub(super) fn make_diag(
         format!("Tuple type compatibility violation: {message}"),
         span,
         path,
-        Some(
-            "Ensure the assigned tuple matches the declared starred-unpack annotation".to_owned(),
-        ),
+        Some("Ensure the assigned tuple matches the declared starred-unpack annotation".to_owned()),
         Some(
             "See https://typing.readthedocs.io/en/latest/spec/tuples.html#type-compatibility-rules"
                 .to_owned(),

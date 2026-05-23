@@ -11,7 +11,7 @@
 
 use basilisk_resolver::{ResolvedModule, Span, TypedDictSecondArgKind};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, error_diagnostic};
+use crate::diagnostic::{error_diagnostic, Diagnostic, ErrorCode};
 
 use super::Rule;
 
