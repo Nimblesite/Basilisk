@@ -569,35 +569,13 @@ fn process_file(
     let source = parsed.source.clone();
     let mut resolved = basilisk_resolver::resolve(&parsed).map_err(|e| e.to_string())?;
 
-    // Resolve imports against venv/site-packages and uv registry.
-    resolve_file_imports(&mut resolved, search_paths);
+    // Resolve imports against venv/site-packages and uv registry using the same
+    // routine the LSP uses, so the CLI and editor agree on what resolves and on
+    // package-dependency metadata (W0011 transitive-import warnings, etc.).
+    basilisk_lsp::import_resolver::resolve_module_imports(&mut resolved, search_paths);
 
     let diags = basilisk_checker::check(&resolved);
     Ok((diags, source))
-}
-
-/// Resolve imports for a single file using the search paths.
-fn resolve_file_imports(
-    resolved: &mut basilisk_resolver::ResolvedModule,
-    search_paths: &basilisk_lsp::import_resolver::ImportSearchPaths,
-) {
-    let importing_file = std::path::Path::new(&resolved.path);
-    for import in &mut resolved.imports {
-        let result = basilisk_lsp::import_resolver::resolve_module_with_importer(
-            &import.module,
-            search_paths,
-            Some(importing_file),
-        );
-        if let Some(r) = result {
-            import.resolution = r.resolution;
-            import.resolved_path = Some(r.path);
-        } else if !basilisk_stubs::is_stdlib_module(&import.module) {
-            import.unresolved_reason = Some(basilisk_lsp::import_resolver::classify_unresolved(
-                &import.module,
-                search_paths,
-            ));
-        }
-    }
 }
 
 /// Walk up from `start` to find the project root (directory containing

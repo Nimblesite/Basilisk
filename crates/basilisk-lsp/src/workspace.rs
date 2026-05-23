@@ -69,6 +69,15 @@ pub struct WorkspaceIndex {
     /// Fallback checker configuration used when a file doesn't belong to any
     /// known root, or for single-root backwards compatibility.
     pub checker_config: BasiliskConfig,
+    /// Import search paths (venv site-packages, workspace members, stub paths,
+    /// uv registry) cached from the last full workspace scan.
+    ///
+    /// Reused by the incremental single-file analysis path (`didOpen` /
+    /// `didChange` / disk reload) so third-party import resolution matches the
+    /// full scan and the editor does not resurrect false `BSK-E0010`.
+    /// Implements [ANALYSIS-INCR-IMPORTS]. See
+    /// docs/specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-INCR-IMPORTS
+    pub search_paths: std::sync::RwLock<Option<Arc<crate::import_resolver::ImportSearchPaths>>>,
 }
 
 impl std::fmt::Debug for WorkspaceIndex {
@@ -113,7 +122,65 @@ impl WorkspaceIndex {
             registry: None,
             root_configs,
             checker_config,
+            search_paths: std::sync::RwLock::new(None),
         }
+    }
+
+    /// Cache the import search paths built during the workspace scan.
+    ///
+    /// Subsequent incremental analyses (`didOpen` / `didChange` / disk reload)
+    /// resolve imports against these so the editor's diagnostics match the
+    /// full-scan diagnostics. Implements [ANALYSIS-INCR-IMPORTS].
+    pub fn set_search_paths(&self, search_paths: crate::import_resolver::ImportSearchPaths) {
+        if let Ok(mut guard) = self.search_paths.write() {
+            *guard = Some(Arc::new(search_paths));
+        }
+    }
+
+    /// Snapshot the cached import search paths, if a scan has built them.
+    #[must_use]
+    fn search_paths_snapshot(&self) -> Option<Arc<crate::import_resolver::ImportSearchPaths>> {
+        self.search_paths
+            .read()
+            .ok()
+            .and_then(|guard| guard.clone())
+    }
+
+    /// Run the analysis pipeline for one file, then resolve its imports against
+    /// the cached search paths and re-check.
+    ///
+    /// When no search paths are cached yet (before the first scan completes),
+    /// this is identical to a plain parse → resolve → check. Once the scan has
+    /// populated the search paths, incremental edits resolve third-party and
+    /// workspace imports exactly like the full scan — without this, every
+    /// `didOpen` / `didChange` re-marks imports `Unresolved`, resurrecting
+    /// false `BSK-E0010` in the editor for packages the CLI resolves fine.
+    /// Implements [ANALYSIS-INCR-IMPORTS].
+    fn analyse_and_resolve(
+        &self,
+        text: &str,
+        path: &std::path::Path,
+    ) -> (FileEntry, Vec<tower_lsp::lsp_types::Diagnostic>) {
+        let config = self.config_for_file(path);
+        let (mut entry, lsp_diags) = analyse_with_config(text, path, config);
+
+        let Some(search_paths) = self.search_paths_snapshot() else {
+            return (entry, lsp_diags);
+        };
+        let Some(resolved_arc) = entry.resolved.as_mut() else {
+            return (entry, lsp_diags);
+        };
+
+        let resolved = Arc::make_mut(resolved_arc);
+        crate::import_resolver::resolve_module_imports(resolved, &search_paths);
+
+        let checker_diags = basilisk_checker::check_with_config(resolved, config);
+        let lsp_diags = checker_diags
+            .iter()
+            .map(|d| crate::workspace_analysis::bsk_to_lsp(d, text))
+            .collect();
+        entry.diagnostics = checker_diags;
+        (entry, lsp_diags)
     }
 
     /// Get the checker config for a file, looking up the owning root.
@@ -201,7 +268,7 @@ impl WorkspaceIndex {
             })
         });
 
-        let (entry, lsp_diags) = analyse_with_config(text, &path, self.config_for_file(&path));
+        let (entry, lsp_diags) = self.analyse_and_resolve(text, &path);
         let mut entry = entry;
         entry.is_open = true;
         entry.version = version;
@@ -258,7 +325,7 @@ impl WorkspaceIndex {
             return None;
         }
 
-        let (entry, lsp_diags) = analyse_with_config(&text, &path, self.config_for_file(&path));
+        let (entry, lsp_diags) = self.analyse_and_resolve(&text, &path);
         let _ = self.files.insert(path, entry);
         Some((uri.clone(), lsp_diags))
     }
@@ -281,7 +348,7 @@ impl WorkspaceIndex {
             let _ = self.files.remove(&path);
             return (uri.clone(), vec![]);
         };
-        let (entry, lsp_diags) = analyse_with_config(&text, &path, self.config_for_file(&path));
+        let (entry, lsp_diags) = self.analyse_and_resolve(&text, &path);
         let _ = self.files.insert(path, entry);
         (uri.clone(), lsp_diags)
     }
@@ -392,8 +459,7 @@ impl WorkspaceIndex {
                 entry.text.clone()
             };
 
-            let (new_entry, lsp_diags) =
-                analyse_with_config(&text, &importer_path, self.config_for_file(&importer_path));
+            let (new_entry, lsp_diags) = self.analyse_and_resolve(&text, &importer_path);
             let version = self.files.get(&importer_path).map_or(0, |e| e.version);
             let is_open = self.files.get(&importer_path).is_some_and(|e| e.is_open);
             let mut entry = new_entry;
@@ -1115,6 +1181,67 @@ mod tests {
             !has_diag(&test_diags, "BSK-E0010", "tests.helpers"),
             "BSK-E0010 false positive: `tests.helpers` import must resolve when the \
              workspace root is on the search path; got: {test_diags:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ── Editor edits must resolve third-party imports (no false BSK-E0010) ───
+    //
+    // Regression: the full workspace scan resolves `import requests` against the
+    // venv site-packages (no BSK-E0010), but opening/editing a file ran parse →
+    // syntactic-resolve → check WITHOUT the import search paths, so every
+    // third-party import was re-marked `Unresolved` and BSK-E0010 fired in the
+    // editor for packages the CLI resolves fine. The diagnostics that
+    // `set_open` *publishes* must already reflect import resolution.
+    // Implements [ANALYSIS-INCR-IMPORTS].
+    #[test]
+    fn test_set_open_resolves_site_package_imports_no_e0010() {
+        let root = unique_tmp("bsk_incr_imports_e0010");
+        // Fake site-packages with a typed `requests` package (py.typed marker).
+        let site_packages = root.join("site-packages");
+        let requests = site_packages.join("requests");
+        std::fs::create_dir_all(&requests).unwrap();
+        std::fs::write(requests.join("__init__.py"), "").unwrap();
+        std::fs::write(requests.join("py.typed"), "").unwrap();
+
+        let main_path = root.join("main.py");
+        std::fs::write(&main_path, "import requests\n").unwrap();
+
+        let roots = vec![root.clone()];
+        let idx = WorkspaceIndex::new(
+            roots.clone(),
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
+
+        // Mirror the LSP scan: cache the import search paths in the index.
+        // Built directly (not via `from_config`) so an ambient `VIRTUAL_ENV`
+        // in the test environment cannot redirect site-packages discovery.
+        idx.set_search_paths(crate::import_resolver::ImportSearchPaths {
+            roots: roots.clone(),
+            extra_paths: vec![],
+            stub_paths: vec![],
+            workspace_members: vec![],
+            site_packages: Some(site_packages.clone()),
+            registry: None,
+        });
+
+        // Simulate the editor opening the file. The diagnostics it PUBLISHES
+        // (the return value) must not contain BSK-E0010 for `requests`.
+        let uri = Url::from_file_path(&main_path).unwrap();
+        let published = idx.set_open(&uri, "import requests\n", 1);
+        assert!(
+            !lsp_codes(&published).iter().any(|c| c == "BSK-E0010"),
+            "editor-opened file must resolve `requests` via the cached search \
+             paths; got BSK-E0010 in published diagnostics: {published:?}"
+        );
+
+        // The cached checker diagnostics must agree (used by other features).
+        let stored = get_diagnostics(&idx, &uri);
+        assert!(
+            !has_diag(&stored, "BSK-E0010", "requests"),
+            "stored diagnostics must not carry BSK-E0010 for resolved `requests`: {stored:?}"
         );
 
         let _ = std::fs::remove_dir_all(&root);
