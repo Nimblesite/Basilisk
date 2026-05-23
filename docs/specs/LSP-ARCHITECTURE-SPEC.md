@@ -17,47 +17,36 @@ This is the **single source of truth** for all LSP features, DAP integration, cu
 
 ## System Architecture
 
-Three editor frontends share one Rust binary. The binary embeds the LSP server, the type-checking pipeline (parser → resolver → checker), and shells out to external tools (`ruff`, `debugpy`, `uv`) on demand.
+Three editor frontends share one binary. The binary embeds the LSP server and the type-checking pipeline (parser → resolver → checker), and shells out to external tools (`ruff`, `debugpy`, `uv`) on demand.
 
 ```mermaid
 flowchart TB
     subgraph Editors["Editor Frontends"]
         direction LR
-        VSC["VS Code<br/>vscode-extension/<br/>(TypeScript)"]
-        Zed["Zed<br/>basilisk-zed/<br/>(Rust → WASM)"]
-        Nvim["Neovim<br/>basilisk.nvim/<br/>(Lua)"]
+        VSC["VS Code"]
+        Zed["Zed"]
+        Nvim["Neovim"]
     end
 
-    subgraph Binary["basilisk binary (Rust)"]
+    subgraph Binary["basilisk binary"]
         direction TB
-        CLI["basilisk-cli<br/>(entry point)"]
-        LSP["basilisk-lsp<br/>(JSON-RPC server)"]
+        LSP["LSP server<br/>(JSON-RPC)"]
         subgraph Pipeline["Type-checking pipeline"]
             direction LR
-            Parser["basilisk-parser<br/>(ruff_python_parser)"]
-            Resolver["basilisk-resolver<br/>(symbol tables)"]
-            Checker["basilisk-checker<br/>(diagnostics)"]
+            Parser["Parser"]
+            Resolver["Resolver"]
+            Checker["Checker"]
             Parser --> Resolver --> Checker
         end
-        subgraph Support["Support crates"]
-            direction LR
-            Config["basilisk-config"]
-            Stubs["basilisk-stubs"]
-            Common["basilisk-common"]
-            UV["basilisk-uv"]
-        end
-        CLI --> LSP
         LSP --> Pipeline
-        LSP --> Support
-        Pipeline --> Support
     end
 
-    subgraph Subprocs["External subprocesses (spawned by LSP)"]
+    subgraph Subprocs["External subprocesses"]
         direction LR
-        Ruff["ruff<br/>(format, organize imports)"]
-        Debugpy["debugpy.adapter<br/>(DAP server)"]
-        UvBin["uv<br/>(sync, add, remove)"]
-        Py["python3<br/>(import resolution)"]
+        Ruff["ruff"]
+        Debugpy["debugpy"]
+        UvBin["uv"]
+        Py["python3"]
     end
 
     Helper["basilisk-profiler-helper<br/>(separate binary)"]
@@ -66,25 +55,24 @@ flowchart TB
     Zed <-->|"stdio JSON-RPC"| LSP
     Nvim <-->|"stdio JSON-RPC"| LSP
 
-    VSC <-->|"TCP DAP<br/>(via proxy)"| Debugpy
+    VSC <-->|"TCP DAP"| Debugpy
     Zed <-->|"TCP DAP"| Debugpy
-    Nvim <-->|"TCP DAP<br/>(nvim-dap)"| Debugpy
+    Nvim <-->|"TCP DAP"| Debugpy
 
-    LSP -.->|"spawn"| Ruff
-    LSP -.->|"spawn"| Debugpy
-    LSP -.->|"spawn"| UvBin
-    LSP -.->|"spawn"| Py
+    LSP -.->|spawn| Ruff
+    LSP -.->|spawn| Debugpy
+    LSP -.->|spawn| UvBin
+    LSP -.->|spawn| Py
 
-    VSC -.->|"bundles<br/>per-platform"| Binary
-    VSC -.->|"bundles<br/>per-platform"| Helper
+    VSC -.->|bundles per-platform| Binary
+    VSC -.->|bundles per-platform| Helper
 ```
 
 **Notes on this picture:**
 - Solid arrows are runtime data flow. Dotted arrows are process spawns or build-time bundling.
-- The VSIX ships `basilisk` and `basilisk-profiler-helper` for 5 platforms (darwin x64/arm64, linux x64/arm64, win32 x64). Zed and Neovim users install `basilisk` themselves.
-- `basilisk-zed` compiles to WASM and runs inside Zed; it acts purely as a launcher that spawns the native `basilisk` binary as the language server.
-- The Salsa-based incremental database (`basilisk-db`) is a Phase 2 placeholder and is **not** in the active pipeline today.
-- See [Three-Phase Pipeline](#three-phase-pipeline) below for the parser/resolver/checker internals.
+- The VSIX ships the `basilisk` binary and `basilisk-profiler-helper` for 5 platforms (darwin x64/arm64, linux x64/arm64, win32 x64). Zed and Neovim users install `basilisk` themselves.
+- The DAP connection from each editor goes directly to `debugpy` over TCP — `basilisk` only spawns `debugpy` and tells the editor which port to dial.
+- See [Three-Phase Pipeline](#three-phase-pipeline) below for what happens inside the pipeline.
 
 ---
 
