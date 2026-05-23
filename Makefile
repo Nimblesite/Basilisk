@@ -177,7 +177,7 @@ _clean_rust:
 
 _clean_vsix:
 	@echo -e '\033[1m\033[0;36m▶ Cleaning VSIX artifacts\033[0m' && \
-	$(RM) $(_EXTENSION_DIR)/out $(_EXTENSION_DIR)/*.vsix && \
+	$(RM) $(_EXTENSION_DIR)/out $(_EXTENSION_DIR)/*.vsix $(_EXTENSION_DIR)/bin && \
 	echo -e '\033[0;32m✓ VSIX clean complete\033[0m'
 
 _uninstall_binaries:
@@ -203,13 +203,29 @@ _build_vsix:
 	echo -e '\033[0;32m✓ VS Code extension compiled\033[0m'
 
 _package_vsix:
-	@echo -e '\033[1m\033[0;36m▶ Packaging VSIX\033[0m' && \
-	cd $(_EXTENSION_DIR) && npm ci && npm run compile && npm run package && \
+	@set -e; \
+	REPO_ROOT="$$(pwd)"; \
+	BASILISK_BIN="$$REPO_ROOT/target/release/basilisk"; \
+	if [ ! -x "$$BASILISK_BIN" ]; then \
+	    echo -e '\033[1m\033[0;36m▶ Building basilisk binary (release)\033[0m'; \
+	    cargo build --release; \
+	fi; \
+	[ -x "$$BASILISK_BIN" ] || { echo -e '\033[0;31m✗ basilisk release binary not found\033[0m'; exit 1; }; \
+	echo -e '\033[1m\033[0;36m▶ Packaging VSIX\033[0m'; \
+	cd $(_EXTENSION_DIR) && npm ci && npm run compile; \
+	echo -e '\033[1m\033[0;36m▶ Staging bundled binary into VSIX (VSIX-SPEC § Binary Distribution)\033[0m'; \
+	node scripts/sync-shipwright-manifest.mjs; \
+	STAGED="$$(node scripts/stage-bundled-binary.mjs "$$BASILISK_BIN")"; \
+	PLATFORM="$$(basename "$$(dirname "$$STAGED")")"; \
+	npm run package; \
+	echo -e '\033[1m\033[0;36m▶ Verifying packaged VSIX contains bundled binary\033[0m'; \
+	VSIX="$$(ls -t *.vsix | head -1)"; \
+	node scripts/verify-shipwright.mjs vsix "$$VSIX" "$$PLATFORM"; \
 	echo -e '\033[0;32m✓ VSIX packaged\033[0m'
 
 _uninstall_vsix:
 	@echo -e '\033[1m\033[0;36m▶ Uninstalling VSIX\033[0m' && \
-	code --uninstall-extension nimblesite.basilisk 2>/dev/null || true && \
+	code --uninstall-extension basilisk-lang.basilisk 2>/dev/null || true && \
 	echo -e '\033[0;32m✓ VSIX uninstalled\033[0m'
 
 _install_vsix:
