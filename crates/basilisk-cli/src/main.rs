@@ -9,9 +9,10 @@
 use std::collections::HashSet;
 use std::process::ExitCode;
 
-use basilisk_common::shipwright_version::{self, VersionOutput};
 use clap::{Parser, Subcommand};
 use colored::Colorize as _;
+use shipwright::{dispatch, BuildInfo, VersionSpec};
+use shipwright_manifest::{ExecutableKind, Language};
 use tracing::{error, info, warn};
 
 use crate::output::{

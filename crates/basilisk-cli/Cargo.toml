@@ -19,6 +19,9 @@ basilisk-common.workspace   = true
 basilisk-uv.workspace       = true
 basilisk-stubs.workspace    = true
 clap.workspace              = true
+# Shipwright `--version` / `--version --json` contract emitter.
+shipwright                  = "0.2"
+shipwright-manifest         = "0.2"
 colored.workspace           = true
 tower-lsp                   = "0.20"
 walkdir.workspace           = true
