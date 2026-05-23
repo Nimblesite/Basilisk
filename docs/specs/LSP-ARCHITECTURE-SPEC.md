@@ -15,6 +15,79 @@ This is the **single source of truth** for all LSP features, DAP integration, cu
 
 ---
 
+## System Architecture
+
+Three editor frontends share one Rust binary. The binary embeds the LSP server, the type-checking pipeline (parser → resolver → checker), and shells out to external tools (`ruff`, `debugpy`, `uv`) on demand.
+
+```mermaid
+flowchart TB
+    subgraph Editors["Editor Frontends"]
+        direction LR
+        VSC["VS Code<br/>vscode-extension/<br/>(TypeScript)"]
+        Zed["Zed<br/>basilisk-zed/<br/>(Rust → WASM)"]
+        Nvim["Neovim<br/>basilisk.nvim/<br/>(Lua)"]
+    end
+
+    subgraph Binary["basilisk binary (Rust)"]
+        direction TB
+        CLI["basilisk-cli<br/>(entry point)"]
+        LSP["basilisk-lsp<br/>(JSON-RPC server)"]
+        subgraph Pipeline["Type-checking pipeline"]
+            direction LR
+            Parser["basilisk-parser<br/>(ruff_python_parser)"]
+            Resolver["basilisk-resolver<br/>(symbol tables)"]
+            Checker["basilisk-checker<br/>(diagnostics)"]
+            Parser --> Resolver --> Checker
+        end
+        subgraph Support["Support crates"]
+            direction LR
+            Config["basilisk-config"]
+            Stubs["basilisk-stubs"]
+            Common["basilisk-common"]
+            UV["basilisk-uv"]
+        end
+        CLI --> LSP
+        LSP --> Pipeline
+        LSP --> Support
+        Pipeline --> Support
+    end
+
+    subgraph Subprocs["External subprocesses (spawned by LSP)"]
+        direction LR
+        Ruff["ruff<br/>(format, organize imports)"]
+        Debugpy["debugpy.adapter<br/>(DAP server)"]
+        UvBin["uv<br/>(sync, add, remove)"]
+        Py["python3<br/>(import resolution)"]
+    end
+
+    Helper["basilisk-profiler-helper<br/>(separate binary)"]
+
+    VSC <-->|"stdio JSON-RPC"| LSP
+    Zed <-->|"stdio JSON-RPC"| LSP
+    Nvim <-->|"stdio JSON-RPC"| LSP
+
+    VSC <-->|"TCP DAP<br/>(via proxy)"| Debugpy
+    Zed <-->|"TCP DAP"| Debugpy
+    Nvim <-->|"TCP DAP<br/>(nvim-dap)"| Debugpy
+
+    LSP -.->|"spawn"| Ruff
+    LSP -.->|"spawn"| Debugpy
+    LSP -.->|"spawn"| UvBin
+    LSP -.->|"spawn"| Py
+
+    VSC -.->|"bundles<br/>per-platform"| Binary
+    VSC -.->|"bundles<br/>per-platform"| Helper
+```
+
+**Notes on this picture:**
+- Solid arrows are runtime data flow. Dotted arrows are process spawns or build-time bundling.
+- The VSIX ships `basilisk` and `basilisk-profiler-helper` for 5 platforms (darwin x64/arm64, linux x64/arm64, win32 x64). Zed and Neovim users install `basilisk` themselves.
+- `basilisk-zed` compiles to WASM and runs inside Zed; it acts purely as a launcher that spawns the native `basilisk` binary as the language server.
+- The Salsa-based incremental database (`basilisk-db`) is a Phase 2 placeholder and is **not** in the active pipeline today.
+- See [Three-Phase Pipeline](#three-phase-pipeline) below for the parser/resolver/checker internals.
+
+---
+
 ## Binary Invocation
 
 ```bash
@@ -171,17 +244,14 @@ All editors MUST implement a TCP proxy between the DAP client and debugpy to fix
 
 ### Three-Phase Pipeline
 
-```
-Source Text
-    │
-    ▼
-basilisk-parser::parse_source() → ParsedModule (Ruff AST)
-    │
-    ▼
-basilisk-resolver::resolve() → ResolvedModule (symbol table)
-    │
-    ▼
-basilisk-checker::check() → Vec<Diagnostic>
+```mermaid
+flowchart TD
+    Src["Source Text"]
+    Parser["basilisk-parser::parse_source()<br/>→ ParsedModule (Ruff AST)"]
+    Resolver["basilisk-resolver::resolve()<br/>→ ResolvedModule (symbol table)"]
+    Checker["basilisk-checker::check()<br/>→ Vec&lt;Diagnostic&gt;"]
+
+    Src --> Parser --> Resolver --> Checker
 ```
 
 ### ResolvedModule — The Data That Powers Everything
