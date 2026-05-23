@@ -130,17 +130,43 @@ enum StubGenModeArg {
     Hybrid,
 }
 
-fn main() -> ExitCode {
-    let args = std::env::args().skip(1).collect::<Vec<_>>();
-    if shipwright_version::print_if_requested(
-        &args,
-        VersionOutput {
-            name: "basilisk",
-            kind: "lsp",
-            product: "basilisk",
-            capabilities: &["cli", "lsp", "dap", "profiler", "test-explorer"],
+/// Handle `--version` / `--version --json` via the Shipwright contract emitter.
+///
+/// Returns `true` when a version flag was handled and `main` should exit 0.
+/// Build-time metadata is supplied by `build.rs`.
+fn handle_version(args: &[String]) -> bool {
+    let spec = VersionSpec {
+        name: "basilisk",
+        version: env!("CARGO_PKG_VERSION"),
+        kind: ExecutableKind::Lsp,
+        language: Language::Rust,
+        product: Some("basilisk"),
+        capabilities: &["cli", "lsp", "dap", "profiler", "test-explorer"],
+        build: BuildInfo {
+            git_sha: option_env!("SHIPWRIGHT_GIT_SHA"),
+            git_dirty: option_env!("SHIPWRIGHT_GIT_DIRTY").map(|s| s == "true"),
+            build_time: option_env!("SHIPWRIGHT_BUILD_TIME"),
+            target: option_env!("SHIPWRIGHT_TARGET"),
+            toolchain: option_env!("SHIPWRIGHT_TOOLCHAIN"),
         },
-    ) {
+    };
+    match dispatch(args, &mut std::io::stdout(), &spec) {
+        Ok(handled) => handled,
+        Err(err) => {
+            let _ = std::io::Write::write_all(
+                &mut std::io::stderr(),
+                format!("basilisk: --version emission failed: {err}\n").as_bytes(),
+            );
+            // Don't swallow the error silently; surface to the user but
+            // don't continue normal execution either.
+            true
+        }
+    }
+}
+
+fn main() -> ExitCode {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if handle_version(&args) {
         return ExitCode::SUCCESS;
     }
 

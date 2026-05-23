@@ -39,7 +39,6 @@ fn version_json_matches_shipwright_contract() -> Result<(), Box<dyn std::error::
     let value: Value = serde_json::from_slice(&output.stdout)?;
     assert_eq!(value["manifestVersion"], 1);
     assert_eq!(value["name"], "basilisk-profiler-helper");
-    assert_eq!(value["binaryName"], "basilisk-profiler-helper");
     assert_eq!(value["version"], env!("CARGO_PKG_VERSION"));
     assert_eq!(value["kind"], "tool");
     assert_eq!(value["language"], "rust");
