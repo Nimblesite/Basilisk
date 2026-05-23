@@ -552,7 +552,11 @@
         },
         "basilisk.testExplorer.framework": {
           "type": "string",
-          "enum": ["pytest", "unittest", "auto"],
+          "enum": [
+            "pytest",
+            "unittest",
+            "auto"
+          ],
           "default": "auto",
           "description": "Test framework to use. 'auto' detects from project config."
         },
@@ -563,7 +567,9 @@
         },
         "basilisk.testExplorer.args": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "Additional arguments passed to the test runner."
         },
@@ -594,12 +600,12 @@
         },
         "basilisk.profiler.lineThreshold": {
           "type": "number",
-          "default": 1.0,
+          "default": 1,
           "description": "Minimum percentage of total samples for a line to appear as a hotspot (0.1-100)."
         },
         "basilisk.profiler.functionThreshold": {
           "type": "number",
-          "default": 2.0,
+          "default": 2,
           "description": "Minimum percentage of total samples for a function to appear as a hotspot (0.1-100)."
         },
         "basilisk.profiler.maxDiagnosticsPerFile": {
@@ -619,7 +625,12 @@
         },
         "basilisk.profiler.preset": {
           "type": "string",
-          "enum": ["default", "lightweight", "detailed", "memory"],
+          "enum": [
+            "default",
+            "lightweight",
+            "detailed",
+            "memory"
+          ],
           "enumDescriptions": [
             "100 Hz sampling, no native frames (default)",
             "10 Hz sampling for low overhead",
@@ -666,25 +677,33 @@
             "id": "basilisk.installBinary",
             "title": "Install Basilisk Binary",
             "description": "Install via cargo: `cargo install basilisk` or download from GitHub releases.\n[Open Terminal](command:workbench.action.terminal.new)",
-            "media": { "markdown": "Install via `cargo install basilisk`." }
+            "media": {
+              "markdown": "Install via `cargo install basilisk`."
+            }
           },
           {
             "id": "basilisk.openPythonProject",
             "title": "Open a Python Project",
             "description": "Open a folder containing Python files to start analysis.\n[Open Folder](command:vscode.openFolder)",
-            "media": { "markdown": "Open any folder with `.py` files." }
+            "media": {
+              "markdown": "Open any folder with `.py` files."
+            }
           },
           {
             "id": "basilisk.exploreModules",
             "title": "Explore Modules",
             "description": "Click the Basilisk icon in the activity bar to see your modules and type health.\n[Open Module Explorer](command:basilisk.moduleExplorer.focus)",
-            "media": { "markdown": "The Module Explorer shows your workspace's Python modules." }
+            "media": {
+              "markdown": "The Module Explorer shows your workspace's Python modules."
+            }
           },
           {
             "id": "basilisk.checkTypeHealth",
             "title": "Check Type Health",
             "description": "The Type Health panel shows coverage statistics per module.\n[Open Type Health](command:basilisk.typeHealth.focus)",
-            "media": { "markdown": "See which modules need more type annotations." }
+            "media": {
+              "markdown": "See which modules need more type annotations."
+            }
           }
         ]
       }
@@ -702,13 +721,11 @@
     "package": "npm run sync:shipwright && vsce package"
   },
   "dependencies": {
-    "@nimblesite/shipwright-vscode": "^0.1.0",
+    "@nimblesite/shipwright-vscode": "^0.2.0",
     "@preact/signals-core": "^1.14.0",
     "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
-    "ajv": "^8.17.1",
-    "ajv-formats": "^3.0.1",
     "@types/mocha": "^10.0.10",
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.99.0",
@@ -717,6 +734,8 @@
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.0.0",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
     "eslint": "^10.0.2",
     "glob": "^13.0.6",
     "mocha": "^11.7.5",

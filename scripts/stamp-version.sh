@@ -17,9 +17,9 @@ set -euo pipefail
 
 readonly PLACEHOLDER="0.0.0-PLACEHOLDER"
 
-# Files that take the full SemVer (including any -alpha / -rc.N suffix).
-# Used by git tags, Cargo, our own binaries, the shipwright contract, and
-# the GitHub release.
+# Files that take the full SemVer including any pre-release suffix
+# (e.g. `0.1.0-alpha`). Git tags, Cargo, our own binaries, the shipwright
+# contract, the website data, and the GitHub release all carry this.
 readonly FILES=(
     "Cargo.toml"
     "basilisk-zed/Cargo.toml"
@@ -28,25 +28,15 @@ readonly FILES=(
     "website/src/_data/site.json"
 )
 
-# Files that take a Marketplace-legal MAJOR.MINOR.PATCH (suffix stripped).
-# The VS Marketplace flatly rejects SemVer pre-release suffixes in the
-# extension version; pre-release status is conveyed via the --pre-release
-# flag to vsce + the odd-minor convention (see VERSION_CONVENTION below),
-# never via the version string itself.
+# Files that take a Marketplace-legal MAJOR.MINOR.PATCH only. The VS
+# Marketplace rejects SemVer pre-release suffixes in the extension version
+# outright ("We only support major.minor.patch"); pre-release status is
+# conveyed via the --pre-release flag to `vsce package`/`vsce publish` in
+# release.yml. The unsuffixed core matches the version in every other
+# file, so the bundled binary's --version and the manifest stay aligned.
 readonly MARKETPLACE_FILES=(
     "vscode-extension/package.json"
 )
-
-# VS Marketplace convention: even MINOR for stable, odd MINOR for
-# pre-release. Stable users auto-upgrade across this boundary, so mixing
-# them on the same MINOR will yank pre-release users onto stable
-# unexpectedly. We refuse to stamp a tag that violates the convention.
-#
-# Examples:
-#   v0.1.0       -> reject: stable tag on odd minor
-#   v0.1.0-alpha -> ok:     pre-release tag on odd minor
-#   v0.2.0       -> ok:     stable tag on even minor
-#   v0.2.0-rc.1  -> reject: pre-release tag on even minor
 
 resolve_version() {
     if [[ $# -ge 1 && -n "$1" ]]; then
@@ -74,41 +64,54 @@ repo_root() {
     cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd
 }
 
+stamp_file() {
+    local file="$1" value="$2"
+    if [[ ! -f "$file" ]]; then
+        echo "stamp-version.sh: missing file: $file" >&2
+        exit 2
+    fi
+    if ! grep -qF "$PLACEHOLDER" "$file"; then
+        echo "stamp-version.sh: $file does not contain $PLACEHOLDER (already stamped?)" >&2
+        exit 2
+    fi
+    # Portable in-place edit (BSD + GNU sed both accept this with -i.bak).
+    sed -i.bak "s/${PLACEHOLDER}/${value}/g" "$file"
+    rm -f "${file}.bak"
+    echo "  stamped $file -> $value"
+}
+
 main() {
     local version
     version="$(resolve_version "$@")"
     validate_semver "$version"
 
+    # Marketplace version is the core MAJOR.MINOR.PATCH with any pre-release
+    # and build-metadata suffixes stripped (0.1.0-alpha.2+sha.abc -> 0.1.0).
+    local marketplace_version="${version%%[-+]*}"
+
     local root
     root="$(repo_root)"
     cd "$root"
 
-    echo "Stamping version $version into ${#FILES[@]} files..."
+    local total=$((${#FILES[@]} + ${#MARKETPLACE_FILES[@]}))
+    echo "Stamping $total files (version=$version, marketplace=$marketplace_version)..."
 
     for file in "${FILES[@]}"; do
-        if [[ ! -f "$file" ]]; then
-            echo "stamp-version.sh: missing file: $file" >&2
-            exit 2
-        fi
-        if ! grep -qF "$PLACEHOLDER" "$file"; then
-            echo "stamp-version.sh: $file does not contain $PLACEHOLDER (already stamped?)" >&2
-            exit 2
-        fi
-        # Portable in-place edit (BSD + GNU sed both accept this with -i.bak).
-        sed -i.bak "s/${PLACEHOLDER}/${version}/g" "$file"
-        rm -f "${file}.bak"
-        echo "  stamped $file"
+        stamp_file "$file" "$version"
+    done
+    for file in "${MARKETPLACE_FILES[@]}"; do
+        stamp_file "$file" "$marketplace_version"
     done
 
     echo "Done. Verifying no placeholders remain..."
     local leftover
-    leftover="$(grep -lF "$PLACEHOLDER" "${FILES[@]}" 2>/dev/null || true)"
+    leftover="$(grep -lF "$PLACEHOLDER" "${FILES[@]}" "${MARKETPLACE_FILES[@]}" 2>/dev/null || true)"
     if [[ -n "$leftover" ]]; then
         echo "stamp-version.sh: placeholders still present in:" >&2
         echo "$leftover" >&2
         exit 2
     fi
-    echo "All files stamped to $version."
+    echo "All files stamped."
 }
 
 main "$@"
