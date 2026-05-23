@@ -44,5 +44,5 @@ exclude_re = [
     # Equivalent mutants — produce no observable behaviour change:
     "e0014/mod\\.rs:\\d+:\\d+: replace && with \\|\\| in check_vars",
     "e0014/mod\\.rs:\\d+:\\d+: replace \\+ with \\* in extract_annotation",
-    "e0048\\.rs:88:\\d+: replace && with \\|\\| in collect_type_alias_names",
+    "e0048\\.rs:\\d+:\\d+: replace && with \\|\\| in collect_type_alias_names",
 ]
