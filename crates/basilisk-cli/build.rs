@@ -32,8 +32,7 @@ fn main() {
     let dirty = Command::new("git")
         .args(["status", "--porcelain"])
         .output()
-        .map(|o| !o.stdout.is_empty())
-        .unwrap_or(false);
+        .is_ok_and(|o| !o.stdout.is_empty());
     println!(
         "cargo:rustc-env=SHIPWRIGHT_GIT_DIRTY={}",
         if dirty { "true" } else { "false" }
@@ -84,8 +83,7 @@ fn rfc3339_now_or_source_date_epoch() -> String {
         .unwrap_or_else(|| {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0)
+                .map_or(0, |d| d.as_secs())
         });
     rfc3339_from_secs(secs)
 }
@@ -101,7 +99,10 @@ fn rfc3339_from_secs(secs: u64) -> String {
 }
 
 // Howard Hinnant's civil_from_days (public domain).
-#[allow(clippy::arithmetic_side_effects, clippy::cast_possible_truncation)]
+#[expect(
+    clippy::arithmetic_side_effects,
+    reason = "epoch arithmetic on u64 day counts cannot overflow within representable timestamps"
+)]
 fn civil_from_days(days: u64) -> (u64, u64, u64) {
     let adjusted = days + 719_468;
     let era = adjusted / 146_097;
