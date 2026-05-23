@@ -1,3 +1,4 @@
+//! Implements [STUBRES-ENGINE]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-ENGINE
 //! Stub resolution data model.
 //!
 //! These types represent how a module's type information was discovered

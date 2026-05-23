@@ -1,3 +1,4 @@
+//! Implements [BSK-E0127] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0127: Tuple index out of range.
 //!
 //! Detects subscript access on a fixed-length `tuple[T1, T2, ...]` parameter

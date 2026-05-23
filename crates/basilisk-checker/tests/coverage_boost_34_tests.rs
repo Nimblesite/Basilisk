@@ -1,3 +1,4 @@
+//! Tests for [CHKARCH-TESTING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING
 //! Coverage boost tests batch 34: targeting resolver-dependent uncovered branches.
 
 use basilisk_checker::check;

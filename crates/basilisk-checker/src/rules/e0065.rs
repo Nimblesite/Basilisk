@@ -1,3 +1,4 @@
+//! Implements [BSK-E0065] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
 //! BSK-E0065: Access to an `int`-only attribute on a `float`-typed parameter.
 //!
 //! The Python typing spec (PEP 484 / typing spec §Special cases for float and complex)

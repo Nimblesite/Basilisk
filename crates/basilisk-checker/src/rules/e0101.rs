@@ -1,3 +1,4 @@
+//! Implements [BSK-E0101] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0101: `TypeGuard` or `TypeIs` on method with no narrowing parameter.
 //!
 //! The typing spec requires that a `TypeGuard` or `TypeIs` function must have

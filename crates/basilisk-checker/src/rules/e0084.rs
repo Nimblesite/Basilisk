@@ -1,3 +1,4 @@
+//! Implements [BSK-E0084] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0084: `TypeVarTuple` variance/bounds/constraints violation.
 //!
 //! `TypeVarTuple` does not support specification of variance, bounds, or constraints.

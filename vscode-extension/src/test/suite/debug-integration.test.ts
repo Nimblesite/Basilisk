@@ -1,3 +1,4 @@
+// Tests for [LSPDEBUG]. See docs/specs/LSP-DEBUG-INTEGRATION-SPEC.md#LSPDEBUG
 /* eslint-disable max-lines */
 /**
  * Debug Integration E2E Tests for the Basilisk VS Code Extension.

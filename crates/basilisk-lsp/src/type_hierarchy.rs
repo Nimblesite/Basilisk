@@ -1,3 +1,4 @@
+//! Implements [LSPARCH-FEATURES-TYPEHIER]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-TYPEHIER
 //! Type Hierarchy handler: supertypes and subtypes navigation.
 
 use basilisk_resolver::ResolvedModule;

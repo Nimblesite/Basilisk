@@ -1,3 +1,4 @@
+//! Implements [BSK-E0144] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! Helper types and functions for BSK-E0144.
 //!
 //! Contains constructor signature resolution, argument type checking,

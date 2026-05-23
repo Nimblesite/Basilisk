@@ -1,3 +1,4 @@
+//! Implements [BSK-E0038] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
 //! BSK-E0038: Invalid `TypedDict` inheritance.
 //!
 //! PEP 589 and the typing spec place constraints on `TypedDict` inheritance:

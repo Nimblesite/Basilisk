@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-REFS]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-REFS
+//!
 //! Find All References and Rename Symbol handlers.
 //!
 //! Uses the scope tree from `scope_tree` for scope-aware reference finding

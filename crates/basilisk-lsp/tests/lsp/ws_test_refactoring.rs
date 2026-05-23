@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-TESTING]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-TESTING
 // Tests for LSP refactoring code actions.
 //
 // Exercises all refactoring code actions through the real LSP server:

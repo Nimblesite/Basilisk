@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0057] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 // Integration tests for BSK-E0057: PEP 695 type alias invalid.
 
 use super::common::*;

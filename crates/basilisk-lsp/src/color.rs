@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES
+//!
 //! Document Color provider: detect hex color strings in Python source.
 //!
 //! Scans string literals for CSS-style hex colors (`#RGB`, `#RRGGBB`, `#RRGGBBAA`)

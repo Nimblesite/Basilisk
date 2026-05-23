@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-TESTING]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-TESTING
 //! Shared test utilities for basilisk-lsp integration tests.
 
 use std::process::Child;

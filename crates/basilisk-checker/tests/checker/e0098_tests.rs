@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0098] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
 // Integration tests for BSK-E0098: Non-protocol base in Protocol.
 
 use super::common::*;

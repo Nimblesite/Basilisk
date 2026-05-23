@@ -1,4 +1,4 @@
-# Basilisk Profiling — Specification
+# Basilisk Profiling — Specification {#LSPPROF}
 
 ## Goal {#PROFILE-GOAL}
 

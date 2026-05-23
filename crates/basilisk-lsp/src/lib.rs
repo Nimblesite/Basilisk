@@ -1,3 +1,5 @@
+//! Implements [LSPARCH]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH
+//!
 //! Language Server Protocol support for Basilisk.
 //!
 //! This crate provides both a simple `check_source` function for subprocess

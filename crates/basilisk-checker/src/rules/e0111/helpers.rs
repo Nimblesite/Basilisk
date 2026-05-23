@@ -1,3 +1,4 @@
+//! Implements [BSK-E0111] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! Helper functions for BSK-E0111: Constructor call errors.
 
 use std::collections::HashMap;

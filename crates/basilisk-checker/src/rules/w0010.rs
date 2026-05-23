@@ -1,3 +1,4 @@
+//! Implements [BSK-W0010] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
 //! BSK-W0010: Missing type stubs for installed package.
 //!
 //! Fires when a package is imported and resolves to a `.py` source file (not

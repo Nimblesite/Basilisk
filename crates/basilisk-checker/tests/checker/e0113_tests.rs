@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0113] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for BSK-E0113: `TypeIs` inconsistent narrowing.
 
 use super::common::*;

@@ -1,3 +1,4 @@
+//! Implements [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
 //! Basilisk profiler helper -- elevated binary for py-spy `vm_read` on macOS.
 //!
 //! On macOS, reading another process's memory requires elevated privileges

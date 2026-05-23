@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0036] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 // Integration tests for BSK-E0036: `ClassVar` used in invalid context.
 
 use super::common::*;

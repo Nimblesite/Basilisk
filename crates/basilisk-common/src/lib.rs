@@ -1,3 +1,4 @@
+//! Implements [LSPARCH-CMDS]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDS
 //! Shared constants and types for Basilisk.
 //!
 //! This crate has **zero dependencies** so it compiles to both native targets

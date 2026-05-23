@@ -1,3 +1,4 @@
+//! Implements [BSK-E0020] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
 //! BSK-E0020: Missing `@overload` implementation.
 //!
 //! When a function name is defined multiple times and every definition carries

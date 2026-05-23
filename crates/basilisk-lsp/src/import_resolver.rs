@@ -1,3 +1,5 @@
+//! Implements [ANALYSIS-CROSSLSP-IMPORT]. See docs/specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-CROSSLSP-IMPORT
+//!
 //! Import resolution engine — resolves `import X` to filesystem paths.
 //!
 //! Search order: workspace roots → extraPaths → venv site-packages.

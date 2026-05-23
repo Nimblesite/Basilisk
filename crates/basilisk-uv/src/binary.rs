@@ -1,3 +1,4 @@
+//! Implements [LSPUV]. See docs/specs/LSP-UV-INTEGRATION-SPEC.md#LSPUV
 //! uv binary resolution.
 //!
 //! Locates the `uv` executable using a priority cascade:

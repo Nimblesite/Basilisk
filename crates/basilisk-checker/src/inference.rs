@@ -1,3 +1,4 @@
+//! Implements [TYPEINF-ALGO]. See docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#typeinf-algo
 //! Type inference engine for Basilisk.
 
 use crate::types::InferredType;

@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-FEATURES-RENAME]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-RENAME
 // Tests for scope-aware rename.
 //
 // These tests verify that rename operations respect Python's lexical scoping

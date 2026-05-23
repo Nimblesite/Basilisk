@@ -1,3 +1,4 @@
+// Implements [VSIX]. See docs/specs/VSIX-SPEC.md#VSIX
 import * as vscode from "vscode";
 import * as path from "path";
 import { Logger } from "./logger";

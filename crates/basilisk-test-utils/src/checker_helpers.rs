@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-TESTING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING
 //! Helpers that depend on `basilisk-checker`. Gated behind the `checker` feature.
 
 use basilisk_checker::{Diagnostic, Severity};

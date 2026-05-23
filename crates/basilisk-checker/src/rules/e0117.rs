@@ -1,3 +1,4 @@
+//! Implements [BSK-E0117] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0117: Unbound type variable in scope.
 //!
 //! A type variable used in a type annotation must be "in scope" — i.e. it must

@@ -1,3 +1,4 @@
+//! Implements [BSK-E0098] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0098: Non-Protocol base class in a Protocol definition.
 //!
 //! Per PEP 544, a Protocol class may only inherit from other Protocol classes

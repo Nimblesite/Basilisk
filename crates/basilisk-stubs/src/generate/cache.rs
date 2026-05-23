@@ -1,3 +1,4 @@
+//! Implements [STUBRES-ENGINE]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-ENGINE
 //! Cache management for generated stubs.
 //!
 //! Generated stubs are stored in `.basilisk/stubs/{module_name}.pyi`.

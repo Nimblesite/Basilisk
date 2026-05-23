@@ -1,3 +1,4 @@
+// Implements [VSIX-LSP-CLIENT-CONFIGURATION]. See docs/specs/VSIX-SPEC.md#VSIX-LSP-CLIENT-CONFIGURATION
 /**
  * LSP client setup and lifecycle for the Basilisk VS Code extension.
  *

@@ -1,3 +1,4 @@
+// Tests for [VSIX]. See docs/specs/VSIX-SPEC.md#VSIX
 import * as path from 'path';
 import Mocha from 'mocha';
 import { glob } from 'glob';

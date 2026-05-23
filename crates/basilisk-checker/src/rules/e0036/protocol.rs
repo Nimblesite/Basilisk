@@ -1,3 +1,4 @@
+//! Implements [BSK-E0036] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
 //! Protocol `ClassVar` conformance checks for BSK-E0036.
 //!
 //! When a variable is typed as a `Protocol` with `ClassVar` attributes, the RHS

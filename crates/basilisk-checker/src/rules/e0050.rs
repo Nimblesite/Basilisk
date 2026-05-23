@@ -1,3 +1,4 @@
+//! Implements [BSK-E0050] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
 //! BSK-E0050: Invalid `NewType(...)` call.
 //!
 //! PEP 484 places restrictions on `NewType`:

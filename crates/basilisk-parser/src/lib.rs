@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! Python source parser for Basilisk.
 //!
 //! This crate is the single entry point into `ruff_python_parser` for the

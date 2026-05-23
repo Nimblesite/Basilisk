@@ -1,3 +1,4 @@
+//! Implements [BSK-E0126] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! Helper functions for BSK-E0126: `LiteralString` and `Literal` assignment
 //! incompatibilities.
 //!

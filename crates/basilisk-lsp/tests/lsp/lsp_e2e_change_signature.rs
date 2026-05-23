@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-FEATURES-SIGHELP]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-SIGHELP
 // E2E tests for change signature and edit correctness verification.
 //
 // Tests change signature (remove/add/reorder parameters) and verifies

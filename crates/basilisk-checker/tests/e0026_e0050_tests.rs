@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0026]-[BSK-E0050] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 #![allow(
     clippy::allow_attributes,
     clippy::indexing_slicing,

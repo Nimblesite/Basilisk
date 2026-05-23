@@ -1,3 +1,4 @@
+// Tests for [VSIX]. See docs/specs/VSIX-SPEC.md#VSIX
 /**
  * Analysis Mode Tests for the Basilisk VS Code Extension.
  *

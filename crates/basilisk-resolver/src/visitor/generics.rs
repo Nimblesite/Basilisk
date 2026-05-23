@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! Generics visitor functions.
 
 use ruff_python_ast::{Expr, Stmt, StmtClassDef, TypeParam};

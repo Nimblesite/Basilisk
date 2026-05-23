@@ -1,3 +1,5 @@
+//! Implements [LSPDEBUG]. See docs/specs/LSP-DEBUG-INTEGRATION-SPEC.md#LSPDEBUG
+//!
 //! Debug session management for the Basilisk LSP.
 //!
 //! Spawns debugpy on a free TCP port and tracks active sessions.

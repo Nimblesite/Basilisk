@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-FEATURES-DEFINITION]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-DEFINITION
 // Tests for LSP: `ws_test_goto_definition`.
 
 use super::ws_test_common::*;

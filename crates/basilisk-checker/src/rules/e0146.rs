@@ -1,3 +1,4 @@
+//! Implements [BSK-E0146] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0146: Protocol class object violations.
 //!
 //! Detects two related violations involving Protocol classes and class objects:

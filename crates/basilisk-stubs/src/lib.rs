@@ -1,3 +1,4 @@
+//! Implements [STUBRES-ENGINE]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-ENGINE
 //! Bundled type stubs and stdlib module index for Basilisk.
 //!
 //! Provides:

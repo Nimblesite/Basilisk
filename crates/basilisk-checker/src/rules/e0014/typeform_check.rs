@@ -1,3 +1,4 @@
+//! Implements [BSK-E0014] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
 //! `TypeForm` validation for BSK-E0014.
 //!
 //! When the declared type is `TypeForm[T]`, the RHS must be a valid type

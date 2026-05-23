@@ -1,3 +1,4 @@
+//! Implements [BSK-E0022] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
 //! BSK-E0022: Unhashable type used as a dict key.
 //!
 //! Lists, sets, and plain dicts are not hashable and cannot be used as

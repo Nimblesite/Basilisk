@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-TESTING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING
 //! Source-level helpers: binary discovery, line/col computation.
 
 /// Path to the pre-built basilisk binary.

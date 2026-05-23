@@ -1,3 +1,4 @@
+//! Implements [BSK-E0083] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0083: `TypeVarTuple` must be unpacked with `*` operator.
 //!
 //! When a `TypeVarTuple` is used in a generic class base list or as a direct

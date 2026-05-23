@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-CODEACTIONS]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-CODEACTIONS
+//!
 //! Inline function refactoring action: replace a function call with the
 //! function's single-expression body, substituting arguments for parameters.
 

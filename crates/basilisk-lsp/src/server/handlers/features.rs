@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-ARCH-MODSTRUCT]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-ARCH-MODSTRUCT
+//!
 //! Feature-related LSP handlers: hover, signature help, completion, formatting,
 //! code actions, inlay hints, semantic tokens, folding, selection ranges,
 //! code lens, and document color.

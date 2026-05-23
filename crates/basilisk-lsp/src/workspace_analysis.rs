@@ -1,3 +1,4 @@
+//! Implements [ANALYSIS-INCR]. See docs/specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-INCR
 //! Analysis pipeline and diagnostic conversion for the workspace index.
 //!
 //! Runs parse → resolve → check and converts checker diagnostics to LSP

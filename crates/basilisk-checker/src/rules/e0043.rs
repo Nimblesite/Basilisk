@@ -1,3 +1,4 @@
+//! Implements [BSK-E0043] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
 //! BSK-E0043: Non-TypeVar argument in `Generic[...]` or `Protocol[...]`.
 //!
 //! PEP 484 requires that all arguments to `Generic[...]` and `Protocol[...]`

@@ -1,3 +1,4 @@
+//! Tests for [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
 #![allow(
     clippy::allow_attributes,
     clippy::indexing_slicing,

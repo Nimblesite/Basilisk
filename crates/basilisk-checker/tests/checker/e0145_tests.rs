@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0145] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for BSK-E0145: Invalid type[X] usage violations.
 
 use super::common::*;

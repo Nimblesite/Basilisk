@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! Bounded `TypeVar` attribute access violation collector.
 //!
 //! When a PEP 695 type parameter has a bound (e.g., `T: str`), attribute

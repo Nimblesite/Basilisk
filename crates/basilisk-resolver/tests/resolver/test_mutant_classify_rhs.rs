@@ -1,3 +1,4 @@
+//! Tests for [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 // Tests for resolver: `test_mutant_classify_rhs`.
 
 use super::common::resolve_src;

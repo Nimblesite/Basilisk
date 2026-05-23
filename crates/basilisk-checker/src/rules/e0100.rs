@@ -1,3 +1,4 @@
+//! Implements [BSK-E0100] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0100: Augmented assignment widens `Literal` type.
 //!
 //! When a function parameter is annotated with `Literal[...]`, augmented

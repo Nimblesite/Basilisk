@@ -1,3 +1,4 @@
+//! Tests for [TYPEINF-ALGO]. See docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-ALGO
 #![allow(
     clippy::allow_attributes,
     clippy::indexing_slicing,

@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-ARCH-MODSTRUCT]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-ARCH-MODSTRUCT
+//!
 //! LSP command handlers for `basilisk.uv.*` package management commands.
 //!
 //! Each handler extracts arguments, calls the corresponding function in

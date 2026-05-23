@@ -1,3 +1,4 @@
+//! Implements [BSK-E0034] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
 //! BSK-E0034: `@final` decorator violations.
 //!
 //! Three violations are detected:

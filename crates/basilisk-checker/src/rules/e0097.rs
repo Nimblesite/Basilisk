@@ -1,3 +1,4 @@
+//! Implements [BSK-E0097] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0097: Protocol `__new__`/`__init__` sets self-attributes not declared in Protocol.
 //!
 //! When a Protocol class defines `__new__` or `__init__` that assigns to

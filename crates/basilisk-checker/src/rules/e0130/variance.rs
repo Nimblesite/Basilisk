@@ -1,3 +1,4 @@
+//! Implements [BSK-E0130] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! Variance inference for BSK-E0130.
 //!
 //! Implements PEP 695 automatic variance inference for type parameters.

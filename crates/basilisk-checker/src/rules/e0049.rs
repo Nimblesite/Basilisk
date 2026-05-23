@@ -1,3 +1,4 @@
+//! Implements [BSK-E0049] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
 //! BSK-E0049: Multiple unbounded tuple components in a single tuple type.
 //!
 //! A `tuple[...]` type annotation may contain at most one unbounded component.

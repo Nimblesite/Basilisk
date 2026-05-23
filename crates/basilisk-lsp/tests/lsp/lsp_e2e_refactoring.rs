@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-TESTING]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-TESTING
 // E2E tests for refactoring code actions.
 //
 // These tests spin up the full LSP server via stdio and verify that

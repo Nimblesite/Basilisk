@@ -1,3 +1,4 @@
+//! Tests for [TYPEINF-ALGO]. See docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-ALGO
 // End-to-end tests for Basilisk's type inference engine.
 
 // ---------------------------------------------------------------------------

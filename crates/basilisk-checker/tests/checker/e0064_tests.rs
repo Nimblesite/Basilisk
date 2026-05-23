@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0064] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
 // Integration tests for BSK-E0064: Invalid `NamedTuple` call.
 
 use super::common::*;

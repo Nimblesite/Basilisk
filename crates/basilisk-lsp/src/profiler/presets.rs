@@ -1,3 +1,5 @@
+//! Implements [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
+//!
 //! Profiling presets for common use cases.
 //!
 //! Each preset bundles a sample rate and optional duration limit into a

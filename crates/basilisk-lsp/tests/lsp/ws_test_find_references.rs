@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-FEATURES-REFS]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-REFS
 // Tests for LSP: `ws_test_find_references`.
 
 use super::ws_test_common::*;

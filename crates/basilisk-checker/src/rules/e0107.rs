@@ -1,3 +1,4 @@
+//! Implements [BSK-E0107] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0107: Variance incompatibility in base class parameterisation.
 //!
 //! When a class inherits from a generic base class (directly or through a type

@@ -1,3 +1,4 @@
+//! Implements [BSK-E0041] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
 //! BSK-E0041: Too few arguments in a function call.
 //!
 //! When a function is called with fewer positional arguments than it has

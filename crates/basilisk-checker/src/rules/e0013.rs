@@ -1,3 +1,4 @@
+//! Implements [BSK-E0013] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
 //! BSK-E0013: Return type mismatch — inferred return type incompatible with annotation.
 //!
 //! When a function has a return type annotation, the inferred return type must be

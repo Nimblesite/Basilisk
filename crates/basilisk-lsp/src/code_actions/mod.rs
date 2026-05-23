@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-CODEACTIONS]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-CODEACTIONS
+//!
 //! Code Actions handler: quick fixes for diagnostics.
 
 use std::collections::HashMap;

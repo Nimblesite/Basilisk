@@ -1,3 +1,4 @@
+//! Implements [BSK-E0096] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0096: Type mismatch between a dataclass `field(default_factory=…)` and
 //! the field's declared type annotation.
 //!

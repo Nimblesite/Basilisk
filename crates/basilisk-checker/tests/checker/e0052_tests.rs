@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0052] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 // Integration tests for BSK-E0052: Frozen dataclass violations.
 
 use super::common::*;

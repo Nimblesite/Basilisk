@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-FEATURES-COMPLETION]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-COMPLETION
 // Tests for LSP: `ws_test_completion_advanced`.
 
 // WebSocket LSP E2E tests — Keyword argument completions, kind values, docstrings.

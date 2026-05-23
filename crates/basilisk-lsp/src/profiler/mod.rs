@@ -1,3 +1,5 @@
+//! Implements [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
+//!
 //! CPU profiling engine for the Basilisk LSP.
 //!
 //! Embeds py-spy as a Rust library to sample Python process call stacks

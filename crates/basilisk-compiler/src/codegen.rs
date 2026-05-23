@@ -1,3 +1,4 @@
+//! Implements [COMPARCH]. See docs/specs/COMPILER-ARCHITECTURE-SPEC.md#COMPARCH
 // Interpreter inherently does dynamic casts between i64/usize/f64/u32.
 #![expect(
     clippy::cast_possible_truncation,

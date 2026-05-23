@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-FEATURES-FOLDING]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-FOLDING
 // Tests for LSP: `ws_test_folding_ranges`.
 
 use super::ws_test_common::*;

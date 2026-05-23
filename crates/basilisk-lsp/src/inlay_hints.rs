@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-INLAYHINTS]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-INLAYHINTS
+//!
 //! Inlay Hints handler: inferred types and parameter names.
 
 use basilisk_resolver::{ResolvedModule, RhsKind};

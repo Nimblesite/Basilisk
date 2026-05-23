@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-CODEACTIONS]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-CODEACTIONS
+//!
 //! Ternary expression / if-else block conversion refactoring actions.
 
 use tower_lsp::lsp_types::{CodeAction, CodeActionKind, Position, Range, Url};

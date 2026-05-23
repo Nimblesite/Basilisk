@@ -1,3 +1,4 @@
+//! Implements [BSK-E0073] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
 //! BSK-E0073: `NamedTuple`-to-tuple type incompatibility.
 //!
 //! When a `NamedTuple` instance is assigned to a variable annotated with a

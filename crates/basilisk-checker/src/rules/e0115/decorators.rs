@@ -1,3 +1,4 @@
+//! Implements [BSK-E0115] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! Decorator detection helpers for BSK-E0115.
 
 use ruff_python_ast::Expr;

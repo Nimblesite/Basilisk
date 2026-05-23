@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0149] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for BSK-E0149: PEP 695 type parameter scoping.
 
 use super::common::*;

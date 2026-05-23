@@ -1,3 +1,5 @@
+//! Implements [LSPAI]. See docs/specs/LSP-AI-SPEC.md#LSPAI
+//!
 //! AI Typing hooks — trait-based interface for AI-assisted type inference.
 //!
 //! This module defines the [`AiTypingProvider`] trait and supporting types that

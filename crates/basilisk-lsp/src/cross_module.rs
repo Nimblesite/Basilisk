@@ -1,3 +1,5 @@
+//! Implements [ANALYSIS-CROSSLSP]. See docs/specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-CROSSLSP
+//!
 //! Cross-module symbol resolution.
 //!
 //! Populates `ResolvedModule.imported_symbols` by looking up each import's

@@ -1,3 +1,4 @@
+// Implements [LSPTEST-UV-INTEGRATION-COVERAGE]. See docs/specs/LSP-TEST-INTEGRATION-SPEC.md#LSPTEST-UV-INTEGRATION-COVERAGE
 /**
  * Coverage gutter decorations for Basilisk test coverage results.
  *

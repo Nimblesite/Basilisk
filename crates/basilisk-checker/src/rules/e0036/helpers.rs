@@ -1,3 +1,4 @@
+//! Implements [BSK-E0036] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
 //! Shared helper utilities for BSK-E0036: text-based `ClassVar` detection,
 //! diagnostic construction, and the `TypeParamKind` classification enum.
 

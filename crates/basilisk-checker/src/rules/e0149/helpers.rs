@@ -1,3 +1,4 @@
+//! Implements [BSK-E0149] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! Span/indent/name utility helpers for BSK-E0149.
 //!
 //! The geometry helpers (`leading_indent`, `span_for_line`,

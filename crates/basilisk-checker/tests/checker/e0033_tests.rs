@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0033] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 // Integration tests for BSK-E0033: Invalid `reveal_type()` call.
 
 use super::common::*;

@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-TESTING]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-TESTING
 // Tests for LSP: `lsp_e2e_basics`.
 
 // LSP E2E tests — Initialize, document lifecycle, error handling.

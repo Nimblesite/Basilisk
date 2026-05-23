@@ -1,6 +1,6 @@
-# Basilisk VS Code Extension
+# Basilisk VS Code Extension {#VSIX}
 
-## Goal
+## Goal {#VSIX-GOAL}
 
 A first-class VS Code extension that connects to the `basilisk lsp` binary. The primary integration. Open source. No Microsoft proprietary dependencies.
 
@@ -8,7 +8,7 @@ A first-class VS Code extension that connects to the `basilisk lsp` binary. The 
 
 All LSP features, DAP integration, custom commands, configuration settings, and binary resolution are defined in **`LSP-ARCHITECTURE-SPEC.md`** — the single source of truth. This spec only documents **VS Code-specific implementation details**.
 
-## Critical Docs
+## Critical Docs {#VSIX-CRITICAL-DOCS}
 
 - [VS Code Extension API](https://code.visualstudio.com/api)
 - [VS Code Language Extensions](https://code.visualstudio.com/api/language-extensions/overview)
@@ -18,7 +18,7 @@ All LSP features, DAP integration, custom commands, configuration settings, and 
 
 ---
 
-## Architecture
+## Architecture {#VSIX-ARCHITECTURE}
 
 ```mermaid
 flowchart LR
@@ -45,7 +45,7 @@ flowchart LR
 
 ---
 
-## Extension Structure
+## Extension Structure {#VSIX-EXTENSION-STRUCTURE}
 
 ```
 vscode-extension/
@@ -59,7 +59,7 @@ vscode-extension/
 
 ---
 
-## LSP Client Configuration
+## LSP Client Configuration {#VSIX-LSP-CLIENT-CONFIGURATION}
 
 > See `LSP-ARCHITECTURE-SPEC.md` for all LSP features, custom commands, and shared configuration settings.
 
@@ -81,11 +81,11 @@ client.start();
 
 ---
 
-## Commands
+## Commands {#VSIX-COMMANDS}
 
 > **Command Registration Rule**: See `LSP-ARCHITECTURE-SPEC.md` § Command Registration Rule. The extension MUST NOT call `registerCommand()` for any command the LSP server advertises. Server commands are auto-registered by `vscode-languageclient` from the server's `executeCommandProvider` capabilities. Client-side UI (input prompts, toasts) belongs in the `executeCommand` middleware.
 
-### `package.json` contribution
+### `package.json` contribution {#VSIX-COMMANDS-PACKAGE-JSON-CONTRIBUTION}
 
 ```json
 "commands": [
@@ -102,7 +102,7 @@ client.start();
 
 ---
 
-## Configuration Settings (`package.json` contribution)
+## Configuration Settings (`package.json` contribution) {#VSIX-CONFIGURATION-SETTINGS}
 
 > Shared settings (sent to LSP server) are defined in `LSP-ARCHITECTURE-SPEC.md` § Shared Configuration Settings. Below is their `package.json` schema representation plus VS Code-only settings.
 
@@ -191,7 +191,7 @@ client.start();
 }
 ```
 
-### VS Code-Only Settings
+### VS Code-Only Settings {#VSIX-CONFIGURATION-SETTINGS-VS-CODE-ONLY}
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -202,7 +202,7 @@ All other settings are shared across editors (see `LSP-ARCHITECTURE-SPEC.md`).
 
 ---
 
-## Status Bar
+## Status Bar {#VSIX-STATUS-BAR}
 
 Persistent item showing server state and diagnostic count:
 - `$(check) Basilisk` — green, server running, no errors
@@ -217,7 +217,7 @@ Additional indicators (future):
 
 ---
 
-## Error Recovery
+## Error Recovery {#VSIX-ERROR-RECOVERY}
 
 - `errorHandler` on `LanguageClient` for auto-restart (max 3 attempts, exponential backoff)
 - User-visible error message when server fails to start
@@ -226,19 +226,19 @@ Additional indicators (future):
 
 ---
 
-## Test Explorer Integration
+## Test Explorer Integration {#VSIX-TEST-EXPLORER-INTEGRATION}
 
 > See `LSP-TEST-INTEGRATION-SPEC.md` for full test explorer architecture, data model, configuration, and features.
 > VS Code-specific wiring (TestController API, TestRunProfile) is documented in the VS Code section of that spec.
 
 ---
 
-## Python Debugger (DAP)
+## Python Debugger (DAP) {#VSIX-PYTHON-DEBUGGER-DAP}
 
 > See `LSP-ARCHITECTURE-SPEC.md` § Custom LSP Commands for `basilisk/startDebugSession` and `basilisk/stopDebugSession`.
 > See `LSP-ARCHITECTURE-SPEC.md` § DapTcpProxy for the shared proxy specification that all editors implement.
 
-### VS Code-Specific DAP Architecture
+### VS Code-Specific DAP Architecture {#VSIX-PYTHON-DEBUGGER-DAP-ARCHITECTURE}
 
 ```mermaid
 flowchart LR
@@ -249,7 +249,7 @@ flowchart LR
 
 The LSP server spawns `debugpy.adapter --port <free-port>` via `basilisk/startDebugSession`. The proxy connects to that port and relays DAP messages bidirectionally, intercepting specific message patterns.
 
-### Debug Adapter Proxy (VS Code Implementation)
+### Debug Adapter Proxy (VS Code Implementation) {#VSIX-PYTHON-DEBUGGER-DAP-PROXY}
 
 The proxy (`vscode-extension/src/dap-proxy.ts`) implements `vscode.DebugAdapter` via `DebugAdapterInlineImplementation`. It fixes four debugpy quirks:
 
@@ -265,7 +265,7 @@ debugpy stops on `try:` lines during `next` (stepOver). The proxy inspects each 
 **Quirk 4 -- Session termination timing**:
 VS Code's `activeDebugSession` may not be cleared when `onDidTerminateDebugSession` fires. The proxy ensures the `exited` event is sent before `terminated`, with a minimal delay.
 
-### DAP Features
+### DAP Features {#VSIX-PYTHON-DEBUGGER-DAP-FEATURES}
 
 > See `LSP-ARCHITECTURE-SPEC.md` § DapTcpProxy for the full shared feature list.
 
@@ -286,7 +286,7 @@ VS Code's `activeDebugSession` may not be cleared when `onDidTerminateDebugSessi
 - **Type narrowing visualization**: show which branch of a union type is active at a breakpoint
 - **Parameter contract verification**: warn when a function receives a value that violates its annotation at runtime
 
-### Launch Configurations
+### Launch Configurations {#VSIX-PYTHON-DEBUGGER-DAP-LAUNCH-CONFIGURATIONS}
 
 ```json
 {
@@ -314,7 +314,7 @@ VS Code's `activeDebugSession` may not be cleared when `onDidTerminateDebugSessi
 
 ---
 
-## Binary Resolution
+## Binary Resolution {#VSIX-BINARY-RESOLUTION}
 
 > See `LSP-ARCHITECTURE-SPEC.md` § Binary Resolution Order for the shared cascade.
 
@@ -326,7 +326,7 @@ VS Code-specific resolution order:
 
 ---
 
-## Output Channels
+## Output Channels {#VSIX-OUTPUT-CHANNELS}
 
 - `"Basilisk"` — main output channel for server messages
 - `"Basilisk LSP Trace"` — LSP communication trace (when `basilisk.trace.server` is enabled)
@@ -334,7 +334,7 @@ VS Code-specific resolution order:
 
 ---
 
-## Binary Distribution
+## Binary Distribution {#VSIX-BINARY-DISTRIBUTION}
 
 The VSIX bundles pre-compiled `basilisk` binaries per platform:
 - `basilisk-x86_64-apple-darwin`

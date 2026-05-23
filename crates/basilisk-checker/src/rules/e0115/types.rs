@@ -1,3 +1,4 @@
+//! Implements [BSK-E0115] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! Shared data types for BSK-E0115.
 
 use std::collections::{HashMap, HashSet};

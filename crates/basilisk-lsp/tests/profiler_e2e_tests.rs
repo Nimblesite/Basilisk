@@ -1,3 +1,4 @@
+//! Tests for [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
 //! Real py-spy integration tests that spawn Python child processes and profile
 //! them through the full pipeline: sampler -> aggregator -> export -> diagnostics.
 //!

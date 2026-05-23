@@ -1,3 +1,4 @@
+//! Implements [BSK-E0090] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0090: Invalid tuple type syntax.
 //!
 //! Validates tuple type annotations according to PEP 646 rules:

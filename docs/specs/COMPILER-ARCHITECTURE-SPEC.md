@@ -1,4 +1,4 @@
-# Basilisk Compiler Specification
+# Basilisk Compiler Specification {#COMPARCH}
 
 **Version**: 0.1.0-draft
 **Status**: Specification Draft

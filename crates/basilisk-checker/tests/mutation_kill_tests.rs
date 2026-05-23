@@ -1,3 +1,4 @@
+//! Tests for [CHKARCH-TESTING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING
 //! Mutation-killing tests: assertion-heavy tests designed to catch specific
 //! mutants identified by cargo-mutants. Each test asserts BOTH that violations
 //! ARE caught and that correct code is NOT flagged.

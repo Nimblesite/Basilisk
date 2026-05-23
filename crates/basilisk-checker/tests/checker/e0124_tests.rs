@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0124] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for BSK-E0124: Protocol tuple element type mismatch.
 
 use super::common::*;

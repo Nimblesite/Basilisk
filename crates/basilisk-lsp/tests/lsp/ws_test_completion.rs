@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-FEATURES-COMPLETION]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-COMPLETION
 // Tests for LSP: `ws_test_completion`.
 
 use super::ws_test_common::*;

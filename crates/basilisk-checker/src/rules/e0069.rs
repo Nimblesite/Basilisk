@@ -1,3 +1,4 @@
+//! Implements [BSK-E0069] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
 //! BSK-E0069: Dataclass constructor argument violations.
 //!
 //! Reports errors when:

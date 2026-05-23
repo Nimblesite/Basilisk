@@ -1,3 +1,4 @@
+//! Implements [ANALYSIS-INDEX]. See docs/specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-INDEX
 //! Workspace index — persistent per-file analysis state for whole-module and
 //! cross-module analysis modes.
 //!

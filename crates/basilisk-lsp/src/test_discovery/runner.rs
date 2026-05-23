@@ -1,3 +1,5 @@
+//! Implements [LSPTEST]. See docs/specs/LSP-TEST-INTEGRATION-SPEC.md#LSPTEST
+//!
 //! Test execution via pytest subprocess and result parsing.
 
 use std::path::Path;

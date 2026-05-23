@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-TESTING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING
 //! Shared test helpers for Basilisk integration and E2E tests.
 //!
 //! This crate consolidates common test utilities that are used across

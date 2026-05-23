@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0003] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-MISSING
 // Integration tests for BSK-E0003: Missing variable type (unresolvable inference).
 
 use super::common::*;

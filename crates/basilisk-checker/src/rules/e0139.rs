@@ -1,3 +1,4 @@
+//! Implements [BSK-E0139] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0139: Invalid `TypeVarTuple` specialization of generic alias.
 //!
 //! Two related violations are detected:

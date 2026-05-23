@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0130] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for BSK-E0130: `TypeVar` scoping violation.
 
 use super::common::*;

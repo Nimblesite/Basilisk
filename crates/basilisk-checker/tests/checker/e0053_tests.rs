@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0053] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 // Integration tests for BSK-E0053: `assert_type()` type mismatch.
 
 use super::common::*;

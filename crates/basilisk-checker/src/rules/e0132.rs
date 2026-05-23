@@ -1,3 +1,4 @@
+//! Implements [BSK-E0132] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0132: Inconsistent `TypeVar` ordering across base classes.
 //!
 //! When a class inherits from multiple generic bases that share a common

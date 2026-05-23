@@ -1,3 +1,5 @@
+//! Implements [ANALYSIS-GRAPH]. See docs/specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-GRAPH
+//!
 //! Import dependency graph — directed graph of file-to-file import edges.
 //!
 //! Built from resolved `ImportInfo.resolved_path` fields after workspace scanning.

@@ -1,3 +1,4 @@
+//! Implements helpers for [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! Shared helper functions used across multiple type checking rules.
 //!
 //! Consolidated from duplicated implementations in individual rule modules

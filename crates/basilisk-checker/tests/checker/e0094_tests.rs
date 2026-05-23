@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0094] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
 // Integration tests for BSK-E0094: Self type in invalid location.
 
 use super::common::*;

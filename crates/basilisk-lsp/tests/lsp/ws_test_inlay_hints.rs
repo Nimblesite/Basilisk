@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-FEATURES-INLAYHINTS]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-INLAYHINTS
 // Tests for LSP: `ws_test_inlay_hints`.
 
 use super::ws_test_common::*;

@@ -1,3 +1,4 @@
+//! Implements [BSK-E0046] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
 //! BSK-E0046: Enum member annotated with an explicit type.
 //!
 //! In an Enum class, members should NOT carry explicit type annotations.

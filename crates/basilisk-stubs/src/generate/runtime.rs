@@ -1,3 +1,4 @@
+//! Implements [STUBRES-ENGINE]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-ENGINE
 //! Runtime introspection stub generation.
 //!
 //! Spawns a Python subprocess to `import` the target module and extract

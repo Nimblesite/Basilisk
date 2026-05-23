@@ -1,3 +1,4 @@
+//! Implements [STUBRES-ENGINE]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-ENGINE
 //! `.pyi` stub file parser.
 //!
 //! Parses `.pyi` files using `ruff_python_parser` and extracts structured

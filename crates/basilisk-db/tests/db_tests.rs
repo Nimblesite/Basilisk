@@ -1,3 +1,4 @@
+//! Tests for [CHKARCH-INCREMENTAL-SALSA]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INCREMENTAL-SALSA
 #![allow(
     clippy::allow_attributes,
     clippy::indexing_slicing,

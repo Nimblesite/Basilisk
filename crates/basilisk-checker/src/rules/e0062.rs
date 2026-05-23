@@ -1,3 +1,4 @@
+//! Implements [BSK-E0062] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
 //! BSK-E0062: `-> NoReturn` / `-> Never` function can fall through.
 //!
 //! A function declared with a return type of `NoReturn` or `Never` must

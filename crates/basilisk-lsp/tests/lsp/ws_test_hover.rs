@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-FEATURES-HOVER]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-HOVER
 // Tests for LSP: `ws_test_hover`.
 
 use super::ws_test_common::*;

@@ -1,3 +1,4 @@
+//! Implements [BSK-E0091] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0091: Incompatible `TypeVar` bound or constraint with its default.
 //!
 //! PEP 696 specifies two constraints on `TypeVar` defaults:

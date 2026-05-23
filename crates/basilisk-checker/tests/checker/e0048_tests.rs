@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0048] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
 // Integration tests for BSK-E0048: `TypeAlias` invalid RHS.
 
 use super::common::*;

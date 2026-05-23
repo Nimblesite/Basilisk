@@ -1,3 +1,5 @@
+//! Implements [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
+//!
 //! Export profiling data to speedscope JSON and flamegraph SVG.
 //!
 //! Converts aggregated `ProfileData` into formats that external viewers

@@ -1,3 +1,4 @@
+//! Implements [BSK-E0029] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
 //! BSK-E0029: Method defined inside a `TypedDict` class.
 //!
 //! `TypedDict` classes (PEP 589) are restricted to key declarations only.

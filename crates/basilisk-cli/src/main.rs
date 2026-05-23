@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-CLI]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI
 //! Basilisk CLI entry point.
 //!
 //! Usage:

@@ -1,3 +1,4 @@
+//! Implements [BSK-E0140] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! Module context, function signatures, and protocol info for BSK-E0140.
 
 use ruff_python_ast::{self as ast, Expr, Stmt};

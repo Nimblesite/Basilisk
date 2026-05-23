@@ -1,3 +1,4 @@
+//! Implements [LSPARCH-INVOKE]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-INVOKE
 //! WebSocket transport for the Basilisk LSP server.
 //!
 //! Bridges WebSocket frames (one JSON-RPC message per frame, no headers)

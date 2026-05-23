@@ -1,3 +1,4 @@
+//! Implements [LSPARCH-FEATURES-DEFINITION]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-DEFINITION
 //! Go to Type Definition handler.
 //!
 //! Navigates from a symbol to the definition of its *type*:

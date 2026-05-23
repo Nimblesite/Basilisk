@@ -1,3 +1,4 @@
+// Implements [VSIX]. See docs/specs/VSIX-SPEC.md#VSIX
 /**
  * Shared test helpers for Basilisk VS Code extension E2E tests.
  *

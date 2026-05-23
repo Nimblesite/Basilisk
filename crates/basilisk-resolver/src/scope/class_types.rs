@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! Class-related types: class info, generic parameters, type arguments.
 
 use super::{span::Span, variable_types::AttributeInfo};

@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0107] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for BSK-E0107: Variance incompatibility in base class.
 
 use super::common::*;

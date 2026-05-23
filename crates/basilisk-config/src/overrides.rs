@@ -1,3 +1,4 @@
+//! Implements [STUBRES-CONFIG]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CONFIG
 //! Override types for per-module and per-path configuration.
 
 use std::collections::HashMap;

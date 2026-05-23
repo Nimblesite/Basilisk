@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0095] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
 // Integration tests for BSK-E0095: `InitVar` field validation.
 
 use super::common::*;

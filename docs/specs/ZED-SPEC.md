@@ -1,4 +1,4 @@
-# Basilisk Zed Extension
+# Basilisk Zed Extension {#ZED}
 
 ## Goal {#ZED-GOAL}
 
@@ -13,7 +13,7 @@ All LSP features, DAP integration, custom commands, configuration settings, and 
 
 CRITICAL: We only target Wasm 64 bit. We don't need to support 32 bit wasm for now
 
-## Critical Docs
+## Critical Docs {#ZED-DOCS}
 
 - [Zed Extension Development](https://zed.dev/docs/extensions/developing-extensions)
 - [Zed Python Language Support](https://zed.dev/docs/languages/python)
@@ -93,7 +93,7 @@ basilisk-zed/
     basilisk-debug.json
 ```
 
-### `extension.toml`
+### `extension.toml` {#ZED-EXTTOML}
 
 ```toml
 id = "basilisk"
@@ -119,7 +119,7 @@ languages = ["Python"]
 schema_path = "debug_adapter_schemas/basilisk-debug.json"
 ```
 
-### `Cargo.toml`
+### `Cargo.toml` {#ZED-CARGOTOML}
 
 ```toml
 [package]
@@ -134,7 +134,7 @@ crate-type = ["cdylib"]
 zed_extension_api = "0.7.0"
 ```
 
-### `src/lib.rs`
+### `src/lib.rs` {#ZED-LIBRS}
 
 ```rust
 use zed_extension_api::{self as zed, Result};
@@ -402,7 +402,7 @@ The entire backend is shared. Only thin editor-specific glue differs.
 
 See [ZED-PLAN.md](../plans/ZED-PLAN.md) for the full implementation plan with phasing.
 
-### Extension Scaffolding
+### Extension Scaffolding {#ZED-STATUS-SCAFFOLD}
 - [x] Create `basilisk-zed/` directory with `extension.toml`, `Cargo.toml`, `src/lib.rs`
 - [x] Implement `zed::Extension` trait with `language_server_command()`
 - [x] Implement binary resolution (PATH, ~/.cargo/bin, BASILISK_PATH env var)
@@ -412,7 +412,7 @@ See [ZED-PLAN.md](../plans/ZED-PLAN.md) for the full implementation plan with ph
 - [x] Register extension with `zed::register_extension!(BasiliskExtension)`
 - [x] Version check: warn user when newer basilisk release is available
 
-### LSP Verification
+### LSP Verification {#ZED-STATUS-LSP}
 - [x] Diagnostics appear on Python files
 - [x] Completions (dot-triggered and symbol)
 - [x] Hover shows type info
@@ -428,7 +428,7 @@ See [ZED-PLAN.md](../plans/ZED-PLAN.md) for the full implementation plan with ph
 - [x] Call hierarchy
 - [x] Signature help
 
-### Tree-sitter Queries
+### Tree-sitter Queries {#ZED-STATUS-TREESITTER}
 - [x] Add `[grammars.python]` to `extension.toml`
 - [x] Create `languages/python/config.toml`
 - [x] Create `highlights.scm` — keywords, builtins, decorators, f-strings, type annotations
@@ -439,14 +439,14 @@ See [ZED-PLAN.md](../plans/ZED-PLAN.md) for the full implementation plan with ph
 - [x] Create `textobjects.scm` — Vim motions for functions, classes, arguments
 - [x] Create `runnables.scm` — `if __name__ == "__main__"`, pytest functions
 
-### Debugging (DAP)
+### Debugging (DAP) {#ZED-STATUS-DAP}
 - [x] Implement `get_dap_binary()` — resolve basilisk binary
 - [x] Create `debug_adapter_schemas/basilisk-debug.json` (launch + attach schema)
 - [x] Implement `dap_request_kind()` — launch vs attach
 - [x] Implement `dap_config_to_scenario()`
 - [ ] Test: breakpoints, stepping, variables, debug console (manual — no Zed test framework)
 
-### Slash Commands (Profiling & Memory)
+### Slash Commands (Profiling & Memory) {#ZED-STATUS-SLASH}
 - [x] Register `/profile`, `/profstop`, `/profsnapshot` slash commands
 - [x] Register `/memleak`, `/memstop`, `/memrefs` slash commands
 - [x] Implement `run_slash_command()` dispatch with markdown output
@@ -459,12 +459,12 @@ See [ZED-PLAN.md](../plans/ZED-PLAN.md) for the full implementation plan with ph
 - [x] Implement argument completion (PIDs for /profile, type names for /memrefs)
 - [ ] Wire to actual LSP profiler/memory commands (blocked on profiling engine)
 
-### Testing
+### Testing {#ZED-STATUS-TESTING}
 - [x] Extract testable pure logic into `logic.rs` (33 unit tests)
 - [x] LSP E2E tests in `zed_extension_e2e_tests.rs` / `zed_extension_e2e_advanced.rs`
 - [x] Set up CI: build WASM (`wasm32-wasip2`), run unit tests, clippy
 - [x] Cross-platform CI: macOS aarch64, Linux x86_64
 
-### Polish & Publishing
+### Polish & Publishing {#ZED-STATUS-POLISH}
 - [x] Create Basilisk dark theme (`themes/basilisk-dark.json`)
 - [ ] Publish to Zed extension registry

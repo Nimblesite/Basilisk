@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-TESTING]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-TESTING
 // Shared test infrastructure for Zed extension E2E tests.
 //
 // Each Zed test file imports this module via `mod zed_e2e_common;` to get

@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0144] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for BSK-E0144: type[T] constructor call violations.
 
 use super::common::*;

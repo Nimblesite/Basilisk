@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-FEATURES-HIGHLIGHT]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-HIGHLIGHT
 // Tests for LSP: `ws_test_document_highlight`.
 
 use super::ws_test_common::*;

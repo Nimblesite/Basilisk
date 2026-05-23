@@ -1,3 +1,4 @@
+//! Tests for [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 #![allow(
     clippy::allow_attributes,
     clippy::indexing_slicing,

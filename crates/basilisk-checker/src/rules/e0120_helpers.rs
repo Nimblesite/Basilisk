@@ -1,3 +1,4 @@
+//! Implements [BSK-E0120] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! Helper functions for BSK-E0120: Generator return type and yield type
 //! violations.
 //!

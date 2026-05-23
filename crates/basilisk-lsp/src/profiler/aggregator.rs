@@ -1,3 +1,5 @@
+//! Implements [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
+//!
 //! Sample aggregation for profiling sessions.
 //!
 //! Accumulates stack traces from py-spy into per-file, per-line hit counts

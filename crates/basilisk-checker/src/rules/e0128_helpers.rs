@@ -1,3 +1,4 @@
+//! Implements [BSK-E0128] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! Helper types and functions for BSK-E0128.
 //!
 //! Provides source-level parsing of `TypeVar` definitions, argument splitting,

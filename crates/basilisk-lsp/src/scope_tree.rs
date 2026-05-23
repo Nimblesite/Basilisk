@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-ARCH-RESOLVED]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-ARCH-RESOLVED
+//!
 //! Hierarchical scope tree built from a `ResolvedModule`.
 //!
 //! Python uses lexical scoping: a name assigned anywhere in a function is local

@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0025] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 // Integration tests for BSK-E0025: Missing @override decorator.
 
 use super::common::*;

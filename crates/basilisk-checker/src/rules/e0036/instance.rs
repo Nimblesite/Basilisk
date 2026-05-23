@@ -1,3 +1,4 @@
+//! Implements [BSK-E0036] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
 //! Instance-level `ClassVar` violation checks for BSK-E0036.
 //!
 //! Handles two cases:

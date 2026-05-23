@@ -1,3 +1,4 @@
+//! Tests for [COMPARCH]. See docs/specs/COMPILER-ARCHITECTURE-SPEC.md#COMPARCH
 #![allow(
     clippy::allow_attributes,
     clippy::indexing_slicing,

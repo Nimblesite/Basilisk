@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-SELECTION]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-SELECTION
+//!
 //! Selection Ranges handler (Smart Select).
 //!
 //! Implements `textDocument/selectionRange` — given cursor positions, returns

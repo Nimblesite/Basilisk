@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-COMPLETION]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-COMPLETION
+//!
 //! Keyword-argument completion provider.
 //!
 //! When the cursor is inside a function call, suggests `param_name=` items

@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0078] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
 // Integration tests for BSK-E0078: Self type violation.
 
 use super::common::*;

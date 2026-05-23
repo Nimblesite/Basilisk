@@ -1,3 +1,4 @@
+//! Implements [BSK-E0149] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! The three PEP 695 scoping violation checks for BSK-E0149.
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic};

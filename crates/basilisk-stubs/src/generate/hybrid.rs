@@ -1,3 +1,4 @@
+//! Implements [STUBRES-ENGINE]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-ENGINE
 //! Hybrid stub generation.
 //!
 //! Tries runtime introspection first.  If that fails (e.g. the module has

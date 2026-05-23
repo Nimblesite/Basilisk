@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-ARCH-MODSTRUCT]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-ARCH-MODSTRUCT
+//!
 //! LSP command handlers for refactoring operations.
 //!
 //! Currently handles `basilisk.moveSymbol` which moves a top-level symbol

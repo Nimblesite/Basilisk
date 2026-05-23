@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-FEATURES-SIGHELP]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-SIGHELP
 // Tests for LSP: `ws_test_signature_help`.
 
 use super::ws_test_common::*;

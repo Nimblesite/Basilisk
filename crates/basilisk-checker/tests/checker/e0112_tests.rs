@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0112] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for BSK-E0112: `TypeGuard` callable return type mismatch.
 
 use super::common::*;

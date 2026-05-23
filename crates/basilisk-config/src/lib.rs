@@ -1,3 +1,4 @@
+//! Implements [STUBRES-CONFIG]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CONFIG
 //! Configuration parsing for Basilisk.
 //!
 //! Parses `pyproject.toml` `[tool.basilisk]` and `basilisk.json` with support for:

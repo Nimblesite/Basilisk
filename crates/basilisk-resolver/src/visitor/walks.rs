@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! Generic AST walkers shared between the resolver and downstream crates.
 //!
 //! These walkers fold the boilerplate of pre-order statement traversal so

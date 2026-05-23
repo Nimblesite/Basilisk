@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-FEATURES-SEMTOKENS]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-SEMTOKENS
 // Tests for LSP: `ws_test_semantic_tokens`.
 
 use super::ws_test_common::*;

@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-CLI]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI
 //! `basilisk fix` subcommand — apply autofixes to Python files.
 //!
 //! For each Python file: parse → resolve → check → generate fixes → apply.

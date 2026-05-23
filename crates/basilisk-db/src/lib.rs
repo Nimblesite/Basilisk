@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-INCREMENTAL-SALSA]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INCREMENTAL-SALSA
 //! Incremental computation database for Basilisk.
 //!
 //! This crate will house the Salsa-based incremental database in Phase 2.

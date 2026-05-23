@@ -1,3 +1,5 @@
+//! Implements [LSPTEST]. See docs/specs/LSP-TEST-INTEGRATION-SPEC.md#LSPTEST
+//!
 //! Test file and item discovery from Python source files.
 
 use std::path::{Path, PathBuf};

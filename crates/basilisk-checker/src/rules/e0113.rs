@@ -1,3 +1,4 @@
+//! Implements [BSK-E0113] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0113: `TypeIs` narrows to a type inconsistent with the input type.
 //!
 //! Per the typing spec: "It is an error to narrow to a type that is not

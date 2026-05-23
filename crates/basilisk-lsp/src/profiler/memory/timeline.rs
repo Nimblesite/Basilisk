@@ -1,3 +1,5 @@
+//! Implements [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
+//!
 //! Auto-snapshot mode and memory timeline tracking.
 //!
 //! When auto-snapshot is enabled, the LSP takes periodic memory snapshots

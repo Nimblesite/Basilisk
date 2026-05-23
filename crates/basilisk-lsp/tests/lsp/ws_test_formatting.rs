@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-FEATURES-FORMAT]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-FORMAT
 // Tests for LSP: `ws_test_formatting`.
 
 use super::ws_test_common::*;

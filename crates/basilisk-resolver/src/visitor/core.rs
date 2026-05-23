@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! Core visitor functions.
 
 use ruff_python_ast::{ElifElseClause, ExceptHandler, Expr, Stmt};

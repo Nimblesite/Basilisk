@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-FEATURES-COMPLETION]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-COMPLETION
 // Tests for LSP: `lsp_e2e_completion`.
 
 // LSP E2E tests — Completion (`IntelliSense`).

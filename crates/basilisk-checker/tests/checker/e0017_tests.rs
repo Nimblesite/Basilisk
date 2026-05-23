@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0017] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 // Integration tests for BSK-E0017: Incompatible class attribute override.
 
 use super::common::*;

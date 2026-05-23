@@ -1,3 +1,4 @@
+//! Implements [BSK-E0075] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
 //! BSK-E0075: Incompatible type for `Self`-typed attribute.
 //!
 //! When a class declares an attribute annotated with `Self` (or `Self | None`,

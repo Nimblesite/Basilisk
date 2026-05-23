@@ -1,3 +1,4 @@
+// Implements [VSIX-OUTPUT-CHANNELS]. See docs/specs/VSIX-SPEC.md#VSIX-OUTPUT-CHANNELS
 /**
  * Logging abstraction for the Basilisk VS Code extension.
  *

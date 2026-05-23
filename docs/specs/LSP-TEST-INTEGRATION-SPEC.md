@@ -1,4 +1,4 @@
-# LSP Test Integration Spec
+# LSP Test Integration Spec {#LSPTEST}
 
 > Single source of truth for test discovery, execution, and result reporting across all editors.
 >
@@ -6,7 +6,7 @@
 
 ---
 
-## Architecture
+## Architecture {#LSPTEST-ARCHITECTURE}
 
 Test integration follows the same subprocess-delegation pattern as formatting (Ruff) and debugging (debugpy):
 
@@ -18,7 +18,7 @@ The Rust implementation lives in `crates/basilisk-lsp/src/test_discovery.rs`.
 
 ---
 
-## Supported Frameworks
+## Supported Frameworks {#LSPTEST-SUPPORTED-FRAMEWORKS}
 
 | Framework | Detection |
 |---|---|
@@ -28,7 +28,7 @@ The Rust implementation lives in `crates/basilisk-lsp/src/test_discovery.rs`.
 
 ---
 
-## Test Item Data Model
+## Test Item Data Model {#LSPTEST-TEST-ITEM-DATA-MODEL}
 
 ```rust
 pub struct TestItem {
@@ -41,7 +41,7 @@ pub struct TestItem {
 }
 ```
 
-### Test Item Hierarchy
+### Test Item Hierarchy {#LSPTEST-TEST-ITEM-DATA-MODEL-HIERARCHY}
 
 ```
 tests/
@@ -59,7 +59,7 @@ tests/
 
 ---
 
-## Test Discovery
+## Test Discovery {#LSPTEST-TEST-DISCOVERY}
 
 - Scan workspace for `test_*.py` and `*_test.py` files
 - Parse with `basilisk-parser` to extract test items without importing
@@ -68,18 +68,18 @@ tests/
 
 ---
 
-## Test Execution
+## Test Execution {#LSPTEST-TEST-EXECUTION}
 
 - Execute via `pytest` subprocess with node ID targeting (e.g. `pytest tests/test_api.py::test_login`)
 - Honour `pytest.ini`, `pyproject.toml [tool.pytest]`, conftest fixtures
 - Support running: individual test, test class, test file, entire suite
 - Parse output to extract pass/fail/skip/error status per test item
 
-### uv-Aware Execution
+### uv-Aware Execution {#LSPTEST-TEST-EXECUTION-UV-AWARE}
 
 In uv projects, test execution uses `uv run` instead of invoking pytest directly. This guarantees the correct virtual environment is active without manual `VIRTUAL_ENV` setup.
 
-#### Pytest Resolution Cascade
+#### Pytest Resolution Cascade {#LSPTEST-TEST-EXECUTION-UV-AWARE-PYTEST-RESOLUTION-CASCADE}
 
 | Priority | Strategy | When |
 |----------|----------|------|
@@ -94,7 +94,7 @@ When `uv run` is used:
 - No risk of running tests against a stale or wrong environment
 - Coverage tools (`pytest-cov`) installed via `uv add --dev` are available without extra config
 
-#### Environment Variables
+#### Environment Variables {#LSPTEST-TEST-EXECUTION-UV-AWARE-ENVIRONMENT-VARIABLES}
 
 When NOT using `uv run`, the LSP sets environment variables on the subprocess:
 
@@ -106,7 +106,7 @@ When NOT using `uv run`, the LSP sets environment variables on the subprocess:
 
 ---
 
-## Configuration Settings
+## Configuration Settings {#LSPTEST-CONFIGURATION-SETTINGS}
 
 > These settings are shared across all editors. Each editor spec should reference this table rather than duplicating it.
 
@@ -121,7 +121,7 @@ When NOT using `uv run`, the LSP sets environment variables on the subprocess:
 
 ---
 
-## Features
+## Features {#LSPTEST-FEATURES}
 
 - **Auto-discovery**: Finds pytest and unittest tests from AST (no import needed)
 - **Run/debug individual tests**: Click play on any test function or class
@@ -136,11 +136,11 @@ When NOT using `uv run`, the LSP sets environment variables on the subprocess:
 
 ---
 
-## uv Integration
+## uv Integration {#LSPTEST-UV-INTEGRATION}
 
 When a uv project is detected (see [LSP-UV-INTEGRATION-SPEC.md §2](LSP-UV-INTEGRATION-SPEC.md)), test integration gains several capabilities. All uv enhancements are additive — non-uv projects behave identically to before.
 
-### Pytest Resolution via `uv run`
+### Pytest Resolution via `uv run` {#LSPTEST-UV-INTEGRATION-PYTEST-RESOLUTION}
 
 In uv projects, `uv run pytest` replaces bare `pytest` invocation. This is the same subprocess-delegation pattern used for `basilisk.uv.sync` and other uv commands (see [LSP-UV-INTEGRATION-SPEC.md §9](LSP-UV-INTEGRATION-SPEC.md)).
 
@@ -170,7 +170,7 @@ pub fn build_test_command(
 }
 ```
 
-### Test Dependency Verification
+### Test Dependency Verification {#LSPTEST-UV-INTEGRATION-TEST-DEPENDENCY-VERIFICATION}
 
 The `PackageRegistry` (built from `uv.lock`) enables test dependency diagnostics:
 
@@ -182,7 +182,7 @@ The `PackageRegistry` (built from `uv.lock`) enables test dependency diagnostics
 
 These diagnostics are only emitted in uv projects and respect the existing `basilisk.uv.enabled` setting.
 
-### Coverage with `uv run`
+### Coverage with `uv run` {#LSPTEST-UV-INTEGRATION-COVERAGE}
 
 When coverage is enabled, the LSP invokes:
 
@@ -192,7 +192,7 @@ uv run pytest --cov=<src_root> --cov-report=xml:<workspace>/.basilisk/coverage.x
 
 This ensures `pytest-cov` resolves from the uv-managed environment. The coverage XML path is deterministic, enabling the file watcher to detect changes and push `basilisk/coverageResult` notifications.
 
-### Hot Reload Interaction
+### Hot Reload Interaction {#LSPTEST-UV-INTEGRATION-HOT-RELOAD}
 
 When `uv.lock` changes (package added/removed), the existing hot reload pipeline ([LSP-UV-INTEGRATION-SPEC.md §3.4](LSP-UV-INTEGRATION-SPEC.md)) rebuilds the `PackageRegistry`. The test integration layer checks:
 
@@ -202,17 +202,17 @@ When `uv.lock` changes (package added/removed), the existing hot reload pipeline
 
 ---
 
-## Editor-Specific Integration
+## Editor-Specific Integration {#LSPTEST-EDITOR-SPECIFIC-INTEGRATION}
 
 Each editor implements test integration using its native test UI. Behavioral details live here; only editor-specific API wiring belongs in the editor specs.
 
-### VS Code
+### VS Code {#LSPTEST-EDITOR-SPECIFIC-INTEGRATION-VSCODE}
 
 - Implement `TestController` via VS Code's `vscode.tests` API
 - Stream results back to Test Explorer as pass/fail/skip/error
 - Debug integration via existing DAP proxy (see `LSP-DEBUG-INTEGRATION-SPEC.md`)
 
-### Neovim
+### Neovim {#LSPTEST-EDITOR-SPECIFIC-INTEGRATION-NEOVIM}
 
 - **Discovery**: Run `pytest --collect-only -q`, parse output into tree
 - **Tree UI**: Dedicated side-panel buffer with `basilisk-tests` filetype
@@ -224,15 +224,15 @@ Each editor implements test integration using its native test UI. Behavioral det
 - **Inline failures**: `vim.diagnostic.set()` in `basilisk-test` namespace
 - **Coverage**: Parse `coverage.xml`, display as extmark gutter highlights
 
-### Zed
+### Zed {#LSPTEST-EDITOR-SPECIFIC-INTEGRATION-ZED}
 
 - TBD — Zed lacks a native test explorer panel API. Will evaluate when available.
 
 ---
 
-## LSP Protocol
+## LSP Protocol {#LSPTEST-LSP-PROTOCOL}
 
-### Commands
+### Commands {#LSPTEST-LSP-PROTOCOL-COMMANDS}
 
 | Command | Description |
 |---|---|
@@ -240,7 +240,7 @@ Each editor implements test integration using its native test UI. Behavioral det
 | `basilisk.runTestFile` | Run tests in current file |
 | `basilisk.debugTest` | Debug a specific test |
 
-### Custom Notifications (planned)
+### Custom Notifications (planned) {#LSPTEST-LSP-PROTOCOL-CUSTOM-NOTIFICATIONS}
 
 | Direction | Method | Payload |
 |---|---|---|
@@ -249,6 +249,6 @@ Each editor implements test integration using its native test UI. Behavioral det
 | Client → Server | `basilisk/discoverTests` | `{ uri: string }` |
 | Client → Server | `basilisk/runTest` | `{ id: string, debug: boolean }` |
 
-### Interaction with uv Commands
+### Interaction with uv Commands {#LSPTEST-LSP-PROTOCOL-UV-INTERACTION}
 
 Test-related code actions that invoke uv (e.g., "Add pytest" on missing test runner) reuse the existing `basilisk.uv.addDev` command. After the uv command completes, the post-command hook ([LSP-UV-INTEGRATION-SPEC.md §7.2](LSP-UV-INTEGRATION-SPEC.md)) triggers lock re-parse and registry rebuild, which in turn updates test runner availability.

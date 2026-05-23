@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-DOCSYM]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-DOCSYM
+//!
 //! Document Symbols handler (Outline view) and workspace symbol search.
 
 use std::sync::Arc;

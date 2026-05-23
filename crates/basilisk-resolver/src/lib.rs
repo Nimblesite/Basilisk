@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! Name resolution and scope analysis for Basilisk.
 //!
 //! The resolver walks the parsed AST and produces a [`ResolvedModule`]

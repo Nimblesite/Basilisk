@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-ARCH-MODSTRUCT]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-ARCH-MODSTRUCT
+//!
 //! Initialization and configuration handlers for the Basilisk LSP server.
 //!
 //! Covers `initialize`, `initialized`, `shutdown`, and `did_change_configuration`.

@@ -1,3 +1,4 @@
+//! Tests for [TYPEINF-COLLECTIONS]. See docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-COLLECTIONS
 // End-to-end tests for Basilisk's collection type inference.
 
 // ---------------------------------------------------------------------------

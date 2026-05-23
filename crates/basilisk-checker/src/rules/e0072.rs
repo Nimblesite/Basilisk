@@ -1,3 +1,4 @@
+//! Implements [BSK-E0072] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
 //! BSK-E0072: No matching overload for subscript indexing.
 //!
 //! When a class defines overloaded `__getitem__` methods and a module-level
